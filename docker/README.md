@@ -35,10 +35,7 @@ The platform consists of the following services:
 cd docker
 
 # Start all services in production mode
-docker-compose up -d
-
-# Start with development tools
-docker-compose --profile dev up -d
+make up
 ```
 
 ### 2. Access the Platform
@@ -127,7 +124,7 @@ Services that always build from fresh code:
 - `the0-frontend` (Next.js with hot reload)
 - `the0-api` (NestJS with hot reload)
 - `the0-analyzer` (Python security scanner)
-- `bot-runner-master/worker` (Go runtime with autoscaler improvements)
+- `bot-runner-master/worker` (Go runtime)
 - `backtest-runner-master/worker` (Go runtime)
 - `bot-scheduler-master/worker` (Go runtime)
 
