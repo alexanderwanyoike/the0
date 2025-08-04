@@ -1,0 +1,386 @@
+import { Inject, Injectable, Scope } from '@nestjs/common';
+import { CreateBotDto } from './dto/create-bot.dto';
+import { UpdateBotDto } from './dto/update-bot.dto';
+import { BotRepository } from './bot.repository';
+import { REQUEST } from '@nestjs/core';
+import { Bot } from './entities/bot.entity';
+import { Failure, Ok, Result } from '@/common/result';
+import { BotValidator } from './bot.validator';
+import { CustomBotService } from '@/custom-bot/custom-bot.service';
+import { CustomBot, BotType } from '@/custom-bot/custom-bot.types';
+import { UserBotsService } from '@/user-bots/user-bots.service';
+import { NatsService } from '@/nats/nats.service';
+import * as semver from 'semver';
+import { BOT_TYPE_PATTERN, BOT_TOPICS, SCHEDULED_BOT_TOPICS } from '@/bot/bot.constants';
+
+@Injectable({ scope: Scope.REQUEST })
+export class BotService {
+  constructor(
+    @Inject(REQUEST) private readonly request: any,
+    private readonly botRepository: BotRepository,
+    private readonly botValidator: BotValidator,
+    private readonly customBotService: CustomBotService,
+    private readonly userBotsService: UserBotsService,
+    private readonly natsService: NatsService,
+  ) {}
+
+  async create(createBotDto: CreateBotDto): Promise<Result<Bot, string>> {
+    const { uid } = this.request.user;
+
+    const validationResult = await this.validateBotTypeAndConfig(
+      createBotDto.config,
+    );
+
+    if (!validationResult.success) {
+      return Failure<Bot, string>(
+        validationResult.error || 'Invalid bot config',
+      );
+    }
+
+    // Get bot type from config
+    const botType = this.getBotTypeFromConfig(validationResult.data);
+
+    // Feature gates removed for OSS version - allow all bot types
+
+    // Check deployment authorization
+    const deploymentAuthResult = await this.checkDeploymentAuthorization(
+      uid,
+      validationResult.data,
+    );
+
+    if (!deploymentAuthResult.success) {
+      return Failure<Bot, string>(deploymentAuthResult.error);
+    }
+
+    const result = await this.botRepository.create({
+      ...createBotDto,
+      userId: uid,
+      topic: 'the0-scheduled-custom-bot',
+      customBotId: validationResult.data.id,
+    });
+
+    if (!result.success) {
+      return Failure<Bot, string>(result.error);
+    }
+
+    // Fetch custom bot data and publish bot creation event (replaces event-handler service)
+    const customBotResult = await this.customBotService.getUserSpecificVersion(
+      uid, 
+      validationResult.data.name, 
+      validationResult.data.version
+    );
+    
+    if (customBotResult.success) {
+      const customBot = customBotResult.data;
+      const topics = this.getTopicsForBotType(customBot);
+      
+      if (topics) {
+        // Format event data for runtime subscriber (bot-scheduler expects flat structure)
+        const eventPayload = {
+          id: result.data.id,
+          config: {
+            ...createBotDto.config,
+            customBotId: validationResult.data.id,
+          },
+          custom: {
+            config: customBot.config,
+            createdAt: customBot.createdAt,
+            updatedAt: customBot.updatedAt,
+            filePath: customBot.filePath || '',
+            version: customBot.version,
+          },
+        };
+        
+        // Publish bot creation event to appropriate runtime service
+        const publishResult = await this.natsService.publish(topics.CREATED, eventPayload);
+        if (!publishResult.success) {
+          console.error('Failed to publish bot creation event:', publishResult.error);
+        } else {
+          console.log(`📤 Published bot creation event for bot ${result.data.id} to ${topics.CREATED}`);
+        }
+      }
+    }
+
+    return this.botRepository.findOne(uid, result.data.id);
+  }
+
+  findAll(): Promise<Result<Bot[], string>> {
+    const { uid } = this.request.user;
+    return this.botRepository.findAll(uid);
+  }
+
+  findOne(id: string): Promise<Result<Bot, string>> {
+    const { uid } = this.request.user;
+    return this.botRepository.findOne(uid, id);
+  }
+
+  async update(
+    id: string,
+    updateBotDto: UpdateBotDto,
+  ): Promise<Result<Bot, string>> {
+    const validationResult = await this.validateBotTypeAndConfig(
+      updateBotDto.config,
+    );
+    if (!validationResult.success) {
+      return Failure<Bot, string>(
+        validationResult.error || 'Invalid bot config',
+      );
+    }
+
+    const { uid } = this.request.user;
+    const result = await this.botRepository.update(uid, id, updateBotDto);
+    
+    if (result.success) {
+      // Fetch updated bot and custom bot data for event payload
+      const botResult = await this.botRepository.findOne(uid, id);
+      if (botResult.success) {
+        const customBotResult = await this.customBotService.getUserSpecificVersion(
+          uid,
+          validationResult.data.name,
+          validationResult.data.version
+        );
+        
+        if (customBotResult.success) {
+          const customBot = customBotResult.data;
+          const topics = this.getTopicsForBotType(customBot);
+          
+          if (topics) {
+            // Format event data for runtime subscriber (bot-scheduler expects flat structure)
+            const eventPayload = {
+              id: botResult.data.id,
+              config: {
+                ...updateBotDto.config,
+                customBotId: validationResult.data.id,
+              },
+              custom: {
+                config: customBot.config,
+                createdAt: customBot.createdAt,
+                updatedAt: customBot.updatedAt,
+                filePath: customBot.filePath || '',
+                version: customBot.version,
+              },
+            };
+            
+            // Publish bot update event to appropriate runtime service
+            const publishResult = await this.natsService.publish(topics.UPDATED, eventPayload);
+            if (!publishResult.success) {
+              console.error('Failed to publish bot update event:', publishResult.error);
+            } else {
+              console.log(`📤 Published bot update event for bot ${botResult.data.id} to ${topics.UPDATED}`);
+            }
+          }
+        }
+      }
+    }
+    
+    return result;
+  }
+
+  async remove(id: string): Promise<Result<void, string>> {
+    const { uid } = this.request.user;
+    
+    // Fetch bot data before deletion for event payload
+    const botResult = await this.botRepository.findOne(uid, id);
+    if (!botResult.success) {
+      return Failure('Bot not found');
+    }
+    
+    // Get custom bot data to determine correct topic
+    let topics = null;
+    if (botResult.data.config?.type && botResult.data.config?.version) {
+      const [_, name] = botResult.data.config.type.split('/');
+      const customBotResult = await this.customBotService.getUserSpecificVersion(
+        uid,
+        name,
+        botResult.data.config.version
+      );
+      
+      if (customBotResult.success) {
+        topics = this.getTopicsForBotType(customBotResult.data);
+      }
+    }
+    
+    const result = await this.botRepository.remove(uid, id);
+    
+    if (result.success && topics) {
+      // Format event data for runtime subscriber (bot-scheduler expects flat structure)
+      const eventPayload = {
+        id: botResult.data.id,
+        config: botResult.data.config,
+      };
+      
+      // Publish bot deletion event to appropriate runtime service
+      const publishResult = await this.natsService.publish(topics.DELETED, eventPayload);
+      if (!publishResult.success) {
+        console.error('Failed to publish bot deletion event:', publishResult.error);
+      } else {
+        console.log(`📤 Published bot deletion event for bot ${botResult.data.id} to ${topics.DELETED}`);
+      }
+    }
+    
+    return result;
+  }
+
+  private async validateBotTypeAndConfig(
+    config: any,
+  ): Promise<Result<CustomBot, string>> {
+    const { type, version } = config;
+
+    if (!type) {
+      return {
+        success: false,
+        error: 'Bot type is required',
+        data: null,
+      };
+    }
+
+    if (!version) {
+      return {
+        success: false,
+        error: 'Bot version is required',
+        data: null,
+      };
+    }
+
+    // Check that type is in the correct format
+    if (!BOT_TYPE_PATTERN.test(type)) {
+      return {
+        success: false,
+        error: `Invalid bot type format. Expected format: type/name`,
+        data: null,
+      };
+    }
+
+    // use semver to check if version is valid
+    if (!semver.valid(version)) {
+      return {
+        success: false,
+        error: `Invalid version format. Expected format: x.y.z`,
+        data: null,
+      };
+    }
+
+    // Extract vendor, type, and name from the bot type
+    const [_, name] = type.split('/');
+
+    const customBotResult =
+      await this.customBotService.getGlobalSpecificVersion(name, version);
+    if (!customBotResult.success) {
+      return {
+        success: false,
+        error: `Bot type '${type}' not found`,
+        data: null,
+      };
+    }
+
+    const customBot = customBotResult.data;
+    const validationResult = await this.botValidator.validate(
+      config,
+      customBot,
+    );
+    if (!validationResult.success) {
+      return {
+        success: false,
+        error: validationResult.error.join(', ') || 'Invalid bot config',
+        data: null,
+      };
+    }
+
+    return { success: true, error: null, data: customBot };
+  }
+
+  private async checkDeploymentAuthorization(
+    userId: string,
+    customBot: CustomBot,
+  ): Promise<Result<void, string>> {
+    try {
+      // Check if user is the owner of the custom bot
+      if (customBot.userId === userId) {
+        // User is the owner, check if the bot is approved
+        if (
+          customBot.status === 'approved' ||
+          customBot.status === 'published'
+        ) {
+          return { success: true, error: null, data: null };
+        } else {
+          return Failure(
+            'Your custom bot must be approved or published before deployment.',
+          );
+        }
+      }
+
+      // Check if the bot is free
+      if (customBot.marketplace?.price === 0) {
+        // Free bot - any free bot can be deployed
+        const hasBot = await this.userBotsService.hasUserBot(
+          userId,
+          customBot.name,
+        );
+
+        if (!hasBot.success) {
+          return Failure(
+            `Failed to check if user owns the bot: ${hasBot.error}`,
+          );
+        }
+
+        if (hasBot.data) {
+          return Ok(null);
+        }
+
+        // User does not own the bot, but it's free, so let's add it to their account
+        const installResult = await this.userBotsService.install(
+          customBot.name,
+        );
+
+        if (!installResult.success) {
+          return Failure(
+            `Failed to install free bot for user: ${installResult.error}`,
+          );
+        }
+
+        return Ok(null);
+      }
+
+      // Paid bot - check if user has purchased it
+      const hasBot = await this.userBotsService.hasUserBot(
+        userId,
+        customBot.name,
+      );
+      if (!hasBot.success) {
+        return Failure(
+          `Failed to check if user has purchased the bot: ${hasBot.error}`,
+        );
+      }
+
+      if (!hasBot.data) {
+        return Failure(
+          `You must purchase the bot '${customBot.name}' before deploying it. Please visit the marketplace to buy it.`,
+        );
+      }
+
+      return { success: true, error: null, data: null };
+    } catch (error: any) {
+      console.error('Error checking deployment authorization:', error);
+      return Failure(
+        `Failed to check deployment authorization: ${error.message}`,
+      );
+    }
+  }
+
+  private getBotTypeFromConfig(customBot: CustomBot): BotType {
+    return customBot.config.type;
+  }
+
+  private getTopicsForBotType(customBot: CustomBot): { CREATED: string; UPDATED: string; DELETED: string; } | null {
+    const botType = customBot.config.type;
+    
+    if (botType === 'realtime') {
+      return BOT_TOPICS;
+    } else if (botType === 'scheduled') {
+      return SCHEDULED_BOT_TOPICS;
+    } else {
+      console.warn(`Unknown bot type: ${botType}. Expected 'realtime' or 'scheduled'.`);
+      return null;
+    }
+  }
+}

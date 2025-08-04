@@ -1,0 +1,73 @@
+{{- if .Values.the0Api.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-api
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.the0Api.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: 30000
+      {{- end }}
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-api
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.the0Api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: api
+          image: {{ .Values.the0Api.image.repository }}:{{ .Values.the0Api.image.tag }}
+          imagePullPolicy: {{ .Values.the0Api.imagePullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.the0Api.port }}
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.the0Api.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.the0Api.resources | nindent 12 }}
+{{- end }}

@@ -1,0 +1,114 @@
+# Bot Scheduler Master
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-scheduler-master
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-scheduler-master
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.botScheduler.master.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.botScheduler.master.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-scheduler-master
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-scheduler-master
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-scheduler-master
+spec:
+  replicas: {{ .Values.botScheduler.master.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bot-scheduler-master
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bot-scheduler-master
+    spec:
+      containers:
+        - name: bot-scheduler-master
+          image: {{ .Values.botScheduler.image.repository }}:{{ .Values.botScheduler.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["./runtime", "bot-scheduler", "master"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.botScheduler.master.port }}
+            - name: grpc
+              containerPort: {{ .Values.botScheduler.master.grpcPort }}
+          env:
+            {{- range $key, $value := .Values.botScheduler.master.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.botScheduler.master.resources | nindent 12 }}
+
+# Bot Scheduler Workers
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-scheduler-worker
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-scheduler-worker
+spec:
+  replicas: {{ .Values.botScheduler.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bot-scheduler-worker
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bot-scheduler-worker
+    spec:
+      containers:
+        - name: bot-scheduler-worker
+          image: {{ .Values.botScheduler.image.repository }}:{{ .Values.botScheduler.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["./runtime", "bot-scheduler", "worker"]
+          env:
+            {{- range $key, $value := .Values.botScheduler.worker.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          securityContext:
+            privileged: {{ .Values.botScheduler.worker.privileged }}
+          volumeMounts:
+            {{- range .Values.botScheduler.worker.volumes }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.botScheduler.worker.resources | nindent 12 }}
+      volumes:
+        {{- range .Values.botScheduler.worker.volumes }}
+        - name: {{ .name }}
+          hostPath:
+            path: {{ .hostPath }}
+        {{- end }}

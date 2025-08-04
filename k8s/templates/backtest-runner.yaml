@@ -1,0 +1,108 @@
+{{- if .Values.backtestRunner.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-backtest-runner-master
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backtest-runner-master
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 50052
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backtest-runner-master
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-backtest-runner-master
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backtest-runner-master
+spec:
+  replicas: {{ .Values.backtestRunner.master.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backtest-runner-master
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backtest-runner-master
+    spec:
+      containers:
+        - name: backtest-runner-master
+          image: {{ .Values.backtestRunner.image.repository }}:{{ .Values.backtestRunner.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["./runtime", "backtest-runner", "master"]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 50052
+          env:
+            {{- range $key, $value := .Values.backtestRunner.master.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.backtestRunner.master.resources | nindent 12 }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-backtest-runner-worker
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backtest-runner-worker
+spec:
+  replicas: {{ .Values.backtestRunner.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backtest-runner-worker
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backtest-runner-worker
+    spec:
+      containers:
+        - name: backtest-runner-worker
+          image: {{ .Values.backtestRunner.image.repository }}:{{ .Values.backtestRunner.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["./runtime", "backtest-runner", "standalone", "--node=worker"]
+          env:
+            {{- range $key, $value := .Values.backtestRunner.worker.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          securityContext:
+            privileged: {{ .Values.backtestRunner.worker.privileged }}
+          volumeMounts:
+            {{- range .Values.backtestRunner.worker.volumes }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.backtestRunner.worker.resources | nindent 12 }}
+      volumes:
+        {{- range .Values.backtestRunner.worker.volumes }}
+        - name: {{ .name }}
+          hostPath:
+            path: {{ .hostPath }}
+        {{- end }}
+{{- end }}

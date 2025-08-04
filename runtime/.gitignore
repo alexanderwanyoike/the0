@@ -1,0 +1,6 @@
+pb/*.go
+bad-bot.zip
+bad-bot/
+CHANGE.md
+PR_MESSAGE.md
+build/

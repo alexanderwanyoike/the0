@@ -1,0 +1,235 @@
+# =============================================================================
+# Bot Runner - Complete Deployment with Native Autoscaler
+# Single-segment-per-worker architecture with zero external dependencies
+# =============================================================================
+
+# Namespace (optional - remove if using default)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: runtime
+---
+
+# Service Account with autoscaling permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime
+  namespace: runtime
+---
+
+# ClusterRole for autoscaling permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: runtime-autoscaler
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "create", "update", "patch", "watch", "delete"]
+---
+
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: runtime-autoscaler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: runtime-autoscaler
+subjects:
+- kind: ServiceAccount
+  name: runtime
+  namespace: runtime
+---
+
+# ConfigMap for configuration (adjust these values for your environment)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runtime-config
+  namespace: runtime
+data:
+  # MongoDB Configuration
+  MONGO_URI: "mongodb://mongodb:27017"
+  DB_NAME: "bot_scheduler"
+  COLLECTION_NAME: "bots"
+  
+  # Autoscaler Configuration
+  MAX_SEGMENT: "64"                    # Total number of segments
+  LEASE_LOCK_NAME: "runtime"
+  
+  # Optional Features
+  ENABLE_METRICS_ENDPOINT: "true"      # Set to "false" to disable HTTP metrics
+  
+  # GCP Configuration (if using GCS)
+  # GOOGLE_CLOUD_PROJECT: "your-project-id"
+---
+
+# Secret for sensitive data (create separately with your actual values)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: runtime-secrets
+  namespace: runtime
+type: Opaque
+stringData:
+  # Add your secrets here
+  # gcp-service-account.json: |
+  #   {"type": "service_account", ...}
+---
+
+# Main Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime
+  namespace: runtime
+  labels:
+    app: runtime
+spec:
+  replicas: 3  # Initial replicas (autoscaler will adjust this)
+  selector:
+    matchLabels:
+      app: runtime
+  template:
+    metadata:
+      labels:
+        app: runtime
+    spec:
+      serviceAccountName: runtime
+      securityContext:
+        # Required for Docker-in-Docker
+        privileged: true
+      containers:
+      - name: runtime
+        image: runtime:latest  # Replace with your actual image
+        ports:
+        - containerPort: 50051
+          name: grpc
+        - containerPort: 8080
+          name: http
+        env:
+        # Pod identification (required for leader election)
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: DEPLOYMENT_NAME
+          value: "runtime"
+        
+        # Configuration from ConfigMap
+        - name: MONGO_URI
+          valueFrom:
+            configMapKeyRef:
+              name: runtime-config
+              key: MONGO_URI
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: runtime-config
+              key: DB_NAME
+        - name: COLLECTION_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: runtime-config
+              key: COLLECTION_NAME
+        - name: MAX_SEGMENT
+          valueFrom:
+            configMapKeyRef:
+              name: runtime-config
+              key: MAX_SEGMENT
+        - name: LEASE_LOCK_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: runtime-config
+              key: LEASE_LOCK_NAME
+        - name: LEASE_LOCK_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ENABLE_METRICS_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: runtime-config
+              key: ENABLE_METRICS_ENDPOINT
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        # Volume mounts (if using GCP service account)
+        # volumeMounts:
+        # - name: gcp-service-account
+        #   mountPath: /etc/gcp
+        #   readOnly: true
+      
+      # Volumes (if using GCP service account)
+      # volumes:
+      # - name: gcp-service-account
+      #   secret:
+      #     secretName: runtime-secrets
+      #     items:
+      #     - key: gcp-service-account.json
+      #       path: service-account.json
+---
+
+# Service to expose the runtime
+apiVersion: v1
+kind: Service
+metadata:
+  name: runtime-service
+  namespace: runtime
+  labels:
+    app: runtime
+spec:
+  selector:
+    app: runtime
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+
+# Health check endpoint (add this to your gin router)
+# This should return 200 OK when the service is healthy
+# Example implementation in master.go:
+# router.GET("/healthz", func(c *gin.Context) {
+#   c.JSON(200, gin.H{"status": "ok"})
+# })

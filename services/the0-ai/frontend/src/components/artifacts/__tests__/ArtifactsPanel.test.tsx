@@ -1,0 +1,504 @@
+import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest'
+import { ArtifactsPanel } from '../ArtifactsPanel'
+import { useArtifactsStore } from '@/stores/artifactsStore'
+import { useArtifacts } from '@/hooks/useArtifacts'
+import { ArtifactFile } from '@/types'
+
+// Mock the hooks and stores
+vi.mock('@/stores/artifactsStore')
+vi.mock('@/hooks/useArtifacts')
+
+// Mock child components
+vi.mock('../FileTree', () => ({
+  FileTree: vi.fn(({ files, selectedFile, onFileSelect }) => (
+    <div data-testid="file-tree">
+      {files.map((file: ArtifactFile) => (
+        <div
+          key={file.id}
+          data-testid={`file-item-${file.id}`}
+          onClick={() => onFileSelect(file)}
+          style={{
+            backgroundColor: selectedFile?.id === file.id ? 'blue' : 'transparent',
+          }}
+        >
+          {file.name}
+        </div>
+      ))}
+    </div>
+  )),
+}))
+
+vi.mock('../CodeEditor', () => ({
+  CodeEditor: vi.fn(({ file, onChange, readOnly }) => (
+    <div data-testid="code-editor">
+      <div data-testid="editor-file-name">{file.name}</div>
+      <div data-testid="editor-readonly">{readOnly ? 'true' : 'false'}</div>
+      <textarea
+        data-testid="editor-textarea"
+        value={file.content}
+        onChange={e => onChange(e.target.value)}
+        readOnly={readOnly}
+      />
+    </div>
+  )),
+}))
+
+const mockFiles: ArtifactFile[] = [
+  {
+    id: '1',
+    name: 'main.py',
+    content: 'print("hello")',
+    language: 'python',
+    type: 'file',
+  },
+  {
+    id: '2',
+    name: 'config.yaml',
+    content: 'debug: true',
+    language: 'yaml',
+    type: 'file',
+  },
+]
+
+describe('ArtifactsPanel', () => {
+  const mockUseArtifactsStore = useArtifactsStore as unknown as Mock
+  const mockUseArtifacts = useArtifacts as Mock
+
+  const defaultStoreMock = {
+    activeFile: null,
+    setActiveFile: vi.fn(),
+    updateFile: vi.fn(),
+  }
+
+  const defaultArtifactsMock = {
+    files: [],
+    isLoading: false,
+    error: null,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseArtifactsStore.mockReturnValue(defaultStoreMock)
+    mockUseArtifacts.mockReturnValue(defaultArtifactsMock)
+  })
+
+  describe('Loading state', () => {
+    it('shows loading spinner when isLoading is true', () => {
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        isLoading: true,
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(screen.getByText('Loading artifacts...')).toBeInTheDocument()
+      const spinner = document.querySelector('.animate-spin')
+      expect(spinner).toBeInTheDocument()
+    })
+  })
+
+  describe('Error state', () => {
+    it('shows error message when there is an error', () => {
+      const errorMessage = 'Failed to load artifacts'
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        error: new Error(errorMessage),
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(screen.getByText('Error loading artifacts')).toBeInTheDocument()
+      expect(screen.getByText(errorMessage)).toBeInTheDocument()
+    })
+
+    it('shows generic error message for unknown errors', () => {
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        error: 'Unknown error string',
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(screen.getByText('Error loading artifacts')).toBeInTheDocument()
+      expect(screen.getByText('Unknown error')).toBeInTheDocument()
+    })
+  })
+
+  describe('Empty state', () => {
+    it('shows empty state message when no files are available', () => {
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: [],
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(
+        screen.getByText('Start chatting with the0 to create trading bot files')
+      ).toBeInTheDocument()
+    })
+
+    it('shows no file selected message when files exist but none selected', () => {
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(screen.getByText('No file selected')).toBeInTheDocument()
+      expect(
+        screen.getByText('Select a file from the tree to view its contents')
+      ).toBeInTheDocument()
+    })
+  })
+
+  describe('Files loaded state', () => {
+    it('renders FileTree with correct props when files are loaded', () => {
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(screen.getByTestId('file-tree')).toBeInTheDocument()
+      expect(screen.getByTestId('file-item-1')).toHaveTextContent('main.py')
+      expect(screen.getByTestId('file-item-2')).toHaveTextContent('config.yaml')
+    })
+
+    it('highlights selected file in FileTree', () => {
+      const selectedFile = mockFiles[0]
+      mockUseArtifactsStore.mockReturnValue({
+        ...defaultStoreMock,
+        activeFile: selectedFile,
+      })
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      const selectedItem = screen.getByTestId('file-item-1')
+      expect(selectedItem).toHaveStyle('background-color: rgb(0, 0, 255)')
+    })
+
+    it('shows CodeEditor when a file is selected', () => {
+      const selectedFile = mockFiles[0]
+      mockUseArtifactsStore.mockReturnValue({
+        ...defaultStoreMock,
+        activeFile: selectedFile,
+      })
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument()
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('main.py')
+      expect(screen.getByTestId('editor-readonly')).toHaveTextContent('true')
+    })
+  })
+
+  describe('File selection', () => {
+    it('calls setActiveFile when a file is selected from FileTree', () => {
+      const setActiveFile = vi.fn()
+      mockUseArtifactsStore.mockReturnValue({
+        ...defaultStoreMock,
+        setActiveFile,
+      })
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      fireEvent.click(screen.getByTestId('file-item-1'))
+
+      expect(setActiveFile).toHaveBeenCalledWith(mockFiles[0])
+    })
+
+    it('updates file content when CodeEditor content changes', () => {
+      const updateFile = vi.fn()
+      const selectedFile = mockFiles[0]
+      mockUseArtifactsStore.mockReturnValue({
+        ...defaultStoreMock,
+        activeFile: selectedFile,
+        updateFile,
+      })
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      const textarea = screen.getByTestId('editor-textarea')
+      fireEvent.change(textarea, { target: { value: 'new content' } })
+
+      expect(updateFile).toHaveBeenCalledWith(selectedFile.id, 'new content')
+    })
+  })
+
+  describe('Layout and structure', () => {
+    it('renders with correct layout structure', () => {
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      const panel = document.querySelector('.h-full.flex.bg-background')
+      expect(panel).toBeInTheDocument()
+
+      // Should have file tree on left and editor area on right
+      const fileTreeContainer = screen.getByTestId('file-tree').parentElement
+      expect(fileTreeContainer).toHaveClass('w-80', 'border-r', 'border-border')
+    })
+
+    it('maintains layout consistency across different states', () => {
+      // Test loading state layout
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        isLoading: true,
+      })
+
+      const { rerender } = render(<ArtifactsPanel />)
+      let container = document.querySelector('.h-full')
+      expect(container).toBeInTheDocument()
+
+      // Test error state layout
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        error: new Error('Test error'),
+      })
+
+      rerender(<ArtifactsPanel />)
+      container = document.querySelector('.h-full')
+      expect(container).toBeInTheDocument()
+
+      // Test normal state layout
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      rerender(<ArtifactsPanel />)
+      container = document.querySelector('.h-full.flex.bg-background')
+      expect(container).toBeInTheDocument()
+    })
+  })
+
+  describe('Integration with stores and hooks', () => {
+    it('properly integrates with useArtifactsStore', () => {
+      const storeValues = {
+        activeFile: mockFiles[1],
+        setActiveFile: vi.fn(),
+        updateFile: vi.fn(),
+      }
+      mockUseArtifactsStore.mockReturnValue(storeValues)
+      mockUseArtifacts.mockReturnValue({
+        ...defaultArtifactsMock,
+        files: mockFiles,
+      })
+
+      render(<ArtifactsPanel />)
+
+      // Should show the active file from store
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('config.yaml')
+
+      // Should highlight the correct file in tree
+      const selectedItem = screen.getByTestId('file-item-2')
+      expect(selectedItem).toHaveStyle('background-color: rgb(0, 0, 255)')
+    })
+
+    it('properly integrates with useArtifacts hook', () => {
+      const artifactsValues = {
+        files: mockFiles,
+        isLoading: false,
+        error: null,
+      }
+      mockUseArtifacts.mockReturnValue(artifactsValues)
+
+      render(<ArtifactsPanel />)
+
+      // Should display files from useArtifacts hook
+      expect(screen.getByTestId('file-item-1')).toBeInTheDocument()
+      expect(screen.getByTestId('file-item-2')).toBeInTheDocument()
+    })
+  })
+
+  describe('file selection bug prevention', () => {
+    it('maintains selected file when switching between files in file tree', () => {
+      const mockFiles = [
+        {
+          id: 'file1',
+          name: 'strategy.py',
+          content: 'def momentum_strategy():\n    return "buy_signal"',
+          language: 'python',
+          type: 'file' as const,
+        },
+        {
+          id: 'file2',
+          name: 'config.yaml',
+          content: 'strategy:\n  name: momentum',
+          language: 'yaml',
+          type: 'file' as const,
+        },
+      ]
+
+      let currentActiveFile: any = null
+      const mockSetActiveFile = vi.fn(file => {
+        currentActiveFile = file
+      })
+
+      mockUseArtifacts.mockReturnValue({
+        files: mockFiles,
+        isLoading: false,
+        error: null,
+      })
+
+      mockUseArtifactsStore.mockImplementation(() => ({
+        activeFile: currentActiveFile,
+        setActiveFile: mockSetActiveFile,
+        updateFile: vi.fn(),
+      }))
+
+      const { rerender } = render(<ArtifactsPanel />)
+
+      // Initially no file selected
+      expect(screen.getByText('No file selected')).toBeInTheDocument()
+
+      // Click first file
+      fireEvent.click(screen.getByText('strategy.py'))
+      expect(mockSetActiveFile).toHaveBeenCalledWith(mockFiles[0])
+
+      // Simulate store update
+      currentActiveFile = mockFiles[0]
+      rerender(<ArtifactsPanel />)
+
+      // Should show first file content
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument()
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('strategy.py')
+
+      // Click second file
+      fireEvent.click(screen.getByText('config.yaml'))
+      expect(mockSetActiveFile).toHaveBeenCalledWith(mockFiles[1])
+
+      // Simulate store update
+      currentActiveFile = mockFiles[1]
+      rerender(<ArtifactsPanel />)
+
+      // Should show second file content
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('config.yaml')
+    })
+
+    it('preserves file selection when files array is updated', () => {
+      const initialFiles = [
+        {
+          id: 'file1',
+          name: 'strategy.py',
+          content: 'def momentum_strategy():\n    return "buy_signal"',
+          language: 'python',
+          type: 'file' as const,
+        },
+      ]
+
+      let currentFiles = initialFiles
+      let currentActiveFile: any = initialFiles[0]
+
+      mockUseArtifacts.mockImplementation(() => ({
+        files: currentFiles,
+        isLoading: false,
+        error: null,
+      }))
+
+      mockUseArtifactsStore.mockImplementation(() => ({
+        activeFile: currentActiveFile,
+        setActiveFile: vi.fn(),
+        updateFile: vi.fn(),
+      }))
+
+      const { rerender } = render(<ArtifactsPanel />)
+
+      // Should show initial file
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument()
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('strategy.py')
+
+      // Simulate files array update (like what happens in useArtifacts)
+      const updatedFiles = [
+        {
+          ...initialFiles[0],
+          content: 'def updated_momentum_strategy():\n    return "updated_signal"',
+        },
+      ]
+      currentFiles = updatedFiles
+      // Active file should be preserved (not reset to null)
+      currentActiveFile = updatedFiles[0]
+
+      rerender(<ArtifactsPanel />)
+
+      // Should still show the file (not revert to "No file selected")
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument()
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('strategy.py')
+      expect(screen.queryByText('No file selected')).not.toBeInTheDocument()
+    })
+
+    it('handles file selection with identical IDs but different content', () => {
+      const file1v1 = {
+        id: 'file1',
+        name: 'strategy.py',
+        content: 'def momentum_strategy():\n    return "buy_signal"',
+        language: 'python',
+        type: 'file' as const,
+      }
+
+      const file1v2 = {
+        id: 'file1',
+        name: 'strategy.py',
+        content: 'def momentum_strategy():\n    return "updated_signal"',
+        language: 'python',
+        type: 'file' as const,
+      }
+
+      let currentActiveFile = file1v1
+
+      mockUseArtifacts.mockReturnValue({
+        files: [file1v1],
+        isLoading: false,
+        error: null,
+      })
+
+      mockUseArtifactsStore.mockImplementation(() => ({
+        activeFile: currentActiveFile,
+        setActiveFile: vi.fn(),
+        updateFile: vi.fn(),
+      }))
+
+      const { rerender } = render(<ArtifactsPanel />)
+
+      // Should show initial content
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument()
+
+      // Update to new version of same file
+      currentActiveFile = file1v2
+      mockUseArtifacts.mockReturnValue({
+        files: [file1v2],
+        isLoading: false,
+        error: null,
+      })
+
+      rerender(<ArtifactsPanel />)
+
+      // Should still show the editor with updated content
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument()
+      expect(screen.getByTestId('editor-file-name')).toHaveTextContent('strategy.py')
+    })
+  })
+})

@@ -1,0 +1,75 @@
+{{- if .Values.the0Analyzer.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-analyzer
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: analyzer
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: analyzer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-analyzer
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: analyzer
+spec:
+  replicas: {{ .Values.the0Analyzer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: analyzer
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: analyzer
+    spec:
+      containers:
+        - name: analyzer
+          image: {{ .Values.the0Analyzer.image.repository }}:{{ .Values.the0Analyzer.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.the0Analyzer.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import asyncio; from src.services.nats_client import NATSClient; asyncio.run(NATSClient().connect())"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import asyncio; from src.services.nats_client import NATSClient; asyncio.run(NATSClient().connect())"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.the0Analyzer.resources | nindent 12 }}
+{{- end }}

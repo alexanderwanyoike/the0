@@ -1,0 +1,51 @@
+# Example .the0ignore file for the0 custom bot deployment
+
+# Exclude log files but keep important ones
+*.log
+!production.log
+!important.log
+
+# Exclude temporary files
+*.tmp
+*.temp
+**/*.cache
+
+# Exclude test directories and files
+test/
+tests/
+__tests__/
+*_test.py
+test_*.py
+
+# Exclude documentation (except main README)
+docs/**/*.md
+!docs/README.md
+
+# Exclude development and build artifacts
+.env
+.env.local
+build/
+dist/
+**/*.pyc
+**/*.pyo
+__pycache__/
+
+# Exclude OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Exclude IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Exclude configuration files except production
+config_*
+!config_production.yaml
+!config_prod.json
+
+# Note: vendor/ and node_modules/ are automatically protected
+# and will never be ignored regardless of patterns above

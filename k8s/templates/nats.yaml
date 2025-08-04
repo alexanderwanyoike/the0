@@ -1,0 +1,110 @@
+{{- if .Values.nats.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-nats
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.nats.port }}
+      targetPort: nats
+      protocol: TCP
+      name: nats
+    - port: {{ .Values.nats.monitoringPort }}
+      targetPort: monitoring
+      protocol: TCP
+      name: monitoring
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-nats
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nats
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nats
+    spec:
+      containers:
+        - name: nats
+          image: {{ .Values.nats.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command:
+            - nats-server
+            - "-js"
+            - "-m"
+            - "{{ .Values.nats.monitoringPort }}"
+            - "--store_dir"
+            - "/data"
+          ports:
+            - name: nats
+              containerPort: {{ .Values.nats.port }}
+              protocol: TCP
+            - name: monitoring
+              containerPort: {{ .Values.nats.monitoringPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: monitoring
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: monitoring
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.nats.resources | nindent 12 }}
+          {{- if .Values.nats.persistence.enabled }}
+          volumeMounts:
+            - name: nats-storage
+              mountPath: /data
+          {{- end }}
+      {{- if .Values.nats.persistence.enabled }}
+      volumes:
+        - name: nats-storage
+          persistentVolumeClaim:
+            claimName: {{ include "the0.fullname" . }}-nats-pvc
+      {{- end }}
+
+{{- if .Values.nats.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "the0.fullname" . }}-nats-pvc
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.nats.persistence.size }}
+{{- end }}
+{{- end }}

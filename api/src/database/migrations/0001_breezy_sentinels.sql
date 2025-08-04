@@ -1,0 +1,1 @@
+ALTER TABLE "custom_bots" ADD COLUMN "review" jsonb;

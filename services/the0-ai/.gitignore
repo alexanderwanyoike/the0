@@ -1,0 +1,12 @@
+venv
+.claude
+CLAUDE.md
+INTIAL.md
+.env
+bots
+testprompt.md
+.data/
+data/
+**/*.pyc
+dist/
+build/

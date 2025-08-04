@@ -1,0 +1,42 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Vendor directory (if you use vendoring)
+vendor/
+
+# Logs
+logs
+*.log
+
+# Build output
+dist/
+build/
+bin/
+out/
+
+# Environment files
+.env
+.env.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE/editor folders
+.idea/
+.vscode/
+*.swp
+
+# Docker files (optional)
+Dockerfile*
+docker-compose*
+
+# Node modules (if not used, can be removed)
+node_modules/
+bower_components/
