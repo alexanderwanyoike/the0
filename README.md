@@ -89,37 +89,90 @@ cd runtime && go run cmd/app/main.go  # Runtime
 
 ## 🏗️ Architecture
 
-the0 is built as a modern platform with separate services that work together to provide a seamless bot development and execution experience:
+the0 is built as a comprehensive microservices platform that enables algorithmic trading bot development and execution:
 
 ```mermaid
-graph TD
-    User[👤 User] --> Frontend[🌐 Web Dashboard]
-    Frontend --> API[🚀 API Server]
-    API --> DB[(🐘 PostgreSQL)]
-    API --> Runtime[⚙️ Bot Runtime]
-    Runtime --> MongoDB[(🍃 MongoDB)]
-    Runtime --> Exchanges[📈 Trading Exchanges]
+C4Container
+    title Container Diagram - the0 Algorithmic Trading Platform
     
-    API --> Analyzer[🔍 Security Analyzer]
-    API --> Storage[📦 File Storage]
+    Person_Ext(developer, "Bot Developer", "Creates and tests trading bots")
+    Person_Ext(trader, "Trader", "Deploys and monitors trading bots")
+
+    System_Boundary(the0_platform, "the0 Platform") {
+        Container(frontend, "Web Dashboard", "Next.js 15, React 19", "Bot management, real-time monitoring, documentation")
+        Container(cli, "CLI Tool", "Go, Cobra", "Local bot development, deployment commands")
+        Container(api, "API Server", "NestJS, TypeScript", "REST API, authentication, orchestration")
+        
+        System_Boundary(runtime_services, "Runtime Services") {
+            Container(bot_runner, "Bot Runner", "Go, gRPC", "Real-time bot execution with master-worker pattern")
+            Container(backtest_runner, "Backtest Runner", "Go, gRPC", "Historical strategy testing and validation")  
+            Container(bot_scheduler, "Bot Scheduler", "Go, gRPC", "Cron-based scheduled bot execution")
+        }
+        
+        Container(security_analyzer, "Security Analyzer", "Python, YARA", "Automated bot code security analysis")
+        Container(ai_service, "AI Assistant", "Python, FastAPI", "AI-powered bot development helper")
+        
+        ContainerDb(postgres, "PostgreSQL", "Database", "Users, bot definitions, auth tokens")
+        ContainerDb(mongodb, "MongoDB", "Database", "Runtime state, job queues, execution logs")
+        Container(nats, "NATS JetStream", "Message Broker", "Event streaming, service coordination")
+        Container(minio, "MinIO", "Object Storage", "Bot code, logs, backtest results")
+    }
+
+    Rel(developer, frontend, "Manages bots", "HTTPS")
+    Rel(developer, cli, "Develops locally", "CLI")
+    Rel(trader, frontend, "Monitors performance", "HTTPS")
     
-    style Frontend fill:#e1f5fe
-    style API fill:#f3e5f5
-    style Runtime fill:#fff3e0
-    style Analyzer fill:#fce4ec
+    Rel(frontend, api, "API calls", "REST/HTTP + JWT")
+    Rel(cli, api, "Bot operations", "REST/HTTP + API Key")
+    
+    Rel(api, postgres, "User data", "SQL")
+    Rel(api, nats, "Events", "NATS Protocol") 
+    Rel(api, minio, "File storage", "S3 API")
+    
+    Rel(bot_runner, mongodb, "Execution state", "MongoDB")
+    Rel(backtest_runner, mongodb, "Job queues", "MongoDB")
+    Rel(bot_scheduler, mongodb, "Schedules", "MongoDB")
+    
+    Rel(nats, bot_runner, "Bot events", "NATS")
+    Rel(nats, backtest_runner, "Backtest events", "NATS")
+    Rel(nats, bot_scheduler, "Schedule events", "NATS")
+    Rel(nats, security_analyzer, "Analysis events", "NATS")
+    
+    Rel(bot_runner, minio, "Logs", "S3 API")
+    Rel(backtest_runner, minio, "Results", "S3 API")
+    Rel(security_analyzer, minio, "Code analysis", "S3 API")
+    
+    Rel(frontend, api, "Real-time updates", "SSE")
+    
+    UpdateElementStyle(the0_platform, $bgColor="#e8f4fd")
+    UpdateElementStyle(runtime_services, $bgColor="#fff8e1")
+    UpdateElementStyle(frontend, $bgColor="#e1f5fe")
+    UpdateElementStyle(api, $bgColor="#f3e5f5") 
+    UpdateElementStyle(cli, $bgColor="#e8f5e8")
 ```
 
 ### How It Works
 
-**🌐 Web Dashboard** - Your control center for creating, managing, and monitoring trading bots with real-time updates
+**🌐 Web Dashboard** - Next.js frontend for bot management, real-time monitoring, and comprehensive documentation system
 
-**🚀 API Server** - Handles all your requests, manages user accounts, and coordinates between different parts of the system
+**🛠️ CLI Tool** - Go-based command-line interface for local bot development, testing, and deployment automation
 
-**⚙️ Bot Runtime** - The engine that runs your trading bots securely, whether they're scheduled to run daily or trading in real-time
+**🚀 API Server** - NestJS backend providing REST APIs, JWT authentication, and event orchestration across all services
 
-**🔍 Security Analyzer** - Reviews your bot code for basic safety checks before deployment
+**⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
+- **Bot Runner**: Real-time trading bot execution
+- **Backtest Runner**: Historical strategy validation  
+- **Bot Scheduler**: Cron-based scheduled execution
 
-**💾 Data Storage** - Uses PostgreSQL for your account and bot settings, MongoDB for runtime data and logs, and secure file storage for your bot code
+**🔍 Security Analyzer** - Python service with YARA rules for automated security analysis of user-submitted bot code
+
+**🤖 AI Assistant** - FastAPI service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
+
+**💾 Data Architecture** - Multi-database approach:
+- **PostgreSQL**: User accounts, bot definitions, authentication
+- **MongoDB**: Runtime state, job queues, execution logs
+- **MinIO**: Bot code storage, logs, backtest results
+- **NATS JetStream**: Event streaming and service coordination
 
 ### Key Benefits
 
