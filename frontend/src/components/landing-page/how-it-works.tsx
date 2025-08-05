@@ -1,30 +1,30 @@
-import { MousePointer, Settings, Rocket, LayoutDashboard } from 'lucide-react';
+import { Code, TestTube, Container, BarChart3 } from 'lucide-react';
 
 const steps = [
   {
-    icon: MousePointer,
-    title: 'Choose',
+    icon: Code,
+    title: 'Develop',
     description:
-      'Browse our library of proven trading strategies. From conservative dollar-cost averaging to dynamic momentum trading—find the approach that matches your investment goals and risk tolerance.',
+      'Create custom trading bots using Python or JavaScript with any libraries you prefer. Use our framework-agnostic approach to build everything from simple DCA strategies to complex multi-asset arbitrage algorithms.',
   },
   {
-    icon: Settings,
-    title: 'Configure',
+    icon: TestTube,
+    title: 'Test',
     description:
-      'Set your parameters through our simple interface. Choose your assets, set your budget, pick your schedule, and customize risk settings. No technical knowledge required.',
+      'Validate your strategies with comprehensive backtesting using historical data. Test different parameters, optimize performance, and ensure your algorithms work before deploying to live markets.',
   },
   {
-    icon: Rocket,
+    icon: Container,
     title: 'Deploy',
     description:
-      'Connect your brokerage account and launch your bot with one click. Your automated trading strategy starts working immediately, executing trades based on your configured rules.',
+      'Launch your platform locally with Docker Compose in under 5 minutes. Deploy your bots for scheduled execution or real-time trading with full isolation and security.',
   },
-  // {
-  //   icon: LayoutDashboard,
-  //   title: 'Monitor',
-  //   description:
-  //     'Track performance through your personalized dashboard. View profits, adjust settings, pause or modify bots anytime. Stay in complete control of your automated investments.',
-  // },
+  {
+    icon: BarChart3,
+    title: 'Monitor',
+    description:
+      'Track performance through the analytics dashboard. Monitor bot execution, analyze trading results, and get comprehensive insights into your automated trading portfolio.',
+  },
 ];
 
 export function HowItWorksSection() {
@@ -34,20 +34,13 @@ export function HowItWorksSection() {
         <div className="text-center mb-16">
           <h2 className="text-3xl font-bold">How It Works</h2>
           <p className="mt-4 text-xl text-muted-foreground">
-            From setup to profits in just 3 simple steps
+            From development to deployment in 4 simple steps
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-12">
           {steps.map((step, index) => (
-            <div
-              key={index}
-              className={`space-y-4 ${
-                index === steps.length - 1 && steps.length % 2 !== 0
-                  ? 'md:col-span-2 md:mx-auto md:max-w-md'
-                  : ''
-              }`}
-            >
+            <div key={index} className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <step.icon className="h-5 w-5 text-primary" />

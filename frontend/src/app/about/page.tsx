@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, MapPin, Phone, Github, Twitter, Linkedin } from 'lucide-react';
+import { Github, Code, Users, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NavigationMenu } from '@/components/landing-page/navigation-menu';
 
@@ -21,11 +21,7 @@ export default function AboutPage() {
             </div>
             <h1 className="text-4xl font-bold mb-4">About the0</h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              We make professional trading automation accessible to everyone.
-              Our platform handles the complexity while keeping you in complete
-              control. Choose from proven strategies, configure through our
-              simple interface, and deploy automated trading bots—no coding
-              required.
+              An open source algorithmic trading platform that empowers developers and traders to create, deploy, and manage trading bots across multiple markets. Built by the community, for the community.
             </p>
           </div>
         </div>
@@ -37,40 +33,35 @@ export default function AboutPage() {
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold mb-4">Our Mission</h2>
             <p className="text-lg text-muted-foreground">
-              We&#39;re democratizing professional trading automation. Our goal
-              is to give every trader—from beginners to experts—access to
-              sophisticated strategies that were once exclusive to institutions.
+              We believe algorithmic trading should be accessible to everyone. the0 provides the infrastructure and tools needed to build everything from simple DCA strategies to complex multi-asset arbitrage algorithms.
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div>
               <div className="bg-primary/10 rounded-lg p-6 mb-4">
-                <h3 className="font-bold mb-2">Simple & Intuitive</h3>
+                <Code className="h-8 w-8 mx-auto mb-4 text-primary" />
+                <h3 className="font-bold mb-2">Developer First</h3>
                 <p className="text-muted-foreground">
-                  Set up powerful trading bots through our user-friendly
-                  interface. Choose strategies, configure parameters, and
-                  deploy—all without writing code.
+                  Framework agnostic approach. Build bots in Python or JavaScript with any libraries you prefer. Full flexibility and control.
                 </p>
               </div>
             </div>
             <div>
               <div className="bg-primary/10 rounded-lg p-6 mb-4">
-                <h3 className="font-bold mb-2">Secure & Trustworthy</h3>
+                <Users className="h-8 w-8 mx-auto mb-4 text-primary" />
+                <h3 className="font-bold mb-2">Open Source</h3>
                 <p className="text-muted-foreground">
-                  Your funds stay in your brokerage account. We execute trades
-                  securely on your behalf through encrypted connections, never
-                  holding your money.
+                  Built in the open with community contributions. Transparent, secure, and continuously improved by developers worldwide.
                 </p>
               </div>
             </div>
             <div>
               <div className="bg-primary/10 rounded-lg p-6 mb-4">
-                <h3 className="font-bold mb-2">Proven Strategies</h3>
+                <Heart className="h-8 w-8 mx-auto mb-4 text-primary" />
+                <h3 className="font-bold mb-2">Community Driven</h3>
                 <p className="text-muted-foreground">
-                  Access a library of tested trading strategies—from
-                  conservative dollar-cost averaging to dynamic momentum
-                  trading—all ready to deploy.
+                  We encourage the use of AI tools, creative solutions, and innovative approaches to algorithmic trading development.
                 </p>
               </div>
             </div>
@@ -78,14 +69,13 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* How We Work Section */}
+      {/* Technology Section */}
       <div className="py-16">
         <div className="container max-w-4xl">
           <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold mb-4">How We Work</h2>
+            <h2 className="text-2xl font-bold mb-4">Technology Stack</h2>
             <p className="text-muted-foreground">
-              Our platform bridges the gap between complex algorithmic trading
-              and everyday investors.
+              Built with modern technologies for scalability, performance, and reliability.
             </p>
           </div>
 
@@ -93,23 +83,19 @@ export default function AboutPage() {
             <div className="space-y-6">
               <div>
                 <h3 className="font-bold mb-2 text-primary">
-                  Choose Your Strategy
+                  Microservices Architecture
                 </h3>
                 <p className="text-muted-foreground">
-                  Browse our curated library of proven trading strategies. Each
-                  strategy is thoroughly tested and comes with clear
-                  explanations of how it works and what risks are involved.
+                  Comprehensive platform with specialized services for bot execution, backtesting, scheduling, and security analysis. Each service is designed for scalability and reliability.
                 </p>
               </div>
 
               <div>
                 <h3 className="font-bold mb-2 text-primary">
-                  Simple Configuration
+                  Modern Frontend
                 </h3>
                 <p className="text-muted-foreground">
-                  Configure your bot through our intuitive interface. Set your
-                  budget, choose your assets, pick your schedule, and customize
-                  risk parameters— all with simple sliders and dropdowns.
+                  Next.js 15 with React 19 for the web dashboard, plus a Go-based CLI tool for local development. Real-time monitoring and comprehensive bot management.
                 </p>
               </div>
             </div>
@@ -117,22 +103,17 @@ export default function AboutPage() {
             <div className="space-y-6">
               <div>
                 <h3 className="font-bold mb-2 text-primary">
-                  One-Click Deployment
+                  Container Ready
                 </h3>
                 <p className="text-muted-foreground">
-                  Connect your brokerage account and launch your bot instantly.
-                  Your automated strategy starts working immediately, executing
-                  trades based on your configured rules.
+                  Docker Compose for local development, Kubernetes support for production deployments. Get up and running in minutes with a single command.
                 </p>
               </div>
 
               <div>
-                <h3 className="font-bold mb-2 text-primary">Full Control</h3>
+                <h3 className="font-bold mb-2 text-primary">Multi-Database</h3>
                 <p className="text-muted-foreground">
-                  Monitor performance through your dashboard. View profits,
-                  adjust settings, pause strategies, or modify parameters
-                  anytime. You&#39;re always in complete control of your
-                  automated investments.
+                  PostgreSQL for user data, MongoDB for runtime state, MinIO for storage, and NATS JetStream for event coordination. Each database optimized for its use case.
                 </p>
               </div>
             </div>
@@ -140,90 +121,46 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* Contact Section */}
+      {/* Contributing Section */}
       <div className="py-16 bg-muted/50">
         <div className="container max-w-4xl">
           <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold mb-4">Contact Us</h2>
+            <h2 className="text-2xl font-bold mb-4">Join the Community</h2>
             <p className="text-muted-foreground">
-              Have questions? Our team is here to help.
+              We welcome contributions from developers, traders, and AI enthusiasts. Help us build the future of algorithmic trading.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Email</p>
-                  <a
-                    href="mailto:contact@alphaneuron.dev"
-                    className="text-primary hover:text-primary/80"
-                  >
-                    contact@alphanueron.net
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Phone className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Phone</p>
-                  <a
-                    href="tel:+447376195527"
-                    className="text-primary hover:text-primary/80"
-                  >
-                    (+44) 737619 5527
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Address</p>
-                  <p className="text-muted-foreground">
-                    406 4 Box Works Worsley Street
-                    <br />
-                    Manchester, M15 4NU
-                    <br />
-                  </p>
-                </div>
+              <div>
+                <h3 className="font-bold mb-2 text-primary">How to Contribute</h3>
+                <ul className="text-muted-foreground space-y-2">
+                  <li>• Submit bug reports and feature requests</li>
+                  <li>• Contribute code improvements and new features</li>
+                  <li>• Share innovative trading strategies and patterns</li>
+                  <li>• Help improve documentation and examples</li>
+                  <li>• Test and provide feedback on new releases</li>
+                </ul>
               </div>
             </div>
 
             <div className="space-y-6">
-              <h3 className="font-medium mb-4">Connect With Us</h3>
-              <div className="flex gap-4">
-                <Button variant="outline" size="icon" asChild>
-                  <a
-                    href="https://x.com/the0dev"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Twitter className="h-4 w-4" />
-                  </a>
-                </Button>
-                <Button variant="outline" size="icon" asChild>
-                  <a
-                    href="https://www.linkedin.com/company/alpha-neuron"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Linkedin className="h-4 w-4" />
-                  </a>
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-6 bg-background">
-                <h4 className="font-medium mb-2">Support Hours</h4>
+              <div>
+                <h3 className="font-bold mb-2 text-primary">AI-Friendly Development</h3>
                 <p className="text-muted-foreground mb-4">
-                  Monday - Friday
-                  <br />
-                  9:00 AM - 6:00 PM (GMT)
+                  We encourage the use of AI tools like Claude, ChatGPT, and GitHub Copilot in development. Creative solutions and innovative approaches are always welcome.
                 </p>
                 <Button asChild>
-                  <a href="mailto:support@alphaneuron.net">Contact Support</a>
+                  <a
+                    href="https://github.com/alexanderwanyoike/the0"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="gap-2"
+                  >
+                    <Github className="h-4 w-4" />
+                    View on GitHub
+                  </a>
                 </Button>
               </div>
             </div>
