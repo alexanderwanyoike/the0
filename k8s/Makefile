@@ -11,20 +11,34 @@ RELEASE_NAME ?= the0
 NAMESPACE ?= the0
 CHART_PATH ?= .
 
-# Prerequisites check
+# Prerequisites check for general use
 .PHONY: check-deps
-check-deps: ## Check if required tools are installed
+check-deps: ## Check if required tools are installed and cluster is accessible
 	@command -v helm >/dev/null 2>&1 || { echo "❌ Helm is required. Install: https://helm.sh/docs/intro/install/"; exit 1; }
 	@command -v kubectl >/dev/null 2>&1 || { echo "❌ kubectl is required. Install: https://kubernetes.io/docs/tasks/tools/"; exit 1; }
 	@kubectl cluster-info >/dev/null 2>&1 || { echo "❌ kubectl not configured or cluster unreachable"; exit 1; }
 	@echo "✅ Prerequisites satisfied"
 
+# Prerequisites check for minikube (doesn't require running cluster)
+.PHONY: check-minikube-deps
+check-minikube-deps: ## Check if required tools are installed for minikube
+	@command -v minikube >/dev/null 2>&1 || { echo "❌ Minikube is required. Install: https://minikube.sigs.k8s.io/docs/start/"; exit 1; }
+	@command -v helm >/dev/null 2>&1 || { echo "❌ Helm is required. Install: https://helm.sh/docs/intro/install/"; exit 1; }
+	@command -v kubectl >/dev/null 2>&1 || { echo "❌ kubectl is required. Install: https://kubernetes.io/docs/tasks/tools/"; exit 1; }
+	@command -v docker >/dev/null 2>&1 || { echo "❌ Docker is required. Install: https://docs.docker.com/get-docker/"; exit 1; }
+	@echo "✅ Minikube prerequisites satisfied"
+
+
 # Minikube lifecycle management
 .PHONY: minikube-up
-minikube-up: check-deps ## Build, deploy and show service URLs (simplified)
+minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplified)
 	@echo "🏗️  Starting minikube deployment..."
 	@minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker 2>/dev/null || echo "Minikube already running"
+	@echo "⏳ Waiting for minikube cluster to be ready..."
+	@kubectl cluster-info >/dev/null 2>&1 || { echo "❌ Failed to connect to minikube cluster"; exit 1; }
+	@echo "✅ Minikube cluster is ready"
 	@echo "🔨 Building application images in minikube environment..."
+	@echo "⚠️  Note: This requires internet connectivity to pull base images from Docker Hub"
 	@eval $$(minikube docker-env) && \
 		docker build -t the0-api:latest ../api && \
 		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 -t the0-frontend:latest ../frontend && \
@@ -59,14 +73,43 @@ minikube-up: check-deps ## Build, deploy and show service URLs (simplified)
 	@echo "💡 Use 'make logs' to view service logs"
 
 .PHONY: minikube-down
-minikube-down: check-deps ## Stop and remove deployment
+minikube-down: ## Stop and remove deployment
 	@echo "🛑 Stopping minikube deployment..."
-	@helm uninstall $(RELEASE_NAME) -n $(NAMESPACE) 2>/dev/null || echo "Release not found"
-	@kubectl delete namespace $(NAMESPACE) --ignore-not-found=true
-	@echo "✅ Minikube deployment stopped and cleaned up"
+	@if minikube status >/dev/null 2>&1; then \
+		helm uninstall $(RELEASE_NAME) -n $(NAMESPACE) 2>/dev/null || echo "Release not found"; \
+		kubectl delete namespace $(NAMESPACE) --ignore-not-found=true; \
+		echo "✅ Minikube deployment stopped and cleaned up"; \
+	else \
+		echo "⚠️  Minikube is not running"; \
+	fi
+
+.PHONY: minikube-pause
+minikube-pause: ## Pause minikube (saves resources, preserves environment)
+	@echo "⏸️  Pausing minikube..."
+	@minikube pause
+	@echo "✅ Minikube paused. Use 'make minikube-resume' to resume."
+
+.PHONY: minikube-resume
+minikube-resume: ## Resume paused minikube
+	@echo "▶️  Resuming minikube..."
+	@minikube unpause
+	@echo "✅ Minikube resumed."
+
+.PHONY: minikube-stop
+minikube-stop: ## Stop minikube (preserves cluster, saves more resources)
+	@echo "🛑 Stopping minikube..."
+	@minikube stop
+	@echo "✅ Minikube stopped. Use 'make minikube-start' to restart."
+
+.PHONY: minikube-start
+minikube-start: ## Start stopped minikube
+	@echo "🚀 Starting minikube..."
+	@minikube start
+	@echo "✅ Minikube started."
 
 .PHONY: minikube-restart
 minikube-restart: minikube-down minikube-up ## Quick restart (rebuild and redeploy)
+
 
 .PHONY: minikube
 minikube: minikube-up ## Alias for minikube-up (backward compatibility)
