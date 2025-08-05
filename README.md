@@ -277,6 +277,7 @@ We encourage the use of AI tools and agents in development:
 - ✅ **AI-Generated Code** - AI-written code is perfectly fine as long as it's well-tested
 - ✅ **Creative Solutions** - We value innovative approaches and creative problem-solving
 - ⚠️ **Quality First** - Ensure your code is properly tested, regardless of how it was created
+- ⚠️ **Context Engineering Over Vibe Coding** - Use context engineering when contributing with AI rather than "giving into the vibes"
 
 ### Ways to Contribute
 
