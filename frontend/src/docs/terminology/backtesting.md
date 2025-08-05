@@ -1,7 +1,7 @@
 ---
-title: 'Backtesting'
-description: 'Testing trading strategies with historical data'
-tags: ['terminology', 'backtesting', 'testing']
+title: "Backtesting"
+description: "Testing trading strategies with historical data"
+tags: ["terminology", "backtesting", "testing"]
 order: 6
 ---
 
@@ -26,7 +26,7 @@ Backtesting allows traders to:
 
 ## How to perform Backtesting
 
-To perform backtesting for a Custom Bot/User Bot.
+To perform backtesting for a Custom Bot.
 
 ### Custom Bots
 
@@ -34,15 +34,6 @@ To perform backtesting for a Custom Bot/User Bot.
 - Select a bot and click "Backtest"
 - Configure the backtest parameters (date range, data source, etc.)
 - Run the backtest and view results
-
-### User Bots
-
-- Go to the [User Bots](/user-bots) section
-- Select a bot and click "Backtest"
-- Configure the backtest parameters (date range, data source, etc.)
-- Run the backtest and view results
-
-> Not all Custom Bots or User Bots may support backtesting. Check the bot details for availability.
 
 ---
 

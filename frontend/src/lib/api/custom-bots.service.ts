@@ -1,6 +1,11 @@
-import { ApiClient, ApiResponse } from '@/lib/api-client';
-import { Result, Ok, Failure } from '@/lib/result';
-import { CustomBotWithVersions, CustomBotVersion, CustomBotStatus, CustomBotConfig } from '@/types/custom-bots';
+import { ApiClient, ApiResponse } from "@/lib/api-client";
+import { Result, Ok, Failure } from "@/lib/result";
+import {
+  CustomBotWithVersions,
+  CustomBotVersion,
+  CustomBotStatus,
+  CustomBotConfig,
+} from "@/types/custom-bots";
 
 export interface CustomBotServiceError {
   message: string;
@@ -12,13 +17,19 @@ export class CustomBotService {
    * Get all custom bots for the current user with version grouping logic
    * This replaces the Firestore onSnapshot listener in use-custom-bots.ts
    */
-  static async getCustomBots(): Promise<Result<CustomBotWithVersions[], CustomBotServiceError>> {
+  static async getCustomBots(): Promise<
+    Result<CustomBotWithVersions[], CustomBotServiceError>
+  > {
     try {
-      const response = await ApiClient.get<{success: boolean, data: any[], message: string}>('/api/custom-bots');
-      
+      const response = await ApiClient.get<{
+        success: boolean;
+        data: any[];
+        message: string;
+      }>("/api/custom-bots");
+
       if (!response.data || !response.data.success) {
         return Failure({
-          message: response.error?.message || 'Failed to fetch custom bots',
+          message: response.error?.message || "Failed to fetch custom bots",
           statusCode: response.error?.statusCode || 500,
         });
       }
@@ -26,7 +37,7 @@ export class CustomBotService {
       // Check if data is already in CustomBotWithVersions format (has versions array)
       const rawData = response.data.data;
       let customBots: CustomBotWithVersions[];
-      
+
       if (rawData.length > 0 && rawData[0].versions) {
         // Data is already transformed by the backend, just convert dates
         customBots = rawData.map((bot: any) => ({
@@ -39,7 +50,9 @@ export class CustomBotService {
             review: version.review
               ? {
                   ...version.review,
-                  reviewedAt: version.review.reviewedAt ? new Date(version.review.reviewedAt) : undefined,
+                  reviewedAt: version.review.reviewedAt
+                    ? new Date(version.review.reviewedAt)
+                    : undefined,
                 }
               : undefined,
           })),
@@ -52,7 +65,7 @@ export class CustomBotService {
       return Ok(customBots);
     } catch (error: any) {
       return Failure({
-        message: error.message || 'Network error',
+        message: error.message || "Network error",
         statusCode: 500,
       });
     }
@@ -62,20 +75,22 @@ export class CustomBotService {
    * Get a specific custom bot by name with all versions
    * This replaces the Firestore listener in use-custom-bot.ts
    */
-  static async getCustomBot(botName: string): Promise<Result<CustomBotWithVersions, CustomBotServiceError>> {
+  static async getCustomBot(
+    botName: string,
+  ): Promise<Result<CustomBotWithVersions, CustomBotServiceError>> {
     try {
       // First get all custom bots to find the one with the matching name
       const allBotsResult = await this.getCustomBots();
-      
+
       if (!allBotsResult.success) {
         return Failure(allBotsResult.error);
       }
 
-      const customBot = allBotsResult.data.find(bot => bot.name === botName);
-      
+      const customBot = allBotsResult.data.find((bot) => bot.name === botName);
+
       if (!customBot) {
         return Failure({
-          message: 'Bot not found',
+          message: "Bot not found",
           statusCode: 404,
         });
       }
@@ -83,7 +98,7 @@ export class CustomBotService {
       return Ok(customBot);
     } catch (error: any) {
       return Failure({
-        message: error.message || 'Network error',
+        message: error.message || "Network error",
         statusCode: 500,
       });
     }
@@ -93,7 +108,9 @@ export class CustomBotService {
    * Transform raw API response to CustomBotWithVersions format
    * This preserves the complex version grouping logic from the original Firestore hooks
    */
-  private static transformToCustomBotsWithVersions(rawBots: any[]): CustomBotWithVersions[] {
+  private static transformToCustomBotsWithVersions(
+    rawBots: any[],
+  ): CustomBotWithVersions[] {
     const botData: CustomBotWithVersions[] = [];
     const botsByName = new Map<string, any[]>();
 
@@ -113,7 +130,9 @@ export class CustomBotService {
         review: rawBot.review
           ? {
               ...rawBot.review,
-              reviewedAt: rawBot.review.reviewedAt ? new Date(rawBot.review.reviewedAt) : undefined,
+              reviewedAt: rawBot.review.reviewedAt
+                ? new Date(rawBot.review.reviewedAt)
+                : undefined,
             }
           : undefined,
       };
@@ -159,13 +178,19 @@ export class CustomBotService {
   /**
    * Get specific version of a custom bot
    */
-  static async getCustomBotVersion(botName: string, version: string): Promise<Result<any, CustomBotServiceError>> {
+  static async getCustomBotVersion(
+    botName: string,
+    version: string,
+  ): Promise<Result<any, CustomBotServiceError>> {
     try {
-      const response = await ApiClient.get<any>(`/api/custom-bots/${encodeURIComponent(botName)}/${encodeURIComponent(version)}`);
-      
+      const response = await ApiClient.get<any>(
+        `/api/custom-bots/${encodeURIComponent(botName)}/${encodeURIComponent(version)}`,
+      );
+
       if (!response.data) {
         return Failure({
-          message: response.error?.message || 'Failed to fetch custom bot version',
+          message:
+            response.error?.message || "Failed to fetch custom bot version",
           statusCode: response.error?.statusCode || 500,
         });
       }
@@ -178,7 +203,9 @@ export class CustomBotService {
         review: response.data.review
           ? {
               ...response.data.review,
-              reviewedAt: response.data.review.reviewedAt ? new Date(response.data.review.reviewedAt) : undefined,
+              reviewedAt: response.data.review.reviewedAt
+                ? new Date(response.data.review.reviewedAt)
+                : undefined,
             }
           : undefined,
       };
@@ -186,7 +213,7 @@ export class CustomBotService {
       return Ok(botData);
     } catch (error: any) {
       return Failure({
-        message: error.message || 'Network error',
+        message: error.message || "Network error",
         statusCode: 500,
       });
     }
@@ -195,13 +222,18 @@ export class CustomBotService {
   /**
    * Get all versions for a specific custom bot
    */
-  static async getCustomBotVersions(botName: string): Promise<Result<string[], CustomBotServiceError>> {
+  static async getCustomBotVersions(
+    botName: string,
+  ): Promise<Result<string[], CustomBotServiceError>> {
     try {
-      const response = await ApiClient.get<string[]>(`/api/custom-bots/${encodeURIComponent(botName)}/versions`);
-      
+      const response = await ApiClient.get<string[]>(
+        `/api/custom-bots/${encodeURIComponent(botName)}/versions`,
+      );
+
       if (!response.data) {
         return Failure({
-          message: response.error?.message || 'Failed to fetch custom bot versions',
+          message:
+            response.error?.message || "Failed to fetch custom bot versions",
           statusCode: response.error?.statusCode || 500,
         });
       }
@@ -209,7 +241,7 @@ export class CustomBotService {
       return Ok(response.data);
     } catch (error: any) {
       return Failure({
-        message: error.message || 'Network error',
+        message: error.message || "Network error",
         statusCode: 500,
       });
     }

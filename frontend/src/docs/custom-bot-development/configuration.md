@@ -1,7 +1,7 @@
 ---
-title: 'Configuration'
-description: 'Complete guide to bot configuration and schemas'
-tags: ['custom-bots', 'configuration', 'schemas']
+title: "Configuration"
+description: "Complete guide to bot configuration and schemas"
+tags: ["custom-bots", "configuration", "schemas"]
 order: 3
 ---
 
@@ -49,7 +49,7 @@ metadata: # Optional: Additional metadata
 
 ```yaml
 name: momentum-trading-bot
-description: 'A momentum-based trading strategy using technical indicators'
+description: "A momentum-based trading strategy using technical indicators"
 version: 1.2.0
 author: TradingExperts
 type: scheduled

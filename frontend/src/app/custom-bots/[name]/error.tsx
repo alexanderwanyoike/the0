@@ -1,11 +1,11 @@
-'use client';
-import React from 'react';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react';
+"use client";
+import React from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, ArrowLeft, RefreshCw } from "lucide-react";
 
 interface BotDetailErrorProps {
   error: Error & { digest?: string };
@@ -16,7 +16,7 @@ export default function BotDetailError({ error, reset }: BotDetailErrorProps) {
   const router = useRouter();
 
   useEffect(() => {
-    console.error('Custom Bot detail page error:', error);
+    console.error("Custom Bot detail page error:", error);
   }, [error]);
 
   return (
@@ -39,7 +39,7 @@ export default function BotDetailError({ error, reset }: BotDetailErrorProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => router.push('/custom-bots')}
+                onClick={() => router.push("/custom-bots")}
                 className="gap-2"
               >
                 <ArrowLeft className="h-4 w-4" />

@@ -1,19 +1,19 @@
-'use client';
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { User } from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { useToast } from '@/hooks/use-toast';
+"use client";
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { User } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { useToast } from "@/hooks/use-toast";
 
 export function ProfileForm() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.username || '',
+    name: user?.username || "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,10 +22,10 @@ export function ProfileForm() {
 
     setLoading(true);
     try {
-      const response = await authFetch('/api/users/profile', {
-        method: 'PUT',
+      const response = await authFetch("/api/users/profile", {
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           username: formData.name,
@@ -34,19 +34,20 @@ export function ProfileForm() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update profile');
+        throw new Error(errorData.message || "Failed to update profile");
       }
 
       toast({
-        title: 'Profile updated',
-        description: 'Your profile has been updated successfully.',
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
       });
     } catch (error: any) {
-      console.error('Error updating profile:', error);
+      console.error("Error updating profile:", error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to update profile. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description:
+          error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -83,7 +84,7 @@ export function ProfileForm() {
             <Input
               id="email"
               type="email"
-              value={user?.email || ''}
+              value={user?.email || ""}
               disabled
               className="bg-muted w-full"
             />
@@ -94,7 +95,7 @@ export function ProfileForm() {
           </div>
         </div>
         <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-          {loading ? 'Saving...' : 'Save Changes'}
+          {loading ? "Saving..." : "Save Changes"}
         </Button>
       </form>
     </div>

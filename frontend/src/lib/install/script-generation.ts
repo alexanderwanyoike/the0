@@ -1,4 +1,4 @@
-import type { PlatformId, ScriptGenerationConfig } from '@/types/install';
+import type { PlatformId, ScriptGenerationConfig } from "@/types/install";
 
 // Script template generation functions
 export function generateInstallScript(
@@ -7,13 +7,13 @@ export function generateInstallScript(
 ): string {
   const {
     baseUrl = process.env.CLI_DOWNLOAD_BASE_URL ||
-      'https://github.com/theo-cli/theo/releases/latest/download',
-    installBaseUrl = process.env.CLI_INSTALL_BASE_URL || '',
-    channel = 'latest',
+      "https://github.com/theo-cli/theo/releases/latest/download",
+    installBaseUrl = process.env.CLI_INSTALL_BASE_URL || "",
+    channel = "latest",
   } = config;
 
   const timestamp = new Date().toISOString();
-  const isWindows = platformId.startsWith('windows');
+  const isWindows = platformId.startsWith("windows");
 
   if (isWindows) {
     return generatePowerShellScript(
@@ -42,9 +42,9 @@ function generateBashScript(
   timestamp: string,
   channel: string,
 ): string {
-  const binaryName = 'the0';
+  const binaryName = "the0";
   const downloadUrl = `${baseUrl}/${binaryName}-${platformId}`;
-  const installDir = '$HOME/bin';
+  const installDir = "$HOME/bin";
 
   return `#!/bin/bash
 # THE0 CLI Installation Script
@@ -247,7 +247,7 @@ main() {
     print_status "Next steps:"
     print_status "1. Run '${binaryName} auth login' to authenticate"
     print_status "2. Run '${binaryName} --help' to see available commands"
-    print_status "3. Visit ${installBaseUrl || 'https://the0.dev/docs/the0-CLI'} for documentation"
+    print_status "3. Visit ${installBaseUrl || "https://the0.dev/docs/the0-CLI"} for documentation"
 }
 
 # Run main function
@@ -263,8 +263,8 @@ function generatePowerShellScript(
   timestamp: string,
   channel: string,
 ): string {
-  const binaryName = 'the0.exe';
-  const downloadUrl = `${baseUrl}/${binaryName.replace('.exe', '')}-${platformId}.exe`;
+  const binaryName = "the0.exe";
+  const downloadUrl = `${baseUrl}/${binaryName.replace(".exe", "")}-${platformId}.exe`;
 
   return `# THE0 CLI Installation Script for Windows
 # Platform: ${platformId}
@@ -446,7 +446,7 @@ function Install-TheoCli {
     Write-Status "1. Restart your terminal or PowerShell session"
     Write-Status "2. Run 'the0 auth login' to authenticate"
     Write-Status "3. Run 'the0 --help' to see available commands"
-    Write-Status "4. Visit ${installBaseUrl || 'https://the0.dev/docs/the0-CLI'} for documentation"
+    Write-Status "4. Visit ${installBaseUrl || "https://the0.dev/docs/the0-CLI"} for documentation"
 }
 
 # Run installation
@@ -463,7 +463,7 @@ catch {
 // Validate script content for security
 export function validateScriptContent(
   script: string,
-  fileType: 'sh' | 'ps1',
+  fileType: "sh" | "ps1",
 ): boolean {
   // Basic security checks to prevent malicious content
   const dangerousPatterns = [
@@ -486,11 +486,11 @@ export function validateScriptContent(
   }
 
   // Validate basic script structure
-  if (fileType === 'sh') {
-    return script.includes('#!/bin/bash') || script.includes('#!/bin/sh');
-  } else if (fileType === 'ps1') {
+  if (fileType === "sh") {
+    return script.includes("#!/bin/bash") || script.includes("#!/bin/sh");
+  } else if (fileType === "ps1") {
     return (
-      script.includes('$ErrorActionPreference') || script.includes('param(')
+      script.includes("$ErrorActionPreference") || script.includes("param(")
     );
   }
 
@@ -499,16 +499,16 @@ export function validateScriptContent(
 
 // Get script template for a platform without full generation
 export function getScriptTemplate(platformId: PlatformId): {
-  fileExtension: 'sh' | 'ps1';
+  fileExtension: "sh" | "ps1";
   shellCommand: string;
   contentType: string;
 } {
-  const isWindows = platformId.startsWith('windows');
+  const isWindows = platformId.startsWith("windows");
 
   return {
-    fileExtension: isWindows ? 'ps1' : 'sh',
-    shellCommand: isWindows ? 'powershell' : 'bash',
-    contentType: isWindows ? 'application/x-powershell' : 'application/x-sh',
+    fileExtension: isWindows ? "ps1" : "sh",
+    shellCommand: isWindows ? "powershell" : "bash",
+    contentType: isWindows ? "application/x-powershell" : "application/x-sh",
   };
 }
 

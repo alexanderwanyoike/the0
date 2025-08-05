@@ -1,16 +1,16 @@
 // components/main-navigation/user-actions-button.tsx
-import { AuthUser } from '@/lib/auth/types';
-import { Button } from '@/components/ui/button';
+import { AuthUser } from "@/lib/auth/types";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Settings, LogOut } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Settings, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface UserActionsButtonProps {
   user: AuthUser | null;
@@ -32,17 +32,17 @@ export function UserActionsButton({
   // Get user initials for avatar fallback
   const getInitials = (name: string) => {
     return name
-      .split(' ')
+      .split(" ")
       .map((part) => part[0])
-      .join('')
+      .join("")
       .toUpperCase()
       .slice(0, 2);
   };
 
-  const userInitials = getInitials(user.username || user.email || 'User');
+  const userInitials = getInitials(user.username || user.email || "User");
 
   const handleSettingsClick = () => {
-    router.push('/settings/profile');
+    router.push("/settings/profile");
   };
 
   return (
@@ -56,7 +56,7 @@ export function UserActionsButton({
           {!isCollapsed && (
             <div className="flex flex-col items-start text-left">
               <span className="text-sm font-medium">
-                {user.username || 'User'}
+                {user.username || "User"}
               </span>
               <span className="text-xs text-muted-foreground truncate max-w-[150px]">
                 {user.email}

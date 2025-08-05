@@ -1,16 +1,16 @@
-'use client';
-import React, { useState, useEffect } from 'react';
+"use client";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Copy,
   Eye,
@@ -18,9 +18,9 @@ import {
   Key,
   AlertTriangle,
   CheckCircle,
-} from 'lucide-react';
-import { ApiKey } from '@/lib/api/api-key-service';
-import { useToast } from '@/hooks/use-toast';
+} from "lucide-react";
+import { ApiKey } from "@/lib/api/api-key-service";
+import { useToast } from "@/hooks/use-toast";
 
 interface CreateApiKeyDialogProps {
   open: boolean;
@@ -38,7 +38,7 @@ export function CreateApiKeyDialog({
   onNewApiKeyShown,
 }: CreateApiKeyDialogProps) {
   const { toast } = useToast();
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [hasBeenCopied, setHasBeenCopied] = useState(false);
@@ -47,7 +47,7 @@ export function CreateApiKeyDialog({
   useEffect(() => {
     if (open && !newApiKey) {
       // Opening for creation
-      setName('');
+      setName("");
       setShowKey(false);
       setHasBeenCopied(false);
     }
@@ -70,16 +70,16 @@ export function CreateApiKeyDialog({
     navigator.clipboard.writeText(text);
     setHasBeenCopied(true);
     toast({
-      title: 'API Key Copied!',
+      title: "API Key Copied!",
       description:
-        'Your API key has been copied to clipboard. Store it securely.',
+        "Your API key has been copied to clipboard. Store it securely.",
     });
   };
 
   const handleDone = () => {
     // Clear the new API key and reset state
     onNewApiKeyShown();
-    setName('');
+    setName("");
     setShowKey(false);
     setHasBeenCopied(false);
     onOpenChange(false);
@@ -97,7 +97,7 @@ export function CreateApiKeyDialog({
       handleDone();
     } else {
       // Just close normally
-      setName('');
+      setName("");
       onOpenChange(false);
     }
   };
@@ -121,7 +121,7 @@ export function CreateApiKeyDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <Alert variant={'destructive'}>
+          <Alert variant={"destructive"}>
             <AlertTriangle />
             <AlertTitle> Important Security Notice</AlertTitle>
             <AlertDescription>
@@ -163,17 +163,17 @@ export function CreateApiKeyDialog({
                   value={
                     showKey
                       ? newApiKey.key
-                      : '••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••'
+                      : "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
                   }
                   disabled
                   className="font-mono text-sm"
                 />
                 <Button
-                  variant={hasBeenCopied ? 'default' : 'outline'}
+                  variant={hasBeenCopied ? "default" : "outline"}
                   size="sm"
                   onClick={() => copyToClipboard(newApiKey.key)}
                   className={
-                    hasBeenCopied ? 'bg-green-600 hover:bg-green-700' : ''
+                    hasBeenCopied ? "bg-green-600 hover:bg-green-700" : ""
                   }
                 >
                   {hasBeenCopied ? (
@@ -201,14 +201,14 @@ export function CreateApiKeyDialog({
           <div className="flex justify-between items-center pt-4">
             <div className="text-sm text-muted-foreground">
               {hasBeenCopied
-                ? 'You can now safely close this dialog.'
-                : 'Remember to copy your key before closing.'}
+                ? "You can now safely close this dialog."
+                : "Remember to copy your key before closing."}
             </div>
             <Button
               onClick={handleDone}
-              variant={hasBeenCopied ? 'default' : 'outline'}
+              variant={hasBeenCopied ? "default" : "outline"}
             >
-              {hasBeenCopied ? 'Done' : 'Close Without Copying'}
+              {hasBeenCopied ? "Done" : "Close Without Copying"}
             </Button>
           </div>
         </DialogContent>
@@ -272,7 +272,7 @@ export function CreateApiKeyDialog({
                   Creating...
                 </>
               ) : (
-                'Create API Key'
+                "Create API Key"
               )}
             </Button>
           </div>

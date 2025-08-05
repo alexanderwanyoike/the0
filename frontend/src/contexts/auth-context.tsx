@@ -1,19 +1,26 @@
-'use client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { JwtAuthService } from '@/lib/auth/jwt-auth.service';
-import { AuthUser } from '@/lib/auth/types';
-import { setAuthService } from '@/lib/axios-interceptor';
-import { setAuthFetchService } from '@/lib/auth-fetch';
-import { setApiClientService } from '@/lib/api-client';
-import { setSSEAuthService } from '@/lib/sse/sse-auth';
+"use client";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { JwtAuthService } from "@/lib/auth/jwt-auth.service";
+import { AuthUser } from "@/lib/auth/types";
+import { setAuthService } from "@/lib/axios-interceptor";
+import { setAuthFetchService } from "@/lib/auth-fetch";
+import { setApiClientService } from "@/lib/api-client";
+import { setSSEAuthService } from "@/lib/sse/sse-auth";
 
 interface AuthContextType {
   user: AuthUser | null;
   userData: AuthUser | null; // Keep userData for backward compatibility, maps to user
   loading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string }>;
-  register: (credentials: { username: string; email: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: {
+    email: string;
+    password: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  register: (credentials: {
+    username: string;
+    email: string;
+    password: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   token: string | null;
   authService: JwtAuthService; // Expose the centralized auth service
@@ -23,8 +30,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   userData: null,
   loading: true,
-  login: async () => ({ success: false, error: 'Not initialized' }),
-  register: async () => ({ success: false, error: 'Not initialized' }),
+  login: async () => ({ success: false, error: "Not initialized" }),
+  register: async () => ({ success: false, error: "Not initialized" }),
   logout: async () => {},
   token: null,
   authService: new JwtAuthService(),
@@ -35,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  
+
   // Centralized auth service instance
   const authService = new JwtAuthService();
 
@@ -57,21 +64,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             authService.logout();
             setUser(null);
             setToken(null);
-            document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie =
+              "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
           }
         } else {
           // Token invalid, clear it
           authService.logout();
           setUser(null);
           setToken(null);
-          document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          document.cookie =
+            "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         }
       } else {
         setUser(null);
         setToken(null);
       }
     } catch (error) {
-      console.error('Error initializing auth:', error);
+      console.error("Error initializing auth:", error);
       setUser(null);
       setToken(null);
     } finally {
@@ -86,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthFetchService(authService, logout);
     setApiClientService(authService, logout);
     setSSEAuthService(authService, logout);
-    
+
     // Initialize auth state
     initializeAuth();
   }, []);
@@ -99,18 +108,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(result.data.token);
         // Set cookie for server-side auth
         document.cookie = `auth-token=${result.data.token}; path=/`;
-        router.push('/dashboard');
+        router.push("/dashboard");
         return { success: true };
       } else {
-        return { success: false, error: result.error || 'Login failed' };
+        return { success: false, error: result.error || "Login failed" };
       }
     } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: 'Login failed. Please try again.' };
+      console.error("Login error:", error);
+      return { success: false, error: "Login failed. Please try again." };
     }
   };
 
-  const register = async (credentials: { username: string; email: string; password: string }) => {
+  const register = async (credentials: {
+    username: string;
+    email: string;
+    password: string;
+  }) => {
     try {
       const result = await authService.register(credentials);
       if (result.success && result.data) {
@@ -118,14 +131,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(result.data.token);
         // Set cookie for server-side auth
         document.cookie = `auth-token=${result.data.token}; path=/`;
-        router.push('/dashboard');
+        router.push("/dashboard");
         return { success: true };
       } else {
-        return { success: false, error: result.error || 'Registration failed' };
+        return { success: false, error: result.error || "Registration failed" };
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      return { success: false, error: 'Registration failed. Please try again.' };
+      console.error("Registration error:", error);
+      return {
+        success: false,
+        error: "Registration failed. Please try again.",
+      };
     }
   };
 
@@ -135,25 +151,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setToken(null);
       // Remove cookie when logged out
-      document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie =
+        "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       // Use proper React routing instead of window.location
-      router.push('/login');
+      router.push("/login");
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error("Error signing out:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      login, 
-      register, 
-      logout, 
-      userData: user, 
-      token, 
-      authService 
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        userData: user,
+        token,
+        authService,
+      }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );

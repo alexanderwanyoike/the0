@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { Backtest } from '@/types/backtest';
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { Backtest } from "@/types/backtest";
 
 interface UseBacktestsReturn {
   backtests: Backtest[];
@@ -27,10 +27,10 @@ export function useBacktests(): UseBacktestsReturn {
       setLoading(true);
       setError(null);
 
-      const response = await authFetch('/api/backtests');
+      const response = await authFetch("/api/backtests");
 
       if (!response.ok) {
-        throw new Error('Failed to fetch backtests');
+        throw new Error("Failed to fetch backtests");
       }
 
       const data = await response.json();
@@ -45,7 +45,7 @@ export function useBacktests(): UseBacktestsReturn {
 
       setBacktests(transformedBacktests);
     } catch (err: any) {
-      console.error('Error fetching backtests:', err);
+      console.error("Error fetching backtests:", err);
       setError(err.message);
       setBacktests([]);
     } finally {

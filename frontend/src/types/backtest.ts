@@ -1,4 +1,4 @@
-import { BotType } from './custom-bots';
+import { BotType } from "./custom-bots";
 
 // Core type definitions for backtest functionality
 export interface Backtest {
@@ -6,7 +6,7 @@ export interface Backtest {
   name: string;
   config: BacktestConfig;
   analysis: BacktestAnalysis | null;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   createdAt: Date;
   updatedAt: Date;
   userId: string;
@@ -25,7 +25,7 @@ export interface BacktestAnalysis {
   plots?: (PlotData | string)[]; // Support both object and stringified formats
   tables?: TableData[];
   // Error state fields
-  status?: 'error' | 'success';
+  status?: "error" | "success";
   message?: string; // Error message for failed analysis
   // New nested structure
   results?: {
@@ -58,13 +58,13 @@ export type MetricValue =
 export interface DynamicMetric {
   key: string;
   value: MetricValue;
-  type: 'primitive' | 'array' | 'object';
+  type: "primitive" | "array" | "object";
 }
 
 export interface BotSearchResult {
   id: string;
   name: string;
-  resultType: 'marketplace' | 'custom' | 'user';
+  resultType: "marketplace" | "custom" | "user";
   approved?: boolean;
 }
 
@@ -79,7 +79,7 @@ export interface CreateBacktestResponse {
   name: string;
   config: BacktestConfig;
   analysis: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   createdAt: Date;
   updatedAt: Date;
   userId: string;
@@ -92,7 +92,7 @@ export interface BacktestDocument {
   name: string;
   config: BacktestConfig;
   analysis: BacktestAnalysis | null;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   createdAt: string; // ISO string instead of Timestamp
   updatedAt: string; // ISO string instead of Timestamp
   userId: string;

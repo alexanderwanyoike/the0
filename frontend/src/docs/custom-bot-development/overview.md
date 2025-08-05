@@ -1,7 +1,7 @@
 ---
-title: 'Overview'
-description: 'Understanding custom bot development on the0'
-tags: ['custom-bots', 'development', 'overview']
+title: "Overview"
+description: "Understanding custom bot development on the0"
+tags: ["custom-bots", "development", "overview"]
 order: 2
 ---
 
@@ -127,8 +127,8 @@ function main(id, config) {
    */
   // Your trading logic here
   return {
-    status: 'success',
-    message: 'Bot executed successfully',
+    status: "success",
+    message: "Bot executed successfully",
   };
 }
 

@@ -1,7 +1,7 @@
 ---
-title: 'Quick Start Guide'
-description: 'Build your first trading bot in 15 minutes'
-tags: ['custom-bots', 'tutorial', 'dca', 'python']
+title: "Quick Start Guide"
+description: "Build your first trading bot in 15 minutes"
+tags: ["custom-bots", "tutorial", "dca", "python"]
 order: 1
 ---
 
@@ -68,7 +68,7 @@ Edit the `bot-config.yaml` file:
 
 ```yaml
 name: killer-dca-bot
-description: 'A Dollar Cost Averaging bot that brings home the bacon 🥓'
+description: "A Dollar Cost Averaging bot that brings home the bacon 🥓"
 version: 1.0.0
 author: Jim Simons
 type: scheduled

@@ -1,7 +1,7 @@
 ---
-title: 'Installation'
-description: 'How to install the the0 CLI'
-tags: ['cli', 'installation']
+title: "Installation"
+description: "How to install the the0 CLI"
+tags: ["cli", "installation"]
 order: 1
 ---
 

@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { CustomBotVersion, CustomBotWithVersions } from '@/types/custom-bots';
-import { CustomBotService } from '@/lib/api/custom-bots.service';
+import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { CustomBotVersion, CustomBotWithVersions } from "@/types/custom-bots";
+import { CustomBotService } from "@/lib/api/custom-bots.service";
 
 export interface UseCustomBotsReturn {
   bots: CustomBotWithVersions[];
@@ -28,28 +28,28 @@ export const useCustomBots = (): UseCustomBotsReturn => {
       setError(null);
 
       const result = await CustomBotService.getCustomBots();
-      
+
       if (result.success) {
         setBots(result.data);
       } else {
         setError(result.error.message);
         setBots([]);
-        
+
         // Handle specific error cases
         if (result.error.statusCode === 401) {
-          console.warn('User unauthorized for custom bots');
+          console.warn("User unauthorized for custom bots");
         } else if (result.error.statusCode === 403) {
-          console.warn('User forbidden from accessing custom bots');
+          console.warn("User forbidden from accessing custom bots");
         }
       }
     } catch (err: any) {
-      console.error('Error fetching custom bots:', err);
-      console.error('Error stack:', err.stack);
-      if (err.message && err.message.includes('forEach')) {
-        console.error('❌ This is the forEach error we are looking for!');
-        console.error('❌ Error details:', err);
+      console.error("Error fetching custom bots:", err);
+      console.error("Error stack:", err.stack);
+      if (err.message && err.message.includes("forEach")) {
+        console.error("❌ This is the forEach error we are looking for!");
+        console.error("❌ Error details:", err);
       }
-      setError(err.message || 'Failed to load custom bots');
+      setError(err.message || "Failed to load custom bots");
       setBots([]);
     } finally {
       setLoading(false);

@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/auth-context';
-import { RegisterForm } from '@/components/auth/register-form';
-import { NavigationMenu } from '@/components/landing-page/navigation-menu';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
+import { RegisterForm } from "@/components/auth/register-form";
+import { NavigationMenu } from "@/components/landing-page/navigation-menu";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -12,7 +12,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (user) {
-      router.push('/dashboard');
+      router.push("/dashboard");
     }
   }, [user, router]);
 

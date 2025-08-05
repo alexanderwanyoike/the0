@@ -1,15 +1,15 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bot } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Bot } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import React from "react";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 
 export const BotInfo = ({ bot, selectedVersion, onVersionChange }: any) => {
   const versionData =
@@ -39,7 +39,7 @@ export const BotInfo = ({ bot, selectedVersion, onVersionChange }: any) => {
                     <span>v{version.version}</span>
                     <Badge
                       variant={
-                        version.status === 'approved' ? 'default' : 'secondary'
+                        version.status === "approved" ? "default" : "secondary"
                       }
                       className="text-xs"
                     >
@@ -83,7 +83,7 @@ export const BotInfo = ({ bot, selectedVersion, onVersionChange }: any) => {
             <span className="text-muted-foreground">Status:</span>
             <Badge
               variant={
-                versionData.status === 'approved' ? 'default' : 'secondary'
+                versionData.status === "approved" ? "default" : "secondary"
               }
             >
               {versionData.status}

@@ -1,10 +1,10 @@
 /**
  * SSE Client Tests
- * 
+ *
  * Basic validation tests for the SSE client functionality
  */
 
-import { SSEClient, SSEMessage } from '../../sse/sse-client';
+import { SSEClient, SSEMessage } from "../../sse/sse-client";
 
 // Define EventSource constants first
 const EventSourceStates = {
@@ -28,7 +28,7 @@ global.EventSource.CONNECTING = EventSourceStates.CONNECTING;
 global.EventSource.OPEN = EventSourceStates.OPEN;
 global.EventSource.CLOSED = EventSourceStates.CLOSED;
 
-describe('SSEClient', () => {
+describe("SSEClient", () => {
   let sseClient: SSEClient;
 
   beforeEach(() => {
@@ -41,10 +41,10 @@ describe('SSEClient', () => {
     sseClient.disconnectAll();
   });
 
-  describe('connect', () => {
-    it('should create EventSource connection', () => {
+  describe("connect", () => {
+    it("should create EventSource connection", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       sseClient.connect(testUrl, onMessage);
 
@@ -53,16 +53,16 @@ describe('SSEClient', () => {
       });
     });
 
-    it('should handle message parsing correctly', () => {
+    it("should handle message parsing correctly", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
-      const testData = { id: '1', name: 'test' };
+      const testUrl = "/test-stream";
+      const testData = { id: "1", name: "test" };
 
       sseClient.connect(testUrl, onMessage);
 
       // Simulate SSE message
       const sseMessage: SSEMessage = {
-        type: 'update',
+        type: "update",
         data: testData,
         timestamp: new Date().toISOString(),
       };
@@ -78,15 +78,15 @@ describe('SSEClient', () => {
       expect(onMessage).toHaveBeenCalledWith(testData);
     });
 
-    it('should handle keepalive messages without calling onMessage', () => {
+    it("should handle keepalive messages without calling onMessage", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       sseClient.connect(testUrl, onMessage);
 
       // Simulate keepalive message
       const keepaliveMessage: SSEMessage = {
-        type: 'keepalive',
+        type: "keepalive",
         timestamp: new Date().toISOString(),
       };
 
@@ -101,15 +101,15 @@ describe('SSEClient', () => {
       expect(onMessage).not.toHaveBeenCalled();
     });
 
-    it('should handle connection errors', () => {
+    it("should handle connection errors", () => {
       const onMessage = jest.fn();
       const onError = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       sseClient.connect(testUrl, onMessage, { onError });
 
       // Simulate connection error
-      const errorEvent = new Event('error');
+      const errorEvent = new Event("error");
       if (mockEventSource.onerror) {
         mockEventSource.onerror(errorEvent);
       }
@@ -117,13 +117,13 @@ describe('SSEClient', () => {
       expect(onError).toHaveBeenCalledWith(errorEvent);
     });
 
-    it('should return cleanup function', () => {
+    it("should return cleanup function", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       const cleanup = sseClient.connect(testUrl, onMessage);
 
-      expect(typeof cleanup).toBe('function');
+      expect(typeof cleanup).toBe("function");
 
       // Verify cleanup works
       cleanup();
@@ -131,10 +131,10 @@ describe('SSEClient', () => {
     });
   });
 
-  describe('disconnect', () => {
-    it('should close EventSource and clean up', () => {
+  describe("disconnect", () => {
+    it("should close EventSource and clean up", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       sseClient.connect(testUrl, onMessage);
       sseClient.disconnect(testUrl);
@@ -143,12 +143,12 @@ describe('SSEClient', () => {
     });
   });
 
-  describe('disconnectAll', () => {
-    it('should close all connections', () => {
+  describe("disconnectAll", () => {
+    it("should close all connections", () => {
       const onMessage = jest.fn();
-      
-      sseClient.connect('/test-stream-1', onMessage);
-      sseClient.connect('/test-stream-2', onMessage);
+
+      sseClient.connect("/test-stream-1", onMessage);
+      sseClient.connect("/test-stream-2", onMessage);
 
       sseClient.disconnectAll();
 
@@ -157,27 +157,27 @@ describe('SSEClient', () => {
     });
   });
 
-  describe('isConnected', () => {
-    it('should return true for connected EventSource', () => {
+  describe("isConnected", () => {
+    it("should return true for connected EventSource", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       sseClient.connect(testUrl, onMessage);
 
       expect(sseClient.isConnected(testUrl)).toBe(true);
     });
 
-    it('should return false for disconnected EventSource', () => {
-      const testUrl = '/test-stream';
+    it("should return false for disconnected EventSource", () => {
+      const testUrl = "/test-stream";
 
       expect(sseClient.isConnected(testUrl)).toBe(false);
     });
   });
 
-  describe('getConnectionState', () => {
-    it('should return connection state information', () => {
+  describe("getConnectionState", () => {
+    it("should return connection state information", () => {
       const onMessage = jest.fn();
-      const testUrl = '/test-stream';
+      const testUrl = "/test-stream";
 
       sseClient.connect(testUrl, onMessage);
 
@@ -193,4 +193,6 @@ describe('SSEClient', () => {
   });
 });
 
-console.log('SSE Client tests created successfully. Run with: yarn test src/lib/__tests__/sse/sse-client.test.ts');
+console.log(
+  "SSE Client tests created successfully. Run with: yarn test src/lib/__tests__/sse/sse-client.test.ts",
+);

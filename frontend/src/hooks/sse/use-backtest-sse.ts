@@ -1,10 +1,10 @@
 /**
  * Backtest Progress SSE Hook
- * 
+ *
  * Replaces the hybrid Firebase + polling pattern from use-backtest.ts with
  * Server-Sent Events for real-time backtest progress monitoring. Maintains
  * the same comprehensive interface while providing faster progress updates.
- * 
+ *
  * Features:
  * - Real-time progress updates via SSE connection (1-second intervals)
  * - Automatic connection termination on backtest completion
@@ -14,11 +14,11 @@
  * - Consistent interface with existing hook
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { Backtest, BacktestAnalysis } from '@/types/backtest';
-import { useSSEClient } from './use-sse-client';
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { Backtest, BacktestAnalysis } from "@/types/backtest";
+import { useSSEClient } from "./use-sse-client";
 
 interface UseBacktestSSEReturn {
   backtest: Backtest | null;
@@ -44,77 +44,90 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   // Analysis-specific state
-  const [analysisData, setAnalysisData] = useState<BacktestAnalysis | null>(null);
+  const [analysisData, setAnalysisData] = useState<BacktestAnalysis | null>(
+    null,
+  );
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Progress tracking state
   const [progress, setProgress] = useState<number>(0);
-  const [currentStep, setCurrentStep] = useState<string>('Initializing...');
+  const [currentStep, setCurrentStep] = useState<string>("Initializing...");
 
   const { user } = useAuth();
 
   // Handle SSE messages
-  const handleSSEMessage = useCallback((data: any) => {
-    console.log(`Backtest SSE update received for ${id}:`, data);
-    
-    // Extract backtest data (might be wrapped in different response formats)
-    const backtestData = data.data || data;
-    
-    if (backtestData && backtestData.id === id) {
-      // Transform dates from ISO strings to Date objects
-      const transformedBacktest: Backtest = {
-        ...backtestData,
-        createdAt: new Date(backtestData.createdAt),
-        updatedAt: new Date(backtestData.updatedAt),
-        analysis: backtestData.analysis
-          ? typeof backtestData.analysis === 'string'
-            ? JSON.parse(backtestData.analysis)
-            : backtestData.analysis
-          : null,
-      };
+  const handleSSEMessage = useCallback(
+    (data: any) => {
+      console.log(`Backtest SSE update received for ${id}:`, data);
 
-      setBacktest(transformedBacktest);
-      setError(null);
+      // Extract backtest data (might be wrapped in different response formats)
+      const backtestData = data.data || data;
 
-      // Update progress tracking
-      if (backtestData.progress !== undefined) {
-        setProgress(backtestData.progress);
-      }
-      if (backtestData.currentStep) {
-        setCurrentStep(backtestData.currentStep);
-      }
+      if (backtestData && backtestData.id === id) {
+        // Transform dates from ISO strings to Date objects
+        const transformedBacktest: Backtest = {
+          ...backtestData,
+          createdAt: new Date(backtestData.createdAt),
+          updatedAt: new Date(backtestData.updatedAt),
+          analysis: backtestData.analysis
+            ? typeof backtestData.analysis === "string"
+              ? JSON.parse(backtestData.analysis)
+              : backtestData.analysis
+            : null,
+        };
 
-      if (!initialLoadComplete) {
-        setLoading(false);
-        setInitialLoadComplete(true);
-      }
+        setBacktest(transformedBacktest);
+        setError(null);
 
-      // Process analysis data if backtest is completed
-      if (transformedBacktest.status === 'completed' && transformedBacktest.analysis) {
-        processAnalysisData(transformedBacktest);
+        // Update progress tracking
+        if (backtestData.progress !== undefined) {
+          setProgress(backtestData.progress);
+        }
+        if (backtestData.currentStep) {
+          setCurrentStep(backtestData.currentStep);
+        }
+
+        if (!initialLoadComplete) {
+          setLoading(false);
+          setInitialLoadComplete(true);
+        }
+
+        // Process analysis data if backtest is completed
+        if (
+          transformedBacktest.status === "completed" &&
+          transformedBacktest.analysis
+        ) {
+          processAnalysisData(transformedBacktest);
+        }
       }
-    }
-  }, [id, initialLoadComplete]);
+    },
+    [id, initialLoadComplete],
+  );
 
   // Handle SSE connection errors
-  const handleSSEError = useCallback((error: Event) => {
-    console.warn(`Backtest SSE connection error for ${id}:`, error);
-    
-    if (!initialLoadComplete) {
-      // If we haven't loaded initial data and SSE fails, fall back to manual fetch
-      console.log(`SSE failed during initial load for backtest ${id}, falling back to manual fetch`);
-      fetchBacktest();
-    } else {
-      // If we already have data, just show a non-intrusive connection error
-      setError('Real-time updates temporarily unavailable');
-    }
-  }, [id, initialLoadComplete]);
+  const handleSSEError = useCallback(
+    (error: Event) => {
+      console.warn(`Backtest SSE connection error for ${id}:`, error);
+
+      if (!initialLoadComplete) {
+        // If we haven't loaded initial data and SSE fails, fall back to manual fetch
+        console.log(
+          `SSE failed during initial load for backtest ${id}, falling back to manual fetch`,
+        );
+        fetchBacktest();
+      } else {
+        // If we already have data, just show a non-intrusive connection error
+        setError("Real-time updates temporarily unavailable");
+      }
+    },
+    [id, initialLoadComplete],
+  );
 
   // Handle SSE connection events
   const handleSSEConnected = useCallback(() => {
     console.log(`Backtest SSE connected for ${id}`);
-    if (error === 'Real-time updates temporarily unavailable') {
+    if (error === "Real-time updates temporarily unavailable") {
       setError(null);
     }
   }, [id, error]);
@@ -122,8 +135,13 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
   const handleSSEDisconnected = useCallback(() => {
     console.log(`Backtest SSE disconnected for ${id}`);
     // If backtest is completed, this is expected behavior
-    if (backtest?.status && ['completed', 'failed', 'cancelled'].includes(backtest.status)) {
-      console.log(`Backtest ${id} reached terminal state, SSE disconnection is expected`);
+    if (
+      backtest?.status &&
+      ["completed", "failed", "cancelled"].includes(backtest.status)
+    ) {
+      console.log(
+        `Backtest ${id} reached terminal state, SSE disconnection is expected`,
+      );
     }
   }, [id, backtest?.status]);
 
@@ -156,9 +174,9 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
 
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('Backtest not found');
+          throw new Error("Backtest not found");
         }
-        throw new Error('Failed to fetch backtest');
+        throw new Error("Failed to fetch backtest");
       }
 
       const data = await response.json();
@@ -169,7 +187,7 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
         createdAt: new Date(data.createdAt),
         updatedAt: new Date(data.updatedAt),
         analysis: data.analysis
-          ? typeof data.analysis === 'string'
+          ? typeof data.analysis === "string"
             ? JSON.parse(data.analysis)
             : data.analysis
           : null,
@@ -180,13 +198,13 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
 
       // Process analysis data if available from API
       if (
-        transformedBacktest.status === 'completed' &&
+        transformedBacktest.status === "completed" &&
         transformedBacktest.analysis
       ) {
         processAnalysisData(transformedBacktest);
       }
     } catch (err: any) {
-      console.error('Error fetching backtest:', err);
+      console.error("Error fetching backtest:", err);
       setError(err.message);
       setBacktest(null);
     } finally {
@@ -195,51 +213,55 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
   }, [user, id]);
 
   // Process analysis data (extracted from original hook logic)
-  const processAnalysisData = useCallback((backtestToProcess?: Backtest) => {
-    const targetBacktest = backtestToProcess || backtest;
-    
-    if (
-      !targetBacktest ||
-      (targetBacktest.status !== 'completed' && targetBacktest.status !== 'failed')
-    ) {
-      return;
-    }
+  const processAnalysisData = useCallback(
+    (backtestToProcess?: Backtest) => {
+      const targetBacktest = backtestToProcess || backtest;
 
-    setAnalysisLoading(true);
-    setAnalysisError(null);
-
-    try {
-      if (targetBacktest.analysis) {
-        // Parse analysis data if it's a string, otherwise use as-is
-        let parsedAnalysis =
-          typeof targetBacktest.analysis === 'string'
-            ? JSON.parse(targetBacktest.analysis)
-            : targetBacktest.analysis;
-
-        // If the analysis data is wrapped in a results object, extract it
-        // But don't unwrap if it's an error status (error analysis is the top-level object)
-        if (
-          parsedAnalysis &&
-          typeof parsedAnalysis === 'object' &&
-          'status' in parsedAnalysis &&
-          'results' in parsedAnalysis &&
-          parsedAnalysis.status !== 'error'
-        ) {
-          parsedAnalysis = (parsedAnalysis as any).results;
-        }
-
-        setAnalysisData(parsedAnalysis);
-      } else {
-        setAnalysisData(null);
+      if (
+        !targetBacktest ||
+        (targetBacktest.status !== "completed" &&
+          targetBacktest.status !== "failed")
+      ) {
+        return;
       }
-    } catch (err: any) {
-      console.error('Error processing analysis data:', err);
-      setAnalysisError('Failed to parse analysis data');
-      setAnalysisData(null);
-    } finally {
-      setAnalysisLoading(false);
-    }
-  }, [backtest]);
+
+      setAnalysisLoading(true);
+      setAnalysisError(null);
+
+      try {
+        if (targetBacktest.analysis) {
+          // Parse analysis data if it's a string, otherwise use as-is
+          let parsedAnalysis =
+            typeof targetBacktest.analysis === "string"
+              ? JSON.parse(targetBacktest.analysis)
+              : targetBacktest.analysis;
+
+          // If the analysis data is wrapped in a results object, extract it
+          // But don't unwrap if it's an error status (error analysis is the top-level object)
+          if (
+            parsedAnalysis &&
+            typeof parsedAnalysis === "object" &&
+            "status" in parsedAnalysis &&
+            "results" in parsedAnalysis &&
+            parsedAnalysis.status !== "error"
+          ) {
+            parsedAnalysis = (parsedAnalysis as any).results;
+          }
+
+          setAnalysisData(parsedAnalysis);
+        } else {
+          setAnalysisData(null);
+        }
+      } catch (err: any) {
+        console.error("Error processing analysis data:", err);
+        setAnalysisError("Failed to parse analysis data");
+        setAnalysisData(null);
+      } finally {
+        setAnalysisLoading(false);
+      }
+    },
+    [backtest],
+  );
 
   // Initial data fetch if SSE is not connected quickly enough
   useEffect(() => {
@@ -253,7 +275,9 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
     // Shorter timeout for backtest monitoring as users expect immediate feedback
     const fallbackTimeout = setTimeout(() => {
       if (!initialLoadComplete && !sseState.connected) {
-        console.log(`SSE connection taking too long for backtest ${id}, falling back to manual fetch`);
+        console.log(
+          `SSE connection taking too long for backtest ${id}, falling back to manual fetch`,
+        );
         fetchBacktest();
       }
     }, 3000);
@@ -263,9 +287,9 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
 
   // Trigger analysis processing when backtest reaches completed/failed state
   useEffect(() => {
-    if (backtest?.status === 'completed' || backtest?.status === 'failed') {
+    if (backtest?.status === "completed" || backtest?.status === "failed") {
       // If we don't have analysis data, try to process it
-      if (!backtest.analysis && backtest.status === 'completed') {
+      if (!backtest.analysis && backtest.status === "completed") {
         // For completed backtests without analysis, fetch from API
         fetchBacktest();
       } else if (backtest.analysis && !analysisData) {
@@ -315,7 +339,7 @@ export function useBacktestSSE(id: string): UseBacktestSSEReturn {
  */
 export function useBacktest(id: string): UseBacktestReturn {
   const sseResult = useBacktestSSE(id);
-  
+
   return {
     backtest: sseResult.backtest,
     loading: sseResult.loading,

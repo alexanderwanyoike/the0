@@ -1,11 +1,11 @@
-import React from 'react';
-import { useRouter } from 'next/navigation';
-import { Bot, AlertTriangle, Shield } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useCustomBots } from '@/hooks/custom-bots/use-custom-bots';
-import { EmptyState } from '@/components/custom-bots/empty-state';
-import { BotCard } from '@/components/custom-bots/bots-card';
-import { LoadingState } from '@/components/custom-bots/loading-state';
+import React from "react";
+import { useRouter } from "next/navigation";
+import { Bot, AlertTriangle, Shield } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useCustomBots } from "@/hooks/custom-bots/use-custom-bots";
+import { EmptyState } from "@/components/custom-bots/empty-state";
+import { BotCard } from "@/components/custom-bots/bots-card";
+import { LoadingState } from "@/components/custom-bots/loading-state";
 
 const CustomBotsDashboard = () => {
   const router = useRouter();
@@ -88,7 +88,7 @@ const CustomBotsDashboard = () => {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">
-                {bots.filter((b: any) => b.status === 'approved').length}
+                {bots.filter((b: any) => b.status === "approved").length}
               </div>
               <div className="text-sm text-muted-foreground">Approved</div>
             </div>
@@ -97,8 +97,8 @@ const CustomBotsDashboard = () => {
                 {
                   bots.filter(
                     (b: any) =>
-                      b.status === 'pending_review' ||
-                      b.status === 'awaiting_human_review',
+                      b.status === "pending_review" ||
+                      b.status === "awaiting_human_review",
                   ).length
                 }
               </div>
@@ -106,7 +106,7 @@ const CustomBotsDashboard = () => {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">
-                {bots.filter((b: any) => b.status === 'declined').length}
+                {bots.filter((b: any) => b.status === "declined").length}
               </div>
               <div className="text-sm text-muted-foreground">Declined</div>
             </div>

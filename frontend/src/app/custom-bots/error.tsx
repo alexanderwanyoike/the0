@@ -1,11 +1,11 @@
-'use client';
-import React from 'react';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+"use client";
+import React from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -14,10 +14,10 @@ interface ErrorProps {
 
 export default function Error({ error, reset }: ErrorProps) {
   const router = useRouter();
-  
+
   useEffect(() => {
     // Log the error to an error reporting service
-    console.error('Custom Bots page error:', error);
+    console.error("Custom Bots page error:", error);
   }, [error]);
 
   return (
@@ -44,7 +44,7 @@ export default function Error({ error, reset }: ErrorProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push("/dashboard")}
               >
                 Go to Dashboard
               </Button>

@@ -1,30 +1,30 @@
-import React from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Button } from '@/components/ui/button';
-import { Copy } from 'lucide-react';
+import React from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Button } from "@/components/ui/button";
+import { Copy } from "lucide-react";
 
 export const MarkdownComponents = {
   code({ node, className, children, ...props }: any) {
-    const match = /language-(\w+)/.exec(className || '');
-    const language = match ? match[1] : '';
+    const match = /language-(\w+)/.exec(className || "");
+    const language = match ? match[1] : "";
 
     // Handle code blocks (triple backticks)
     return match ? (
       <div className="my-3 rounded-md overflow-hidden">
         <div className="flex items-center justify-between bg-background/90 px-4 py-1 text-xs text-foreground/70">
-          <span>{language || 'Code'}</span>
+          <span>{language || "Code"}</span>
         </div>
         <SyntaxHighlighter
           style={oneDark}
-          language={language || 'javascript'}
+          language={language || "javascript"}
           customStyle={{
             margin: 0,
-            fontSize: '0.85rem',
-            borderRadius: '0 0 0.375rem 0.375rem',
+            fontSize: "0.85rem",
+            borderRadius: "0 0 0.375rem 0.375rem",
           }}
         >
-          {String(children).replace(/\n$/, '')}
+          {String(children).replace(/\n$/, "")}
         </SyntaxHighlighter>
       </div>
     ) : (

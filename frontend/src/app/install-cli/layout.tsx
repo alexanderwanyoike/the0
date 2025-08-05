@@ -1,21 +1,21 @@
-import { Metadata } from 'next';
-import { NavigationMenu } from '@/components/landing-page/navigation-menu';
+import { Metadata } from "next";
+import { NavigationMenu } from "@/components/landing-page/navigation-menu";
 
 export const metadata: Metadata = {
-  title: 'Install THE0 CLI | THE0 Platform',
+  title: "Install THE0 CLI | THE0 Platform",
   description:
-    'Download and install the THE0 CLI for managing trading bots, deploying algorithms, and interacting with the platform.',
+    "Download and install the THE0 CLI for managing trading bots, deploying algorithms, and interacting with the platform.",
   openGraph: {
-    title: 'Install THE0 CLI',
+    title: "Install THE0 CLI",
     description:
-      'Get started with THE0 by installing our command-line interface.',
-    type: 'website',
+      "Get started with THE0 by installing our command-line interface.",
+    type: "website",
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Install THE0 CLI',
+    card: "summary_large_image",
+    title: "Install THE0 CLI",
     description:
-      'Download and install the THE0 CLI for managing trading bots from the command line.',
+      "Download and install the THE0 CLI for managing trading bots from the command line.",
   },
 };
 

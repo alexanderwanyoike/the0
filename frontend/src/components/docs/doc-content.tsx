@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import { DocFrontmatter } from '@/lib/docs/file-system';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import { DocFrontmatter } from "@/lib/docs/file-system";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   vscDarkPlus,
   vs,
-} from 'react-syntax-highlighter/dist/esm/styles/prism';
-import remarkGfm from 'remark-gfm';
-import { useTheme } from 'next-themes';
+} from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
+import { useTheme } from "next-themes";
 
 interface DocsContentProps {
   content: string;
@@ -25,24 +25,24 @@ export const DocsContent: React.FC<DocsContentProps> = ({
   const { resolvedTheme } = useTheme();
   // Clean up Markdoc-specific tags that won't render properly
   const cleanContent = content
-    .replace(/\{%\s*button[^%]*%\}[\s\S]*?\{%\s*\/button\s*%\}/gi, '')
-    .replace(/\{%\s*alert[^%]*%\}[\s\S]*?\{%\s*\/alert\s*%\}/gi, '')
-    .replace(/\{%\s*card[^%]*%\}[\s\S]*?\{%\s*\/card\s*%\}/gi, '')
-    .replace(/\{%\s*[^%]*%\}/gi, '');
+    .replace(/\{%\s*button[^%]*%\}[\s\S]*?\{%\s*\/button\s*%\}/gi, "")
+    .replace(/\{%\s*alert[^%]*%\}[\s\S]*?\{%\s*\/alert\s*%\}/gi, "")
+    .replace(/\{%\s*card[^%]*%\}[\s\S]*?\{%\s*\/card\s*%\}/gi, "")
+    .replace(/\{%\s*[^%]*%\}/gi, "");
 
   // Helper function to resolve relative links
   const resolveLink = (href: string): string => {
     // If it's an absolute URL, return as is
     if (
-      href.startsWith('http://') ||
-      href.startsWith('https://') ||
-      href.startsWith('#')
+      href.startsWith("http://") ||
+      href.startsWith("https://") ||
+      href.startsWith("#")
     ) {
       return href;
     }
 
     // Handle relative links
-    if (href.startsWith('./')) {
+    if (href.startsWith("./")) {
       // Remove leading ./
       const relativePath = href.slice(2);
       // Get current directory path
@@ -50,13 +50,13 @@ export const DocsContent: React.FC<DocsContentProps> = ({
       // Construct the full path
       const fullPath =
         currentPath.length > 0
-          ? `/docs/${currentPath.join('/')}/${relativePath}`
+          ? `/docs/${currentPath.join("/")}/${relativePath}`
           : `/docs/${relativePath}`;
       return fullPath;
     }
 
     // Handle absolute paths from root
-    if (href.startsWith('/')) {
+    if (href.startsWith("/")) {
       return href;
     }
 
@@ -64,7 +64,7 @@ export const DocsContent: React.FC<DocsContentProps> = ({
     const currentPath = slug.slice(0, -1); // Remove last segment (current file)
     const fullPath =
       currentPath.length > 0
-        ? `/docs/${currentPath.join('/')}/${href}`
+        ? `/docs/${currentPath.join("/")}/${href}`
         : `/docs/${href}`;
     return fullPath;
   };
@@ -98,19 +98,19 @@ export const DocsContent: React.FC<DocsContentProps> = ({
           remarkPlugins={[remarkGfm]}
           components={{
             code({ className, children, ...props }: any) {
-              const match = /language-(\w+)/.exec(className || '');
-              const language = match ? match[1] : '';
+              const match = /language-(\w+)/.exec(className || "");
+              const language = match ? match[1] : "";
 
               if (language) {
                 return (
                   <SyntaxHighlighter
-                    style={resolvedTheme === 'dark' ? vscDarkPlus : vs}
+                    style={resolvedTheme === "dark" ? vscDarkPlus : vs}
                     language={language}
                     PreTag="div"
                     className="rounded-lg border"
                     {...props}
                   >
-                    {String(children).replace(/\n$/, '')}
+                    {String(children).replace(/\n$/, "")}
                   </SyntaxHighlighter>
                 );
               }
@@ -191,7 +191,7 @@ export const DocsContent: React.FC<DocsContentProps> = ({
               const resolvedHref = resolveLink(href);
 
               // If it's an external link, use regular anchor
-              if (href.startsWith('http://') || href.startsWith('https://')) {
+              if (href.startsWith("http://") || href.startsWith("https://")) {
                 return (
                   <a
                     href={resolvedHref}
@@ -199,8 +199,8 @@ export const DocsContent: React.FC<DocsContentProps> = ({
                     rel="noopener noreferrer"
                     className="!text-primary hover:!text-primary/80 !no-underline"
                     style={{
-                      color: 'hsl(var(--primary))',
-                      textDecoration: 'none',
+                      color: "hsl(var(--primary))",
+                      textDecoration: "none",
                     }}
                   >
                     {children}
@@ -209,14 +209,14 @@ export const DocsContent: React.FC<DocsContentProps> = ({
               }
 
               // If it's a hash link, use regular anchor
-              if (href.startsWith('#')) {
+              if (href.startsWith("#")) {
                 return (
                   <a
                     href={resolvedHref}
                     className="!text-primary hover:!text-primary/80 !no-underline"
                     style={{
-                      color: 'hsl(var(--primary))',
-                      textDecoration: 'none',
+                      color: "hsl(var(--primary))",
+                      textDecoration: "none",
                     }}
                   >
                     {children}

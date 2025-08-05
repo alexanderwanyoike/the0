@@ -1,6 +1,6 @@
-'use client';
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
+"use client";
+import React from "react";
+import ReactMarkdown from "react-markdown";
 
 interface CustomMarkdownProps {
   children: string;
@@ -11,14 +11,14 @@ export const CustomMarkdown: React.FC<CustomMarkdownProps> = ({ children }) => {
     <ReactMarkdown
       components={{
         code({ node, className, children, ...props }) {
-          const match = /language-(\w+)/.exec(className || '');
-          const language = match ? match[1] : '';
+          const match = /language-(\w+)/.exec(className || "");
+          const language = match ? match[1] : "";
 
           // Handle code blocks (triple backticks)
           return match ? (
             <div className="my-3 rounded-md overflow-hidden">
               <div className="flex items-center justify-between bg-background/90 px-4 py-1 text-xs text-foreground/70">
-                <span>{language || 'Code'}</span>
+                <span>{language || "Code"}</span>
               </div>
             </div>
           ) : (

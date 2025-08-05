@@ -1,1 +1,1 @@
-export { default as PlotModal } from './PlotModal';
+export { default as PlotModal } from "./PlotModal";

@@ -1,20 +1,20 @@
-import React, { JSX } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
+import React, { JSX } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface BotSchema {
-  type: 'object';
+  type: "object";
   properties: Record<string, SchemaProperty>;
   required: string[];
 }
@@ -55,7 +55,7 @@ const FormGenerator: React.FC<FormGeneratorProps> = ({
 
   // Add schedule field for scheduled bots if not present in schema
   const needsScheduleField =
-    botType === 'scheduled' && !schema.properties.schedule;
+    botType === "scheduled" && !schema.properties.schedule;
 
   return (
     <div className="space-y-6">
@@ -63,10 +63,10 @@ const FormGenerator: React.FC<FormGeneratorProps> = ({
       {needsScheduleField && (
         <div>
           {getFormElementForProperty(
-            'schedule',
+            "schedule",
             {
-              type: 'string',
-              format: 'cron',
+              type: "string",
+              format: "cron",
               description:
                 'Cron expression for scheduling bot execution (e.g., "*/5 * * * *" for every 5 minutes)',
             },
@@ -112,14 +112,14 @@ function getFormElementForProperty(
 
   const commonProps = {
     id,
-    'aria-describedby': description ? `${id}-description` : undefined,
-    'aria-invalid': error ? true : undefined,
+    "aria-describedby": description ? `${id}-description` : undefined,
+    "aria-invalid": error ? true : undefined,
   };
 
   let inputElement: JSX.Element;
 
   switch (property.type) {
-    case 'boolean':
+    case "boolean":
       inputElement = (
         <div className="flex items-center space-x-2">
           <Switch
@@ -134,8 +134,8 @@ function getFormElementForProperty(
       );
       break;
 
-    case 'number':
-    case 'integer':
+    case "number":
+    case "integer":
       if (property.minimum !== undefined && property.maximum !== undefined) {
         // Use slider for numbers with min/max range
         inputElement = (
@@ -150,7 +150,7 @@ function getFormElementForProperty(
                 onValueChange={(values) => onChange(key, values[0])}
                 min={property.minimum}
                 max={property.maximum}
-                step={property.type === 'integer' ? 1 : 0.1}
+                step={property.type === "integer" ? 1 : 0.1}
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
@@ -173,33 +173,33 @@ function getFormElementForProperty(
             <Input
               {...commonProps}
               type="number"
-              value={value ?? property.default ?? ''}
+              value={value ?? property.default ?? ""}
               onChange={(e) => {
                 const val = e.target.value;
                 onChange(
                   key,
-                  val === ''
+                  val === ""
                     ? undefined
-                    : property.type === 'integer'
+                    : property.type === "integer"
                       ? parseInt(val)
                       : parseFloat(val),
                 );
               }}
               min={property.minimum}
               max={property.maximum}
-              step={property.type === 'integer' ? 1 : 'any'}
+              step={property.type === "integer" ? 1 : "any"}
             />
           </div>
         );
       }
       break;
 
-    case 'string':
+    case "string":
       if (
-        key.toLowerCase() === 'schedule' ||
-        property.format === 'cron' ||
+        key.toLowerCase() === "schedule" ||
+        property.format === "cron" ||
         (property.description &&
-          property.description.toLowerCase().includes('cron'))
+          property.description.toLowerCase().includes("cron"))
       ) {
         // Schedule/Cron input with helper link
         inputElement = (
@@ -210,7 +210,7 @@ function getFormElementForProperty(
             <Input
               {...commonProps}
               type="text"
-              value={value ?? property.default ?? ''}
+              value={value ?? property.default ?? ""}
               onChange={(e) => onChange(key, e.target.value)}
               placeholder="*/5 * * * * (every 5 minutes)"
               className="font-mono"
@@ -236,7 +236,7 @@ function getFormElementForProperty(
               {label} {required && <span className="text-red-500">*</span>}
             </Label>
             <Select
-              value={value ?? property.default ?? ''}
+              value={value ?? property.default ?? ""}
               onValueChange={(val) => onChange(key, val)}
             >
               <SelectTrigger {...commonProps}>
@@ -253,7 +253,7 @@ function getFormElementForProperty(
           </div>
         );
       } else if (
-        property.format === 'textarea' ||
+        property.format === "textarea" ||
         (description && description.length > 100)
       ) {
         // Textarea for long text
@@ -264,7 +264,7 @@ function getFormElementForProperty(
             </Label>
             <Textarea
               {...commonProps}
-              value={value ?? property.default ?? ''}
+              value={value ?? property.default ?? ""}
               onChange={(e) => onChange(key, e.target.value)}
               placeholder={`Enter ${label.toLowerCase()}`}
               rows={4}
@@ -280,8 +280,8 @@ function getFormElementForProperty(
             </Label>
             <Input
               {...commonProps}
-              type={property.format === 'password' ? 'password' : 'text'}
-              value={value ?? property.default ?? ''}
+              type={property.format === "password" ? "password" : "text"}
+              value={value ?? property.default ?? ""}
               onChange={(e) => onChange(key, e.target.value)}
               placeholder={`Enter ${label.toLowerCase()}`}
             />
@@ -290,7 +290,7 @@ function getFormElementForProperty(
       }
       break;
 
-    case 'array':
+    case "array":
       // Simple array handling (comma-separated values)
       inputElement = (
         <div className="space-y-2">
@@ -302,13 +302,13 @@ function getFormElementForProperty(
             type="text"
             value={
               Array.isArray(value)
-                ? value.join(', ')
-                : (value ?? property.default ?? '')
+                ? value.join(", ")
+                : (value ?? property.default ?? "")
             }
             onChange={(e) => {
               const val = e.target.value;
               const array = val
-                ? val.split(',').map((item) => item.trim())
+                ? val.split(",").map((item) => item.trim())
                 : [];
               onChange(key, array);
             }}
@@ -321,7 +321,7 @@ function getFormElementForProperty(
       );
       break;
 
-    case 'object':
+    case "object":
       // Nested object handling
       if (property.properties) {
         const objectValue = value || {};
@@ -331,7 +331,7 @@ function getFormElementForProperty(
               {label} {required && <span className="text-red-500">*</span>}
             </Label>
             <div
-              className={`border rounded-lg p-4 space-y-4 ${level > 0 ? 'bg-muted/50' : 'bg-muted/20'}`}
+              className={`border rounded-lg p-4 space-y-4 ${level > 0 ? "bg-muted/50" : "bg-muted/20"}`}
             >
               {Object.entries(property.properties).map(
                 ([nestedKey, nestedProp]) => (
@@ -367,9 +367,9 @@ function getFormElementForProperty(
             <Textarea
               {...commonProps}
               value={
-                typeof value === 'object'
+                typeof value === "object"
                   ? JSON.stringify(value, null, 2)
-                  : (value ?? property.default ?? '{}')
+                  : (value ?? property.default ?? "{}")
               }
               onChange={(e) => {
                 try {
@@ -402,7 +402,7 @@ function getFormElementForProperty(
           <Input
             {...commonProps}
             type="text"
-            value={value ?? property.default ?? ''}
+            value={value ?? property.default ?? ""}
             onChange={(e) => onChange(key, e.target.value)}
             placeholder={`Enter ${label.toLowerCase()}`}
           />
@@ -429,9 +429,9 @@ function getFormElementForProperty(
 
 function formatLabel(key: string): string {
   return key
-    .replace(/([A-Z])/g, ' $1')
+    .replace(/([A-Z])/g, " $1")
     .replace(/^./, (str) => str.toUpperCase())
-    .replace(/_/g, ' ')
+    .replace(/_/g, " ")
     .trim();
 }
 

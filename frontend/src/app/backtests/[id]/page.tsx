@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { withAuth } from '@/components/auth/with-auth';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import React, { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { withAuth } from "@/components/auth/with-auth";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   ArrowLeft,
   BarChart3,
@@ -28,11 +28,11 @@ import {
   RefreshCcw,
   Trash2,
   AlertCircle,
-} from 'lucide-react';
-import { useBacktest } from '@/hooks/backtests/use-backtest';
-import { BacktestResults } from '@/components/backtests/backtest-results';
-import moment from 'moment';
-import { authFetch } from '@/lib/auth-fetch';
+} from "lucide-react";
+import { useBacktest } from "@/hooks/backtests/use-backtest";
+import { BacktestResults } from "@/components/backtests/backtest-results";
+import moment from "moment";
+import { authFetch } from "@/lib/auth-fetch";
 
 function BacktestDetailPage() {
   const params = useParams();
@@ -43,7 +43,7 @@ function BacktestDetailPage() {
   const { backtest, loading, error, refetch } = useBacktest(id);
 
   const handleBack = () => {
-    router.push('/backtests');
+    router.push("/backtests");
   };
 
   const handleDelete = async () => {
@@ -52,12 +52,12 @@ function BacktestDetailPage() {
     setIsDeleting(true);
     try {
       await authFetch(`/api/backtests/${backtest.id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
-      router.push('/backtests');
+      router.push("/backtests");
     } catch (err) {
-      console.error('Failed to delete backtest:', err);
+      console.error("Failed to delete backtest:", err);
     } finally {
       setIsDeleting(false);
     }
@@ -65,16 +65,16 @@ function BacktestDetailPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'default';
-      case 'running':
-        return 'secondary';
-      case 'pending':
-        return 'outline';
-      case 'failed':
-        return 'destructive';
+      case "completed":
+        return "default";
+      case "running":
+        return "secondary";
+      case "pending":
+        return "outline";
+      case "failed":
+        return "destructive";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
@@ -177,8 +177,8 @@ function BacktestDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(backtest.status === 'running' ||
-              backtest.status === 'pending') && (
+            {(backtest.status === "running" ||
+              backtest.status === "pending") && (
               <Button
                 onClick={refetch}
                 variant="outline"
@@ -221,7 +221,7 @@ function BacktestDetailPage() {
                         Deleting...
                       </>
                     ) : (
-                      'Delete'
+                      "Delete"
                     )}
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -245,7 +245,7 @@ function BacktestDetailPage() {
                   Created
                 </p>
                 <p className="text-sm">
-                  {moment(backtest.createdAt).format('MMM D, YYYY h:mm A')}
+                  {moment(backtest.createdAt).format("MMM D, YYYY h:mm A")}
                 </p>
               </div>
               <div>
@@ -253,7 +253,7 @@ function BacktestDetailPage() {
                   Last Updated
                 </p>
                 <p className="text-sm">
-                  {moment(backtest.updatedAt).format('MMM D, YYYY h:mm A')}
+                  {moment(backtest.updatedAt).format("MMM D, YYYY h:mm A")}
                 </p>
               </div>
               <div>
@@ -272,8 +272,8 @@ function BacktestDetailPage() {
                   <Badge variant={getStatusColor(backtest.status)}>
                     {backtest.status}
                   </Badge>
-                  {(backtest.status === 'running' ||
-                    backtest.status === 'pending') && (
+                  {(backtest.status === "running" ||
+                    backtest.status === "pending") && (
                     <Clock className="h-3 w-3 text-muted-foreground" />
                   )}
                 </div>

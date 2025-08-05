@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/middleware/admin-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export async function GET(
   req: NextRequest,
@@ -7,15 +7,15 @@ export async function GET(
 ) {
   return withAdminAuth(req, async (req: NextRequest) => {
     const { name } = await params;
-    const token = req.headers.get('Authorization');
+    const token = req.headers.get("Authorization");
 
     try {
       const response = await fetch(
         `${process.env.BOT_API_URL}/custom-bots/${encodeURIComponent(name)}`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
         },
@@ -23,7 +23,7 @@ export async function GET(
 
       if (!response.ok) {
         return NextResponse.json(
-          { error: 'Failed to fetch bot versions' },
+          { error: "Failed to fetch bot versions" },
           { status: response.status },
         );
       }
@@ -39,11 +39,11 @@ export async function GET(
         });
       }
 
-      return NextResponse.json({ success: false, error: 'No versions found' });
+      return NextResponse.json({ success: false, error: "No versions found" });
     } catch (error) {
-      console.error('Error fetching bot versions:', error);
+      console.error("Error fetching bot versions:", error);
       return NextResponse.json(
-        { error: 'Internal server error' },
+        { error: "Internal server error" },
         { status: 500 },
       );
     }

@@ -1,7 +1,7 @@
 ---
-title: 'Bot Deployment'
-description: 'The process of deploying trading bots to the platform'
-tags: ['terminology', 'deployment']
+title: "Bot Deployment"
+description: "The process of deploying trading bots to the platform"
+tags: ["terminology", "deployment"]
 order: 5
 ---
 
@@ -13,7 +13,7 @@ Bot Deployment is the process of deploying a Bot to the platform, configuring it
 
 ## Overview
 
-Deployment transforms a Custom Bot template or User Bot into a running Bot instance that:
+Deployment transforms a Custom Bot template into a running Bot instance that:
 
 - Executes trading logic according to its configuration
 - Connects to specified exchanges and data sources
@@ -30,8 +30,7 @@ Deployment transforms a Custom Bot template or User Bot into a running Bot insta
 
 1. **Navigate to Bot Source**:
 
-   - Custom Bots: Go to [Custom Bots](/custom-bots) section. Note you have to deploy a custom bot before it appears in the custom bots section and also the custom bot will need to be reviewed by the 0vers33r before it can be approved for deployment.
-   - User Bots: Go to [My Bots](/user-bots) section. Find a bot select a version and click "Deploy".
+Go to [Custom Bots](/custom-bots) section. Note you have to deploy a custom bot before it appears in the custom bots section and also the custom bot will need to be reviewed by the 0vers33r before it can be approved for deployment.
 
 2. **Configure Deployment**:
 
@@ -82,5 +81,4 @@ During deployment, you must provide:
 
 - [Bots](/docs/terminology/bots) - The deployed instances
 - [Custom Bots](/docs/terminology/custom-bots) - Templates for deployment
-- [User Bots](/docs/terminology/user-bots) - Marketplace bots ready for deployment
 - [Monitoring](/docs/terminology/monitoring) - Post-deployment tracking

@@ -1,25 +1,25 @@
-'use client';
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { JwtAuthService } from '@/lib/auth/jwt-auth.service';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+"use client";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { JwtAuthService } from "@/lib/auth/jwt-auth.service";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { APP_NAME } from '@/lib/constants';
-import { useAuth } from '@/contexts/auth-context';
+} from "@/components/ui/card";
+import { APP_NAME } from "@/lib/constants";
+import { useAuth } from "@/contexts/auth-context";
 
 export function RegisterForm() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -31,22 +31,22 @@ export function RegisterForm() {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       setIsLoading(false);
       return;
     }
 
     try {
       // Need to add username for JWT auth registration
-      const username = email.split('@')[0]; // Simple username from email
+      const username = email.split("@")[0]; // Simple username from email
       const result = await register({
         username,
         email,
         password,
       });
-      
+
       if (!result.success) {
-        setError(result.error || 'Registration failed');
+        setError(result.error || "Registration failed");
       }
       // Success navigation is handled by the auth context
     } catch (error) {
@@ -61,18 +61,18 @@ export function RegisterForm() {
     if (error instanceof Error) {
       // Format Firebase error messages to be more user-friendly
       let errorMessage = error.message;
-      if (errorMessage.includes('email-already-in-use')) {
+      if (errorMessage.includes("email-already-in-use")) {
         errorMessage =
-          'This email is already registered. Please try logging in instead.';
-      } else if (errorMessage.includes('weak-password')) {
-        errorMessage = 'Password should be at least 6 characters long.';
-      } else if (errorMessage.includes('invalid-email')) {
-        errorMessage = 'Please enter a valid email address.';
+          "This email is already registered. Please try logging in instead.";
+      } else if (errorMessage.includes("weak-password")) {
+        errorMessage = "Password should be at least 6 characters long.";
+      } else if (errorMessage.includes("invalid-email")) {
+        errorMessage = "Please enter a valid email address.";
       }
       return errorMessage;
     } else {
       // Handle other types of errors
-      return 'An unknown error occurred. Please try again later.';
+      return "An unknown error occurred. Please try again later.";
     }
   };
 
@@ -132,15 +132,15 @@ export function RegisterForm() {
           )}
 
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? 'Creating account...' : 'Create Account'}
+            {isLoading ? "Creating account..." : "Create Account"}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
+            Already have an account?{" "}
             <Button
               variant="link"
               className="p-0"
-              onClick={() => router.push('/login')}
+              onClick={() => router.push("/login")}
             >
               Login here
             </Button>

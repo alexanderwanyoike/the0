@@ -1,9 +1,9 @@
-import { Badge } from '@/components/ui/badge';
-import React from 'react';
-import { THREAT_COLORS } from '@/components/custom-bots/constants';
+import { Badge } from "@/components/ui/badge";
+import React from "react";
+import { THREAT_COLORS } from "@/components/custom-bots/constants";
 
 export const ReviewSummary = ({ review, status }: any) => {
-  if (!review || status === 'pending_review') return null;
+  if (!review || status === "pending_review") return null;
 
   const threatColor =
     THREAT_COLORS[review.threatSummary.threatLevel] || THREAT_COLORS.medium;
@@ -43,7 +43,7 @@ export const ReviewSummary = ({ review, status }: any) => {
 
       {review.scannedFiles && (
         <div className="mt-2 text-xs text-muted-foreground">
-          <span className="font-medium">Scanned files:</span>{' '}
+          <span className="font-medium">Scanned files:</span>{" "}
           {review.scannedFiles.length} files analyzed
         </div>
       )}

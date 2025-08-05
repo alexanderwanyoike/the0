@@ -1,7 +1,7 @@
 ---
-title: 'Bot Commands'
-description: 'Managing bot instances with the CLI'
-tags: ['cli', 'bots', 'commands']
+title: "Bot Commands"
+description: "Managing bot instances with the CLI"
+tags: ["cli", "bots", "commands"]
 order: 3
 ---
 
@@ -11,7 +11,7 @@ The `bot` commands allow you to deploy, manage, and monitor your trading bot ins
 
 ## Overview
 
-Bot instances are deployed configurations of either Custom Bots or User Bots. These commands help you:
+Bot instances are deployed configurations of either Custom Bots. These commands help you:
 
 - Deploy new bot instances
 - List and monitor active bots
@@ -216,5 +216,4 @@ For scheduled bots, use standard cron expressions:
 ## Related Commands
 
 - [Custom Bot Commands](/docs/the0-cli/custom-bot-commands) - Deploy your own bot templates
-- [User Bot Commands](/docs/the0-cli/user-bot-commands) - Manage marketplace bots
 - [Authentication](/docs/the0-cli/authentication) - Set up API access

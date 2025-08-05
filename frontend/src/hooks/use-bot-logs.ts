@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { LogEntry } from '@/components/bot/console-interface';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { LogEntry } from "@/components/bot/console-interface";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
 
 interface LogsQuery {
   date?: string;
@@ -60,24 +60,24 @@ export const useBotLogs = ({
         setLoading(true);
         setError(null);
         if (!user) {
-          throw new Error('User not authenticated');
+          throw new Error("User not authenticated");
         }
 
         const searchParams = new URLSearchParams();
         if (queryParams.date) {
-          searchParams.set('date', queryParams.date);
+          searchParams.set("date", queryParams.date);
         } else {
           searchParams.set(
-            'date',
-            new Date().toISOString().slice(0, 10).replace(/-/g, ''),
+            "date",
+            new Date().toISOString().slice(0, 10).replace(/-/g, ""),
           );
         }
         if (queryParams.dateRange)
-          searchParams.set('dateRange', queryParams.dateRange);
+          searchParams.set("dateRange", queryParams.dateRange);
         if (queryParams.limit)
-          searchParams.set('limit', queryParams.limit.toString());
+          searchParams.set("limit", queryParams.limit.toString());
         if (queryParams.offset)
-          searchParams.set('offset', queryParams.offset.toString());
+          searchParams.set("offset", queryParams.offset.toString());
 
         const response = await authFetch(
           `/api/logs/${botId}?${searchParams.toString()}`,
@@ -97,8 +97,8 @@ export const useBotLogs = ({
         result.data.forEach((logEntry) => {
           // Split content by newlines and create individual entries
           const lines = logEntry.content
-            .split('\n')
-            .filter((line) => line.trim() !== '');
+            .split("\n")
+            .filter((line) => line.trim() !== "");
           lines.forEach((line) => {
             expandedLogs.push({
               date: logEntry.date,
@@ -116,19 +116,19 @@ export const useBotLogs = ({
         setHasMore(result.hasMore);
         setTotal(result.total);
       } catch (err: any) {
-        if (err.name === 'AbortError') {
+        if (err.name === "AbortError") {
           return; // Request was cancelled, don't show error
         }
 
-        const errorMessage = err.message || 'Failed to fetch logs';
+        const errorMessage = err.message || "Failed to fetch logs";
         setError(errorMessage);
 
         if (!append) {
           // Only show toast for initial fetch errors
           toast({
-            title: 'Error',
+            title: "Error",
             description: errorMessage,
-            variant: 'destructive',
+            variant: "destructive",
           });
         }
       } finally {
@@ -198,9 +198,9 @@ export const useBotLogs = ({
   const exportLogs = useCallback(() => {
     if (logs.length === 0) {
       toast({
-        title: 'No logs to export',
-        description: 'There are no logs available to export.',
-        variant: 'destructive',
+        title: "No logs to export",
+        description: "There are no logs available to export.",
+        variant: "destructive",
       });
       return;
     }
@@ -209,20 +209,20 @@ export const useBotLogs = ({
       .map((log) => {
         return `[${log.date}] ${log.content}`;
       })
-      .join('\n');
+      .join("\n");
 
-    const blob = new Blob([logText], { type: 'text/plain' });
+    const blob = new Blob([logText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.download = `bot-${botId}-logs-${new Date().toISOString().split('T')[0]}.txt`;
+    link.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
     toast({
-      description: 'Logs exported successfully',
+      description: "Logs exported successfully",
     });
   }, [logs, botId, toast]);
 

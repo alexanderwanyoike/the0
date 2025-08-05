@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { APP_NAME } from '@/lib/constants';
-import { useAuth } from '@/contexts/auth-context';
+} from "@/components/ui/card";
+import { APP_NAME } from "@/lib/constants";
+import { useAuth } from "@/contexts/auth-context";
 
 export function LoginForm() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { loading, login } = useAuth();
@@ -24,15 +24,15 @@ export function LoginForm() {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-    
+
     try {
       const result = await login({ email, password });
       if (!result.success) {
-        setError(result.error || 'Login failed');
+        setError(result.error || "Login failed");
       }
       // Success navigation is handled by the auth context
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError("An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -81,8 +81,12 @@ export function LoginForm() {
             </Alert>
           )}
 
-          <Button type="submit" className="w-full" disabled={isLoading || loading}>
-            {isLoading ? 'Logging in...' : 'Login'}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={isLoading || loading}
+          >
+            {isLoading ? "Logging in..." : "Login"}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">

@@ -1,15 +1,16 @@
-import { 
-  AuthUser, 
-  LoginCredentials, 
-  RegisterCredentials, 
-  AuthResponse, 
+import {
+  AuthUser,
+  LoginCredentials,
+  RegisterCredentials,
+  AuthResponse,
   ApiResponse,
-  Result 
-} from './types';
+  Result,
+} from "./types";
 
 export class JwtAuthService {
-  private readonly API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-  private readonly TOKEN_KEY = 'auth-token';
+  private readonly API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+  private readonly TOKEN_KEY = "auth-token";
 
   /**
    * Login with email and password
@@ -17,9 +18,9 @@ export class JwtAuthService {
   async login(credentials: LoginCredentials): Promise<Result<AuthResponse>> {
     try {
       const response = await fetch(`${this.API_BASE_URL}/auth/login`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(credentials),
       });
@@ -29,14 +30,14 @@ export class JwtAuthService {
       if (!response.ok) {
         return {
           success: false,
-          error: data.message || 'Login failed',
+          error: data.message || "Login failed",
         };
       }
 
       if (data.success && data.data) {
         // Store token in localStorage
         this.setToken(data.data.token);
-        
+
         return {
           success: true,
           data: data.data,
@@ -45,13 +46,13 @@ export class JwtAuthService {
 
       return {
         success: false,
-        error: 'Invalid response format',
+        error: "Invalid response format",
       };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       return {
         success: false,
-        error: 'Login failed. Please try again.',
+        error: "Login failed. Please try again.",
       };
     }
   }
@@ -59,12 +60,14 @@ export class JwtAuthService {
   /**
    * Register new user
    */
-  async register(credentials: RegisterCredentials): Promise<Result<AuthResponse>> {
+  async register(
+    credentials: RegisterCredentials,
+  ): Promise<Result<AuthResponse>> {
     try {
       const response = await fetch(`${this.API_BASE_URL}/auth/register`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(credentials),
       });
@@ -74,14 +77,14 @@ export class JwtAuthService {
       if (!response.ok) {
         return {
           success: false,
-          error: data.message || 'Registration failed',
+          error: data.message || "Registration failed",
         };
       }
 
       if (data.success && data.data) {
         // Store token in localStorage
         this.setToken(data.data.token);
-        
+
         return {
           success: true,
           data: data.data,
@@ -90,13 +93,13 @@ export class JwtAuthService {
 
       return {
         success: false,
-        error: 'Invalid response format',
+        error: "Invalid response format",
       };
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error("Registration error:", error);
       return {
         success: false,
-        error: 'Registration failed. Please try again.',
+        error: "Registration failed. Please try again.",
       };
     }
   }
@@ -107,9 +110,9 @@ export class JwtAuthService {
   async validateToken(token: string): Promise<Result<AuthUser>> {
     try {
       const response = await fetch(`${this.API_BASE_URL}/auth/validate`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ token }),
       });
@@ -119,7 +122,7 @@ export class JwtAuthService {
       if (!response.ok) {
         return {
           success: false,
-          error: data.message || 'Token validation failed',
+          error: data.message || "Token validation failed",
         };
       }
 
@@ -132,13 +135,13 @@ export class JwtAuthService {
 
       return {
         success: false,
-        error: 'Invalid response format',
+        error: "Invalid response format",
       };
     } catch (error) {
-      console.error('Token validation error:', error);
+      console.error("Token validation error:", error);
       return {
         success: false,
-        error: 'Token validation failed',
+        error: "Token validation failed",
       };
     }
   }
@@ -148,19 +151,19 @@ export class JwtAuthService {
    */
   async getCurrentUser(): Promise<Result<AuthUser>> {
     const token = this.getToken();
-    
+
     if (!token) {
       return {
         success: false,
-        error: 'No authentication token found',
+        error: "No authentication token found",
       };
     }
 
     try {
       const response = await fetch(`${this.API_BASE_URL}/auth/me`, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -171,10 +174,10 @@ export class JwtAuthService {
         if (response.status === 401) {
           this.removeToken();
         }
-        
+
         return {
           success: false,
-          error: data.message || 'Failed to get current user',
+          error: data.message || "Failed to get current user",
         };
       }
 
@@ -187,13 +190,13 @@ export class JwtAuthService {
 
       return {
         success: false,
-        error: 'Invalid response format',
+        error: "Invalid response format",
       };
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error("Get current user error:", error);
       return {
         success: false,
-        error: 'Failed to get current user',
+        error: "Failed to get current user",
       };
     }
   }
@@ -209,7 +212,7 @@ export class JwtAuthService {
    * Get stored token
    */
   getToken(): string | null {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === "undefined") return null;
     return localStorage.getItem(this.TOKEN_KEY);
   }
 
@@ -224,7 +227,7 @@ export class JwtAuthService {
    * Store token in localStorage
    */
   private setToken(token: string): void {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       localStorage.setItem(this.TOKEN_KEY, token);
     }
   }
@@ -233,7 +236,7 @@ export class JwtAuthService {
    * Remove token from localStorage
    */
   private removeToken(): void {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       localStorage.removeItem(this.TOKEN_KEY);
     }
   }

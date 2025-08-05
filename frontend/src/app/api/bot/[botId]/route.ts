@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/middleware/admin-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export async function GET(
   req: NextRequest,
@@ -8,26 +8,26 @@ export async function GET(
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
       const { botId } = await params;
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
       const response = await fetch(`${process.env.BOT_API_URL}/bot/${botId}`, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: token,
         } as HeadersInit,
       });
       if (!response.ok) {
         return NextResponse.json(
-          { error: 'Error fetching bots' },
+          { error: "Error fetching bots" },
           { status: response.status },
         );
       }
       const data = await response.json();
       return NextResponse.json(data);
     } catch (error: any) {
-      console.error('Error fetching bots:', error);
+      console.error("Error fetching bots:", error);
       return NextResponse.json(
-        { error: 'Error fetching bots' },
+        { error: "Error fetching bots" },
         { status: 500 },
       );
     }
@@ -41,18 +41,18 @@ export async function DELETE(
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
       const { botId } = await params;
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
 
       const response = await fetch(`${process.env.BOT_API_URL}/bot/${botId}`, {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: token,
         } as HeadersInit,
       });
-      
+
       if (!response.ok) {
-        let errorMessage = 'Error deleting bot';
+        let errorMessage = "Error deleting bot";
         try {
           const errorData = await response.json();
           errorMessage = errorData.message || errorData.error || errorMessage;
@@ -65,7 +65,7 @@ export async function DELETE(
           { status: response.status },
         );
       }
-      
+
       // Handle successful deletion - might return empty response
       let data = null;
       try {
@@ -77,12 +77,12 @@ export async function DELETE(
         // If no JSON response, that's fine for deletion
         data = { success: true };
       }
-      
+
       return NextResponse.json(data || { success: true });
     } catch (error: any) {
-      console.error('Error deleting bot:', error);
+      console.error("Error deleting bot:", error);
       return NextResponse.json(
-        { error: error.message || 'Error deleting bot' },
+        { error: error.message || "Error deleting bot" },
         { status: 500 },
       );
     }
@@ -95,20 +95,20 @@ export async function PUT(
 ) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
       const { botId } = await params;
       const bot = await req.json();
-      console.log('Updating bot with body:', bot);
+      console.log("Updating bot with body:", bot);
       const response = await fetch(`${process.env.BOT_API_URL}/bot/${botId}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: token,
         } as HeadersInit,
         body: JSON.stringify(bot),
       });
       if (!response.ok) {
-        console.error('Error updating bot:', response.statusText);
+        console.error("Error updating bot:", response.statusText);
         return NextResponse.json(
           { error: await response.json() },
           { status: response.status },
@@ -117,13 +117,13 @@ export async function PUT(
       const data = await response.json();
       return NextResponse.json(data);
     } catch (error: any) {
-      console.error('Error updating bot:', error);
+      console.error("Error updating bot:", error);
       return NextResponse.json(
         {
           error: {
-            message: 'Error creating bot',
+            message: "Error creating bot",
             statusCode: 500,
-            error: 'Internal Server Error',
+            error: "Internal Server Error",
           },
         },
         { status: 500 },

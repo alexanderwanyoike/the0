@@ -1,7 +1,7 @@
 ---
-title: 'Bot Types'
-description: 'Understanding different bot execution models'
-tags: ['custom-bots', 'bot-types', 'execution-models']
+title: "Bot Types"
+description: "Understanding different bot execution models"
+tags: ["custom-bots", "bot-types", "execution-models"]
 order: 9
 ---
 
@@ -207,13 +207,13 @@ class RealtimeBot {
     // Connect to exchange WebSocket
     const ws = new WebSocket(this.getWebSocketUrl());
 
-    ws.on('message', (data) => {
+    ws.on("message", (data) => {
       const marketData = JSON.parse(data);
       this.processMarketUpdate(marketData);
     });
 
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+    ws.on("error", (error) => {
+      console.error("WebSocket error:", error);
       this.reconnect();
     });
   }
@@ -234,7 +234,7 @@ class RealtimeBot {
       this.orders.set(order.id, order);
       console.log(`Order placed: ${order.id}`);
     } catch (error) {
-      console.error('Trade execution failed:', error);
+      console.error("Trade execution failed:", error);
     }
   }
 }
@@ -257,24 +257,24 @@ function main(id, config) {
     bot.start();
 
     // Handle graceful shutdown
-    process.on('SIGINT', () => {
-      console.log('Shutdown signal received, stopping bot...');
+    process.on("SIGINT", () => {
+      console.log("Shutdown signal received, stopping bot...");
       bot.stop();
     });
 
-    process.on('SIGTERM', () => {
-      console.log('Termination signal received, stopping bot...');
+    process.on("SIGTERM", () => {
+      console.log("Termination signal received, stopping bot...");
       bot.stop();
     });
 
     return {
-      status: 'success',
+      status: "success",
       message: `Realtime bot ${id} started successfully`,
     };
   } catch (error) {
     console.error(`Failed to start bot ${id}:`, error);
     return {
-      status: 'error',
+      status: "error",
       message: `Bot startup failed: ${error.message}`,
     };
   }

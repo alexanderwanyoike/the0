@@ -1,4 +1,4 @@
-import { Terminal } from 'lucide-react';
+import { Terminal } from "lucide-react";
 
 export default function Loading() {
   return (
@@ -21,15 +21,15 @@ export default function Loading() {
           <div className="flex space-x-2">
             <div
               className="h-2 w-2 bg-primary rounded-full animate-bounce"
-              style={{ animationDelay: '0ms' }}
+              style={{ animationDelay: "0ms" }}
             ></div>
             <div
               className="h-2 w-2 bg-primary rounded-full animate-bounce"
-              style={{ animationDelay: '150ms' }}
+              style={{ animationDelay: "150ms" }}
             ></div>
             <div
               className="h-2 w-2 bg-primary rounded-full animate-bounce"
-              style={{ animationDelay: '300ms' }}
+              style={{ animationDelay: "300ms" }}
             ></div>
           </div>
         </div>

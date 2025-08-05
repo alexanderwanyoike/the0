@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface MetricsSummaryProps {
   metrics: Record<string, any>;
@@ -17,17 +17,17 @@ export function MetricsSummary({ metrics }: MetricsSummaryProps) {
   // Helper function to format labels
   const formatLabel = (key: string): string => {
     return key
-      .replace(/_/g, ' ')
-      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, " ")
+      .replace(/([A-Z])/g, " $1")
       .trim()
-      .split(' ')
+      .split(" ")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
+      .join(" ");
   };
 
   // Helper function to format values
   const formatValue = (key: string, value: any): string => {
-    if (value === null || value === undefined) return '-';
+    if (value === null || value === undefined) return "-";
 
     // Handle arrays
     if (Array.isArray(value)) {
@@ -35,30 +35,30 @@ export function MetricsSummary({ metrics }: MetricsSummaryProps) {
     }
 
     // Handle objects
-    if (typeof value === 'object') {
+    if (typeof value === "object") {
       return `{${Object.keys(value).length} fields}`;
     }
 
     // Handle numbers
-    if (typeof value === 'number') {
+    if (typeof value === "number") {
       const keyLower = key.toLowerCase();
 
       // Percentage values
       if (
-        keyLower.includes('rate') ||
-        keyLower.includes('return') ||
-        keyLower.includes('pct') ||
-        keyLower.includes('ratio')
+        keyLower.includes("rate") ||
+        keyLower.includes("return") ||
+        keyLower.includes("pct") ||
+        keyLower.includes("ratio")
       ) {
         return `${(value * 100).toFixed(2)}%`;
       }
 
       // Currency values
       if (
-        keyLower.includes('price') ||
-        keyLower.includes('value') ||
-        keyLower.includes('pnl') ||
-        keyLower.includes('profit')
+        keyLower.includes("price") ||
+        keyLower.includes("value") ||
+        keyLower.includes("pnl") ||
+        keyLower.includes("profit")
       ) {
         return `$${value.toFixed(2)}`;
       }
@@ -72,16 +72,16 @@ export function MetricsSummary({ metrics }: MetricsSummaryProps) {
 
   // Helper function to determine if value should be highlighted
   const shouldHighlightValue = (key: string, value: any): boolean => {
-    if (typeof value !== 'number') return false;
+    if (typeof value !== "number") return false;
 
     const keyLower = key.toLowerCase();
 
     // Highlight returns, profits, and ratios
     return (
-      keyLower.includes('return') ||
-      keyLower.includes('profit') ||
-      keyLower.includes('ratio') ||
-      keyLower.includes('pnl')
+      keyLower.includes("return") ||
+      keyLower.includes("profit") ||
+      keyLower.includes("ratio") ||
+      keyLower.includes("pnl")
     );
   };
 
@@ -210,7 +210,7 @@ export function MetricsSummary({ metrics }: MetricsSummaryProps) {
                 return (
                   <Button
                     key={pageIndex}
-                    variant={pageIndex === currentPage ? 'default' : 'outline'}
+                    variant={pageIndex === currentPage ? "default" : "outline"}
                     size="sm"
                     className="w-8 h-8 p-0 text-xs"
                     onClick={() => setCurrentPage(pageIndex)}

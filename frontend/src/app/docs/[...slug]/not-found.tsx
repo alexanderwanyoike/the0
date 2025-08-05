@@ -1,8 +1,8 @@
-import React from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FileText, ArrowLeft, Home, Search } from 'lucide-react';
+import React from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FileText, ArrowLeft, Home, Search } from "lucide-react";
 
 export default function DocsNotFound() {
   return (
@@ -65,7 +65,7 @@ export default function DocsNotFound() {
             <div className="mt-6 text-sm text-muted-foreground">
               <p>
                 Can&apos;t find what you&apos;re looking for? Try using the
-                search feature or{' '}
+                search feature or{" "}
                 <Link href="/support" className="text-primary hover:underline">
                   contact support
                 </Link>

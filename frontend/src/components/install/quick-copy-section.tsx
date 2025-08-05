@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Copy, Check, Download, ExternalLink, Terminal } from 'lucide-react';
-import type { QuickCopySectionProps } from '@/types/install';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Copy, Check, Download, ExternalLink, Terminal } from "lucide-react";
+import type { QuickCopySectionProps } from "@/types/install";
 
 export function QuickCopySection({ command, platform }: QuickCopySectionProps) {
   const [copied, setCopied] = useState(false);
@@ -26,7 +26,7 @@ export function QuickCopySection({ command, platform }: QuickCopySectionProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
+      console.error("Failed to copy to clipboard:", error);
       // Still show success feedback even if copy failed
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -104,7 +104,7 @@ export function InlineQuickCopy({ command, platform }: QuickCopySectionProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (error) {
-      console.error('Copy failed:', error);
+      console.error("Copy failed:", error);
     }
   };
 
@@ -150,7 +150,7 @@ export function EnhancedQuickCopySection({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Copy failed:', error);
+      console.error("Copy failed:", error);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } finally {
@@ -160,7 +160,7 @@ export function EnhancedQuickCopySection({
 
   const downloadScript = () => {
     if (scriptUrl) {
-      window.open(scriptUrl, '_blank');
+      window.open(scriptUrl, "_blank");
     }
   };
 
@@ -254,7 +254,7 @@ export function EnhancedQuickCopySection({
 // Code block component for displaying commands with syntax highlighting
 export function CodeBlock({
   code,
-  language = 'bash',
+  language = "bash",
   showCopy = true,
 }: {
   code: string;
@@ -274,7 +274,7 @@ export function CodeBlock({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (error) {
-      console.error('Copy failed:', error);
+      console.error("Copy failed:", error);
     }
   };
 
@@ -308,13 +308,13 @@ export function CodeBlock({
 async function fallbackCopyToClipboard(text: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // Create a textarea element
-    const textArea = document.createElement('textarea');
+    const textArea = document.createElement("textarea");
     textArea.value = text;
 
     // Make the textarea invisible
-    textArea.style.position = 'fixed';
-    textArea.style.left = '-999999px';
-    textArea.style.top = '-999999px';
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
 
     document.body.appendChild(textArea);
     textArea.focus();
@@ -322,13 +322,13 @@ async function fallbackCopyToClipboard(text: string): Promise<void> {
 
     try {
       // Use the deprecated execCommand as fallback
-      const successful = document.execCommand('copy');
+      const successful = document.execCommand("copy");
       document.body.removeChild(textArea);
 
       if (successful) {
         resolve();
       } else {
-        reject(new Error('execCommand copy failed'));
+        reject(new Error("execCommand copy failed"));
       }
     } catch (error) {
       document.body.removeChild(textArea);

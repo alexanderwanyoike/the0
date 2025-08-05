@@ -1,26 +1,26 @@
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { useCustomBot } from '@/hooks/custom-bots/use-custom-bot';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle, ArrowLeft, Bot } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import React from 'react';
-import { StatusHeader } from '@/components/custom-bots/status-header';
-import { ScanProgress } from '@/components/custom-bots/scan-progress';
-import { SecurityReport } from '@/components/custom-bots/security-report';
-import { BotInfo } from '@/components/custom-bots/bot-info';
-import { VersionHistory } from '@/components/custom-bots/version-history';
-import { ActionButtons } from '@/components/custom-bots/action-buttons';
-import { ReadmeComponent } from '@/components/custom-bots/readme-component';
-import { LoadingState } from '@/components/custom-bots/loading-detail-state';
-import { AIReviewSection } from '@/components/custom-bots/ai-review-section';
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useCustomBot } from "@/hooks/custom-bots/use-custom-bot";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, ArrowLeft, Bot } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import React from "react";
+import { StatusHeader } from "@/components/custom-bots/status-header";
+import { ScanProgress } from "@/components/custom-bots/scan-progress";
+import { SecurityReport } from "@/components/custom-bots/security-report";
+import { BotInfo } from "@/components/custom-bots/bot-info";
+import { VersionHistory } from "@/components/custom-bots/version-history";
+import { ActionButtons } from "@/components/custom-bots/action-buttons";
+import { ReadmeComponent } from "@/components/custom-bots/readme-component";
+import { LoadingState } from "@/components/custom-bots/loading-detail-state";
+import { AIReviewSection } from "@/components/custom-bots/ai-review-section";
 
 export const CustomBotDetailPage = ({ botName }: any) => {
   const router = useRouter();
   const { bot, loading, error } = useCustomBot(botName);
 
   // Track selected version - default to latest
-  const [selectedVersion, setSelectedVersion] = useState<string>('');
+  const [selectedVersion, setSelectedVersion] = useState<string>("");
 
   // Set initial selected version when bot loads
   React.useEffect(() => {
@@ -30,7 +30,7 @@ export const CustomBotDetailPage = ({ botName }: any) => {
   }, [bot, selectedVersion]);
 
   const handleBack = () => {
-    router.push('/custom-bots');
+    router.push("/custom-bots");
   };
 
   const handleVersionChange = (version: string) => {

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import React, { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Search,
   Calendar,
@@ -14,8 +14,8 @@ import {
   RefreshCw,
   Filter,
   X,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface LogEntry {
   date: string;
@@ -34,10 +34,10 @@ interface ConsoleInterfaceProps {
 }
 
 const LOG_LEVEL_COLORS = {
-  ERROR: 'text-red-400 bg-red-950/50 border-red-800',
-  WARN: 'text-yellow-400 bg-yellow-950/50 border-yellow-800',
-  INFO: 'text-blue-400 bg-blue-950/50 border-blue-800',
-  DEBUG: 'text-gray-400 bg-gray-950/50 border-gray-800',
+  ERROR: "text-red-400 bg-red-950/50 border-red-800",
+  WARN: "text-yellow-400 bg-yellow-950/50 border-yellow-800",
+  INFO: "text-blue-400 bg-blue-950/50 border-blue-800",
+  DEBUG: "text-gray-400 bg-gray-950/50 border-gray-800",
 };
 
 const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
@@ -51,34 +51,34 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
     );
     const levelMatch = content.match(/\b(ERROR|WARN|WARNING|INFO|DEBUG)\b/);
 
-    let timestamp = '';
+    let timestamp = "";
     if (timestampMatch) {
       // Convert to date and time format (MM-DD HH:MM:SS)
       const fullTimestamp = timestampMatch[1];
       const date = new Date(fullTimestamp);
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const seconds = String(date.getSeconds()).padStart(2, "0");
       timestamp = `${month}-${day} ${hours}:${minutes}:${seconds}`;
     } else {
       const now = new Date();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const seconds = String(now.getSeconds()).padStart(2, "0");
       timestamp = `${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
 
-    const level = levelMatch ? levelMatch[1] : 'INFO';
+    const level = levelMatch ? levelMatch[1] : "INFO";
 
     // Clean message by removing timestamp and level prefixes
     let message = content
-      .replace(/^\[.*?\]\s*/, '')
-      .replace(/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\s]*\s*/, '')
-      .replace(/^(ERROR|WARN|WARNING|INFO|DEBUG):?\s*/, '')
+      .replace(/^\[.*?\]\s*/, "")
+      .replace(/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\s]*\s*/, "")
+      .replace(/^(ERROR|WARN|WARNING|INFO|DEBUG):?\s*/, "")
       .trim();
 
     if (!message) {
@@ -92,33 +92,33 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
 
   const getStatusIndicator = (level: string) => {
     switch (level) {
-      case 'ERROR':
-        return '●'; // Red dot
-      case 'WARN':
-      case 'WARNING':
-        return '●'; // Yellow dot
-      case 'INFO':
-        return '●'; // Green dot
-      case 'DEBUG':
-        return '●'; // Gray dot
+      case "ERROR":
+        return "●"; // Red dot
+      case "WARN":
+      case "WARNING":
+        return "●"; // Yellow dot
+      case "INFO":
+        return "●"; // Green dot
+      case "DEBUG":
+        return "●"; // Gray dot
       default:
-        return '●'; // Default green dot
+        return "●"; // Default green dot
     }
   };
 
   const getStatusColor = (level: string) => {
     switch (level) {
-      case 'ERROR':
-        return 'text-red-500 dark:text-red-400';
-      case 'WARN':
-      case 'WARNING':
-        return 'text-yellow-500 dark:text-yellow-400';
-      case 'INFO':
-        return 'text-green-500 dark:text-green-400';
-      case 'DEBUG':
-        return 'text-gray-500 dark:text-gray-400';
+      case "ERROR":
+        return "text-red-500 dark:text-red-400";
+      case "WARN":
+      case "WARNING":
+        return "text-yellow-500 dark:text-yellow-400";
+      case "INFO":
+        return "text-green-500 dark:text-green-400";
+      case "DEBUG":
+        return "text-gray-500 dark:text-gray-400";
       default:
-        return 'text-green-500 dark:text-green-400';
+        return "text-green-500 dark:text-green-400";
     }
   };
 
@@ -149,12 +149,12 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   onExport,
   className,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
-    start: '',
-    end: '',
+    start: "",
+    end: "",
   });
   const [showFilters, setShowFilters] = useState(false);
 
@@ -163,21 +163,21 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
 
   useEffect(() => {
     if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [logs, autoScroll]);
 
   const filteredLogs = logs.filter(
     (log) =>
-      searchQuery === '' ||
+      searchQuery === "" ||
       log.content.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleDateChange = (value: string) => {
     setSelectedDate(value);
     if (value) {
-      onDateChange(value.replace(/-/g, ''));
-      setDateRange({ start: '', end: '' });
+      onDateChange(value.replace(/-/g, ""));
+      setDateRange({ start: "", end: "" });
     } else {
       onDateChange(null);
     }
@@ -186,24 +186,24 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   const handleDateRangeChange = () => {
     if (dateRange.start && dateRange.end) {
       onDateRangeChange(
-        dateRange.start.replace(/-/g, ''),
-        dateRange.end.replace(/-/g, ''),
+        dateRange.start.replace(/-/g, ""),
+        dateRange.end.replace(/-/g, ""),
       );
-      setSelectedDate('');
+      setSelectedDate("");
     }
   };
 
   const clearFilters = () => {
-    setSearchQuery('');
-    setSelectedDate('');
-    setDateRange({ start: '', end: '' });
+    setSearchQuery("");
+    setSelectedDate("");
+    setDateRange({ start: "", end: "" });
     onDateChange(null);
   };
 
   return (
     <div
       className={cn(
-        'flex flex-col h-full bg-white dark:bg-black border border-gray-300 dark:border-green-900/50',
+        "flex flex-col h-full bg-white dark:bg-black border border-gray-300 dark:border-green-900/50",
         className,
       )}
     >
@@ -238,17 +238,17 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               disabled={loading}
               className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
             >
-              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setAutoScroll(!autoScroll)}
               className={cn(
-                'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300',
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
                 autoScroll
-                  ? 'bg-green-200 dark:bg-green-950/50 text-green-700 dark:text-green-300'
-                  : '',
+                  ? "bg-green-200 dark:bg-green-950/50 text-green-700 dark:text-green-300"
+                  : "",
               )}
             >
               {autoScroll ? (
@@ -352,8 +352,8 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           ) : filteredLogs.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-gray-600 dark:text-green-600 font-mono">
               {logs.length === 0
-                ? '> No logs available'
-                : '> No logs match your filters'}
+                ? "> No logs available"
+                : "> No logs match your filters"}
             </div>
           ) : (
             <>

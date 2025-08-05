@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { DocsSidebar } from '@/components/docs/docs-sidebar';
-import { DocsSearch } from '@/components/docs/docs-search';
-import { DocsBreadcrumbs } from '@/components/docs/docs-breadcrumbs';
-import { DocItem } from '@/lib/docs/file-system';
-import { Button } from '@/components/ui/button';
-import { ModeToggle } from '@/components/mode-toggle';
-import { Menu, PanelLeftOpen } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { DocsSidebar } from "@/components/docs/docs-sidebar";
+import { DocsSearch } from "@/components/docs/docs-search";
+import { DocsBreadcrumbs } from "@/components/docs/docs-breadcrumbs";
+import { DocItem } from "@/lib/docs/file-system";
+import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode-toggle";
+import { Menu, PanelLeftOpen } from "lucide-react";
 
 interface DocsLayoutProps {
   children: React.ReactNode;
@@ -28,12 +28,12 @@ export function DocsLayout({ children, currentPath = [] }: DocsLayoutProps) {
     };
 
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   useEffect(() => {
-    fetch('/api/docs/navigation')
+    fetch("/api/docs/navigation")
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -80,7 +80,7 @@ export function DocsLayout({ children, currentPath = [] }: DocsLayoutProps) {
 
       {/* Main content */}
       <div
-        className={`transition-all duration-300 ${sidebarOpen && !isMobile ? 'pl-72' : 'pl-0'}`}
+        className={`transition-all duration-300 ${sidebarOpen && !isMobile ? "pl-72" : "pl-0"}`}
       >
         {/* Header */}
         <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b px-4 py-4">

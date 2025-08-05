@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,21 +12,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Trash2 } from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Trash2 } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 export function DeleteAccount() {
   const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleDelete = async () => {
@@ -34,10 +34,10 @@ export function DeleteAccount() {
 
     setLoading(true);
     try {
-      const response = await authFetch('/api/users/delete-account', {
-        method: 'DELETE',
+      const response = await authFetch("/api/users/delete-account", {
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           password: password,
@@ -46,27 +46,30 @@ export function DeleteAccount() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete account');
+        throw new Error(errorData.message || "Failed to delete account");
       }
 
       toast({
-        title: 'Account deleted',
-        description: 'Your account has been permanently deleted.',
+        title: "Account deleted",
+        description: "Your account has been permanently deleted.",
       });
 
       // Clear auth state and redirect to home page
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth-token');
-        document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth-token");
+        document.cookie =
+          "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       }
-      
-      router.push('/');
+
+      router.push("/");
     } catch (error: any) {
-      console.error('Error deleting account:', error);
+      console.error("Error deleting account:", error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete account. Please check your password and try again.',
-        variant: 'destructive',
+        title: "Error",
+        description:
+          error.message ||
+          "Failed to delete account. Please check your password and try again.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -128,7 +131,7 @@ export function DeleteAccount() {
               onClick={handleDelete}
               disabled={loading || !password}
             >
-              {loading ? 'Deleting...' : 'Delete Account'}
+              {loading ? "Deleting..." : "Delete Account"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

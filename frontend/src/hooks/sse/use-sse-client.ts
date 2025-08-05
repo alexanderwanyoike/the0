@@ -1,22 +1,30 @@
 /**
  * Generic SSE Client Hook
- * 
+ *
  * Provides a reusable React hook for SSE connections with:
  * - Automatic reconnection logic
  * - Authentication handling
  * - Cleanup on component unmount
  * - Consistent loading/error state pattern
- * 
+ *
  * This hook follows the same patterns as existing hooks in the codebase
  * and can be used as a foundation for specific SSE implementations.
  */
 
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { SSEClient, SSEMessage, SSEConnectionState } from '@/lib/sse/sse-client';
-import { createAuthenticatedSSEUrl, handleSSEAuthError, validateSSEAuth } from '@/lib/sse/sse-auth';
-import { useAuth } from '@/contexts/auth-context';
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  SSEClient,
+  SSEMessage,
+  SSEConnectionState,
+} from "@/lib/sse/sse-client";
+import {
+  createAuthenticatedSSEUrl,
+  handleSSEAuthError,
+  validateSSEAuth,
+} from "@/lib/sse/sse-auth";
+import { useAuth } from "@/contexts/auth-context";
 
 export interface UseSSEClientOptions<T> {
   onMessage: (data: T) => void;
@@ -39,7 +47,7 @@ export interface SSEClientState {
 
 export function useSSEClient<T>(
   endpoint: string,
-  options: UseSSEClientOptions<T>
+  options: UseSSEClientOptions<T>,
 ) {
   const [state, setState] = useState<SSEClientState>({
     connected: false,
@@ -65,18 +73,21 @@ export function useSSEClient<T>(
   } = options;
 
   // Handle SSE messages
-  const handleMessage = useCallback((data: T) => {
-    setState(prev => ({
-      ...prev,
-      lastUpdate: new Date(),
-      error: null,
-    }));
-    onMessage(data);
-  }, [onMessage]);
+  const handleMessage = useCallback(
+    (data: T) => {
+      setState((prev) => ({
+        ...prev,
+        lastUpdate: new Date(),
+        error: null,
+      }));
+      onMessage(data);
+    },
+    [onMessage],
+  );
 
   // Handle SSE connection open
   const handleOpen = useCallback(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       connected: true,
       loading: false,
@@ -87,24 +98,27 @@ export function useSSEClient<T>(
   }, [onConnected]);
 
   // Handle SSE connection errors
-  const handleError = useCallback((error: Event) => {
-    setState(prev => ({
-      ...prev,
-      connected: false,
-      loading: false,
-      error: 'Connection error occurred',
-      retryCount: prev.retryCount + 1,
-    }));
+  const handleError = useCallback(
+    (error: Event) => {
+      setState((prev) => ({
+        ...prev,
+        connected: false,
+        loading: false,
+        error: "Connection error occurred",
+        retryCount: prev.retryCount + 1,
+      }));
 
-    // Handle authentication errors
-    handleSSEAuthError(error);
-    
-    onError?.(error);
-  }, [onError]);
+      // Handle authentication errors
+      handleSSEAuthError(error);
+
+      onError?.(error);
+    },
+    [onError],
+  );
 
   // Handle SSE connection close
   const handleClose = useCallback(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       connected: false,
       loading: false,
@@ -115,15 +129,15 @@ export function useSSEClient<T>(
   // Connect to SSE endpoint
   const connect = useCallback(async () => {
     if (!user || !enabled) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         loading: false,
-        error: user ? null : 'Authentication required',
+        error: user ? null : "Authentication required",
       }));
       return;
     }
 
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       loading: true,
       error: null,
@@ -132,7 +146,7 @@ export function useSSEClient<T>(
     // Validate authentication
     const authResult = validateSSEAuth();
     if (!authResult.success) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         loading: false,
         error: authResult.error,
@@ -143,7 +157,7 @@ export function useSSEClient<T>(
     // Create authenticated URL
     const urlResult = createAuthenticatedSSEUrl(endpoint);
     if (!urlResult.success) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         loading: false,
         error: urlResult.error,
@@ -168,18 +182,28 @@ export function useSSEClient<T>(
           onClose: handleClose,
           maxReconnectAttempts,
           reconnectDelay,
-        }
+        },
       );
 
       disconnectRef.current = disconnect;
     } catch (error) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         loading: false,
-        error: `Failed to establish SSE connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error: `Failed to establish SSE connection: ${error instanceof Error ? error.message : "Unknown error"}`,
       }));
     }
-  }, [user, enabled, endpoint, handleMessage, handleOpen, handleError, handleClose, maxReconnectAttempts, reconnectDelay]);
+  }, [
+    user,
+    enabled,
+    endpoint,
+    handleMessage,
+    handleOpen,
+    handleError,
+    handleClose,
+    maxReconnectAttempts,
+    reconnectDelay,
+  ]);
 
   // Disconnect from SSE endpoint
   const disconnect = useCallback(() => {
@@ -187,8 +211,8 @@ export function useSSEClient<T>(
       disconnectRef.current();
       disconnectRef.current = null;
     }
-    
-    setState(prev => ({
+
+    setState((prev) => ({
       ...prev,
       connected: false,
       loading: false,
@@ -241,12 +265,12 @@ export function useSSEClient<T>(
     error: state.error,
     retryCount: state.retryCount,
     lastUpdate: state.lastUpdate,
-    
+
     // Connection methods
     connect,
     disconnect,
     reconnect,
-    
+
     // Utility methods
     getConnectionState,
     isEnabled: enabled && !!user,
@@ -255,14 +279,14 @@ export function useSSEClient<T>(
 
 /**
  * Simplified SSE hook for basic use cases
- * 
+ *
  * Provides a simpler interface for components that just need
  * basic SSE functionality without advanced options.
  */
 export function useSSE<T>(
   endpoint: string,
   onMessage: (data: T) => void,
-  enabled: boolean = true
+  enabled: boolean = true,
 ) {
   return useSSEClient<T>(endpoint, {
     onMessage,
@@ -273,13 +297,13 @@ export function useSSE<T>(
 
 /**
  * SSE hook with manual connection control
- * 
+ *
  * Provides manual control over when to connect/disconnect,
  * useful for components that need precise control over SSE lifecycle.
  */
 export function useManualSSE<T>(
   endpoint: string,
-  onMessage: (data: T) => void
+  onMessage: (data: T) => void,
 ) {
   return useSSEClient<T>(endpoint, {
     onMessage,

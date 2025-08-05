@@ -4,11 +4,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { BookOpen } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { MarkdownComponents } from '@/components/custom-bots/markdown-components';
+} from "@/components/ui/card";
+import { BookOpen } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { MarkdownComponents } from "@/components/custom-bots/markdown-components";
 
 export const ReadmeComponent = ({ readme }: any) => {
   if (!readme) {

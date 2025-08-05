@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/middleware/admin-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export async function GET(
   req: NextRequest,
@@ -8,15 +8,15 @@ export async function GET(
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
       const { name, version } = await params;
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
 
       // Get custom bot details from the bot API (globally accessible)
       const botResponse = await fetch(
         `${process.env.BOT_API_URL}/custom-bots/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
         },
@@ -27,8 +27,8 @@ export async function GET(
         return NextResponse.json(
           {
             success: false,
-            error: errorData.message || 'Failed to get custom bot details',
-            message: errorData.message || 'Failed to get custom bot details',
+            error: errorData.message || "Failed to get custom bot details",
+            message: errorData.message || "Failed to get custom bot details",
           },
           { status: botResponse.status },
         );
@@ -47,9 +47,9 @@ export async function GET(
       const userCustomBotsResponse = await fetch(
         `${process.env.BOT_API_URL}/custom-bots`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
         },
@@ -73,9 +73,9 @@ export async function GET(
         const hasUserBotResponse = await fetch(
           `${process.env.BOT_API_URL}/user-bots/has/${encodeURIComponent(name)}`,
           {
-            method: 'GET',
+            method: "GET",
             headers: {
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
               Authorization: token,
             } as HeadersInit,
           },
@@ -100,11 +100,11 @@ export async function GET(
 
       return NextResponse.json(result);
     } catch (error: any) {
-      console.error('Error getting custom bot details:', error);
+      console.error("Error getting custom bot details:", error);
       return NextResponse.json(
         {
           success: false,
-          error: 'Failed to get custom bot details',
+          error: "Failed to get custom bot details",
           message: error.message,
         },
         { status: 500 },

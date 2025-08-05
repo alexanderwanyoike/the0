@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { QuickCopySection, CodeBlock } from './quick-copy-section';
-import { generatePlatformCommands } from '@/lib/install/install-urls';
-import { Download, Terminal, Zap, FileText } from 'lucide-react';
-import type { InstallationTabsProps, PlatformInfo } from '@/types/install';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { QuickCopySection, CodeBlock } from "./quick-copy-section";
+import { generatePlatformCommands } from "@/lib/install/install-urls";
+import { Download, Terminal, Zap, FileText } from "lucide-react";
+import type { InstallationTabsProps, PlatformInfo } from "@/types/install";
 
 export function InstallationTabs({ platform }: InstallationTabsProps) {
-  const [activeTab, setActiveTab] = useState('oneliner');
+  const [activeTab, setActiveTab] = useState("oneliner");
 
   if (!platform) {
     return (
@@ -35,7 +35,7 @@ export function InstallationTabs({ platform }: InstallationTabsProps) {
   }
 
   const commands = generatePlatformCommands(platform.id as any);
-  const isWindows = platform.os === 'Windows';
+  const isWindows = platform.os === "Windows";
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -123,8 +123,8 @@ export function InstallationTabs({ platform }: InstallationTabsProps) {
                       {index + 1}
                     </span>
                     <div className="flex-1">
-                      {step.startsWith('curl') ||
-                      step.startsWith('Download') ? (
+                      {step.startsWith("curl") ||
+                      step.startsWith("Download") ? (
                         <CodeBlock code={step} showCopy={true} />
                       ) : (
                         <p className="text-sm">{step}</p>

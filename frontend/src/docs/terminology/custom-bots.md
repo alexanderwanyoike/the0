@@ -1,7 +1,7 @@
 ---
-title: 'Custom Bots'
-description: 'Bot templates and blueprints in the0'
-tags: ['terminology', 'custom-bots', 'development']
+title: "Custom Bots"
+description: "Bot templates and blueprints in the0"
+tags: ["terminology", "custom-bots", "development"]
 order: 2
 ---
 

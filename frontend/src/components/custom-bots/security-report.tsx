@@ -1,23 +1,23 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Shield,
   AlertTriangle,
   CheckCircle,
   FileText,
   Scan,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import {
   THREAT_COLORS,
   STATUS_CONFIG,
-} from '@/components/custom-bots/constants';
-import React from 'react';
+} from "@/components/custom-bots/constants";
+import React from "react";
 
 export const SecurityReport = ({ review, status }: any) => {
-  if (!review || status === 'pending_review') {
+  if (!review || status === "pending_review") {
     return (
       <Card>
         <CardHeader>
@@ -37,7 +37,7 @@ export const SecurityReport = ({ review, status }: any) => {
     );
   }
 
-  const threatLevel = review.threatSummary.threatLevel || 'low';
+  const threatLevel = review.threatSummary.threatLevel || "low";
   // Use correct field names from 0vers33r service
   const filesScanned = review.filesScanned || [];
   const totalFiles = review.totalFiles || 0;
@@ -70,7 +70,7 @@ export const SecurityReport = ({ review, status }: any) => {
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Threat Level:</span>
             <Badge
-              variant={status === 'approved' ? 'default' : 'destructive'}
+              variant={status === "approved" ? "default" : "destructive"}
               className={THREAT_COLORS[threatLevel]}
             >
               {threatLevel.toUpperCase()}
@@ -103,13 +103,13 @@ export const SecurityReport = ({ review, status }: any) => {
         <Separator />
 
         {/* 0vers33r Verdict */}
-        <Alert variant={status === 'approved' ? 'default' : 'destructive'}>
+        <Alert variant={status === "approved" ? "default" : "destructive"}>
           <div className="flex items-start gap-3">
             <div className="text-2xl">🕵️</div>
             <div className="flex-1">
               <div className="font-medium mb-1">0vers33r Analysis Complete</div>
               <AlertDescription className="text-sm">
-                {review.reason || 'Security analysis completed'}
+                {review.reason || "Security analysis completed"}
               </AlertDescription>
               {review.reviewedAt && (
                 <div className="text-xs text-muted-foreground mt-2">
@@ -170,7 +170,7 @@ export const SecurityReport = ({ review, status }: any) => {
 
         {/* Technical Details */}
         <div className="text-xs text-muted-foreground space-y-1">
-          <div>Reviewed by: {review.reviewedBy || 'Unknown'}</div>
+          <div>Reviewed by: {review.reviewedBy || "Unknown"}</div>
           <div>Analysis Score: {review.score || 0}/5</div>
           {review.overseerBadge && <div>Overseer: {review.overseerBadge}</div>}
         </div>

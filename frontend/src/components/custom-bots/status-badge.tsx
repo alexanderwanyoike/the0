@@ -1,5 +1,5 @@
-import React from 'react';
-import { STATUS_CONFIG } from '@/components/custom-bots/constants';
+import React from "react";
+import { STATUS_CONFIG } from "@/components/custom-bots/constants";
 
 export const StatusBadge = ({ status, review }: any) => {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending_review;

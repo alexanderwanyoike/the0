@@ -1,24 +1,24 @@
 // jest.config.ts
-import type { Config } from 'jest';
-import nextJest from 'next/jest';
+import type { Config } from "jest";
+import nextJest from "next/jest";
 
 const createJestConfig = nextJest({
-  dir: './',
+  dir: "./",
 });
 
 const customJestConfig: Config = {
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  testEnvironment: 'jest-fixed-jsdom',
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
+  testEnvironment: "jest-fixed-jsdom",
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
+    "^@/(.*)$": "<rootDir>/src/$1",
   },
-  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  testPathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/node_modules/"],
 
   transformIgnorePatterns: [
-    '/node_modules/(?!(string-width|strip-ansi|ansi-regex|cliui))',
+    "/node_modules/(?!(string-width|strip-ansi|ansi-regex|cliui))",
   ],
   testEnvironmentOptions: {
-    customExportConditions: [''],
+    customExportConditions: [""],
   },
 };
 

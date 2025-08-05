@@ -1,23 +1,23 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-import { Lock } from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { useToast } from '@/hooks/use-toast';
+import { Lock } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { useToast } from "@/hooks/use-toast";
 
 export function PasswordForm() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,28 +26,28 @@ export function PasswordForm() {
 
     if (formData.newPassword !== formData.confirmPassword) {
       toast({
-        title: 'Error',
-        description: 'New passwords do not match.',
-        variant: 'destructive',
+        title: "Error",
+        description: "New passwords do not match.",
+        variant: "destructive",
       });
       return;
     }
 
     if (formData.newPassword.length < 6) {
       toast({
-        title: 'Error',
-        description: 'New password must be at least 6 characters long.',
-        variant: 'destructive',
+        title: "Error",
+        description: "New password must be at least 6 characters long.",
+        variant: "destructive",
       });
       return;
     }
 
     setLoading(true);
     try {
-      const response = await authFetch('/api/users/change-password', {
-        method: 'PUT',
+      const response = await authFetch("/api/users/change-password", {
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           currentPassword: formData.currentPassword,
@@ -57,26 +57,28 @@ export function PasswordForm() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update password');
+        throw new Error(errorData.message || "Failed to update password");
       }
 
       toast({
-        title: 'Password updated',
-        description: 'Your password has been updated successfully.',
+        title: "Password updated",
+        description: "Your password has been updated successfully.",
       });
 
       // Clear the form
       setFormData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
       });
     } catch (error: any) {
-      console.error('Error updating password:', error);
+      console.error("Error updating password:", error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to update password. Please check your current password and try again.',
-        variant: 'destructive',
+        title: "Error",
+        description:
+          error.message ||
+          "Failed to update password. Please check your current password and try again.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -135,7 +137,7 @@ export function PasswordForm() {
           </div>
         </div>
         <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-          {loading ? 'Updating...' : 'Update Password'}
+          {loading ? "Updating..." : "Update Password"}
         </Button>
       </form>
     </div>

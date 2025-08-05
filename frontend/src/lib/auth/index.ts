@@ -1,5 +1,5 @@
 // JWT Auth Service
-export { JwtAuthService } from './jwt-auth.service';
+export { JwtAuthService } from "./jwt-auth.service";
 
 // Types
 export type {
@@ -10,4 +10,4 @@ export type {
   ApiResponse,
   ApiError,
   Result,
-} from './types';
+} from "./types";

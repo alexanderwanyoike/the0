@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BotSelectionForm } from './bot-selection-form';
-import FormGenerator from '@/components/bots/form-generator';
-import { useBacktestCreation } from '@/hooks/backtests/use-backtest-creation';
-import { BotSearchResult } from '@/types/backtest';
-import { PlayCircle, Loader2 } from 'lucide-react';
-import { authFetch } from '@/lib/auth-fetch';
-import { BotType } from '@/types/custom-bots';
-import { canBotBeBacktested } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle, XCircle } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BotSelectionForm } from "./bot-selection-form";
+import FormGenerator from "@/components/bots/form-generator";
+import { useBacktestCreation } from "@/hooks/backtests/use-backtest-creation";
+import { BotSearchResult } from "@/types/backtest";
+import { PlayCircle, Loader2 } from "lucide-react";
+import { authFetch } from "@/lib/auth-fetch";
+import { BotType } from "@/types/custom-bots";
+import { canBotBeBacktested } from "@/lib/utils";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, XCircle } from "lucide-react";
 
 interface BacktestCreationFormProps {
   preSelectedBotName?: string;
@@ -35,8 +35,8 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
   const [selectedBot, setSelectedBot] = useState<
     BotSearchResult | null | undefined
   >(null);
-  const [selectedVersion, setSelectedVersion] = useState<string>('');
-  const [formData, setFormData] = useState<FormData>({ name: '' });
+  const [selectedVersion, setSelectedVersion] = useState<string>("");
+  const [formData, setFormData] = useState<FormData>({ name: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [botSchema, setBotSchema] = useState<any>(null);
   const [botType, setBotType] = useState<BotType | null>(null);
@@ -72,17 +72,17 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
               setCanBacktest(true);
             } else {
               setCanBacktest(false);
-              setSchemaError('This bot does not support backtesting.');
+              setSchemaError("This bot does not support backtesting.");
             }
           } else {
             setSchemaError(
-              'Failed to load bot configuration. Please try again later.',
+              "Failed to load bot configuration. Please try again later.",
             );
           }
         } catch (err) {
-          console.error('Error fetching bot schema:', err);
+          console.error("Error fetching bot schema:", err);
           setSchemaError(
-            'Failed to load bot configuration. Please try again later.',
+            "Failed to load bot configuration. Please try again later.",
           );
         } finally {
           setSchemaLoading(false);
@@ -110,7 +110,7 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
     setFormData((prev) => ({ ...prev, [name]: value }));
     // Clear error when field is modified
     if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -147,14 +147,14 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
 
     // Validate name
     if (!formData.name?.trim()) {
-      newErrors.name = 'Backtest name is required';
+      newErrors.name = "Backtest name is required";
     }
 
     // Validate bot selection
     if (!selectedBot) {
-      newErrors.bot = 'Please select a bot to backtest';
+      newErrors.bot = "Please select a bot to backtest";
     } else if (!selectedVersion) {
-      newErrors.bot = 'Please select a version for the bot';
+      newErrors.bot = "Please select a version for the bot";
     }
 
     // Validate schema fields if bot and version are selected
@@ -198,7 +198,7 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
   };
 
   // Debug logging for BotSelectionForm props
-  console.log('BotSelectionForm props:', {
+  console.log("BotSelectionForm props:", {
     selectedBot,
     preSelectedBotName,
     preSelectedBotVersion,
@@ -221,9 +221,9 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
               id="name"
               type="text"
               value={formData.name}
-              onChange={(e) => handleFieldChange('name', e.target.value)}
+              onChange={(e) => handleFieldChange("name", e.target.value)}
               placeholder="Enter a name for your backtest"
-              className={errors.name ? 'border-red-500' : ''}
+              className={errors.name ? "border-red-500" : ""}
             />
             {errors.name && (
               <p className="text-xs text-red-500 mt-1">{errors.name}</p>
@@ -270,7 +270,7 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
 
             {schemaError && (
               <Alert
-                variant={!canBacktest ? 'destructive' : 'default'}
+                variant={!canBacktest ? "destructive" : "default"}
                 className="mb-4"
               >
                 {!canBacktest ? (
@@ -280,8 +280,8 @@ export const BacktestCreationForm: React.FC<BacktestCreationFormProps> = ({
                 )}
                 <AlertTitle>
                   {!canBacktest
-                    ? 'Backtesting Not Supported'
-                    : 'Configuration Schema Unavailable'}
+                    ? "Backtesting Not Supported"
+                    : "Configuration Schema Unavailable"}
                 </AlertTitle>
                 <AlertDescription>{schemaError}</AlertDescription>
               </Alert>

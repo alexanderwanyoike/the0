@@ -1,6 +1,6 @@
 /**
  * Server-Sent Events (SSE) Client
- * 
+ *
  * Provides a reusable SSE connection management class with:
  * - Connection pooling and cleanup mechanisms
  * - Authentication token handling
@@ -9,7 +9,7 @@
  */
 
 export interface SSEMessage<T = any> {
-  type: 'connection' | 'update' | 'error' | 'keepalive';
+  type: "connection" | "update" | "error" | "keepalive";
   data?: T;
   timestamp: string;
   error?: string;
@@ -31,7 +31,9 @@ export interface SSEOptions {
   withCredentials?: boolean;
 }
 
-const DEFAULT_OPTIONS: Required<Omit<SSEOptions, 'onOpen' | 'onError' | 'onClose'>> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<SSEOptions, "onOpen" | "onError" | "onClose">
+> = {
   maxReconnectAttempts: 5,
   reconnectDelay: 3000,
   withCredentials: true,
@@ -48,10 +50,10 @@ export class SSEClient {
   connect<T>(
     url: string,
     onMessage: (data: T) => void,
-    options: SSEOptions = {}
+    options: SSEOptions = {},
   ): () => void {
     const mergedOptions = { ...DEFAULT_OPTIONS, ...options };
-    
+
     // Clean up any existing connection to this URL
     this.disconnect(url);
 
@@ -70,21 +72,21 @@ export class SSEClient {
         eventSource.onmessage = (event) => {
           try {
             const message: SSEMessage<T> = JSON.parse(event.data);
-            
+
             switch (message.type) {
-              case 'update':
+              case "update":
                 if (message.data) {
                   onMessage(message.data);
                 }
                 break;
-              case 'error':
+              case "error":
                 console.error(`SSE error for ${url}:`, message.error);
-                options.onError?.(new Event('message-error'));
+                options.onError?.(new Event("message-error"));
                 break;
-              case 'keepalive':
+              case "keepalive":
                 console.debug(`SSE keepalive for ${url}`);
                 break;
-              case 'connection':
+              case "connection":
                 console.log(`SSE connection confirmed for ${url}`);
                 break;
               default:
@@ -92,14 +94,14 @@ export class SSEClient {
             }
           } catch (error) {
             console.error(`SSE message parsing error for ${url}:`, error);
-            options.onError?.(new Event('parse-error'));
+            options.onError?.(new Event("parse-error"));
           }
         };
 
         eventSource.onerror = (error) => {
           console.error(`SSE connection error for ${url}:`, error);
           const attempts = this.reconnectAttempts.get(url) || 0;
-          
+
           // Close the current connection
           eventSource.close();
           this.connections.delete(url);
@@ -108,14 +110,16 @@ export class SSEClient {
           if (attempts < mergedOptions.maxReconnectAttempts) {
             this.reconnectAttempts.set(url, attempts + 1);
             const delay = mergedOptions.reconnectDelay * Math.pow(2, attempts); // Exponential backoff
-            
-            console.log(`SSE reconnecting to ${url} in ${delay}ms (attempt ${attempts + 1}/${mergedOptions.maxReconnectAttempts})`);
-            
+
+            console.log(
+              `SSE reconnecting to ${url} in ${delay}ms (attempt ${attempts + 1}/${mergedOptions.maxReconnectAttempts})`,
+            );
+
             const timeout = setTimeout(() => {
               this.reconnectTimeouts.delete(url);
               connect();
             }, delay);
-            
+
             this.reconnectTimeouts.set(url, timeout);
           } else {
             console.error(`SSE max reconnection attempts reached for ${url}`);
@@ -126,10 +130,9 @@ export class SSEClient {
         };
 
         this.connections.set(url, eventSource);
-
       } catch (error) {
         console.error(`Failed to create SSE connection for ${url}:`, error);
-        options.onError?.(new Event('connection-failed'));
+        options.onError?.(new Event("connection-failed"));
       }
     };
 
@@ -166,7 +169,7 @@ export class SSEClient {
    */
   disconnectAll(): void {
     const urls = Array.from(this.connections.keys());
-    urls.forEach(url => this.disconnect(url));
+    urls.forEach((url) => this.disconnect(url));
   }
 
   /**
@@ -175,7 +178,7 @@ export class SSEClient {
   getConnectionState(url: string): SSEConnectionState {
     const connection = this.connections.get(url);
     const isConnected = connection?.readyState === EventSource.OPEN;
-    
+
     return {
       connected: isConnected,
       lastUpdate: null, // Could track this if needed
@@ -196,7 +199,9 @@ export class SSEClient {
    * Get all active connection URLs
    */
   getActiveConnections(): string[] {
-    return Array.from(this.connections.keys()).filter(url => this.isConnected(url));
+    return Array.from(this.connections.keys()).filter((url) =>
+      this.isConnected(url),
+    );
   }
 }
 

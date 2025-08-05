@@ -1,5 +1,5 @@
-import { Bot, ChevronDown, ChevronRight, Terminal } from 'lucide-react';
-import React from 'react';
+import { Bot, ChevronDown, ChevronRight, Terminal } from "lucide-react";
+import React from "react";
 
 interface DocsNavigationProps {
   navigation: {

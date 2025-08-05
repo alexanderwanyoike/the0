@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Search, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { DocSearchResult } from '@/lib/docs/search-service';
+import React, { useState, useRef, useEffect } from "react";
+import { Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { DocSearchResult } from "@/lib/docs/search-service";
 
 interface DocsSearchProps {
   placeholder?: string;
@@ -14,10 +14,10 @@ interface DocsSearchProps {
 }
 
 export const DocsSearch: React.FC<DocsSearchProps> = ({
-  placeholder = 'Search documentation...',
+  placeholder = "Search documentation...",
   className,
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [results, setResults] = useState<DocSearchResult[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -36,8 +36,8 @@ export const DocsSearch: React.FC<DocsSearchProps> = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,7 +67,7 @@ export const DocsSearch: React.FC<DocsSearchProps> = ({
           setSuggestions(suggestionsData.data);
         }
       } catch (error) {
-        console.error('Search error:', error);
+        console.error("Search error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -79,7 +79,7 @@ export const DocsSearch: React.FC<DocsSearchProps> = ({
   };
 
   const handleResultClick = (result: DocSearchResult) => {
-    setQuery('');
+    setQuery("");
     setIsOpen(false);
     router.push(`/docs/${result.path}`);
   };
@@ -94,13 +94,13 @@ export const DocsSearch: React.FC<DocsSearchProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       setIsOpen(false);
     }
   };
 
   const handleClear = () => {
-    setQuery('');
+    setQuery("");
     setIsOpen(false);
     setResults([]);
     setSuggestions([]);
@@ -108,7 +108,7 @@ export const DocsSearch: React.FC<DocsSearchProps> = ({
   };
 
   return (
-    <div ref={containerRef} className={cn('relative w-full', className)}>
+    <div ref={containerRef} className={cn("relative w-full", className)}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input

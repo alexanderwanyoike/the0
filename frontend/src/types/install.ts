@@ -6,12 +6,12 @@ export interface PlatformInfo {
   displayName: string; // 'macOS (Apple Silicon)'
   command: string; // Generated install command
   scriptUrl: string; // API endpoint for script download
-  fileExtension: 'sh' | 'ps1'; // Script file type
-  shellCommand: 'bash' | 'powershell'; // Execution shell
+  fileExtension: "sh" | "ps1"; // Script file type
+  shellCommand: "bash" | "powershell"; // Execution shell
 }
 
 // Installation method types
-export type InstallMethod = 'oneliner' | 'script' | 'manual' | 'package';
+export type InstallMethod = "oneliner" | "script" | "manual" | "package";
 
 // Component prop interfaces
 export interface InstallationPageProps {
@@ -79,25 +79,25 @@ export interface ScriptGenerationConfig {
 // Platform detection result
 export interface PlatformDetectionResult {
   platform: PlatformInfo | null;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
   detectionMethod: string;
   fallback?: boolean;
 }
 
 // Validation types
 export type PlatformId =
-  | 'darwin-amd64'
-  | 'darwin-arm64'
-  | 'linux-amd64'
-  | 'linux-arm64'
-  | 'windows-amd64';
+  | "darwin-amd64"
+  | "darwin-arm64"
+  | "linux-amd64"
+  | "linux-arm64"
+  | "windows-amd64";
 
 export const SUPPORTED_PLATFORMS: PlatformId[] = [
-  'darwin-amd64',
-  'darwin-arm64',
-  'linux-amd64',
-  'linux-arm64',
-  'windows-amd64',
+  "darwin-amd64",
+  "darwin-arm64",
+  "linux-amd64",
+  "linux-arm64",
+  "windows-amd64",
 ];
 
 // Verification step interface
@@ -117,16 +117,16 @@ export interface TroubleshootingItem {
   description: string;
   solution: string;
   platform?: PlatformId;
-  category: 'permissions' | 'network' | 'platform' | 'configuration';
+  category: "permissions" | "network" | "platform" | "configuration";
 }
 
 // Installation analytics event
 export interface InstallationEvent {
   eventType:
-    | 'platform_detected'
-    | 'command_copied'
-    | 'script_downloaded'
-    | 'installation_completed';
+    | "platform_detected"
+    | "command_copied"
+    | "script_downloaded"
+    | "installation_completed";
   platform: PlatformId;
   installMethod: InstallMethod;
   timestamp: string;

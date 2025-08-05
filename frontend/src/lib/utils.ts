@@ -1,6 +1,6 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { CustomBotConfig } from '@/types/custom-bots';
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { CustomBotConfig } from "@/types/custom-bots";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

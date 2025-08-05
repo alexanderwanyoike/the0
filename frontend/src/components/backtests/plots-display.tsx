@@ -1,30 +1,30 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PlotComponent } from '@/components/ui/plot';
-import { PlotData } from '@/types/backtest';
+import React, { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PlotComponent } from "@/components/ui/plot";
+import { PlotData } from "@/types/backtest";
 import {
   BarChart3,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface PlotsDisplayProps {
   plots: (PlotData | string)[]; // Support both object and stringified formats
 }
 
-const UNTITLED_CHART_TITLE = 'Untitled Chart';
+const UNTITLED_CHART_TITLE = "Untitled Chart";
 const CHARTS_PER_PAGE = 10;
 
 // Utility function to process plot data from different formats
 const processPlotData = (plot: PlotData | string): PlotData | null => {
   try {
     // Handle string format - parse JSON
-    if (typeof plot === 'string') {
+    if (typeof plot === "string") {
       const parsed = JSON.parse(plot);
       if (!parsed.data) {
         console.error('Plot data missing required "data" property');
@@ -59,7 +59,7 @@ const processPlotData = (plot: PlotData | string): PlotData | null => {
       layout: { ...plot.layout, title: undefined },
     };
   } catch (error) {
-    console.error('Failed to parse plot data:', error);
+    console.error("Failed to parse plot data:", error);
     return null;
   }
 };
@@ -68,7 +68,7 @@ const processPlotData = (plot: PlotData | string): PlotData | null => {
 const PlotError = ({ title, error }: { title?: string; error: string }) => (
   <div className="p-6 text-center">
     <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-amber-500" />
-    <h4 className="font-medium mb-2">{title || 'Chart Error'}</h4>
+    <h4 className="font-medium mb-2">{title || "Chart Error"}</h4>
     <p className="text-sm text-muted-foreground">{error}</p>
   </div>
 );
@@ -148,7 +148,7 @@ export function PlotsDisplay({ plots }: PlotsDisplayProps) {
             <Alert className="mt-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                {invalidPlots.length} chart{invalidPlots.length > 1 ? 's' : ''}{' '}
+                {invalidPlots.length} chart{invalidPlots.length > 1 ? "s" : ""}{" "}
                 could not be displayed due to formatting issues.
               </AlertDescription>
             </Alert>
@@ -188,7 +188,7 @@ export function PlotsDisplay({ plots }: PlotsDisplayProps) {
           <Alert className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {invalidPlots.length} chart{invalidPlots.length > 1 ? 's' : ''}{' '}
+              {invalidPlots.length} chart{invalidPlots.length > 1 ? "s" : ""}{" "}
               could not be displayed due to formatting issues.
             </AlertDescription>
           </Alert>
@@ -237,16 +237,16 @@ export function PlotsDisplay({ plots }: PlotsDisplayProps) {
                     onClick={() => setSelectedChart(globalIndex)}
                     className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 ${
                       selectedChart === globalIndex
-                        ? 'bg-primary/10 text-primary border-l-3 border-primary pl-3'
-                        : 'text-foreground hover:bg-accent'
+                        ? "bg-primary/10 text-primary border-l-3 border-primary pl-3"
+                        : "text-foreground hover:bg-accent"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <BarChart3
                         className={`h-4 w-4 flex-shrink-0 ${
                           selectedChart === globalIndex
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
+                            ? "text-primary"
+                            : "text-muted-foreground"
                         }`}
                       />
                       <span className="text-sm truncate">{plot.title}</span>
@@ -269,44 +269,44 @@ export function PlotsDisplay({ plots }: PlotsDisplayProps) {
                 data={selectedPlot.data}
                 layout={{
                   margin: { t: 20, l: 60, r: 40, b: 60 },
-                  paper_bgcolor: 'transparent',
-                  plot_bgcolor: 'transparent',
+                  paper_bgcolor: "transparent",
+                  plot_bgcolor: "transparent",
                   font: {
-                    family: 'var(--font-sans), system-ui, sans-serif',
+                    family: "var(--font-sans), system-ui, sans-serif",
                     size: 12,
-                    color: 'hsl(var(--foreground))',
+                    color: "hsl(var(--foreground))",
                   },
                   xaxis: {
                     title: {
-                      text: 'Time',
-                      font: { color: 'hsl(var(--muted-foreground))' },
+                      text: "Time",
+                      font: { color: "hsl(var(--muted-foreground))" },
                     },
-                    tickfont: { color: 'hsl(var(--muted-foreground))' },
-                    gridcolor: 'hsl(var(--border))',
-                    linecolor: 'hsl(var(--border))',
-                    zerolinecolor: 'hsl(var(--border))',
+                    tickfont: { color: "hsl(var(--muted-foreground))" },
+                    gridcolor: "hsl(var(--border))",
+                    linecolor: "hsl(var(--border))",
+                    zerolinecolor: "hsl(var(--border))",
                   },
                   yaxis: {
                     title: {
-                      text: 'Value',
-                      font: { color: 'hsl(var(--muted-foreground))' },
+                      text: "Value",
+                      font: { color: "hsl(var(--muted-foreground))" },
                     },
-                    tickfont: { color: 'hsl(var(--muted-foreground))' },
-                    gridcolor: 'hsl(var(--border))',
-                    linecolor: 'hsl(var(--border))',
-                    zerolinecolor: 'hsl(var(--border))',
+                    tickfont: { color: "hsl(var(--muted-foreground))" },
+                    gridcolor: "hsl(var(--border))",
+                    linecolor: "hsl(var(--border))",
+                    zerolinecolor: "hsl(var(--border))",
                   },
                   showlegend: true,
                   legend: {
-                    font: { color: 'hsl(var(--foreground))' },
-                    bgcolor: 'transparent',
-                    bordercolor: 'transparent',
+                    font: { color: "hsl(var(--foreground))" },
+                    bgcolor: "transparent",
+                    bordercolor: "transparent",
                   },
-                  hovermode: 'x unified',
+                  hovermode: "x unified",
                   hoverlabel: {
-                    bgcolor: 'hsl(var(--popover))',
-                    bordercolor: 'hsl(var(--border))',
-                    font: { color: 'hsl(var(--popover-foreground))' },
+                    bgcolor: "hsl(var(--popover))",
+                    bordercolor: "hsl(var(--border))",
+                    font: { color: "hsl(var(--popover-foreground))" },
                   },
                   autosize: true,
                   // Spread layout but ensure our color settings take precedence
@@ -315,10 +315,10 @@ export function PlotsDisplay({ plots }: PlotsDisplayProps) {
                 config={{
                   displayModeBar: true,
                   displaylogo: false,
-                  modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+                  modeBarButtonsToRemove: ["pan2d", "lasso2d", "select2d"],
                   toImageButtonOptions: {
-                    format: 'png',
-                    filename: `backtest_${selectedPlot.title.toLowerCase().replace(/\s+/g, '_')}`,
+                    format: "png",
+                    filename: `backtest_${selectedPlot.title.toLowerCase().replace(/\s+/g, "_")}`,
                     height: 600,
                     width: 1000,
                     scale: 1,

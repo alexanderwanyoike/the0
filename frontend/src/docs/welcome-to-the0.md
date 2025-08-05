@@ -1,6 +1,6 @@
 ---
-title: 'Welcome to the0'
-description: 'Your comprehensive algorithmic trading platform'
+title: "Welcome to the0"
+description: "Your comprehensive algorithmic trading platform"
 order: 1
 ---
 

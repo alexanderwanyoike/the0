@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/middleware/admin-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export async function GET(
   req: NextRequest,
@@ -7,14 +7,14 @@ export async function GET(
 ) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
       const { id } = await params;
       const response = await fetch(
         `${process.env.BOT_API_URL}/api-keys/${id}`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
         },
@@ -31,13 +31,13 @@ export async function GET(
       // Convert Firestore timestamps to ISO strings if necessary
       return NextResponse.json(data);
     } catch (error: any) {
-      console.error('Error fetching API key:', error);
+      console.error("Error fetching API key:", error);
       return NextResponse.json(
         {
           error: {
-            message: 'Error fetching API key',
+            message: "Error fetching API key",
             statusCode: 500,
-            error: 'Internal Server Error',
+            error: "Internal Server Error",
           },
         },
         { status: 500 },
@@ -52,17 +52,17 @@ export async function DELETE(
 ) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
       const { id } = await params;
-      
-      console.log('🗑️ Frontend DELETE handler called for API key ID:', id);
+
+      console.log("🗑️ Frontend DELETE handler called for API key ID:", id);
 
       const response = await fetch(
         `${process.env.BOT_API_URL}/api-keys/${id}`,
         {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
         },
@@ -78,13 +78,13 @@ export async function DELETE(
       let data = await response.json();
       return NextResponse.json(data);
     } catch (error: any) {
-      console.error('Error deleting API key:', error);
+      console.error("Error deleting API key:", error);
       return NextResponse.json(
         {
           error: {
-            message: 'Error deleting API key',
+            message: "Error deleting API key",
             statusCode: 500,
-            error: 'Internal Server Error',
+            error: "Internal Server Error",
           },
         },
         { status: 500 },

@@ -1,6 +1,6 @@
-'use client';
-import { Failure, Ok, Result } from '@/lib/result';
-import { UserService, ApiUser } from '@/lib/api/user.service';
+"use client";
+import { Failure, Ok, Result } from "@/lib/result";
+import { UserService, ApiUser } from "@/lib/api/user.service";
 // Use ApiUser as UserData for compatibility
 export type UserData = ApiUser;
 

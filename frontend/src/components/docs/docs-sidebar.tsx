@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronRight,
   ChevronDown,
   FileText,
   Folder,
   PanelLeftClose,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { DocItem } from '@/lib/docs/file-system';
-import { APP_NAME } from '@/lib/constants';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { DocItem } from "@/lib/docs/file-system";
+import { APP_NAME } from "@/lib/constants";
 
 interface DocsSidebarProps {
   navigation: DocItem[];
@@ -41,7 +41,7 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
     const paths: string[] = [];
     const traverse = (items: DocItem[]) => {
       items.forEach((item) => {
-        if (item.type === 'folder') {
+        if (item.type === "folder") {
           paths.push(item.path);
           if (item.children) {
             traverse(item.children);
@@ -79,14 +79,14 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
     const itemActive = isActive(item.path);
     const paddingLeft = level * 16 + 16;
 
-    if (item.type === 'folder') {
+    if (item.type === "folder") {
       return (
         <div key={item.path}>
           <button
             onClick={() => toggleFolder(item.path)}
             className={cn(
-              'w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/50 transition-colors',
-              isExpanded && 'bg-muted/30',
+              "w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/50 transition-colors",
+              isExpanded && "bg-muted/30",
             )}
             style={{ paddingLeft }}
           >
@@ -112,8 +112,8 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
         key={item.path}
         href={`/docs/${item.path}`}
         className={cn(
-          'flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/50 transition-colors',
-          itemActive && 'bg-primary/10 text-primary border-r-2 border-primary',
+          "flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/50 transition-colors",
+          itemActive && "bg-primary/10 text-primary border-r-2 border-primary",
         )}
         style={{ paddingLeft }}
       >
@@ -127,9 +127,9 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
     <>
       <div
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col bg-background border-r border-border transition-transform duration-300',
-          isOpen ? 'translate-x-0' : '-translate-x-full',
-          isMobile ? 'w-80' : 'w-72',
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-background border-r border-border transition-transform duration-300",
+          isOpen ? "translate-x-0" : "-translate-x-full",
+          isMobile ? "w-80" : "w-72",
         )}
       >
         {/* Header */}

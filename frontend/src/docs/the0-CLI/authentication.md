@@ -1,7 +1,7 @@
 ---
-title: 'Authentication'
-description: 'Setting up and managing API authentication'
-tags: ['cli', 'authentication', 'api']
+title: "Authentication"
+description: "Setting up and managing API authentication"
+tags: ["cli", "authentication", "api"]
 order: 2
 ---
 
@@ -108,4 +108,3 @@ chmod 700 ~/.the0/
 
 - [Bot Commands](./bot-commands) - Start managing bot instances
 - [Custom Bot Commands](./custom-bot-commands) - Deploy your custom bots
-- [User Bot Commands](./user-bot-commands) - Manage marketplace bots

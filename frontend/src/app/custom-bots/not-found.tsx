@@ -1,8 +1,8 @@
-import React from 'react';
-import Link from 'next/link';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Button } from '@/components/ui/button';
-import { Bot, ArrowLeft, Home } from 'lucide-react';
+import React from "react";
+import Link from "next/link";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Button } from "@/components/ui/button";
+import { Bot, ArrowLeft, Home } from "lucide-react";
 
 export default function NotFound() {
   return (

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   Copy,
@@ -7,23 +7,22 @@ import {
   FileText,
   Play,
   BarChart3,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { CustomBotWithVersions } from '@/types/custom-bots';
-import { canBotBeBacktested } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/auth-context';
-import semver from 'semver';
-
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CustomBotWithVersions } from "@/types/custom-bots";
+import { canBotBeBacktested } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
+import semver from "semver";
 
 interface ActionButtonsProps {
   bot: CustomBotWithVersions;
@@ -46,7 +45,6 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
   const isVersionApproved = true; // Simplified - remove marketplace approval logic
   const isDeclinedBot = false; // Simplified
 
-
   // Check if this is the latest version
   const isLatestVersion = selectedVersion === bot.latestVersion;
 
@@ -56,18 +54,16 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
     : `the0 custom-bot deploy`;
 
   // Check if bot has README content
-  const hasReadme = versionData?.config?.readme || bot.versions?.[0]?.config?.readme;
-
+  const hasReadme =
+    versionData?.config?.readme || bot.versions?.[0]?.config?.readme;
 
   const handleCopyCommand = () => {
     navigator.clipboard.writeText(deployCommand);
     toast({
-      title: 'Command Copied',
-      description: 'CLI deployment command copied to clipboard.',
+      title: "Command Copied",
+      description: "CLI deployment command copied to clipboard.",
     });
   };
-
-
 
   const handleDeploy = () => {
     router.push(
@@ -93,18 +89,14 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
           <Play className="h-4 w-4" />
           Deploy Bot
         </Button>
-        
+
         {versionData?.config && canBotBeBacktested(versionData.config) && (
-          <Button
-            variant="outline"
-            onClick={handleBacktest}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={handleBacktest} className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Backtest
           </Button>
         )}
-        
+
         <Button
           variant="outline"
           onClick={() => setIsDeployModalOpen(true)}
@@ -151,7 +143,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Run this command in your terminal where the the0 CLI is installed.
+                Run this command in your terminal where the the0 CLI is
+                installed.
               </p>
             </div>
 
@@ -166,8 +159,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
                   {hasReadme ? (
                     <div className="space-y-2">
                       <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
-                        📖 Configuration details are available in this
-                        bot&#39;s README
+                        📖 Configuration details are available in this bot&#39;s
+                        README
                       </p>
                       <p className="text-xs text-blue-700 dark:text-blue-300">
                         The bot author has provided specific configuration
@@ -182,30 +175,30 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
                       </p>
                       <p className="text-xs text-blue-700 dark:text-blue-300">
                         This bot requires configuration before deployment. The
-                        CLI will prompt you for the necessary settings when
-                        you run the deploy command.
+                        CLI will prompt you for the necessary settings when you
+                        run the deploy command.
                       </p>
                     </div>
                   )}
 
                   <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
                     <p>
-                      <strong>Bot Type:</strong>{' '}
-                      {versionData?.config?.type || 'Unknown'}
+                      <strong>Bot Type:</strong>{" "}
+                      {versionData?.config?.type || "Unknown"}
                     </p>
-                    {versionData?.config?.type === 'scheduled' && (
+                    {versionData?.config?.type === "scheduled" && (
                       <p>
-                        <strong>Scheduling:</strong> This bot runs on a
-                        schedule you configure
+                        <strong>Scheduling:</strong> This bot runs on a schedule
+                        you configure
                       </p>
                     )}
-                    {versionData?.config?.type === 'realtime' && (
+                    {versionData?.config?.type === "realtime" && (
                       <p>
                         <strong>Real-time:</strong> This bot monitors markets
                         continuously
                       </p>
                     )}
-                    {versionData?.config?.type === 'event' && (
+                    {versionData?.config?.type === "event" && (
                       <p>
                         <strong>Event-driven:</strong> This bot responds to
                         specific market events
@@ -218,15 +211,13 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 
             {/* Instructions */}
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-950/20">
-              <h4 className="text-sm font-medium mb-2">
-                Next Steps:
-              </h4>
+              <h4 className="text-sm font-medium mb-2">Next Steps:</h4>
               <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                 <li>Install the the0 CLI if you haven&#39;t already</li>
                 <li>
                   {hasReadme
                     ? "Review the bot's README for configuration details"
-                    : 'Prepare your bot configuration settings'}
+                    : "Prepare your bot configuration settings"}
                 </li>
                 <li>Run the deployment command in your terminal</li>
                 <li>Follow the CLI prompts to configure your bot</li>

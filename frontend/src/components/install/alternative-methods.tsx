@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Card,
@@ -6,12 +6,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CodeBlock } from './quick-copy-section';
-import { InstallUrlGenerator } from '@/lib/install/install-urls';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CodeBlock } from "./quick-copy-section";
+import { InstallUrlGenerator } from "@/lib/install/install-urls";
 import {
   Package,
   Download,
@@ -23,8 +23,8 @@ import {
   Box,
   HardDrive,
   Info,
-} from 'lucide-react';
-import type { PlatformInfo } from '@/types/install';
+} from "lucide-react";
+import type { PlatformInfo } from "@/types/install";
 
 interface AlternativeMethodsProps {
   platform: PlatformInfo;
@@ -169,8 +169,8 @@ function PackageManagerCard({
           <Icon className="h-5 w-5" />
           <h4 className="font-medium">{method.title}</h4>
         </div>
-        <Badge variant={method.available ? 'default' : 'secondary'}>
-          {method.available ? 'Available' : 'Coming Soon'}
+        <Badge variant={method.available ? "default" : "secondary"}>
+          {method.available ? "Available" : "Coming Soon"}
         </Badge>
       </div>
 
@@ -211,7 +211,7 @@ function ManualDownloadSection({
     checksum?: string;
   };
 }) {
-  const binaryName = platform.os === 'Windows' ? 'the0.exe' : 'the0';
+  const binaryName = platform.os === "Windows" ? "the0.exe" : "the0";
 
   return (
     <div className="space-y-4">

@@ -1,16 +1,16 @@
 // Custom Bot Review Interface
-import { BotSchema } from '@/lib/api/api-client';
+import { BotSchema } from "@/lib/api/api-client";
 
 export type CustomBotStatus =
-  | 'pending_review'
-  | 'approved'
-  | 'declined'
-  | 'awaiting_human_review';
+  | "pending_review"
+  | "approved"
+  | "declined"
+  | "awaiting_human_review";
 
 export interface CustomBotReview {
   reviewedBy: string;
   threatSummary: {
-    threatLevel: 'none' | 'low' | 'medium' | 'high' | 'critical';
+    threatLevel: "none" | "low" | "medium" | "high" | "critical";
   };
   score: number;
   reason: string;
@@ -20,8 +20,8 @@ export interface CustomBotReview {
   overseerBadge?: string;
   readme?: string; // README content extracted during scanning
 }
-export type BotType = 'scheduled' | 'realtime' | 'event';
-export type Runtime = 'python3.11' | 'nodejs20';
+export type BotType = "scheduled" | "realtime" | "event";
+export type Runtime = "python3.11" | "nodejs20";
 // Custom Bot Configuration
 export interface CustomBotConfig {
   name: string;

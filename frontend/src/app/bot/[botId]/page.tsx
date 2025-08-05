@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { use, useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { useRouter } from 'next/navigation';
-import moment from 'moment';
-import TradingViewWidget from '@/components/trading-view/TradingViewChart';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import React, { use, useEffect, useState } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { useRouter } from "next/navigation";
+import moment from "moment";
+import TradingViewWidget from "@/components/trading-view/TradingViewChart";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Clipboard,
   Loader2,
@@ -16,14 +16,14 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { withAuth } from '@/components/auth/with-auth';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ConsoleInterface } from '@/components/bot/console-interface';
-import { useBotLogs } from '@/hooks/use-bot-logs';
-import { BotService, Bot as ApiBotType } from '@/lib/api/api-client';
-import { getErrorMessage } from '@/lib/axios';
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { withAuth } from "@/components/auth/with-auth";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ConsoleInterface } from "@/components/bot/console-interface";
+import { useBotLogs } from "@/hooks/use-bot-logs";
+import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
+import { getErrorMessage } from "@/lib/axios";
 
 import {
   AlertDialog,
@@ -35,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 
 // Extend the API Bot type with additional properties we need
 interface Bot extends ApiBotType {
@@ -90,41 +90,41 @@ const BotDetail = ({ params }: BotDetailProps) => {
       setError(null);
       try {
         const result = await BotService.getBot(botId);
-        
+
         if (!result.success) {
-          throw new Error(result.error.message || 'Failed to fetch bot');
+          throw new Error(result.error.message || "Failed to fetch bot");
         }
 
         const botData = result.data;
         // Check authorization (API might use 'user_id' instead of 'userId')
         const botUserId = (botData as any).userId || (botData as any).user_id;
-        if (botUserId !== user.id) throw new Error('Unauthorized access');
+        if (botUserId !== user.id) throw new Error("Unauthorized access");
 
         // Add a default status if not present
         if (!botData.status) {
-          botData.status = 'running';
+          botData.status = "running";
         }
 
         setBot(botData);
       } catch (error) {
-        console.error('Error fetching bot:', error);
+        console.error("Error fetching bot:", error);
         const errorMessage =
-          error instanceof Error ? error.message : 'An unknown error occurred';
+          error instanceof Error ? error.message : "An unknown error occurred";
         setError(errorMessage);
 
         // Show toast for errors
         toast({
-          title: 'Error',
+          title: "Error",
           description: `Failed to load bot: ${errorMessage}`,
-          variant: 'destructive',
+          variant: "destructive",
         });
 
         if (
           error instanceof Error &&
-          (error.message === 'Bot not found' ||
-            error.message === 'Unauthorized access')
+          (error.message === "Bot not found" ||
+            error.message === "Unauthorized access")
         ) {
-          setTimeout(() => router.push('/dashboard'), 2000);
+          setTimeout(() => router.push("/dashboard"), 2000);
         }
       } finally {
         setLoading(false);
@@ -144,7 +144,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
     // Mask sensitive data before copying
     navigator.clipboard.writeText(JSON.stringify(configCopy, null, 2));
     toast({
-      description: 'Bot configuration copied to clipboard',
+      description: "Bot configuration copied to clipboard",
       duration: 2000,
     });
   };
@@ -154,12 +154,12 @@ const BotDetail = ({ params }: BotDetailProps) => {
     if (!bot) return;
 
     // Extract bot name from the config.type format (type/name)
-    let botName = 'unknown';
-    let botVersion = 'latest';
+    let botName = "unknown";
+    let botVersion = "latest";
 
-    if (bot.config?.type && bot.config.type.includes('/')) {
+    if (bot.config?.type && bot.config.type.includes("/")) {
       // Extract name from type/name format
-      const [, extractedName] = bot.config.type.split('/');
+      const [, extractedName] = bot.config.type.split("/");
       if (extractedName && extractedName.trim()) {
         botName = extractedName;
       }
@@ -188,25 +188,25 @@ const BotDetail = ({ params }: BotDetailProps) => {
 
     try {
       const result = await BotService.deleteBot(botId);
-      
+
       if (!result.success) {
-        throw new Error(result.error.message || 'Failed to delete bot');
+        throw new Error(result.error.message || "Failed to delete bot");
       }
 
       toast({
-        description: 'Bot deleted successfully',
+        description: "Bot deleted successfully",
         duration: 2000,
       });
 
       // Redirect to dashboard list page
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (error) {
-      console.error('Error deleting bot:', error);
+      console.error("Error deleting bot:", error);
       toast({
-        title: 'Delete Failed',
+        title: "Delete Failed",
         description:
-          error instanceof Error ? error.message : 'Failed to delete bot',
-        variant: 'destructive',
+          error instanceof Error ? error.message : "Failed to delete bot",
+        variant: "destructive",
       });
       setIsDeleting(false);
     }
@@ -238,18 +238,18 @@ const BotDetail = ({ params }: BotDetailProps) => {
         );
 
         toast({
-          description: `Bot ${enabled ? 'enabled' : 'disabled'} successfully. It may take a few moments to reflect the change.`,
+          description: `Bot ${enabled ? "enabled" : "disabled"} successfully. It may take a few moments to reflect the change.`,
           duration: 2000,
         });
       } else {
         throw new Error(result.error.message);
       }
     } catch (error) {
-      console.error('Error updating bot enabled status:', error);
+      console.error("Error updating bot enabled status:", error);
       toast({
-        title: 'Update Failed',
+        title: "Update Failed",
         description: getErrorMessage(error),
-        variant: 'destructive',
+        variant: "destructive",
       });
     } finally {
       setIsUpdatingEnabled(false);
@@ -259,16 +259,16 @@ const BotDetail = ({ params }: BotDetailProps) => {
   // Get status badge color based on bot status
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'running':
-        return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-      case 'stopped':
-        return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-      case 'paused':
-        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
-      case 'restarting':
-        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+      case "running":
+        return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+      case "stopped":
+        return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+      case "paused":
+        return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+      case "restarting":
+        return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
       default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400';
+        return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
     }
   };
 
@@ -298,7 +298,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
     ];
 
     const filterSensitiveData = (obj: any): any => {
-      if (!obj || typeof obj !== 'object') return obj;
+      if (!obj || typeof obj !== "object") return obj;
 
       const filtered: any = Array.isArray(obj) ? [] : {};
 
@@ -310,7 +310,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
         if (isSensitive) {
           // Skip sensitive fields entirely - don't include them in the display
           return;
-        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        } else if (typeof obj[key] === "object" && obj[key] !== null) {
           filtered[key] = filterSensitiveData(obj[key]);
         } else {
           filtered[key] = obj[key];
@@ -363,9 +363,9 @@ const BotDetail = ({ params }: BotDetailProps) => {
                       {isUpdatingEnabled ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (bot.config.enabled ?? true) ? (
-                        'Enabled'
+                        "Enabled"
                       ) : (
-                        'Disabled'
+                        "Disabled"
                       )}
                     </span>
                   </div>
@@ -406,7 +406,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
                               Deleting...
                             </>
                           ) : (
-                            'Delete Bot'
+                            "Delete Bot"
                           )}
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -442,9 +442,9 @@ const BotDetail = ({ params }: BotDetailProps) => {
                     {isUpdatingEnabled ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (bot.config.enabled ?? true) ? (
-                      'Enabled'
+                      "Enabled"
                     ) : (
-                      'Disabled'
+                      "Disabled"
                     )}
                   </span>
                 </div>
@@ -493,7 +493,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
                               Deleting...
                             </>
                           ) : (
-                            'Delete Bot'
+                            "Delete Bot"
                           )}
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -570,7 +570,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
               <div className="grid grid-cols-3 gap-1">
                 <dt className="text-sm text-muted-foreground">Schedule</dt>
                 <dd className="col-span-2 text-sm">
-                  {bot.config.schedule || 'Real-time'}
+                  {bot.config.schedule || "Real-time"}
                 </dd>
               </div>
               <div className="grid grid-cols-3 gap-1">
@@ -578,10 +578,10 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 <dd className="col-span-2">
                   <div className="flex items-baseline gap-2">
                     <span className="text-sm">
-                      {moment(bot.createdAt).format('MMM D, YYYY')}
+                      {moment(bot.createdAt).format("MMM D, YYYY")}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {moment(bot.createdAt).format('h:mm A')}
+                      {moment(bot.createdAt).format("h:mm A")}
                     </span>
                   </div>
                 </dd>
@@ -591,10 +591,10 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 <dd className="col-span-2">
                   <div className="flex items-baseline gap-2">
                     <span className="text-sm">
-                      {moment(bot.updatedAt).format('MMM D, YYYY')}
+                      {moment(bot.updatedAt).format("MMM D, YYYY")}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {moment(bot.updatedAt).format('h:mm A')}
+                      {moment(bot.updatedAt).format("h:mm A")}
                     </span>
                   </div>
                 </dd>
