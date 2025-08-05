@@ -606,7 +606,7 @@ func TestAPIClient_RequestUploadURL(t *testing.T) {
 			statusCode: 200,
 			responseBody: `{
 				"uploadUrl": "https://storage.googleapis.com/bucket/path?signature=abc123",
-				"gcsPath": "gs://bucket/user123/test-bot/1.0.0/test-bot_1.0.0_1234567890.zip",
+				"FilePath": "gs://bucket/user123/test-bot/1.0.0/test-bot_1.0.0_1234567890.zip",
 				"expiresAt": "2024-01-01T13:00:00Z"
 			}`,
 			expectedError: false,
@@ -691,11 +691,11 @@ func TestAPIClient_RequestUploadURL(t *testing.T) {
 					if response.UploadUrl == "" {
 						t.Errorf("RequestUploadURL() returned empty upload URL")
 					}
-					if response.GcsPath == "" {
+					if response.FilePath == "" {
 						t.Errorf("RequestUploadURL() returned empty GCS path")
 					}
-					if !strings.HasPrefix(response.GcsPath, "gs://") {
-						t.Errorf("RequestUploadURL() returned invalid GCS path format: %s", response.GcsPath)
+					if !strings.HasPrefix(response.FilePath, "gs://") {
+						t.Errorf("RequestUploadURL() returned invalid GCS path format: %s", response.FilePath)
 					}
 				}
 			}
