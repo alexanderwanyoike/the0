@@ -92,63 +92,84 @@ cd runtime && go run cmd/app/main.go  # Runtime
 the0 is built as a comprehensive microservices platform that enables algorithmic trading bot development and execution:
 
 ```mermaid
-C4Container
-    title Container Diagram - the0 Algorithmic Trading Platform
+graph TB
+    subgraph "Users"
+        DEV[👨‍💻 Bot Developer<br/>Creates & tests bots]
+        TRADER[📊 Trader<br/>Deploys & monitors]
+    end
     
-    Person_Ext(developer, "Bot Developer", "Creates and tests trading bots")
-    Person_Ext(trader, "Trader", "Deploys and monitors trading bots")
-
-    System_Boundary(the0_platform, "the0 Platform") {
-        Container(frontend, "Web Dashboard", "Next.js 15, React 19", "Bot management, real-time monitoring, documentation")
-        Container(cli, "CLI Tool", "Go, Cobra", "Local bot development, deployment commands")
-        Container(api, "API Server", "NestJS, TypeScript", "REST API, authentication, orchestration")
+    subgraph "the0 Platform"
+        subgraph "Client Layer"
+            WEB[🌐 Web Dashboard<br/>Next.js 15, React 19<br/>Bot management & monitoring]
+            CLI[🛠️ CLI Tool<br/>Go, Cobra<br/>Local development]
+        end
         
-        System_Boundary(runtime_services, "Runtime Services") {
-            Container(bot_runner, "Bot Runner", "Go, gRPC", "Real-time bot execution with master-worker pattern")
-            Container(backtest_runner, "Backtest Runner", "Go, gRPC", "Historical strategy testing and validation")  
-            Container(bot_scheduler, "Bot Scheduler", "Go, gRPC", "Cron-based scheduled bot execution")
-        }
+        subgraph "API Layer"
+            API[🚀 API Server<br/>NestJS, TypeScript<br/>REST API & orchestration]
+        end
         
-        Container(security_analyzer, "Security Analyzer", "Python, YARA", "Automated bot code security analysis")
-        Container(ai_service, "AI Assistant", "Python, FastAPI", "AI-powered bot development helper")
+        subgraph "Runtime Services"
+            BR[⚡ Bot Runner<br/>Go, gRPC<br/>Real-time execution]
+            BT[📈 Backtest Runner<br/>Go, gRPC<br/>Historical testing]
+            BS[⏰ Bot Scheduler<br/>Go, gRPC<br/>Cron execution]
+        end
         
-        ContainerDb(postgres, "PostgreSQL", "Database", "Users, bot definitions, auth tokens")
-        ContainerDb(mongodb, "MongoDB", "Database", "Runtime state, job queues, execution logs")
-        Container(nats, "NATS JetStream", "Message Broker", "Event streaming, service coordination")
-        Container(minio, "MinIO", "Object Storage", "Bot code, logs, backtest results")
-    }
-
-    Rel(developer, frontend, "Manages bots", "HTTPS")
-    Rel(developer, cli, "Develops locally", "CLI")
-    Rel(trader, frontend, "Monitors performance", "HTTPS")
+        subgraph "Supporting Services"
+            SA[🔍 Security Analyzer<br/>Python, YARA<br/>Code analysis]
+            AI[🤖 AI Assistant<br/>Python, FastAPI<br/>Development helper]
+        end
+        
+        subgraph "Data Layer"
+            PG[(🐘 PostgreSQL<br/>Users, bots, auth)]
+            MONGO[(🍃 MongoDB<br/>Runtime state, logs)]
+            NATS[📨 NATS JetStream<br/>Event streaming]
+            MINIO[📦 MinIO<br/>Code & log storage]
+        end
+    end
     
-    Rel(frontend, api, "API calls", "REST/HTTP + JWT")
-    Rel(cli, api, "Bot operations", "REST/HTTP + API Key")
+    %% User interactions
+    DEV -.->|HTTPS| WEB
+    DEV -.->|CLI| CLI
+    TRADER -.->|HTTPS| WEB
     
-    Rel(api, postgres, "User data", "SQL")
-    Rel(api, nats, "Events", "NATS Protocol") 
-    Rel(api, minio, "File storage", "S3 API")
+    %% Client to API
+    WEB -->|REST + JWT| API
+    CLI -->|REST + API Key| API
+    API -->|SSE| WEB
     
-    Rel(bot_runner, mongodb, "Execution state", "MongoDB")
-    Rel(backtest_runner, mongodb, "Job queues", "MongoDB")
-    Rel(bot_scheduler, mongodb, "Schedules", "MongoDB")
+    %% API to databases
+    API -->|SQL| PG
+    API -->|Events| NATS
+    API -->|S3 API| MINIO
     
-    Rel(nats, bot_runner, "Bot events", "NATS")
-    Rel(nats, backtest_runner, "Backtest events", "NATS")
-    Rel(nats, bot_scheduler, "Schedule events", "NATS")
-    Rel(nats, security_analyzer, "Analysis events", "NATS")
+    %% Runtime services
+    NATS -->|Events| BR
+    NATS -->|Events| BT  
+    NATS -->|Events| BS
+    NATS -->|Events| SA
     
-    Rel(bot_runner, minio, "Logs", "S3 API")
-    Rel(backtest_runner, minio, "Results", "S3 API")
-    Rel(security_analyzer, minio, "Code analysis", "S3 API")
+    BR -->|State| MONGO
+    BT -->|Jobs| MONGO
+    BS -->|Schedules| MONGO
     
-    Rel(frontend, api, "Real-time updates", "SSE")
+    BR -->|Logs| MINIO
+    BT -->|Results| MINIO
+    SA -->|Analysis| MINIO
     
-    UpdateElementStyle(the0_platform, $bgColor="#e8f4fd")
-    UpdateElementStyle(runtime_services, $bgColor="#fff8e1")
-    UpdateElementStyle(frontend, $bgColor="#e1f5fe")
-    UpdateElementStyle(api, $bgColor="#f3e5f5") 
-    UpdateElementStyle(cli, $bgColor="#e8f5e8")
+    %% Styling
+    classDef userClass fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef clientClass fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef apiClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef runtimeClass fill:#fff8e1,stroke:#f57c00,stroke-width:2px
+    classDef serviceClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef dataClass fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    
+    class DEV,TRADER userClass
+    class WEB,CLI clientClass
+    class API apiClass
+    class BR,BT,BS runtimeClass
+    class SA,AI serviceClass
+    class PG,MONGO,NATS,MINIO dataClass
 ```
 
 ### How It Works
