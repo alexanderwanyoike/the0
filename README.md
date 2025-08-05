@@ -176,7 +176,7 @@ graph TB
 
 **🔍 Security Analyzer** - Python service with YARA rules for automated security analysis of user-submitted bot code
 
-**🤖 AI Assistant** - FastAPI service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
+**🤖 AI Assistant** - Standalone service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
 
 **💾 Data Architecture** - Multi-database approach:
 - **PostgreSQL**: User accounts, bot definitions, authentication
