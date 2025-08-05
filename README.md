@@ -18,9 +18,9 @@
 
 ## 🎯 What is the0?
 
-**the0** is a comprehensive algorithmic trading platform that empowers developers and traders to create, deploy, and manage trading bots across multiple markets. Whether you're building a simple Dollar Cost Averaging (DCA) strategy or complex multi-asset arbitrage algorithms, the0 provides the infrastructure and tools you need.
+**the0** is a open source algorithmic trading platform that empowers developers and traders to create, deploy, and manage trading bots across multiple markets. Whether you're building a simple Dollar Cost Averaging (DCA) strategy or complex multi-asset arbitrage algorithms, the0 provides the infrastructure and tools you need.
 
-> ⚠️ **Early Development**: the0 is currently in active development and not yet production ready. We're building towards a stable release - contributions and feedback are welcome!
+> ⚠️ **Early Development**: the0 is currently in active development and not yet production ready. We're building towards a stable release and currently at beta - contributions and feedback are welcome!
 
 ### ✨ Key Features
 
@@ -78,7 +78,7 @@ Cloud deployments will be available in the future.
 
 ## 🏗️ Architecture
 
-the0 is built as a comprehensive microservices platform that enables algorithmic trading bot development and execution:
+the0 is built as a microservices platform that enables algorithmic trading bot development and execution:
 
 ```mermaid
 graph TB
@@ -163,7 +163,7 @@ graph TB
 
 ### How It Works
 
-**🌐 Web Dashboard** - Next.js frontend for bot management, real-time monitoring, and comprehensive documentation system
+**🌐 Web Dashboard** - Next.js frontend for bot management, real-time monitoring, and documentation system
 
 **🛠️ CLI Tool** - Go-based command-line interface for local bot development, testing, and deployment automation
 
@@ -301,7 +301,7 @@ We encourage the use of AI tools and agents in development:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/your-creative-idea`)
 3. Build your solution (with or without AI assistance!)
-4. Add comprehensive tests
+4. Add tests
 5. Document your approach and any AI tools used
 6. Submit a pull request with a clear description
 
