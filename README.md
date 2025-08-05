@@ -43,7 +43,7 @@ Get the0 running locally in under 5 minutes:
 - At least 4GB RAM available for containers
 - **Git** for cloning the repository
 
-### Option 1: Docker Compose (Recommended)
+### Option 1: Docker Compose Local Deployment (Recommended)
 
 ```bash
 # Clone the repository
@@ -60,7 +60,7 @@ open http://localhost:3000  # API
 open http://localhost:9001  # MinIO Console (admin/the0password)
 ```
 
-### Option 2: Kubernetes (Highly Experimental)
+### Option 2: Kubernetes (Minikube) (Highly Experimental)
 
 ```bash
 # Navigate to k8s directory
@@ -72,18 +72,7 @@ make minikube
 # Note: Kubernetes deployment is highly experimental and may not work properly
 ```
 
-### Option 3: Development Mode
-
-```bash
-# Start infrastructure only
-cd docker
-make infrastructure
-
-# Run services locally
-cd api && yarn dev      # API server
-cd frontend && yarn dev # Frontend
-cd runtime && go run cmd/app/main.go  # Runtime
-```
+Cloud deployments will be available in the future.
 
 ---
 
@@ -197,10 +186,9 @@ graph TB
 
 ### Key Benefits
 
-- **🔒 Secure**: Each bot runs in isolation with basic security checks
+- **🔒 Isolated**: Each bot runs in isolation with basic security checks
 - **⚡ Fast**: Real-time execution with live market data
 - **📈 Scalable**: Automatically handles multiple bots and users
-- **🛡️ Reliable**: Robust error handling and monitoring
 
 ---
 
