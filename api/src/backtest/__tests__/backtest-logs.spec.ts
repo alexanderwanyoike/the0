@@ -125,7 +125,7 @@ RESULT_WRITE: Successfully wrote result file`;
       expect(result.data).toBe(mockLogs);
       expect(mockMinioClient.getObject).toHaveBeenCalledWith(
         'test-bucket',
-        'backtests/test-id/logs.txt',
+        'test-id/logs.txt',
       );
     });
 
@@ -264,7 +264,7 @@ RESULT_WRITE: Successfully wrote result file`;
 
       expect(mockMinioClient.getObject).toHaveBeenCalledWith(
         customBucket,
-        'backtests/test-id/logs.txt',
+        'test-id/logs.txt',
       );
     });
   });

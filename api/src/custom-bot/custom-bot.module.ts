@@ -6,9 +6,10 @@ import { StorageService } from './storage.service';
 import { CustomBotEventsService } from './custom-bot-events.service';
 import { ApiKeyModule } from '@/api-key/api-key.module';
 import { NatsModule } from '@/nats/nats.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [ApiKeyModule, NatsModule],
+  imports: [ConfigModule, ApiKeyModule, NatsModule],
   controllers: [CustomBotController],
   providers: [
     CustomBotService,

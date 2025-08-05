@@ -8,7 +8,6 @@ import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
 import { CustomBotModule } from '@/custom-bot/custom-bot.module';
 import { CustomBotService } from '@/custom-bot/custom-bot.service';
-import { UserBotsService } from '@/user-bots/user-bots.service';
 import { NatsService } from '@/nats/nats.service';
 // FeatureGateService removed for OSS version
 import { Ok, Failure } from '@/common/result';
@@ -18,7 +17,6 @@ describe('BotService - Enhanced Tests', () => {
   let repository: BotRepository;
   let validator: BotValidator;
   let mockCustomBotService: CustomBotService;
-  let mockUserBotsService: UserBotsService;
   // FeatureGateService removed for OSS version
   const uid = 'test-user-id';
 
@@ -83,18 +81,6 @@ describe('BotService - Enhanced Tests', () => {
       getAllUserSpecificVersions: jest.fn(),
     } as unknown as CustomBotService;
 
-    mockUserBotsService = {
-      hasUserBot: jest.fn().mockResolvedValue({
-        success: true,
-        data: true,
-      }),
-      install: jest.fn().mockResolvedValue({
-        success: true,
-        data: { id: 'userbot-1', customBotName: 'test-custom-bot' },
-      }),
-      getUserBots: jest.fn(),
-      getCurrentUserHasBot: jest.fn(),
-    } as unknown as UserBotsService;
 
     // FeatureGateService removed for OSS version
 
@@ -108,21 +94,18 @@ describe('BotService - Enhanced Tests', () => {
           useValue: mockCustomBotService,
         },
         {
-          provide: UserBotsService,
-          useValue: mockUserBotsService,
-        },
-        {
           provide: NatsService,
           useValue: {
             publish: jest.fn().mockResolvedValue(Ok(null)),
           },
         },
+        {
+          provide: REQUEST,
+          useValue: { user: { uid } },
+        },
         // FeatureGateService removed for OSS version
       ],
-    })
-      .overrideProvider(REQUEST)
-      .useValue({ user: { uid } })
-      .compile();
+    }).compile();
 
     service = await module.resolve<BotService>(BotService);
     repository = module.get<BotRepository>(BotRepository);
@@ -296,20 +279,12 @@ describe('BotService - Enhanced Tests', () => {
             topic: 'the0-scheduled-custom-bot',
           } as Bot,
         });
-        mockUserBotsService.hasUserBot = jest.fn().mockResolvedValue({
-          success: true,
-          data: false,
-        });
-
         const result = await service.create(validBotData);
 
         expect(result.success).toBe(true);
-        expect(mockUserBotsService.install).toHaveBeenCalledWith(
-          'test-custom-bot',
-        );
       });
 
-      it('should reject deployment of paid bots for non-purchasers', async () => {
+      it('should allow deployment of all bots in OSS version', async () => {
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
           .mockResolvedValue({
@@ -317,15 +292,30 @@ describe('BotService - Enhanced Tests', () => {
             data: { ...mockCustomBot, marketplace: { price: 1000 } },
           });
 
-        mockUserBotsService.hasUserBot = jest.fn().mockResolvedValue({
+        // Mock successful repository operations - using repository instead of mockRepository
+        jest.spyOn(repository, 'create').mockResolvedValue({
           success: true,
-          data: false,
+          data: { ...validBotData, id: 'test-id' },
+        } as any);
+
+        jest.spyOn(repository, 'findOne').mockResolvedValue({
+          success: true,
+          error: null,
+          data: {
+            id: 'test-id',
+            ...validBotData,
+            userId: uid,
+            topic: 'the0-scheduled-custom-bot',
+          } as Bot,
         });
 
         const result = await service.create(validBotData);
 
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('must purchase');
+        if (!result.success) {
+          console.log('Bot service create failed with error:', result.error);
+        }
+        expect(result.success).toBe(true);
+        // OSS version allows all bots regardless of price
       });
     });
   });

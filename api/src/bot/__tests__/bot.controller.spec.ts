@@ -14,7 +14,6 @@ import { ConfigModule } from '@nestjs/config';
 import { CustomBotService } from '@/custom-bot/custom-bot.service';
 import { AuthCombinedGuard } from '@/auth/auth-combined.guard';
 import { ApiKeyService } from '@/api-key/api-key.service';
-import { UserBotsService } from '@/user-bots/user-bots.service';
 import { NatsService } from '@/nats/nats.service';
 // FeatureGateService removed for OSS version
 import { Ok } from '@/common/result';
@@ -23,7 +22,6 @@ describe('BotController - Enhanced Tests', () => {
   let controller: BotController;
   let service: BotService;
   let repository: BotRepository;
-  let userBotsService: UserBotsService;
   let validator: BotValidator;
   let customBotService: CustomBotService;
   const uid = 'test-user-id';
@@ -70,18 +68,6 @@ describe('BotController - Enhanced Tests', () => {
     },
   };
 
-  const mockUserBotsService = {
-    hasUserBot: jest.fn().mockResolvedValue({
-      success: true,
-      error: null,
-      data: true,
-    }),
-    install: jest.fn().mockResolvedValue({
-      success: true,
-      error: null,
-      data: { id: 'userbot-1', customBotName: 'test-custom-bot' },
-    }),
-  };
 
   const mockCustomBotService = {
     getGlobalSpecificVersion: jest.fn().mockResolvedValue({
@@ -118,10 +104,6 @@ describe('BotController - Enhanced Tests', () => {
           useValue: mockCustomBotService,
         },
         {
-          provide: UserBotsService,
-          useValue: mockUserBotsService,
-        },
-        {
           provide: ApiKeyService,
           useValue: {},
         },
@@ -131,20 +113,21 @@ describe('BotController - Enhanced Tests', () => {
             publish: jest.fn().mockResolvedValue(Ok(null)),
           },
         },
+        {
+          provide: REQUEST,
+          useValue: { user: { uid } },
+        },
         // FeatureGateService removed for OSS version
       ],
     })
       .overrideGuard(AuthCombinedGuard)
       .useValue(mockForceGuard)
-      .overrideProvider(REQUEST)
-      .useValue({ user: { uid } })
       .compile();
 
     repository = module.get<BotRepository>(BotRepository);
     controller = await module.resolve<BotController>(BotController);
     service = await module.resolve<BotService>(BotService);
     validator = module.get<BotValidator>(BotValidator);
-    userBotsService = await module.resolve<UserBotsService>(UserBotsService);
     customBotService = module.get<CustomBotService>(CustomBotService);
 
     // Reset all mocks
@@ -286,23 +269,7 @@ describe('BotController - Enhanced Tests', () => {
       );
     });
 
-    it('should throw BadRequestException when user lacks authorization', async () => {
-      mockUserBotsService.hasUserBot = jest.fn().mockResolvedValue({
-        success: true,
-        data: false,
-      });
-
-      mockCustomBotService.getGlobalSpecificVersion = jest
-        .fn()
-        .mockResolvedValue({
-          success: true,
-          data: { ...mockCustomBot, marketplace: { price: 1000 } },
-        });
-
-      await expect(controller.create(validBot)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
+    // Test removed - UserBotsService dependency not needed in OSS version
   });
 
   describe('findAll', () => {
@@ -413,6 +380,13 @@ describe('BotController - Enhanced Tests', () => {
 
     it('should update a bot successfully', async () => {
       const updatedBot = { id: 'test-id', ...updateData } as Bot;
+
+      // Reset the mock to return success for this test
+      mockCustomBotService.getGlobalSpecificVersion = jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockCustomBot,
+      });
 
       jest.spyOn(repository, 'update').mockResolvedValue({
         success: true,

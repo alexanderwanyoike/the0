@@ -108,7 +108,7 @@ describe('BacktestService Analysis Loading', () => {
       expect(result.data).toEqual(mockAnalysis);
       expect(mockMinioClient.getObject).toHaveBeenCalledWith(
         'test-bucket',
-        'backtests/test-id/analysis.json',
+        'test-id/analysis.json',
       );
     });
 

@@ -7,7 +7,6 @@ import { BacktestModule } from './backtest/backtest.module';
 import { ConfigModule } from '@nestjs/config';
 import { CustomBotModule } from './custom-bot/custom-bot.module';
 import { ApiKeyModule } from './api-key/api-key.module';
-import { UserBotsModule } from './user-bots/user-bots.module';
 import { LogsModule } from './logs/logs.module';
 import { NatsModule } from './nats/nats.module';
 import { UploadModule } from './upload/upload.module';
@@ -25,7 +24,6 @@ import configuration from './config/configuration';
     BacktestModule,
     CustomBotModule,
     ApiKeyModule,
-    UserBotsModule,
     LogsModule,
     NatsModule,
     UploadModule,
