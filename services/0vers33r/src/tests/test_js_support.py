@@ -37,7 +37,7 @@ class TestJavaScriptSupport(unittest.TestCase):
         bot_data = {
             "name": "test-bot",
             "config": {"runtime": "nodejs20"},
-            "gcsPath": "test.zip",
+            "filePath": "test.zip",
             "userId": "test-user"
         }
         
@@ -49,7 +49,7 @@ class TestJavaScriptSupport(unittest.TestCase):
         bot_data = {
             "name": "test-bot", 
             "config": {"runtime": "python3.11"},
-            "gcsPath": "test.zip",
+            "filePath": "test.zip",
             "userId": "test-user"
         }
         
@@ -61,7 +61,7 @@ class TestJavaScriptSupport(unittest.TestCase):
         bot_data = {
             "name": "test-bot",
             "config": {"runtime": "unknown"},
-            "gcsPath": "test.zip", 
+            "filePath": "test.zip", 
             "userId": "test-user"
         }
         
@@ -123,12 +123,12 @@ class TestJavaScriptSupport(unittest.TestCase):
             "package.json": '{"name": "test", "main": "malicious.js"}'
         })
         
-        self.mock_storage.zip_content = zip_content
+        self.mock_storage.add_file("malicious.zip", zip_content)
         
         bot_data = {
             "name": "malicious-bot",
             "config": {"runtime": "nodejs20"},
-            "gcsPath": "malicious.zip",
+            "filePath": "malicious.zip",
             "userId": "test-user"
         }
         
@@ -158,12 +158,12 @@ class TestJavaScriptSupport(unittest.TestCase):
             "package.json": '{"name": "web-app", "main": "index.js"}'
         })
         
-        self.mock_storage.zip_content = zip_content
+        self.mock_storage.add_file("benign.zip", zip_content)
         
         bot_data = {
             "name": "web-app",
             "config": {"runtime": "nodejs20"},
-            "gcsPath": "benign.zip",
+            "filePath": "benign.zip",
             "userId": "test-user"
         }
         
@@ -183,12 +183,12 @@ class TestJavaScriptSupport(unittest.TestCase):
             "config.json": '{"runtime": "nodejs20"}'
         })
         
-        self.mock_storage.zip_content = zip_content
+        self.mock_storage.add_file("mixed.zip", zip_content)
         
         bot_data = {
             "name": "mixed-bot",
             "config": {"runtime": "nodejs20"},
-            "gcsPath": "mixed.zip",
+            "filePath": "mixed.zip",
             "userId": "test-user"
         }
         

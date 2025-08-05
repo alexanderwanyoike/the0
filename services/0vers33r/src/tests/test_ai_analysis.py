@@ -29,13 +29,13 @@ class TestAIAnalysis(unittest.TestCase):
     def test_ai_analyzer_initialization(self):
         """Test AI analyzer initialization with API key"""
         with patch('src.ai_analyzer.genai') as mock_genai:
-            mock_model = Mock()
-            mock_genai.GenerativeModel.return_value = mock_model
+            mock_client = Mock()
+            mock_genai.Client.return_value = mock_client
             
             ai_analyzer = AICodeAnalyzer()
             
             self.assertTrue(ai_analyzer.is_available())
-            mock_genai.configure.assert_called_once_with(api_key='test_api_key')
+            mock_genai.Client.assert_called_once_with(vertexai=True, project=None, location='global')
 
     def test_ai_analyzer_no_api_key(self):
         """Test AI analyzer when no API key is provided"""
@@ -57,9 +57,9 @@ class TestAIAnalysis(unittest.TestCase):
             }
             '''
             
-            mock_model = Mock()
-            mock_model.generate_content.return_value = mock_response
-            mock_genai.GenerativeModel.return_value = mock_model
+            mock_client = Mock()
+            mock_client.models.generate_content.return_value = mock_response
+            mock_genai.Client.return_value = mock_client
             
             ai_analyzer = AICodeAnalyzer()
             
@@ -147,9 +147,9 @@ class TestAIAnalysis(unittest.TestCase):
             }
             '''
             
-            mock_model = Mock()
-            mock_model.generate_content.return_value = mock_response
-            mock_genai.GenerativeModel.return_value = mock_model
+            mock_client = Mock()
+            mock_client.models.generate_content.return_value = mock_response
+            mock_genai.Client.return_value = mock_client
             
             analyzer = The0vers33r(
                 rules_directory="yara_rules",
@@ -167,12 +167,12 @@ class TestAIAnalysis(unittest.TestCase):
                 """
             })
             
-            self.mock_storage.zip_content = zip_content
+            self.mock_storage.add_file("suspicious.zip", zip_content)
             
             bot_data = {
                 "name": "suspicious-bot",
                 "config": {"runtime": "nodejs20"},
-                "gcsPath": "suspicious.zip",
+                "filePath": "suspicious.zip",
                 "userId": "test-user"
             }
             
@@ -206,12 +206,12 @@ class TestAIAnalysis(unittest.TestCase):
                     "malicious.js": "eval(userInput);"
                 })
                 
-                self.mock_storage.zip_content = zip_content
+                self.mock_storage.add_file("critical.zip", zip_content)
                 
                 bot_data = {
                     "name": "critical-bot",
                     "config": {"runtime": "nodejs20"},
-                    "gcsPath": "critical.zip",
+                    "filePath": "critical.zip",
                     "userId": "test-user"
                 }
                 
@@ -237,9 +237,9 @@ class TestAIAnalysis(unittest.TestCase):
             }
             '''
             
-            mock_model = Mock()
-            mock_model.generate_content.return_value = mock_response
-            mock_genai.GenerativeModel.return_value = mock_model
+            mock_client = Mock()
+            mock_client.models.generate_content.return_value = mock_response
+            mock_genai.Client.return_value = mock_client
             
             analyzer = The0vers33r(
                 rules_directory="yara_rules",
@@ -256,12 +256,12 @@ class TestAIAnalysis(unittest.TestCase):
                     "test.js": "console.log('test');"
                 })
                 
-                self.mock_storage.zip_content = zip_content
+                self.mock_storage.add_file("test.zip", zip_content)
                 
                 bot_data = {
                     "name": "test-bot",
                     "config": {"runtime": "nodejs20"},
-                    "gcsPath": "test.zip",
+                    "filePath": "test.zip",
                     "userId": "test-user"
                 }
                 

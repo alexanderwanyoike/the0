@@ -73,4 +73,8 @@ yara-python==4.5.4
 minio==7.2.5
 psycopg2-binary==2.9.9
 nats-py==2.6.0
-google-generativeai==0.8.3
+google-genai==0.5.0
+# Testing dependencies
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-mock==3.12.0
