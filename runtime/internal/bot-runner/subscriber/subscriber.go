@@ -463,7 +463,7 @@ func (s *NATSSubscriber) handleDelete(ctx context.Context, msg *nats.Msg) error 
 	if err != nil {
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
-	
+
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
 	filter := bson.M{"id": message.ID}
 

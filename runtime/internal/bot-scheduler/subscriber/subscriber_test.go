@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"runtime/internal/constants"
 	"runtime/internal/util"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDefaultOptions(t *testing.T) {
@@ -88,7 +88,7 @@ func TestParseEventMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			message, err := subscriber.parseEventMessage(tt.data)
-			
+
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, message)

@@ -306,7 +306,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	} else {
 		assert.Len(t, containers, 1)
 		assert.Equal(t, containerID, containers[0].ContainerID)
-		assert.Equal(t, "bot", containers[0].Entrypoint)
+		assert.Equal(t, "main.py", containers[0].Entrypoint)
 	}
 
 	// Test GetContainerLogs - THIS IS THE CRUCIAL TEST for the fix
@@ -445,9 +445,9 @@ func TestIntegration_RealDocker_DifferentExecutables_SameContainer(t *testing.T)
 	assert.Contains(t, botResult.Output, "CHDIR_SUCCESS: Changed to working directory: /bot")
 
 	// Test 2: Start same executable as backtest entrypoint
-	executable.Entrypoint = "backtest"  // Change to backtest entrypoint
-	executable.IsLongRunning = false    // Make it terminating for backtest
-	executable.PersistResults = true    // Backtests produce result files
+	executable.Entrypoint = "backtest" // Change to backtest entrypoint
+	executable.IsLongRunning = false   // Make it terminating for backtest
+	executable.PersistResults = true   // Backtests produce result files
 	backtestResult, err := runner.StartContainer(ctx, executable)
 	require.NoError(t, err)
 	assert.Equal(t, "success", backtestResult.Status)
@@ -835,7 +835,6 @@ func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
 	assert.NotNil(t, results["tables"], "Results should contain tables")
 }
 
-
 func TestStoreAnalysisResult(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Docker runner integration test in short mode")
@@ -937,11 +936,11 @@ func TestStoreAnalysisResult(t *testing.T) {
 
 	// Verify analysis structure
 	assert.Equal(t, "success", analysisResult["status"], "Analysis should have success status")
-	
+
 	// The analysis result has a nested "results" structure
 	results, hasResults := analysisResult["results"].(map[string]any)
 	require.True(t, hasResults, "Analysis should contain results object")
-	
+
 	assert.NotNil(t, results["metrics"], "Analysis should contain metrics")
 	assert.NotNil(t, results["plots"], "Analysis should contain plots")
 	assert.NotNil(t, results["tables"], "Analysis should contain tables")

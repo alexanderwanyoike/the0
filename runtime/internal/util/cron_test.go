@@ -108,7 +108,7 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 	t.Run("Every minute should advance by one minute", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 30, 0, 0, time.UTC)
 		nextTime, err := CalculateNextExecutionTime("* * * * *", baseTime)
-		
+
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 1, 12, 31, 0, 0, time.UTC)
 		assert.Equal(t, expectedNext, nextTime)
@@ -117,7 +117,7 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 	t.Run("Daily at 9 AM should advance to next 9 AM", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC) // Sunday noon
 		nextTime, err := CalculateNextExecutionTime("0 9 * * *", baseTime)
-		
+
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 2, 9, 0, 0, 0, time.UTC) // Monday 9 AM
 		assert.Equal(t, expectedNext, nextTime)
@@ -126,7 +126,7 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 	t.Run("Weekly on Monday should advance to next Monday", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC) // Sunday
 		nextTime, err := CalculateNextExecutionTime("0 10 * * 1", baseTime)
-		
+
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 2, 10, 0, 0, 0, time.UTC) // Monday 10 AM
 		assert.Equal(t, expectedNext, nextTime)
@@ -135,7 +135,7 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 	t.Run("Six-field format with seconds", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 30, 30, 0, time.UTC)
 		nextTime, err := CalculateNextExecutionTime("0 * * * * *", baseTime) // Every minute at 0 seconds
-		
+
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 1, 12, 31, 0, 0, time.UTC)
 		assert.Equal(t, expectedNext, nextTime)

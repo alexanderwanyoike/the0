@@ -201,17 +201,17 @@ func TestLoggerInterface(t *testing.T) {
 	t.Run("DefaultLogger implements Logger interface", func(t *testing.T) {
 		var logger Logger = &DefaultLogger{}
 		assert.NotNil(t, logger)
-		
+
 		// Test that all interface methods work
 		logger.Info("test")
-		logger.Error("test") 		
+		logger.Error("test")
 		logger.Debug("test")
 	})
 
 	t.Run("TestLogger implements Logger interface", func(t *testing.T) {
 		var logger Logger = &TestLogger{T: t}
 		assert.NotNil(t, logger)
-		
+
 		// Test that all interface methods work
 		logger.Info("test")
 		logger.Error("test")

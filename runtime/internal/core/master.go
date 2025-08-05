@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"runtime/internal/autoscaler"
 	"runtime/internal/util"
-	"time"
 	pb "runtime/pb"
+	"time"
 )
 
 type Master struct {

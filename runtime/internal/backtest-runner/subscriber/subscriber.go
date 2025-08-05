@@ -29,22 +29,22 @@ type BacktestMessage struct {
 }
 
 type SubscriberOptions struct {
-	NATSUrl        string
-	DBName         string
-	CollectionName string
-	MaxRetries     int
-	MaxBacktestsPerPartition    int
-	Logger         util.Logger
+	NATSUrl                  string
+	DBName                   string
+	CollectionName           string
+	MaxRetries               int
+	MaxBacktestsPerPartition int
+	Logger                   util.Logger
 }
 
 func DefaultOptions() SubscriberOptions {
 	return SubscriberOptions{
-		NATSUrl:        os.Getenv("NATS_URL"),
-		DBName:         constants.BACKTEST_RUNNER_DB_NAME,
-		CollectionName: constants.BACKTEST_COLLECTION,
+		NATSUrl:                  os.Getenv("NATS_URL"),
+		DBName:                   constants.BACKTEST_RUNNER_DB_NAME,
+		CollectionName:           constants.BACKTEST_COLLECTION,
 		MaxBacktestsPerPartition: getDefaultMaxBotsPerPartition(),
-		MaxRetries:     getDefaultMaxRetries(),
-		Logger:         &util.DefaultLogger{},
+		MaxRetries:               getDefaultMaxRetries(),
+		Logger:                   &util.DefaultLogger{},
 	}
 }
 
@@ -82,16 +82,16 @@ type Subscriber interface {
 }
 
 type NATSSubscriber struct {
-	mongoClient    *mongo.Client
-	natsConn       *nats.Conn
-	dbName         string
-	collectionName string
-	maxRetries     int
+	mongoClient              *mongo.Client
+	natsConn                 *nats.Conn
+	dbName                   string
+	collectionName           string
+	maxRetries               int
 	maxBacktestsPerPartition int
-	subscriptions  []*nats.Subscription
-	stopChan       chan struct{}
-	wg             sync.WaitGroup
-	logger         util.Logger
+	subscriptions            []*nats.Subscription
+	stopChan                 chan struct{}
+	wg                       sync.WaitGroup
+	logger                   util.Logger
 }
 
 func NewNATSSubscriber(
@@ -139,16 +139,16 @@ func NewNATSSubscriber(
 	}
 
 	return &NATSSubscriber{
-		mongoClient:    mongoClient,
-		natsConn:       natsConn,
-		dbName:         opts.DBName,
-		collectionName: opts.CollectionName,
-		maxRetries:     opts.MaxRetries,
+		mongoClient:              mongoClient,
+		natsConn:                 natsConn,
+		dbName:                   opts.DBName,
+		collectionName:           opts.CollectionName,
+		maxRetries:               opts.MaxRetries,
 		maxBacktestsPerPartition: opts.MaxBacktestsPerPartition,
-		subscriptions:  make([]*nats.Subscription, 0),
-		stopChan:       make(chan struct{}),
-		wg:             sync.WaitGroup{},
-		logger:         opts.Logger,
+		subscriptions:            make([]*nats.Subscription, 0),
+		stopChan:                 make(chan struct{}),
+		wg:                       sync.WaitGroup{},
+		logger:                   opts.Logger,
 	}, nil
 }
 
@@ -337,7 +337,6 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error 
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
 
-	
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
 	filter := bson.M{"id": message.ID}
 	count, err := collection.CountDocuments(ctx, filter)
