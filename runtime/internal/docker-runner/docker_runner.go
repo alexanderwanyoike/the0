@@ -538,6 +538,9 @@ func (r *dockerRunner) Close() error {
 		<-r.logCollectorDone
 	}
 
+	// Clean up managed containers
+	r.cleanupManagedContainers()
+
 	// Close MinIO logger
 	if r.minioLogger != nil {
 		r.minioLogger.Close()
@@ -548,6 +551,47 @@ func (r *dockerRunner) Close() error {
 		return r.dockerClient.Close()
 	}
 	return nil
+}
+
+// cleanupManagedContainers stops and removes all containers that are still being tracked
+func (r *dockerRunner) cleanupManagedContainers() {
+	r.containersMutex.Lock()
+	containerIDs := make([]string, 0, len(r.managedContainers))
+	for containerID := range r.managedContainers {
+		containerIDs = append(containerIDs, containerID)
+	}
+	r.containersMutex.Unlock()
+
+	if len(containerIDs) == 0 {
+		return // Nothing to clean up
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for _, containerID := range containerIDs {
+		// Try to stop the container gracefully first
+		timeout := 5 // 5 second timeout for graceful shutdown
+		if err := r.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+			// Container might already be stopped or not exist, log but continue
+			util.LogWorker("Warning: Failed to stop container during cleanup - container_id: %s, error: %v", containerID, err)
+		}
+		
+		// Force remove the container to ensure cleanup
+		if err := r.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
+			// Container might already be removed, log but continue
+			util.LogWorker("Warning: Failed to remove container during cleanup - container_id: %s, error: %v", containerID, err)
+		} else {
+			util.LogWorker("Cleaned up container during shutdown - container_id: %s", containerID)
+		}
+	}
+
+	// Clear the managed containers map
+	r.containersMutex.Lock()
+	r.managedContainers = make(map[string]*ContainerInfo)
+	r.containersMutex.Unlock()
+
+	util.LogWorker("Completed cleanup of %d managed containers", len(containerIDs))
 }
 
 // StartContainer starts a bot as a long-running container
