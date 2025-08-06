@@ -5,12 +5,12 @@ export const getErrorMessage = (error: any): string => {
       error?.response?.data?.message ||
       error?.response?.statusText ||
       error?.response?.message ||
-      'Unknown error'
+      "Unknown error"
     );
   }
 
   if (error.request) {
-    return 'No response received from server';
+    return "No response received from server";
   }
 
   return `Error: ${error.message}`;

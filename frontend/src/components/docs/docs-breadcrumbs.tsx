@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { ChevronRight, Home } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import React from "react";
+import Link from "next/link";
+import { ChevronRight, Home } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface DocsBreadcrumbsProps {
   path: string[];
@@ -16,16 +16,16 @@ export const DocsBreadcrumbs: React.FC<DocsBreadcrumbsProps> = ({
 }) => {
   const formatSegment = (segment: string) => {
     return segment
-      .replace(/[-_]/g, ' ')
+      .replace(/[-_]/g, " ")
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
   const buildPath = (index: number) => {
-    return '/docs/' + path.slice(0, index + 1).join('/');
+    return "/docs/" + path.slice(0, index + 1).join("/");
   };
 
   return (
-    <nav className={cn('flex items-center space-x-1 text-sm', className)}>
+    <nav className={cn("flex items-center space-x-1 text-sm", className)}>
       <Link
         href="/docs"
         className="flex items-center text-muted-foreground hover:text-foreground transition-colors"

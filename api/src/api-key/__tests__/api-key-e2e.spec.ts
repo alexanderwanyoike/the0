@@ -6,6 +6,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { Ok, Failure } from '@/common/result';
 import { ApiKeyRepository } from '@/api-key/api-key.repository';
 import { ApiKeyModule } from '@/api-key/api-key.module';
+import { PassportModule } from '@nestjs/passport';
+import { ConfigModule } from '@nestjs/config';
 
 describe('ApiKeyController (e2e)', () => {
   let app: INestApplication;
@@ -40,7 +42,11 @@ describe('ApiKeyController (e2e)', () => {
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [ApiKeyModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        PassportModule.register({ defaultStrategy: 'jwt' }),
+        ApiKeyModule,
+      ],
     })
       .overrideGuard(AuthGuard())
       .useValue(mockGuard)

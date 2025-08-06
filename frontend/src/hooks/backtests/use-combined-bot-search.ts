@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useCustomBots } from '@/hooks/custom-bots/use-custom-bots';
-import { useUserBots } from '@/hooks/use-user-bots';
-import { BotSearchResult } from '@/types/backtest';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useCustomBots } from "@/hooks/custom-bots/use-custom-bots";
+import { useUserBots } from "@/hooks/use-user-bots";
+import { BotSearchResult } from "@/types/backtest";
 // Marketplace search functionality removed
 
 export function useCombinedBotSearch() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<BotSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -15,15 +15,12 @@ export function useCombinedBotSearch() {
   const { bots: customBots, loading: customBotsLoading } = useCustomBots();
   const { userBots, loading: userBotsLoading } = useUserBots();
 
-  const search = useCallback(
-    async (searchQuery: string) => {
-      setQuery(searchQuery);
-      setLoading(true);
+  const search = useCallback(async (searchQuery: string) => {
+    setQuery(searchQuery);
+    setLoading(true);
 
-      // Marketplace search removed
-    },
-    [],
-  );
+    // Marketplace search removed
+  }, []);
 
   // Memoize the filtered results to prevent infinite loops
   const filteredResults = useMemo(() => {
@@ -38,7 +35,7 @@ export function useCombinedBotSearch() {
       combined.push({
         id: suggestion.name,
         name: suggestion.name,
-        resultType: 'marketplace',
+        resultType: "marketplace",
         approved: true,
       });
     });
@@ -49,13 +46,13 @@ export function useCombinedBotSearch() {
         .filter(
           (bot) =>
             bot.name.toLowerCase().includes(query.toLowerCase()) &&
-            bot.versions?.[0]?.status === 'approved',
+            bot.versions?.[0]?.status === "approved",
         )
         .forEach((bot) => {
           combined.push({
             id: bot.id,
             name: bot.name,
-            resultType: 'custom',
+            resultType: "custom",
             approved: true,
           });
         });
@@ -77,7 +74,7 @@ export function useCombinedBotSearch() {
             combined.push({
               id: bot.id,
               name: bot.customBotName,
-              resultType: 'user',
+              resultType: "user",
               approved: true,
             });
           }
@@ -95,17 +92,24 @@ export function useCombinedBotSearch() {
       return;
     }
 
-    const isLoading = marketplaceLoading || customBotsLoading || userBotsLoading;
+    const isLoading =
+      marketplaceLoading || customBotsLoading || userBotsLoading;
     setLoading(isLoading);
 
     if (!isLoading) {
       setSuggestions(filteredResults);
       setLoading(false);
     }
-  }, [filteredResults, marketplaceLoading, customBotsLoading, userBotsLoading, query]);
+  }, [
+    filteredResults,
+    marketplaceLoading,
+    customBotsLoading,
+    userBotsLoading,
+    query,
+  ]);
 
   const clearSuggestions = useCallback(() => {
-    setQuery('');
+    setQuery("");
     setSuggestions([]);
   }, []);
 

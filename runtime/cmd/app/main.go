@@ -172,7 +172,7 @@ func runBotRunnerMaster() {
 		constants.BOT_RUNNER_COLLECTION,
 		address,
 	)
-	
+
 	util.LogMaster("Bot-runner master listening on %s", address)
 	master.Start()
 }
@@ -323,7 +323,7 @@ func runBacktestRunnerStandalone(nodeType string) {
 func runBacktestRunnerCluster() {
 	// TODO: Implement cluster mode with proper leader election
 	// This needs to be updated to work with the new architecture
-	
+
 	// For now, we'll run in standalone mode until cluster mode is implemented
 	util.LogMaster("Cluster mode not yet implemented with new architecture")
 	util.LogMaster("Falling back to standalone mode...")
@@ -352,7 +352,7 @@ func runBotSchedulerMaster() {
 		constants.BOT_SCHEDULE_COLLECTION,
 		address,
 	)
-	
+
 	util.LogMaster("Bot-scheduler master listening on %s", address)
 	master.Start()
 }
@@ -425,17 +425,17 @@ func generateWorkerID() string {
 func createMongoClient(mongoUri string) (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	mongoClient, err := mongo.Connect(ctx, mongoOptions.Client().ApplyURI(mongoUri))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
-	
+
 	// Test the connection
 	err = mongoClient.Ping(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
-	
+
 	return mongoClient, nil
 }

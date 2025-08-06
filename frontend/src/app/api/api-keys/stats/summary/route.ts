@@ -1,17 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/middleware/admin-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export async function GET(req: NextRequest) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
 
       const response = await fetch(
         `${process.env.BOT_API_URL}/api-keys/stats/summary`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
         },
@@ -27,13 +27,13 @@ export async function GET(req: NextRequest) {
       let data = await response.json();
       return NextResponse.json(data);
     } catch (error: any) {
-      console.error('Error fetching API key stats:', error);
+      console.error("Error fetching API key stats:", error);
       return NextResponse.json(
         {
           error: {
-            message: 'Error fetching API key stats',
+            message: "Error fetching API key stats",
             statusCode: 500,
-            error: 'Internal Server Error',
+            error: "Internal Server Error",
           },
         },
         { status: 500 },

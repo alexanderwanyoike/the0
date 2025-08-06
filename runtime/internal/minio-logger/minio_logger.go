@@ -211,7 +211,6 @@ func (m *minIOLogger) StoreFinalLogs(ctx context.Context, id string, logs string
 	return nil
 }
 
-
 func (m *minIOLogger) Close() error {
 	// MinIO client doesn't need explicit close
 	return nil

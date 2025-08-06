@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { withAuth } from '@/components/auth/with-auth';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Bot, Loader2, Save, Play } from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
-import FormGenerator from '@/components/bots/form-generator';
-import { ReadmeComponent } from '@/components/custom-bots/readme-component';
-import BotUpdateConfirmationDialog from '@/components/bots/bot-update-confirmation-dialog';
-import { CustomBotConfig } from '@/types/custom-bots';
+import React, { useState, useEffect } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { withAuth } from "@/components/auth/with-auth";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowLeft, Bot, Loader2, Save, Play } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/hooks/use-toast";
+import FormGenerator from "@/components/bots/form-generator";
+import { ReadmeComponent } from "@/components/custom-bots/readme-component";
+import BotUpdateConfirmationDialog from "@/components/bots/bot-update-confirmation-dialog";
+import { CustomBotConfig } from "@/types/custom-bots";
 
 interface BotDetails {
   config: CustomBotConfig;
@@ -36,7 +36,7 @@ function BotDeployPage() {
 
   const name = params?.name as string;
   const version = params?.version as string;
-  const botId = searchParams?.get('botId'); // If present, we're updating an existing bot
+  const botId = searchParams?.get("botId"); // If present, we're updating an existing bot
 
   const [botDetails, setBotDetails] = useState<BotDetails | null>(null);
   const [existingBot, setExistingBot] = useState<DeployedBot | null>(null);
@@ -65,7 +65,7 @@ function BotDeployPage() {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch bot details');
+        throw new Error("Failed to fetch bot details");
       }
 
       const data = await response.json();
@@ -84,14 +84,14 @@ function BotDeployPage() {
           setFormData(defaultValues);
         }
       } else {
-        throw new Error(data.message || 'Failed to fetch bot details');
+        throw new Error(data.message || "Failed to fetch bot details");
       }
     } catch (err: any) {
       setError(err.message);
       toast({
-        title: 'Error',
+        title: "Error",
         description: `Failed to load bot details: ${err.message}`,
-        variant: 'destructive',
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -112,8 +112,8 @@ function BotDeployPage() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('fetchExistingBot: Response not ok:', errorText);
-        throw new Error('Failed to fetch existing bot');
+        console.error("fetchExistingBot: Response not ok:", errorText);
+        throw new Error("Failed to fetch existing bot");
       }
 
       const data = await response.json();
@@ -132,7 +132,7 @@ function BotDeployPage() {
         ...userConfig,
       }));
     } catch (err: any) {
-      console.error('Error fetching existing bot:', err);
+      console.error("Error fetching existing bot:", err);
     }
   }, [user, botId, token]);
 
@@ -157,10 +157,10 @@ function BotDeployPage() {
   React.useEffect(() => {
     if (botDetails && !botDetails.hasAccess) {
       toast({
-        title: 'Access Denied',
+        title: "Access Denied",
         description:
           "You don't have access to deploy this bot. Make sure you own this custom bot or have purchased it from the marketplace.",
-        variant: 'destructive',
+        variant: "destructive",
       });
       setTimeout(() => router.back(), 2000);
     }
@@ -172,7 +172,7 @@ function BotDeployPage() {
 
   // Debug: Log current form data
   React.useEffect(() => {
-    console.log('Current form data:', formData);
+    console.log("Current form data:", formData);
   }, [formData]);
 
   const handleSubmit = async () => {
@@ -193,7 +193,6 @@ function BotDeployPage() {
 
     setSubmitting(true);
     try {
-
       // Create the bot configuration payload
       const botConfig = {
         // Include bot metadata with proper format: type/name
@@ -209,11 +208,11 @@ function BotDeployPage() {
 
       // Ensure scheduled bots have a schedule field (backend requirement)
       if (
-        botDetails.config.type === 'scheduled' &&
+        botDetails.config.type === "scheduled" &&
         !(botConfig as any).schedule
       ) {
         throw new Error(
-          'Schedule is required for scheduled bots. Please provide a valid cron expression.',
+          "Schedule is required for scheduled bots. Please provide a valid cron expression.",
         );
       }
 
@@ -222,11 +221,11 @@ function BotDeployPage() {
         : { name: botDetails.config.name, config: botConfig };
 
       const response = await fetch(
-        isUpdate ? `/api/bot/${botId}` : '/api/bot',
+        isUpdate ? `/api/bot/${botId}` : "/api/bot",
         {
-          method: isUpdate ? 'PUT' : 'POST',
+          method: isUpdate ? "PUT" : "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(payload),
@@ -236,21 +235,21 @@ function BotDeployPage() {
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
-          errorData.error?.message || errorData.message || 'Deployment failed',
+          errorData.error?.message || errorData.message || "Deployment failed",
         );
       }
 
       await response.json();
 
       toast({
-        title: isUpdate ? 'Bot Updated' : 'Bot Deployed',
+        title: isUpdate ? "Bot Updated" : "Bot Deployed",
         description: isUpdate
-          ? 'Your bot configuration has been successfully updated.'
-          : 'Your bot has been successfully deployed and is now running.',
+          ? "Your bot configuration has been successfully updated."
+          : "Your bot has been successfully deployed and is now running.",
       });
 
       // Redirect to dashboard or bot details
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (err: any) {
       // Clear any previous errors
       setError(null);
@@ -258,9 +257,9 @@ function BotDeployPage() {
 
       // Show toast error
       toast({
-        title: isUpdate ? 'Update Failed' : 'Deployment Failed',
+        title: isUpdate ? "Update Failed" : "Deployment Failed",
         description: err.message,
-        variant: 'destructive',
+        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
@@ -343,7 +342,7 @@ function BotDeployPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">
-                {isUpdate ? 'Update' : 'Deploy'} {botDetails.config.name}
+                {isUpdate ? "Update" : "Deploy"} {botDetails.config.name}
               </h1>
               <p className="text-muted-foreground">
                 Version {version} • {botDetails.config.type} bot
@@ -361,8 +360,8 @@ function BotDeployPage() {
                 <CardTitle>Bot Configuration</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {isUpdate
-                    ? 'Update the configuration for your running bot instance.'
-                    : 'Configure your bot parameters before deployment.'}
+                    ? "Update the configuration for your running bot instance."
+                    : "Configure your bot parameters before deployment."}
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -402,11 +401,11 @@ function BotDeployPage() {
                     )}
                     {submitting
                       ? isUpdate
-                        ? 'Updating...'
-                        : 'Deploying...'
+                        ? "Updating..."
+                        : "Deploying..."
                       : isUpdate
-                        ? 'Update Bot'
-                        : 'Deploy Bot'}
+                        ? "Update Bot"
+                        : "Deploy Bot"}
                   </Button>
                 </div>
               </CardContent>
@@ -474,7 +473,7 @@ function BotDeployPage() {
             await performDeployment();
           }}
           isUpdating={submitting}
-          botName={botDetails?.config.name || 'Unknown Bot'}
+          botName={botDetails?.config.name || "Unknown Bot"}
           oldConfig={existingBot.config}
           newConfig={{
             // Include bot metadata with proper format: type/name

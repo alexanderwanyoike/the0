@@ -1,19 +1,17 @@
-import Link from 'next/link';
-import { Github } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import Link from "next/link";
+import { Github } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const footerLinks = {
   Product: [
-    { name: 'Features', href: '#features' },
-    { name: 'How It Works', href: '#how-it-works' },
+    { name: "Features", href: "#features" },
+    { name: "How It Works", href: "#how-it-works" },
   ],
   Resources: [
-    { name: 'Docs', href: '/docs' },
-    { name: 'GitHub', href: 'https://github.com/alexanderwanyoike/the0' },
+    { name: "Docs", href: "/docs" },
+    { name: "GitHub", href: "https://github.com/alexanderwanyoike/the0" },
   ],
-  Company: [
-    { name: 'About', href: '/about' },
-  ],
+  Company: [{ name: "About", href: "/about" }],
 };
 
 export function Footer() {
@@ -50,7 +48,7 @@ export function Footer() {
               </div>
               <span className="text-xl font-bold ml-2">the0</span>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="icon" asChild>
                 <a

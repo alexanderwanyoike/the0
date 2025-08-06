@@ -48,7 +48,7 @@ type BacktestWorker struct {
 
 	// Simple control channels
 	shutdown chan struct{}
-	
+
 	// Worker context for operations that should be tied to worker lifecycle
 	workerCtx    context.Context
 	workerCancel context.CancelFunc

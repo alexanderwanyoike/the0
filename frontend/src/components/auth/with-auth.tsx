@@ -1,7 +1,7 @@
-'use client';
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/auth-context';
+"use client";
+import React, { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
 
 export function withAuth<P extends object>(Component: React.ComponentType<P>) {
   const ProtectedRoute = function (props: P) {
@@ -10,7 +10,7 @@ export function withAuth<P extends object>(Component: React.ComponentType<P>) {
 
     useEffect(() => {
       if (!loading && !user) {
-        router.replace('/login');
+        router.replace("/login");
       }
     }, [user, loading, router]);
 
@@ -23,6 +23,6 @@ export function withAuth<P extends object>(Component: React.ComponentType<P>) {
     return <Component {...props} />;
   };
 
-  ProtectedRoute.displayName = 'ProtectedRoute';
+  ProtectedRoute.displayName = "ProtectedRoute";
   return ProtectedRoute;
 }

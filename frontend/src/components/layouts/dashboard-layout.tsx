@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { ReactNode, useState } from 'react';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { useAuth } from '@/contexts/auth-context';
-import { Sidebar } from '@/components/main-navigation';
-import { ModeToggle } from '@/components/mode-toggle';
+import { ReactNode, useState } from "react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context";
+import { Sidebar } from "@/components/main-navigation";
+import { ModeToggle } from "@/components/mode-toggle";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -22,8 +22,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <Sidebar
         navigation={[
           {
-            name: 'Dashboard',
-            href: '/dashboard',
+            name: "Dashboard",
+            href: "/dashboard",
             icon: (props) => (
               <svg
                 fill="none"
@@ -41,8 +41,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             ),
           },
           {
-            name: 'Custom Bots',
-            href: '/custom-bots',
+            name: "Custom Bots",
+            href: "/custom-bots",
             icon: (props) => (
               <svg
                 fill="none"
@@ -60,27 +60,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             ),
           },
           {
-            name: 'My Bots',
-            href: '/user-bots',
-            icon: (props) => (
-              <svg
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                {...props}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-                />
-              </svg>
-            ),
-          },
-          {
-            name: 'Backtests',
-            href: '/backtests',
+            name: "Backtests",
+            href: "/backtests",
             icon: (props) => (
               <svg
                 fill="none"
@@ -108,15 +89,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main content area */}
       <div
         className={`min-h-screen transition-all duration-300 ease-in-out ${
-          isSidebarCollapsed ? 'pl-[60px]' : 'pl-64'
+          isSidebarCollapsed ? "pl-[60px]" : "pl-64"
         }`}
       >
         {/* Top header */}
         <header
           className="fixed top-0 right-0 h-12 flex items-center justify-between px-6 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-10"
           style={{
-            left: isSidebarCollapsed ? '60px' : '256px',
-            transition: 'left 300ms ease-in-out',
+            left: isSidebarCollapsed ? "60px" : "256px",
+            transition: "left 300ms ease-in-out",
           }}
         >
           <div className="flex items-center gap-4">

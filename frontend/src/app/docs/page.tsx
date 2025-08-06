@@ -1,36 +1,36 @@
-import { Metadata } from 'next';
-import { DocsFileSystem } from '@/lib/docs/file-system';
-import { DocsContent } from '@/components/docs/doc-content';
+import { Metadata } from "next";
+import { DocsFileSystem } from "@/lib/docs/file-system";
+import { DocsContent } from "@/components/docs/doc-content";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { BookOpen } from 'lucide-react';
+} from "@/components/ui/card";
+import { BookOpen } from "lucide-react";
 
 export async function generateMetadata(): Promise<Metadata> {
   const fileSystem = new DocsFileSystem();
-  const doc = await fileSystem.getDocContent(['index']);
+  const doc = await fileSystem.getDocContent(["index"]);
 
   if (!doc) {
     return {
-      title: 'Documentation | Theo',
-      description: 'Theo platform documentation',
+      title: "Documentation | Theo",
+      description: "Theo platform documentation",
     };
   }
 
   return {
-    title: `${doc.frontmatter.title || 'Documentation'} | Theo`,
-    description: doc.frontmatter.description || 'Theo platform documentation',
+    title: `${doc.frontmatter.title || "Documentation"} | Theo`,
+    description: doc.frontmatter.description || "Theo platform documentation",
     keywords: doc.frontmatter.tags || [],
   };
 }
 
 export default async function DocsHomePage() {
   const fileSystem = new DocsFileSystem();
-  const doc = await fileSystem.getDocContent(['index']);
+  const doc = await fileSystem.getDocContent(["index"]);
 
   // If no index.md found, show empty state
   if (!doc) {
@@ -65,7 +65,7 @@ export default async function DocsHomePage() {
     <DocsContent
       content={doc.content}
       frontmatter={doc.frontmatter}
-      slug={['index']}
+      slug={["index"]}
     />
   );
 }

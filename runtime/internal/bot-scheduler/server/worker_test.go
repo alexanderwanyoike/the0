@@ -17,6 +17,10 @@ import (
 	"runtime/internal/util"
 	"runtime/pb"
 
+	"archive/zip"
+	"bytes"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -24,10 +28,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"archive/zip"
-	"bytes"
 )
 
 // Mock gRPC server for testing BaseWorker interactions
@@ -177,17 +177,17 @@ func setupTestMinIOWithScheduledBotCode(t *testing.T, minioEndpoint string) {
 	uploadScheduledBotCode := func(fileName, code string) {
 		var zipBuffer bytes.Buffer
 		zipWriter := zip.NewWriter(&zipBuffer)
-		
+
 		mainFile, err := zipWriter.Create("main.py")
 		require.NoError(t, err)
 		_, err = mainFile.Write([]byte(code))
 		require.NoError(t, err)
-		
+
 		err = zipWriter.Close()
 		require.NoError(t, err)
-		
+
 		zipData := zipBuffer.Bytes()
-		_, err = minioClient.PutObject(ctx, bucketName, fileName, 
+		_, err = minioClient.PutObject(ctx, bucketName, fileName,
 			bytes.NewReader(zipData), int64(len(zipData)), minio.PutObjectOptions{
 				ContentType: "application/zip",
 			})
@@ -425,12 +425,12 @@ func TestScheduledBotWorker_ImmediateExecution_Success(t *testing.T) {
 
 	// Note: The bot might have finished execution already since it's short-lived
 	// The important thing is that it was scheduled and the next execution time was updated
-	
+
 	// Verify next execution time was updated in database
 	var updatedSchedule map[string]interface{}
 	err = collection.FindOne(ctx, map[string]interface{}{"id": "immediate-scheduled-bot"}).Decode(&updatedSchedule)
 	require.NoError(t, err)
-	
+
 	nextExecTime, ok := updatedSchedule["next_execution_time"].(int64)
 	require.True(t, ok, "next_execution_time should be int64")
 	assert.Greater(t, nextExecTime, currentTime, "Next execution time should be updated to future")
@@ -441,7 +441,7 @@ func TestScheduledBotWorker_ImmediateExecution_Success(t *testing.T) {
 	t.Logf("  - MinIO integration works for scheduled bot code download")
 	t.Logf("  - Next execution time was updated (from %d to %d)", currentTime-10, nextExecTime)
 	t.Logf("  - Scheduling logic functions correctly")
-	
+
 	if runningCount > 0 || botExists {
 		t.Logf("  - Bot was tracked during execution")
 	} else {
@@ -534,7 +534,7 @@ func TestScheduledBotWorker_CronScheduling_MultipleExecutions(t *testing.T) {
 
 	// Verify that scheduling is working correctly
 	assert.Greater(t, firstNextExec, currentTime, "First next execution time should be in future")
-	
+
 	// Note: Due to cron parsing limitations, the 10-second schedule might not work exactly as expected
 	// But the important thing is that the time gets updated, showing the scheduling mechanism works
 	t.Logf("✅ Cron scheduling test passed:")
@@ -774,7 +774,7 @@ func TestScheduledBotWorker_SegmentBasedFiltering(t *testing.T) {
 
 	// Segment 1 bot should NOT have been executed (next execution time unchanged)
 	assert.Equal(t, currentTime-5, segment1NextExec, "Segment 1 bot should not be executed")
-	
+
 	// Segment 2 bot SHOULD have been executed (next execution time updated)
 	assert.Greater(t, segment2NextExec, currentTime, "Segment 2 bot should be executed and updated")
 
@@ -892,7 +892,7 @@ func TestScheduledBotWorker_DisabledBots_NotExecuted(t *testing.T) {
 
 	// Enabled bot should have been executed (next execution time updated)
 	assert.Greater(t, enabledNextExec, currentTime, "Enabled bot should be executed and updated")
-	
+
 	// Disabled bot should NOT have been executed (next execution time unchanged)
 	assert.Equal(t, currentTime-5, disabledNextExec, "Disabled bot should not be executed")
 

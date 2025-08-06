@@ -1,6 +1,6 @@
-import { Bot } from 'lucide-react';
-import React from 'react';
-import Link from 'next/link';
+import { Bot } from "lucide-react";
+import React from "react";
+import Link from "next/link";
 
 export const EmptyState = () => (
   <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -18,7 +18,7 @@ export const EmptyState = () => (
         the0 custom-bot deploy
       </code>
       <p className="text-xs text-muted-foreground mt-2">
-        Deploy your custom bot via CLI and track its approval status here.{' '}
+        Deploy your custom bot via CLI and track its approval status here.{" "}
         <Link
           href="/docs/the0-CLI/custom-bot-commands"
           className="text-primary hover:underline"

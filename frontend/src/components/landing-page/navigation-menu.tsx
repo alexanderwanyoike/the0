@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import * as React from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import {
   NavigationMenu as UINavigationMenu,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
   navigationMenuTriggerStyle,
-} from '@/components/ui/navigation-menu';
+} from "@/components/ui/navigation-menu";
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
   SheetTitle,
-} from '@/components/ui/sheet';
-import { ModeToggle } from '@/components/mode-toggle';
-import { useAuth } from '@/contexts/auth-context';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Menu, User2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/sheet";
+import { ModeToggle } from "@/components/mode-toggle";
+import { useAuth } from "@/contexts/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Menu, User2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface NavigationMenuProps {
   showSearch?: boolean;
@@ -100,7 +100,7 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
                 <Button variant="ghost" size="sm" className="gap-2">
                   <User2 className="h-4 w-4" />
                   <span className="hidden lg:inline">
-                    {user.username || 'User'}
+                    {user.username || "User"}
                   </span>
                 </Button>
                 <Button asChild size="sm">
@@ -189,7 +189,7 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
                       <div className="flex items-center space-x-2 p-2 rounded-md bg-muted">
                         <User2 className="h-4 w-4" />
                         <span className="text-sm font-medium">
-                          {user.username || 'User'}
+                          {user.username || "User"}
                         </span>
                       </div>
                       <Button

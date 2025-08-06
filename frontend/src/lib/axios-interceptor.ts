@@ -1,5 +1,5 @@
-'use client';
-import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
+"use client";
+import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
 
 // Create an axios instance with interceptors
 const axiosInstance = axios.create();
@@ -9,7 +9,10 @@ let globalAuthService: any = null;
 let globalLogout: (() => Promise<void>) | null = null;
 
 // Function to set the auth service from the context
-export const setAuthService = (authService: any, logoutFn: () => Promise<void>) => {
+export const setAuthService = (
+  authService: any,
+  logoutFn: () => Promise<void>,
+) => {
   globalAuthService = authService;
   globalLogout = logoutFn;
 };
@@ -47,12 +50,13 @@ axiosInstance.interceptors.response.use(
       } else if (globalAuthService) {
         // Fallback to auth service logout if context logout not available
         globalAuthService.logout();
-        if (typeof window !== 'undefined') {
-          document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-          window.location.href = '/login';
+        if (typeof window !== "undefined") {
+          document.cookie =
+            "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          window.location.href = "/login";
         }
       }
-      
+
       return Promise.reject(error);
     }
 

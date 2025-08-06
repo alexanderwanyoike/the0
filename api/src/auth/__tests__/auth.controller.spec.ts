@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
+import { ApiKeyService } from '@/api-key/api-key.service';
 import { Ok, Failure } from '../../common/result';
 
 describe('AuthController', () => {
@@ -14,6 +15,13 @@ describe('AuthController', () => {
     validateToken: jest.fn(),
   };
 
+  const mockApiKeyService = {
+    // Add any methods the AuthController might use from ApiKeyService
+    createApiKey: jest.fn(),
+    getUserApiKeys: jest.fn(),
+    deleteApiKey: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -21,6 +29,10 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: mockAuthService,
+        },
+        {
+          provide: ApiKeyService,
+          useValue: mockApiKeyService,
         },
       ],
     }).compile();

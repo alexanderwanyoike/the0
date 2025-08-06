@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   detectPlatform,
   detectPlatformWithConfidence,
-} from '@/lib/install/platform-detection';
-import type { PlatformInfo, PlatformDetectorProps } from '@/types/install';
+} from "@/lib/install/platform-detection";
+import type { PlatformInfo, PlatformDetectorProps } from "@/types/install";
 
 export function PlatformDetector({
   onPlatformDetected,
@@ -15,8 +15,8 @@ export function PlatformDetector({
   const [detectedPlatform, setDetectedPlatform] = useState<PlatformInfo | null>(
     null,
   );
-  const [confidence, setConfidence] = useState<'high' | 'medium' | 'low'>(
-    'medium',
+  const [confidence, setConfidence] = useState<"high" | "medium" | "low">(
+    "medium",
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -34,8 +34,8 @@ export function PlatformDetector({
         onPlatformDetected(result.platform);
 
         // Log detection details for debugging
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Platform detection result:', {
+        if (process.env.NODE_ENV === "development") {
+          console.log("Platform detection result:", {
             platform: result.platform?.displayName,
             confidence: result.confidence,
             method: result.detectionMethod,
@@ -43,8 +43,8 @@ export function PlatformDetector({
           });
         }
       } catch (err) {
-        console.error('Platform detection failed:', err);
-        setError('Failed to detect platform');
+        console.error("Platform detection failed:", err);
+        setError("Failed to detect platform");
         setIsDetecting(false);
         onPlatformDetected(null);
       }
@@ -88,15 +88,15 @@ export function PlatformDetector({
   // Success state
   if (detectedPlatform) {
     const confidenceColor = {
-      high: 'bg-green-500',
-      medium: 'bg-yellow-500',
-      low: 'bg-orange-500',
+      high: "bg-green-500",
+      medium: "bg-yellow-500",
+      low: "bg-orange-500",
     }[confidence];
 
     const confidenceText = {
-      high: 'Confident detection',
-      medium: 'Likely match',
-      low: 'Best guess',
+      high: "Confident detection",
+      medium: "Likely match",
+      low: "Best guess",
     }[confidence];
 
     return (
@@ -108,7 +108,7 @@ export function PlatformDetector({
         <span className="text-sm font-medium">
           Detected: {detectedPlatform.displayName}
         </span>
-        {confidence !== 'high' && (
+        {confidence !== "high" && (
           <span
             className="text-xs text-muted-foreground"
             title={confidenceText}
@@ -137,7 +137,7 @@ export function PlatformDetector({
 // Alternative compact version for smaller UI contexts
 export function CompactPlatformDetector({
   onPlatformDetected,
-}: Pick<PlatformDetectorProps, 'onPlatformDetected'>) {
+}: Pick<PlatformDetectorProps, "onPlatformDetected">) {
   const [detectedPlatform, setDetectedPlatform] = useState<PlatformInfo | null>(
     null,
   );
@@ -181,8 +181,8 @@ export function CompactPlatformDetector({
 export function usePlatformDetection() {
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
   const [isDetecting, setIsDetecting] = useState(true);
-  const [confidence, setConfidence] = useState<'high' | 'medium' | 'low'>(
-    'medium',
+  const [confidence, setConfidence] = useState<"high" | "medium" | "low">(
+    "medium",
   );
 
   useEffect(() => {

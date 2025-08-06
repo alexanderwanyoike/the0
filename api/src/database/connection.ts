@@ -5,7 +5,6 @@ import Database from 'better-sqlite3';
 import { loadConfig, DatabaseConfig } from '../config/database.config';
 import * as usersSchema from './schema/users';
 import * as customBotsSchema from './schema/custom-bots';
-import * as userBotsSchema from './schema/user-bots';
 import * as botsSchema from './schema/bots';
 import * as backtestsSchema from './schema/backtests';
 // Logs are stored in external storage (MinIO/S3), not in database
@@ -14,7 +13,6 @@ import * as backtestsSchema from './schema/backtests';
 export const pgSchema = {
   ...usersSchema,
   ...customBotsSchema,
-  ...userBotsSchema,
   ...botsSchema,
   ...backtestsSchema,
 };
@@ -24,7 +22,6 @@ export const sqliteSchema = {
   usersTable: usersSchema.usersTableSqlite,
   apiKeysTable: usersSchema.apiKeysTableSqlite,
   customBotsTable: customBotsSchema.customBotsTableSqlite,
-  userBotsTable: userBotsSchema.userBotsTableSqlite,
   botsTable: botsSchema.botsTableSqlite,
   backtestsTable: backtestsSchema.backtestsTableSqlite,
 };
@@ -34,7 +31,6 @@ export interface TableRegistry {
   users: typeof usersSchema.usersTable | typeof usersSchema.usersTableSqlite;
   apiKeys: typeof usersSchema.apiKeysTable | typeof usersSchema.apiKeysTableSqlite;
   customBots: typeof customBotsSchema.customBotsTable | typeof customBotsSchema.customBotsTableSqlite;
-  userBots: typeof userBotsSchema.userBotsTable | typeof userBotsSchema.userBotsTableSqlite;
   bots: typeof botsSchema.botsTable | typeof botsSchema.botsTableSqlite;
   backtests: typeof backtestsSchema.backtestsTable | typeof backtestsSchema.backtestsTableSqlite;
 }
@@ -59,7 +55,6 @@ export function getDatabase() {
       users: usersSchema.usersTableSqlite,
       apiKeys: usersSchema.apiKeysTableSqlite,
       customBots: customBotsSchema.customBotsTableSqlite,
-      userBots: userBotsSchema.userBotsTableSqlite,
       bots: botsSchema.botsTableSqlite,
       backtests: backtestsSchema.backtestsTableSqlite,
     };
@@ -78,7 +73,6 @@ export function getDatabase() {
       users: usersSchema.usersTable,
       apiKeys: usersSchema.apiKeysTable,
       customBots: customBotsSchema.customBotsTable,
-      userBots: userBotsSchema.userBotsTable,
       bots: botsSchema.botsTable,
       backtests: backtestsSchema.backtestsTable,
     };

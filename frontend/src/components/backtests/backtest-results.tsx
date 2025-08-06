@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
-import { MetricsSummary } from './metrics-summary';
-import { PlotsDisplay } from './plots-display';
-import { TablesDisplay } from './tables-display';
-import { Backtest } from '@/types/backtest';
-import { useBacktest } from '@/hooks/backtests/use-backtest';
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { MetricsSummary } from "./metrics-summary";
+import { PlotsDisplay } from "./plots-display";
+import { TablesDisplay } from "./tables-display";
+import { Backtest } from "@/types/backtest";
+import { useBacktest } from "@/hooks/backtests/use-backtest";
 import {
   BarChart3,
   AlertCircle,
@@ -20,20 +20,20 @@ import {
   Loader2,
   RefreshCcw,
   AlertTriangle,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface BacktestResultsProps {
   backtest: Backtest;
 }
 
 const ConfigurationSummary = ({ config }: { config: any }) => {
-  const flattenConfig = (obj: any, prefix = ''): Array<[string, any]> => {
+  const flattenConfig = (obj: any, prefix = ""): Array<[string, any]> => {
     const result: Array<[string, any]> = [];
 
     Object.entries(obj || {}).forEach(([key, value]) => {
       const fullKey = prefix ? `${prefix}/${key}` : key;
 
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
         result.push(...flattenConfig(value, fullKey));
       } else {
         result.push([fullKey, value]);
@@ -48,12 +48,12 @@ const ConfigurationSummary = ({ config }: { config: any }) => {
 
   return flattenConfig(config)
     .filter(
-      ([key]) => !['type', 'version'].includes(key) && !sensitiveKeys.test(key),
+      ([key]) => !["type", "version"].includes(key) && !sensitiveKeys.test(key),
     )
     .map(([key, value]) => (
       <div key={key}>
         <p className="text-sm font-medium text-muted-foreground capitalize">
-          {key.replace(/([A-Z])/g, ' $1').trim()}
+          {key.replace(/([A-Z])/g, " $1").trim()}
         </p>
         <p className="text-sm">
           {value == null ? (
@@ -68,18 +68,22 @@ const ConfigurationSummary = ({ config }: { config: any }) => {
 
 export function BacktestResults({ backtest }: BacktestResultsProps) {
   // Use the enhanced hook to get backtest data
-  const { backtest: backtestData, loading, error, refetch } =
-    useBacktest(backtest.id);
+  const {
+    backtest: backtestData,
+    loading,
+    error,
+    refetch,
+  } = useBacktest(backtest.id);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed':
+      case "completed":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'running':
+      case "running":
         return <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />;
-      case 'pending':
+      case "pending":
         return <Clock className="h-4 w-4 text-yellow-600" />;
-      case 'failed':
+      case "failed":
         return <XCircle className="h-4 w-4 text-red-600" />;
       default:
         return <AlertCircle className="h-4 w-4 text-gray-600" />;
@@ -88,43 +92,43 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'default';
-      case 'running':
-        return 'secondary';
-      case 'pending':
-        return 'outline';
-      case 'failed':
-        return 'destructive';
+      case "completed":
+        return "default";
+      case "running":
+        return "secondary";
+      case "pending":
+        return "outline";
+      case "failed":
+        return "destructive";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
   const getErrorMessage = () => {
     const analysis = backtestData?.analysis || backtest.analysis;
-    return analysis?.status === 'error' ? analysis.message : null;
+    return analysis?.status === "error" ? analysis.message : null;
   };
 
   const getStatusMessage = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'Backtest completed successfully. Results are ready for analysis.';
-      case 'running':
-        return 'Backtest is currently running. Please wait for completion.';
-      case 'pending':
-        return 'Backtest is queued for execution. It will start shortly.';
-      case 'failed':
-        return 'Backtest failed to complete. Please check the configuration and try again.';
+      case "completed":
+        return "Backtest completed successfully. Results are ready for analysis.";
+      case "running":
+        return "Backtest is currently running. Please wait for completion.";
+      case "pending":
+        return "Backtest is queued for execution. It will start shortly.";
+      case "failed":
+        return "Backtest failed to complete. Please check the configuration and try again.";
       default:
-        return 'Unknown backtest status.';
+        return "Unknown backtest status.";
     }
   };
 
   // Show status for non-completed backtests
-  if (backtest.status !== 'completed') {
+  if (backtest.status !== "completed") {
     const errorMessage =
-      backtest.status === 'failed' ? getErrorMessage() : null;
+      backtest.status === "failed" ? getErrorMessage() : null;
 
     return (
       <div className="space-y-6">
@@ -162,7 +166,7 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
                 </div>
               )}
 
-              {backtest.status === 'running' && (
+              {backtest.status === "running" && (
                 <p className="text-xs text-muted-foreground">
                   This page will automatically update when results are
                   available.
@@ -192,12 +196,12 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
                 <p className="text-sm">v{backtest.config.version}</p>
               </div>
               {Object.entries(backtest.config)
-                .filter(([key]) => !['type', 'version'].includes(key))
+                .filter(([key]) => !["type", "version"].includes(key))
                 .slice(0, 6)
                 .map(([key, value]) => (
                   <div key={key}>
                     <p className="text-sm font-medium text-muted-foreground capitalize">
-                      {key.replace(/([A-Z])/g, ' $1').trim()}
+                      {key.replace(/([A-Z])/g, " $1").trim()}
                     </p>
                     <p className="text-sm">{String(value)}</p>
                   </div>
@@ -210,7 +214,7 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
   }
 
   // Show analysis loading state for completed backtests
-  if (backtest.status === 'completed' && loading) {
+  if (backtest.status === "completed" && loading) {
     return (
       <Card>
         <CardContent className="py-8">
@@ -229,7 +233,7 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
   }
 
   // Show analysis error state
-  if (backtest.status === 'completed' && error) {
+  if (backtest.status === "completed" && error) {
     return (
       <Card>
         <CardContent className="py-8">
@@ -237,14 +241,8 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
             <AlertTriangle className="h-12 w-12 mx-auto text-amber-500" />
             <div>
               <h3 className="font-medium mb-2">Failed to Load Analysis</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {error}
-              </p>
-              <Button
-                onClick={refetch}
-                variant="outline"
-                className="gap-2"
-              >
+              <p className="text-sm text-muted-foreground mb-4">{error}</p>
+              <Button onClick={refetch} variant="outline" className="gap-2">
                 <RefreshCcw className="h-4 w-4" />
                 Try Again
               </Button>
@@ -259,7 +257,7 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
   const analysis = backtestData?.analysis || backtest.analysis;
 
   // Check if analysis contains an error (failed backtest with completed status)
-  if (analysis?.status === 'error') {
+  if (analysis?.status === "error") {
     return (
       <Card>
         <CardContent className="py-8">
@@ -292,12 +290,8 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
               <p className="text-sm text-muted-foreground mb-4">
                 Backtest completed but no analysis data is available.
               </p>
-              {backtest.status === 'completed' && (
-                <Button
-                  onClick={refetch}
-                  variant="outline"
-                  className="gap-2"
-                >
+              {backtest.status === "completed" && (
+                <Button onClick={refetch} variant="outline" className="gap-2">
                   <RefreshCcw className="h-4 w-4" />
                   Retry Analysis
                 </Button>
@@ -315,12 +309,11 @@ export function BacktestResults({ backtest }: BacktestResultsProps) {
   return (
     <div className="space-y-6">
       {/* Analysis Error Alert (when we have partial data) */}
-      {backtest.status === 'completed' && error && analysis && (
+      {backtest.status === "completed" && error && analysis && (
         <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-900/20">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-800 dark:text-amber-300">
-            Some analysis data may be incomplete due to an error:{' '}
-            {error}
+            Some analysis data may be incomplete due to an error: {error}
           </AlertDescription>
         </Alert>
       )}

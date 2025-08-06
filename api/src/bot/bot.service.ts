@@ -8,7 +8,7 @@ import { Failure, Ok, Result } from '@/common/result';
 import { BotValidator } from './bot.validator';
 import { CustomBotService } from '@/custom-bot/custom-bot.service';
 import { CustomBot, BotType } from '@/custom-bot/custom-bot.types';
-import { UserBotsService } from '@/user-bots/user-bots.service';
+// UserBotsService removed for OSS version
 import { NatsService } from '@/nats/nats.service';
 import * as semver from 'semver';
 import { BOT_TYPE_PATTERN, BOT_TOPICS, SCHEDULED_BOT_TOPICS } from '@/bot/bot.constants';
@@ -20,7 +20,7 @@ export class BotService {
     private readonly botRepository: BotRepository,
     private readonly botValidator: BotValidator,
     private readonly customBotService: CustomBotService,
-    private readonly userBotsService: UserBotsService,
+    // UserBotsService removed for OSS version
     private readonly natsService: NatsService,
   ) {}
 
@@ -309,54 +309,8 @@ export class BotService {
         }
       }
 
-      // Check if the bot is free
-      if (customBot.marketplace?.price === 0) {
-        // Free bot - any free bot can be deployed
-        const hasBot = await this.userBotsService.hasUserBot(
-          userId,
-          customBot.name,
-        );
-
-        if (!hasBot.success) {
-          return Failure(
-            `Failed to check if user owns the bot: ${hasBot.error}`,
-          );
-        }
-
-        if (hasBot.data) {
-          return Ok(null);
-        }
-
-        // User does not own the bot, but it's free, so let's add it to their account
-        const installResult = await this.userBotsService.install(
-          customBot.name,
-        );
-
-        if (!installResult.success) {
-          return Failure(
-            `Failed to install free bot for user: ${installResult.error}`,
-          );
-        }
-
-        return Ok(null);
-      }
-
-      // Paid bot - check if user has purchased it
-      const hasBot = await this.userBotsService.hasUserBot(
-        userId,
-        customBot.name,
-      );
-      if (!hasBot.success) {
-        return Failure(
-          `Failed to check if user has purchased the bot: ${hasBot.error}`,
-        );
-      }
-
-      if (!hasBot.data) {
-        return Failure(
-          `You must purchase the bot '${customBot.name}' before deploying it. Please visit the marketplace to buy it.`,
-        );
-      }
+      // OSS version - all bots are free and accessible
+      // No need to check user ownership or payment in the open source version
 
       return { success: true, error: null, data: null };
     } catch (error: any) {

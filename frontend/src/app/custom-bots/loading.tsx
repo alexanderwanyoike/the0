@@ -1,6 +1,6 @@
-import React from 'react';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Skeleton } from '@/components/ui/skeleton';
+import React from "react";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function BotDetailLoading() {
   return (

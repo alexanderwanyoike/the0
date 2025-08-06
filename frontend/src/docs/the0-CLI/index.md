@@ -1,6 +1,6 @@
 ---
-title: 'the0 CLI'
-description: 'Command-line interface for the0 platform'
+title: "the0 CLI"
+description: "Command-line interface for the0 platform"
 order: 3
 ---
 
@@ -17,7 +17,6 @@ The command-line interface for interacting with the the0 platform. Create, deplo
 
 - **[Bot Commands](./bot-commands)** - Create and manage bots
 - **[Custom Bot Commands](./bot-commands)** - Create and manage custom bots
-- **[User Bot Commands](./user-bot-commands)** - Create and manage user bots
 
 ## CLI Reference
 

@@ -1,14 +1,14 @@
-import '@testing-library/jest-dom';
+import "@testing-library/jest-dom";
 
 // Polyfill for userEvent
-import 'whatwg-fetch';
-import { TextEncoder, TextDecoder } from 'util';
+import "whatwg-fetch";
+import { TextEncoder, TextDecoder } from "util";
 global.TextEncoder = TextEncoder;
 //@ts-ignore
 global.TextDecoder = TextDecoder;
 
 // Mock matchMedia for tests
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: jest.fn().mockImplementation((query) => ({
     matches: false,
@@ -23,57 +23,57 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Setup MSW for API mocking
-import { setupServer } from 'msw/node';
-import { http, HttpResponse } from 'msw';
+import { setupServer } from "msw/node";
+import { http, HttpResponse } from "msw";
 
 // API mocking setup
 const server = setupServer(
-  http.get('/api/users/:id', ({ params }) => {
+  http.get("/api/users/:id", ({ params }) => {
     return HttpResponse.json({
       success: true,
       data: {
         id: params.id,
-        email: 'test@example.com',
-        displayName: 'Test User',
+        email: "test@example.com",
+        displayName: "Test User",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         isActive: true,
         isEmailVerified: true,
-      }
-    });
-  }),
-  
-  http.post('/api/users', () => {
-    return HttpResponse.json({
-      success: true,
-      data: { 
-        id: 'new-user-id', 
-        email: 'test@example.com',
-        displayName: 'Test User',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isActive: true,
-        isEmailVerified: true,
-      }
+      },
     });
   }),
 
-  http.put('/api/users/:id', () => {
+  http.post("/api/users", () => {
     return HttpResponse.json({
       success: true,
-      data: { 
-        id: 'user-id', 
-        email: 'test@example.com',
-        displayName: 'Updated User',
+      data: {
+        id: "new-user-id",
+        email: "test@example.com",
+        displayName: "Test User",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         isActive: true,
         isEmailVerified: true,
-      }
+      },
     });
   }),
 
-  http.delete('/api/users/:id', () => {
+  http.put("/api/users/:id", () => {
+    return HttpResponse.json({
+      success: true,
+      data: {
+        id: "user-id",
+        email: "test@example.com",
+        displayName: "Updated User",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isActive: true,
+        isEmailVerified: true,
+      },
+    });
+  }),
+
+  http.delete("/api/users/:id", () => {
     return HttpResponse.json({ success: true });
   }),
 );
@@ -83,7 +83,7 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 // Mock Next.js router
-jest.mock('next/navigation', () => ({
+jest.mock("next/navigation", () => ({
   useRouter: () => ({
     push: jest.fn(),
     replace: jest.fn(),
@@ -92,13 +92,13 @@ jest.mock('next/navigation', () => ({
     forward: jest.fn(),
     prefetch: jest.fn(),
   }),
-  usePathname: () => '/test-path',
+  usePathname: () => "/test-path",
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({}),
 }));
 
 // Mock Next.js Image component
-jest.mock('next/image', () => ({
+jest.mock("next/image", () => ({
   __esModule: true,
   default: function Image(props: any) {
     return props;
@@ -106,8 +106,8 @@ jest.mock('next/image', () => ({
 }));
 
 // Mock environment variables commonly used in tests
-process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3001';
-process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
+process.env.NEXT_PUBLIC_API_URL = "http://localhost:3001";
+process.env.JWT_SECRET = "test-jwt-secret-key-for-testing-only";
 
 // Mock console methods to reduce noise in tests
 const originalError = console.error;
@@ -117,9 +117,9 @@ beforeAll(() => {
   console.error = jest.fn((...args) => {
     // Only show errors that aren't React act() warnings
     if (
-      typeof args[0] === 'string' &&
-      !args[0].includes('Warning: An update to') &&
-      !args[0].includes('act()')
+      typeof args[0] === "string" &&
+      !args[0].includes("Warning: An update to") &&
+      !args[0].includes("act()")
     ) {
       originalError(...args);
     }

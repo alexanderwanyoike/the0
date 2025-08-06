@@ -1,11 +1,10 @@
 package entrypoints
 
 import (
-    "fmt"
-    "strings"
-    "text/template"
+	"fmt"
+	"strings"
+	"text/template"
 )
-
 
 const nodeBashEntrypoint = `#!/bin/bash
 #!/bin/sh
@@ -61,55 +60,54 @@ exec python3 /tmp/python_entrypoint.py
 `
 
 type bashEntrypointFactory struct {
-        EntryPointType string
-        ScriptContent  string
-        BotId          string
-        BotConfig      string
-        ScriptPath     string
+	EntryPointType string
+	ScriptContent  string
+	BotId          string
+	BotConfig      string
+	ScriptPath     string
 }
 
 func NewBashEntrypointFactory(
-    entryPointType, scriptContent, botId, botConfig, scriptPath string,
+	entryPointType, scriptContent, botId, botConfig, scriptPath string,
 ) *bashEntrypointFactory {
-    // Add logging for debugging
-    fmt.Printf("ENTRYPOINT_FACTORY: Creating bash entrypoint factory\n")
-    fmt.Printf("ENTRYPOINT_FACTORY: EntryPointType=%s\n", entryPointType)
-    fmt.Printf("ENTRYPOINT_FACTORY: BotId=%s\n", botId)
-    fmt.Printf("ENTRYPOINT_FACTORY: ScriptPath=%s\n", scriptPath)
-    
-    return &bashEntrypointFactory{
-        EntryPointType: entryPointType,
-        ScriptContent:  scriptContent,
-        BotId:          botId,
-        BotConfig:      botConfig,
-        ScriptPath:     scriptPath,
-    }
+	// Add logging for debugging
+	fmt.Printf("ENTRYPOINT_FACTORY: Creating bash entrypoint factory\n")
+	fmt.Printf("ENTRYPOINT_FACTORY: EntryPointType=%s\n", entryPointType)
+	fmt.Printf("ENTRYPOINT_FACTORY: BotId=%s\n", botId)
+	fmt.Printf("ENTRYPOINT_FACTORY: ScriptPath=%s\n", scriptPath)
+
+	return &bashEntrypointFactory{
+		EntryPointType: entryPointType,
+		ScriptContent:  scriptContent,
+		BotId:          botId,
+		BotConfig:      botConfig,
+		ScriptPath:     scriptPath,
+	}
 }
 
-
 func (p *bashEntrypointFactory) BuildBashEntrypoint(
-    runtime string,
+	runtime string,
 ) (string, error) {
-    var selectedEntrypoint string
-    switch {
-    case runtime == "nodejs20":
-        selectedEntrypoint = nodeBashEntrypoint
-    case runtime == "python3.11":
-        selectedEntrypoint = pythonBashEntrypoint
-    // Add more cases for other runtimes as needed
-    default:
-        return "", fmt.Errorf("unsupported runtime: %s", runtime)
-    }
+	var selectedEntrypoint string
+	switch {
+	case runtime == "nodejs20":
+		selectedEntrypoint = nodeBashEntrypoint
+	case runtime == "python3.11":
+		selectedEntrypoint = pythonBashEntrypoint
+	// Add more cases for other runtimes as needed
+	default:
+		return "", fmt.Errorf("unsupported runtime: %s", runtime)
+	}
 
-    tmpl, err := template.New("bashEntrypoint").Parse(selectedEntrypoint)
-    if err != nil {
-        return "", fmt.Errorf("failed to parse bash entrypoint template: %w", err)
-    }
-    var result strings.Builder
-    err = tmpl.Execute(&result, p)
-    if err != nil {
-        return "", fmt.Errorf("failed to execute bash entrypoint template: %w", err)
-    }
-    
-    return result.String(), nil
+	tmpl, err := template.New("bashEntrypoint").Parse(selectedEntrypoint)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse bash entrypoint template: %w", err)
+	}
+	var result strings.Builder
+	err = tmpl.Execute(&result, p)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute bash entrypoint template: %w", err)
+	}
+
+	return result.String(), nil
 }

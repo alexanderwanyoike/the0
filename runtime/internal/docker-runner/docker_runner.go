@@ -121,7 +121,7 @@ type LogCaptureMetrics struct {
 
 type dockerRunner struct {
 	dockerClient      *client.Client
-	resultsBucket 		string
+	resultsBucket     string
 	minioClient       *minio.Client
 	logger            util.Logger
 	tempDir           string
@@ -208,8 +208,8 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 		resultsBucket:     resultsBucket,
 		logCollectorStop:  make(chan bool),
 
-		logCollectorDone:  make(chan bool),
-		metrics:           &LogCaptureMetrics{},
+		logCollectorDone: make(chan bool),
+		metrics:          &LogCaptureMetrics{},
 	}
 
 	// Start background log collector for long-running containers
@@ -415,14 +415,14 @@ func (r *dockerRunner) createEntrypointScript(executable model.Executable, botDi
 	r.logger.Info("DOCKER_RUNNER: Creating entrypoint script", "bot_id", executable.ID)
 	r.logger.Info("DOCKER_RUNNER: Entrypoint type", "entrypoint", executable.Entrypoint)
 	r.logger.Info("DOCKER_RUNNER: Available EntrypointFiles", "files", executable.EntrypointFiles)
-	
+
 	// Get the script path from entrypoints
 	scriptPath, exists := executable.EntrypointFiles[executable.Entrypoint]
 	if !exists {
 		r.logger.Error("DOCKER_RUNNER: Entrypoint not found", "entrypoint", executable.Entrypoint, "available", executable.EntrypointFiles)
 		return "", fmt.Errorf("entrypoint '%s' not found in executable configuration", executable.Entrypoint)
 	}
-	
+
 	r.logger.Info("DOCKER_RUNNER: Found script path", "script_path", scriptPath, "entrypoint", executable.Entrypoint)
 
 	runtime := executable.Runtime
@@ -538,6 +538,9 @@ func (r *dockerRunner) Close() error {
 		<-r.logCollectorDone
 	}
 
+	// Clean up managed containers
+	r.cleanupManagedContainers()
+
 	// Close MinIO logger
 	if r.minioLogger != nil {
 		r.minioLogger.Close()
@@ -548,6 +551,47 @@ func (r *dockerRunner) Close() error {
 		return r.dockerClient.Close()
 	}
 	return nil
+}
+
+// cleanupManagedContainers stops and removes all containers that are still being tracked
+func (r *dockerRunner) cleanupManagedContainers() {
+	r.containersMutex.Lock()
+	containerIDs := make([]string, 0, len(r.managedContainers))
+	for containerID := range r.managedContainers {
+		containerIDs = append(containerIDs, containerID)
+	}
+	r.containersMutex.Unlock()
+
+	if len(containerIDs) == 0 {
+		return // Nothing to clean up
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for _, containerID := range containerIDs {
+		// Try to stop the container gracefully first
+		timeout := 5 // 5 second timeout for graceful shutdown
+		if err := r.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout}); err != nil {
+			// Container might already be stopped or not exist, log but continue
+			util.LogWorker("Warning: Failed to stop container during cleanup - container_id: %s, error: %v", containerID, err)
+		}
+		
+		// Force remove the container to ensure cleanup
+		if err := r.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
+			// Container might already be removed, log but continue
+			util.LogWorker("Warning: Failed to remove container during cleanup - container_id: %s, error: %v", containerID, err)
+		} else {
+			util.LogWorker("Cleaned up container during shutdown - container_id: %s", containerID)
+		}
+	}
+
+	// Clear the managed containers map
+	r.containersMutex.Lock()
+	r.managedContainers = make(map[string]*ContainerInfo)
+	r.containersMutex.Unlock()
+
+	util.LogWorker("Completed cleanup of %d managed containers", len(containerIDs))
 }
 
 // StartContainer starts a bot as a long-running container
@@ -855,9 +899,11 @@ func (r *dockerRunner) ListManagedContainers(ctx context.Context, segment int32)
 		if botId == "" {
 			continue // Skip containers without bot ID label
 		}
+		entrypoint := container.Labels["runtime.entrypoint"]
 		result = append(result, &ContainerInfo{
 			ContainerID: container.ID,
 			ID:          botId,
+			Entrypoint:  entrypoint,
 			Status:      container.State,
 		})
 	}
@@ -926,7 +972,7 @@ func (r *dockerRunner) createLongRunningContainer(ctx context.Context, imageName
 
 	volumeMount := fmt.Sprintf("%s:/%s", botDir, executable.Entrypoint)
 	r.logger.Info("DOCKER_RUNNER: Configuring volume mount", "mount", volumeMount, "bot_dir", botDir, "entrypoint", executable.Entrypoint)
-	
+
 	hostConfig := &container.HostConfig{
 		Binds: []string{
 			volumeMount,
@@ -1013,7 +1059,7 @@ func (r *dockerRunner) createTerminatingContainer(ctx context.Context, imageName
 
 	volumeMount := fmt.Sprintf("%s:/%s", directory, executable.Entrypoint)
 	r.logger.Info("DOCKER_RUNNER: Configuring terminating container mount", "mount", volumeMount, "directory", directory, "entrypoint", executable.Entrypoint)
-	
+
 	hostConfig := &container.HostConfig{
 		Binds: []string{
 			volumeMount,
@@ -1061,7 +1107,7 @@ func (r *dockerRunner) createTerminatingContainer(ctx context.Context, imageName
 		if err != nil {
 			logs = fmt.Sprintf("Failed to get logs: %v", err)
 		}
-		
+
 		// Log container output for debugging
 		r.logger.Info("Container logs", "container_id", resp.ID, "exit_code", status.StatusCode, "logs", logs)
 
@@ -1304,7 +1350,6 @@ func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, re
 
 	return nil
 }
-
 
 // --- Metrics Methods ---
 

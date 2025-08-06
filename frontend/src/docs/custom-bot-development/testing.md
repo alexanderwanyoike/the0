@@ -1,7 +1,7 @@
 ---
-title: 'Testing'
-description: 'Comprehensive testing strategies for custom bots'
-tags: ['custom-bots', 'testing', 'debugging', 'validation']
+title: "Testing"
+description: "Comprehensive testing strategies for custom bots"
+tags: ["custom-bots", "testing", "debugging", "validation"]
 order: 5
 ---
 

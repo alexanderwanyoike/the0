@@ -1,4 +1,4 @@
-import type { PlatformId, InstallConfig } from '@/types/install';
+import type { PlatformId, InstallConfig } from "@/types/install";
 
 // URL generation and mapping configuration
 export class InstallUrlGenerator {
@@ -10,12 +10,12 @@ export class InstallUrlGenerator {
     this.baseUrl =
       config.baseUrl ||
       process.env.CLI_DOWNLOAD_BASE_URL ||
-      'https://github.com/theo-cli/theo/releases/latest/download';
+      "https://github.com/theo-cli/theo/releases/latest/download";
     this.installBaseUrl =
       config.installBaseUrl ||
       process.env.CLI_INSTALL_BASE_URL ||
-      (typeof window !== 'undefined' ? window.location.origin : '');
-    this.channel = 'latest'; // Default to latest stable release
+      (typeof window !== "undefined" ? window.location.origin : "");
+    this.channel = "latest"; // Default to latest stable release
   }
 
   // Generate download URL for binary
@@ -33,7 +33,7 @@ export class InstallUrlGenerator {
   getInstallCommand(platformId: PlatformId): string {
     const scriptUrl = this.getScriptUrl(platformId);
 
-    if (platformId.startsWith('windows')) {
+    if (platformId.startsWith("windows")) {
       return `iwr ${scriptUrl} -useb | iex`;
     } else {
       return `curl -fsSL ${scriptUrl} | bash`;
@@ -42,9 +42,9 @@ export class InstallUrlGenerator {
 
   // Get binary name for platform
   private getBinaryName(platformId: PlatformId): string {
-    const baseName = 'the0';
+    const baseName = "the0";
 
-    if (platformId.startsWith('windows')) {
+    if (platformId.startsWith("windows")) {
       return `${baseName}-${platformId}.exe`;
     } else {
       return `${baseName}-${platformId}`;
@@ -76,69 +76,69 @@ export class InstallUrlGenerator {
     const alternatives = [];
 
     // Homebrew for macOS
-    if (platformId.startsWith('darwin')) {
+    if (platformId.startsWith("darwin")) {
       alternatives.push({
-        method: 'homebrew',
-        title: 'Homebrew',
-        description: 'Install via Homebrew package manager',
-        command: 'brew install theo-cli',
+        method: "homebrew",
+        title: "Homebrew",
+        description: "Install via Homebrew package manager",
+        command: "brew install theo-cli",
         available: false, // Not yet available
       });
     }
 
     // Chocolatey for Windows
-    if (platformId.startsWith('windows')) {
+    if (platformId.startsWith("windows")) {
       alternatives.push({
-        method: 'chocolatey',
-        title: 'Chocolatey',
-        description: 'Install via Chocolatey package manager',
-        command: 'choco install theo-cli',
+        method: "chocolatey",
+        title: "Chocolatey",
+        description: "Install via Chocolatey package manager",
+        command: "choco install theo-cli",
         available: false, // Not yet available
       });
 
       alternatives.push({
-        method: 'winget',
-        title: 'Windows Package Manager',
-        description: 'Install via winget',
-        command: 'winget install theo-cli',
+        method: "winget",
+        title: "Windows Package Manager",
+        description: "Install via winget",
+        command: "winget install theo-cli",
         available: false, // Not yet available
       });
     }
 
     // Snap for Linux
-    if (platformId.startsWith('linux')) {
+    if (platformId.startsWith("linux")) {
       alternatives.push({
-        method: 'snap',
-        title: 'Snap Package',
-        description: 'Install via Snap package manager',
-        command: 'sudo snap install theo-cli',
+        method: "snap",
+        title: "Snap Package",
+        description: "Install via Snap package manager",
+        command: "sudo snap install theo-cli",
         available: false, // Not yet available
       });
 
       alternatives.push({
-        method: 'apt',
-        title: 'APT Repository',
-        description: 'Install via APT package manager (Debian/Ubuntu)',
-        command: 'sudo apt install theo-cli',
+        method: "apt",
+        title: "APT Repository",
+        description: "Install via APT package manager (Debian/Ubuntu)",
+        command: "sudo apt install theo-cli",
         available: false, // Not yet available
       });
     }
 
     // Docker (available for all platforms)
     alternatives.push({
-      method: 'docker',
-      title: 'Docker',
-      description: 'Run THE0 CLI in a Docker container',
-      command: 'docker run --rm -it theo/cli:latest',
+      method: "docker",
+      title: "Docker",
+      description: "Run THE0 CLI in a Docker container",
+      command: "docker run --rm -it theo/cli:latest",
       available: false, // Not yet available
     });
 
     // NPM global install (if available)
     alternatives.push({
-      method: 'npm',
-      title: 'NPM Global Install',
-      description: 'Install globally via npm',
-      command: 'npm install -g @theo/cli',
+      method: "npm",
+      title: "NPM Global Install",
+      description: "Install globally via npm",
+      command: "npm install -g @theo/cli",
       available: false, // Not yet available
     });
 
@@ -158,29 +158,29 @@ export const PLATFORM_URLS: Record<
     docs: string;
   }
 > = {
-  'darwin-amd64': {
-    binary: urlGenerator.getBinaryDownloadUrl('darwin-amd64'),
-    script: urlGenerator.getScriptUrl('darwin-amd64'),
+  "darwin-amd64": {
+    binary: urlGenerator.getBinaryDownloadUrl("darwin-amd64"),
+    script: urlGenerator.getScriptUrl("darwin-amd64"),
     docs: `${process.env.NEXT_BASE_URL}/docs/the0-CLI/installation`,
   },
-  'darwin-arm64': {
-    binary: urlGenerator.getBinaryDownloadUrl('darwin-arm64'),
-    script: urlGenerator.getScriptUrl('darwin-arm64'),
+  "darwin-arm64": {
+    binary: urlGenerator.getBinaryDownloadUrl("darwin-arm64"),
+    script: urlGenerator.getScriptUrl("darwin-arm64"),
     docs: `${process.env.NEXT_BASE_URL}/docs/the0-CLI/installation`,
   },
-  'linux-amd64': {
-    binary: urlGenerator.getBinaryDownloadUrl('linux-amd64'),
-    script: urlGenerator.getScriptUrl('linux-amd64'),
+  "linux-amd64": {
+    binary: urlGenerator.getBinaryDownloadUrl("linux-amd64"),
+    script: urlGenerator.getScriptUrl("linux-amd64"),
     docs: `${process.env.NEXT_BASE_URL}/docs/the0-CLI/installation`,
   },
-  'linux-arm64': {
-    binary: urlGenerator.getBinaryDownloadUrl('linux-arm64'),
-    script: urlGenerator.getScriptUrl('linux-arm64'),
+  "linux-arm64": {
+    binary: urlGenerator.getBinaryDownloadUrl("linux-arm64"),
+    script: urlGenerator.getScriptUrl("linux-arm64"),
     docs: `${process.env.NEXT_BASE_URL}/docs/the0-CLI/installation`,
   },
-  'windows-amd64': {
-    binary: urlGenerator.getBinaryDownloadUrl('windows-amd64'),
-    script: urlGenerator.getScriptUrl('windows-amd64'),
+  "windows-amd64": {
+    binary: urlGenerator.getBinaryDownloadUrl("windows-amd64"),
+    script: urlGenerator.getScriptUrl("windows-amd64"),
     docs: `${process.env.NEXT_BASE_URL}/docs/the0-CLI/installation`,
   },
 };
@@ -192,8 +192,8 @@ export function generatePlatformCommands(platformId: PlatformId): {
   manualSteps: string[];
   verification: string[];
 } {
-  const isWindows = platformId.startsWith('windows');
-  const binaryName = isWindows ? 'the0.exe' : 'the0';
+  const isWindows = platformId.startsWith("windows");
+  const binaryName = isWindows ? "the0.exe" : "the0";
   const scriptUrl = urlGenerator.getScriptUrl(platformId);
   const binaryUrl = urlGenerator.getBinaryDownloadUrl(platformId);
 
@@ -203,17 +203,17 @@ export function generatePlatformCommands(platformId: PlatformId): {
       scriptDownload: `iwr ${scriptUrl} -OutFile install.ps1; .\\install.ps1`,
       manualSteps: [
         `Download the binary from: ${binaryUrl}`,
-        'Create a directory: C:\\Program Files\\THE0',
-        'Move the downloaded file to: C:\\Program Files\\THE0\\the0.exe',
-        'Add C:\\Program Files\\THE0 to your PATH environment variable',
-        'Restart your terminal or PowerShell session',
+        "Create a directory: C:\\Program Files\\THE0",
+        "Move the downloaded file to: C:\\Program Files\\THE0\\the0.exe",
+        "Add C:\\Program Files\\THE0 to your PATH environment variable",
+        "Restart your terminal or PowerShell session",
       ],
-      verification: ['the0 --version', 'the0 --help', 'the0 auth login'],
+      verification: ["the0 --version", "the0 --help", "the0 auth login"],
     };
   } else {
-    const installDir = platformId.startsWith('darwin')
-      ? '/usr/local/bin'
-      : '/usr/local/bin';
+    const installDir = platformId.startsWith("darwin")
+      ? "/usr/local/bin"
+      : "/usr/local/bin";
 
     return {
       oneLiner: `curl -fsSL ${scriptUrl} | bash`,
@@ -222,9 +222,9 @@ export function generatePlatformCommands(platformId: PlatformId): {
         `Download the binary: curl -fsSL ${binaryUrl} -o ${binaryName}`,
         `Make it executable: chmod +x ${binaryName}`,
         `Move to system path: sudo mv ${binaryName} ${installDir}/`,
-        'Verify installation with: the0 --version',
+        "Verify installation with: the0 --version",
       ],
-      verification: ['the0 --version', 'the0 --help', 'the0 auth login'],
+      verification: ["the0 --version", "the0 --help", "the0 auth login"],
     };
   }
 }
@@ -235,12 +235,12 @@ export function getTroubleshootingUrls(platformId: PlatformId): {
   platform: string;
   community: string;
 } {
-  const baseDocsUrl = 'https://the0.dev/docs/the0-CLI';
+  const baseDocsUrl = "https://the0.dev/docs/the0-CLI";
 
   return {
     general: `${baseDocsUrl}/installation`,
     platform: PLATFORM_URLS[platformId].docs,
-    community: 'https://discord.gg/qafCfTA5',
+    community: "https://discord.gg/qafCfTA5",
   };
 }
 

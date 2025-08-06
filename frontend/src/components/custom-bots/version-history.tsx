@@ -4,11 +4,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { GitBranch, Package, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import React, { useState } from 'react';
+} from "@/components/ui/card";
+import { GitBranch, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import React, { useState } from "react";
 
 export const VersionHistory = ({
   versions,
@@ -59,8 +59,8 @@ export const VersionHistory = ({
               key={version.version}
               className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
                 selectedVersion === version.version
-                  ? 'bg-primary/5 border-primary'
-                  : 'hover:bg-muted/50'
+                  ? "bg-primary/5 border-primary"
+                  : "hover:bg-muted/50"
               }`}
               onClick={() => onVersionChange(version.version)}
             >
@@ -77,14 +77,14 @@ export const VersionHistory = ({
               </div>
               <Badge
                 variant={
-                  version.status === 'approved'
-                    ? 'default'
-                    : version.status === 'declined'
-                      ? 'destructive'
-                      : 'secondary'
+                  version.status === "approved"
+                    ? "default"
+                    : version.status === "declined"
+                      ? "destructive"
+                      : "secondary"
                 }
               >
-                {version.status?.replace('_', ' ') || 'pending'}
+                {version.status?.replace("_", " ") || "pending"}
               </Badge>
             </div>
           ))}

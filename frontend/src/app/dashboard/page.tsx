@@ -1,8 +1,8 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { BotService, Bot as ApiBot } from '@/lib/api/api-client';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { useAuth } from '@/contexts/auth-context';
+"use client";
+import { useEffect, useState } from "react";
+import { BotService, Bot as ApiBot } from "@/lib/api/api-client";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { useAuth } from "@/contexts/auth-context";
 import {
   Table,
   TableBody,
@@ -10,16 +10,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import cronstrue from 'cronstrue';
-import moment from 'moment';
-import { withAuth } from '@/components/auth/with-auth';
-import { useRouter } from 'next/navigation';
-import { Bot, Calendar, Clock, ExternalLink } from 'lucide-react';
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import cronstrue from "cronstrue";
+import moment from "moment";
+import { withAuth } from "@/components/auth/with-auth";
+import { useRouter } from "next/navigation";
+import { Bot, Calendar, Clock, ExternalLink } from "lucide-react";
 
 interface BotConfig {
   type: string;
@@ -37,7 +37,7 @@ interface DashboardBot extends ApiBot {
 // Mobile Bot Card Component
 const BotCard = ({ bot }: { bot: ApiBot }) => {
   const getReadableSchedule = (schedule: string | undefined) => {
-    if (!schedule) return 'Real-time';
+    if (!schedule) return "Real-time";
     try {
       return cronstrue.toString(schedule);
     } catch {
@@ -66,10 +66,10 @@ const BotCard = ({ bot }: { bot: ApiBot }) => {
           </div>
           <div className="flex flex-wrap gap-1.5">
             <Badge variant="secondary" className="text-xs font-mono">
-              {(bot.config as any)?.symbol || 'N/A'}
+              {(bot.config as any)?.symbol || "N/A"}
             </Badge>
             <Badge variant="outline" className="text-xs truncate">
-              {(bot.config as any)?.type || 'Bot'}
+              {(bot.config as any)?.type || "Bot"}
             </Badge>
           </div>
         </div>
@@ -90,10 +90,10 @@ const BotCard = ({ bot }: { bot: ApiBot }) => {
                   Created
                 </div>
                 <div className="truncate">
-                  {moment(bot.createdAt).format('MMM D, YYYY')}
+                  {moment(bot.createdAt).format("MMM D, YYYY")}
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  {moment(bot.createdAt).format('h:mm A')}
+                  {moment(bot.createdAt).format("h:mm A")}
                 </div>
               </div>
               <div className="min-w-0 flex-1 text-right">
@@ -101,10 +101,10 @@ const BotCard = ({ bot }: { bot: ApiBot }) => {
                   Updated
                 </div>
                 <div className="truncate">
-                  {moment(bot.updatedAt).format('MMM D, YYYY')}
+                  {moment(bot.updatedAt).format("MMM D, YYYY")}
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  {moment(bot.updatedAt).format('h:mm A')}
+                  {moment(bot.updatedAt).format("h:mm A")}
                 </div>
               </div>
             </div>
@@ -154,7 +154,7 @@ const Dashboard = () => {
         setLoading(false);
         return;
       }
-      
+
       setLoading(true);
       try {
         const result = await BotService.getBots();
@@ -162,17 +162,17 @@ const Dashboard = () => {
           // API should already filter by user, no need for client-side filtering
           setBots(result.data);
         } else {
-          console.error('Error fetching bots:', result.error);
+          console.error("Error fetching bots:", result.error);
           // Add user-friendly error handling
           if (result.error.statusCode === 401) {
             // Handle unauthorized - user needs to log in again
-            console.warn('User unauthorized, redirecting to login');
+            console.warn("User unauthorized, redirecting to login");
           } else if (result.error.statusCode === 403) {
-            console.warn('User forbidden from accessing bots');
+            console.warn("User forbidden from accessing bots");
           }
         }
       } catch (error) {
-        console.error('Error fetching bots:', error);
+        console.error("Error fetching bots:", error);
       } finally {
         setLoading(false);
       }
@@ -182,7 +182,7 @@ const Dashboard = () => {
   }, [user]);
 
   const getReadableSchedule = (schedule: string | undefined) => {
-    if (!schedule) return 'Real-time';
+    if (!schedule) return "Real-time";
     try {
       return cronstrue.toString(schedule);
     } catch {
@@ -219,7 +219,7 @@ const Dashboard = () => {
                 Trading Bots
               </h2>
               <p className="text-xl sm:text-2xl font-semibold">
-                {bots.length} {bots.length === 1 ? 'bot' : 'bots'} running
+                {bots.length} {bots.length === 1 ? "bot" : "bots"} running
               </p>
             </div>
           </div>
@@ -270,14 +270,14 @@ const Dashboard = () => {
                           </Link>
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {(bot.config as any)?.symbol || 'N/A'}
+                          {(bot.config as any)?.symbol || "N/A"}
                         </TableCell>
                         <TableCell>
                           <Badge
                             variant="outline"
                             className="font-mono text-xs"
                           >
-                            {(bot.config as any)?.type || 'Bot'}
+                            {(bot.config as any)?.type || "Bot"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm">
@@ -286,24 +286,20 @@ const Dashboard = () => {
                         <TableCell className="text-sm">
                           <div className="space-y-1">
                             <div>
-                              {moment(bot.createdAt).format(
-                                'MMM D, YYYY',
-                              )}
+                              {moment(bot.createdAt).format("MMM D, YYYY")}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {moment(bot.createdAt).format('h:mm A')}
+                              {moment(bot.createdAt).format("h:mm A")}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="space-y-1">
                             <div>
-                              {moment(bot.updatedAt).format(
-                                'MMM D, YYYY',
-                              )}
+                              {moment(bot.updatedAt).format("MMM D, YYYY")}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {moment(bot.updatedAt).format('h:mm A')}
+                              {moment(bot.updatedAt).format("h:mm A")}
                             </div>
                           </div>
                         </TableCell>

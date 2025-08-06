@@ -1,14 +1,14 @@
-import '@/styles/globals.css';
-import { Inter as FontSans } from 'next/font/google';
-import { ThemeProvider } from '@/components/theme-provider';
-import { cn } from '@/lib/utils';
-import { AuthProvider } from '@/contexts/auth-context';
-import { Toaster } from '@/components/ui/toaster';
-import React from 'react';
+import "@/styles/globals.css";
+import { Inter as FontSans } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
+import { AuthProvider } from "@/contexts/auth-context";
+import { Toaster } from "@/components/ui/toaster";
+import React from "react";
 
 const fontSans = FontSans({
-  subsets: ['latin'],
-  variable: '--font-sans',
+  subsets: ["latin"],
+  variable: "--font-sans",
 });
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
       <head />
       <body
         className={cn(
-          'min-h-screen bg-background font-sans antialiased',
+          "min-h-screen bg-background font-sans antialiased",
           fontSans.variable,
         )}
       >

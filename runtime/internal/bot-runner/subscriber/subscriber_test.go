@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"runtime/internal/constants"
 	"runtime/internal/util"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDefaultOptions(t *testing.T) {

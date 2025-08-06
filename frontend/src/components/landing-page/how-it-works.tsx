@@ -1,29 +1,29 @@
-import { Code, TestTube, Container, BarChart3 } from 'lucide-react';
+import { Code, TestTube, Container, BarChart3 } from "lucide-react";
 
 const steps = [
   {
     icon: Code,
-    title: 'Develop',
+    title: "Develop",
     description:
-      'Create custom trading bots using Python or JavaScript with any libraries you prefer. Use our framework-agnostic approach to build everything from simple DCA strategies to complex multi-asset arbitrage algorithms.',
+      "Create custom trading bots using Python or JavaScript with any libraries you prefer. Use our framework-agnostic approach to build everything from simple DCA strategies to complex multi-asset arbitrage algorithms.",
   },
   {
     icon: TestTube,
-    title: 'Test',
+    title: "Test",
     description:
-      'Validate your strategies with comprehensive backtesting using historical data. Test different parameters, optimize performance, and ensure your algorithms work before deploying to live markets.',
+      "Validate your strategies with comprehensive backtesting using historical data. Test different parameters, optimize performance, and ensure your algorithms work before deploying to live markets.",
   },
   {
     icon: Container,
-    title: 'Deploy',
+    title: "Deploy",
     description:
-      'Launch your platform locally with Docker Compose in under 5 minutes. Deploy your bots for scheduled execution or real-time trading with full isolation and security.',
+      "Launch your platform locally with Docker Compose in under 5 minutes. Deploy your bots for scheduled execution or real-time trading with full isolation and security.",
   },
   {
     icon: BarChart3,
-    title: 'Monitor',
+    title: "Monitor",
     description:
-      'Track performance through the analytics dashboard. Monitor bot execution, analyze trading results, and get comprehensive insights into your automated trading portfolio.',
+      "Track performance through the analytics dashboard. Monitor bot execution, analyze trading results, and get comprehensive insights into your automated trading portfolio.",
   },
 ];
 

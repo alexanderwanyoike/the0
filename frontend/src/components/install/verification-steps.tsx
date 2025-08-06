@@ -1,25 +1,25 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CodeBlock } from './quick-copy-section';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CodeBlock } from "./quick-copy-section";
 import {
   CheckCircle,
   Circle,
   Terminal,
   ExternalLink,
   HelpCircle,
-} from 'lucide-react';
-import type { VerificationStepsProps, VerificationStep } from '@/types/install';
+} from "lucide-react";
+import type { VerificationStepsProps, VerificationStep } from "@/types/install";
 
 export function VerificationSteps({ platform }: VerificationStepsProps) {
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
@@ -56,7 +56,7 @@ export function VerificationSteps({ platform }: VerificationStepsProps) {
               is ready to use.
             </CardDescription>
           </div>
-          <Badge variant={allStepsCompleted ? 'default' : 'secondary'}>
+          <Badge variant={allStepsCompleted ? "default" : "secondary"}>
             {completedCount}/{steps.length} completed
           </Badge>
         </div>
@@ -155,7 +155,7 @@ function VerificationStepItem({
         <button
           onClick={onToggle}
           className="flex-shrink-0 mt-1"
-          aria-label={`Mark step ${stepNumber} as ${isCompleted ? 'incomplete' : 'complete'}`}
+          aria-label={`Mark step ${stepNumber} as ${isCompleted ? "incomplete" : "complete"}`}
         >
           {isCompleted ? (
             <CheckCircle className="h-5 w-5 text-green-600" />
@@ -167,7 +167,7 @@ function VerificationStepItem({
         <div className="flex-1 space-y-2">
           <div className="flex items-center justify-between">
             <h4
-              className={`font-medium ${isCompleted ? 'text-green-600' : ''}`}
+              className={`font-medium ${isCompleted ? "text-green-600" : ""}`}
             >
               {stepNumber}. {step.title}
             </h4>
@@ -252,31 +252,31 @@ export function CompactVerificationSteps({ platform }: VerificationStepsProps) {
 
 // Get verification steps based on platform
 function getVerificationSteps(platform?: string): VerificationStep[] {
-  const isWindows = platform?.toLowerCase().includes('windows');
-  const binaryName = isWindows ? 'the0.exe' : 'the0';
+  const isWindows = platform?.toLowerCase().includes("windows");
+  const binaryName = isWindows ? "the0.exe" : "the0";
 
   const baseSteps: VerificationStep[] = [
     {
-      id: 'check-version',
-      title: 'Check CLI Version',
+      id: "check-version",
+      title: "Check CLI Version",
       description:
-        'Verify that THE0 CLI is installed and accessible in your PATH.',
+        "Verify that THE0 CLI is installed and accessible in your PATH.",
       command: `${binaryName} --version`,
-      expectedOutput: 'the0 version 1.0.0',
+      expectedOutput: "the0 version 1.0.0",
     },
     {
-      id: 'check-help',
-      title: 'View Help Information',
+      id: "check-help",
+      title: "View Help Information",
       description:
-        'Confirm that the CLI is working and see available commands.',
+        "Confirm that the CLI is working and see available commands.",
       command: `${binaryName} --help`,
       expectedOutput:
-        'THE0 CLI - Manage your trading bots from the command line',
+        "THE0 CLI - Manage your trading bots from the command line",
     },
     {
-      id: 'check-auth-status',
-      title: 'Check Authentication Status',
-      description: 'See if you need to authenticate with your THE0 account.',
+      id: "check-auth-status",
+      title: "Check Authentication Status",
+      description: "See if you need to authenticate with your THE0 account.",
       command: `${binaryName} auth status`,
       expectedOutput: 'Not authenticated. Run "the0 auth login" to sign in.',
     },
@@ -285,19 +285,19 @@ function getVerificationSteps(platform?: string): VerificationStep[] {
   // Add platform-specific steps
   if (isWindows) {
     baseSteps.push({
-      id: 'check-path-windows',
-      title: 'Verify PATH Configuration',
-      description: 'Ensure THE0 CLI is available in new PowerShell sessions.',
-      command: 'Get-Command the0',
-      expectedOutput: 'C:\\Users\\username\\bin\\the0.exe',
+      id: "check-path-windows",
+      title: "Verify PATH Configuration",
+      description: "Ensure THE0 CLI is available in new PowerShell sessions.",
+      command: "Get-Command the0",
+      expectedOutput: "C:\\Users\\username\\bin\\the0.exe",
     });
   } else {
     baseSteps.push({
-      id: 'check-permissions',
-      title: 'Verify File Permissions',
-      description: 'Check that the binary has correct executable permissions.',
+      id: "check-permissions",
+      title: "Verify File Permissions",
+      description: "Check that the binary has correct executable permissions.",
       command: `which ${binaryName} && ls -la $(which ${binaryName})`,
-      expectedOutput: '-rwxr-xr-x 1 user staff 1234567 /home/user/bin/the0',
+      expectedOutput: "-rwxr-xr-x 1 user staff 1234567 /home/user/bin/the0",
     });
   }
 

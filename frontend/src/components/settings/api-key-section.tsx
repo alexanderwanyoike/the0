@@ -1,26 +1,35 @@
-'use client';
-import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+"use client";
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Key, Plus, Activity, Calendar, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
-import { ApiKeyService, ApiKey, ApiKeyStats } from '@/lib/api/api-key-service';
-import { CreateApiKeyDialog } from './create-api-key-dialog';
-import { DeleteApiKeyDialog } from './delete-api-key-dialog';
-import { ApiKeySetupDialog } from './api-key-setup-dialog';
-import { formatDistanceToNow } from 'date-fns';
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Key,
+  Plus,
+  Activity,
+  Calendar,
+  Trash2,
+  Copy,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/hooks/use-toast";
+import { ApiKeyService, ApiKey, ApiKeyStats } from "@/lib/api/api-key-service";
+import { CreateApiKeyDialog } from "./create-api-key-dialog";
+import { DeleteApiKeyDialog } from "./delete-api-key-dialog";
+import { ApiKeySetupDialog } from "./api-key-setup-dialog";
+import { formatDistanceToNow } from "date-fns";
 
 export function ApiKeySection() {
-  console.log('🟢 ApiKeySection component rendered');
+  console.log("🟢 ApiKeySection component rendered");
   const { user } = useAuth();
   const { toast } = useToast();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -46,9 +55,9 @@ export function ApiKeySection() {
         setApiKeys(keysResult.data);
       } else {
         toast({
-          title: 'Error',
-          description: 'Failed to load API keys.',
-          variant: 'destructive',
+          title: "Error",
+          description: "Failed to load API keys.",
+          variant: "destructive",
         });
       }
 
@@ -56,11 +65,11 @@ export function ApiKeySection() {
         setStats(statsResult.data);
       }
     } catch (error) {
-      console.error('Error fetching API keys:', error);
+      console.error("Error fetching API keys:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to load API keys.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to load API keys.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -83,29 +92,29 @@ export function ApiKeySection() {
         // Refresh the list in background
         await fetchApiKeys();
         toast({
-          title: 'Success',
+          title: "Success",
           description:
-            'Your API key has been created. Make sure to copy it now!',
+            "Your API key has been created. Make sure to copy it now!",
         });
       } else {
         toast({
-          title: 'Error',
+          title: "Error",
           description: result.error.message,
-          variant: 'destructive',
+          variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Error creating API key:', error);
+      console.error("Error creating API key:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to create API key.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to create API key.",
+        variant: "destructive",
       });
     }
   };
 
   const handleDeleteApiKey = async (apiKey: ApiKey) => {
-    console.log('🗑️ handleDeleteApiKey called for:', apiKey.name, apiKey.id);
+    console.log("🗑️ handleDeleteApiKey called for:", apiKey.name, apiKey.id);
     if (!user) return;
 
     try {
@@ -116,36 +125,36 @@ export function ApiKeySection() {
         setSelectedApiKey(null);
         await fetchApiKeys();
         toast({
-          title: 'API key revoked',
-          description: 'The API key has been revoked successfully.',
+          title: "API key revoked",
+          description: "The API key has been revoked successfully.",
         });
       } else {
         toast({
-          title: 'Error',
+          title: "Error",
           description: result.error.message,
-          variant: 'destructive',
+          variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Error deleting API key:', error);
+      console.error("Error deleting API key:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to revoke API key.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to revoke API key.",
+        variant: "destructive",
       });
     }
   };
 
-  const copyToClipboard = (text: string, description: string = 'text') => {
+  const copyToClipboard = (text: string, description: string = "text") => {
     navigator.clipboard.writeText(text);
     toast({
-      title: 'Copied',
+      title: "Copied",
       description: `${description} copied to clipboard.`,
     });
   };
 
   const openDeleteDialog = (apiKey: ApiKey) => {
-    console.log('🗑️ openDeleteDialog called for:', apiKey.name, apiKey.id);
+    console.log("🗑️ openDeleteDialog called for:", apiKey.name, apiKey.id);
     setSelectedApiKey(apiKey);
     setDeleteDialogOpen(true);
   };
@@ -168,7 +177,7 @@ export function ApiKeySection() {
   };
 
   const toggleKeyVisibility = (keyId: string) => {
-    setVisibleKeys(prev => {
+    setVisibleKeys((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(keyId)) {
         newSet.delete(keyId);
@@ -275,25 +284,28 @@ export function ApiKeySection() {
                     <div className="flex items-center gap-2 mb-2">
                       <h4 className="font-medium truncate">{apiKey.name}</h4>
                       <Badge
-                        variant={apiKey.isActive ? 'default' : 'secondary'}
+                        variant={apiKey.isActive ? "default" : "secondary"}
                       >
-                        {apiKey.isActive ? 'Active' : 'Inactive'}
+                        {apiKey.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span className="font-mono text-xs">
-                          {visibleKeys.has(apiKey.id) 
+                          {visibleKeys.has(apiKey.id)
                             ? apiKey.key
-                            : '••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••'
-                          }
+                            : "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
                         </span>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => toggleKeyVisibility(apiKey.id)}
                           className="h-6 w-6 p-0"
-                          title={visibleKeys.has(apiKey.id) ? 'Hide API key' : 'Show API key'}
+                          title={
+                            visibleKeys.has(apiKey.id)
+                              ? "Hide API key"
+                              : "Show API key"
+                          }
                         >
                           {visibleKeys.has(apiKey.id) ? (
                             <EyeOff className="h-3 w-3" />
@@ -306,10 +318,7 @@ export function ApiKeySection() {
                             variant="ghost"
                             size="sm"
                             onClick={() =>
-                              copyToClipboard(
-                                apiKey.key,
-                                'API key',
-                              )
+                              copyToClipboard(apiKey.key, "API key")
                             }
                             className="h-6 w-6 p-0"
                             title="Copy API key"
@@ -321,7 +330,7 @@ export function ApiKeySection() {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          Created{' '}
+                          Created{" "}
                           {formatDistanceToNow(new Date(apiKey.createdAt), {
                             addSuffix: true,
                           })}
@@ -329,7 +338,7 @@ export function ApiKeySection() {
                         {apiKey.lastUsedAt && (
                           <div className="flex items-center gap-1">
                             <Activity className="h-3 w-3" />
-                            Last used{' '}
+                            Last used{" "}
                             {formatDistanceToNow(new Date(apiKey.lastUsedAt), {
                               addSuffix: true,
                             })}
@@ -351,7 +360,7 @@ export function ApiKeySection() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        console.log('🔴 Revoke button clicked!', apiKey.name);
+                        console.log("🔴 Revoke button clicked!", apiKey.name);
                         openDeleteDialog(apiKey);
                       }}
                       className="text-destructive hover:text-destructive"

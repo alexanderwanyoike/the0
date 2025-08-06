@@ -1,15 +1,15 @@
-'use client';
-import React, { useState } from 'react';
+"use client";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Copy,
   Key,
@@ -18,11 +18,11 @@ import {
   Code,
   Terminal,
   FileCode,
-} from 'lucide-react';
-import { ApiKey } from '@/lib/api/api-key-service';
-import { useToast } from '@/hooks/use-toast';
-import { formatDistanceToNow, format } from 'date-fns';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+} from "lucide-react";
+import { ApiKey } from "@/lib/api/api-key-service";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow, format } from "date-fns";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ApiKeySetupDialogProps {
   open: boolean;
@@ -43,7 +43,7 @@ export function ApiKeySetupDialog({
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
     toast({
-      title: 'Copied',
+      title: "Copied",
       description: `${field} copied to clipboard.`,
     });
   };
@@ -72,8 +72,8 @@ export function ApiKeySetupDialog({
                   <span className="font-mono">{apiKey.key}</span>
                 </p>
               </div>
-              <Badge variant={apiKey.isActive ? 'default' : 'secondary'}>
-                {apiKey.isActive ? 'Active' : 'Inactive'}
+              <Badge variant={apiKey.isActive ? "default" : "secondary"}>
+                {apiKey.isActive ? "Active" : "Inactive"}
               </Badge>
             </div>
 
@@ -83,7 +83,7 @@ export function ApiKeySetupDialog({
                 <div>
                   <div className="font-medium">Created</div>
                   <div className="text-muted-foreground">
-                    {format(new Date(apiKey.createdAt), 'MMM d, yyyy')}
+                    {format(new Date(apiKey.createdAt), "MMM d, yyyy")}
                     <br />
                     {formatDistanceToNow(new Date(apiKey.createdAt), {
                       addSuffix: true,
@@ -98,7 +98,7 @@ export function ApiKeySetupDialog({
                   <div>
                     <div className="font-medium">Last Used</div>
                     <div className="text-muted-foreground">
-                      {format(new Date(apiKey.lastUsedAt), 'MMM d, yyyy')}
+                      {format(new Date(apiKey.lastUsedAt), "MMM d, yyyy")}
                       <br />
                       {formatDistanceToNow(new Date(apiKey.lastUsedAt), {
                         addSuffix: true,
@@ -127,15 +127,15 @@ export function ApiKeySetupDialog({
                     onClick={() =>
                       copyToClipboard(
                         `export THE0_API_KEY="your_api_key_here"`,
-                        'Environment variable',
+                        "Environment variable",
                       )
                     }
                     className="h-6 px-2"
                   >
                     <Copy className="h-3 w-3" />
-                    {copiedField === 'Environment variable'
-                      ? 'Copied!'
-                      : 'Copy'}
+                    {copiedField === "Environment variable"
+                      ? "Copied!"
+                      : "Copy"}
                   </Button>
                 </div>
                 <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">

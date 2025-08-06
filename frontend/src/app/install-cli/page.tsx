@@ -1,51 +1,51 @@
-import { Metadata } from 'next';
-import { headers } from 'next/headers';
-import { suggestPlatformFromHeaders } from '@/lib/install/platform-detection';
-import { InstallationInterface } from '@/components/install/installation-interface';
-import { VerificationSteps } from '@/components/install/verification-steps';
-import { Terminal, Zap, Shield, HelpCircle } from 'lucide-react';
-import Link from 'next/link';
+import { Metadata } from "next";
+import { headers } from "next/headers";
+import { suggestPlatformFromHeaders } from "@/lib/install/platform-detection";
+import { InstallationInterface } from "@/components/install/installation-interface";
+import { VerificationSteps } from "@/components/install/verification-steps";
+import { Terminal, Zap, Shield, HelpCircle } from "lucide-react";
+import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: 'Install THE0 CLI | THE0 Platform',
+  title: "Install THE0 CLI | THE0 Platform",
   description:
-    'Download and install the THE0 CLI for managing trading bots, deploying algorithms, and interacting with the platform from the command line.',
+    "Download and install the THE0 CLI for managing trading bots, deploying algorithms, and interacting with the platform from the command line.",
   keywords: [
-    'cli',
-    'installation',
-    'trading bots',
-    'the0',
-    'command line',
-    'terminal',
-    'developer tools',
+    "cli",
+    "installation",
+    "trading bots",
+    "the0",
+    "command line",
+    "terminal",
+    "developer tools",
   ],
   openGraph: {
-    title: 'Install THE0 CLI',
+    title: "Install THE0 CLI",
     description:
-      'Get started with THE0 by installing our powerful command-line interface for managing trading bots and algorithms.',
-    type: 'website',
+      "Get started with THE0 by installing our powerful command-line interface for managing trading bots and algorithms.",
+    type: "website",
     images: [
       {
-        url: '/og-install-cli.png',
+        url: "/og-install-cli.png",
         width: 1200,
         height: 630,
-        alt: 'THE0 CLI Installation',
+        alt: "THE0 CLI Installation",
       },
     ],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Install THE0 CLI',
+    card: "summary_large_image",
+    title: "Install THE0 CLI",
     description:
-      'Download and install the THE0 CLI for managing trading bots from the command line.',
-    images: ['/og-install-cli.png'],
+      "Download and install the THE0 CLI for managing trading bots from the command line.",
+    images: ["/og-install-cli.png"],
   },
   robots: {
     index: true,
     follow: true,
   },
   alternates: {
-    canonical: '/install-cli',
+    canonical: "/install-cli",
   },
 };
 
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
 export default async function InstallCliPage() {
   // Server-side platform suggestion from request headers
   const headersList = await headers();
-  const userAgent = headersList.get('user-agent');
+  const userAgent = headersList.get("user-agent");
   const suggestedPlatform = suggestPlatformFromHeaders(userAgent || undefined);
 
   return (

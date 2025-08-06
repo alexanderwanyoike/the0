@@ -1,14 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/middleware/admin-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export async function GET(req: NextRequest) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
       const response = await fetch(`${process.env.BOT_API_URL}/backtest`, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: token,
         } as HeadersInit,
       });
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(data);
     } catch (error: any) {
       return NextResponse.json(
-        { error: { message: 'Error fetching backtests', statusCode: 500 } },
+        { error: { message: "Error fetching backtests", statusCode: 500 } },
         { status: 500 },
       );
     }
@@ -33,20 +33,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
-      const token = req.headers.get('Authorization');
+      const token = req.headers.get("Authorization");
       const body = await req.json();
-      console.log('Creating backtest with body:', body);
+      console.log("Creating backtest with body:", body);
 
       const response = await fetch(`${process.env.BOT_API_URL}/backtest`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: token,
         } as HeadersInit,
         body: JSON.stringify(body),
       });
 
-      console.log('Response:', response);
+      console.log("Response:", response);
       if (!response.ok) {
         return NextResponse.json(
           { error: await response.json() },
@@ -57,13 +57,13 @@ export async function POST(req: NextRequest) {
       const data = await response.json();
       return NextResponse.json(data);
     } catch (error: any) {
-      console.error('Error creating backtest:', error);
+      console.error("Error creating backtest:", error);
       return NextResponse.json(
         {
           error: {
-            message: 'Error creating backtest',
+            message: "Error creating backtest",
             statusCode: 500,
-            error: 'Internal Server Error',
+            error: "Internal Server Error",
           },
         },
         { status: 500 },

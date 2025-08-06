@@ -1,7 +1,7 @@
 ---
-title: 'Deployment'
-description: 'Deploy and manage custom bots on the0 platform'
-tags: ['custom-bots', 'deployment', 'production']
+title: "Deployment"
+description: "Deploy and manage custom bots on the0 platform"
+tags: ["custom-bots", "deployment", "production"]
 order: 6
 ---
 

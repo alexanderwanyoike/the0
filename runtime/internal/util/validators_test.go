@@ -117,14 +117,14 @@ func TestValidateUUIDConsistency(t *testing.T) {
 		// This test documents the intended behavior:
 		// The function is designed to accept any bot ID format, not just UUIDs
 		// This is intentional to allow flexible ID formats in the system
-		
+
 		examples := map[string]string{
-			"uuid-format":        "550e8400-e29b-41d4-a716-446655440000",
-			"simple-name":        "my-bot",
-			"email-like":         "bot@example.com",
-			"path-like":          "organization/project/bot-name",
-			"version-suffix":     "bot-v1.2.3",
-			"numeric":            "12345",
+			"uuid-format":    "550e8400-e29b-41d4-a716-446655440000",
+			"simple-name":    "my-bot",
+			"email-like":     "bot@example.com",
+			"path-like":      "organization/project/bot-name",
+			"version-suffix": "bot-v1.2.3",
+			"numeric":        "12345",
 		}
 
 		for description, id := range examples {

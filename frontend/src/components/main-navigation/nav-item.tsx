@@ -1,12 +1,12 @@
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { JSX } from 'react';
+} from "@/components/ui/tooltip";
+import { JSX } from "react";
 
 interface NavItemProps {
   href: string;
@@ -27,14 +27,14 @@ export function NavItem({
     <Link
       href={href}
       className={cn(
-        'flex items-center rounded-lg text-sm font-medium transition-colors',
-        'hover:bg-accent hover:text-accent-foreground mb-2',
-        isCollapsed ? 'justify-center p-2' : 'px-3 py-2',
-        isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+        "flex items-center rounded-lg text-sm font-medium transition-colors",
+        "hover:bg-accent hover:text-accent-foreground mb-2",
+        isCollapsed ? "justify-center p-2" : "px-3 py-2",
+        isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
       )}
     >
       <Icon
-        className={cn('h-4 w-4', !isCollapsed && 'mr-3')}
+        className={cn("h-4 w-4", !isCollapsed && "mr-3")}
         aria-hidden="true"
       />
       {!isCollapsed && <span>{name}</span>}

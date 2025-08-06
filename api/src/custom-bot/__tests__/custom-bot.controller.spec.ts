@@ -55,7 +55,7 @@ describe('CustomBotController', () => {
       fileExists: jest.fn(),
       generateSignedUploadUrl: jest.fn(),
       validateZipFile: jest.fn(),
-      downloadAndValidateZipStructure: jest.fn(),
+      validateZipStructure: jest.fn(),
     } as any;
 
     // Removed GcsService - using StorageService
@@ -350,6 +350,7 @@ describe('CustomBotController', () => {
         uploadUrl: 'https://storage.googleapis.com/signed-url',
         filePath:
           'gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip',
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       };
 
       mockStorageService.generateSignedUploadUrl.mockResolvedValue({

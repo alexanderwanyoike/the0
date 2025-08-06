@@ -11,6 +11,8 @@ import {
   CustomBotWithVersions,
 } from '@/custom-bot/custom-bot.types';
 import { AuthCombinedGuard } from '@/auth/auth-combined.guard';
+import { NatsService } from '@/nats/nats.service';
+import { CustomBotEventsService } from '../custom-bot-events.service';
 // Removed StripeConnectService - not needed in OSS version
 
 // Mock database and storage
@@ -61,16 +63,24 @@ describe('Custom Bot API Integration Tests', () => {
     })
       .overrideProvider(CustomBotRepository)
       .useValue({
-        globalBotExists: jest.fn(),
-        globalVersionExists: jest.fn(),
-        createNewGlobalVersion: jest.fn(),
-        getAllGlobalVersions: jest.fn(),
-        getSpecificGlobalVersion: jest.fn(),
-        getGlobalLatestVersion: jest.fn(),
-        isVersionNewer: jest.fn(),
-        checkUserOwnership: jest.fn(),
-        getAllUserVersions: jest.fn(),
-        getSpecificUserVersion: jest.fn(),
+        globalBotExists: jest.fn().mockResolvedValue(Ok(false)),
+        globalVersionExists: jest.fn().mockResolvedValue(Ok(false)),
+        createNewGlobalVersion: jest.fn().mockResolvedValue(Ok({
+          id: 'mock-bot-id',
+          name: 'mock-bot',
+          version: '1.0.0',
+          userId: 'test-user-123',
+          status: 'pending_review',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+        getAllGlobalVersions: jest.fn().mockResolvedValue(Ok([])),
+        getSpecificGlobalVersion: jest.fn().mockResolvedValue(Ok(null)),
+        getGlobalLatestVersion: jest.fn().mockResolvedValue(Ok(null)),
+        isVersionNewer: jest.fn().mockResolvedValue(Ok(true)),
+        checkUserOwnership: jest.fn().mockResolvedValue(Ok(true)),
+        getAllUserVersions: jest.fn().mockResolvedValue(Ok([])),
+        getSpecificUserVersion: jest.fn().mockResolvedValue(Ok(null)),
       })
       .overrideGuard(AuthCombinedGuard)
       .useValue({
@@ -78,14 +88,33 @@ describe('Custom Bot API Integration Tests', () => {
       })
       .overrideProvider(StorageService)
       .useValue({
-        generateSignedUploadUrl: jest.fn(),
-        fileExists: jest.fn(),
-        downloadAndValidateZipStructure: jest.fn(),
-        validateZipStructure: jest.fn(),
-        uploadBotFile: jest.fn(),
-        deleteBotFile: jest.fn(),
-        getFileMetadata: jest.fn(),
-        validateZipFile: jest.fn(),
+        generateSignedUploadUrl: jest.fn().mockResolvedValue(Ok({
+          uploadUrl: 'https://minio.test/upload-url',
+          filePath: 'test/path',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        })),
+        fileExists: jest.fn().mockResolvedValue(Ok(true)),
+        validateZipStructure: jest.fn().mockResolvedValue(Ok(true)),
+        uploadBotFile: jest.fn().mockResolvedValue(Ok('test/path')),
+        deleteBotFile: jest.fn().mockResolvedValue(Ok(null)),
+        getFileMetadata: jest.fn().mockResolvedValue(Ok({})),
+        validateZipFile: jest.fn().mockResolvedValue(Ok(true)),
+      })
+      .overrideProvider(NatsService)
+      .useValue({
+        isConnected: jest.fn(() => Promise.resolve(true)),
+        connect: jest.fn(() => Promise.resolve()),
+        disconnect: jest.fn(() => Promise.resolve()),
+        subscribe: jest.fn(() => Promise.resolve()),
+        publish: jest.fn(() => Promise.resolve(Ok(null))),
+        onModuleInit: jest.fn(() => Promise.resolve()),
+        onModuleDestroy: jest.fn(() => Promise.resolve()),
+      })
+      .overrideProvider(CustomBotEventsService)
+      .useValue({
+        onModuleInit: jest.fn(() => Promise.resolve()),
+        onModuleDestroy: jest.fn(() => Promise.resolve()),
+        setupEventListeners: jest.fn(() => Promise.resolve()),
       })
       // Removed StripeConnectService override - not needed in OSS version
       .compile();
@@ -128,7 +157,7 @@ describe('Custom Bot API Integration Tests', () => {
 
       // Mock the file existence check and validation
       storageService.fileExists.mockResolvedValue(Ok(true));
-      storageService.downloadAndValidateZipStructure.mockResolvedValue(Ok(true));
+      storageService.validateZipStructure.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
       repository.createNewGlobalVersion.mockResolvedValue(Ok(mockCreatedBot));
       repository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockCreatedBot));
@@ -147,7 +176,7 @@ describe('Custom Bot API Integration Tests', () => {
 
       // Verify service calls
       expect(storageService.fileExists).toHaveBeenCalledWith(filePath);
-      expect(storageService.downloadAndValidateZipStructure).toHaveBeenCalledWith(
+      expect(storageService.validateZipStructure).toHaveBeenCalledWith(
         filePath,
         ['main.py', 'backtest.py'],
       );
@@ -265,7 +294,7 @@ describe('Custom Bot API Integration Tests', () => {
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
-      storageService.downloadAndValidateZipStructure.mockResolvedValue(
+      storageService.validateZipStructure.mockResolvedValue(
         Failure('Required bot entrypoint main.py not found in ZIP'),
       );
 
@@ -333,7 +362,7 @@ describe('Custom Bot API Integration Tests', () => {
       };
 
       storageService.fileExists.mockResolvedValue(Ok(true));
-      storageService.downloadAndValidateZipStructure.mockResolvedValue(Ok(true));
+      storageService.validateZipStructure.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(true));
       repository.checkUserOwnership.mockResolvedValue(Ok(true));
       repository.getGlobalLatestVersion.mockResolvedValue(Ok(mockExistingBot));
@@ -470,6 +499,7 @@ describe('Custom Bot API Integration Tests', () => {
           'https://storage.googleapis.com/bucket/path?signature=abc123',
         filePath:
           'gs://test-bucket/user123/integration-test-bot/1.0.0/integration-test-bot_1.0.0_123456.zip',
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       };
 
       storageService.generateSignedUploadUrl.mockResolvedValue(
@@ -626,7 +656,7 @@ describe('Custom Bot API Integration Tests', () => {
       };
 
       storageService.fileExists.mockResolvedValueOnce(Ok(true));
-      storageService.downloadAndValidateZipStructure.mockResolvedValueOnce(
+      storageService.validateZipStructure.mockResolvedValueOnce(
         Ok(true),
       );
       repository.globalBotExists.mockResolvedValueOnce(Ok(false));
@@ -666,7 +696,7 @@ describe('Custom Bot API Integration Tests', () => {
       };
 
       storageService.fileExists.mockResolvedValueOnce(Ok(true));
-      storageService.downloadAndValidateZipStructure.mockResolvedValueOnce(
+      storageService.validateZipStructure.mockResolvedValueOnce(
         Ok(true),
       );
       repository.globalBotExists.mockResolvedValueOnce(Ok(true));
@@ -803,7 +833,7 @@ describe('Custom Bot API Integration Tests', () => {
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
-      storageService.downloadAndValidateZipStructure.mockResolvedValue(
+      storageService.validateZipStructure.mockResolvedValue(
         Failure('GCS service unavailable'),
       );
 
@@ -824,7 +854,7 @@ describe('Custom Bot API Integration Tests', () => {
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
-      storageService.downloadAndValidateZipStructure.mockResolvedValue(
+      storageService.validateZipStructure.mockResolvedValue(
         Failure('ZIP file size exceeds 200MB limit'),
       );
 
@@ -860,7 +890,7 @@ describe('Custom Bot API Integration Tests', () => {
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
-      storageService.downloadAndValidateZipStructure.mockResolvedValue(
+      storageService.validateZipStructure.mockResolvedValue(
         Failure('Failed to validate ZIP structure: not a valid ZIP file'),
       );
 

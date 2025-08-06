@@ -1,6 +1,6 @@
-import axios from '@/lib/axios-interceptor';
-import { Result, Ok, Failure } from '@/lib/result';
-import { getErrorMessage, getErrorStatusCode } from '@/lib/axios';
+import axios from "@/lib/axios-interceptor";
+import { Result, Ok, Failure } from "@/lib/result";
+import { getErrorMessage, getErrorStatusCode } from "@/lib/axios";
 
 export interface BotSchema {
   properties: Record<string, any>;
@@ -34,7 +34,7 @@ export class BotService {
     config: Record<string, any>,
   ): Promise<Result<Bot, BotServiceError>> {
     try {
-      const response = await axios.post('/api/bot', {
+      const response = await axios.post("/api/bot", {
         name: config.name,
         config,
       });
@@ -80,7 +80,7 @@ export class BotService {
 
   public static async getBots(): Promise<Result<Bot[], BotServiceError>> {
     try {
-      const response = await axios.get('/api/bot', {
+      const response = await axios.get("/api/bot", {
         timeout: 120000,
       });
       return Ok(response.data);

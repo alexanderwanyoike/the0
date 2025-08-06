@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Brain,
   AlertTriangle,
@@ -6,14 +6,14 @@ import {
   XCircle,
   Info,
   Zap,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import { MarkdownComponents } from './markdown-components';
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import { MarkdownComponents } from "./markdown-components";
 
 interface AIReviewSectionProps {
   review: any;
@@ -98,11 +98,11 @@ export const AIReviewSection = ({ review, status }: AIReviewSectionProps) => {
 
   // Determine AI threat level based on score
   const getAIThreatLevel = (score: number) => {
-    if (score === 0) return 'none';
-    if (score <= 1) return 'low';
-    if (score <= 2) return 'medium';
-    if (score <= 3) return 'high';
-    return 'critical';
+    if (score === 0) return "none";
+    if (score <= 1) return "low";
+    if (score <= 2) return "medium";
+    if (score <= 3) return "high";
+    return "critical";
   };
 
   const aiThreatLevel = getAIThreatLevel(aiAnalysis.score || 0);
@@ -110,25 +110,25 @@ export const AIReviewSection = ({ review, status }: AIReviewSectionProps) => {
   // Threat level colors
   const getThreatColor = (level: string) => {
     switch (level) {
-      case 'none':
-        return 'text-green-600 dark:text-green-400';
-      case 'low':
-        return 'text-blue-600 dark:text-blue-400';
-      case 'medium':
-        return 'text-yellow-600 dark:text-yellow-400';
-      case 'high':
-        return 'text-orange-600 dark:text-orange-400';
-      case 'critical':
-        return 'text-red-600 dark:text-red-400';
+      case "none":
+        return "text-green-600 dark:text-green-400";
+      case "low":
+        return "text-blue-600 dark:text-blue-400";
+      case "medium":
+        return "text-yellow-600 dark:text-yellow-400";
+      case "high":
+        return "text-orange-600 dark:text-orange-400";
+      case "critical":
+        return "text-red-600 dark:text-red-400";
       default:
-        return 'text-gray-600 dark:text-gray-400';
+        return "text-gray-600 dark:text-gray-400";
     }
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'text-green-600 dark:text-green-400';
-    if (confidence >= 60) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-red-600 dark:text-red-400';
+    if (confidence >= 80) return "text-green-600 dark:text-green-400";
+    if (confidence >= 60) return "text-yellow-600 dark:text-yellow-400";
+    return "text-red-600 dark:text-red-400";
   };
 
   const getConfidenceIcon = (confidence: number) => {
@@ -165,9 +165,9 @@ export const AIReviewSection = ({ review, status }: AIReviewSectionProps) => {
             <span>AI Threat Assessment:</span>
             <Badge
               variant={
-                aiThreatLevel === 'none' || aiThreatLevel === 'low'
-                  ? 'default'
-                  : 'destructive'
+                aiThreatLevel === "none" || aiThreatLevel === "low"
+                  ? "default"
+                  : "destructive"
               }
               className={getThreatColor(aiThreatLevel)}
             >
@@ -205,9 +205,9 @@ export const AIReviewSection = ({ review, status }: AIReviewSectionProps) => {
         {/* AI Analysis Verdict */}
         <Alert
           variant={
-            aiThreatLevel === 'none' || aiThreatLevel === 'low'
-              ? 'default'
-              : 'destructive'
+            aiThreatLevel === "none" || aiThreatLevel === "low"
+              ? "default"
+              : "destructive"
           }
         >
           <div className="flex items-start gap-3">
@@ -217,7 +217,7 @@ export const AIReviewSection = ({ review, status }: AIReviewSectionProps) => {
               <AlertDescription className="text-sm prose prose-sm max-w-none">
                 <ReactMarkdown components={MarkdownComponents}>
                   {aiAnalysis.reason ||
-                    'AI security analysis completed successfully'}
+                    "AI security analysis completed successfully"}
                 </ReactMarkdown>
               </AlertDescription>
               <div className="text-xs text-muted-foreground mt-2 space-y-1">

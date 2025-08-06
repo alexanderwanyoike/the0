@@ -303,13 +303,13 @@ func (w *ScheduledBotWorker) executeScheduledBot(botSchedule model.BotSchedule) 
 		w.stateMutex.Unlock()
 
 		util.LogWorker("Successfully started scheduled bot %s (container: %s)", botSchedule.ID, result.ContainerID)
-		
+
 		// For short-running scheduled bots, the StartContainer call has already completed
 		// meaning the container has finished execution. Clean up the state.
 		w.stateMutex.Lock()
 		delete(w.state.RunningBots, botSchedule.ID)
 		w.stateMutex.Unlock()
-		
+
 		util.LogWorker("Scheduled bot %s execution completed, removed from running state", botSchedule.ID)
 	}()
 }

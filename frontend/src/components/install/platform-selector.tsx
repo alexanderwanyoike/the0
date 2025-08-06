@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { getAllPlatforms } from '@/lib/install/platform-detection';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from "react";
+import { getAllPlatforms } from "@/lib/install/platform-detection";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Laptop, Monitor, Smartphone } from 'lucide-react';
-import type { PlatformInfo, PlatformSelectorProps } from '@/types/install';
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Laptop, Monitor, Smartphone } from "lucide-react";
+import type { PlatformInfo, PlatformSelectorProps } from "@/types/install";
 
 export function PlatformSelector({
   platforms,
@@ -21,7 +21,7 @@ export function PlatformSelector({
   onPlatformChange,
 }: PlatformSelectorProps) {
   const [selectedId, setSelectedId] = useState<string>(
-    selectedPlatform?.id || '',
+    selectedPlatform?.id || "",
   );
 
   const handleSelectionChange = (platformId: string) => {
@@ -87,7 +87,7 @@ function PlatformCard({
   return (
     <Card
       className={`cursor-pointer transition-all hover:shadow-md ${
-        isSelected ? 'ring-2 ring-primary border-primary' : ''
+        isSelected ? "ring-2 ring-primary border-primary" : ""
       }`}
       onClick={onSelect}
     >
@@ -121,13 +121,13 @@ function PlatformCard({
 
 // Platform icon component
 function PlatformIcon({ platform }: { platform: PlatformInfo }) {
-  const iconClass = 'h-4 w-4';
+  const iconClass = "h-4 w-4";
 
-  if (platform.os === 'macOS') {
+  if (platform.os === "macOS") {
     return <Laptop className={iconClass} />;
-  } else if (platform.os === 'Windows') {
+  } else if (platform.os === "Windows") {
     return <Monitor className={iconClass} />;
-  } else if (platform.os === 'Linux') {
+  } else if (platform.os === "Linux") {
     return <Smartphone className={iconClass} />;
   }
 
@@ -151,7 +151,7 @@ export function CompactPlatformSelector({
     <div className="flex items-center space-x-2">
       <span className="text-sm font-medium whitespace-nowrap">Platform:</span>
       <Select
-        value={selectedPlatform?.id || ''}
+        value={selectedPlatform?.id || ""}
         onValueChange={handleSelectionChange}
       >
         <SelectTrigger className="w-48">
@@ -176,7 +176,7 @@ export function RadioPlatformSelector({
   onPlatformChange,
 }: PlatformSelectorProps) {
   const [selectedId, setSelectedId] = useState<string>(
-    selectedPlatform?.id || '',
+    selectedPlatform?.id || "",
   );
 
   const handleSelectionChange = (platformId: string) => {

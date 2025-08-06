@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 export interface ApiResponse<T = any> {
   data?: T;
@@ -14,7 +14,10 @@ let globalAuthService: any = null;
 let globalLogout: (() => Promise<void>) | null = null;
 
 // Function to set the auth service from the context
-export const setApiClientService = (authService: any, logoutFn: () => Promise<void>) => {
+export const setApiClientService = (
+  authService: any,
+  logoutFn: () => Promise<void>,
+) => {
   globalAuthService = authService;
   globalLogout = logoutFn;
 };
@@ -36,8 +39,8 @@ export class ApiClient {
     if (!token) {
       return {
         error: {
-          message: 'Not authenticated',
-          code: 'NO_AUTH',
+          message: "Not authenticated",
+          code: "NO_AUTH",
           statusCode: 401,
         },
       };
@@ -46,8 +49,8 @@ export class ApiClient {
     const requestOptions: RequestInit = {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
         ...options.headers,
       },
     };
@@ -68,7 +71,7 @@ export class ApiClient {
 
         return {
           error: {
-            message: data.message || data.error || 'Request failed',
+            message: data.message || data.error || "Request failed",
             code: data.code,
             statusCode: response.status,
           },
@@ -79,8 +82,8 @@ export class ApiClient {
     } catch (error: any) {
       return {
         error: {
-          message: error.message || 'Network error',
-          code: 'NETWORK_ERROR',
+          message: error.message || "Network error",
+          code: "NETWORK_ERROR",
           statusCode: 500,
         },
       };
@@ -88,24 +91,24 @@ export class ApiClient {
   }
 
   static async get<T>(url: string): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, { method: 'GET' });
+    return this.makeRequest<T>(url, { method: "GET" });
   }
 
   static async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(url, {
-      method: 'POST',
+      method: "POST",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
   static async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(url, {
-      method: 'PUT',
+      method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
   static async delete<T>(url: string): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, { method: 'DELETE' });
+    return this.makeRequest<T>(url, { method: "DELETE" });
   }
 }

@@ -1,18 +1,18 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   // Check if maintenance mode is enabled
-  const maintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true';
+  const maintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
   // If maintenance mode is enabled and not already on maintenance page
-  if (maintenanceMode && !request.nextUrl.pathname.startsWith('/maintenance')) {
-    return NextResponse.redirect(new URL('/maintenance', request.url));
+  if (maintenanceMode && !request.nextUrl.pathname.startsWith("/maintenance")) {
+    return NextResponse.redirect(new URL("/maintenance", request.url));
   }
 
   // If maintenance mode is disabled and trying to access maintenance page, redirect to home
-  if (!maintenanceMode && request.nextUrl.pathname.startsWith('/maintenance')) {
-    return NextResponse.redirect(new URL('/', request.url));
+  if (!maintenanceMode && request.nextUrl.pathname.startsWith("/maintenance")) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   // Pass through all other requests
@@ -28,6 +28,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 };

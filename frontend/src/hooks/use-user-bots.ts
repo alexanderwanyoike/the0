@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { CustomBotConfig, CustomBotWithVersions } from '@/types/custom-bots';
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { CustomBotConfig, CustomBotWithVersions } from "@/types/custom-bots";
 
 export interface CustomBotVersion {
   version: string;
@@ -23,11 +23,11 @@ export interface UserBotSummary {
 }
 
 export type CustomBotStatus =
-  | 'approved'
-  | 'declined'
-  | 'awaiting_human_review'
-  | 'pending_review'
-  | 'published';
+  | "approved"
+  | "declined"
+  | "awaiting_human_review"
+  | "pending_review"
+  | "published";
 
 interface MarketplaceMetadata {
   isPublished?: boolean;
@@ -61,17 +61,17 @@ export function useUserBots(): UseUserBotsReturn {
       setLoading(true);
       setError(null);
 
-      const response = await authFetch('/api/user-bots');
+      const response = await authFetch("/api/user-bots");
 
       if (!response.ok) {
-        throw new Error('Failed to fetch user bots');
+        throw new Error("Failed to fetch user bots");
       }
 
       const data = await response.json();
       if (data.success) {
         setUserBots(data.data || []);
       } else {
-        throw new Error(data.message || 'Failed to fetch user bots');
+        throw new Error(data.message || "Failed to fetch user bots");
       }
     } catch (err: any) {
       setError(err.message);

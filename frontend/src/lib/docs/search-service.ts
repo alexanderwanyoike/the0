@@ -1,4 +1,4 @@
-import { DocsFileSystem, DocFrontmatter } from './file-system';
+import { DocsFileSystem, DocFrontmatter } from "./file-system";
 
 export interface DocSearchResult {
   slug: string;
@@ -33,9 +33,9 @@ export class DocsSearchService {
 
     this.searchIndex = allDocs.map((doc) => ({
       slug: doc.slug,
-      title: doc.frontmatter.title || doc.slug.join(' '),
+      title: doc.frontmatter.title || doc.slug.join(" "),
       content: this.cleanContent(doc.content),
-      path: doc.slug.join('/'),
+      path: doc.slug.join("/"),
       frontmatter: doc.frontmatter,
     }));
   }
@@ -44,7 +44,7 @@ export class DocsSearchService {
     if (!query || query.length < 2) return [];
 
     const lowerQuery = query.toLowerCase();
-    const terms = lowerQuery.split(' ').filter((term) => term.length > 1);
+    const terms = lowerQuery.split(" ").filter((term) => term.length > 1);
 
     const results = this.searchIndex
       .map((doc) => ({
@@ -75,7 +75,7 @@ export class DocsSearchService {
       }
 
       // Word-based suggestions from titles
-      const titleWords = doc.title.toLowerCase().split(' ');
+      const titleWords = doc.title.toLowerCase().split(" ");
       titleWords.forEach((word) => {
         if (word.startsWith(lowerQuery) && word.length > lowerQuery.length) {
           suggestions.add(word);
@@ -123,7 +123,7 @@ export class DocsSearchService {
 
     // Content matches (lower weight)
     terms.forEach((term) => {
-      const contentMatches = (lowerContent.match(new RegExp(term, 'g')) || [])
+      const contentMatches = (lowerContent.match(new RegExp(term, "g")) || [])
         .length;
       score += contentMatches * 1;
     });
@@ -155,7 +155,7 @@ export class DocsSearchService {
 
     // Find the first occurrence of any search term
     let bestMatch = -1;
-    let bestTerm = '';
+    let bestTerm = "";
 
     for (const term of terms) {
       const index = cleanContent.toLowerCase().indexOf(term);
@@ -167,7 +167,7 @@ export class DocsSearchService {
 
     if (bestMatch === -1) {
       // No match found, return beginning of content
-      return cleanContent.substring(0, 150).trim() + '...';
+      return cleanContent.substring(0, 150).trim() + "...";
     }
 
     // Create excerpt around the match
@@ -176,22 +176,22 @@ export class DocsSearchService {
     let excerpt = cleanContent.substring(start, end);
 
     // Add ellipsis if needed
-    if (start > 0) excerpt = '...' + excerpt;
-    if (end < cleanContent.length) excerpt = excerpt + '...';
+    if (start > 0) excerpt = "..." + excerpt;
+    if (end < cleanContent.length) excerpt = excerpt + "...";
 
     return excerpt.trim();
   }
 
   private cleanContent(content: string): string {
     return content
-      .replace(/#{1,6}\s/g, '') // Remove headers
-      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
-      .replace(/\*(.*?)\*/g, '$1') // Remove italic
-      .replace(/`(.*?)`/g, '$1') // Remove inline code
-      .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
-      .replace(/\n{2,}/g, ' ') // Normalize whitespace
-      .replace(/\s+/g, ' ') // Normalize spaces
+      .replace(/#{1,6}\s/g, "") // Remove headers
+      .replace(/\*\*(.*?)\*\*/g, "$1") // Remove bold
+      .replace(/\*(.*?)\*/g, "$1") // Remove italic
+      .replace(/`(.*?)`/g, "$1") // Remove inline code
+      .replace(/```[\s\S]*?```/g, "") // Remove code blocks
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Remove links, keep text
+      .replace(/\n{2,}/g, " ") // Normalize whitespace
+      .replace(/\s+/g, " ") // Normalize spaces
       .trim();
   }
 }

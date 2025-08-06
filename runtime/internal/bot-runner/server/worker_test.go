@@ -17,6 +17,10 @@ import (
 	"runtime/internal/util"
 	"runtime/pb"
 
+	"archive/zip"
+	"bytes"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -24,10 +28,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"archive/zip"
-	"bytes"
 )
 
 // Mock gRPC server for testing BaseWorker interactions
@@ -177,17 +177,17 @@ func setupTestMinIOWithBotCode(t *testing.T, minioEndpoint string) {
 	uploadBotCode := func(fileName, code string) {
 		var zipBuffer bytes.Buffer
 		zipWriter := zip.NewWriter(&zipBuffer)
-		
+
 		mainFile, err := zipWriter.Create("main.py")
 		require.NoError(t, err)
 		_, err = mainFile.Write([]byte(code))
 		require.NoError(t, err)
-		
+
 		err = zipWriter.Close()
 		require.NoError(t, err)
-		
+
 		zipData := zipBuffer.Bytes()
-		_, err = minioClient.PutObject(ctx, bucketName, fileName, 
+		_, err = minioClient.PutObject(ctx, bucketName, fileName,
 			bytes.NewReader(zipData), int64(len(zipData)), minio.PutObjectOptions{
 				ContentType: "application/zip",
 			})
@@ -438,11 +438,11 @@ func TestBotWorker_RealBotExecution_Success(t *testing.T) {
 	assert.Greater(t, runningCount, 0, "Bot should be running")
 	assert.True(t, botExists, "Specific test bot should be in running state")
 
-	// Note: We don't check ListManagedContainers here because the bot container 
+	// Note: We don't check ListManagedContainers here because the bot container
 	// may finish execution and exit before we can query it. The important thing
 	// is that the bot was successfully started (confirmed by logs) and is tracked
 	// in the worker's internal state. This is realistic behavior for short-running bots.
-	
+
 	t.Logf("✅ Integration test passed:")
 	t.Logf("  - BotWorker successfully uses BaseWorker")
 	t.Logf("  - Real Docker container was started and executed")
@@ -741,7 +741,7 @@ func TestBotWorker_ErrorHandling_InvalidDockerImage(t *testing.T) {
 }
 
 func TestBotWorker_SegmentBasedFiltering(t *testing.T) {
-	// Setup test infrastructure  
+	// Setup test infrastructure
 	mongoUri, _, cleanupAll := setupTestEnvironment(t)
 	defer cleanupAll()
 
@@ -824,7 +824,7 @@ func TestBotWorker_SegmentBasedFiltering(t *testing.T) {
 	// Verify actual containers match segment filtering
 	actualContainers, err := botWorker.dockerRunner.ListManagedContainers(ctx, 2)
 	require.NoError(t, err)
-	
+
 	// Note: Similar to the first test, containers may finish quickly and not be visible
 	// The important verification is that the correct bot is tracked in internal state
 	t.Logf("Found %d actual containers from Docker", len(actualContainers))

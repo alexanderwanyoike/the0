@@ -1,7 +1,7 @@
 ---
-title: 'Backtesting'
-description: 'How to implement a comprehensive backtesting solution for your custom bots'
-tags: ['custom-bots', 'deployment', 'backtesting']
+title: "Backtesting"
+description: "How to implement a comprehensive backtesting solution for your custom bots"
+tags: ["custom-bots", "deployment", "backtesting"]
 order: 10
 ---
 
@@ -149,7 +149,7 @@ function main(id, config) {
   // Your backtesting logic here
 
   return {
-    status: 'success',
+    status: "success",
     results: {
       metrics: {
         // Your performance metrics
@@ -237,8 +237,8 @@ def main(id: str, config: dict) -> dict:
 ### JavaScript Example
 
 ```javascript
-const plotly = require('plotly.js');
-const { mean, std } = require('mathjs');
+const plotly = require("plotly.js");
+const { mean, std } = require("mathjs");
 
 function main(id, config) {
   /**
@@ -273,8 +273,8 @@ function main(id, config) {
         ? {
             date: new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
               .toISOString()
-              .split('T')[0],
-            action: Math.random() > 0.5 ? 'buy' : 'sell',
+              .split("T")[0],
+            action: Math.random() > 0.5 ? "buy" : "sell",
             price: Math.round(portfolioValues[i]),
             quantity: 10,
           }
@@ -301,7 +301,7 @@ function main(id, config) {
     (_, i) =>
       new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
         .toISOString()
-        .split('T')[0],
+        .split("T")[0],
   );
 
   const plots = [
@@ -310,31 +310,31 @@ function main(id, config) {
         {
           x: dates,
           y: portfolioValues,
-          type: 'scatter',
-          mode: 'lines',
-          name: 'Portfolio',
+          type: "scatter",
+          mode: "lines",
+          name: "Portfolio",
         },
       ],
       layout: {
-        title: 'Portfolio Performance',
-        xaxis: { title: 'Date' },
-        yaxis: { title: 'Value' },
+        title: "Portfolio Performance",
+        xaxis: { title: "Date" },
+        yaxis: { title: "Value" },
       },
     }),
     JSON.stringify({
       data: [
         {
           x: dailyReturns.map((r) => r * 100),
-          type: 'histogram',
-          name: 'Returns',
+          type: "histogram",
+          name: "Returns",
         },
       ],
-      layout: { title: 'Returns Distribution', xaxis: { title: 'Return (%)' } },
+      layout: { title: "Returns Distribution", xaxis: { title: "Return (%)" } },
     }),
   ];
 
   return {
-    status: 'success',
+    status: "success",
     results: {
       metrics: {
         total_return: Number(totalReturn.toFixed(4)),
@@ -342,7 +342,7 @@ function main(id, config) {
         max_drawdown: Number(maxDrawdown.toFixed(4)),
         win_rate: Number(
           (
-            trades.filter((t) => t.action === 'sell').length / trades.length
+            trades.filter((t) => t.action === "sell").length / trades.length
           ).toFixed(2),
         ),
         total_trades: trades.length,
@@ -352,12 +352,12 @@ function main(id, config) {
       },
       plots: plots,
       tables: [
-        { title: 'Recent Trades', data: trades.slice(-5) },
+        { title: "Recent Trades", data: trades.slice(-5) },
         {
-          title: 'Summary',
+          title: "Summary",
           data: [
             {
-              metric: 'Total Return',
+              metric: "Total Return",
               value: `${(totalReturn * 100).toFixed(1)}%`,
             },
           ],

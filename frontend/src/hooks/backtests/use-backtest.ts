@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/auth-context';
-import { authFetch } from '@/lib/auth-fetch';
-import { Backtest } from '@/types/backtest';
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { Backtest } from "@/types/backtest";
 
 interface UseBacktestReturn {
   backtest: Backtest | null;
@@ -25,7 +25,11 @@ export function useBacktest(id: string): UseBacktestReturn {
 
       const response = await authFetch(`/api/backtests/${id}`);
       if (!response.ok) {
-        throw new Error(response.status === 404 ? 'Backtest not found' : 'Failed to fetch backtest');
+        throw new Error(
+          response.status === 404
+            ? "Backtest not found"
+            : "Failed to fetch backtest",
+        );
       }
 
       const data = await response.json();
@@ -33,7 +37,11 @@ export function useBacktest(id: string): UseBacktestReturn {
         ...data,
         createdAt: new Date(data.createdAt),
         updatedAt: new Date(data.updatedAt),
-        analysis: data.analysis ? (typeof data.analysis === 'string' ? JSON.parse(data.analysis) : data.analysis) : null,
+        analysis: data.analysis
+          ? typeof data.analysis === "string"
+            ? JSON.parse(data.analysis)
+            : data.analysis
+          : null,
       });
     } catch (err: any) {
       setError(err.message);
@@ -50,7 +58,8 @@ export function useBacktest(id: string): UseBacktestReturn {
 
   // Poll only if pending or running
   useEffect(() => {
-    if (backtest?.status !== 'pending' && backtest?.status !== 'running') return;
+    if (backtest?.status !== "pending" && backtest?.status !== "running")
+      return;
 
     const interval = setInterval(fetchBacktest, 3000);
     return () => clearInterval(interval);

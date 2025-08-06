@@ -1,16 +1,16 @@
-'use client';
-import React, { useState } from 'react';
+"use client";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Trash2, AlertTriangle } from 'lucide-react';
-import { ApiKey } from '@/lib/api/api-key-service';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Trash2, AlertTriangle } from "lucide-react";
+import { ApiKey } from "@/lib/api/api-key-service";
 
 interface DeleteApiKeyDialogProps {
   open: boolean;
@@ -83,7 +83,7 @@ export function DeleteApiKeyDialog({
             onClick={handleDelete}
             disabled={loading}
           >
-            {loading ? 'Revoking...' : 'Revoke API Key'}
+            {loading ? "Revoking..." : "Revoke API Key"}
           </Button>
         </div>
       </DialogContent>

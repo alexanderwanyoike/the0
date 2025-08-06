@@ -1,6 +1,6 @@
 ---
-title: 'Custom Bot Development'
-description: 'Build your own trading bots on the0 platform'
+title: "Custom Bot Development"
+description: "Build your own trading bots on the0 platform"
 order: 4
 ---
 

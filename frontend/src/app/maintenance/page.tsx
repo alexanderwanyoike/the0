@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw } from "lucide-react";
 
 export default function MaintenancePage() {
   return (
@@ -43,7 +43,7 @@ export default function MaintenancePage() {
         {/* Contact */}
         <div className="text-sm text-muted-foreground">
           <p>
-            Questions? Reach out to us at{' '}
+            Questions? Reach out to us at{" "}
             <a
               href="mailto:support@alphanueron.net"
               className="text-primary hover:underline"

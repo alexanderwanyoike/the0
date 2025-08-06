@@ -1,7 +1,7 @@
 ---
-title: 'Custom Bot Commands'
-description: 'Deploy and manage your custom trading algorithms'
-tags: ['cli', 'custom-bots', 'development']
+title: "Custom Bot Commands"
+description: "Deploy and manage your custom trading algorithms"
+tags: ["cli", "custom-bots", "development"]
 order: 4
 ---
 
@@ -46,7 +46,7 @@ my-bot/
 
 ```yaml
 name: my-awesome-bot
-description: 'A trading bot that makes money while you sleep'
+description: "A trading bot that makes money while you sleep"
 version: 1.0.0
 author: your-name
 type: scheduled # or 'realtime'
@@ -63,7 +63,7 @@ schema:
 readme: README.md
 
 metadata:
-  tags: ['arbitrage', 'crypto', 'defi']
+  tags: ["arbitrage", "crypto", "defi"]
   categories:
     - trading
   instruments:
@@ -247,5 +247,4 @@ docs/
 ## Related Commands
 
 - [Bot Commands](./bot-commands) - Deploy bot instances
-- [User Bot Commands](./user-bot-commands) - Manage marketplace bots
 - [Authentication](./authentication) - Set up API access

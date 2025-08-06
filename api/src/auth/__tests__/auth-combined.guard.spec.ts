@@ -85,7 +85,7 @@ describe('AuthCombinedGuard', () => {
     } as ExecutionContext;
 
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      'Authentication required. Provide Bearer JWT token.'
+      'Authentication required. Provide Bearer JWT token or ApiKey.'
     );
   });
 
@@ -99,7 +99,7 @@ describe('AuthCombinedGuard', () => {
     } as ExecutionContext;
 
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      'Authentication required. Provide Bearer JWT token.'
+      'Authentication required. Provide Bearer JWT token or ApiKey.'
     );
   });
 });

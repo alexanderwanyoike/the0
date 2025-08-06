@@ -1,7 +1,7 @@
-import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import { DocsFileSystem } from '@/lib/docs/file-system';
-import { DocsContent } from '@/components/docs/doc-content';
+import { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { DocsFileSystem } from "@/lib/docs/file-system";
+import { DocsContent } from "@/components/docs/doc-content";
 interface DocsPageProps {
   params: Promise<{ slug: string[] }>;
 }
@@ -15,13 +15,13 @@ export async function generateMetadata({
 
   if (!doc) {
     return {
-      title: 'Documentation Not Found | Theo',
+      title: "Documentation Not Found | Theo",
     };
   }
 
   return {
-    title: `${doc.frontmatter.title || 'Documentation'} | Theo`,
-    description: doc.frontmatter.description || 'Theo platform documentation',
+    title: `${doc.frontmatter.title || "Documentation"} | Theo`,
+    description: doc.frontmatter.description || "Theo platform documentation",
     keywords: doc.frontmatter.tags || [],
   };
 }

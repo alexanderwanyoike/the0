@@ -253,67 +253,6 @@ the0 custom-bot schema <bot|backtest> <version> <custom-bot-name>
 ```
 Retrieve the JSON schema for either the bot or backtest entrypoint of a custom bot.
 
-### 👤 User Bot Management
-Manage bots you've installed from the the0 marketplace.
-
-#### List User Bots
-```bash
-the0 user-bot list
-```
-Display all bots you've acquired from the marketplace.
-
-#### Get User Bot Schema
-```bash
-the0 user-bot schema <type|name> <version> [bot|schema]
-```
-Retrieve the JSON schema for a specific user bot type and version. Defaults to "bot" schema, use "schema" for backtest schemas.
-
-#### List User Bot Versions
-```bash
-the0 user-bot versions <type|name>
-```
-List all available versions for a specific user bot type.
-
-#### Install User Bot
-```bash
-the0 user-bot install <bot_name>
-```
-Install a bot from the marketplace to your account.
-
-**Examples:**
-```bash
-# List available user bots
-the0 user-bot list
-# 📋 Your installed bots:
-# Bot Name         | Version | Acquired At
-# momentum-trader  | 2.1.0   | 2024-01-10 09:15
-# mean-reversion   | 1.5.2   | 2024-01-08 14:30
-
-# Install a new bot
-the0 user-bot install advanced-arbitrage
-# 🚀 Installing bot: advanced-arbitrage
-# ✅ Bot installed successfully!
-
-# Get schema for a specific user bot
-the0 user-bot schema trading/momentum-trader 2.1.0 bot
-# 📄 Schema for user bot 'trading/momentum-trader' version '2.1.0' (bot entry point):
-# {
-#   "type": "object",
-#   "properties": {
-#     "symbol": { "type": "string" },
-#     "timeframe": { "type": "string" }
-#   }
-# }
-
-# List versions for a user bot
-the0 user-bot versions trading/momentum-trader
-# 📋 Found 3 version(s) for user bot 'trading/momentum-trader':
-# Version | Created At      | Type
-# 2.1.0   | 2024-01-15 10:30| trading/momentum-trader
-# 2.0.5   | 2024-01-10 09:15| trading/momentum-trader
-# 1.9.2   | 2024-01-05 14:22| trading/momentum-trader
-```
-
 
 ### 🔄 CLI Self-Update
 Keep your CLI up-to-date with automatic update notifications and seamless binary updates.

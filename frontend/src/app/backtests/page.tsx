@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { useAuth } from '@/contexts/auth-context';
+import { useEffect, useState } from "react";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { useAuth } from "@/contexts/auth-context";
 import {
   Table,
   TableBody,
@@ -10,32 +10,32 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import moment from 'moment';
-import { withAuth } from '@/components/auth/with-auth';
-import { useRouter } from 'next/navigation';
-import { BarChart3, Clock, Bot, Plus } from 'lucide-react';
-import { useBacktests } from '@/hooks/backtests/use-backtests';
-import { Backtest } from '@/types/backtest';
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import moment from "moment";
+import { withAuth } from "@/components/auth/with-auth";
+import { useRouter } from "next/navigation";
+import { BarChart3, Clock, Bot, Plus } from "lucide-react";
+import { useBacktests } from "@/hooks/backtests/use-backtests";
+import { Backtest } from "@/types/backtest";
 
 // Mobile Backtest Card Component
 const BacktestCard = ({ backtest }: { backtest: Backtest }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'default';
-      case 'running':
-        return 'secondary';
-      case 'pending':
-        return 'outline';
-      case 'failed':
-        return 'destructive';
+      case "completed":
+        return "default";
+      case "running":
+        return "secondary";
+      case "pending":
+        return "outline";
+      case "failed":
+        return "destructive";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
@@ -85,10 +85,10 @@ const BacktestCard = ({ backtest }: { backtest: Backtest }) => {
                   Created
                 </div>
                 <div className="truncate">
-                  {moment(backtest.createdAt).format('MMM D, YYYY')}
+                  {moment(backtest.createdAt).format("MMM D, YYYY")}
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  {moment(backtest.createdAt).format('h:mm A')}
+                  {moment(backtest.createdAt).format("h:mm A")}
                 </div>
               </div>
               <div className="min-w-0 flex-1 text-right">
@@ -96,10 +96,10 @@ const BacktestCard = ({ backtest }: { backtest: Backtest }) => {
                   Updated
                 </div>
                 <div className="truncate">
-                  {moment(backtest.updatedAt).format('MMM D, YYYY')}
+                  {moment(backtest.updatedAt).format("MMM D, YYYY")}
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  {moment(backtest.updatedAt).format('h:mm A')}
+                  {moment(backtest.updatedAt).format("h:mm A")}
                 </div>
               </div>
             </div>
@@ -135,21 +135,21 @@ const BacktestsPage = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'default';
-      case 'running':
-        return 'secondary';
-      case 'pending':
-        return 'outline';
-      case 'failed':
-        return 'destructive';
+      case "completed":
+        return "default";
+      case "running":
+        return "secondary";
+      case "pending":
+        return "outline";
+      case "failed":
+        return "destructive";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
   const handleCreateBacktest = () => {
-    router.push('/backtests/create');
+    router.push("/backtests/create");
   };
 
   if (loading) {
@@ -196,8 +196,8 @@ const BacktestsPage = () => {
                 Backtests
               </h2>
               <p className="text-xl sm:text-2xl font-semibold">
-                {backtests.length}{' '}
-                {backtests.length === 1 ? 'backtest' : 'backtests'}
+                {backtests.length}{" "}
+                {backtests.length === 1 ? "backtest" : "backtests"}
               </p>
             </div>
             <Button
@@ -276,20 +276,20 @@ const BacktestsPage = () => {
                         <TableCell className="text-sm">
                           <div className="space-y-1">
                             <div>
-                              {moment(backtest.createdAt).format('MMM D, YYYY')}
+                              {moment(backtest.createdAt).format("MMM D, YYYY")}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {moment(backtest.createdAt).format('h:mm A')}
+                              {moment(backtest.createdAt).format("h:mm A")}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="space-y-1">
                             <div>
-                              {moment(backtest.updatedAt).format('MMM D, YYYY')}
+                              {moment(backtest.updatedAt).format("MMM D, YYYY")}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {moment(backtest.updatedAt).format('h:mm A')}
+                              {moment(backtest.updatedAt).format("h:mm A")}
                             </div>
                           </div>
                         </TableCell>

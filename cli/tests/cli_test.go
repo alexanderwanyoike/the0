@@ -151,111 +151,6 @@ func TestBotDeployCommand_Usage(t *testing.T) {
 	}
 }
 
-func TestUserBotSchemaCommand_Arguments(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        []string
-		expectError bool
-		errorMsg    string
-	}{
-		{
-			name:        "correct two arguments",
-			args:        []string{"trading/my-bot", "1.0.0"},
-			expectError: false,
-		},
-		{
-			name:        "correct three arguments",
-			args:        []string{"trading/my-bot", "1.0.0", "bot"},
-			expectError: false,
-		},
-		{
-			name:        "no arguments",
-			args:        []string{},
-			expectError: true,
-			errorMsg:    "accepts between 2 and 3 arg(s), received 0",
-		},
-		{
-			name:        "only one argument",
-			args:        []string{"trading/my-bot"},
-			expectError: true,
-			errorMsg:    "accepts between 2 and 3 arg(s), received 1",
-		},
-		{
-			name:        "too many arguments",
-			args:        []string{"trading/my-bot", "1.0.0", "bot", "extra"},
-			expectError: true,
-			errorMsg:    "accepts between 2 and 3 arg(s), received 4",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := cmd.NewUserBotSchemaCmd()
-
-			err := cmd.Args(cmd, tt.args)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got nil")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("Expected error to contain '%s', got: %s", tt.errorMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
-func TestUserBotVersionsCommand_Arguments(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        []string
-		expectError bool
-		errorMsg    string
-	}{
-		{
-			name:        "correct single argument",
-			args:        []string{"trading/my-bot"},
-			expectError: false,
-		},
-		{
-			name:        "no arguments",
-			args:        []string{},
-			expectError: true,
-			errorMsg:    "accepts 1 arg(s), received 0",
-		},
-		{
-			name:        "too many arguments",
-			args:        []string{"trading/my-bot", "extra"},
-			expectError: true,
-			errorMsg:    "accepts 1 arg(s), received 2",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := cmd.NewUserBotVersionsCmd()
-
-			err := cmd.Args(cmd, tt.args)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got nil")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("Expected error to contain '%s', got: %s", tt.errorMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
 func TestCustomBotVersionsCommand_Arguments(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -303,34 +198,6 @@ func TestCustomBotVersionsCommand_Arguments(t *testing.T) {
 	}
 }
 
-func TestUserBotSchemaCommand_Usage(t *testing.T) {
-	cmd := cmd.NewUserBotSchemaCmd()
-
-	expectedUsage := "schema <type|name> <version> [bot|backtest]"
-	if cmd.Use != expectedUsage {
-		t.Errorf("Expected usage '%s', got '%s'", expectedUsage, cmd.Use)
-	}
-
-	expectedShort := "Get the schema of a user bot"
-	if cmd.Short != expectedShort {
-		t.Errorf("Expected short description '%s', got '%s'", expectedShort, cmd.Short)
-	}
-}
-
-func TestUserBotVersionsCommand_Usage(t *testing.T) {
-	cmd := cmd.NewUserBotVersionsCmd()
-
-	expectedUsage := "versions <type|name>"
-	if cmd.Use != expectedUsage {
-		t.Errorf("Expected usage '%s', got '%s'", expectedUsage, cmd.Use)
-	}
-
-	expectedShort := "List all versions of a user bot"
-	if cmd.Short != expectedShort {
-		t.Errorf("Expected short description '%s', got '%s'", expectedShort, cmd.Short)
-	}
-}
-
 func TestCustomBotVersionsCommand_Usage(t *testing.T) {
 	cmd := cmd.NewCustomBotVersionsCmd()
 
@@ -342,30 +209,6 @@ func TestCustomBotVersionsCommand_Usage(t *testing.T) {
 	expectedShort := "List all versions of a custom bot"
 	if cmd.Short != expectedShort {
 		t.Errorf("Expected short description '%s', got '%s'", expectedShort, cmd.Short)
-	}
-}
-
-func TestUserBotCommand_HasNewSubcommands(t *testing.T) {
-	cmd := cmd.NewUserBotCmd()
-
-	subcommands := cmd.Commands()
-
-	var hasSchema, hasVersions bool
-	for _, subcmd := range subcommands {
-		if subcmd.Name() == "schema" {
-			hasSchema = true
-		}
-		if subcmd.Name() == "versions" {
-			hasVersions = true
-		}
-	}
-
-	if !hasSchema {
-		t.Error("Expected user-bot command to have 'schema' subcommand")
-	}
-
-	if !hasVersions {
-		t.Error("Expected user-bot command to have 'versions' subcommand")
 	}
 }
 

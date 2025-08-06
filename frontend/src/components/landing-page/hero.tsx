@@ -1,7 +1,7 @@
-'use client';
-import Link from 'next/link';
-import { ArrowRight, Code, TestTube, Zap, BarChart3 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+"use client";
+import Link from "next/link";
+import { ArrowRight, Code, TestTube, Zap, BarChart3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function HeroSection() {
   return (
@@ -14,7 +14,9 @@ export function HeroSection() {
             <span className="text-primary">trading platform</span>
           </h1>
           <p className="mt-6 text-xl text-muted-foreground max-w-3xl mx-auto">
-            Create, deploy, and manage trading bots with ease. Whether you're building a simple DCA strategy or complex multi-asset arbitrage algorithms, the0 provides the infrastructure and tools you need.
+            Create, deploy, and manage trading bots with ease. Whether you're
+            building a simple DCA strategy or complex multi-asset arbitrage
+            algorithms, the0 provides the infrastructure and tools you need.
           </p>
 
           {/* Main CTA Buttons */}
@@ -40,7 +42,8 @@ export function HeroSection() {
               </div>
               <h3 className="font-semibold mb-2">Custom Bot Development</h3>
               <p className="text-sm text-muted-foreground">
-                Build bots in Python or JavaScript (and more in the future) with any libraries you prefer
+                Build bots in Python or JavaScript (and more in the future) with
+                any libraries you prefer
               </p>
             </div>
             <div className="text-center">
@@ -49,8 +52,9 @@ export function HeroSection() {
               </div>
               <h3 className="font-semibold mb-2">Custom Backtesting</h3>
               <p className="text-sm text-muted-foreground">
-                Test strategies with historical data before going live. Define your own custom backtesting implementation
-                with whatever libraries you prefer.
+                Test strategies with historical data before going live. Define
+                your own custom backtesting implementation with whatever
+                libraries you prefer.
               </p>
             </div>
             <div className="text-center">

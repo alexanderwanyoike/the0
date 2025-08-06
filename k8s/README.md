@@ -5,20 +5,30 @@ This directory contains Helm charts and configuration for deploying the0 platfor
 ## Quick Start
 
 ### Minikube (Local Development)
+
+**Starting from absolute zero (minikube not running):**
+
 ```bash
-# Single command - deploy and show service URLs
+# Single command - starts minikube, builds images, deploys everything
 make minikube-up
 
-# Services automatically available at minikube URLs:
-# - Frontend: http://192.168.49.2:30XXX
-# - API: http://192.168.49.2:30XXX  
-# - MinIO Console: http://192.168.49.2:30XXX
-# - Bot Runner: http://192.168.49.2:30XXX
-# - Backtest Runner: http://192.168.49.2:30XXX
-# - Bot Scheduler: http://192.168.49.2:30XXX
+# Services will be available at:
+# - Frontend:    http://the0.local:30001
+# - API:         http://api.the0.local:30000  
+# - MinIO Console: http://minio.the0.local:30002
 
-# No additional setup required - works immediately!
+# Set up local domain names (required once)
+make setup-hosts
+
+# That's it! No tunnel required.
 ```
+
+**If you already have minikube running:**
+```bash
+# Just deploy (faster, skips minikube start)
+make minikube-up
+```
+
 
 ### Production Cluster
 ```bash
@@ -32,15 +42,20 @@ make dev
 ## Prerequisites
 
 ### Required Tools
-- **Docker** - For building local images
+
+The `make minikube-up` command will check for these tools and provide install links if missing:
+
+- **Docker** - For building local images ([install guide](https://docs.docker.com/get-docker/))
 - **kubectl** - Kubernetes CLI tool ([install guide](https://kubernetes.io/docs/tasks/tools/))
 - **Helm 3.0+** - Kubernetes package manager ([install guide](https://helm.sh/docs/intro/install/))
 - **minikube** - For local development ([install guide](https://minikube.sigs.k8s.io/docs/start/))
 
 ### Minikube Requirements
-- Minimum 4GB RAM and 2 CPUs allocated to minikube
+- Minimum 4GB RAM and 4 CPUs allocated to minikube
 - 20GB+ disk space
 - Docker driver (recommended)
+
+**Don't have these installed?** Run `make minikube-up` anyway - it will tell you exactly what to install!
 
 ## Project Structure
 
@@ -57,10 +72,11 @@ k8s/
 │   ├── the0-api.yaml       # Main API service
 │   ├── the0-frontend.yaml  # Frontend web application
 │   ├── the0-analyzer.yaml  # Security analyzer service
-│   ├── bot-runner.yaml     # Bot execution service
-│   ├── backtest-runner.yaml # Backtesting service
-│   ├── bot-scheduler.yaml  # Bot scheduling service
-│   ├── minikube-services.yaml # LoadBalancer services for minikube
+│   ├── bot-runner.yaml     # Bot execution service (master + workers)
+│   ├── backtest-runner.yaml # Backtesting service (master + workers)
+│   ├── bot-scheduler.yaml  # Bot scheduling service (master + workers)
+│   ├── external-services.yaml # NodePort services for .local access
+│   ├── ingress.yaml        # Ingress configuration (optional)
 │   └── _helpers.tpl        # Helm template helpers
 └── README.md              # This file
 ```
@@ -68,44 +84,54 @@ k8s/
 ### Architecture Overview
 
 **Infrastructure Services** (can be disabled for production):
-- **PostgreSQL** - Main application database
-- **MongoDB** - Bot runtime data and metrics
-- **NATS with JetStream** - Message broker for service communication
-- **MinIO** - S3-compatible object storage for logs and assets
+- **PostgreSQL** - Main application database (port 5432)
+- **MongoDB** - Bot runtime data and metrics (port 27017)
+- **NATS with JetStream** - Message broker for service communication (port 4222)
+- **MinIO** - S3-compatible object storage for logs and assets (port 9000, console 9001)
 
 **Application Services**:
-- **the0-api** - REST API server (NestJS/TypeScript)
-- **the0-frontend** - Web interface (Next.js/React)
-- **the0-analyzer** - Security analysis service (Python)
-- **bot-runner** - Bot execution runtime (Go)
-- **backtest-runner** - Backtesting engine (Go)  
-- **bot-scheduler** - Bot scheduling service (Go)
+- **the0-api** - REST API server (NestJS/TypeScript) - port 3000
+- **the0-frontend** - Web interface (Next.js/React) - port 3000
+- **the0-analyzer** - Security analysis service (Python) - background service
+- **bot-runner** - Bot execution runtime (Go) - HTTP port 8080, gRPC port 50051
+- **backtest-runner** - Backtesting engine (Go) - HTTP port 8080, gRPC port 50052  
+- **bot-scheduler** - Bot scheduling service (Go) - HTTP port 8080, gRPC port 50053
+
+**External Access** (via NodePort):
+- Frontend: NodePort 30001 → the0.local:30001
+- API: NodePort 30000 → api.the0.local:30000  
+- MinIO Console: NodePort 30002 → minio.the0.local:30002
 
 ## Installation Methods
 
 ### 1. Minikube (Recommended for Development)
 
-Deploy with the same endpoints as docker-compose:
+Deploy with NodePort services for easy access:
 
 ```bash
-# Single command - builds images, deploys, and starts tunnels
-make minikube
+# Single command - builds images and deploys
+make minikube-up
 ```
 
-**Endpoints (identical to docker-compose):**
-- Frontend: http://localhost:3001
-- API: http://localhost:3000
-- MinIO Console: http://localhost:9001
-- Bot Runner API: http://localhost:8080
-- Backtest Runner API: http://localhost:8081
-- Bot Scheduler API: http://localhost:8082
+**Endpoints (via .local domains):**
+- Frontend: http://the0.local:30001
+- API: http://api.the0.local:30000
+- MinIO Console: http://minio.the0.local:30002
+
+**Note:** Runtime services (bot-runner, backtest-runner, bot-scheduler) are internal services accessed via the API.
 
 The command will:
-1. Start minikube (if not running)
-2. Build all Docker images in minikube environment  
-3. Deploy all services with Helm
-4. Automatically start port forwarding for localhost access
-5. Keep running until you press Ctrl+C
+1. Check prerequisites (minikube, docker, helm, kubectl)
+2. Start minikube (if not running) with 4GB RAM and 4 CPUs
+3. Build all Docker images in minikube environment  
+4. Deploy all services with Helm using NodePort
+5. Show service URLs for access
+
+**Required setup step:**
+```bash
+# Add .local domains to /etc/hosts (required once)
+make setup-hosts
+```
 
 ### 2. Production Cluster with External Infrastructure
 
@@ -122,16 +148,7 @@ make deploy
 # minio.enabled: false
 ```
 
-### 3. Development Cluster with Included Infrastructure
-
-For development clusters where you want the full stack:
-
-```bash
-# Deploy with included databases and services
-make dev
-```
-
-### 4. Manual Helm Deployment
+### 3. Manual Helm Deployment
 
 For custom configurations:
 
@@ -210,8 +227,20 @@ make logs
 # Show service URLs
 make services
 
-# Remove deployment
-make uninstall
+# Pause minikube (saves resources, preserves everything)
+make minikube-pause
+
+# Resume paused minikube
+make minikube-resume
+
+# Stop minikube (saves more resources than pause)
+make minikube-stop
+
+# Start stopped minikube
+make minikube-start
+
+# Remove deployment but keep minikube
+make minikube-down
 
 # Remove deployment and namespace
 make clean
@@ -223,17 +252,62 @@ make check-deps
 ## Networking
 
 ### Minikube
-- Uses LoadBalancer services accessible via minikube service URLs
-- `make minikube-up` shows all service URLs automatically
-- No tunnels or port forwarding needed - works immediately
-- Example: `http://192.168.49.2:30587` for frontend
+- Uses NodePort services with fixed ports for predictable access
+- External services available via .local domains:
+  - Frontend: the0.local:30001 (NodePort 30001)
+  - API: api.the0.local:30000 (NodePort 30000) 
+  - MinIO Console: minio.the0.local:30002 (NodePort 30002)
+- Requires `/etc/hosts` setup via `make setup-hosts`
+- No tunnels or port forwarding needed
 
 ### Production Clusters
 - Uses ClusterIP services by default for internal communication
-- LoadBalancer services get external IPs from cloud providers
+- External access via ingress controllers or LoadBalancer services
 - Configure ingress in `values.yaml` for custom domain access
+- Set `externalServices.enabled: false` to disable NodePort services
 
 ## Troubleshooting
+
+### Starting from Zero Issues
+
+**"❌ kubectl not configured or cluster unreachable"**
+- This should no longer happen with the updated Makefile
+- If you see this, minikube failed to start - check Docker is running
+
+**"❌ Minikube is required"**
+```bash
+# Install minikube first
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+```
+
+**"❌ Docker is required"**
+```bash
+# Install Docker first
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+**Network issues / Docker Hub timeouts:**
+```bash
+# Wait for network to improve and try again
+make minikube-up
+
+# Or check your internet connection and Docker daemon
+docker run hello-world
+```
+
+**Minikube won't start:**
+```bash
+# Check Docker is running
+sudo systemctl start docker
+
+# Reset minikube if needed
+minikube delete
+minikube start --driver=docker
+```
 
 ### Common Issues
 
@@ -244,11 +318,13 @@ eval $(minikube docker-env)
 docker build -t the0-api:latest ../api
 ```
 
-**Can't access services:**
+**Can't access services (domains don't resolve):**
 ```bash
-# Check service URLs with
-make services
-# Use the minikube URLs shown (no tunnel needed)
+# Run the hosts setup command
+make setup-hosts
+
+# Or manually add to /etc/hosts:
+echo "$(minikube ip) the0.local api.the0.local minio.the0.local" | sudo tee -a /etc/hosts
 ```
 
 **Pods stuck in ImagePullBackOff:**
@@ -256,13 +332,6 @@ make services
 # Check image pull policy
 kubectl get pods -n the0
 kubectl describe pod <pod-name> -n the0
-```
-
-**Service connectivity issues:**
-```bash
-# Check service endpoints
-kubectl get endpoints -n the0
-kubectl get svc -n the0
 ```
 
 ### Debug Commands
@@ -294,14 +363,16 @@ kubectl run debug --image=busybox -it --rm --restart=Never -- sh
 
 | Feature | Docker Compose | Kubernetes |
 |---------|----------------|------------|
-| **Command** | `docker-compose up` | `make minikube-up` |
-| **Endpoints** | localhost:3000/3001 | minikube URLs (auto-shown) |
-| **Setup** | Manual | Fully automated |
-| **Infrastructure** | Included | Optional (configurable) |
+| **Command** | `make up` | `make minikube-up` |
+| **Endpoints** | localhost:3000/3001 | the0.local:30001, api.the0.local:30000 |
+| **Setup** | Single command | Single command + hosts setup |
+| **Infrastructure** | Included | Included (configurable) |
 | **Scaling** | Manual | Automatic + manual |
 | **Health checks** | Basic | Advanced (liveness/readiness) |
 | **Service discovery** | Container names | DNS-based |
 | **Persistence** | Docker volumes | PersistentVolumes |
-| **Production ready** | No | Yes |
+| **Production ready** | Development only | Yes |
+| **Resource limits** | Manual | Automatic |
+| **Restart policies** | Basic | Advanced |
 
-The Kubernetes deployment provides **similar developer experience** to docker-compose with a single command, while adding production-ready features like automatic restarts, health checks, horizontal scaling, and deployment flexibility. Service URLs are automatically displayed after deployment.
+The Kubernetes deployment provides **similar developer experience** to docker-compose with predictable endpoints and single-command deployment, while adding production-ready features like automatic restarts, health checks, horizontal scaling, and deployment flexibility.

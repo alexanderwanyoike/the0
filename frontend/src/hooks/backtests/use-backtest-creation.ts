@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
-import { authFetch } from '@/lib/auth-fetch';
+import { useState, useCallback } from "react";
+import { authFetch } from "@/lib/auth-fetch";
 import {
   CreateBacktestRequest,
   CreateBacktestResponse,
-} from '@/types/backtest';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+} from "@/types/backtest";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 interface UseBacktestCreationReturn {
   createBacktest: (
@@ -30,22 +30,22 @@ export function useBacktestCreation(): UseBacktestCreationReturn {
 
       try {
         console.log(data);
-        const response = await authFetch('/api/backtests', {
-          method: 'POST',
+        const response = await authFetch("/api/backtests", {
+          method: "POST",
           body: JSON.stringify(data),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(
-            errorData.error?.message || 'Failed to create backtest',
+            errorData.error?.message || "Failed to create backtest",
           );
         }
 
         const result = await response.json();
 
         toast({
-          title: 'Backtest Created',
+          title: "Backtest Created",
           description: `Backtest "${data.name}" has been created successfully`,
         });
 
@@ -54,13 +54,13 @@ export function useBacktestCreation(): UseBacktestCreationReturn {
 
         return result;
       } catch (err: any) {
-        const errorMessage = err.message || 'Failed to create backtest';
+        const errorMessage = err.message || "Failed to create backtest";
         setError(errorMessage);
 
         toast({
-          title: 'Error',
+          title: "Error",
           description: errorMessage,
-          variant: 'destructive',
+          variant: "destructive",
         });
 
         return null;

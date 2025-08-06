@@ -1,9 +1,9 @@
-'use client';
-import React from 'react';
-import { useParams } from 'next/navigation';
-import { withAuth } from '@/components/auth/with-auth';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { CustomBotDetailPage } from '@/components/custom-bots/custom-bot-detail-page';
+"use client";
+import React from "react";
+import { useParams } from "next/navigation";
+import { withAuth } from "@/components/auth/with-auth";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { CustomBotDetailPage } from "@/components/custom-bots/custom-bot-detail-page";
 
 interface CustomBotDetailPageProps {
   params: { name: string };

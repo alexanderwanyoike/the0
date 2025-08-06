@@ -1,5 +1,5 @@
-'use client';
-import React, { useEffect, useRef } from 'react';
+"use client";
+import React, { useEffect, useRef } from "react";
 
 interface TradingViewWidgetProps {
   symbol: string;
@@ -14,10 +14,10 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
 
     if (!tvScriptLoadingPromise) {
       tvScriptLoadingPromise = new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.id = 'tradingview-widget-loading-script';
-        script.src = 'https://s3.tradingview.com/tv.js';
-        script.type = 'text/javascript';
+        const script = document.createElement("script");
+        script.id = "tradingview-widget-loading-script";
+        script.src = "https://s3.tradingview.com/tv.js";
+        script.type = "text/javascript";
         script.onload = () => resolve();
         document.head.appendChild(script);
       });
@@ -33,21 +33,21 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
 
     function createWidget() {
       if (
-        document.getElementById('tradingview_widget') &&
-        'TradingView' in window
+        document.getElementById("tradingview_widget") &&
+        "TradingView" in window
       ) {
         new (window as any).TradingView.widget({
           autosize: true,
           symbol: symbol,
-          interval: 'D',
-          timezone: 'Etc/UTC',
-          theme: 'dark',
-          style: '1',
-          locale: 'en',
-          toolbar_bg: '#f1f3f6',
+          interval: "D",
+          timezone: "Etc/UTC",
+          theme: "dark",
+          style: "1",
+          locale: "en",
+          toolbar_bg: "#f1f3f6",
           enable_publishing: false,
           allow_symbol_change: true,
-          container_id: 'tradingview_widget',
+          container_id: "tradingview_widget",
         });
       }
     }
@@ -56,11 +56,11 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = ({ symbol }) => {
   return (
     <div
       className="tradingview-widget-container"
-      style={{ height: '100%', width: '100%' }}
+      style={{ height: "100%", width: "100%" }}
     >
       <div
         id="tradingview_widget"
-        style={{ height: 'calc(100% - 32px)', width: '100%' }}
+        style={{ height: "calc(100% - 32px)", width: "100%" }}
       />
       <div className="tradingview-widget-copyright">
         <a

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { DocsFileSystem } from '@/lib/docs/file-system';
+import { NextRequest, NextResponse } from "next/server";
+import { DocsFileSystem } from "@/lib/docs/file-system";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,11 +11,11 @@ export async function GET(request: NextRequest) {
       data: navigation,
     });
   } catch (error: any) {
-    console.error('Error fetching docs navigation:', error);
+    console.error("Error fetching docs navigation:", error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to load documentation navigation',
+        error: "Failed to load documentation navigation",
       },
       { status: 500 },
     );

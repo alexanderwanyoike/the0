@@ -1,13 +1,13 @@
-import { AuthUser } from '@/lib/auth/types';
-import { cn } from '@/lib/utils';
-import { NavItem } from './nav-item';
-import { UserActionsButton } from './user-actions-button';
-import { APP_NAME } from '@/lib/constants';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { JSX, useRef } from 'react';
-import Link from 'next/link';
+import { AuthUser } from "@/lib/auth/types";
+import { cn } from "@/lib/utils";
+import { NavItem } from "./nav-item";
+import { UserActionsButton } from "./user-actions-button";
+import { APP_NAME } from "@/lib/constants";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { JSX, useRef } from "react";
+import Link from "next/link";
 
 type NavItemType = {
   name: string;
@@ -35,18 +35,18 @@ export function Sidebar({
   return (
     <div
       className={cn(
-        'fixed inset-y-0 left-0 z-20',
-        'flex flex-col border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
-        'transition-all duration-300 ease-in-out',
-        isCollapsed ? 'w-[60px]' : 'w-64',
+        "fixed inset-y-0 left-0 z-20",
+        "flex flex-col border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        "transition-all duration-300 ease-in-out",
+        isCollapsed ? "w-[60px]" : "w-64",
       )}
     >
       {/* Logo section */}
 
       <div
         className={cn(
-          'flex h-12 items-center gap-2 border-b shrink-0',
-          isCollapsed ? 'justify-center px-0' : 'px-4',
+          "flex h-12 items-center gap-2 border-b shrink-0",
+          isCollapsed ? "justify-center px-0" : "px-4",
         )}
       >
         <Link
@@ -73,8 +73,8 @@ export function Sidebar({
         variant="ghost"
         size="icon"
         className={cn(
-          'absolute -right-4 top-12 h-8 w-8 rounded-full border bg-background',
-          'hover:bg-accent hover:text-accent-foreground',
+          "absolute -right-4 top-12 h-8 w-8 rounded-full border bg-background",
+          "hover:bg-accent hover:text-accent-foreground",
         )}
         onClick={() => onCollapsedChange(!isCollapsed)}
       >
@@ -86,7 +86,7 @@ export function Sidebar({
       </Button>
 
       {/* Navigation section */}
-      <nav className={cn('py-3', isCollapsed ? 'px-2' : 'px-4')}>
+      <nav className={cn("py-3", isCollapsed ? "px-2" : "px-4")}>
         {navigation.map((item) => (
           <NavItem
             key={item.name}

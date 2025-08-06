@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 export interface AuthFetchOptions extends RequestInit {
   skipTokenRefresh?: boolean;
@@ -9,7 +9,10 @@ let globalAuthService: any = null;
 let globalLogout: (() => Promise<void>) | null = null;
 
 // Function to set the auth service from the context
-export const setAuthFetchService = (authService: any, logoutFn: () => Promise<void>) => {
+export const setAuthFetchService = (
+  authService: any,
+  logoutFn: () => Promise<void>,
+) => {
   globalAuthService = authService;
   globalLogout = logoutFn;
 };
@@ -19,13 +22,13 @@ export async function authFetch(
   options: AuthFetchOptions = {},
 ): Promise<Response> {
   if (!globalAuthService) {
-    throw new Error('Auth service not initialized');
+    throw new Error("Auth service not initialized");
   }
-  
+
   const token = globalAuthService.getToken();
-  
+
   if (!token) {
-    throw new Error('Not authenticated');
+    throw new Error("Not authenticated");
   }
 
   const { skipTokenRefresh, ...fetchOptions } = options;
@@ -33,9 +36,9 @@ export async function authFetch(
   const requestOptions: RequestInit = {
     ...fetchOptions,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...fetchOptions.headers,
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   };
 
@@ -48,7 +51,7 @@ export async function authFetch(
     } else if (globalAuthService) {
       globalAuthService.logout();
     }
-    throw new Error('Authentication failed');
+    throw new Error("Authentication failed");
   }
 
   return response;

@@ -1,6 +1,6 @@
-import axios from '@/lib/axios-interceptor';
-import { Result, Ok, Failure } from '@/lib/result';
-import { getErrorMessage, getErrorStatusCode } from '@/lib/axios';
+import axios from "@/lib/axios-interceptor";
+import { Result, Ok, Failure } from "@/lib/result";
+import { getErrorMessage, getErrorStatusCode } from "@/lib/axios";
 
 export interface ApiKey {
   id: string;
@@ -32,7 +32,7 @@ export class ApiKeyService {
     Result<ApiKey[], ApiKeyServiceError>
   > {
     try {
-      const response = await axios.get('/api/api-keys', {
+      const response = await axios.get("/api/api-keys", {
         timeout: 10000,
       });
       return Ok(response.data);
@@ -45,7 +45,7 @@ export class ApiKeyService {
     request: CreateApiKeyRequest,
   ): Promise<Result<ApiKey, ApiKeyServiceError>> {
     try {
-      const response = await axios.post('/api/api-keys', request, {
+      const response = await axios.post("/api/api-keys", request, {
         timeout: 10000,
       });
       return Ok(response.data);
@@ -84,7 +84,7 @@ export class ApiKeyService {
     Result<ApiKeyStats, ApiKeyServiceError>
   > {
     try {
-      const response = await axios.get('/api/api-keys/stats/summary', {
+      const response = await axios.get("/api/api-keys/stats/summary", {
         timeout: 10000,
       });
       return Ok(response.data);

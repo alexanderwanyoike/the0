@@ -20,10 +20,10 @@ import (
 // setupMinIOTestContainer starts a MinIO container for testing
 func setupMinIOTestContainer(t *testing.T) (testcontainers.Container, string, string, string) {
 	ctx := context.Background()
-	
+
 	accessKey := "testkey"
 	secretKey := "testsecret"
-	
+
 	req := testcontainers.ContainerRequest{
 		Image:        "minio/minio:latest",
 		ExposedPorts: []string{"9000/tcp"},
@@ -34,21 +34,21 @@ func setupMinIOTestContainer(t *testing.T) (testcontainers.Container, string, st
 		Cmd:        []string{"server", "/data"},
 		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp"),
 	}
-	
+
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
 	require.NoError(t, err)
-	
+
 	host, err := container.Host(ctx)
 	require.NoError(t, err)
-	
+
 	port, err := container.MappedPort(ctx, "9000")
 	require.NoError(t, err)
-	
+
 	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
-	
+
 	return container, endpoint, accessKey, secretKey
 }
 
@@ -83,21 +83,21 @@ func TestNewMinIOLogger(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "MINIO_SECRET_KEY")
 	})
-	
+
 	t.Run("SuccessfulConnection", func(t *testing.T) {
 		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
 		defer container.Terminate(context.Background())
-		
+
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
 		os.Setenv("MINIO_SECRET_KEY", secretKey)
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
-		
+
 		logger, err := NewMinIOLogger(context.Background())
 		assert.NoError(t, err)
 		assert.NotNil(t, logger)
-		
+
 		err = logger.Close()
 		assert.NoError(t, err)
 	})
@@ -130,7 +130,7 @@ func TestGetBotMutex(t *testing.T) {
 	// Test different bot gets different mutex
 	mutex3 := logger.getMutex("bot2")
 	assert.NotNil(t, mutex3)
-	
+
 	// Use direct pointer comparison instead of assert.NotEqual (which has issues with sync.Mutex)
 	if mutex1 == mutex3 {
 		t.Errorf("Expected different mutexes for different bots, but got the same mutex")
@@ -147,73 +147,73 @@ func TestAppendBotLogs(t *testing.T) {
 		err := logger.AppendBotLogs(context.Background(), "test-bot", "")
 		assert.NoError(t, err) // Should not error on empty logs
 	})
-	
+
 	t.Run("IntegrationTest", func(t *testing.T) {
 		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
 		defer container.Terminate(context.Background())
-		
+
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
 		os.Setenv("MINIO_SECRET_KEY", secretKey)
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
-		
+
 		logger, err := NewMinIOLogger(context.Background())
 		require.NoError(t, err)
 		defer logger.Close()
-		
+
 		botID := "test-bot-123"
-		
+
 		// Test appending logs multiple times
 		err = logger.AppendBotLogs(context.Background(), botID, "First log entry")
 		assert.NoError(t, err)
-		
+
 		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry")
 		assert.NoError(t, err)
-		
+
 		// Verify logs were written by reading them back
 		client, err := minio.New(endpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 			Secure: false,
 		})
 		require.NoError(t, err)
-		
+
 		timestamp := time.Now().Format("20060102")
 		objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
-		
+
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
 		require.NoError(t, err)
 		defer obj.Close()
-		
+
 		content, err := io.ReadAll(obj)
 		require.NoError(t, err)
-		
+
 		contentStr := string(content)
 		assert.Contains(t, contentStr, "First log entry")
 		assert.Contains(t, contentStr, "Second log entry")
 		assert.Contains(t, contentStr, time.Now().Format("2006-01-02")) // Should have timestamps
 	})
-	
+
 	t.Run("ConcurrentAppends", func(t *testing.T) {
 		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
 		defer container.Terminate(context.Background())
-		
+
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
 		os.Setenv("MINIO_SECRET_KEY", secretKey)
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
-		
+
 		logger, err := NewMinIOLogger(context.Background())
 		require.NoError(t, err)
 		defer logger.Close()
-		
+
 		botID := "concurrent-bot"
 		numGoroutines := 10
-		
+
 		var wg sync.WaitGroup
 		wg.Add(numGoroutines)
-		
+
 		// Launch multiple goroutines to append logs concurrently
 		for i := 0; i < numGoroutines; i++ {
 			go func(index int) {
@@ -223,26 +223,26 @@ func TestAppendBotLogs(t *testing.T) {
 				assert.NoError(t, err)
 			}(i)
 		}
-		
+
 		wg.Wait()
-		
+
 		// Verify all logs were written
 		client, err := minio.New(endpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 			Secure: false,
 		})
 		require.NoError(t, err)
-		
+
 		timestamp := time.Now().Format("20060102")
 		objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
-		
+
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
 		require.NoError(t, err)
 		defer obj.Close()
-		
+
 		content, err := io.ReadAll(obj)
 		require.NoError(t, err)
-		
+
 		contentStr := string(content)
 		// Each goroutine should have written its log entry
 		for i := 0; i < numGoroutines; i++ {
@@ -261,43 +261,43 @@ func TestStoreFinalLogs(t *testing.T) {
 		err := logger.StoreFinalLogs(context.Background(), "test-bot", "")
 		assert.NoError(t, err) // Should not error on empty logs
 	})
-	
+
 	t.Run("IntegrationTest", func(t *testing.T) {
 		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
 		defer container.Terminate(context.Background())
-		
+
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
 		os.Setenv("MINIO_SECRET_KEY", secretKey)
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
-		
+
 		logger, err := NewMinIOLogger(context.Background())
 		require.NoError(t, err)
 		defer logger.Close()
-		
+
 		botID := "final-logs-bot"
 		finalLogs := "Bot execution completed successfully\nFinal metrics: CPU 0.5%, Memory 128MB"
-		
+
 		err = logger.StoreFinalLogs(context.Background(), botID, finalLogs)
 		assert.NoError(t, err)
-		
+
 		// Verify logs were stored by reading them back
 		client, err := minio.New(endpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 			Secure: false,
 		})
 		require.NoError(t, err)
-		
+
 		objectPath := fmt.Sprintf("%s/logs.txt", botID)
-		
+
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
 		require.NoError(t, err)
 		defer obj.Close()
-		
+
 		content, err := io.ReadAll(obj)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, finalLogs, string(content))
 	})
 }
@@ -366,10 +366,10 @@ func TestGetMutexConcurrency(t *testing.T) {
 	// Test concurrent access to getMutex
 	const numGoroutines = 100
 	const botID = "concurrent-test-bot"
-	
+
 	var wg sync.WaitGroup
 	mutexes := make([]*sync.Mutex, numGoroutines)
-	
+
 	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func(index int) {
@@ -377,15 +377,15 @@ func TestGetMutexConcurrency(t *testing.T) {
 			mutexes[index] = logger.getMutex(botID)
 		}(i)
 	}
-	
+
 	wg.Wait()
-	
+
 	// All goroutines should have gotten the same mutex
 	firstMutex := mutexes[0]
 	for i := 1; i < numGoroutines; i++ {
 		assert.Equal(t, firstMutex, mutexes[i], "All goroutines should get the same mutex for the same bot ID")
 	}
-	
+
 	// Different bot should get different mutex
 	differentBotMutex := logger.getMutex("different-bot")
 	// Use direct pointer comparison since assert.NotEqual has issues with sync.Mutex
@@ -402,24 +402,24 @@ func TestMinIOLoggerInterface(t *testing.T) {
 		mutexes:       make(map[string]*sync.Mutex),
 		mutexesMu:     sync.RWMutex{},
 	}
-	
+
 	assert.NotNil(t, logger)
-	
+
 	// Test interface methods exist (will fail without real MinIO, but interface is satisfied)
 	err := logger.AppendBotLogs(context.Background(), "test", "")
 	assert.NoError(t, err) // Empty logs should not error
-	
+
 	err = logger.StoreFinalLogs(context.Background(), "test", "")
 	assert.NoError(t, err) // Empty logs should not error
-	
+
 	err = logger.Close()
 	assert.NoError(t, err) // Close should not error
-	
+
 	// Test that AppendBotLogs fails gracefully with nil client when logs are non-empty
 	err = logger.AppendBotLogs(context.Background(), "test", "some logs")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "MinIO client is not initialized")
-	
+
 	// Test that StoreFinalLogs fails gracefully with nil client when logs are non-empty
 	err = logger.StoreFinalLogs(context.Background(), "test", "some logs")
 	assert.Error(t, err)

@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { PlatformDetector } from '@/components/install/platform-detector';
-import { AutoPlatformSelector } from '@/components/install/platform-selector';
-import { InstallationTabs } from '@/components/install/installation-tabs';
-import type { PlatformInfo } from '@/types/install';
+import { useState, useEffect } from "react";
+import { PlatformDetector } from "@/components/install/platform-detector";
+import { AutoPlatformSelector } from "@/components/install/platform-selector";
+import { InstallationTabs } from "@/components/install/installation-tabs";
+import type { PlatformInfo } from "@/types/install";
 
 interface InstallationInterfaceProps {
   suggestedPlatform: PlatformInfo | null;
@@ -26,10 +26,10 @@ export function InstallationInterface({
     if (selectedPlatform) {
       // Update alternative methods section
       const alternativesSection = document.getElementById(
-        'alternative-methods',
+        "alternative-methods",
       );
-      if (alternativesSection && typeof window !== 'undefined') {
-        import('@/components/install/alternative-methods').then(
+      if (alternativesSection && typeof window !== "undefined") {
+        import("@/components/install/alternative-methods").then(
           ({ AlternativeMethods }) => {
             // This is a simplified approach - in a real implementation, you'd use React portals
             // or a more sophisticated state management solution
@@ -38,9 +38,9 @@ export function InstallationInterface({
       }
 
       // Update troubleshooting section
-      const troubleshootingSection = document.getElementById('troubleshooting');
-      if (troubleshootingSection && typeof window !== 'undefined') {
-        import('@/components/install/troubleshooting').then(
+      const troubleshootingSection = document.getElementById("troubleshooting");
+      if (troubleshootingSection && typeof window !== "undefined") {
+        import("@/components/install/troubleshooting").then(
           ({ TroubleshootingSection }) => {
             // Similar approach for troubleshooting
           },
@@ -78,7 +78,7 @@ export function InstallationInterface({
             onClick={() => setShowManualSelector(!showManualSelector)}
             className="text-sm text-blue-600 hover:text-blue-800 underline"
           >
-            {showManualSelector ? 'Hide' : 'Show'} Manual Selection
+            {showManualSelector ? "Hide" : "Show"} Manual Selection
           </button>
         </div>
 
@@ -129,20 +129,20 @@ function PlatformSpecificSections({ platform }: { platform: PlatformInfo }) {
 function AlternativeMethodsUpdater({ platform }: { platform: PlatformInfo }) {
   useEffect(() => {
     const updateAlternativeMethods = async () => {
-      const section = document.getElementById('alternative-methods');
+      const section = document.getElementById("alternative-methods");
       if (!section) return;
 
       try {
         const { AlternativeMethods } = await import(
-          '@/components/install/alternative-methods'
+          "@/components/install/alternative-methods"
         );
-        const { createRoot } = await import('react-dom/client');
+        const { createRoot } = await import("react-dom/client");
 
         // Clear existing content
-        section.innerHTML = '';
+        section.innerHTML = "";
 
         // Create a container for React component
-        const container = document.createElement('div');
+        const container = document.createElement("div");
         section.appendChild(container);
 
         // Render the component
@@ -154,7 +154,7 @@ function AlternativeMethodsUpdater({ platform }: { platform: PlatformInfo }) {
           root.unmount();
         };
       } catch (error) {
-        console.error('Failed to update alternative methods:', error);
+        console.error("Failed to update alternative methods:", error);
         section.innerHTML = `<p class="text-center text-muted-foreground py-8">Alternative methods for ${platform.displayName}</p>`;
       }
     };
@@ -169,20 +169,20 @@ function AlternativeMethodsUpdater({ platform }: { platform: PlatformInfo }) {
 function TroubleshootingUpdater({ platform }: { platform: PlatformInfo }) {
   useEffect(() => {
     const updateTroubleshooting = async () => {
-      const section = document.getElementById('troubleshooting');
+      const section = document.getElementById("troubleshooting");
       if (!section) return;
 
       try {
         const { TroubleshootingSection } = await import(
-          '@/components/install/troubleshooting'
+          "@/components/install/troubleshooting"
         );
-        const { createRoot } = await import('react-dom/client');
+        const { createRoot } = await import("react-dom/client");
 
         // Clear existing content
-        section.innerHTML = '';
+        section.innerHTML = "";
 
         // Create a container for React component
-        const container = document.createElement('div');
+        const container = document.createElement("div");
         section.appendChild(container);
 
         // Render the component
@@ -194,7 +194,7 @@ function TroubleshootingUpdater({ platform }: { platform: PlatformInfo }) {
           root.unmount();
         };
       } catch (error) {
-        console.error('Failed to update troubleshooting:', error);
+        console.error("Failed to update troubleshooting:", error);
         section.innerHTML = `<p class="text-center text-muted-foreground py-8">Troubleshooting for ${platform.displayName}</p>`;
       }
     };

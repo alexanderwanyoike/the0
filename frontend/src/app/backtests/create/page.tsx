@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { withAuth } from '@/components/auth/with-auth';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, BarChart3 } from 'lucide-react';
-import { BacktestCreationForm } from '@/components/backtests/backtest-creation-form';
+import React from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { withAuth } from "@/components/auth/with-auth";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, BarChart3 } from "lucide-react";
+import { BacktestCreationForm } from "@/components/backtests/backtest-creation-form";
 
 function CreateBacktestPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const preSelectedBotName = searchParams?.get('name') || undefined;
-  const preSelectedBotVersion = searchParams?.get('version') || undefined;
+  const preSelectedBotName = searchParams?.get("name") || undefined;
+  const preSelectedBotVersion = searchParams?.get("version") || undefined;
 
   const handleBack = () => {
     router.back();

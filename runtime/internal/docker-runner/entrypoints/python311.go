@@ -229,7 +229,6 @@ if __name__ == "__main__":
     main()
 `
 
-
 const PythonBotEntrypoint = `
 #!/usr/bin/env python3
 """

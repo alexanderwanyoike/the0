@@ -95,10 +95,10 @@ func TestRetryWithBackoff(t *testing.T) {
 
 		// Test with minimal retries to avoid long waits
 		err := RetryWithBackoff(fn, 3)
-		
+
 		assert.NoError(t, err)
 		assert.Equal(t, 3, callCount)
-		
+
 		// The backoff logic is tested implicitly - if the function eventually succeeds,
 		// the exponential backoff is working correctly
 	})
@@ -118,7 +118,7 @@ func TestRetryWithBackoff(t *testing.T) {
 		err := RetryWithBackoff(fn, 3)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, callCount)
-		
+
 		// The math.Min logic for capping at 60s is tested by the implementation
 		// We trust that math.Min works correctly
 	})
@@ -176,7 +176,7 @@ func TestRetryWithBackoffLogger(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, callCount)
-		
+
 		// Should contain retry attempt log
 		assert.Contains(t, output, "Retry 1/3 failed for database connection")
 		assert.Contains(t, output, "temporary error")
@@ -207,7 +207,7 @@ func TestRetryWithBackoffLogger(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, 2, callCount)
 		assert.Contains(t, err.Error(), "failed after 2 attempts")
-		
+
 		// Should contain all retry logs
 		assert.Contains(t, output, "Retry 1/2 failed for service startup")
 		assert.Contains(t, output, "Retry 2/2 failed for service startup")
@@ -291,7 +291,7 @@ func TestRetryWithBackoffLogger(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, callCount)
-		
+
 		// Should contain retry timing information
 		assert.Contains(t, output, "Retrying timing test in 1s")
 		assert.Contains(t, output, "Retry successful for timing test after 2 attempts")

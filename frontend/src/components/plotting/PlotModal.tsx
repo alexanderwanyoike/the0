@@ -1,7 +1,7 @@
-'use client';
-import dynamic from 'next/dynamic';
+"use client";
+import dynamic from "next/dynamic";
 
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 interface PlotModalProps {
   isOpen: boolean;
@@ -45,7 +45,7 @@ const PlotModal: React.FC<PlotModalProps> = ({ isOpen, onClose, plot }) => {
               margin: { l: 50, r: 50, t: 50, b: 50 },
             }}
             config={{ responsive: true }}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: "100%", height: "100%" }}
           />
         </div>
       </div>

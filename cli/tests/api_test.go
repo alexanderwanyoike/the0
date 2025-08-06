@@ -275,7 +275,7 @@ func TestAPIClient_ListCustomBots(t *testing.T) {
 								},
 								"userId": "user-abc123",
 								"id": "version-123",
-								"gcsPath": "custom-bots/trade-bot/1.0.0",
+								"FilePath": "custom-bots/trade-bot/1.0.0",
 								"status": "published",
 								"createdAt": "2023-11-15T10:30:00.000Z",
 								"updatedAt": "2023-11-15T10:30:00.000Z"

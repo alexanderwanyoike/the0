@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import React, { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   FileText,
   ChevronDown,
@@ -13,9 +13,9 @@ import {
   Settings,
   Zap,
   AlertCircle,
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { CustomBotConfig } from '@/types/custom-bots';
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { CustomBotConfig } from "@/types/custom-bots";
 
 interface BotDocumentationProps {
   config: CustomBotConfig;
@@ -35,8 +35,8 @@ const BotDocumentation: React.FC<BotDocumentationProps> = ({
     if (config.readme) {
       navigator.clipboard.writeText(config.readme);
       toast({
-        title: 'Copied',
-        description: 'README content copied to clipboard',
+        title: "Copied",
+        description: "README content copied to clipboard",
         duration: 2000,
       });
     }
@@ -54,22 +54,22 @@ const BotDocumentation: React.FC<BotDocumentationProps> = ({
         /^### (.*$)/gm,
         '<h3 class="text-sm font-medium mt-2 mb-1">$1</h3>',
       )
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(
         /`(.*?)`/g,
         '<code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">$1</code>',
       )
-      .replace(/\n/g, '<br>');
+      .replace(/\n/g, "<br>");
   };
 
   const getBotTypeIcon = (type: string) => {
     switch (type) {
-      case 'scheduled':
+      case "scheduled":
         return <Settings className="h-4 w-4" />;
-      case 'realtime':
+      case "realtime":
         return <Zap className="h-4 w-4" />;
-      case 'event':
+      case "event":
         return <AlertCircle className="h-4 w-4" />;
       default:
         return <FileText className="h-4 w-4" />;
@@ -78,14 +78,14 @@ const BotDocumentation: React.FC<BotDocumentationProps> = ({
 
   const getBotTypeColor = (type: string) => {
     switch (type) {
-      case 'scheduled':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'realtime':
-        return 'bg-green-50 text-green-700 border-green-200';
-      case 'event':
-        return 'bg-orange-50 text-orange-700 border-orange-200';
+      case "scheduled":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "realtime":
+        return "bg-green-50 text-green-700 border-green-200";
+      case "event":
+        return "bg-orange-50 text-orange-700 border-orange-200";
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
+        return "bg-gray-50 text-gray-700 border-gray-200";
     }
   };
 
@@ -270,12 +270,12 @@ const BotDocumentation: React.FC<BotDocumentationProps> = ({
               </div>
               <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded border">
                 <p>
-                  This bot requires{' '}
-                  {Object.keys(config.schema.bot.properties || {}).length}{' '}
+                  This bot requires{" "}
+                  {Object.keys(config.schema.bot.properties || {}).length}{" "}
                   configuration parameter
                   {Object.keys(config.schema.bot.properties || {}).length !== 1
-                    ? 's'
-                    : ''}
+                    ? "s"
+                    : ""}
                   .
                 </p>
                 {config.schema.bot.required &&
@@ -283,8 +283,8 @@ const BotDocumentation: React.FC<BotDocumentationProps> = ({
                     <p className="mt-1">
                       {config.schema.bot.required.length} parameter
                       {config.schema.bot.required.length !== 1
-                        ? 's are'
-                        : ' is'}{' '}
+                        ? "s are"
+                        : " is"}{" "}
                       required.
                     </p>
                   )}

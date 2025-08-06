@@ -1,5 +1,5 @@
 export const sanitizeBotType = (botType: string): string =>
-  botType.replace(/\//g, '_');
+  botType.replace(/\//g, "_");
 
 export const splitBotType = (
   botType: string,
@@ -8,10 +8,10 @@ export const splitBotType = (
   type: string;
   name: string;
 } => {
-  const [vendor, type, name] = botType.split('/');
+  const [vendor, type, name] = botType.split("/");
   if (!vendor || !type || !name) {
     throw new Error(
-      'Invalid bot type format. Expected format: vendor/type/name',
+      "Invalid bot type format. Expected format: vendor/type/name",
     );
   }
   return { vendor, type, name };

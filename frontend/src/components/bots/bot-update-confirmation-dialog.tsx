@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -8,17 +8,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Card, CardContent } from '@/components/ui/card';
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertTriangle,
   CheckCircle,
   Loader2,
   ArrowRight,
   Settings,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface BotUpdateConfirmationDialogProps {
   isOpen: boolean;
@@ -47,7 +47,7 @@ const BotUpdateConfirmationDialog: React.FC<
       key: string;
       oldValue: any;
       newValue: any;
-      type: 'added' | 'modified' | 'removed';
+      type: "added" | "modified" | "removed";
     }> = [];
 
     const allKeys = new Set([
@@ -60,11 +60,11 @@ const BotUpdateConfirmationDialog: React.FC<
       const newValue = newConfig?.[key];
 
       if (oldValue === undefined && newValue !== undefined) {
-        changes.push({ key, oldValue, newValue, type: 'added' });
+        changes.push({ key, oldValue, newValue, type: "added" });
       } else if (oldValue !== undefined && newValue === undefined) {
-        changes.push({ key, oldValue, newValue, type: 'removed' });
+        changes.push({ key, oldValue, newValue, type: "removed" });
       } else if (oldValue !== newValue) {
-        changes.push({ key, oldValue, newValue, type: 'modified' });
+        changes.push({ key, oldValue, newValue, type: "modified" });
       }
     });
 
@@ -74,12 +74,12 @@ const BotUpdateConfirmationDialog: React.FC<
   // Format value for display
   const formatValue = (value: any): string => {
     if (value === null || value === undefined) {
-      return 'null';
+      return "null";
     }
-    if (typeof value === 'boolean') {
+    if (typeof value === "boolean") {
       return value.toString();
     }
-    if (typeof value === 'object') {
+    if (typeof value === "object") {
       return JSON.stringify(value);
     }
     return String(value);
@@ -89,14 +89,14 @@ const BotUpdateConfirmationDialog: React.FC<
   const hasDestructiveChanges = () => {
     const changes = getConfigChanges();
     const destructiveKeys = [
-      'api_key',
-      'secret_key',
-      'apiKey',
-      'secretKey',
-      'exchange',
-      'symbol',
-      'amount',
-      'strategy',
+      "api_key",
+      "secret_key",
+      "apiKey",
+      "secretKey",
+      "exchange",
+      "symbol",
+      "amount",
+      "strategy",
     ];
 
     return changes.some(
@@ -104,7 +104,7 @@ const BotUpdateConfirmationDialog: React.FC<
         destructiveKeys.some((key) =>
           change.key.toLowerCase().includes(key.toLowerCase()),
         ) &&
-        (change.type === 'modified' || change.type === 'removed'),
+        (change.type === "modified" || change.type === "removed"),
     );
   };
 
@@ -120,7 +120,7 @@ const BotUpdateConfirmationDialog: React.FC<
             Confirm Bot Update
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Review the configuration changes for <strong>{botName}</strong>{' '}
+            Review the configuration changes for <strong>{botName}</strong>{" "}
             before applying them.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -152,7 +152,7 @@ const BotUpdateConfirmationDialog: React.FC<
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium">Configuration Changes</h4>
               <Badge variant="outline">
-                {changes.length} change{changes.length !== 1 ? 's' : ''}
+                {changes.length} change{changes.length !== 1 ? "s" : ""}
               </Badge>
             </div>
 
@@ -178,11 +178,11 @@ const BotUpdateConfirmationDialog: React.FC<
                           </span>
                           <Badge
                             variant={
-                              change.type === 'added'
-                                ? 'default'
-                                : change.type === 'removed'
-                                  ? 'destructive'
-                                  : 'secondary'
+                              change.type === "added"
+                                ? "default"
+                                : change.type === "removed"
+                                  ? "destructive"
+                                  : "secondary"
                             }
                             className="text-xs"
                           >
@@ -245,7 +245,7 @@ const BotUpdateConfirmationDialog: React.FC<
             onClick={onConfirm}
             disabled={isUpdating}
             className={
-              isDestructive ? 'bg-orange-600 hover:bg-orange-700' : undefined
+              isDestructive ? "bg-orange-600 hover:bg-orange-700" : undefined
             }
           >
             {isUpdating ? (
@@ -256,7 +256,7 @@ const BotUpdateConfirmationDialog: React.FC<
             ) : (
               <>
                 <Settings className="h-4 w-4 mr-2" />
-                {isDestructive ? 'Update Anyway' : 'Confirm Update'}
+                {isDestructive ? "Update Anyway" : "Confirm Update"}
               </>
             )}
           </AlertDialogAction>

@@ -44,7 +44,7 @@ type APIBotConfig struct {
 type CustomBotVersion struct {
 	Version   string       `json:"version"`
 	Config    APIBotConfig `json:"config"`
-	GcsPath   string       `json:"gcsPath"`
+	FilePath   string       `json:"FilePath"`
 	CreatedAt string       `json:"createdAt"`
 	UpdatedAt string       `json:"updatedAt"`
 }

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 interface TableProps {
   headers: string[];
   data: Record<string, any>[];
@@ -22,7 +22,7 @@ const CustomTable: React.FC<TableProps> = ({ headers, data, keyField }) => {
           {data.map((row, rowIndex) => (
             <tr
               key={rowIndex}
-              className={`bg-white border-b dark:bg-gray-800 dark:border-gray-700 ${rowIndex % 2 === 0 ? 'bg-gray-50 dark:bg-gray-900' : ''}`}
+              className={`bg-white border-b dark:bg-gray-800 dark:border-gray-700 ${rowIndex % 2 === 0 ? "bg-gray-50 dark:bg-gray-900" : ""}`}
             >
               {headers.map((header, cellIndex) => (
                 <td

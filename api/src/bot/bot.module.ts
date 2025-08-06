@@ -7,7 +7,7 @@ import { BotValidator } from './bot.validator';
 import { ConfigModule } from '@nestjs/config';
 import { CustomBotModule } from '@/custom-bot/custom-bot.module';
 import { ApiKeyModule } from '@/api-key/api-key.module';
-import { UserBotsModule } from '@/user-bots/user-bots.module';
+// UserBotsModule removed for OSS version
 import { NatsModule } from '@/nats/nats.module';
 // FeatureGateModule removed for OSS version
 
@@ -17,7 +17,6 @@ import { NatsModule } from '@/nats/nats.module';
     ConfigModule,
     CustomBotModule,
     ApiKeyModule,
-    UserBotsModule,
     NatsModule,
   ],
   controllers: [BotController],

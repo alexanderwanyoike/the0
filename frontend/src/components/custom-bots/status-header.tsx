@@ -1,9 +1,9 @@
-import { Badge } from '@/components/ui/badge';
-import React from 'react';
+import { Badge } from "@/components/ui/badge";
+import React from "react";
 import {
   STATUS_CONFIG,
   THREAT_COLORS,
-} from '@/components/custom-bots/constants';
+} from "@/components/custom-bots/constants";
 
 export const StatusHeader = ({ bot }: any) => {
   const config = STATUS_CONFIG[bot.status];
@@ -17,7 +17,7 @@ export const StatusHeader = ({ bot }: any) => {
       <div className="flex-1">
         <div className="flex items-center gap-3 mb-2">
           <h2 className="text-xl font-semibold">{config.text}</h2>
-          <Badge className={config.color}>{bot.status.replace('_', ' ')}</Badge>
+          <Badge className={config.color}>{bot.status.replace("_", " ")}</Badge>
         </div>
         <p className="text-muted-foreground">{config.description}</p>
 

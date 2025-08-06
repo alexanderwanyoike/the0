@@ -1,13 +1,13 @@
-import fs from 'fs/promises';
-import path from 'path';
-import matter from 'gray-matter';
+import fs from "fs/promises";
+import path from "path";
+import matter from "gray-matter";
 
 export interface DocItem {
   slug: string;
   title: string;
   path: string;
   children?: DocItem[];
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   order?: number;
 }
 
@@ -25,7 +25,7 @@ export interface DocContent {
 }
 
 export class DocsFileSystem {
-  private docsPath = path.join(process.cwd(), 'src/docs');
+  private docsPath = path.join(process.cwd(), "src/docs");
 
   async getNavigationTree(): Promise<DocItem[]> {
     try {
@@ -39,7 +39,7 @@ export class DocsFileSystem {
 
     const buildTree = async (
       dirPath: string,
-      basePath: string = '',
+      basePath: string = "",
     ): Promise<DocItem[]> => {
       const items = await fs.readdir(dirPath, { withFileTypes: true });
       const result: DocItem[] = [];
@@ -60,15 +60,15 @@ export class DocsFileSystem {
             slug,
             title,
             path: relativePath,
-            type: 'folder',
+            type: "folder",
             children: children.length > 0 ? children : undefined,
             order: directoryOrder,
           });
-        } else if (item.name.endsWith('.md') || item.name.endsWith('.mdoc')) {
-          const slug = item.name.replace(/\.(md|mdoc)$/, '');
+        } else if (item.name.endsWith(".md") || item.name.endsWith(".mdoc")) {
+          const slug = item.name.replace(/\.(md|mdoc)$/, "");
 
           // Skip index files in navigation
-          if (slug === 'index') {
+          if (slug === "index") {
             continue;
           }
 
@@ -78,8 +78,8 @@ export class DocsFileSystem {
           result.push({
             slug,
             title,
-            path: relativePath.replace(/\.(md|mdoc)$/, ''),
-            type: 'file',
+            path: relativePath.replace(/\.(md|mdoc)$/, ""),
+            type: "file",
             order: frontmatter.order,
           });
         }
@@ -96,7 +96,7 @@ export class DocsFileSystem {
 
         // Then sort by type (folders before files)
         if (a.type !== b.type) {
-          return a.type === 'folder' ? -1 : 1;
+          return a.type === "folder" ? -1 : 1;
         }
 
         // Finally sort by title alphabetically
@@ -110,12 +110,12 @@ export class DocsFileSystem {
   async getDocContent(slug: string[]): Promise<DocContent | null> {
     try {
       // Try both .md and .mdoc extensions
-      let filePath = path.join(this.docsPath, ...slug) + '.md';
+      let filePath = path.join(this.docsPath, ...slug) + ".md";
 
       try {
         await fs.access(filePath);
       } catch {
-        filePath = path.join(this.docsPath, ...slug) + '.mdoc';
+        filePath = path.join(this.docsPath, ...slug) + ".mdoc";
         try {
           await fs.access(filePath);
         } catch {
@@ -123,7 +123,7 @@ export class DocsFileSystem {
         }
       }
 
-      const fileContent = await fs.readFile(filePath, 'utf8');
+      const fileContent = await fs.readFile(filePath, "utf8");
       const { content, data } = matter(fileContent);
 
       return {
@@ -131,25 +131,25 @@ export class DocsFileSystem {
         frontmatter: data as DocFrontmatter,
       };
     } catch (error) {
-      console.error('Error reading doc content:', error);
+      console.error("Error reading doc content:", error);
       return null;
     }
   }
 
   private async getFrontmatter(filePath: string): Promise<DocFrontmatter> {
     try {
-      const fileContent = await fs.readFile(filePath, 'utf8');
+      const fileContent = await fs.readFile(filePath, "utf8");
       const { data } = matter(fileContent);
       return data as DocFrontmatter;
     } catch (error) {
-      console.error('Error reading frontmatter:', error);
+      console.error("Error reading frontmatter:", error);
       return {};
     }
   }
 
   private formatTitle(slug: string): string {
     return slug
-      .replace(/[-_]/g, ' ')
+      .replace(/[-_]/g, " ")
       .replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
@@ -170,7 +170,7 @@ export class DocsFileSystem {
       for (const item of items) {
         const itemPath = [...currentPath, item.slug];
 
-        if (item.type === 'file') {
+        if (item.type === "file") {
           const doc = await this.getDocContent(itemPath);
           if (doc) {
             docs.push({
@@ -193,7 +193,7 @@ export class DocsFileSystem {
     dirPath: string,
   ): Promise<number | undefined> {
     // Try to read order from index.md or README.md in the directory
-    const indexFiles = ['index.md', 'README.md', 'index.mdoc'];
+    const indexFiles = ["index.md", "README.md", "index.mdoc"];
 
     for (const indexFile of indexFiles) {
       const indexPath = path.join(dirPath, indexFile);

@@ -1,7 +1,7 @@
 ---
-title: 'Bots'
-description: 'Understanding bot instances in the0 platform'
-tags: ['terminology', 'bots']
+title: "Bots"
+description: "Understanding bot instances in the0 platform"
+tags: ["terminology", "bots"]
 order: 1
 ---
 
@@ -46,5 +46,4 @@ Once deployed, a Bot:
 ## Related Terms
 
 - [Custom Bots](/docs/terminology/custom-bots) - The templates that Bots are created from
-- [User Bots](/docs/terminology/user-bots) - Bots installed from the marketplace
 - [Bot Deployment](/docs/terminology/bot-deployment) - The process of creating Bot instances

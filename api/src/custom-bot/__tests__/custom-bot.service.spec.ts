@@ -8,6 +8,8 @@ import {
 } from '../custom-bot.types';
 import { Ok, Failure } from '@/common/result';
 import { validateCustomBotConfigPayload } from '../custom-bot.schema';
+import { NatsService } from '@/nats/nats.service';
+import { ConfigService } from '@nestjs/config';
 // Removed StripeConnectService - not needed in OSS version
 
 // Mock dependencies
@@ -21,6 +23,8 @@ describe('CustomBotService', () => {
   let service: CustomBotService;
   let mockRepository: jest.Mocked<CustomBotRepository>;
   let mockStorageService: jest.Mocked<StorageService>;
+  let mockNatsService: jest.Mocked<NatsService>;
+  let mockConfigService: jest.Mocked<ConfigService>;
   // Removed StripeConnectService mock - not needed in OSS version
   let mockValidateConfig: jest.MockedFunction<
     typeof validateCustomBotConfigPayload
@@ -64,9 +68,43 @@ describe('CustomBotService', () => {
   });
 
   beforeEach(() => {
-    mockRepository =
-      new CustomBotRepository() as jest.Mocked<CustomBotRepository>;
-    mockStorageService = new StorageService() as jest.Mocked<StorageService>;
+    mockRepository = {
+      globalBotExists: jest.fn(),
+      globalVersionExists: jest.fn(),
+      createNewGlobalVersion: jest.fn(),
+      getAllGlobalVersions: jest.fn(),
+      getSpecificGlobalVersion: jest.fn(),
+      getGlobalLatestVersion: jest.fn(),
+      isVersionNewer: jest.fn(),
+      checkUserOwnership: jest.fn(),
+      getAllUserVersions: jest.fn(),
+      getSpecificUserVersion: jest.fn(),
+      getUserCustomBots: jest.fn(),
+    } as unknown as jest.Mocked<CustomBotRepository>;
+
+    mockConfigService = {
+      get: jest.fn(),
+    } as unknown as jest.Mocked<ConfigService>;
+
+    mockStorageService = {
+      validateZipStructure: jest.fn(),
+      uploadBotFile: jest.fn(),
+      fileExists: jest.fn(),
+      generateSignedUploadUrl: jest.fn(),
+      deleteFile: jest.fn(),
+      downloadFile: jest.fn(),
+      getFileInfo: jest.fn(),
+      ensureBucket: jest.fn(),
+    } as unknown as jest.Mocked<StorageService>;
+
+    mockNatsService = {
+      isConnected: jest.fn(() => false),
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      publish: jest.fn(() => Promise.resolve(Ok(null))),
+      subscribe: jest.fn(),
+    } as unknown as jest.Mocked<NatsService>;
+
     mockValidateConfig = validateCustomBotConfigPayload as jest.MockedFunction<
       typeof validateCustomBotConfigPayload
     >;
@@ -74,6 +112,7 @@ describe('CustomBotService', () => {
     service = new CustomBotService(
       mockRepository,
       mockStorageService,
+      mockNatsService,
     );
   });
 
@@ -90,7 +129,7 @@ describe('CustomBotService', () => {
       // Setup mocks
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Ok(true),
       );
       const mockResult = {
@@ -119,7 +158,7 @@ describe('CustomBotService', () => {
       expect(result.data!.name).toBe('test-bot');
       expect(mockRepository.globalBotExists).toHaveBeenCalledWith('test-bot');
       expect(
-        mockStorageService.downloadAndValidateZipStructure,
+        mockStorageService.validateZipStructure,
       ).toHaveBeenCalledWith(filePath, Object.values(validConfig.entrypoints).filter(Boolean));
     });
 
@@ -169,7 +208,7 @@ describe('CustomBotService', () => {
 
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Failure('Required entrypoint not found'),
       );
 
@@ -190,7 +229,7 @@ describe('CustomBotService', () => {
 
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Failure('Required entrypoint not found'),
       );
 
@@ -211,7 +250,7 @@ describe('CustomBotService', () => {
 
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Ok(true),
       );
       mockRepository.createNewGlobalVersion.mockResolvedValue(
@@ -261,7 +300,7 @@ describe('CustomBotService', () => {
 
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Ok(true),
       );
 
@@ -291,7 +330,7 @@ describe('CustomBotService', () => {
         'Realtime bots must specify a valid runtime (python3.11 or nodejs20)',
       );
       expect(
-        mockStorageService.downloadAndValidateZipStructure,
+        mockStorageService.validateZipStructure,
       ).not.toHaveBeenCalled();
     });
 
@@ -319,7 +358,7 @@ describe('CustomBotService', () => {
         'Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)',
       );
       expect(
-        mockStorageService.downloadAndValidateZipStructure,
+        mockStorageService.validateZipStructure,
       ).not.toHaveBeenCalled();
     });
   });
@@ -353,7 +392,7 @@ describe('CustomBotService', () => {
       );
       mockRepository.isVersionNewer.mockReturnValue(true);
       mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Ok(true),
       );
       mockRepository.createNewGlobalVersion.mockResolvedValue(
@@ -408,7 +447,7 @@ describe('CustomBotService', () => {
         'Realtime bots must specify a valid runtime (python3.11 or nodejs20)',
       );
       expect(
-        mockStorageService.downloadAndValidateZipStructure,
+        mockStorageService.validateZipStructure,
       ).not.toHaveBeenCalled();
     });
 
@@ -438,7 +477,7 @@ describe('CustomBotService', () => {
         'Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)',
       );
       expect(
-        mockStorageService.downloadAndValidateZipStructure,
+        mockStorageService.validateZipStructure,
       ).not.toHaveBeenCalled();
     });
 
@@ -603,7 +642,7 @@ describe('CustomBotService', () => {
       );
       mockRepository.isVersionNewer.mockReturnValue(true);
       mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
-      mockStorageService.downloadAndValidateZipStructure.mockResolvedValue(
+      mockStorageService.validateZipStructure.mockResolvedValue(
         Failure('Invalid ZIP structure'),
       );
 

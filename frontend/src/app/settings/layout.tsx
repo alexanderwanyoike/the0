@@ -1,9 +1,9 @@
-'use client';
-import { useSelectedLayoutSegment } from 'next/navigation';
-import Link from 'next/link';
-import DashboardLayout from '@/components/layouts/dashboard-layout';
-import { cn } from '@/lib/utils';
-import React from 'react';
+"use client";
+import { useSelectedLayoutSegment } from "next/navigation";
+import Link from "next/link";
+import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { cn } from "@/lib/utils";
+import React from "react";
 
 export default function SettingsLayout({
   children,
@@ -11,7 +11,6 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   const segment = useSelectedLayoutSegment();
-
 
   return (
     <DashboardLayout>
@@ -30,10 +29,10 @@ export default function SettingsLayout({
             <Link
               href="/settings/profile"
               className={cn(
-                'px-3 sm:px-4 py-2 text-sm whitespace-nowrap transition-colors hover:text-primary',
-                segment === 'profile'
-                  ? 'border-b-2 border-primary font-medium text-primary'
-                  : 'text-muted-foreground',
+                "px-3 sm:px-4 py-2 text-sm whitespace-nowrap transition-colors hover:text-primary",
+                segment === "profile"
+                  ? "border-b-2 border-primary font-medium text-primary"
+                  : "text-muted-foreground",
               )}
             >
               Profile
@@ -41,10 +40,10 @@ export default function SettingsLayout({
             <Link
               href="/settings/api-settings"
               className={cn(
-                'px-3 sm:px-4 py-2 text-sm whitespace-nowrap transition-colors hover:text-primary',
-                segment === 'api-settings'
-                  ? 'border-b-2 border-primary font-medium text-primary'
-                  : 'text-muted-foreground',
+                "px-3 sm:px-4 py-2 text-sm whitespace-nowrap transition-colors hover:text-primary",
+                segment === "api-settings"
+                  ? "border-b-2 border-primary font-medium text-primary"
+                  : "text-muted-foreground",
               )}
             >
               API

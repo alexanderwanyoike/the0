@@ -1,23 +1,23 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CodeBlock } from './quick-copy-section';
-import { getTroubleshootingUrls } from '@/lib/install/install-urls';
+} from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CodeBlock } from "./quick-copy-section";
+import { getTroubleshootingUrls } from "@/lib/install/install-urls";
 import {
   ChevronDown,
   ChevronRight,
@@ -28,12 +28,12 @@ import {
   Network,
   Settings,
   Terminal,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   TroubleshootingProps,
   TroubleshootingItem,
   PlatformId,
-} from '@/types/install';
+} from "@/types/install";
 
 export function TroubleshootingSection({ platform }: TroubleshootingProps) {
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
@@ -70,8 +70,8 @@ export function TroubleshootingSection({ platform }: TroubleshootingProps) {
           <span>Troubleshooting</span>
         </CardTitle>
         <CardDescription>
-          Common installation issues and solutions for{' '}
-          {platform ? `${platform}` : 'your platform'}.
+          Common installation issues and solutions for{" "}
+          {platform ? `${platform}` : "your platform"}.
         </CardDescription>
       </CardHeader>
 
@@ -119,7 +119,7 @@ export function TroubleshootingSection({ platform }: TroubleshootingProps) {
             </p>
             <ul className="space-y-1 ml-4">
               <li>
-                • Check our{' '}
+                • Check our{" "}
                 <a
                   href={urls.general}
                   className="text-blue-600 hover:underline"
@@ -128,7 +128,7 @@ export function TroubleshootingSection({ platform }: TroubleshootingProps) {
                 </a>
               </li>
               <li>
-                • Ask the community on our{' '}
+                • Ask the community on our{" "}
                 <a
                   href={urls.community}
                   className="text-blue-600 hover:underline"
@@ -137,7 +137,7 @@ export function TroubleshootingSection({ platform }: TroubleshootingProps) {
                 </a>
               </li>
               <li>
-                • Report bugs on{' '}
+                • Report bugs on{" "}
                 <a
                   href="https://github.com/the0-org/cli/issues"
                   className="text-blue-600 hover:underline"
@@ -177,11 +177,11 @@ function TroubleshootingCategory({
   const CategoryIcon = categoryIcon;
   const categoryTitle =
     {
-      permissions: 'Permissions & Security',
-      network: 'Network & Downloads',
-      platform: 'Platform Specific',
-      configuration: 'Configuration',
-    }[category] || 'Other Issues';
+      permissions: "Permissions & Security",
+      network: "Network & Downloads",
+      platform: "Platform Specific",
+      configuration: "Configuration",
+    }[category] || "Other Issues";
 
   return (
     <div className="space-y-3">
@@ -243,11 +243,11 @@ function TroubleshootingItem({
           <div className="bg-muted p-3 rounded-md">
             <h5 className="font-medium text-sm mb-2">Solution:</h5>
             <div className="text-sm space-y-2">
-              {item.solution.split('\n').map((line, index) => {
-                if (line.trim().startsWith('```')) {
+              {item.solution.split("\n").map((line, index) => {
+                if (line.trim().startsWith("```")) {
                   return null; // Skip code block markers
                 }
-                if (line.trim().includes('$') || line.trim().includes('>')) {
+                if (line.trim().includes("$") || line.trim().includes(">")) {
                   return (
                     <CodeBlock key={index} code={line.trim()} showCopy={true} />
                   );
@@ -266,9 +266,9 @@ function TroubleshootingItem({
 function getTroubleshootingItems(platform: PlatformId): TroubleshootingItem[] {
   const commonItems: TroubleshootingItem[] = [
     {
-      id: 'command-not-found',
-      title: 'Command not found: the0',
-      description: 'The CLI was installed but the command is not recognized.',
+      id: "command-not-found",
+      title: "Command not found: the0",
+      description: "The CLI was installed but the command is not recognized.",
       solution: `The installation directory might not be in your PATH. Try these solutions:
 
 1. Restart your terminal/shell
@@ -279,12 +279,12 @@ export PATH="/usr/local/bin:$PATH"
 
 Or find where it was installed:
 which the0`,
-      category: 'configuration',
+      category: "configuration",
     },
     {
-      id: 'download-failed',
-      title: 'Download failed or timed out',
-      description: 'The installation script cannot download the CLI binary.',
+      id: "download-failed",
+      title: "Download failed or timed out",
+      description: "The installation script cannot download the CLI binary.",
       solution: `This is usually a network connectivity issue:
 
 1. Check your internet connection
@@ -293,12 +293,12 @@ which the0`,
 4. Check if antivirus is blocking the download
 
 curl -v https://github.com/the0-org/cli/releases/latest`,
-      category: 'network',
+      category: "network",
     },
     {
-      id: 'checksum-mismatch',
-      title: 'Checksum verification failed',
-      description: 'The downloaded binary failed integrity verification.',
+      id: "checksum-mismatch",
+      title: "Checksum verification failed",
+      description: "The downloaded binary failed integrity verification.",
       solution: `The download may be corrupted or incomplete:
 
 1. Delete the downloaded file and try again
@@ -307,16 +307,16 @@ curl -v https://github.com/the0-org/cli/releases/latest`,
 4. Report this issue if it persists
 
 rm -f /tmp/the0-installer*`,
-      category: 'network',
+      category: "network",
     },
   ];
 
   // Platform-specific items
   const platformItems: Record<PlatformId, TroubleshootingItem[]> = {
-    'darwin-amd64': [
+    "darwin-amd64": [
       {
-        id: 'gatekeeper-block',
-        title: 'macOS Gatekeeper blocking execution',
+        id: "gatekeeper-block",
+        title: "macOS Gatekeeper blocking execution",
         description:
           '"the0" cannot be opened because it is from an unidentified developer.',
         solution: `macOS Gatekeeper is blocking the unsigned binary:
@@ -326,25 +326,25 @@ rm -f /tmp/the0-installer*`,
    xattr -d com.apple.quarantine /usr/local/bin/the0
 
 3. Or allow in System Preferences > Security & Privacy`,
-        category: 'platform',
+        category: "platform",
       },
       {
-        id: 'rosetta-required',
-        title: 'Architecture mismatch on Apple Silicon',
-        description: 'The Intel binary was installed on Apple Silicon Mac.',
+        id: "rosetta-required",
+        title: "Architecture mismatch on Apple Silicon",
+        description: "The Intel binary was installed on Apple Silicon Mac.",
         solution: `You might need to install Rosetta 2 or use the ARM64 version:
 
 1. Install Rosetta 2:
    softwareupdate --install-rosetta
 
 2. Or download the ARM64 version specifically for Apple Silicon`,
-        category: 'platform',
+        category: "platform",
       },
     ],
-    'darwin-arm64': [
+    "darwin-arm64": [
       {
-        id: 'gatekeeper-block-arm64',
-        title: 'macOS Gatekeeper blocking execution',
+        id: "gatekeeper-block-arm64",
+        title: "macOS Gatekeeper blocking execution",
         description:
           '"the0" cannot be opened because it is from an unidentified developer.',
         solution: `macOS Gatekeeper is blocking the unsigned binary:
@@ -354,26 +354,26 @@ rm -f /tmp/the0-installer*`,
    xattr -d com.apple.quarantine /usr/local/bin/the0
 
 3. Or allow in System Preferences > Security & Privacy`,
-        category: 'platform',
+        category: "platform",
       },
     ],
-    'linux-amd64': [
+    "linux-amd64": [
       {
-        id: 'permission-denied',
-        title: 'Permission denied when running the0',
-        description: 'The binary file does not have execute permissions.',
+        id: "permission-denied",
+        title: "Permission denied when running the0",
+        description: "The binary file does not have execute permissions.",
         solution: `Make the binary executable:
 
 chmod +x /usr/local/bin/the0
 
 Or if installed elsewhere:
 chmod +x /path/to/the0`,
-        category: 'permissions',
+        category: "permissions",
       },
       {
-        id: 'missing-dependencies',
-        title: 'Missing system dependencies',
-        description: 'Error about missing shared libraries or system packages.',
+        id: "missing-dependencies",
+        title: "Missing system dependencies",
+        description: "Error about missing shared libraries or system packages.",
         solution: `Install required system dependencies:
 
 # Ubuntu/Debian:
@@ -384,26 +384,26 @@ sudo yum install ca-certificates curl
 
 # Or:
 sudo dnf install ca-certificates curl`,
-        category: 'platform',
+        category: "platform",
       },
     ],
-    'linux-arm64': [
+    "linux-arm64": [
       {
-        id: 'permission-denied-arm64',
-        title: 'Permission denied when running the0',
-        description: 'The binary file does not have execute permissions.',
+        id: "permission-denied-arm64",
+        title: "Permission denied when running the0",
+        description: "The binary file does not have execute permissions.",
         solution: `Make the binary executable:
 
 chmod +x /usr/local/bin/the0
 
 Or if installed elsewhere:
 chmod +x /path/to/the0`,
-        category: 'permissions',
+        category: "permissions",
       },
       {
-        id: 'architecture-error',
-        title: 'Cannot execute binary file',
-        description: 'The binary format is not compatible with your system.',
+        id: "architecture-error",
+        title: "Cannot execute binary file",
+        description: "The binary format is not compatible with your system.",
         solution: `This usually means architecture mismatch:
 
 1. Verify your architecture:
@@ -411,27 +411,27 @@ chmod +x /path/to/the0`,
 
 2. Ensure you downloaded the ARM64 version
 3. Check if you're in a container with different architecture`,
-        category: 'platform',
+        category: "platform",
       },
     ],
-    'windows-amd64': [
+    "windows-amd64": [
       {
-        id: 'execution-policy',
-        title: 'PowerShell execution policy restriction',
-        description: 'Cannot run installation script due to execution policy.',
+        id: "execution-policy",
+        title: "PowerShell execution policy restriction",
+        description: "Cannot run installation script due to execution policy.",
         solution: `Temporarily allow script execution:
 
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 Or run the installer directly:
 powershell -ExecutionPolicy Bypass -File install.ps1`,
-        category: 'permissions',
+        category: "permissions",
       },
       {
-        id: 'antivirus-blocking',
-        title: 'Antivirus software blocking installation',
+        id: "antivirus-blocking",
+        title: "Antivirus software blocking installation",
         description:
-          'Windows Defender or other antivirus blocking the download.',
+          "Windows Defender or other antivirus blocking the download.",
         solution: `Temporarily disable real-time protection:
 
 1. Open Windows Security
@@ -439,12 +439,12 @@ powershell -ExecutionPolicy Bypass -File install.ps1`,
 3. Temporarily disable real-time protection
 4. Run the installation again
 5. Re-enable protection after installation`,
-        category: 'permissions',
+        category: "permissions",
       },
       {
-        id: 'path-not-updated',
-        title: 'PATH not updated after installation',
-        description: 'Command not found even after successful installation.',
+        id: "path-not-updated",
+        title: "PATH not updated after installation",
+        description: "Command not found even after successful installation.",
         solution: `Restart PowerShell or update PATH manually:
 
 1. Close and reopen PowerShell/Command Prompt
@@ -452,7 +452,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1`,
    $env:PATH += ";C:\\Program Files\\THE0"
 
 3. For permanent PATH update, use System Properties`,
-        category: 'configuration',
+        category: "configuration",
       },
     ],
   };

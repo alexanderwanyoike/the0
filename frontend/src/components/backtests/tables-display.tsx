@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import React, { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -12,8 +12,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { TableData } from '@/types/backtest';
+} from "@/components/ui/table";
+import { TableData } from "@/types/backtest";
 import {
   Table as TableIconLucide,
   Search,
@@ -24,7 +24,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface TablesDisplayProps {
   tables: TableData[];
@@ -32,7 +32,7 @@ interface TablesDisplayProps {
 
 interface SortConfig {
   key: string;
-  direction: 'asc' | 'desc';
+  direction: "asc" | "desc";
 }
 
 const TABLES_PER_PAGE = 8;
@@ -47,7 +47,7 @@ const validateTableData = (data: any[]): boolean => {
   // Check if all rows have consistent structure
   return data.every(
     (row) =>
-      typeof row === 'object' &&
+      typeof row === "object" &&
       row !== null &&
       !Array.isArray(row) &&
       Object.keys(row).length > 0,
@@ -63,7 +63,7 @@ const NonTabularDataDisplay = ({
   data: any[];
 }) => {
   const renderDataItem = (item: any, index: number) => {
-    if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+    if (typeof item === "object" && item !== null && !Array.isArray(item)) {
       return (
         <div key={index} className="p-3 border rounded-lg bg-muted/30">
           <div className="text-sm font-medium mb-2">Item {index + 1}</div>
@@ -71,8 +71,8 @@ const NonTabularDataDisplay = ({
             {Object.entries(item).map(([key, value]) => (
               <div key={key}>
                 <span className="font-medium text-muted-foreground">
-                  {key.replace(/([A-Z])/g, ' $1').trim()}:
-                </span>{' '}
+                  {key.replace(/([A-Z])/g, " $1").trim()}:
+                </span>{" "}
                 <span>{String(value)}</span>
               </div>
             ))}
@@ -112,7 +112,7 @@ const NonTabularDataDisplay = ({
 export function TablesDisplay({ tables }: TablesDisplayProps) {
   const [selectedTable, setSelectedTable] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   // Auto-navigate to page containing selected table - moved before early returns
@@ -169,9 +169,9 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
 
   const handleSort = (column: string) => {
     const newDirection =
-      sortConfig?.key === column && sortConfig.direction === 'asc'
-        ? 'desc'
-        : 'asc';
+      sortConfig?.key === column && sortConfig.direction === "asc"
+        ? "desc"
+        : "asc";
     setSortConfig({ key: column, direction: newDirection });
   };
 
@@ -194,18 +194,18 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
         const bValue = b[sortConfig.key];
 
         // Handle different data types
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
-          return sortConfig.direction === 'asc'
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortConfig.direction === "asc"
             ? aValue - bValue
             : bValue - aValue;
         }
 
         // Handle dates
-        if (typeof aValue === 'string' && typeof bValue === 'string') {
+        if (typeof aValue === "string" && typeof bValue === "string") {
           const aDate = new Date(aValue);
           const bDate = new Date(bValue);
           if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
-            return sortConfig.direction === 'asc'
+            return sortConfig.direction === "asc"
               ? aDate.getTime() - bDate.getTime()
               : bDate.getTime() - aDate.getTime();
           }
@@ -214,7 +214,7 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
         // Handle strings
         const aStr = String(aValue).toLowerCase();
         const bStr = String(bValue).toLowerCase();
-        if (sortConfig.direction === 'asc') {
+        if (sortConfig.direction === "asc") {
           return aStr.localeCompare(bStr);
         } else {
           return bStr.localeCompare(aStr);
@@ -226,23 +226,23 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
   };
 
   const formatCellValue = (value: any, key: string): string => {
-    if (value === null || value === undefined) return '-';
+    if (value === null || value === undefined) return "-";
 
     // Format numbers
-    if (typeof value === 'number') {
+    if (typeof value === "number") {
       // Check if it's a percentage field
       if (
-        key.toLowerCase().includes('rate') ||
-        key.toLowerCase().includes('return') ||
-        key.toLowerCase().includes('pct')
+        key.toLowerCase().includes("rate") ||
+        key.toLowerCase().includes("return") ||
+        key.toLowerCase().includes("pct")
       ) {
         return `${(value * 100).toFixed(2)}%`;
       }
       // Check if it's a currency field
       if (
-        key.toLowerCase().includes('price') ||
-        key.toLowerCase().includes('value') ||
-        key.toLowerCase().includes('pnl')
+        key.toLowerCase().includes("price") ||
+        key.toLowerCase().includes("value") ||
+        key.toLowerCase().includes("pnl")
       ) {
         return `$${value.toFixed(2)}`;
       }
@@ -251,13 +251,13 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
     }
 
     // Format dates
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       const date = new Date(value);
-      if (!isNaN(date.getTime()) && value.includes('T')) {
+      if (!isNaN(date.getTime()) && value.includes("T")) {
         return (
           date.toLocaleDateString() +
-          ' ' +
-          date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          " " +
+          date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         );
       }
     }
@@ -267,7 +267,7 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
 
   const getSortIcon = (column: string) => {
     if (sortConfig?.key === column) {
-      return sortConfig.direction === 'asc' ? (
+      return sortConfig.direction === "asc" ? (
         <ArrowUp className="h-3 w-3" />
       ) : (
         <ArrowDown className="h-3 w-3" />
@@ -294,7 +294,7 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
           <Alert className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {invalidTables.length} table{invalidTables.length > 1 ? 's' : ''}{' '}
+              {invalidTables.length} table{invalidTables.length > 1 ? "s" : ""}{" "}
               cannot be displayed in table format due to inconsistent data
               structure.
             </AlertDescription>
@@ -345,16 +345,16 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
                     onClick={() => setSelectedTable(globalIndex)}
                     className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 ${
                       selectedTable === globalIndex
-                        ? 'bg-primary/10 text-primary border-l-3 border-primary pl-3'
-                        : 'text-foreground hover:bg-accent'
+                        ? "bg-primary/10 text-primary border-l-3 border-primary pl-3"
+                        : "text-foreground hover:bg-accent"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <TableIconLucide
                         className={`h-4 w-4 flex-shrink-0 ${
                           selectedTable === globalIndex
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
+                            ? "text-primary"
+                            : "text-muted-foreground"
                         }`}
                       />
                       <span className="text-sm truncate">
@@ -428,7 +428,7 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
                                     className="h-auto p-0 font-medium hover:bg-transparent"
                                   >
                                     <span className="capitalize">
-                                      {column.replace(/([A-Z])/g, ' $1').trim()}
+                                      {column.replace(/([A-Z])/g, " $1").trim()}
                                     </span>
                                     {getSortIcon(column)}
                                   </Button>
@@ -457,8 +457,8 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
                                   className="text-center py-8 text-muted-foreground"
                                 >
                                   {searchTerm
-                                    ? 'No matching results found'
-                                    : 'No data available'}
+                                    ? "No matching results found"
+                                    : "No data available"}
                                 </TableCell>
                               </TableRow>
                             )}
@@ -467,7 +467,7 @@ export function TablesDisplay({ tables }: TablesDisplayProps) {
                       </div>
                       {filteredData.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Showing {filteredData.length} of{' '}
+                          Showing {filteredData.length} of{" "}
                           {selectedTableData.data.length} rows
                         </p>
                       )}

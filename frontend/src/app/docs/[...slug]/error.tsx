@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { useEffect } from 'react';
-import { DocsLayout } from '@/components/docs/docs-layout';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import Link from 'next/link';
+import React from "react";
+import { useEffect } from "react";
+import { DocsLayout } from "@/components/docs/docs-layout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import Link from "next/link";
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -15,7 +15,7 @@ interface ErrorProps {
 
 export default function DocsError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    console.error('Documentation page error:', error);
+    console.error("Documentation page error:", error);
   }, [error]);
 
   return (

@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Search, X, Bot, ChevronDown } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import React, { useState, useRef, useEffect } from "react";
+import { Search, X, Bot, ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { useCombinedBotSearch } from '@/hooks/backtests/use-combined-bot-search';
-import { cn } from '@/lib/utils';
-import { BotSearchResult } from '@/types/backtest';
-import { authFetch } from '@/lib/auth-fetch';
+} from "@/components/ui/select";
+import { useCombinedBotSearch } from "@/hooks/backtests/use-combined-bot-search";
+import { cn } from "@/lib/utils";
+import { BotSearchResult } from "@/types/backtest";
+import { authFetch } from "@/lib/auth-fetch";
 
 interface BotSelectionFormProps {
   selectedBot?: BotSearchResult | null;
@@ -36,7 +36,7 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
   selectedVersion,
   onVersionSelect,
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [availableVersions, setAvailableVersions] = useState<string[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -62,9 +62,9 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
       } else if (preSelectedBotName) {
         // If not found in suggestions, create a bot result from URL params
         const botResult: BotSearchResult = {
-          id: '', // We'll set this when available
+          id: "", // We'll set this when available
           name: preSelectedBotName,
-          resultType: 'custom',
+          resultType: "custom",
           approved: true,
         };
         onBotSelect(botResult);
@@ -103,7 +103,7 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
             setAvailableVersions([]);
           }
         } catch (error) {
-          console.error('Error fetching versions:', error);
+          console.error("Error fetching versions:", error);
           setAvailableVersions([]);
         } finally {
           setVersionsLoading(false);
@@ -126,8 +126,8 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,7 +155,7 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
   };
 
   const handleClear = () => {
-    setQuery('');
+    setQuery("");
     onBotSelect(null);
     setIsOpen(false);
     clearSuggestions();
@@ -163,39 +163,39 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       setIsOpen(false);
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'marketplace':
-        return 'default';
-      case 'custom':
-        return 'secondary';
-      case 'user':
-        return 'outline';
+      case "marketplace":
+        return "default";
+      case "custom":
+        return "secondary";
+      case "user":
+        return "outline";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'marketplace':
-        return '🏪';
-      case 'custom':
-        return '🔧';
-      case 'user':
-        return '👤';
+      case "marketplace":
+        return "🏪";
+      case "custom":
+        return "🔧";
+      case "user":
+        return "👤";
       default:
-        return '🤖';
+        return "🤖";
     }
   };
 
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn("space-y-4", className)}>
       {/* Bot Search Input */}
       <div>
         <label className="text-sm font-medium mb-2 block">Select Bot</label>
@@ -292,7 +292,7 @@ export const BotSelectionForm: React.FC<BotSelectionFormProps> = ({
                     variant={getTypeColor(selectedBot.resultType)}
                     className="text-xs"
                   >
-                    {getTypeIcon(selectedBot.resultType)}{' '}
+                    {getTypeIcon(selectedBot.resultType)}{" "}
                     {selectedBot.resultType}
                   </Badge>
                 </div>

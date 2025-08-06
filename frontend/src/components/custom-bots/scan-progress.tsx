@@ -4,13 +4,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Activity, FileText } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
-import React from 'react';
+} from "@/components/ui/card";
+import { Activity, FileText } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import React from "react";
 
 export const ScanProgress = ({ review, status }: any) => {
-  if (status !== 'pending_review' || !review?.scanProgress) return null;
+  if (status !== "pending_review" || !review?.scanProgress) return null;
 
   return (
     <Card>

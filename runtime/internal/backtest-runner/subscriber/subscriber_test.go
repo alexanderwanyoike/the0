@@ -46,7 +46,7 @@ func setupTestMongo(t *testing.T, dbName, collectionName string) (*mongo.Client,
 	if err != nil {
 		t.Skipf("MongoDB authentication required, skipping test: %v", err)
 	}
-	
+
 	// Clean up test document
 	testCollection.DeleteOne(context.Background(), testDoc)
 
@@ -304,7 +304,7 @@ func TestUpsertBacktest(t *testing.T) {
 	t.Run("successful upsert", func(t *testing.T) {
 		msg := createTestMessage(t, "upsert-test-backtest")
 		collection := client.Database(dbName).Collection(collectionName)
-		
+
 		err := subscriber.upsertBacktest(context.Background(), collection, *msg, 3)
 		assert.NoError(t, err)
 
@@ -320,7 +320,7 @@ func TestUpsertBacktest(t *testing.T) {
 
 func TestMockSubscriber(t *testing.T) {
 	mock := &MockSubscriber{}
-	
+
 	// Test Start
 	err := mock.Start(context.Background())
 	assert.NoError(t, err)

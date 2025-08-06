@@ -1,6 +1,6 @@
 ---
-title: 'Documentation'
-description: 'the0 platform documentation'
+title: "Documentation"
+description: "the0 platform documentation"
 order: 0
 ---
 

@@ -1,16 +1,16 @@
 interface SpinnerProps {
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
   color?: string;
 }
 
 const Spinner: React.FC<SpinnerProps> = ({
-  size = 'md',
-  color = 'text-blue-600',
+  size = "md",
+  color = "text-blue-600",
 }) => {
   const sizeClasses = {
-    sm: 'w-6 h-6',
-    md: 'w-8 h-8',
-    lg: 'w-12 h-12',
+    sm: "w-6 h-6",
+    md: "w-8 h-8",
+    lg: "w-12 h-12",
   };
 
   return (

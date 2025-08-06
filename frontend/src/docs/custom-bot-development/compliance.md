@@ -1,7 +1,7 @@
 ---
-title: 'Compliance and Code Review'
-description: 'Understanding the0 platform compliance requirements and code review process'
-tags: ['custom-bots', 'compliance', 'code-review', '0vers33r']
+title: "Compliance and Code Review"
+description: "Understanding the0 platform compliance requirements and code review process"
+tags: ["custom-bots", "compliance", "code-review", "0vers33r"]
 order: 11
 ---
 
