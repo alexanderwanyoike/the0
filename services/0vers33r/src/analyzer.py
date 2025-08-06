@@ -43,7 +43,7 @@ class The0vers33r:
         """
         review_data = {
             "reviewedAt": "SERVER_TIMESTAMP",  # Will be replaced by concrete implementation
-            "reviewedBy": "0vers33r_clean",
+            "reviewedBy": "0vers33r",
             "version": "v2.1-js-ai-support",
             "score": 0,
             "issues": [],
