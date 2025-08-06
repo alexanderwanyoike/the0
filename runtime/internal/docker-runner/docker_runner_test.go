@@ -163,7 +163,7 @@ func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
 	assert.Contains(t, scriptContent, "main") // Script path should be "main" not "main.js"
 }
 
-func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
+func testIntegration_RealDocker_NodeJSBot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -233,7 +233,7 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 	}
 }
 
-func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
+func testIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -330,7 +330,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	assert.Empty(t, finalContainers, "Container should be removed from managed list")
 }
 
-func TestIntegration_RealDocker_StartStopContainer_BacktestEntrypoint(t *testing.T) {
+func testIntegration_RealDocker_StartStopContainer_BacktestEntrypoint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -388,7 +388,7 @@ func TestIntegration_RealDocker_StartStopContainer_BacktestEntrypoint(t *testing
 	assert.Contains(t, result.Output, "CHDIR_SUCCESS: Changed to working directory: /backtest") // Verify working in /backtest directory
 }
 
-func TestIntegration_RealDocker_DifferentExecutables_SameContainer(t *testing.T) {
+func testIntegration_RealDocker_DifferentExecutables_SameContainer(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -586,7 +586,7 @@ func isDockerAvailable() bool {
 	return true
 }
 
-func TestIntegration_RealDocker_NodeJSBacktest(t *testing.T) {
+func testIntegration_RealDocker_NodeJSBacktest(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -671,7 +671,7 @@ func TestIntegration_RealDocker_NodeJSBacktest(t *testing.T) {
 	assert.NotNil(t, results["tables"], "Results should contain tables")
 }
 
-func TestIntegration_RealDocker_PythonBot(t *testing.T) {
+func testIntegration_RealDocker_PythonBot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -750,7 +750,7 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 	require.NoError(t, err, "StopContainer should succeed")
 }
 
-func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
+func testIntegration_RealDocker_PythonBacktest(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -835,7 +835,7 @@ func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
 	assert.NotNil(t, results["tables"], "Results should contain tables")
 }
 
-func TestStoreAnalysisResult(t *testing.T) {
+func testStoreAnalysisResult(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Docker runner integration test in short mode")
 	}
@@ -946,4 +946,27 @@ func TestStoreAnalysisResult(t *testing.T) {
 	assert.NotNil(t, results["tables"], "Analysis should contain tables")
 
 	t.Logf("Analysis file successfully stored and verified: %s", string(content))
+}
+
+// TestDockerIntegrationSequential ensures all Docker integration tests that use segment=1 
+// run sequentially to avoid container conflicts in CI environments
+func TestDockerIntegrationSequential(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping Docker integration tests in short mode")
+	}
+
+	// Check if Docker is available
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available, skipping Docker integration tests")
+	}
+
+	// Run each integration test sequentially
+	t.Run("StartStopContainer_BotEntrypoint", testIntegration_RealDocker_StartStopContainer_BotEntrypoint)
+	t.Run("StartStopContainer_BacktestEntrypoint", testIntegration_RealDocker_StartStopContainer_BacktestEntrypoint)
+	t.Run("DifferentExecutables_SameContainer", testIntegration_RealDocker_DifferentExecutables_SameContainer)
+	t.Run("NodeJSBot", testIntegration_RealDocker_NodeJSBot)
+	t.Run("NodeJSBacktest", testIntegration_RealDocker_NodeJSBacktest)
+	t.Run("PythonBot", testIntegration_RealDocker_PythonBot)
+	t.Run("PythonBacktest", testIntegration_RealDocker_PythonBacktest)
+	t.Run("StoreAnalysisResult", testStoreAnalysisResult)
 }
