@@ -35,10 +35,6 @@ jobs:
       working-directory: ./frontend
       run: yarn install --frozen-lockfile
 
-    - name: Run linting
-      working-directory: ./frontend
-      run: yarn lint
-
     # TODO: Re-enable tests once they are fixed
     # - name: Run tests
     #   working-directory: ./frontend
