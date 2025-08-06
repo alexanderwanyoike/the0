@@ -51,7 +51,7 @@ jobs:
 
     - name: Run tests
       working-directory: ./runtime
-      run: go test ./...
+      run: go test -p 1 ./...
 
   build-and-push:
     needs: test
