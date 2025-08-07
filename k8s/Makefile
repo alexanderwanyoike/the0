@@ -41,7 +41,8 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@echo "⚠️  Note: This requires internet connectivity to pull base images from Docker Hub"
 	@eval $$(minikube docker-env) && \
 		docker build -t the0-api:latest ../api && \
-		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 -t the0-frontend:latest ../frontend && \
+		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30003 -t the0-frontend:latest ../frontend && \
+		docker build -t the0-docs:latest ../docs && \
 		docker build -t runtime:latest ../runtime && \
 		docker build -t the0-analyzer:latest ../services/0vers33r
 	@echo "🚀 Deploying to minikube..."
@@ -51,6 +52,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		--set global.imagePullPolicy=IfNotPresent \
 		--set the0Api.imagePullPolicy=Never \
 		--set the0Frontend.imagePullPolicy=Never \
+		--set the0Docs.imagePullPolicy=Never \
 		--set botRunner.imagePullPolicy=Never \
 		--set backtestRunner.imagePullPolicy=Never \
 		--set botScheduler.imagePullPolicy=Never \
@@ -64,6 +66,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@echo "   Frontend:  http://the0.local:30001"
 	@echo "   API:       http://api.the0.local:30000"
 	@echo "   MinIO:     http://minio.the0.local:30002"
+	@echo "   Docs:      http://docs.the0.local:30003"
 	@echo ""
 	@echo "⚠️  To access services:"
 	@echo "   1. Run: make setup-hosts"
@@ -122,7 +125,7 @@ setup-hosts: ## Add the0.local hostnames to /etc/hosts
 		echo "⚠️  Updating existing the0.local entries in /etc/hosts"; \
 		sudo sed -i '/the0\.local/d' /etc/hosts; \
 	fi && \
-	echo "$$MINIKUBE_IP  the0.local api.the0.local minio.the0.local" | sudo tee -a /etc/hosts > /dev/null && \
+	echo "$$MINIKUBE_IP  the0.local api.the0.local minio.the0.local docs.the0.local" | sudo tee -a /etc/hosts > /dev/null && \
 	echo "✅ Added the0.local entries to /etc/hosts ($$MINIKUBE_IP)"
 
 .PHONY: tunnel

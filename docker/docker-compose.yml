@@ -473,10 +473,11 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
+        - NEXT_PUBLIC_API_URL=http://localhost:3000
+        - NEXT_PUBLIC_DOCS_URL=http://localhost:3002
     pull_policy: always
     environment:
-      # API configuration
-      NEXT_PUBLIC_API_URL: http://localhost:3000
+      # API configuration (runtime)
       BOT_API_URL: http://the0-api:3000
       
       # CLI download configuration
