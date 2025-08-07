@@ -1,12 +1,12 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Code, TestTube, Zap, Container, BarChart3, Globe } from "lucide-react";
+import { Code, TestTube, Zap, Container, Languages, Globe } from "lucide-react";
 
 const features = [
   {
     title: "Custom Bot Development",
     description:
-      "Build trading bots in Python or JavaScript (and more in the future) with any libraries you prefer. Full framework agnostic approach gives you complete flexibility.",
+      "Build trading bots in Python or JavaScript with any libraries you prefer. Full framework agnostic approach gives you complete flexibility.",
     icon: Code,
   },
   {
@@ -28,10 +28,10 @@ const features = [
     icon: Container,
   },
   {
-    title: "Analytics Dashboard",
+    title: "Multi Language Support",
     description:
-      "Monitor performance and track metrics in real-time. Comprehensive insights into your bot execution and trading results.",
-    icon: BarChart3,
+      "Currently supports Python and JavaScript. Coming soon: TypeScript, Rust, C++, and C#. Theoretically supports any programming language.",
+    icon: Languages,
   },
   {
     title: "Exchange Agnostic",
