@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/main-navigation";
 import { ModeToggle } from "@/components/mode-toggle";
+import { config } from "@/lib/config";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -106,8 +107,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex items-center gap-4">
             <nav className="hidden md:flex items-center space-x-4">
               <Link
-                href="/docs"
+                href={config.docsUrl}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 Docs
               </Link>
