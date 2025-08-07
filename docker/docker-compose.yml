@@ -508,6 +508,32 @@ services:
     networks:
       - the0-network
 
+  # the0 Documentation Site (Next.js)
+  the0-docs:
+    build: 
+      context: ../docs
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    pull_policy: always
+    environment:
+      # App configuration
+      NEXT_PUBLIC_APP_NAME: "the0"
+      NEXT_PUBLIC_APP_VERSION: "1.0.0"
+      
+      NODE_ENV: production
+      
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - the0-network
+
   # Development tools (optional)
   adminer:
     image: adminer:4.8.1
