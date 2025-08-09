@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Menu, User2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { config } from "@/lib/config";
 
 interface NavigationMenuProps {
   showSearch?: boolean;
@@ -40,9 +41,11 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
         About
       </Link>
       <Link
-        href="/docs"
+        href={config.docsUrl}
         className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         onClick={() => setOpen(false)}
+        target="_blank"
+        rel="noopener noreferrer"
       >
         Docs
       </Link>
@@ -76,8 +79,10 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
             About
           </Link>
           <Link
-            href="/docs"
+            href={config.docsUrl}
             className="transition-colors hover:text-foreground/80 text-foreground/60"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             Docs
           </Link>
@@ -162,9 +167,11 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
                         About
                       </Link>
                       <Link
-                        href="/docs"
+                        href={config.docsUrl}
                         className="block text-sm font-medium transition-colors hover:text-primary"
                         onClick={() => setOpen(false)}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
                         Docs
                       </Link>

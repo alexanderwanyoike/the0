@@ -473,10 +473,11 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
+        - NEXT_PUBLIC_API_URL=http://localhost:3000
+        - NEXT_PUBLIC_DOCS_URL=http://localhost:3002
     pull_policy: always
     environment:
-      # API configuration
-      NEXT_PUBLIC_API_URL: http://localhost:3000
+      # API configuration (runtime)
       BOT_API_URL: http://the0-api:3000
       
       # CLI download configuration
@@ -499,6 +500,32 @@ services:
     depends_on:
       the0-api:
         condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - the0-network
+
+  # the0 Documentation Site (Next.js)
+  the0-docs:
+    build: 
+      context: ../docs
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    pull_policy: always
+    environment:
+      # App configuration
+      NEXT_PUBLIC_APP_NAME: "the0"
+      NEXT_PUBLIC_APP_VERSION: "1.0.0"
+      
+      NODE_ENV: production
+      
+    ports:
+      - "3002:3000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]

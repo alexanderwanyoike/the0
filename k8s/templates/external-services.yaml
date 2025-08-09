@@ -73,6 +73,27 @@ spec:
     app.kubernetes.io/component: minio
 
 ---
+# Docs LoadBalancer Service (localhost:3002)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-docs-external
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: docs-external
+spec:
+  type: NodePort
+  ports:
+    - port: 3002
+      targetPort: 3000
+      nodePort: {{ .Values.externalServices.nodePort.docs }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: docs
+
+---
 # Bot Runner Master NodePort Service
 apiVersion: v1
 kind: Service

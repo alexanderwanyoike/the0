@@ -142,7 +142,7 @@ the0Frontend:
   port: 3000
   env:
     # Frontend configuration (using NodePort URLs)
-    NEXT_PUBLIC_API_URL: "http://api.the0.local:30000"
+    # Note: NEXT_PUBLIC_API_URL and NEXT_PUBLIC_DOCS_URL are set via build args in Makefile
     BOT_API_URL: "http://the0-api:3000"
     NEXT_PUBLIC_APP_NAME: "the0"
     NEXT_PUBLIC_APP_VERSION: "1.0.0"
@@ -156,6 +156,31 @@ the0Frontend:
     limits:
       memory: 512Mi
       cpu: 500m
+
+the0Docs:
+  enabled: true
+  replicas: 1
+  # Local image (default)
+  image:
+    repository: the0-docs
+    tag: latest
+  # DockerHub image (uncomment for production)
+  # image:
+  #   repository: the0org/the0-docs
+  #   tag: latest
+  port: 3000
+  env:
+    # Documentation configuration
+    NEXT_PUBLIC_APP_NAME: "the0"
+    NEXT_PUBLIC_APP_VERSION: "1.0.0"
+    NODE_ENV: "development"
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
 
 botRunner:
   enabled: true
@@ -232,6 +257,9 @@ botRunner:
       - name: tmp-runtime
         mountPath: /tmp/runtime
         hostPath: /tmp/runtime
+      - name: tmp-bot-runner
+        mountPath: /tmp/bot-runner
+        hostPath: /tmp/bot-runner
     resources:
       requests:
         memory: 512Mi
@@ -325,6 +353,9 @@ backtestRunner:
       - name: tmp-runtime
         mountPath: /tmp/runtime
         hostPath: /tmp/runtime
+      - name: tmp-backtest-runner
+        mountPath: /tmp/backtest-runner
+        hostPath: /tmp/backtest-runner
     resources:
       requests:
         memory: 512Mi
@@ -408,6 +439,9 @@ botScheduler:
       - name: tmp-runtime
         mountPath: /tmp/runtime
         hostPath: /tmp/runtime
+      - name: tmp-bot-scheduler
+        mountPath: /tmp/bot-scheduler
+        hostPath: /tmp/bot-scheduler
     resources:
       requests:
         memory: 512Mi
@@ -466,6 +500,7 @@ externalServices:
     frontend: 30001  # the0.local:30001
     api: 30000       # api.the0.local:30000  
     minio: 30002     # minio.the0.local:30002
+    docs: 30004      # docs.the0.local:30004
 
 # Minikube configuration  
 minikube:

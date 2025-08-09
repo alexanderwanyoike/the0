@@ -13,6 +13,7 @@ services:
       CHOKIDAR_USEPOLLING: true
       NEXT_PUBLIC_API_URL: http://localhost:3000
       BOT_API_URL: http://the0-api:3000
+      NEXT_PUBLIC_DOCS_URL: http://localhost:3002
       CLI_DOWNLOAD_BASE_URL: https://github.com/your-org/the0-oss/releases/download
       CLI_INSTALL_BASE_URL: http://localhost:3001
       NEXT_PUBLIC_CLI_INSTALL_BASE_URL: http://localhost:3001
