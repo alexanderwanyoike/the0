@@ -14,7 +14,7 @@ spec:
       protocol: TCP
       name: http
       {{- if eq .Values.service.type "NodePort" }}
-      nodePort: 30003
+      nodePort: 30004
       {{- end }}
   selector:
     {{- include "the0.selectorLabels" . | nindent 4 }}

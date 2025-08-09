@@ -257,6 +257,9 @@ botRunner:
       - name: tmp-runtime
         mountPath: /tmp/runtime
         hostPath: /tmp/runtime
+      - name: tmp-bot-runner
+        mountPath: /tmp/bot-runner
+        hostPath: /tmp/bot-runner
     resources:
       requests:
         memory: 512Mi
@@ -350,6 +353,9 @@ backtestRunner:
       - name: tmp-runtime
         mountPath: /tmp/runtime
         hostPath: /tmp/runtime
+      - name: tmp-backtest-runner
+        mountPath: /tmp/backtest-runner
+        hostPath: /tmp/backtest-runner
     resources:
       requests:
         memory: 512Mi
@@ -433,6 +439,9 @@ botScheduler:
       - name: tmp-runtime
         mountPath: /tmp/runtime
         hostPath: /tmp/runtime
+      - name: tmp-bot-scheduler
+        mountPath: /tmp/bot-scheduler
+        hostPath: /tmp/bot-scheduler
     resources:
       requests:
         memory: 512Mi
@@ -491,7 +500,7 @@ externalServices:
     frontend: 30001  # the0.local:30001
     api: 30000       # api.the0.local:30000  
     minio: 30002     # minio.the0.local:30002
-    docs: 30003      # docs.the0.local:30003
+    docs: 30004      # docs.the0.local:30004
 
 # Minikube configuration  
 minikube:

@@ -41,7 +41,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@echo "⚠️  Note: This requires internet connectivity to pull base images from Docker Hub"
 	@eval $$(minikube docker-env) && \
 		docker build -t the0-api:latest ../api && \
-		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30003 -t the0-frontend:latest ../frontend && \
+		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30004 -t the0-frontend:latest ../frontend && \
 		docker build -t the0-docs:latest ../docs && \
 		docker build -t runtime:latest ../runtime && \
 		docker build -t the0-analyzer:latest ../services/0vers33r
@@ -66,7 +66,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@echo "   Frontend:  http://the0.local:30001"
 	@echo "   API:       http://api.the0.local:30000"
 	@echo "   MinIO:     http://minio.the0.local:30002"
-	@echo "   Docs:      http://docs.the0.local:30003"
+	@echo "   Docs:      http://docs.the0.local:30004"
 	@echo ""
 	@echo "⚠️  To access services:"
 	@echo "   1. Run: make setup-hosts"
