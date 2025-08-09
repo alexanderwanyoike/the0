@@ -10,3 +10,5 @@ data/
 **/*.pyc
 dist/
 build/
+.pytest_cache/
+*/**/__pycache__

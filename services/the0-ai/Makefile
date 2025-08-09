@@ -1,87 +1,92 @@
-# the0-ai Desktop Application Makefile
-# Provides commands for development, building, and running the application
+# the0-ai API Makefile
+# Provides commands for development, testing, formatting, and running the AI agent API
 
-.PHONY: help install install-deps dev dev-browser build clean test
+.PHONY: help install-deps dev test format lint clean clean-deps run-agent setup
 
 # Default target
 help:
-	@echo "the0-ai Desktop Application Commands:"
+	@echo "the0-ai API Commands:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make setup        - Set up virtual environment and install dependencies"
+	@echo "  make install-deps - Install Python dependencies"
 	@echo ""
 	@echo "Development:"
-	@echo "  make setup        - Set up development environment and install dependencies"
-	@echo "  make install-deps - Install Python and Node.js dependencies"
-	@echo "  make dev          - Run application in desktop mode"
-	@echo "  make dev-browser  - Run application in browser mode"
-	@echo "  make dev-staging  - Run application with staging updates"
+	@echo "  make dev          - Run AI agent API in development mode"
+	@echo "  make run-agent    - Run AI agent API server"
 	@echo ""
-	@echo "Building:"
-	@echo "  make build        - Build standalone executable"
-	@echo "  make build-frontend - Build React frontend only"
-	@echo "  make install      - Install executable to ~/bin/the0-ai"
+	@echo "Code Quality:"
+	@echo "  make format       - Format code with black"
+	@echo "  make lint         - Lint code with flake8"
+	@echo "  make test         - Run all tests with pytest"
+	@echo "  make test-watch   - Run tests in watch mode"
 	@echo ""
 	@echo "Maintenance:"
-	@echo "  make clean        - Clean build artifacts and cache"
-	@echo "  make test         - Run tests (when available)"
+	@echo "  make clean        - Clean cache and artifacts"
+	@echo "  make clean-deps   - Clean up unused dependencies"
 
-# Set up development environment
-setup: install-deps
+# Set up virtual environment and install dependencies
+setup:
+	@echo "🐍 Setting up Python virtual environment..."
+	python3 -m venv venv
+	@echo "📦 Installing dependencies..."
+	. venv/bin/activate && pip install -r requirements.txt
 	@echo "✅ Development environment setup complete!"
 
-# Install all dependencies
+# Install Python dependencies
 install-deps:
 	@echo "📦 Installing Python dependencies..."
-	pip install -r requirements.txt
-	@echo "📦 Installing Node.js dependencies..."
-	cd frontend && npm install
-	@echo "✅ All dependencies installed!"
+	. venv/bin/activate && pip install -r requirements.txt
+	@echo "✅ Dependencies installed!"
 
-# Run application in desktop mode
+# Run AI agent API in development mode
 dev:
-	@echo "🚀 Starting the0-ai in desktop mode..."
-	python3 the0_ai.py
+	@echo "🚀 Starting AI agent API server..."
+	. venv/bin/activate && uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
-# Run application in browser mode (for debugging)
-dev-browser:
-	@echo "🌐 Starting the0-ai in browser mode..."
-	python3 the0_ai.py --browser
+# Run AI agent API server
+run-agent:
+	@echo "🚀 Starting AI agent API server..."
+	. venv/bin/activate && python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
 
-# Run application with staging updates  
-dev-staging:
-	@echo "🧪 Starting the0-ai with staging update stream..."
-	THE0_AI_UPDATE_STREAM=staging python3 the0_ai.py
+# Format code with black
+format:
+	@echo "🎨 Formatting code with black..."
+	. venv/bin/activate && black api/ the0/ tests/ --line-length 88
+	@echo "✅ Code formatted!"
 
-# Build standalone executable
-build: build-frontend
-	@echo "🔨 Building standalone executable..."
-	python3 build.py
-	@echo "✅ Build complete! Executable created in dist/"
+# Lint code with flake8
+lint:
+	@echo "🔍 Linting code with flake8..."
+	. venv/bin/activate && flake8 api/ the0/ tests/ --max-line-length=88 --ignore=E203,W503
+	@echo "✅ Code linted!"
 
-# Build React frontend only
-build-frontend:
-	@echo "🏗️ Building React frontend..."
-	cd frontend && npm run build
-	@echo "✅ Frontend build complete!"
+# Run all tests with pytest
+test:
+	@echo "🧪 Running all tests..."
+	. venv/bin/activate && python -m pytest tests/ -v --tb=short
+	@echo "✅ Tests complete!"
 
-# Install executable to user's bin directory  
-install: build
-	@echo "📦 Installing the0-ai executable..."
-	python3 install.py
-	@echo "✅ Installation complete!"
+# Run tests in watch mode
+test-watch:
+	@echo "🧪 Running tests in watch mode..."
+	. venv/bin/activate && python -m pytest tests/ -v --tb=short -f
 
-# Clean build artifacts and cache
+# Clean cache and build artifacts
 clean:
-	@echo "🧹 Cleaning build artifacts..."
-	rm -rf dist/
-	rm -rf build/
-	rm -rf *.spec
-	rm -rf frontend/dist/
-	rm -rf frontend/node_modules/.cache/
+	@echo "🧹 Cleaning cache and artifacts..."
 	rm -rf __pycache__/
 	rm -rf **/__pycache__/
 	rm -rf .pytest_cache/
+	rm -rf *.egg-info/
+	rm -rf build/
+	rm -rf dist/
+	find . -name "*.pyc" -delete
+	find . -name "*.pyo" -delete
 	@echo "✅ Clean complete!"
 
-# Run tests (placeholder for when tests are added)
-test:
-	@echo "🧪 Running tests..."
-	@echo "⚠️  No tests configured yet"
+# Clean up unused dependencies
+clean-deps:
+	@echo "🧹 Cleaning up unused dependencies..."
+	. venv/bin/activate && pip-autoremove -y || echo "Install pip-autoremove with: pip install pip-autoremove"
+	@echo "✅ Dependencies cleaned!"
