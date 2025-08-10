@@ -6,6 +6,15 @@ interface DocsPageProps {
   params: Promise<{ slug: string[] }>;
 }
 
+export async function generateStaticParams() {
+  const fileSystem = new DocsFileSystem();
+  const allDocs = await fileSystem.getAllDocs();
+  
+  return allDocs.map((doc) => ({
+    slug: doc.slug,
+  }));
+}
+
 export async function generateMetadata({
   params,
 }: DocsPageProps): Promise<Metadata> {
