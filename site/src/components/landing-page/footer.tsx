@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Github } from "lucide-react";
+import { Github, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DOCS_URLS } from "@/lib/constants";
 
 const footerLinks = {
   Product: [
@@ -8,8 +9,8 @@ const footerLinks = {
     { name: "How It Works", href: "#how-it-works" },
   ],
   Resources: [
-    { name: "Documentation", href: "/docs" },
-    { name: "GitHub", href: "https://github.com/alexanderwanyoike/the0" },
+    { name: "Documentation", href: DOCS_URLS.main, external: true },
+    { name: "GitHub", href: DOCS_URLS.github, external: true },
   ],
   Company: [{ name: "About", href: "/about" }],
 };
@@ -28,7 +29,7 @@ export function Footer() {
                     <Link
                       href={link.href}
                       className="text-muted-foreground hover:text-primary transition-colors"
-                      {...(link.href.startsWith("http")
+                      {...((link as any).external
                         ? { target: "_blank", rel: "noopener noreferrer" }
                         : {})}
                     >
@@ -55,7 +56,17 @@ export function Footer() {
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="icon" asChild>
                 <a
-                  href="https://github.com/alexanderwanyoike/the0"
+                  href={DOCS_URLS.main}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Documentation"
+                >
+                  <BookOpen className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button variant="ghost" size="icon" asChild>
+                <a
+                  href={DOCS_URLS.github}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="GitHub"

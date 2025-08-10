@@ -10,7 +10,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Menu, Github } from "lucide-react";
+import { Menu, Github, BookOpen } from "lucide-react";
+import { DOCS_URLS } from "@/lib/constants";
 
 export function Navigation() {
   const [open, setOpen] = React.useState(false);
@@ -41,6 +42,14 @@ export function Navigation() {
           >
             About
           </Link>
+          <Link
+            href={DOCS_URLS.main}
+            className="transition-colors hover:text-foreground/80 text-foreground/60"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Documentation
+          </Link>
         </nav>
 
         {/* Right side items */}
@@ -50,7 +59,18 @@ export function Navigation() {
             <ModeToggle />
             <Button variant="ghost" size="sm" asChild>
               <a
-                href="https://github.com/alexanderwanyoike/the0"
+                href={DOCS_URLS.main}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="gap-2"
+              >
+                <BookOpen className="h-4 w-4" />
+                <span className="hidden lg:inline">Docs</span>
+              </a>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <a
+                href={DOCS_URLS.github}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="gap-2"
@@ -96,6 +116,15 @@ export function Navigation() {
                       >
                         About
                       </Link>
+                      <Link
+                        href={DOCS_URLS.main}
+                        className="block text-sm font-medium transition-colors hover:text-primary"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setOpen(false)}
+                      >
+                        Documentation
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -107,21 +136,38 @@ export function Navigation() {
                     <ModeToggle />
                   </div>
 
-                  <Button
-                    variant="outline"
-                    asChild
-                    className="w-full gap-2"
-                    onClick={() => setOpen(false)}
-                  >
-                    <a
-                      href="https://github.com/alexanderwanyoike/the0"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      asChild
+                      className="w-full gap-2"
+                      onClick={() => setOpen(false)}
                     >
-                      <Github className="h-4 w-4" />
-                      View on GitHub
-                    </a>
-                  </Button>
+                      <a
+                        href={DOCS_URLS.main}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        Documentation
+                      </a>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      asChild
+                      className="w-full gap-2"
+                      onClick={() => setOpen(false)}
+                    >
+                      <a
+                        href={DOCS_URLS.github}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Github className="h-4 w-4" />
+                        View on GitHub
+                      </a>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </SheetContent>
