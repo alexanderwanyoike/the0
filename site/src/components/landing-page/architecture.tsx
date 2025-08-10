@@ -8,9 +8,6 @@ import {
   Cpu,
   Activity,
   Shield,
-  Database,
-  MessageSquare,
-  HardDrive,
   ArrowRight,
   ArrowDown,
 } from "lucide-react";
@@ -99,49 +96,6 @@ const services = [
     textColor: "text-pink-700",
     bgColor: "bg-pink-50 dark:bg-pink-950/20",
     borderColor: "border-pink-200 dark:border-pink-800",
-  },
-];
-
-const dataStores = [
-  {
-    name: "PostgreSQL",
-    description: "Users & bot definitions",
-    tech: "SQL Database",
-    icon: Database,
-    color: "bg-teal-500",
-    textColor: "text-teal-700",
-    bgColor: "bg-teal-50 dark:bg-teal-950/20",
-    borderColor: "border-teal-200 dark:border-teal-800",
-  },
-  {
-    name: "MongoDB",
-    description: "Runtime state & logs",
-    tech: "Document Database",
-    icon: HardDrive,
-    color: "bg-teal-500",
-    textColor: "text-teal-700",
-    bgColor: "bg-teal-50 dark:bg-teal-950/20",
-    borderColor: "border-teal-200 dark:border-teal-800",
-  },
-  {
-    name: "MinIO",
-    description: "Code & file storage",
-    tech: "S3-Compatible Storage",
-    icon: HardDrive,
-    color: "bg-teal-500",
-    textColor: "text-teal-700",
-    bgColor: "bg-teal-50 dark:bg-teal-950/20",
-    borderColor: "border-teal-200 dark:border-teal-800",
-  },
-  {
-    name: "NATS JetStream",
-    description: "Event streaming",
-    tech: "Message Queue",
-    icon: MessageSquare,
-    color: "bg-teal-500",
-    textColor: "text-teal-700",
-    bgColor: "bg-teal-50 dark:bg-teal-950/20",
-    borderColor: "border-teal-200 dark:border-teal-800",
   },
 ];
 

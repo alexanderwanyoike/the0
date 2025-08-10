@@ -1,10 +1,14 @@
 import React from "react";
 import { Github, Code, Users, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Navigation } from "@/components/landing-page/navigation";
+import { Footer } from "@/components/landing-page/footer";
+import { DOCS_URLS } from "@/lib/constants";
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
+      <Navigation />
       {/* Hero Section */}
       <div className="py-16 md:py-24">
         <div className="container max-w-4xl">
@@ -172,7 +176,7 @@ export default function AboutPage() {
                 </p>
                 <Button asChild>
                   <a
-                    href="https://github.com/alexanderwanyoike/the0"
+                    href={DOCS_URLS.github}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="gap-2"
@@ -186,6 +190,8 @@ export default function AboutPage() {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }

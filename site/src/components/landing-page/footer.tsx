@@ -29,7 +29,7 @@ export function Footer() {
                     <Link
                       href={link.href}
                       className="text-muted-foreground hover:text-primary transition-colors"
-                      {...((link as any).external
+                      {...((link as { external?: boolean }).external
                         ? { target: "_blank", rel: "noopener noreferrer" }
                         : {})}
                     >
