@@ -32,46 +32,6 @@ export function HeroSection() {
               </Button>
             </Link>
           </div>
-
-          {/* Key Features */}
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-4 gap-8 max-w-6xl mx-auto">
-            <div className="text-center">
-              <div className="h-12 w-12 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Code className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">Custom Bot Development</h3>
-              <p className="text-sm text-muted-foreground">
-                Build bots in Python or JavaScript with any libraries you prefer
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="h-12 w-12 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-                <TestTube className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">Custom Backtesting</h3>
-              <p className="text-sm text-muted-foreground">
-                Test strategies with historical data before going live
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="h-12 w-12 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Zap className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">Real-time Execution</h3>
-              <p className="text-sm text-muted-foreground">
-                Deploy scheduled or continuous trading bots with live data
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="h-12 w-12 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-                <BarChart3 className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">Analytics Dashboard</h3>
-              <p className="text-sm text-muted-foreground">
-                Monitor performance and track metrics in real-time
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </section>
