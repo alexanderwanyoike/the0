@@ -251,8 +251,8 @@ export function ArchitectureSection() {
             </div>
             <h3 className="text-lg font-semibold mb-2">Auto Scaling</h3>
             <p className="text-muted-foreground">
-              Customizable autoscaling based on the overall number of bots per worker. 
-              Kubernetes-ready microservices adapt to your trading load.
+              Customizable autoscaling based on the overall number of bots per
+              worker. Kubernetes-ready microservices adapt to your trading load.
             </p>
           </div>
         </div>
@@ -263,7 +263,8 @@ export function ArchitectureSection() {
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold mb-4">Data Infrastructure</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Multi-database architecture optimized for different data types and access patterns.
+            Multi-database architecture optimized for different data types and
+            access patterns.
           </p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
