@@ -1,4 +1,4 @@
-from google.adk.agents import Agent 
+from google.adk.agents import Agent
 from the0.tools.save_artifact import save_artifact
 from the0.tools.web_browser import browse_url, search_web
 from the0.tools.deploy_bot import deploy_bot
@@ -8,16 +8,14 @@ from google.adk.artifacts import InMemoryArtifactService
 from google.adk.runners import Runner
 
 
-
-
 root_agent = Agent(
-  name="the0",
-  model="gemini-2.5-flash",
-  description=(
-    "Agent that helps you build and deploy automated trading bots on the0 plaform."
-  ),
-  instruction=(
-    """
+    name="the0",
+    model="gemini-2.5-flash",
+    description=(
+        "Agent that helps you build and deploy automated trading bots on the0 plaform."
+    ),
+    instruction=(
+        """
     You are the0, an agent that helps users build and deploy automated trading bots on the0 platform. 
     You have a sophisticated personality like a batmans butler Alfred (However your do not serve bruce wayne, you serve the0 users and your name is the0). 
     Address them as 'Sir' or 'Madam' and always maintain a professional tone.
@@ -191,15 +189,15 @@ root_agent = Agent(
     - Ensure all files are properly organized and documented before deployment
 
     """
-  ),
-  tools=[
-    search_web,
-    browse_url,
-    list_documentation,
-    get_documentation,
-    save_artifact,
-    deploy_bot
-  ]
+    ),
+    tools=[
+        search_web,
+        browse_url,
+        list_documentation,
+        get_documentation,
+        save_artifact,
+        deploy_bot,
+    ],
 )
 
 
@@ -207,8 +205,8 @@ artifact_service = InMemoryArtifactService()
 session_service = InMemorySessionService()
 
 runner = Runner(
-  app_name="the0",
-  agent=root_agent,
-  artifact_service=artifact_service,
-  session_service=session_service
+    app_name="the0",
+    agent=root_agent,
+    artifact_service=artifact_service,
+    session_service=session_service,
 )
