@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Code, TestTube, Zap, BarChart3, Github } from "lucide-react";
+import { Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function HeroSection() {
