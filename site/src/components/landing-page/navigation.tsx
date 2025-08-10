@@ -42,14 +42,6 @@ export function Navigation() {
           >
             About
           </Link>
-          <Link
-            href={DOCS_URLS.main}
-            className="transition-colors hover:text-foreground/80 text-foreground/60"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </Link>
         </nav>
 
         {/* Right side items */}
@@ -115,15 +107,6 @@ export function Navigation() {
                         onClick={() => setOpen(false)}
                       >
                         About
-                      </Link>
-                      <Link
-                        href={DOCS_URLS.main}
-                        className="block text-sm font-medium transition-colors hover:text-primary"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setOpen(false)}
-                      >
-                        Documentation
                       </Link>
                     </div>
                   </div>

@@ -67,7 +67,8 @@ open http://localhost:9001  # MinIO Console (admin/the0password)
 cd k8s
 
 # Single command deployment with local endpoints (experimental)
-make minikube
+make minikube-up
+make setup-hosts
 
 # Note: Kubernetes deployment is highly experimental and may not work properly
 ```
@@ -119,7 +120,7 @@ the0 custom-bot upload my-trading-bot.zip
 the0 custom-bot status my-trading-bot
 ```
 
-For more CLI commands and usage, see the [CLI documentation](docs/the0-CLI/installation.md).
+For more CLI commands and usage, see the CLI documentation.
 
 ---
 
@@ -302,7 +303,6 @@ def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
 ### Deployment Guides
 - [Docker Setup](docker/README.md) - Local development environment
 - [Kubernetes Deployment](k8s/README.md) - Production deployment
-- [CLI Installation](frontend/src/docs/the0-CLI/installation.md) - Command-line tools
 
 ### Development Resources
 - [Bot Configuration](frontend/src/docs/custom-bot-development/configuration.md) - Configuration reference

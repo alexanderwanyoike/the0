@@ -101,7 +101,7 @@ const services = [
     id: "ai-assistant",
     name: "AI Assistant",
     description: "Bot development & deployment help",
-    tech: "FastAPI, Claude API",
+    tech: "FastAPI, Google ADK",
     icon: Activity,
     type: "service",
     color: "bg-indigo-500",
@@ -283,7 +283,7 @@ export function ArchitectureSection() {
             </div>
             <h3 className="text-lg font-semibold mb-2">MongoDB</h3>
             <p className="text-muted-foreground text-sm">
-              Runtime state, execution logs, and dynamic bot data.
+              Runtime state and dynamic bot data.
             </p>
           </div>
           <div className="text-center">
@@ -292,7 +292,8 @@ export function ArchitectureSection() {
             </div>
             <h3 className="text-lg font-semibold mb-2">MinIO</h3>
             <p className="text-muted-foreground text-sm">
-              S3-compatible storage for bot code, files, and artifacts.
+              S3-compatible storage for bot code, files, artifacts, and
+              execution logs.
             </p>
           </div>
           <div className="text-center">

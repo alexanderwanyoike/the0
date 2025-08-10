@@ -184,9 +184,9 @@ metadata:
 const features = [
   {
     icon: Code,
-    title: "Framework Agnostic",
+    title: "Language Agnostic",
     description:
-      "Use Python, JavaScript, or any runtime with your favorite libraries and frameworks.",
+      "We will be language agnostic. Use Python, JavaScript, or any runtime with your favorite libraries and frameworks.",
   },
   {
     icon: Settings,
@@ -233,8 +233,8 @@ export function CodeShowcaseSection() {
             Build Your First Trading Bot
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            A complete Dollar Cost Averaging bot with just a few files.
-            Framework agnostic - use any libraries you prefer.
+            A complete Dollar Cost Averaging bot with just a few files. We will
+            be language agnostic - use any libraries you prefer.
           </p>
         </div>
 

@@ -68,7 +68,8 @@ open http://localhost:9001  # MinIO Console (admin/the0password)`,
 cd k8s
 
 # Single command deployment with local endpoints (experimental)
-make minikube
+make minikube-up
+make setup-hosts
 
 # Note: Kubernetes deployment is highly experimental and may not work properly`,
   },

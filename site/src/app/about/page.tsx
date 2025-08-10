@@ -50,7 +50,7 @@ export default function AboutPage() {
                 <Code className="h-8 w-8 mx-auto mb-4 text-primary" />
                 <h3 className="font-bold mb-2">Developer First</h3>
                 <p className="text-muted-foreground">
-                  Framework agnostic approach. Build bots in Python or
+                  We will be language agnostic. Build bots in Python or
                   JavaScript with any libraries you prefer. Full flexibility and
                   control.
                 </p>

@@ -6,7 +6,7 @@ const features = [
   {
     title: "Custom Bot Development",
     description:
-      "Build trading bots in Python or JavaScript with any libraries you prefer. Full framework agnostic approach gives you complete flexibility.",
+      "Build trading bots in Python or JavaScript with any libraries you prefer. We will be language agnostic giving you complete flexibility.",
     icon: Code,
   },
   {
