@@ -10,23 +10,29 @@ import {
   Copy,
   AlertTriangle,
   Zap,
+  Terminal,
 } from "lucide-react";
 
 const prerequisites = [
   {
     icon: Container,
     title: "Docker 20.10+",
-    description: "Docker and Docker Compose 2.0+",
+    description: "Docker and Docker Compose 2.0+ (for platform deployment)",
   },
   {
     icon: CheckCircle,
     title: "4GB RAM",
-    description: "At least 4GB RAM available for containers",
+    description: "At least 4GB RAM available for containers (platform only)",
   },
   {
     icon: Download,
     title: "Git",
     description: "For cloning the repository",
+  },
+  {
+    icon: Terminal,
+    title: "Go 1.21+",
+    description: "Required for building the CLI tool",
   },
 ];
 
@@ -66,6 +72,28 @@ make minikube
 
 # Note: Kubernetes deployment is highly experimental and may not work properly`,
   },
+  {
+    id: "cli",
+    title: "CLI Tool Only",
+    subtitle: "Development",
+    description: "Install just the CLI for local development",
+    badge: { text: "CLI Only", variant: "outline" as const },
+    icon: Terminal,
+    code: `# Clone the repository
+git clone https://github.com/alexanderwanyoike/the0.git
+cd the0/cli
+
+# Build and install the CLI
+make install
+
+# Verify installation
+the0 --help
+
+# Usage examples
+the0 auth login
+the0 bot list
+the0 custom-bot upload my-bot.zip`,
+  },
 ];
 
 export function QuickStartSection() {
@@ -102,7 +130,7 @@ export function QuickStartSection() {
           <h3 className="text-xl font-semibold text-center mb-8">
             Prerequisites
           </h3>
-          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             {prerequisites.map((req, index) => (
               <Card key={index} className="text-center">
                 <CardContent className="p-6">

@@ -97,6 +97,18 @@ const services = [
     bgColor: "bg-pink-50 dark:bg-pink-950/20",
     borderColor: "border-pink-200 dark:border-pink-800",
   },
+  {
+    id: "ai-assistant",
+    name: "AI Assistant",
+    description: "Bot development & deployment help",
+    tech: "FastAPI, Claude API",
+    icon: Activity,
+    type: "service",
+    color: "bg-indigo-500",
+    textColor: "text-indigo-700",
+    bgColor: "bg-indigo-50 dark:bg-indigo-950/20",
+    borderColor: "border-indigo-200 dark:border-indigo-800",
+  },
 ];
 
 const layers = [
@@ -239,8 +251,56 @@ export function ArchitectureSection() {
             </div>
             <h3 className="text-lg font-semibold mb-2">Auto Scaling</h3>
             <p className="text-muted-foreground">
-              Kubernetes-ready microservices that automatically scale based on
-              trading volume.
+              Customizable autoscaling based on the overall number of bots per worker. 
+              Kubernetes-ready microservices adapt to your trading load.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Data Sources */}
+      <div className="container mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold mb-4">Data Infrastructure</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Multi-database architecture optimized for different data types and access patterns.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-teal-50 dark:bg-teal-950/20 text-teal-600 dark:text-teal-400 rounded-lg mb-4">
+              <Server className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">PostgreSQL</h3>
+            <p className="text-muted-foreground text-sm">
+              User accounts, bot definitions, and structured data storage.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 rounded-lg mb-4">
+              <Activity className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">MongoDB</h3>
+            <p className="text-muted-foreground text-sm">
+              Runtime state, execution logs, and dynamic bot data.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-lg mb-4">
+              <Globe className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">MinIO</h3>
+            <p className="text-muted-foreground text-sm">
+              S3-compatible storage for bot code, files, and artifacts.
+            </p>
+          </div>
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 rounded-lg mb-4">
+              <ArrowRight className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">NATS JetStream</h3>
+            <p className="text-muted-foreground text-sm">
+              Event streaming and message coordination between services.
             </p>
           </div>
         </div>

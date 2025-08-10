@@ -76,6 +76,53 @@ Cloud deployments will be available in the future.
 
 ---
 
+## 🛠️ CLI Installation
+
+The the0 CLI tool provides a local development interface for managing your bots. 
+
+### Install from Source
+
+```bash
+# Clone the repository if you haven't already
+git clone https://github.com/alexanderwanyoike/the0.git
+cd the0/cli
+
+# Build and install the CLI
+make install
+
+# Verify installation
+the0 --help
+```
+
+The CLI will be installed to `~/bin/the0`. Make sure `~/bin` is in your PATH.
+
+### Prerequisites for CLI
+
+- **Go 1.21+** - Required for building the CLI
+- **Git** - For cloning the repository
+
+### CLI Usage
+
+Once installed, you can use the CLI to:
+
+```bash
+# Authenticate with the platform
+the0 auth login
+
+# Manage bots
+the0 bot list
+the0 bot create my-bot
+the0 bot deploy my-bot
+
+# Custom bot commands
+the0 custom-bot upload my-trading-bot.zip
+the0 custom-bot status my-trading-bot
+```
+
+For more CLI commands and usage, see the [CLI documentation](docs/the0-CLI/installation.md).
+
+---
+
 ## 🏗️ Architecture
 
 the0 is built as a microservices platform that enables algorithmic trading bot development and execution:
