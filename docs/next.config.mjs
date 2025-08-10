@@ -4,7 +4,11 @@ import withMarkdoc from "@markdoc/next.js";
 const nextConfig = withMarkdoc()({
   reactStrictMode: true,
   pageExtensions: ["md", "mdoc", "js", "jsx", "ts", "tsx"],
-  // output: "standalone",
+  output: "export",
+  trailingSlash: true,
+  images: {
+    unoptimized: true
+  }
 });
 
 export default nextConfig;

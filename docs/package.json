@@ -10,7 +10,7 @@
     "format": "prettier --write ."
   },
   "engines": {
-    "node": "20"
+    "node": "22.18.0"
   },
   "dependencies": {
     "@markdoc/markdoc": "^0.5.2",
