@@ -102,9 +102,19 @@ The CLI will be installed to `~/bin/the0`. Make sure `~/bin` is in your PATH.
 - **Go 1.21+** - Required for building the CLI
 - **Git** - For cloning the repository
 
-### CLI Usage
+### CLI Configuration & Usage
 
-Once installed, you can use the CLI to:
+**Configure API endpoint for local deployments:**
+
+```bash
+# For Docker Compose deployment
+export THE0_API_URL=http://localhost:3000
+
+# For Kubernetes deployment  
+export THE0_API_URL=http://api.the0.local:3000
+```
+
+**Basic CLI usage:**
 
 ```bash
 # Authenticate with the platform

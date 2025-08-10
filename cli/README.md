@@ -17,10 +17,30 @@ make install
 ### From Releases
 Download the latest binary from the [releases page](https://github.com/the0platform/cli/releases).
 
+## Configuration
+
+### API Endpoint Setup
+
+The CLI needs to connect to the0 API server. Set the API URL based on your deployment:
+
+**For Docker Compose deployment:**
+```bash
+export THE0_API_URL=http://localhost:3000
+```
+
+**For Kubernetes deployment:**
+```bash
+export THE0_API_URL=http://api.the0.local:3000
+```
+
 ## Quick Start
 
-1. **Set up your API key:**
+1. **Set up your API endpoint and authenticate:**
    ```bash
+   # Set API endpoint (if using local deployment)
+   export THE0_API_URL=http://localhost:3000
+   
+   # Authenticate
    the0 auth login
    ```
 

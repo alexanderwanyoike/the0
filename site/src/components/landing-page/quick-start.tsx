@@ -87,13 +87,18 @@ cd the0/cli
 # Build and install the CLI
 make install
 
-# Verify installation
+# Configure API endpoint for local deployments
+# For Docker Compose:
+export THE0_API_URL=http://localhost:3000
+# For Kubernetes:
+export THE0_API_URL=http://api.the0.local:3000
+
+# Verify installation and authenticate
 the0 --help
+the0 auth login
 
 # Usage examples
-the0 auth login
-the0 bot list
-the0 custom-bot upload my-bot.zip`,
+the0 bot list`,
   },
 ];
 
