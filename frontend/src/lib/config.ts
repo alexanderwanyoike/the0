@@ -4,11 +4,17 @@
 export const getDocsUrl = (): string => {
   // Primary: Use NEXT_PUBLIC_DOCS_URL (embedded at build time)
   // Fallback: Use /docs for backward compatibility
-  return process.env.NEXT_PUBLIC_DOCS_URL || '/docs';
+  return process.env.NEXT_PUBLIC_DOCS_URL || "/docs";
+};
+
+export const getAiAgentUrl = (): string => {
+  // Use AI_AGENT_API_URL for server-side API calls
+  return process.env.AI_AGENT_API_URL || "http://localhost:8000";
 };
 
 export const config = {
   docsUrl: getDocsUrl(),
-  appName: process.env.NEXT_PUBLIC_APP_NAME || 'the0',
-  appVersion: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+  aiAgentUrl: getAiAgentUrl(),
+  appName: process.env.NEXT_PUBLIC_APP_NAME || "the0",
+  appVersion: process.env.NEXT_PUBLIC_APP_VERSION || "1.0.0",
 };
