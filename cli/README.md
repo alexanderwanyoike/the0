@@ -568,9 +568,8 @@ MIT License - see LICENSE file for details.
 ## Support
 
 - 📚 Documentation: [docs.the0.dev](https://docs.the0.dev)
-- 💬 Discord: [discord.gg/the0](https://discord.gg/the0)
+- 💬 Discord: [Join for support](https://discord.gg/g5mp57nK)
 - 🐛 Issues: [GitHub Issues](https://github.com/the0platform/cli/issues)
-- 📧 Email: support@the0.dev
 
 ---
 

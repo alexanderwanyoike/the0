@@ -364,8 +364,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🆘 Support & Community
 
-- 📧 **Support**: [support@the0.dev](mailto:support@the0.dev)
-- 💬 **Discord**: [Join our community](https://discord.gg/the0-community)
+- 💬 **Discord**: [Join our community for support](https://discord.gg/g5mp57nK)
 - 📚 **Documentation**: [docs.the0.dev](https://docs.the0.dev)
 - 🐙 **GitHub Issues**: [Report bugs or request features](https://github.com/yourusername/the0/issues)
 
@@ -375,6 +374,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 **Built with ❤️ by AlphaNeuron**
 
-[Website](https://the0.dev) • [Documentation](https://docs.the0.dev) • [Discord](https://discord.gg/the0-community)
+[Website](https://the0.dev) • [Documentation](https://docs.the0.dev) • [Discord](https://discord.gg/g5mp57nK)
 
 </div>

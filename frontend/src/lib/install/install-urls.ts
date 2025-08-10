@@ -240,7 +240,7 @@ export function getTroubleshootingUrls(platformId: PlatformId): {
   return {
     general: `${baseDocsUrl}/installation`,
     platform: PLATFORM_URLS[platformId].docs,
-    community: "https://discord.gg/qafCfTA5",
+    community: "https://discord.gg/g5mp57nK",
   };
 }
 
