@@ -306,18 +306,18 @@ def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
 ## 📚 Documentation
 
 ### Getting Started
-- [Welcome to the0](frontend/src/docs/welcome-to-the0.md) - Platform overview
-- [Custom Bot Development](frontend/src/docs/custom-bot-development/) - Build your first bot
-- [Quick Start Guide](frontend/src/docs/custom-bot-development/quick-start-guide.md) - 15-minute DCA bot tutorial
+- [Welcome to the0](/docs/welcome-to-the0.md) - Platform overview
+- [Custom Bot Development](/docs/custom-bot-development/) - Build your first bot
+- [Quick Start Guide](/docs/custom-bot-development/quick-start-guide.md) - 15-minute DCA bot tutorial
 
 ### Deployment Guides
 - [Docker Setup](docker/README.md) - Local development environment
 - [Kubernetes Deployment](k8s/README.md) - Production deployment
 
 ### Development Resources
-- [Bot Configuration](frontend/src/docs/custom-bot-development/configuration.md) - Configuration reference
-- [Testing & Debugging](frontend/src/docs/custom-bot-development/testing.md) - Development best practices
-- [Backtesting](frontend/src/docs/custom-bot-development/backtesting.md) - Strategy validation
+- [Bot Configuration](docs/custom-bot-development/configuration.md) - Configuration reference
+- [Testing & Debugging](docs/custom-bot-development/testing.md) - Development best practices
+- [Backtesting](docs/custom-bot-development/backtesting.md) - Strategy validation
 
 ---
 
