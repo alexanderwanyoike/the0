@@ -136,12 +136,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - the0-network
+    volumes:
+      - the0-api-uploads:/app/uploads
 
   # Bot Runner Master Service (Go - coordinates workers and serves HTTP API)
   bot-runner-master:
@@ -503,12 +505,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - the0-network
+    volumes:
+      - the0-frontend-node-modules:/app/node_modules
 
   # the0 Documentation Site (Next.js)
   the0-docs:
@@ -529,12 +533,14 @@ services:
       - "3002:3000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - the0-network
+    volumes:
+      - the0-docs-node-modules:/app/node_modules # line ~751
 
   # Development tools (optional)
   adminer:
@@ -677,7 +683,12 @@ volumes:
     driver: local
   bot_scheduler_worker_data:
     driver: local
-
+  the0-api-uploads:
+    driver: local
+  the0-frontend-node-modules:
+    driver: local
+  the0-docs-node-modules:
+    driver: local
 networks:
   the0-network:
     driver: bridge
