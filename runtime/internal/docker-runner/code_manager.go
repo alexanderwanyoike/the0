@@ -1,12 +1,8 @@
-/*
-Handles artifact management for Docker-based runtime environments.
-Key responsibilities include:
-- Downloading bot code archive
-- Extraction of the archive
-- Setting up the execution environment
-- Cleanup of temporary files and directories
-- Code structure validation
-*/
+// Package dockerrunner provides the CodeManager component.
+//
+// CodeManager handles downloading bot code archives from MinIO and extracting them
+// to temporary directories. It implements security checks like directory traversal
+// prevention and supports ZIP archive format with automatic format detection.
 package dockerrunner
 
 import (
@@ -24,16 +20,21 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
+// CodeManager handles fetching and extracting bot code from storage.
 type CodeManager interface {
+	// FetchAndExtract downloads code from MinIO and extracts it to a temporary directory.
+	// Returns the path to the extracted code directory.
 	FetchAndExtract(ctx context.Context, executable model.Executable) (string, error)
 }
 
+// minioCodeManager implements CodeManager using MinIO as the storage backend.
 type minioCodeManager struct {
 	minioClient *minio.Client
 	config      *DockerRunnerConfig
 	logger      util.Logger
 }
 
+// NewMinioCodeManager creates a new CodeManager that fetches code from MinIO.
 func NewMinioCodeManager(minioClient *minio.Client, config *DockerRunnerConfig, logger util.Logger) CodeManager {
 	return &minioCodeManager{
 		minioClient: minioClient,
@@ -42,6 +43,9 @@ func NewMinioCodeManager(minioClient *minio.Client, config *DockerRunnerConfig, 
 	}
 }
 
+// FetchAndExtract downloads the bot code archive from MinIO and extracts it.
+// It creates a bot-specific temporary directory and performs security checks
+// to prevent directory traversal attacks.
 func (r *minioCodeManager) FetchAndExtract(
 	ctx context.Context,
 	executable model.Executable,
@@ -91,6 +95,7 @@ func (r *minioCodeManager) FetchAndExtract(
 	return botDir, nil
 }
 
+// extractZip extracts a ZIP archive to the destination directory with security checks.
 func (r *minioCodeManager) extractZip(data []byte, destDir string) error {
 	reader := bytes.NewReader(data)
 	zipReader, err := zip.NewReader(reader, int64(len(data)))

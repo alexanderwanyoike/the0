@@ -1,8 +1,9 @@
-/**
- * Container Orchestrator
- *
- * Encapsulates all the orchestration logic for running containers
- */
+// Package dockerrunner provides the ContainerOrchestrator component.
+//
+// ContainerOrchestrator encapsulates all Docker API interactions, providing a clean
+// interface for pulling images, creating/starting containers, retrieving logs,
+// and managing container lifecycle. This abstraction isolates Docker-specific
+// logic from the rest of the application.
 package dockerrunner
 
 import (
@@ -21,13 +22,14 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
+// ContainerRunResult contains the outcome of a completed container execution.
 type ContainerRunResult struct {
-	ExitCode           int
-	Logs               string
-	ResultFileContents []byte
+	ExitCode           int    // Container exit code
+	Logs               string // Combined stdout/stderr
+	ResultFileContents []byte // Optional result file contents
 }
 
-// ContainerStatus represents the current status of a container
+// ContainerStatus represents the current state of a Docker container.
 type ContainerStatus struct {
 	ContainerID string            `json:"container_id"`
 	Status      string            `json:"status"` // "running", "exited", "paused", "restarting", "dead", "not_found"
@@ -38,37 +40,52 @@ type ContainerStatus struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 }
 
+// ContainerOrchestrator handles all Docker daemon interactions.
+// It provides methods for managing container lifecycle, from image pulling
+// to execution, log retrieval, and cleanup.
 type ContainerOrchestrator interface {
-	// PullImage ensures the Docker image is available locally
+	// PullImage ensures the Docker image is available locally.
 	PullImage(ctx context.Context, image string) error
-	// CreateAndStart creates and starts a container with the given configuration returns the container ID
+
+	// CreateAndStart creates and starts a container, returning its ID.
 	CreateAndStart(
 		ctx context.Context,
 		config *container.Config,
 		hostConfig *container.HostConfig,
 	) (string, error)
-	// RunAndWait runs a container and waits for it to finish, returning the result
+
+	// RunAndWait runs a container and waits for completion, returning results.
+	// Optionally copies a result file from the container before cleanup.
 	RunAndWait(
 		ctx context.Context,
 		config *container.Config,
 		hostConfig *container.HostConfig,
 		resultFilePath string,
 	) (*ContainerRunResult, error)
-	// Stop Gracefully stops a running container
+
+	// Stop gracefully stops a running container with the given timeout.
 	Stop(ctx context.Context, containerID string, timeout time.Duration) error
-	// GetLogs retrieves the logs of a specific container
+
+	// GetLogs retrieves the last N lines of logs from a container.
 	GetLogs(ctx context.Context, containerID string, tail int) (string, error)
-	// CopyFromContainer copies files from the container
+
+	// CopyFromContainer extracts a file from a running container.
 	CopyFromContainer(ctx context.Context, containerID, srcPath string) ([]byte, error)
+
+	// GetStatus returns the current status of a container.
 	GetStatus(ctx context.Context, containerID string) (*ContainerStatus, error)
+
+	// ListContainer returns containers matching the given filter criteria.
 	ListContainer(ctx context.Context, filter filters.Args) ([]*ContainerInfo, error)
 }
 
+// dockerOrchestrator is the concrete implementation of ContainerOrchestrator.
 type dockerOrchestrator struct {
 	dockerClient *client.Client
 	logger       util.Logger
 }
 
+// NewDockerOrchestrator creates a new ContainerOrchestrator with the given Docker client.
 func NewDockerOrchestrator(dockerClient *client.Client, logger util.Logger) ContainerOrchestrator {
 	return &dockerOrchestrator{
 		dockerClient: dockerClient,

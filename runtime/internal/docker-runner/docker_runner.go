@@ -1,3 +1,5 @@
+// Package dockerrunner provides a Docker-based execution environment for bots and backtests.
+// It orchestrates the entire lifecycle from code download to container execution and log collection.
 package dockerrunner
 
 import (
@@ -21,72 +23,92 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+// DockerRunner is the main interface for managing Docker-based bot/backtest execution.
+// It supports both long-running containers (bots) and short-lived containers (backtests).
 type DockerRunner interface {
-	// Container lifecycle management for long-running bots
+	// StartContainer starts a container based on the executable configuration.
+	// For long-running executables (IsLongRunning=true), returns immediately with container ID.
+	// For terminating executables (IsLongRunning=false), waits for completion and returns results.
 	StartContainer(
 		ctx context.Context,
 		executable model.Executable,
 	) (*ExecutionResult, error)
+
+	// StopContainer gracefully stops a running container and cleans up its resources.
 	StopContainer(
 		ctx context.Context,
 		containerID string,
 		executable model.Executable,
 	) error
+
+	// GetContainerStatus returns the current status of a container.
 	GetContainerStatus(ctx context.Context, containerID string) (*ContainerStatus, error)
+
+	// ListManagedContainers returns all containers managed by this runner for a given segment.
 	ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
+
+	// GetContainerLogs retrieves the last N lines of logs from a container.
 	GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error)
 
+	// Close shuts down the runner and cleans up all managed resources.
 	Close() error
 }
 
+// ExecutionResult contains the outcome of container execution.
 type ExecutionResult struct {
-	Status   string                 `json:"status"`
-	Message  string                 `json:"message"`
-	Output   string                 `json:"output"`
+	Status   string                 `json:"status"`  // "running", "success", or "error"
+	Message  string                 `json:"message"` // Human-readable message
+	Output   string                 `json:"output"`  // Container stdout/stderr
 	Error    string                 `json:"error,omitempty"`
-	ExitCode int                    `json:"exit_code"`
-	Duration time.Duration          `json:"duration"`
+	ExitCode int                    `json:"exit_code"` // Container exit code
+	Duration time.Duration          `json:"duration"`  // Execution duration
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	// Long-running bot support
-	ContainerID        string `json:"container_id,omitempty"`         // For tracking long-running containers
-	IsLongRunning      bool   `json:"is_long_running,omitempty"`      // Indicates if bot should keep running
-	ResultFileContents []byte `json:"result_file_contents,omitempty"` // For file-based result parsing
+
+	// Long-running container fields
+	ContainerID        string `json:"container_id,omitempty"`         // Docker container ID
+	IsLongRunning      bool   `json:"is_long_running,omitempty"`      // True for bots, false for backtests
+	ResultFileContents []byte `json:"result_file_contents,omitempty"` // Backtest result.json contents
 }
 
-// ContainerInfo represents information about a managed container
+// ContainerInfo represents information about a managed container.
 type ContainerInfo struct {
-	ContainerID string            `json:"container_id"`
-	ID          string            `json:"id"`
-	Entrypoint  string            `json:"entrypoint"`
-	Status      string            `json:"status"`
-	StartedAt   string            `json:"started_at"`
+	ContainerID string            `json:"container_id"` // Docker container ID
+	ID          string            `json:"id"`           // Bot/backtest ID
+	Entrypoint  string            `json:"entrypoint"`   // Entrypoint script filename (e.g., "main.py")
+	Status      string            `json:"status"`       // Container status
+	StartedAt   string            `json:"started_at"`   // RFC3339 timestamp
 	Labels      map[string]string `json:"labels,omitempty"`
-	BotDir      string            `json:"bot_dir,omitempty"`    // Directory path for cleanup
-	LastLogTime time.Time         `json:"last_log_time"`        // Last time logs were collected
-	LogsSince   string            `json:"logs_since,omitempty"` // Timestamp for incremental log collection
+	BotDir      string            `json:"bot_dir,omitempty"`    // Host directory path for cleanup
+	LastLogTime time.Time         `json:"last_log_time"`        // Last log collection timestamp
+	LogsSince   string            `json:"logs_since,omitempty"` // RFC3339Nano for incremental logs
 }
 
+// dockerRunner is the concrete implementation of DockerRunner interface.
+// It delegates responsibilities to specialized components for better separation of concerns.
 type dockerRunner struct {
-	// Sub services
-	orchestrator  ContainerOrchestrator
-	codeManager   CodeManager
-	scriptManager ScriptManager
-	logCollector  LogCollector
+	// Component dependencies
+	orchestrator  ContainerOrchestrator // Handles Docker operations
+	codeManager   CodeManager           // Handles code download/extraction
+	scriptManager ScriptManager         // Handles entrypoint script generation
+	logCollector  LogCollector          // Background log collection for long-running containers
 	minioLogger   miniologger.MinIOLogger
 
-	resultsBucket string
-
+	// Configuration
+	resultsBucket     string
 	config            *DockerRunnerConfig
 	minioClient       *minio.Client
 	logger            util.Logger
-	managedContainers map[string]*ContainerInfo // containerID -> info
-	containersMutex   sync.RWMutex              // Protects managedContainers
+	managedContainers map[string]*ContainerInfo // Tracks active containers
+	containersMutex   sync.RWMutex              // Protects managedContainers map
 }
 
+// DockerRunnerOptions contains configuration options for creating a DockerRunner.
 type DockerRunnerOptions struct {
-	Logger util.Logger
+	Logger util.Logger // Optional logger, defaults to util.DefaultLogger if nil
 }
 
+// NewDockerRunner creates a new DockerRunner instance with all required components initialized.
+// It loads configuration from environment variables and starts background services like log collection.
 func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 	// Create Docker client
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -95,7 +117,7 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 	}
 
 	// Create MinIO client
-	config, err := LoaConfigFromEnv()
+	config, err := LoadConfigFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load MinIO config: %v", err)
 	}
@@ -275,11 +297,13 @@ func (r *dockerRunner) cleanupManagedContainers() {
 	r.logger.Info("Completed cleanup of managed containers")
 }
 
+// buildContainerConfig constructs Docker container configuration using the builder pattern.
+// It determines the appropriate shell, sets up volume mounts, and applies resource limits.
 func (r *dockerRunner) buildContainerConfig(
 	executable model.Executable,
 	botDir, imageName string,
 ) (*container.Config, *container.HostConfig) {
-	// Determine shell based on image
+	// Determine shell based on image (Alpine uses /bin/sh, others use /bin/bash)
 	shell := "/bin/bash"
 	if strings.Contains(imageName, "alpine") {
 		shell = "/bin/sh"
@@ -291,6 +315,7 @@ func (r *dockerRunner) buildContainerConfig(
 		WithBinds(fmt.Sprintf("%s:/%s", botDir, executable.Entrypoint)).
 		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
 
+	// Long-running containers auto-remove on exit, terminating containers need manual cleanup
 	if executable.IsLongRunning {
 		builder = builder.WithAutoRemove(true)
 	} else {
@@ -300,7 +325,9 @@ func (r *dockerRunner) buildContainerConfig(
 	return builder.Build()
 }
 
-// StartContainer starts a bot as a long-running container
+// StartContainer starts a container based on the executable configuration.
+// The execution flow is: validate -> download code -> pull image -> generate script -> start container.
+// Returns immediately for long-running containers, waits for completion for terminating containers.
 func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Executable) (*ExecutionResult, error) {
 	startTime := time.Now()
 	entrypointFile, ok := executable.EntrypointFiles[executable.Entrypoint]

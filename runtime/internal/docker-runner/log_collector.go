@@ -1,8 +1,8 @@
-/*
-* Log Collector
-* Background service responsible for collecting logs from running containers
- */
-
+// Package dockerrunner provides the LogCollector component.
+//
+// LogCollector is a background service that periodically collects logs from
+// long-running containers and stores them in MinIO. It runs on a configurable
+// interval and handles each container independently to prevent blocking.
 package dockerrunner
 
 import (
@@ -12,11 +12,16 @@ import (
 	"time"
 )
 
+// LogCollector manages background log collection from running containers.
 type LogCollector interface {
+	// Start begins the background log collection service.
 	Start()
+
+	// Stop gracefully stops the log collection service.
 	Stop()
 }
 
+// logCollector implements LogCollector with periodic log collection.
 type logCollector struct {
 	// Dependencies
 	orchestrator      ContainerOrchestrator
@@ -30,6 +35,7 @@ type logCollector struct {
 	doneCh chan bool
 }
 
+// NewLogCollector creates a new LogCollector that collects logs at the specified interval.
 func NewLogCollector(
 	interval time.Duration,
 	orchestrator ContainerOrchestrator,
@@ -48,6 +54,7 @@ func NewLogCollector(
 	}
 }
 
+// Start begins the background goroutine that periodically collects logs.
 func (lc *logCollector) Start() {
 	lc.logger.Info("Log Collector: Starting log collection service")
 	go func() {
@@ -65,11 +72,13 @@ func (lc *logCollector) Start() {
 	}()
 }
 
+// Stop signals the background goroutine to stop and waits for it to finish.
 func (lc *logCollector) Stop() {
 	close(lc.stopCh)
 	<-lc.doneCh
 }
 
+// collectAllLogs fetches logs from all managed containers concurrently.
 func (lc *logCollector) collectAllLogs() {
 	containers := lc.getContainersFunc()
 	if len(containers) == 0 {
@@ -82,6 +91,7 @@ func (lc *logCollector) collectAllLogs() {
 	}
 }
 
+// collectAndStoreLogs fetches logs from a single container and stores them in MinIO.
 func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
 	lc.logger.Info("Log Collector: Collecting logs", "container_id", containerInfo.ID, "bot_id", containerInfo.ID)
 	start := time.Now()

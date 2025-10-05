@@ -1,12 +1,9 @@
-/*
-Script management for Docker containers
-key responsibilites include:
-- Factory orchestration (Manages the CodeEntrypointFactory and BashEntrypointFactory)
-- Configuration management (Handles settings related to script execution)
-- Filesystem Interaction: Handles writing the final entrypoint script
-- Abstraction with a high-level interface (ScriptManager) for script generation
-*/
-
+// Package dockerrunner provides the ScriptManager component.
+//
+// ScriptManager generates dynamic entrypoint scripts for containers using the
+// factory pattern. It orchestrates CodeEntrypointFactory and BashEntrypointFactory
+// to create runtime-specific wrapper scripts (Python/Node.js) with injected
+// configuration and writes them to the filesystem.
 package dockerrunner
 
 import (
@@ -20,26 +17,33 @@ import (
 	"runtime/internal/util"
 )
 
+// ScriptManager handles generation of container entrypoint scripts.
 type ScriptManager interface {
+	// Create generates an entrypoint script for the given executable and writes it to botDir.
+	// Returns the path to the generated script file.
 	Create(ctx context.Context, executable model.Executable, botDir string) (string, error)
 }
 
+// defaultScriptManager implements ScriptManager using entrypoint factories.
 type defaultScriptManager struct {
 	logger util.Logger
 }
 
+// NewScriptManager creates a new ScriptManager instance.
 func NewScriptManager(logger util.Logger) ScriptManager {
 	return &defaultScriptManager{
 		logger: logger,
 	}
 }
 
+// Create generates a runtime-specific entrypoint script with injected configuration.
+// The script is created using the factory pattern: first creating the code wrapper
+// (Python/Node.js), then wrapping it in a bash script, and finally writing to disk.
 func (m *defaultScriptManager) Create(
 	ctx context.Context,
 	executable model.Executable,
 	botDir string,
 ) (string, error) {
-	// Add logging for debugging
 	m.logger.Info("Script Manager: Creating entrypoint script", "bot_id", executable.ID)
 	m.logger.Info("Script Manager: Entrypoint type", "entrypoint", executable.Entrypoint)
 	m.logger.Info("Script Manager: Available EntrypointFiles", "files", executable.EntrypointFiles)

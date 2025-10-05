@@ -1,3 +1,5 @@
+// Package dockerrunner provides configuration management for the Docker-based runtime environment.
+// This file handles environment-based configuration loading for MinIO, Docker, and resource limits.
 package dockerrunner
 
 import (
@@ -6,19 +8,25 @@ import (
 	"strconv"
 )
 
+// DockerRunnerConfig holds all configuration needed to run containers
+// including MinIO credentials, resource limits, and directory paths.
 type DockerRunnerConfig struct {
-	MinIOEndpoint        string
-	MinIOAccessKeyID     string
-	MinIOSecretAccessKey string
-	MinIOUseSSL          bool
-	MinIOCodeBucket      string
-	MinioResultsBucket   string
-	TempDir              string
-	MemoryLimitMB        int64
-	CPUShares            int64
+	MinIOEndpoint        string // MinIO server endpoint (e.g., "localhost:9000")
+	MinIOAccessKeyID     string // MinIO access key
+	MinIOSecretAccessKey string // MinIO secret key
+	MinIOUseSSL          bool   // Whether to use SSL/TLS for MinIO connections
+	MinIOCodeBucket      string // Bucket containing bot code archives
+	MinioResultsBucket   string // Bucket for storing backtest results
+	TempDir              string // Temporary directory for extracted bot code
+	MemoryLimitMB        int64  // Memory limit in bytes for containers
+	CPUShares            int64  // CPU shares allocated to containers
 }
 
-func LoaConfigFromEnv() (*DockerRunnerConfig, error) {
+// LoadConfigFromEnv loads configuration from environment variables.
+// Required env vars: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
+// Optional env vars: MINIO_SSL, MINIO_BACKTESTS_BUCKET, TEMP_DIR, MINIO_CODE_BUCKET,
+// BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES
+func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	endpoint := os.Getenv("MINIO_ENDPOINT")
 	if endpoint == "" {
 		return nil, fmt.Errorf("MINIO_ENDPOINT environment variable is required")
@@ -64,6 +72,8 @@ func LoaConfigFromEnv() (*DockerRunnerConfig, error) {
 	}, nil
 }
 
+// getCPUShares returns the CPU shares from environment variable BOT_CPU_SHARES.
+// Defaults to 512 (half CPU) if not set or invalid.
 func getCPUShares() int64 {
 	cpuShares := os.Getenv("BOT_CPU_SHARES")
 	if cpuShares == "" {
@@ -78,6 +88,8 @@ func getCPUShares() int64 {
 	return int64(shares)
 }
 
+// getMemoryLimit returns the memory limit in bytes from environment variable BOT_MEMORY_LIMIT_MB.
+// Defaults to 512MB if not set or invalid.
 func getMemoryLimit() int64 {
 	memoryLimitMB := os.Getenv("BOT_MEMORY_LIMIT_MB")
 	if memoryLimitMB == "" {
