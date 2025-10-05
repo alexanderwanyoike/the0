@@ -66,6 +66,9 @@ func (b *ContainerBuilder) WithAutoRemove(autoRemove bool) *ContainerBuilder {
 }
 
 func (b *ContainerBuilder) WithExecutable(executable model.Executable) *ContainerBuilder {
+	// Extract entrypoint file from executable
+	entrypointFile := executable.EntrypointFiles[executable.Entrypoint]
+
 	configJSON, _ := json.Marshal(executable.Config)
 	b.config.Env = append(b.config.Env,
 		fmt.Sprintf("ID=%s", executable.ID),
@@ -75,7 +78,7 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 	)
 
 	b.config.Labels["runtime.id"] = executable.ID
-	b.config.Labels["runtime.entrypoint"] = executable.Entrypoint
+	b.config.Labels["runtime.entrypoint"] = entrypointFile
 	b.config.Labels["runtime.managed"] = "true"
 	b.config.Labels["runtime.segment"] = fmt.Sprintf("%d", executable.Segment)
 

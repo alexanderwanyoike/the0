@@ -34,6 +34,7 @@ type DockerRunner interface {
 	) error
 	GetContainerStatus(ctx context.Context, containerID string) (*ContainerStatus, error)
 	ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
+	GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error)
 
 	Close() error
 }
@@ -436,7 +437,7 @@ func (r *dockerRunner) startLongRunningContainer(
 			Message:  "Failed to create/start container",
 			Error:    err.Error(),
 			ExitCode: 1,
-			Duration: time.Since(time.Now()),
+			Duration: time.Since(startTime),
 		}, nil
 	}
 
@@ -445,12 +446,12 @@ func (r *dockerRunner) startLongRunningContainer(
 	r.logger.Info("Started long-running container", "container_id", containerID, "bot_id", exec.ID)
 
 	return &ExecutionResult{
-		Status:        "started",
-		Message:       "Container started successfully",
+		Status:        "running",
+		Message:       "Long-running container started successfully",
 		ContainerID:   containerID,
 		IsLongRunning: true,
 		ExitCode:      0,
-		Duration:      time.Since(time.Now()),
+		Duration:      time.Since(startTime),
 	}, nil
 }
 
@@ -566,4 +567,8 @@ func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, re
 	}
 
 	return nil
+}
+
+func (r *dockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
+	return r.orchestrator.GetLogs(ctx, containerID, tail)
 }
