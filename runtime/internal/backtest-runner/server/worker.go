@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -88,8 +87,7 @@ func (factory *WorkerDockerRunnerFactory) CreateDockerRunner(
 	worker *BacktestWorker,
 ) (dockerrunner.DockerRunner, error) {
 	return dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
-		Logger:  &util.DefaultLogger{},
-		TempDir: os.Getenv("TEMP_DIR"),
+		Logger: &util.DefaultLogger{},
 	})
 }
 
