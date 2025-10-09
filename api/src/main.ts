@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { runMigrations } from './database/migrate';
 
+
 async function bootstrap() {
   // Run database migrations before starting the application
   console.log('🔄 Running database migrations...');
@@ -25,7 +26,7 @@ async function bootstrap() {
   }));
   
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   
   console.log(`🚀 The0 API is running on port ${port}`);
 }
