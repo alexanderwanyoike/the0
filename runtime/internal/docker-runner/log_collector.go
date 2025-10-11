@@ -99,9 +99,9 @@ func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
 	defer cancel()
 
 	// Delegate log fetching to the orchestrator for incremental collection
-	logs, err := lc.orchestrator.GetLogs(ctx, containerInfo.ID, 100)
+	logs, err := lc.orchestrator.GetLogs(ctx, containerInfo.ContainerID, 100)
 	if err != nil {
-		lc.logger.Info("Log Collector: Failed to get logs", "container_id", containerInfo.ID, "error", err.Error())
+		lc.logger.Info("Log Collector: Failed to get logs", "container_id", containerInfo.ContainerID, "error", err.Error())
 		return
 	}
 

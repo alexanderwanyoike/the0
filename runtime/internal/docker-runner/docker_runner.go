@@ -100,6 +100,9 @@ type dockerRunner struct {
 	logger            util.Logger
 	managedContainers map[string]*ContainerInfo // Tracks active containers
 	containersMutex   sync.RWMutex              // Protects managedContainers map
+
+	// Dynamic segment filtering for log collector
+	segmentChan chan int32 // Channel to update current segment for log collection
 }
 
 // DockerRunnerOptions contains configuration options for creating a DockerRunner.
@@ -162,6 +165,7 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 		managedContainers: make(map[string]*ContainerInfo),
 		resultsBucket:     config.MinioResultsBucket,
 		config:            config,
+		segmentChan:       make(chan int32, 1), // Buffered channel for segment updates
 	}
 
 	if runner.minioLogger != nil {
@@ -231,12 +235,33 @@ func fixDirectoryPermissions(dir string) error {
 
 func (r *dockerRunner) initializeLogCollector() LogCollector {
 	getContainersFunc := func() []*ContainerInfo {
-		r.containersMutex.RLock()
-		defer r.containersMutex.RUnlock()
-		containers := make([]*ContainerInfo, 0, len(r.managedContainers))
-		for _, info := range r.managedContainers {
-			containers = append(containers, info)
+		// Get current segment from channel (non-blocking)
+		var currentSegment int32 = -1 // Default to -1 (no segment)
+		select {
+		case segment := <-r.segmentChan:
+			currentSegment = segment
+			// Put the segment back for other reads
+			r.segmentChan <- segment
+		default:
+			// No segment set yet, use -1
 		}
+
+		// Query Docker directly for managed containers in the current segment
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		filter := filters.NewArgs()
+		filter.Add("label", "runtime.managed=true")
+		if currentSegment != -1 {
+			filter.Add("label", fmt.Sprintf("runtime.segment=%d", currentSegment))
+		}
+
+		containers, err := r.orchestrator.ListContainer(ctx, filter)
+		if err != nil {
+			r.logger.Info("Log Collector: Failed to list containers", "error", err.Error())
+			return []*ContainerInfo{}
+		}
+
 		return containers
 	}
 
@@ -259,6 +284,7 @@ func (r *dockerRunner) Close() error {
 	if r.minioLogger != nil {
 		r.minioLogger.Close()
 	}
+	close(r.segmentChan) // Close segment channel
 
 	return nil
 }
@@ -546,6 +572,17 @@ func (r *dockerRunner) addManagedContainer(
 ) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
+
+	// Update the segment channel with the current segment from the executable
+	select {
+	case r.segmentChan <- exec.Segment:
+		r.logger.Info("Updated log collector segment", "segment", exec.Segment)
+	default:
+		// Channel already has a value, replace it
+		<-r.segmentChan // Clear existing value
+		r.segmentChan <- exec.Segment
+		r.logger.Info("Updated log collector segment (replaced existing)", "segment", exec.Segment)
+	}
 
 	startTime := time.Now()
 	containerInfo := &ContainerInfo{
