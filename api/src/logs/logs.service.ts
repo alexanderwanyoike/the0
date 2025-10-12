@@ -1,8 +1,8 @@
-import { Injectable, Scope } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { BotService } from '@/bot/bot.service';
-import { Result, Ok, Failure } from '@/common/result';
-import * as Minio from 'minio';
+import { Injectable, Scope } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { BotService } from "@/bot/bot.service";
+import { Result, Ok, Failure } from "@/common/result";
+import * as Minio from "minio";
 
 export interface LogsQuery {
   date?: string;
@@ -26,27 +26,34 @@ export class LogsService {
     private readonly botService: BotService,
   ) {
     this.minioClient = new Minio.Client({
-      endPoint: this.configService.get<string>('MINIO_ENDPOINT') || 'localhost',
-      port: parseInt(this.configService.get<string>('MINIO_PORT') || '9000'),
-      useSSL: this.configService.get<string>('MINIO_USE_SSL') === 'true',
-      accessKey: this.configService.get<string>('MINIO_ACCESS_KEY') || 'minioadmin',
-      secretKey: this.configService.get<string>('MINIO_SECRET_KEY') || 'minioadmin',
+      endPoint: this.configService.get<string>("MINIO_ENDPOINT") || "localhost",
+      port: parseInt(this.configService.get<string>("MINIO_PORT") || "9000"),
+      useSSL: this.configService.get<string>("MINIO_USE_SSL") === "true",
+      accessKey:
+        this.configService.get<string>("MINIO_ACCESS_KEY") || "minioadmin",
+      secretKey:
+        this.configService.get<string>("MINIO_SECRET_KEY") || "minioadmin",
     });
-    this.logBucket = this.configService.get<string>('LOG_BUCKET') || 'bot-logs';
-    console.log(`🪣 LogsService initialized with bucket: ${this.logBucket} (LOG_BUCKET env: ${this.configService.get<string>('LOG_BUCKET')})`);
+    this.logBucket = this.configService.get<string>("LOG_BUCKET") || "bot-logs";
+    console.log(
+      `🪣 LogsService initialized with bucket: ${this.logBucket} (LOG_BUCKET env: ${this.configService.get<string>("LOG_BUCKET")})`,
+    );
   }
 
   async getLogs(
     botId: string,
     query: LogsQuery,
   ): Promise<Result<LogEntry[], string>> {
-    console.log(`🔍 LogsService.getLogs called with botId: ${botId}, query:`, query);
-    
+    console.log(
+      `🔍 LogsService.getLogs called with botId: ${botId}, query:`,
+      query,
+    );
+
     // Verify bot ownership
     const botResult = await this.botService.findOne(botId);
     if (!botResult.success) {
       console.log(`❌ Bot ownership verification failed for botId: ${botId}`);
-      return Failure('Bot not found or access denied');
+      return Failure("Bot not found or access denied");
     }
     console.log(`✅ Bot ownership verified for botId: ${botId}`);
 
@@ -56,7 +63,7 @@ export class LogsService {
     if (!dates.length) {
       console.log(`❌ No valid dates found in query`);
       return Failure(
-        'Invalid date or dateRange format. Use YYYYMMDD or YYYYMMDD-YYYYMMDD',
+        "Invalid date or dateRange format. Use YYYYMMDD or YYYYMMDD-YYYYMMDD",
       );
     }
 
@@ -65,17 +72,23 @@ export class LogsService {
 
       for (const date of dates) {
         const logPath = `logs/${botId}/${date}.log`;
-        console.log(`📁 Attempting to fetch log from path: ${logPath} in bucket: ${this.logBucket}`);
+        console.log(
+          `📁 Attempting to fetch log from path: ${logPath} in bucket: ${this.logBucket}`,
+        );
         const logContent = await this.getLogContent(logPath);
 
         if (logContent.success && logContent.data) {
-          console.log(`✅ Found log content for ${date}, length: ${logContent.data.length}`);
+          console.log(
+            `✅ Found log content for ${date}, length: ${logContent.data.length}`,
+          );
           logEntries.push({
             date,
             content: logContent.data,
           });
         } else {
-          console.log(`❌ No log content found for ${date}, error: ${logContent.error || 'No data'}`);
+          console.log(
+            `❌ No log content found for ${date}, error: ${logContent.error || "No data"}`,
+          );
         }
       }
 
@@ -85,10 +98,12 @@ export class LogsService {
         query.offset + query.limit,
       );
 
-      console.log(`📄 Returning ${paginatedLogs.length} log entries (total found: ${logEntries.length})`);
+      console.log(
+        `📄 Returning ${paginatedLogs.length} log entries (total found: ${logEntries.length})`,
+      );
       return Ok(paginatedLogs);
     } catch (error: any) {
-      console.error('Error fetching logs:', error);
+      console.error("Error fetching logs:", error);
       return Failure(`Failed to fetch logs: ${error.message}`);
     }
   }
@@ -101,22 +116,22 @@ export class LogsService {
       try {
         await this.minioClient.statObject(this.logBucket, logPath);
       } catch (error: any) {
-        if (error.code === 'NotFound') {
-          return Ok(''); // Return empty content if log file doesn't exist
+        if (error.code === "NotFound") {
+          return Ok(""); // Return empty content if log file doesn't exist
         }
         throw error;
       }
 
       // Get the object
       const stream = await this.minioClient.getObject(this.logBucket, logPath);
-      
+
       // Convert stream to string
       const chunks: Buffer[] = [];
       for await (const chunk of stream) {
         chunks.push(chunk);
       }
-      const content = Buffer.concat(chunks).toString('utf-8');
-      
+      const content = Buffer.concat(chunks).toString("utf-8");
+
       return Ok(content);
     } catch (error: any) {
       console.error(`Error downloading log file ${logPath}:`, error);
@@ -133,7 +148,7 @@ export class LogsService {
     }
 
     if (query.dateRange) {
-      const [startDate, endDate] = query.dateRange.split('-');
+      const [startDate, endDate] = query.dateRange.split("-");
       if (
         !startDate ||
         !endDate ||
@@ -188,8 +203,8 @@ export class LogsService {
     while (current <= end) {
       const dateStr =
         current.getFullYear().toString() +
-        (current.getMonth() + 1).toString().padStart(2, '0') +
-        current.getDate().toString().padStart(2, '0');
+        (current.getMonth() + 1).toString().padStart(2, "0") +
+        current.getDate().toString().padStart(2, "0");
       dates.push(dateStr);
       current.setDate(current.getDate() + 1);
     }

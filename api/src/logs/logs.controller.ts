@@ -6,19 +6,19 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
-} from '@nestjs/common';
-import { LogsService } from './logs.service';
-import { GetLogsQueryDto } from './dto/get-logs-query.dto';
-import { AuthCombinedGuard } from '@/auth/auth-combined.guard';
+} from "@nestjs/common";
+import { LogsService } from "./logs.service";
+import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 
-@Controller('logs')
+@Controller("logs")
 @UseGuards(AuthCombinedGuard)
 export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 
-  @Get(':botId')
+  @Get(":botId")
   async getLogs(
-    @Param('botId') botId: string,
+    @Param("botId") botId: string,
     @Query() query: GetLogsQueryDto,
   ) {
     const result = await this.logsService.getLogs(botId, {
@@ -30,8 +30,8 @@ export class LogsController {
 
     if (!result.success) {
       if (
-        result.error?.includes('not found') ||
-        result.error?.includes('access denied')
+        result.error?.includes("not found") ||
+        result.error?.includes("access denied")
       ) {
         throw new NotFoundException(result.error);
       }
@@ -41,7 +41,7 @@ export class LogsController {
     return {
       success: true,
       data: result.data,
-      message: 'Logs retrieved successfully',
+      message: "Logs retrieved successfully",
     };
   }
 }

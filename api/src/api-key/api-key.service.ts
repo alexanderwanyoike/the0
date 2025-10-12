@@ -1,11 +1,11 @@
 // src/api-keys/services/api-key.service.ts
-import { Injectable } from '@nestjs/common';
-import { ApiKeyRepository } from './api-key.repository';
-import { Result, Ok, Failure } from '../common/result';
-import { ApiKey } from './models/api-key.model';
-import { CreateApiKeyDto } from './dto/create-api-key.dto';
-import { ApiKeyCreatedResponseDto } from './dto/api-key-created-response.dto';
-import { ApiKeyResponseDto } from './dto/api-key-response.dto';
+import { Injectable } from "@nestjs/common";
+import { ApiKeyRepository } from "./api-key.repository";
+import { Result, Ok, Failure } from "../common/result";
+import { ApiKey } from "./models/api-key.model";
+import { CreateApiKeyDto } from "./dto/create-api-key.dto";
+import { ApiKeyCreatedResponseDto } from "./dto/api-key-created-response.dto";
+import { ApiKeyResponseDto } from "./dto/api-key-response.dto";
 
 @Injectable()
 export class ApiKeyService {
@@ -28,7 +28,7 @@ export class ApiKeyService {
       (key) => key.name === createApiKeyDto.name,
     );
     if (nameExists) {
-      return Failure('An API key with this name already exists');
+      return Failure("An API key with this name already exists");
     }
 
     // Create the API key

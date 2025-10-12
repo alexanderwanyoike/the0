@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsObject, IsString } from 'class-validator';
+import { IsNotEmpty, IsObject, IsString } from "class-validator";
 
 export class CreateBacktestDto {
   @IsNotEmpty()

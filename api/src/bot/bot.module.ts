@@ -1,14 +1,14 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { BotService } from './bot.service';
-import { BotController } from './bot.controller';
-import { BotRepository } from './bot.repository';
-import { HttpModule } from '@nestjs/axios';
-import { BotValidator } from './bot.validator';
-import { ConfigModule } from '@nestjs/config';
-import { CustomBotModule } from '@/custom-bot/custom-bot.module';
-import { ApiKeyModule } from '@/api-key/api-key.module';
+import { Module, forwardRef } from "@nestjs/common";
+import { BotService } from "./bot.service";
+import { BotController } from "./bot.controller";
+import { BotRepository } from "./bot.repository";
+import { HttpModule } from "@nestjs/axios";
+import { BotValidator } from "./bot.validator";
+import { ConfigModule } from "@nestjs/config";
+import { CustomBotModule } from "@/custom-bot/custom-bot.module";
+import { ApiKeyModule } from "@/api-key/api-key.module";
 // UserBotsModule removed for OSS version
-import { NatsModule } from '@/nats/nats.module';
+import { NatsModule } from "@/nats/nats.module";
 // FeatureGateModule removed for OSS version
 
 @Module({

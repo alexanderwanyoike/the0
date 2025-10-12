@@ -1,11 +1,11 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext } from '@nestjs/common';
-import { AuthCombinedGuard } from '../auth-combined.guard';
-import { AuthService } from '../auth.service';
-import { ApiKeyService } from '../../api-key/api-key.service';
-import { Ok, Failure } from '../../common/result';
+import { Test, TestingModule } from "@nestjs/testing";
+import { ExecutionContext } from "@nestjs/common";
+import { AuthCombinedGuard } from "../auth-combined.guard";
+import { AuthService } from "../auth.service";
+import { ApiKeyService } from "../../api-key/api-key.service";
+import { Ok, Failure } from "../../common/result";
 
-describe('AuthCombinedGuard', () => {
+describe("AuthCombinedGuard", () => {
   let guard: AuthCombinedGuard;
   let authService: AuthService;
   let apiKeyService: ApiKeyService;
@@ -42,25 +42,25 @@ describe('AuthCombinedGuard', () => {
     jest.clearAllMocks();
   });
 
-  it('should be defined', () => {
+  it("should be defined", () => {
     expect(guard).toBeDefined();
   });
 
-  it('should allow access with valid JWT token', async () => {
+  it("should allow access with valid JWT token", async () => {
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({
           headers: {
-            authorization: 'Bearer valid-jwt-token',
+            authorization: "Bearer valid-jwt-token",
           },
         }),
       }),
     } as ExecutionContext;
 
     const mockUser = {
-      id: 'test-id',
-      username: 'testuser',
-      email: 'test@example.com',
+      id: "test-id",
+      username: "testuser",
+      email: "test@example.com",
       isActive: true,
       isEmailVerified: false,
     };
@@ -70,26 +70,26 @@ describe('AuthCombinedGuard', () => {
     const result = await guard.canActivate(mockContext);
 
     expect(result).toBe(true);
-    expect(authService.validateToken).toHaveBeenCalledWith('valid-jwt-token');
+    expect(authService.validateToken).toHaveBeenCalledWith("valid-jwt-token");
   });
 
-  it('should throw exception without JWT token', async () => {
+  it("should throw exception without JWT token", async () => {
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({
           headers: {
-            'x-api-key': 'valid-api-key',
+            "x-api-key": "valid-api-key",
           },
         }),
       }),
     } as ExecutionContext;
 
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      'Authentication required. Provide Bearer JWT token or ApiKey.'
+      "Authentication required. Provide Bearer JWT token or ApiKey.",
     );
   });
 
-  it('should throw exception without any authentication', async () => {
+  it("should throw exception without any authentication", async () => {
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({
@@ -99,7 +99,7 @@ describe('AuthCombinedGuard', () => {
     } as ExecutionContext;
 
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      'Authentication required. Provide Bearer JWT token or ApiKey.'
+      "Authentication required. Provide Bearer JWT token or ApiKey.",
     );
   });
 });

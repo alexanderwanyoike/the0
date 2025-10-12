@@ -1,4 +1,4 @@
-import { Result } from './result';
+import { Result } from "./result";
 
 export default interface Repository {
   create: (args: any) => Promise<Result<any, string>>;

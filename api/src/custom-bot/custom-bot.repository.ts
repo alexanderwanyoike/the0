@@ -1,19 +1,26 @@
-import { Injectable } from '@nestjs/common';
-import { RoleRevisionRepository } from '@/common/role-revision.repository';
-import { CustomBot, CustomBotWithVersions, CustomBotVersion } from './custom-bot.types';
-import { Result, Ok, Failure } from '@/common/result';
-import { eq, and, desc } from 'drizzle-orm';
-import * as semver from 'semver';
+import { Injectable } from "@nestjs/common";
+import { RoleRevisionRepository } from "@/common/role-revision.repository";
+import {
+  CustomBot,
+  CustomBotWithVersions,
+  CustomBotVersion,
+} from "./custom-bot.types";
+import { Result, Ok, Failure } from "@/common/result";
+import { eq, and, desc } from "drizzle-orm";
+import * as semver from "semver";
 
 @Injectable()
 export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
-  protected readonly tableName = 'customBots' as const;
+  protected readonly tableName = "customBots" as const;
 
   constructor() {
-    super('name'); // Use 'name' as the revision key field
+    super("name"); // Use 'name' as the revision key field
   }
 
-  async userBotExists(userId: string, name: string): Promise<Result<boolean, string>> {
+  async userBotExists(
+    userId: string,
+    name: string,
+  ): Promise<Result<boolean, string>> {
     try {
       const result = await this.findByKey(userId, name);
       if (!result.success) {
@@ -37,7 +44,11 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async userVersionExists(userId: string, name: string, version: string): Promise<Result<boolean, string>> {
+  async userVersionExists(
+    userId: string,
+    name: string,
+    version: string,
+  ): Promise<Result<boolean, string>> {
     try {
       const result = await this.findByKeyAndVersion(userId, name, version);
       return Ok(result.success);
@@ -46,7 +57,10 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async globalVersionExists(name: string, version: string): Promise<Result<boolean, string>> {
+  async globalVersionExists(
+    name: string,
+    version: string,
+  ): Promise<Result<boolean, string>> {
     try {
       const result = await this.findGlobalByKeyAndVersion(name, version);
       return Ok(result.success);
@@ -55,7 +69,9 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async getUserCustomBots(userId: string): Promise<Result<CustomBotWithVersions[], string>> {
+  async getUserCustomBots(
+    userId: string,
+  ): Promise<Result<CustomBotWithVersions[], string>> {
     try {
       // Get all custom bots for the user
       const result = await this.findAll(userId);
@@ -81,7 +97,10 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       for (const [botName, bots] of botsByName) {
         // Sort by creation date descending (latest first)
-        bots.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        bots.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
 
         const latestBot = bots[0];
 
@@ -112,7 +131,10 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
 
       // Sort by latest update time descending
-      customBotsWithVersions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      customBotsWithVersions.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
 
       return Ok(customBotsWithVersions);
     } catch (error: any) {
@@ -120,7 +142,10 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async getAllUserVersions(userId: string, name: string): Promise<Result<CustomBotWithVersions, string>> {
+  async getAllUserVersions(
+    userId: string,
+    name: string,
+  ): Promise<Result<CustomBotWithVersions, string>> {
     try {
       const result = await this.findByKey(userId, name);
       if (!result.success) {
@@ -128,7 +153,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
 
       if (result.data.length === 0) {
-        return Failure('Bot not found');
+        return Failure("Bot not found");
       }
 
       const bots = result.data;
@@ -161,7 +186,9 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async getAllGlobalVersions(name: string): Promise<Result<CustomBotWithVersions, string>> {
+  async getAllGlobalVersions(
+    name: string,
+  ): Promise<Result<CustomBotWithVersions, string>> {
     try {
       const result = await this.findGlobalByKey(name);
       if (!result.success) {
@@ -169,7 +196,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
 
       if (result.data.length === 0) {
-        return Failure('Bot not found');
+        return Failure("Bot not found");
       }
 
       const bots = result.data;
@@ -202,15 +229,25 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async getSpecificUserVersion(userId: string, name: string, version: string): Promise<Result<CustomBot, string>> {
+  async getSpecificUserVersion(
+    userId: string,
+    name: string,
+    version: string,
+  ): Promise<Result<CustomBot, string>> {
     return this.findByKeyAndVersion(userId, name, version);
   }
 
-  async getSpecificGlobalVersion(name: string, version: string): Promise<Result<CustomBot, string>> {
+  async getSpecificGlobalVersion(
+    name: string,
+    version: string,
+  ): Promise<Result<CustomBot, string>> {
     return this.findGlobalByKeyAndVersion(name, version);
   }
 
-  async createNewGlobalVersion(userId: string, botData: Partial<CustomBot>): Promise<Result<CustomBot, string>> {
+  async createNewGlobalVersion(
+    userId: string,
+    botData: Partial<CustomBot>,
+  ): Promise<Result<CustomBot, string>> {
     return this.create({
       ...botData,
       userId,
@@ -221,25 +258,30 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     return semver.gt(newVersion, currentVersion);
   }
 
-  async checkUserOwnership(userId: string, name: string): Promise<Result<boolean, string>> {
+  async checkUserOwnership(
+    userId: string,
+    name: string,
+  ): Promise<Result<boolean, string>> {
     const result = await this.findGlobalByKey(name);
     if (!result.success) {
       return Failure(result.error);
     }
     const bots = result.data;
     if (bots.length === 0) {
-      return Failure('Bot not found');
+      return Failure("Bot not found");
     }
     const bot = bots[0];
     if (bot.userId !== userId) {
-      return Failure('Insufficient permissions');
+      return Failure("Insufficient permissions");
     }
     return Ok(true);
   }
 
-  
   // Legacy aliases for backward compatibility
-  async getVersionsForBot(userId: string, name: string): Promise<Result<CustomBotVersion[], string>> {
+  async getVersionsForBot(
+    userId: string,
+    name: string,
+  ): Promise<Result<CustomBotVersion[], string>> {
     const result = await this.getAllUserVersions(userId, name);
     if (!result.success) {
       return Failure(result.error);
@@ -247,31 +289,39 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     return Ok(result.data.versions);
   }
 
-  async getBotsWithVersions(userId: string): Promise<Result<CustomBotWithVersions[], string>> {
+  async getBotsWithVersions(
+    userId: string,
+  ): Promise<Result<CustomBotWithVersions[], string>> {
     return this.getUserCustomBots(userId);
   }
 
-  async createBot(userId: string, customBot: Partial<CustomBot>): Promise<Result<CustomBot, string>> {
+  async createBot(
+    userId: string,
+    customBot: Partial<CustomBot>,
+  ): Promise<Result<CustomBot, string>> {
     const data = {
       userId,
       name: customBot.name!,
       version: customBot.version!,
       config: customBot.config!,
       filePath: customBot.filePath!,
-      status: customBot.status || 'pending_review',
+      status: customBot.status || "pending_review",
       marketplace: customBot.marketplace || null,
     };
 
     return this.create(data);
   }
 
-  async updateBotStatus(botId: string, status: string): Promise<Result<void, string>> {
+  async updateBotStatus(
+    botId: string,
+    status: string,
+  ): Promise<Result<void, string>> {
     try {
       const result = await this.db
         .update(this.table)
-        .set({ 
+        .set({
           status: status as any,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(this.table.id, botId));
 
@@ -281,16 +331,21 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  async updateBotAnalysis(botId: string, analysis: any): Promise<Result<void, string>> {
+  async updateBotAnalysis(
+    botId: string,
+    analysis: any,
+  ): Promise<Result<void, string>> {
     try {
       // Add analysis data to the bot record (this would require schema update)
       // For now, just log the analysis data
-      console.log(`📊 Analysis data for bot ${botId}:`, JSON.stringify(analysis, null, 2));
-      
+      console.log(
+        `📊 Analysis data for bot ${botId}:`,
+        JSON.stringify(analysis, null, 2),
+      );
+
       return Ok(null);
     } catch (error: any) {
       return Failure(`Failed to update bot analysis: ${error.message}`);
     }
   }
-
 }

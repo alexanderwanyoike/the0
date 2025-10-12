@@ -1,15 +1,15 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
-import { BacktestService } from '../backtest.service';
-import { BacktestRepository } from '../backtest.repository';
-import { BacktestValidator } from '../backtest.validator';
-import { CustomBotService } from '@/custom-bot/custom-bot.service';
-import { NatsService } from '@/nats/nats.service';
-import { REQUEST } from '@nestjs/core';
-import { Ok, Failure } from '@/common';
-import { EventEmitter } from 'events';
+import { Test, TestingModule } from "@nestjs/testing";
+import { ConfigService } from "@nestjs/config";
+import { BacktestService } from "../backtest.service";
+import { BacktestRepository } from "../backtest.repository";
+import { BacktestValidator } from "../backtest.validator";
+import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { NatsService } from "@/nats/nats.service";
+import { REQUEST } from "@nestjs/core";
+import { Ok, Failure } from "@/common";
+import { EventEmitter } from "events";
 
-describe('BacktestService Logs Loading', () => {
+describe("BacktestService Logs Loading", () => {
   let service: BacktestService;
   let configService: jest.Mocked<ConfigService>;
   let mockRepository: jest.Mocked<BacktestRepository>;
@@ -18,13 +18,13 @@ describe('BacktestService Logs Loading', () => {
     getObject: jest.fn(),
   };
 
-  const uid = 'test-user-id';
+  const uid = "test-user-id";
 
   const createMockStream = (content: string) => {
     const stream = new EventEmitter();
     setTimeout(() => {
-      stream.emit('data', Buffer.from(content));
-      stream.emit('end');
+      stream.emit("data", Buffer.from(content));
+      stream.emit("end");
     }, 0);
     return stream;
   };
@@ -36,7 +36,7 @@ describe('BacktestService Logs Loading', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockReturnValue('test-bucket'),
+            get: jest.fn().mockReturnValue("test-bucket"),
           },
         },
         {
@@ -81,20 +81,20 @@ describe('BacktestService Logs Loading', () => {
     jest.clearAllMocks();
   });
 
-  describe('getBacktestLogs', () => {
+  describe("getBacktestLogs", () => {
     const mockBacktest = {
-      id: 'test-id',
-      name: 'Test Backtest',
-      status: 'completed',
+      id: "test-id",
+      name: "Test Backtest",
+      status: "completed",
       userId: uid,
       config: {},
       analysis: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      customBotId: 'bot-id',
+      customBotId: "bot-id",
     };
 
-    it('should return logs for valid backtest', async () => {
+    it("should return logs for valid backtest", async () => {
       const mockLogs = `STARTUP: Node.js backtest wrapper starting
 STARTUP: Node.js version v20.19.3
 STARTUP: Current working directory: /tmp
@@ -119,107 +119,111 @@ RESULT_WRITE: Successfully wrote result file`;
       mockRepository.findOne.mockResolvedValue(Ok(mockBacktest));
       mockMinioClient.getObject.mockResolvedValue(createMockStream(mockLogs));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(mockLogs);
       expect(mockMinioClient.getObject).toHaveBeenCalledWith(
-        'test-bucket',
-        'test-id/logs.txt',
+        "test-bucket",
+        "test-id/logs.txt",
       );
     });
 
-    it('should validate user access before retrieving logs', async () => {
-      mockRepository.findOne.mockResolvedValue(Failure('Backtest not found'));
+    it("should validate user access before retrieving logs", async () => {
+      mockRepository.findOne.mockResolvedValue(Failure("Backtest not found"));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Backtest not found or access denied');
+      expect(result.error).toBe("Backtest not found or access denied");
       expect(mockMinioClient.getObject).not.toHaveBeenCalled();
     });
 
-    it('should return error for non-existent logs file', async () => {
+    it("should return error for non-existent logs file", async () => {
       mockRepository.findOne.mockResolvedValue(Ok(mockBacktest));
-      mockMinioClient.getObject.mockRejectedValue(new Error('The specified key does not exist.'));
+      mockMinioClient.getObject.mockRejectedValue(
+        new Error("The specified key does not exist."),
+      );
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Failed to load logs: The specified key does not exist.');
+      expect(result.error).toBe(
+        "Failed to load logs: The specified key does not exist.",
+      );
     });
 
-    it('should handle MinIO download errors', async () => {
+    it("should handle MinIO download errors", async () => {
       mockRepository.findOne.mockResolvedValue(Ok(mockBacktest));
-      mockMinioClient.getObject.mockRejectedValue(new Error('Network error'));
+      mockMinioClient.getObject.mockRejectedValue(new Error("Network error"));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Failed to load logs: Network error');
+      expect(result.error).toBe("Failed to load logs: Network error");
     });
 
-    it('should work with failed backtests', async () => {
-      const failedBacktest = { ...mockBacktest, status: 'failed' };
-      const mockLogs = 'ERROR: Backtest failed with error XYZ';
+    it("should work with failed backtests", async () => {
+      const failedBacktest = { ...mockBacktest, status: "failed" };
+      const mockLogs = "ERROR: Backtest failed with error XYZ";
 
       mockRepository.findOne.mockResolvedValue(Ok(failedBacktest));
       mockMinioClient.getObject.mockResolvedValue(createMockStream(mockLogs));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(mockLogs);
     });
 
-    it('should work with running backtests', async () => {
-      const runningBacktest = { ...mockBacktest, status: 'running' };
+    it("should work with running backtests", async () => {
+      const runningBacktest = { ...mockBacktest, status: "running" };
       const mockLogs =
-        'STARTUP: Node.js backtest wrapper starting\\nINFO: Processing...';
+        "STARTUP: Node.js backtest wrapper starting\\nINFO: Processing...";
 
       mockRepository.findOne.mockResolvedValue(Ok(runningBacktest));
       mockMinioClient.getObject.mockResolvedValue(createMockStream(mockLogs));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(mockLogs);
     });
 
-    it('should handle access denied from repository', async () => {
-      mockRepository.findOne.mockResolvedValue(Failure('Access denied'));
+    it("should handle access denied from repository", async () => {
+      mockRepository.findOne.mockResolvedValue(Failure("Access denied"));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Backtest not found or access denied');
+      expect(result.error).toBe("Backtest not found or access denied");
     });
 
-    it('should handle empty logs file', async () => {
+    it("should handle empty logs file", async () => {
       mockRepository.findOne.mockResolvedValue(Ok(mockBacktest));
-      mockMinioClient.getObject.mockResolvedValue(createMockStream(''));
+      mockMinioClient.getObject.mockResolvedValue(createMockStream(""));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(true);
-      expect(result.data).toBe('');
+      expect(result.data).toBe("");
     });
 
-    it('should handle logs with special characters and unicode', async () => {
+    it("should handle logs with special characters and unicode", async () => {
       const mockLogs =
-        'INFO: Processing symbol BTC/USD\\nWARNING: Price jumped 10% 📈\\nERROR: Connection failed ❌';
+        "INFO: Processing symbol BTC/USD\\nWARNING: Price jumped 10% 📈\\nERROR: Connection failed ❌";
 
       mockRepository.findOne.mockResolvedValue(Ok(mockBacktest));
       mockMinioClient.getObject.mockResolvedValue(createMockStream(mockLogs));
 
-      const result = await service.getBacktestLogs('test-id');
+      const result = await service.getBacktestLogs("test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(mockLogs);
     });
 
-    it('should use correct bucket from config', async () => {
-      const customBucket = 'custom-backtest-bucket';
+    it("should use correct bucket from config", async () => {
+      const customBucket = "custom-backtest-bucket";
       configService.get.mockReturnValue(customBucket);
 
       // Recreate service to pick up new config
@@ -244,7 +248,7 @@ RESULT_WRITE: Successfully wrote result file`;
           },
           {
             provide: NatsService,
-            useValue: { 
+            useValue: {
               publish: jest.fn().mockResolvedValue(Ok(null)),
             },
           },
@@ -258,13 +262,15 @@ RESULT_WRITE: Successfully wrote result file`;
       (newService as any).minioClient = mockMinioClient;
 
       mockRepository.findOne.mockResolvedValue(Ok(mockBacktest));
-      mockMinioClient.getObject.mockResolvedValue(createMockStream('test logs'));
+      mockMinioClient.getObject.mockResolvedValue(
+        createMockStream("test logs"),
+      );
 
-      await newService.getBacktestLogs('test-id');
+      await newService.getBacktestLogs("test-id");
 
       expect(mockMinioClient.getObject).toHaveBeenCalledWith(
         customBucket,
-        'test-id/logs.txt',
+        "test-id/logs.txt",
       );
     });
   });

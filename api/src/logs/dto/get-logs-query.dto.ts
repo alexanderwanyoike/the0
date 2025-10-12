@@ -1,5 +1,5 @@
-import { IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsOptional, IsString, IsInt, Min, Max } from "class-validator";
+import { Transform } from "class-transformer";
 
 export class GetLogsQueryDto {
   @IsOptional()
