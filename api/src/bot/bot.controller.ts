@@ -9,13 +9,13 @@ import {
   Put,
   BadRequestException,
   NotFoundException,
-} from '@nestjs/common';
-import { BotService } from './bot.service';
-import { CreateBotDto } from './dto/create-bot.dto';
-import { UpdateBotDto } from './dto/update-bot.dto';
-import { AuthCombinedGuard } from '@/auth/auth-combined.guard';
+} from "@nestjs/common";
+import { BotService } from "./bot.service";
+import { CreateBotDto } from "./dto/create-bot.dto";
+import { UpdateBotDto } from "./dto/update-bot.dto";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 
-@Controller('bot')
+@Controller("bot")
 @UseGuards(AuthCombinedGuard)
 export class BotController {
   constructor(private readonly botService: BotService) {}
@@ -38,8 +38,8 @@ export class BotController {
     return result.data;
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
     const result = await this.botService.findOne(id);
     if (!result.success) {
       throw new NotFoundException(result.error);
@@ -47,8 +47,8 @@ export class BotController {
     return result.data;
   }
 
-  @Put(':id')
-  async update(@Param('id') id: string, @Body() updateBotDto: UpdateBotDto) {
+  @Put(":id")
+  async update(@Param("id") id: string, @Body() updateBotDto: UpdateBotDto) {
     const result = await this.botService.update(id, updateBotDto);
     if (!result.success) {
       throw new BadRequestException(result.error);
@@ -56,8 +56,8 @@ export class BotController {
     return result.data;
   }
 
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
+  @Delete(":id")
+  async remove(@Param("id") id: string) {
     const result = await this.botService.remove(id);
     if (!result.success) {
       throw new BadRequestException(result.error);

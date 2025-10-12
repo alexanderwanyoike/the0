@@ -1,12 +1,12 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
-import postgres from 'postgres';
-import Database from 'better-sqlite3';
-import { loadConfig, DatabaseConfig } from '../config/database.config';
-import * as usersSchema from './schema/users';
-import * as customBotsSchema from './schema/custom-bots';
-import * as botsSchema from './schema/bots';
-import * as backtestsSchema from './schema/backtests';
+import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import postgres from "postgres";
+import Database from "better-sqlite3";
+import { loadConfig, DatabaseConfig } from "../config/database.config";
+import * as usersSchema from "./schema/users";
+import * as customBotsSchema from "./schema/custom-bots";
+import * as botsSchema from "./schema/bots";
+import * as backtestsSchema from "./schema/backtests";
 // Logs are stored in external storage (MinIO/S3), not in database
 
 // Combined schema for PostgreSQL
@@ -29,10 +29,16 @@ export const sqliteSchema = {
 // Table registry for clean access
 export interface TableRegistry {
   users: typeof usersSchema.usersTable | typeof usersSchema.usersTableSqlite;
-  apiKeys: typeof usersSchema.apiKeysTable | typeof usersSchema.apiKeysTableSqlite;
-  customBots: typeof customBotsSchema.customBotsTable | typeof customBotsSchema.customBotsTableSqlite;
+  apiKeys:
+    | typeof usersSchema.apiKeysTable
+    | typeof usersSchema.apiKeysTableSqlite;
+  customBots:
+    | typeof customBotsSchema.customBotsTable
+    | typeof customBotsSchema.customBotsTableSqlite;
   bots: typeof botsSchema.botsTable | typeof botsSchema.botsTableSqlite;
-  backtests: typeof backtestsSchema.backtestsTable | typeof backtestsSchema.backtestsTableSqlite;
+  backtests:
+    | typeof backtestsSchema.backtestsTable
+    | typeof backtestsSchema.backtestsTableSqlite;
 }
 
 let dbInstance: any = null;
@@ -47,10 +53,10 @@ export function getDatabase() {
   const config = loadConfig();
   configCache = config;
 
-  if (config.type === 'sqlite') {
+  if (config.type === "sqlite") {
     const sqlite = new Database(config.url);
     dbInstance = drizzleSqlite(sqlite, { schema: sqliteSchema });
-    
+
     tablesCache = {
       users: usersSchema.usersTableSqlite,
       apiKeys: usersSchema.apiKeysTableSqlite,
@@ -68,7 +74,7 @@ export function getDatabase() {
       max: 10,
     });
     dbInstance = drizzle(client, { schema: pgSchema });
-    
+
     tablesCache = {
       users: usersSchema.usersTable,
       apiKeys: usersSchema.apiKeysTable,

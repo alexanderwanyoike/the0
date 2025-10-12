@@ -1,11 +1,11 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
-import { AuthController } from '../auth.controller';
-import { AuthService } from '../auth.service';
-import { ApiKeyService } from '@/api-key/api-key.service';
-import { Ok, Failure } from '../../common/result';
+import { Test, TestingModule } from "@nestjs/testing";
+import { UnauthorizedException } from "@nestjs/common";
+import { AuthController } from "../auth.controller";
+import { AuthService } from "../auth.service";
+import { ApiKeyService } from "@/api-key/api-key.service";
+import { Ok, Failure } from "../../common/result";
 
-describe('AuthController', () => {
+describe("AuthController", () => {
   let controller: AuthController;
   let authService: AuthService;
 
@@ -45,23 +45,23 @@ describe('AuthController', () => {
     jest.clearAllMocks();
   });
 
-  it('should be defined', () => {
+  it("should be defined", () => {
     expect(controller).toBeDefined();
   });
 
-  describe('login', () => {
-    it('should return success on valid credentials', async () => {
+  describe("login", () => {
+    it("should return success on valid credentials", async () => {
       const loginDto = {
-        email: 'test@example.com',
-        password: 'password123',
+        email: "test@example.com",
+        password: "password123",
       };
 
       const mockResult = Ok({
-        token: 'test-token',
+        token: "test-token",
         user: {
-          id: 'test-id',
-          username: 'testuser',
-          email: 'test@example.com',
+          id: "test-id",
+          username: "testuser",
+          email: "test@example.com",
           isActive: true,
           isEmailVerified: false,
         },
@@ -72,38 +72,42 @@ describe('AuthController', () => {
       const result = await controller.login(loginDto);
 
       expect(result.success).toBe(true);
-      expect(result.data.token).toBe('test-token');
+      expect(result.data.token).toBe("test-token");
       expect(authService.login).toHaveBeenCalledWith(loginDto);
     });
 
-    it('should return error on invalid credentials', async () => {
+    it("should return error on invalid credentials", async () => {
       const loginDto = {
-        email: 'test@example.com',
-        password: 'wrongpassword',
+        email: "test@example.com",
+        password: "wrongpassword",
       };
 
-      const mockResult = Failure('Invalid credentials');
+      const mockResult = Failure("Invalid credentials");
       mockAuthService.login.mockResolvedValue(mockResult);
 
-      await expect(controller.login(loginDto)).rejects.toThrow(UnauthorizedException);
-      await expect(controller.login(loginDto)).rejects.toThrow('Invalid credentials');
+      await expect(controller.login(loginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(controller.login(loginDto)).rejects.toThrow(
+        "Invalid credentials",
+      );
     });
   });
 
-  describe('register', () => {
-    it('should register user successfully', async () => {
+  describe("register", () => {
+    it("should register user successfully", async () => {
       const registerDto = {
-        username: 'newuser',
-        email: 'new@example.com',
-        password: 'password123',
+        username: "newuser",
+        email: "new@example.com",
+        password: "password123",
       };
 
       const mockResult = Ok({
-        token: 'test-token',
+        token: "test-token",
         user: {
-          id: 'test-id',
-          username: 'newuser',
-          email: 'new@example.com',
+          id: "test-id",
+          username: "newuser",
+          email: "new@example.com",
           isActive: true,
           isEmailVerified: false,
         },
@@ -114,19 +118,19 @@ describe('AuthController', () => {
       const result = await controller.register(registerDto);
 
       expect(result.success).toBe(true);
-      expect(result.data.token).toBe('test-token');
+      expect(result.data.token).toBe("test-token");
       expect(authService.register).toHaveBeenCalledWith(registerDto);
     });
   });
 
-  describe('validate', () => {
-    it('should validate token successfully', async () => {
-      const validateDto = { token: 'valid-token' };
+  describe("validate", () => {
+    it("should validate token successfully", async () => {
+      const validateDto = { token: "valid-token" };
 
       const mockResult = Ok({
-        id: 'test-id',
-        username: 'testuser',
-        email: 'test@example.com',
+        id: "test-id",
+        username: "testuser",
+        email: "test@example.com",
         isActive: true,
         isEmailVerified: false,
       });
@@ -136,17 +140,21 @@ describe('AuthController', () => {
       const result = await controller.validate(validateDto);
 
       expect(result.success).toBe(true);
-      expect(authService.validateToken).toHaveBeenCalledWith('valid-token');
+      expect(authService.validateToken).toHaveBeenCalledWith("valid-token");
     });
 
-    it('should return error for invalid token', async () => {
-      const validateDto = { token: 'invalid-token' };
+    it("should return error for invalid token", async () => {
+      const validateDto = { token: "invalid-token" };
 
-      const mockResult = Failure('Invalid token');
+      const mockResult = Failure("Invalid token");
       mockAuthService.validateToken.mockResolvedValue(mockResult);
 
-      await expect(controller.validate(validateDto)).rejects.toThrow(UnauthorizedException);
-      await expect(controller.validate(validateDto)).rejects.toThrow('Invalid token');
+      await expect(controller.validate(validateDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(controller.validate(validateDto)).rejects.toThrow(
+        "Invalid token",
+      );
     });
   });
 });

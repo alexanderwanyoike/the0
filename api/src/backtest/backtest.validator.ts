@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { Result, Failure, Ok } from '@/common/result';
-import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
-import { CustomBot } from '@/custom-bot/custom-bot.types';
-import { BOT_TYPE_PATTERN } from '@/bot/bot.constants';
-import { BOT_TYPES } from '@/custom-bot/custom-bot.types';
+import { Injectable } from "@nestjs/common";
+import { Result, Failure, Ok } from "@/common/result";
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
+import { CustomBot } from "@/custom-bot/custom-bot.types";
+import { BOT_TYPE_PATTERN } from "@/bot/bot.constants";
+import { BOT_TYPES } from "@/custom-bot/custom-bot.types";
 
 @Injectable()
 export class BacktestValidator {
@@ -16,20 +16,20 @@ export class BacktestValidator {
     const { type } = config;
 
     if (!type) {
-      return Failure<boolean, string[]>(['No type provided']);
+      return Failure<boolean, string[]>(["No type provided"]);
     }
 
     if (BOT_TYPE_PATTERN.test(type) === false) {
       return Failure<boolean, string[]>([
-        'Invalid bot type format. Expected format: type/name',
+        "Invalid bot type format. Expected format: type/name",
       ]);
     }
 
-    const [botType] = type.split('/');
+    const [botType] = type.split("/");
 
     if (!BOT_TYPES.includes(botType as any)) {
       return Failure<boolean, string[]>([
-        `Invalid bot type. Supported types are: ${BOT_TYPES.join(', ')}`,
+        `Invalid bot type. Supported types are: ${BOT_TYPES.join(", ")}`,
       ]);
     }
 
@@ -83,7 +83,7 @@ export class BacktestValidator {
   }
 
   private filterObjectProperties(obj: any, schema: any): any {
-    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
       return obj;
     }
 
@@ -93,9 +93,9 @@ export class BacktestValidator {
     for (const key of Object.keys(schemaProperties)) {
       if (obj[key] !== undefined) {
         const propertySchema = schemaProperties[key];
-        
+
         // If property is an object and has its own schema, recursively filter
-        if (propertySchema.type === 'object' && propertySchema.properties) {
+        if (propertySchema.type === "object" && propertySchema.properties) {
           filtered[key] = this.filterObjectProperties(obj[key], propertySchema);
         } else {
           filtered[key] = obj[key];

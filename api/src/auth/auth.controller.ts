@@ -5,12 +5,16 @@ import {
   Get,
   Headers,
   UnauthorizedException,
-} from '@nestjs/common';
-import { AuthService, LoginCredentials, RegisterCredentials } from './auth.service';
-import { ValidateTokenDto } from './dto/validate-token.dto';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, IsOptional } from 'class-validator';
-import { ApiKeyService } from '@/api-key/api-key.service';
+} from "@nestjs/common";
+import {
+  AuthService,
+  LoginCredentials,
+  RegisterCredentials,
+} from "./auth.service";
+import { ValidateTokenDto } from "./dto/validate-token.dto";
+import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
+import { IsEmail, IsString, IsNotEmpty, IsOptional } from "class-validator";
+import { ApiKeyService } from "@/api-key/api-key.service";
 
 export class LoginDto {
   @IsEmail()
@@ -44,18 +48,18 @@ export class RegisterDto {
   lastName?: string;
 }
 
-@ApiTags('auth')
-@Controller('auth')
+@ApiTags("auth")
+@Controller("auth")
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly apiKeyService: ApiKeyService,
   ) {}
 
-  @Post('login')
+  @Post("login")
   async login(@Body() loginDto: LoginDto) {
     const result = await this.authService.login(loginDto);
-    
+
     if (!result.success) {
       throw new UnauthorizedException(result.error);
     }
@@ -63,14 +67,14 @@ export class AuthController {
     return {
       success: true,
       data: result.data,
-      message: 'Login successful',
+      message: "Login successful",
     };
   }
 
-  @Post('register')
+  @Post("register")
   async register(@Body() registerDto: RegisterDto) {
     const result = await this.authService.register(registerDto);
-    
+
     if (!result.success) {
       throw new UnauthorizedException(result.error);
     }
@@ -78,15 +82,15 @@ export class AuthController {
     return {
       success: true,
       data: result.data,
-      message: 'Registration successful',
+      message: "Registration successful",
     };
   }
 
-  @Post('validate')
+  @Post("validate")
   @ApiBearerAuth()
   async validate(@Body() validateTokenDto: ValidateTokenDto) {
     const result = await this.authService.validateToken(validateTokenDto.token);
-    
+
     if (!result.success) {
       throw new UnauthorizedException(result.error);
     }
@@ -94,20 +98,20 @@ export class AuthController {
     return {
       success: true,
       data: result.data,
-      message: 'Token is valid',
+      message: "Token is valid",
     };
   }
 
-  @Get('me')
+  @Get("me")
   @ApiBearerAuth()
-  async getCurrentUser(@Headers('authorization') authHeader?: string) {
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Bearer token is required');
+  async getCurrentUser(@Headers("authorization") authHeader?: string) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new UnauthorizedException("Bearer token is required");
     }
 
     const token = authHeader.substring(7);
     const result = await this.authService.validateToken(token);
-    
+
     if (!result.success) {
       throw new UnauthorizedException(result.error);
     }
@@ -115,28 +119,28 @@ export class AuthController {
     return {
       success: true,
       data: result.data,
-      message: 'User retrieved successfully',
+      message: "User retrieved successfully",
     };
   }
 
-  @Get('validate-api-key')
-  async validateApiKey(@Headers('authorization') authHeader?: string) {
+  @Get("validate-api-key")
+  async validateApiKey(@Headers("authorization") authHeader?: string) {
     if (!authHeader) {
-      throw new UnauthorizedException('Authorization header is required');
+      throw new UnauthorizedException("Authorization header is required");
     }
 
     // Extract API key from Authorization header
     let apiKey: string;
-    if (authHeader.startsWith('ApiKey ')) {
+    if (authHeader.startsWith("ApiKey ")) {
       apiKey = authHeader.substring(7);
-    } else if (authHeader.startsWith('Bearer ')) {
+    } else if (authHeader.startsWith("Bearer ")) {
       apiKey = authHeader.substring(7);
     } else {
-      throw new UnauthorizedException('Invalid authorization header format');
+      throw new UnauthorizedException("Invalid authorization header format");
     }
 
     const result = await this.apiKeyService.validateApiKey(apiKey);
-    
+
     if (!result.success) {
       throw new UnauthorizedException(result.error);
     }
@@ -148,9 +152,11 @@ export class AuthController {
         userId: result.data.userId,
         keyId: result.data.id,
         keyName: result.data.name,
-        lastUsedAt: result.data.lastUsedAt ? result.data.lastUsedAt.toISOString() : null,
+        lastUsedAt: result.data.lastUsedAt
+          ? result.data.lastUsedAt.toISOString()
+          : null,
       },
-      message: 'API key is valid',
+      message: "API key is valid",
     };
   }
 }

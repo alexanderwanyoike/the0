@@ -3,8 +3,8 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
-} from '@nestjs/common';
-import { ApiKeyService } from '@/api-key/api-key.service';
+} from "@nestjs/common";
+import { ApiKeyService } from "@/api-key/api-key.service";
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -15,13 +15,13 @@ export class ApiKeyGuard implements CanActivate {
     const apiKey = this.extractApiKeyFromHeader(request);
 
     if (!apiKey) {
-      throw new UnauthorizedException('API key is required');
+      throw new UnauthorizedException("API key is required");
     }
 
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
     if (!result.success) {
-      throw new UnauthorizedException('Invalid API key');
+      throw new UnauthorizedException("Invalid API key");
     }
 
     // Attach the user to the request for downstream use
@@ -41,15 +41,15 @@ export class ApiKeyGuard implements CanActivate {
     // X-API-Key: the0_xxx
 
     const authHeader = request.headers.authorization;
-    const apiKeyHeader = request.headers['x-api-key'];
+    const apiKeyHeader = request.headers["x-api-key"];
 
     if (apiKeyHeader) {
       return apiKeyHeader;
     }
 
     if (authHeader) {
-      const [type, key] = authHeader.split(' ');
-      if ((type === 'Bearer' || type === 'ApiKey') && key) {
+      const [type, key] = authHeader.split(" ");
+      if ((type === "Bearer" || type === "ApiKey") && key) {
         return key;
       }
     }

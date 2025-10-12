@@ -3,9 +3,9 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
-} from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { ApiKeyService } from '@/api-key/api-key.service';
+} from "@nestjs/common";
+import { AuthService } from "./auth.service";
+import { ApiKeyService } from "@/api-key/api-key.service";
 
 @Injectable()
 export class AuthCombinedGuard implements CanActivate {
@@ -30,11 +30,14 @@ export class AuthCombinedGuard implements CanActivate {
     }
 
     throw new UnauthorizedException(
-      'Authentication required. Provide Bearer JWT token or ApiKey.',
+      "Authentication required. Provide Bearer JWT token or ApiKey.",
     );
   }
 
-  private async validateJwtToken(request: any, token: string): Promise<boolean> {
+  private async validateJwtToken(
+    request: any,
+    token: string,
+  ): Promise<boolean> {
     const result = await this.authService.validateToken(token);
 
     if (!result.success) {
@@ -51,7 +54,7 @@ export class AuthCombinedGuard implements CanActivate {
       lastName: result.data.lastName,
       isActive: result.data.isActive,
       isEmailVerified: result.data.isEmailVerified,
-      authType: 'jwt',
+      authType: "jwt",
     };
 
     return true;
@@ -68,13 +71,13 @@ export class AuthCombinedGuard implements CanActivate {
     request.user = {
       uid: result.data.userId,
       id: result.data.userId,
-      username: '', // API keys don't have username
-      email: '',    // API keys don't have email
+      username: "", // API keys don't have username
+      email: "", // API keys don't have email
       firstName: null,
       lastName: null,
       isActive: true,
       isEmailVerified: true,
-      authType: 'apikey',
+      authType: "apikey",
     };
 
     return true;
@@ -84,8 +87,8 @@ export class AuthCombinedGuard implements CanActivate {
     const authHeader = request.headers.authorization;
 
     if (authHeader) {
-      const [type, token] = authHeader.split(' ');
-      if (type === 'Bearer' && token) {
+      const [type, token] = authHeader.split(" ");
+      if (type === "Bearer" && token) {
         return token;
       }
     }
@@ -97,8 +100,8 @@ export class AuthCombinedGuard implements CanActivate {
     const authHeader = request.headers.authorization;
 
     if (authHeader) {
-      const [type, key] = authHeader.split(' ');
-      if (type === 'ApiKey' && key) {
+      const [type, key] = authHeader.split(" ");
+      if (type === "ApiKey" && key) {
         return key;
       }
     }
