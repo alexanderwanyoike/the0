@@ -22,7 +22,6 @@ export default (databaseType === 'sqlite'
       schema: [
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
-        './src/database/schema/user-bots.ts',
         './src/database/schema/bots.ts',
         './src/database/schema/backtests.ts'
       ],
@@ -36,7 +35,6 @@ export default (databaseType === 'sqlite'
       schema: [
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
-        './src/database/schema/user-bots.ts',
         './src/database/schema/bots.ts',
         './src/database/schema/backtests.ts'
       ],
