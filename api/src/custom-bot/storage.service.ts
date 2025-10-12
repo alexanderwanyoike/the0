@@ -1,10 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Result, Ok, Failure } from "@/common/result";
-import * as crypto from "crypto";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
-import { Readable } from "stream";
 
 // Simple in-memory token storage (in production, use Redis)
 const uploadTokens = new Map<string, string>();
@@ -12,14 +10,11 @@ const uploadTokens = new Map<string, string>();
 @Injectable()
 export class StorageService {
   private minioClient: Minio.Client;
-  private externalMinioClient: Minio.Client;
   private bucketName: string;
 
   constructor(private readonly configService: ConfigService) {
     const endpoint =
       this.configService.get<string>("MINIO_ENDPOINT") || "localhost";
-    const externalEndpoint =
-      this.configService.get<string>("MINIO_EXTERNAL_ENDPOINT") || endpoint;
     const port = parseInt(
       this.configService.get<string>("MINIO_PORT") || "9000",
     );
@@ -28,20 +23,6 @@ export class StorageService {
     this.minioClient = new Minio.Client({
       endPoint: endpoint,
       port,
-      useSSL: this.configService.get<string>("MINIO_USE_SSL") === "true",
-      accessKey:
-        this.configService.get<string>("MINIO_ACCESS_KEY") || "minioadmin",
-      secretKey:
-        this.configService.get<string>("MINIO_SECRET_KEY") || "minioadmin",
-    });
-
-    // External client for generating signed URLs accessible from outside
-    const [externalHost, externalPortStr] = externalEndpoint.split(":");
-    const externalPort = externalPortStr ? parseInt(externalPortStr) : port;
-
-    this.externalMinioClient = new Minio.Client({
-      endPoint: externalHost,
-      port: externalPort,
       useSSL: this.configService.get<string>("MINIO_USE_SSL") === "true",
       accessKey:
         this.configService.get<string>("MINIO_ACCESS_KEY") || "minioadmin",
@@ -194,71 +175,6 @@ export class StorageService {
     }
   }
 
-  async generateSignedUploadUrl(
-    userId: string,
-    name: string,
-    version: string,
-  ): Promise<
-    Result<
-      {
-        uploadUrl: string;
-        filePath: string;
-        expiresAt: string;
-      },
-      string
-    >
-  > {
-    try {
-      const filePath = `${userId}/${name}/${version}`;
-
-      // Generate presigned URL (24 hours expiry) using external client for external access
-      const expiry = 24 * 60 * 60; // 24 hours in seconds
-      const uploadUrl = await this.externalMinioClient.presignedPutObject(
-        this.bucketName,
-        filePath,
-        expiry,
-      );
-
-      const expiresAt = new Date(Date.now() + expiry * 1000).toISOString();
-
-      console.log(`📡 Generated signed upload URL: ${uploadUrl}`);
-
-      return Ok({
-        uploadUrl,
-        filePath,
-        expiresAt,
-      });
-    } catch (error) {
-      console.error("❌ Error generating upload URL:", error);
-      return Failure(`Error generating upload URL: ${error.message || error}`);
-    }
-  }
-
-  // Token-based upload methods (kept for compatibility)
-  async generateUploadToken(
-    userId: string,
-    botName: string,
-    version: string,
-  ): Promise<Result<string, string>> {
-    try {
-      const token = crypto.randomBytes(32).toString("hex");
-      const key = `${userId}:${botName}:${version}`;
-
-      uploadTokens.set(token, key);
-
-      // Clean up token after 1 hour
-      setTimeout(
-        () => {
-          uploadTokens.delete(token);
-        },
-        60 * 60 * 1000,
-      );
-
-      return Ok(token);
-    } catch (error) {
-      return Failure(`Error generating upload token: ${error.message}`);
-    }
-  }
 
   async validateUploadToken(token: string): Promise<
     Result<

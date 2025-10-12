@@ -98,7 +98,6 @@ services:
       
       # MinIO configuration
       MINIO_ENDPOINT: minio # Internal endpoint hostname for API to connect to MinIO
-      MINIO_EXTERNAL_ENDPOINT: localhost:9000 # External endpoint for signed URLs from browser
       MINIO_PORT: "9000"
       MINIO_USE_SSL: "false"
       MINIO_ACCESS_KEY: the0admin

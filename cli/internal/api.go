@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -288,11 +289,11 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 		return fmt.Errorf("failed to get upload URL: %v", err)
 	}
 
-	// Step 2: Upload ZIP file directly to storage
-	fmt.Printf("📦 Uploading %s to storage...\n", filepath.Base(zipPath))
-	err = c.UploadToStorage(zipPath, uploadResponse.UploadUrl)
+	// Step 2: Upload ZIP file to API
+	fmt.Printf("📦 Uploading %s to API...\n", filepath.Base(zipPath))
+	err = c.UploadToStorage(zipPath, uploadResponse.UploadUrl, config.Version, auth)
 	if err != nil {
-		return fmt.Errorf("failed to upload file to storage: %v", err)
+		return fmt.Errorf("failed to upload file: %v", err)
 	}
 	fmt.Println("✅ File uploaded successfully!")
 
@@ -850,23 +851,52 @@ func (c *APIClient) RequestUploadURL(botName string, version string, auth *Auth)
 	return &uploadResponse, nil
 }
 
-// UploadToStorage uploads a file to Firebase Storage using a signed URL
-func (c *APIClient) UploadToStorage(filePath string, uploadURL string) error {
-	// Read the file content into memory
-	fileContent, err := os.ReadFile(filePath)
+// UploadToStorage uploads a file to the API using multipart form data
+func (c *APIClient) UploadToStorage(filePath string, uploadURL string, version string, auth *Auth) error {
+	// Open the file
+	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %v", err)
+		return fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	// Create a buffer to write our multipart form
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+
+	// Add version field
+	err = writer.WriteField("version", version)
+	if err != nil {
+		return fmt.Errorf("failed to write version field: %v", err)
 	}
 
-	// Create PUT request with the signed URL
-	req, err := http.NewRequest("PUT", uploadURL, bytes.NewReader(fileContent))
+	// Create the file field
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return fmt.Errorf("failed to create form file: %v", err)
+	}
+
+	// Copy file content to the form
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return fmt.Errorf("failed to copy file content: %v", err)
+	}
+
+	// Close the writer to finalize the multipart message
+	err = writer.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close writer: %v", err)
+	}
+
+	// Create POST request with multipart form data
+	req, err := http.NewRequest("POST", uploadURL, &requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to create upload request: %v", err)
 	}
 
-	// Set required headers for Firebase Storage
-	req.Header.Set("Content-Type", "application/zip")
-	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(fileContent)))
+	// Set required headers
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
 
 	// Use a longer timeout for large file uploads
 	client := &http.Client{
