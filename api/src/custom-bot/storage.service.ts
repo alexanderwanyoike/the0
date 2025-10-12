@@ -17,7 +17,6 @@ export class StorageService {
 
   constructor(private readonly configService: ConfigService) {
     const endpoint = this.configService.get<string>('MINIO_ENDPOINT') || 'localhost';
-    const externalEndpoint = this.configService.get<string>('MINIO_EXTERNAL_ENDPOINT') || endpoint;
     const port = parseInt(this.configService.get<string>('MINIO_PORT') || '9000');
     
     // Internal client for API operations
@@ -30,9 +29,11 @@ export class StorageService {
     });
 
     // External client for generating signed URLs accessible from outside
+    // With host networking, localhost:9000 will work from within container
+    const externalEndpoint = this.configService.get<string>('MINIO_EXTERNAL_ENDPOINT') || 'localhost:9000';
     const [externalHost, externalPortStr] = externalEndpoint.split(':');
     const externalPort = externalPortStr ? parseInt(externalPortStr) : port;
-    
+
     this.externalMinioClient = new Minio.Client({
       endPoint: externalHost,
       port: externalPort,
@@ -187,8 +188,9 @@ export class StorageService {
   }, string>> {
     try {
       const filePath = `${userId}/${name}/${version}`;
-      
-      // Generate presigned URL (24 hours expiry) using external client for external access
+
+      // Generate presigned URL (24 hours expiry) using external client
+      // With host networking, localhost:9000 works correctly
       const expiry = 24 * 60 * 60; // 24 hours in seconds
       const uploadUrl = await this.externalMinioClient.presignedPutObject(
         this.bucketName,
@@ -196,10 +198,10 @@ export class StorageService {
         expiry
       );
 
-      const expiresAt = new Date(Date.now() + expiry * 1000).toISOString();
-      
       console.log(`📡 Generated signed upload URL: ${uploadUrl}`);
-      
+
+      const expiresAt = new Date(Date.now() + expiry * 1000).toISOString();
+
       return Ok({
         uploadUrl,
         filePath,

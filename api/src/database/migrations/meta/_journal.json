@@ -15,6 +15,13 @@
       "when": 1753497594306,
       "tag": "0001_breezy_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1760229805794,
+      "tag": "0002_amused_the_santerians",
+      "breakpoints": true
     }
   ]
 }

@@ -17,12 +17,11 @@ if (databaseType === 'postgresql' && databaseUrl) {
   };
 }
 
-export default (databaseType === 'sqlite' 
+export default (databaseType === 'sqlite'
   ? {
       schema: [
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
-        './src/database/schema/user-bots.ts',
         './src/database/schema/bots.ts',
         './src/database/schema/backtests.ts'
       ],
@@ -36,11 +35,10 @@ export default (databaseType === 'sqlite'
       schema: [
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
-        './src/database/schema/user-bots.ts',
         './src/database/schema/bots.ts',
         './src/database/schema/backtests.ts'
       ],
-      out: './src/database/migrations', 
+      out: './src/database/migrations',
       driver: 'pg' as const,
       dbCredentials: {
         connectionString: databaseUrl || `postgresql://${dbConfig.user}:${dbConfig.password}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`,
