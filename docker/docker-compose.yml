@@ -88,17 +88,17 @@ services:
         - BUILDKIT_INLINE_CACHE=1
     pull_policy: always
     environment:
-      # Database configuration
-      DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss?sslmode=disable
+      # Database configuration - use localhost with host networking
+      DATABASE_URL: postgresql://the0:the0_password@localhost:5432/the0_oss?sslmode=disable
       DATABASE_TYPE: postgres
+
+      # NATS configuration - use localhost with host networking
+      NATS_URLS: nats://localhost:4222
       
-      # NATS configuration
-      NATS_URLS: nats://nats:4222
       
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: minio # Internal endpoint hostname for API to connect to MinIO
-      MINIO_EXTERNAL_ENDPOINT: localhost:9000 # External endpoint for signed URLs from browser
+      # MinIO configuration - use localhost with host networking
+      MINIO_ENDPOINT: localhost # Internal endpoint hostname - same as external with host networking
+      MINIO_EXTERNAL_ENDPOINT: localhost:9000 # External endpoint for signed URLs from browser/CLI
       MINIO_PORT: "9000"
       MINIO_USE_SSL: "false"
       MINIO_ACCESS_KEY: the0admin
@@ -125,8 +125,9 @@ services:
       # Bot API configuration (used by frontend API routes)
       BOT_API_URL: http://the0-api:3000
       
-    ports:
-      - "3000:3000"
+    # Use host networking so localhost refers to the actual host machine
+    # This allows the API to access MinIO at localhost:9000 from within the container
+    network_mode: "host"
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,12 +137,10 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - the0-network
     volumes:
       - the0-api-uploads:/app/uploads
 
