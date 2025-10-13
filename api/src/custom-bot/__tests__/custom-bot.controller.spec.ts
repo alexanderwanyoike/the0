@@ -53,7 +53,6 @@ describe("CustomBotController", () => {
 
     mockStorageService = {
       fileExists: jest.fn(),
-      generateSignedUploadUrl: jest.fn(),
       validateZipFile: jest.fn(),
       validateZipStructure: jest.fn(),
     } as any;
@@ -347,71 +346,7 @@ describe("CustomBotController", () => {
     });
   });
 
-  describe("generateUploadUrl", () => {
-    it("should generate upload URL successfully", async () => {
-      const mockUploadResponse = {
-        uploadUrl: "https://storage.googleapis.com/signed-url",
-        filePath:
-          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      };
-
-      mockStorageService.generateSignedUploadUrl.mockResolvedValue({
-        success: true,
-        data: mockUploadResponse,
-        error: null,
-      });
-
-      const body = { version: "1.0.0" };
-
-      const result = await controller.generateUploadUrl(
-        "test-bot",
-        body,
-        mockRequest,
-      );
-
-      expect(result.uploadUrl).toBe(mockUploadResponse.uploadUrl);
-      expect(result.filePath).toBe(mockUploadResponse.filePath);
-      expect(result.expiresAt).toBeDefined();
-      expect(mockStorageService.generateSignedUploadUrl).toHaveBeenCalledWith(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-    });
-
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const requestWithoutUser = {} as any;
-      const body = { version: "1.0.0" };
-
-      await expect(
-        controller.generateUploadUrl("test-bot", body, requestWithoutUser),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("should throw BadRequestException when version is missing", async () => {
-      const body = {};
-
-      await expect(
-        controller.generateUploadUrl("test-bot", body as any, mockRequest),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("should throw BadRequestException when GCS service fails", async () => {
-      mockStorageService.generateSignedUploadUrl.mockResolvedValue({
-        success: false,
-        data: null,
-        error: "Failed to generate signed URL",
-      });
-
-      const body = { version: "1.0.0" };
-
-      await expect(
-        controller.generateUploadUrl("test-bot", body, mockRequest),
-      ).rejects.toThrow(BadRequestException);
-    });
-  });
-
+  
   // NEW TEST SECTION
   describe("getUserCustomBots", () => {
     it("should get user custom bots successfully", async () => {

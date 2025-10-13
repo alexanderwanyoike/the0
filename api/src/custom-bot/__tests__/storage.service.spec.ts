@@ -58,7 +58,8 @@ describe("StorageService", () => {
           useValue: {
             get: jest.fn((key: string) => {
               const config = {
-                MINIO_ENDPOINT: "localhost:9000",
+                MINIO_ENDPOINT: "localhost",
+                MINIO_PORT: "9000",
                 MINIO_USE_SSL: "false",
                 MINIO_ACCESS_KEY: "testkey",
                 MINIO_SECRET_KEY: "testsecret",
@@ -270,44 +271,7 @@ describe("StorageService", () => {
     });
   });
 
-  describe("generateSignedUploadUrl", () => {
-    it("should generate signed upload URL successfully", async () => {
-      const mockUrl = "https://minio.test/upload-url";
-      mockMinioClient.presignedPutObject.mockResolvedValue(mockUrl);
-
-      const result = await service.generateSignedUploadUrl(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data.uploadUrl).toBe(mockUrl);
-      expect(result.data.filePath).toBe("user123/test-bot/1.0.0");
-      expect(result.data.expiresAt).toBeDefined();
-      expect(mockMinioClient.presignedPutObject).toHaveBeenCalledWith(
-        "custom-bots",
-        "user123/test-bot/1.0.0",
-        24 * 60 * 60, // 24 hours
-      );
-    });
-
-    it("should handle URL generation errors", async () => {
-      mockMinioClient.presignedPutObject.mockRejectedValue(
-        new Error("URL generation failed"),
-      );
-
-      const result = await service.generateSignedUploadUrl(
-        "user123",
-        "test-bot",
-        "1.0.0",
-      );
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("URL generation failed");
-    });
-  });
-
+  
   describe("downloadFile", () => {
     it("should download file successfully", async () => {
       const fileBuffer = createSampleZipBuffer();

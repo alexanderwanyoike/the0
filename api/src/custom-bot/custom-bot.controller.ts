@@ -27,11 +27,6 @@ interface CustomBotDeployDto {
   filePath: string; // Storage path where file was uploaded
 }
 
-interface UploadUrlResponse {
-  uploadUrl: string;
-  filePath: string;
-  expiresAt: string;
-}
 
 @Controller("custom-bots")
 @UseGuards(AuthCombinedGuard)
@@ -41,36 +36,7 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
-  @Post(":name/upload-url")
-  @HttpCode(HttpStatus.OK)
-  async generateUploadUrl(
-    @Param("name") name: string,
-    @Body() body: { version: string },
-    @Req() request: Request,
-  ): Promise<UploadUrlResponse> {
-    const userId = (request as any).user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
-
-    if (!body.version) {
-      throw new BadRequestException("Version is required");
-    }
-
-    // Generate the file path where the file will be stored
-    const filePath = `${userId}/${name}/${body.version}`;
-
-    // Return API's own upload endpoint instead of presigned URL
-    const apiBaseUrl = process.env.API_BASE_URL || "http://localhost:3000";
-    const uploadUrl = `${apiBaseUrl}/custom-bots/${name}/upload`;
-
-    return {
-      uploadUrl,
-      filePath,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    };
-  }
-
+  
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))

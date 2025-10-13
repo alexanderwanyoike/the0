@@ -90,13 +90,6 @@ describe("Custom Bot API Integration Tests", () => {
       })
       .overrideProvider(StorageService)
       .useValue({
-        generateSignedUploadUrl: jest.fn().mockResolvedValue(
-          Ok({
-            uploadUrl: "https://minio.test/upload-url",
-            filePath: "test/path",
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          }),
-        ),
         fileExists: jest.fn().mockResolvedValue(Ok(true)),
         validateZipStructure: jest.fn().mockResolvedValue(Ok(true)),
         uploadBotFile: jest.fn().mockResolvedValue(Ok("test/path")),
@@ -373,6 +366,7 @@ describe("Custom Bot API Integration Tests", () => {
       repository.isVersionNewer.mockReturnValue(true);
       repository.globalVersionExists.mockResolvedValue(Ok(false));
       repository.createNewGlobalVersion.mockResolvedValue(Ok(mockUpdatedBot));
+      repository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockUpdatedBot));
 
       const response = await request(app.getHttpServer())
         .put("/custom-bots/integration-test-bot")
@@ -496,53 +490,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
   });
 
-  describe("POST /custom-bots/:name/upload-url", () => {
-    it("should generate upload URL successfully", async () => {
-      const mockUploadResponse = {
-        uploadUrl:
-          "https://storage.googleapis.com/bucket/path?signature=abc123",
-        filePath:
-          "gs://test-bucket/user123/integration-test-bot/1.0.0/integration-test-bot_1.0.0_123456.zip",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      };
-
-      storageService.generateSignedUploadUrl.mockResolvedValue(
-        Ok(mockUploadResponse),
-      );
-
-      const response = await request(app.getHttpServer())
-        .post("/custom-bots/integration-test-bot/upload-url")
-        .send({ version: "1.0.0" })
-        .expect(200);
-
-      expect(response.body.uploadUrl).toBe(mockUploadResponse.uploadUrl);
-      expect(response.body.filePath).toBe(mockUploadResponse.filePath);
-      expect(response.body.expiresAt).toBeDefined();
-    });
-
-    it("should return 400 when version is missing", async () => {
-      const response = await request(app.getHttpServer())
-        .post("/custom-bots/integration-test-bot/upload-url")
-        .send({})
-        .expect(400);
-
-      expect(response.body.message).toBe("Version is required");
-    });
-
-    it("should return 400 when GCS service fails", async () => {
-      storageService.generateSignedUploadUrl.mockResolvedValue(
-        Failure("Failed to generate signed URL"),
-      );
-
-      const response = await request(app.getHttpServer())
-        .post("/custom-bots/integration-test-bot/upload-url")
-        .send({ version: "1.0.0" })
-        .expect(400);
-
-      expect(response.body.message).toContain("Failed to generate upload URL");
-    });
-  });
-
+  
   describe("GET /custom-bots/:name", () => {
     it("should get all versions successfully", async () => {
       const mockVersionsData = {
@@ -717,6 +665,19 @@ describe("Custom Bot API Integration Tests", () => {
       repository.isVersionNewer.mockReturnValue(true);
       repository.globalVersionExists.mockResolvedValueOnce(Ok(false));
       repository.createNewGlobalVersion.mockResolvedValueOnce(
+        Ok({
+          id: "e2e-v1.1-id",
+          name: botName,
+          version: "1.1.0",
+          config: updateConfig,
+          status: "pending_review",
+          filePath: "gs://test-bucket/e2e-v1.1.zip",
+          userId: "test-user-123",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      repository.getSpecificGlobalVersion.mockResolvedValueOnce(
         Ok({
           id: "e2e-v1.1-id",
           name: botName,

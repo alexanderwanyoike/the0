@@ -4,8 +4,6 @@ import { Result, Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
 
-// Simple in-memory token storage (in production, use Redis)
-const uploadTokens = new Map<string, string>();
 
 @Injectable()
 export class StorageService {
@@ -176,60 +174,7 @@ export class StorageService {
   }
 
 
-  async validateUploadToken(token: string): Promise<
-    Result<
-      {
-        userId: string;
-        botName: string;
-        version: string;
-      },
-      string
-    >
-  > {
-    try {
-      const key = uploadTokens.get(token);
-      if (!key) {
-        return Failure("Invalid or expired upload token");
-      }
-
-      const [userId, botName, version] = key.split(":");
-      return Ok({ userId, botName, version });
-    } catch (error) {
-      return Failure(`Error validating upload token: ${error.message}`);
-    }
-  }
-
-  async uploadWithToken(
-    token: string,
-    content: Buffer,
-  ): Promise<Result<string, string>> {
-    try {
-      const tokenResult = await this.validateUploadToken(token);
-      if (!tokenResult.success) {
-        return Failure(tokenResult.error);
-      }
-
-      const { userId, botName, version } = tokenResult.data;
-
-      const uploadResult = await this.uploadBotFile(
-        content,
-        version,
-        userId,
-        botName,
-      );
-      if (!uploadResult.success) {
-        return Failure(uploadResult.error);
-      }
-
-      // Clean up token after successful upload
-      uploadTokens.delete(token);
-
-      return Ok(uploadResult.data);
-    } catch (error) {
-      return Failure(`Error uploading with token: ${error.message}`);
-    }
-  }
-
+  
   // Helper method to get object metadata
   async getObjectMetadata(filePath: string): Promise<Result<any, string>> {
     try {
