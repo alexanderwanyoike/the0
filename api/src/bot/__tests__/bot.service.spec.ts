@@ -1,59 +1,59 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { BotService } from '../bot.service';
-import { BotRepository } from '../bot.repository';
-import { Bot } from '../entities/bot.entity';
-import { REQUEST } from '@nestjs/core';
-import { BotValidator } from '../bot.validator';
-import { HttpModule } from '@nestjs/axios';
-import { ConfigModule } from '@nestjs/config';
-import { CustomBotModule } from '@/custom-bot/custom-bot.module';
-import { CustomBotService } from '@/custom-bot/custom-bot.service';
-import { NatsService } from '@/nats/nats.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { BotService } from "../bot.service";
+import { BotRepository } from "../bot.repository";
+import { Bot } from "../entities/bot.entity";
+import { REQUEST } from "@nestjs/core";
+import { BotValidator } from "../bot.validator";
+import { HttpModule } from "@nestjs/axios";
+import { ConfigModule } from "@nestjs/config";
+import { CustomBotModule } from "@/custom-bot/custom-bot.module";
+import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { NatsService } from "@/nats/nats.service";
 // FeatureGateService removed for OSS version
-import { Ok, Failure } from '@/common/result';
+import { Ok, Failure } from "@/common/result";
 
-describe('BotService - Enhanced Tests', () => {
+describe("BotService - Enhanced Tests", () => {
   let service: BotService;
   let repository: BotRepository;
   let validator: BotValidator;
   let mockCustomBotService: CustomBotService;
   // FeatureGateService removed for OSS version
-  const uid = 'test-user-id';
+  const uid = "test-user-id";
 
   const mockCustomBot = {
-    id: 'test-custom-bot',
-    name: 'test-custom-bot',
-    version: '1.0.0',
-    filePath: 'gs://test-bucket/test-custom-bot',
-    userId: 'another-user-id',
-    status: 'approved',
+    id: "test-custom-bot",
+    name: "test-custom-bot",
+    version: "1.0.0",
+    filePath: "gs://test-bucket/test-custom-bot",
+    userId: "another-user-id",
+    status: "approved",
     createdAt: new Date(),
     updatedAt: new Date(),
     config: {
-      name: 'test-custom-bot',
-      type: 'scheduled',
-      runtime: 'python3.11',
-      description: 'A test custom bot',
+      name: "test-custom-bot",
+      type: "scheduled",
+      runtime: "python3.11",
+      description: "A test custom bot",
       entrypoints: {
-        bot: 'bot.py',
-        backtest: 'backtest.py',
+        bot: "bot.py",
+        backtest: "backtest.py",
       },
       schema: {
         bot: {
-          type: 'object',
+          type: "object",
           properties: {
-            foo: { type: 'string' },
-            bar: { type: 'number' },
+            foo: { type: "string" },
+            bar: { type: "number" },
           },
-          required: ['foo', 'bar'],
+          required: ["foo", "bar"],
         },
       },
-      readme: 'This is a test custom bot',
+      readme: "This is a test custom bot",
       metadata: {
-        categories: ['test'],
-        instruments: ['BTC'],
-        exchanges: ['Binance'],
-        tags: ['test', 'bot'],
+        categories: ["test"],
+        instruments: ["BTC"],
+        exchanges: ["Binance"],
+        tags: ["test", "bot"],
       },
     },
     marketplace: {
@@ -80,7 +80,6 @@ describe('BotService - Enhanced Tests', () => {
       getAllGlobalVersions: jest.fn(),
       getAllUserSpecificVersions: jest.fn(),
     } as unknown as CustomBotService;
-
 
     // FeatureGateService removed for OSS version
 
@@ -115,13 +114,13 @@ describe('BotService - Enhanced Tests', () => {
     jest.clearAllMocks();
   });
 
-  describe('create', () => {
+  describe("create", () => {
     const validBotData = {
-      name: 'Test Bot',
+      name: "Test Bot",
       config: {
-        type: 'scheduled/test-custom-bot',
-        version: '1.0.0',
-        foo: 'test',
+        type: "scheduled/test-custom-bot",
+        version: "1.0.0",
+        foo: "test",
         bar: 123,
       },
     };
@@ -133,119 +132,119 @@ describe('BotService - Enhanced Tests', () => {
         data: null,
       });
 
-      jest.spyOn(repository, 'findAll').mockResolvedValue({
+      jest.spyOn(repository, "findAll").mockResolvedValue({
         success: true,
         error: null,
         data: [],
       });
 
-      jest.spyOn(repository, 'create').mockResolvedValue({
+      jest.spyOn(repository, "create").mockResolvedValue({
         success: true,
         error: null,
         data: {
-          id: 'test-id',
+          id: "test-id",
           ...validBotData,
           userId: uid,
-          topic: 'the0-scheduled-custom-bot',
+          topic: "the0-scheduled-custom-bot",
         } as Bot,
       });
     });
 
-    it('should create a bot successfully', async () => {
-      jest.spyOn(repository, 'findOne').mockResolvedValue({
+    it("should create a bot successfully", async () => {
+      jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
         data: {
-          id: 'test-id',
+          id: "test-id",
           ...validBotData,
           userId: uid,
-          topic: 'the0-scheduled-custom-bot',
+          topic: "the0-scheduled-custom-bot",
         } as Bot,
       });
       const result = await service.create(validBotData);
 
       expect(result.success).toBe(true);
-      expect(result.data.id).toBe('test-id');
+      expect(result.data.id).toBe("test-id");
       // FeatureGateService removed for OSS version
       expect(repository.create).toHaveBeenCalledWith({
         ...validBotData,
-        topic: 'the0-scheduled-custom-bot',
+        topic: "the0-scheduled-custom-bot",
         userId: uid,
         customBotId: mockCustomBot.id,
       });
     });
 
-    it('should validate bot type and version format', async () => {
+    it("should validate bot type and version format", async () => {
       const invalidTypeBot = {
         ...validBotData,
-        config: { ...validBotData.config, type: 'invalid-format' },
+        config: { ...validBotData.config, type: "invalid-format" },
       };
 
       const result = await service.create(invalidTypeBot);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Invalid bot type format');
+      expect(result.error).toContain("Invalid bot type format");
     });
 
-    it('should validate semantic version format', async () => {
+    it("should validate semantic version format", async () => {
       const invalidVersionBot = {
         ...validBotData,
-        config: { ...validBotData.config, version: 'invalid-version' },
+        config: { ...validBotData.config, version: "invalid-version" },
       };
 
       const result = await service.create(invalidVersionBot);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Invalid version format');
+      expect(result.error).toContain("Invalid version format");
     });
 
     // Feature gate tests removed for OSS version
 
-    it('should fail when custom bot type not found', async () => {
+    it("should fail when custom bot type not found", async () => {
       mockCustomBotService.getGlobalSpecificVersion = jest
         .fn()
         .mockResolvedValue({
           success: false,
-          error: 'Not found',
+          error: "Not found",
           data: null,
         });
 
       const result = await service.create(validBotData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('not found');
+      expect(result.error).toContain("not found");
     });
 
-    it('should fail when bot config validation fails', async () => {
+    it("should fail when bot config validation fails", async () => {
       validator.validate = jest.fn().mockReturnValue({
         success: false,
-        error: ['Missing required field'],
+        error: ["Missing required field"],
         data: null,
       });
 
       const result = await service.create(validBotData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Missing required field');
+      expect(result.error).toContain("Missing required field");
     });
 
-    describe('deployment authorization', () => {
-      it('should allow deployment for bot owner with approved bot', async () => {
-        jest.spyOn(repository, 'findOne').mockResolvedValue({
+    describe("deployment authorization", () => {
+      it("should allow deployment for bot owner with approved bot", async () => {
+        jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
           data: {
-            id: 'test-id',
+            id: "test-id",
             ...validBotData,
             userId: uid,
-            topic: 'the0-scheduled-custom-bot',
+            topic: "the0-scheduled-custom-bot",
           } as Bot,
         });
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
           .mockResolvedValue({
             success: true,
-            data: { ...mockCustomBot, userId: uid, status: 'approved' },
+            data: { ...mockCustomBot, userId: uid, status: "approved" },
           });
 
         const result = await service.create(validBotData);
@@ -254,29 +253,29 @@ describe('BotService - Enhanced Tests', () => {
         // Owner doesn't need to check hasUserBot
       });
 
-      it('should reject deployment for bot owner with unapproved bot', async () => {
+      it("should reject deployment for bot owner with unapproved bot", async () => {
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
           .mockResolvedValue({
             success: true,
-            data: { ...mockCustomBot, userId: uid, status: 'pending' },
+            data: { ...mockCustomBot, userId: uid, status: "pending" },
           });
 
         const result = await service.create(validBotData);
 
         expect(result.success).toBe(false);
-        expect(result.error).toContain('must be approved');
+        expect(result.error).toContain("must be approved");
       });
 
-      it('should auto-install free bots for non-owners', async () => {
-        jest.spyOn(repository, 'findOne').mockResolvedValue({
+      it("should auto-install free bots for non-owners", async () => {
+        jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
           data: {
-            id: 'test-id',
+            id: "test-id",
             ...validBotData,
             userId: uid,
-            topic: 'the0-scheduled-custom-bot',
+            topic: "the0-scheduled-custom-bot",
           } as Bot,
         });
         const result = await service.create(validBotData);
@@ -284,7 +283,7 @@ describe('BotService - Enhanced Tests', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should allow deployment of all bots in OSS version', async () => {
+      it("should allow deployment of all bots in OSS version", async () => {
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
           .mockResolvedValue({
@@ -293,26 +292,26 @@ describe('BotService - Enhanced Tests', () => {
           });
 
         // Mock successful repository operations - using repository instead of mockRepository
-        jest.spyOn(repository, 'create').mockResolvedValue({
+        jest.spyOn(repository, "create").mockResolvedValue({
           success: true,
-          data: { ...validBotData, id: 'test-id' },
+          data: { ...validBotData, id: "test-id" },
         } as any);
 
-        jest.spyOn(repository, 'findOne').mockResolvedValue({
+        jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
           data: {
-            id: 'test-id',
+            id: "test-id",
             ...validBotData,
             userId: uid,
-            topic: 'the0-scheduled-custom-bot',
+            topic: "the0-scheduled-custom-bot",
           } as Bot,
         });
 
         const result = await service.create(validBotData);
 
         if (!result.success) {
-          console.log('Bot service create failed with error:', result.error);
+          console.log("Bot service create failed with error:", result.error);
         }
         expect(result.success).toBe(true);
         // OSS version allows all bots regardless of price
@@ -320,14 +319,14 @@ describe('BotService - Enhanced Tests', () => {
     });
   });
 
-  describe('findAll', () => {
-    it('should return all user bots', async () => {
+  describe("findAll", () => {
+    it("should return all user bots", async () => {
       const bots = [
-        { id: 'bot1', name: 'Bot 1' },
-        { id: 'bot2', name: 'Bot 2' },
+        { id: "bot1", name: "Bot 1" },
+        { id: "bot2", name: "Bot 2" },
       ] as Bot[];
 
-      jest.spyOn(repository, 'findAll').mockResolvedValue({
+      jest.spyOn(repository, "findAll").mockResolvedValue({
         success: true,
         error: null,
         data: bots,
@@ -340,58 +339,58 @@ describe('BotService - Enhanced Tests', () => {
       expect(repository.findAll).toHaveBeenCalledWith(uid);
     });
 
-    it('should handle repository errors', async () => {
-      jest.spyOn(repository, 'findAll').mockResolvedValue({
+    it("should handle repository errors", async () => {
+      jest.spyOn(repository, "findAll").mockResolvedValue({
         success: false,
-        error: 'Database error',
+        error: "Database error",
         data: null,
       });
 
       const result = await service.findAll();
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Database error');
+      expect(result.error).toBe("Database error");
     });
   });
 
-  describe('findOne', () => {
-    it('should return a specific bot', async () => {
-      const bot = { id: 'test-id', name: 'Test Bot' } as Bot;
+  describe("findOne", () => {
+    it("should return a specific bot", async () => {
+      const bot = { id: "test-id", name: "Test Bot" } as Bot;
 
-      jest.spyOn(repository, 'findOne').mockResolvedValue({
+      jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
         data: bot,
       });
 
-      const result = await service.findOne('test-id');
+      const result = await service.findOne("test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(bot);
-      expect(repository.findOne).toHaveBeenCalledWith(uid, 'test-id');
+      expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
     });
 
-    it('should handle bot not found', async () => {
-      jest.spyOn(repository, 'findOne').mockResolvedValue({
+    it("should handle bot not found", async () => {
+      jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: 'Bot not found',
+        error: "Bot not found",
         data: null,
       });
 
-      const result = await service.findOne('nonexistent-id');
+      const result = await service.findOne("nonexistent-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Bot not found');
+      expect(result.error).toBe("Bot not found");
     });
   });
 
-  describe('update', () => {
+  describe("update", () => {
     const updateData = {
-      name: 'Updated Bot',
+      name: "Updated Bot",
       config: {
-        type: 'scheduled/test-custom-bot',
-        version: '1.0.0',
-        foo: 'updated',
+        type: "scheduled/test-custom-bot",
+        version: "1.0.0",
+        foo: "updated",
         bar: 456,
       },
     };
@@ -404,93 +403,93 @@ describe('BotService - Enhanced Tests', () => {
       });
     });
 
-    it('should update a bot successfully', async () => {
-      const updatedBot = { id: 'test-id', ...updateData } as Bot;
+    it("should update a bot successfully", async () => {
+      const updatedBot = { id: "test-id", ...updateData } as Bot;
 
-      jest.spyOn(repository, 'update').mockResolvedValue({
+      jest.spyOn(repository, "update").mockResolvedValue({
         success: true,
         error: null,
         data: updatedBot,
       });
 
-      const result = await service.update('test-id', updateData);
+      const result = await service.update("test-id", updateData);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(updatedBot);
       expect(repository.update).toHaveBeenCalledWith(
         uid,
-        'test-id',
+        "test-id",
         updateData,
       );
     });
 
-    it('should validate update data', async () => {
+    it("should validate update data", async () => {
       validator.validate = jest.fn().mockReturnValue({
         success: false,
-        error: ['Invalid configuration'],
+        error: ["Invalid configuration"],
         data: null,
       });
 
-      const result = await service.update('test-id', updateData);
+      const result = await service.update("test-id", updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Invalid configuration');
+      expect(result.error).toContain("Invalid configuration");
     });
 
-    it('should handle repository update failures', async () => {
-      jest.spyOn(repository, 'update').mockResolvedValue({
+    it("should handle repository update failures", async () => {
+      jest.spyOn(repository, "update").mockResolvedValue({
         success: false,
-        error: 'Update failed',
+        error: "Update failed",
         data: null,
       });
 
-      const result = await service.update('test-id', updateData);
+      const result = await service.update("test-id", updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Update failed');
+      expect(result.error).toBe("Update failed");
     });
   });
 
-  describe('remove', () => {
-    it('should remove a bot successfully', async () => {
+  describe("remove", () => {
+    it("should remove a bot successfully", async () => {
       const mockBot = {
-        id: 'test-id',
-        name: 'Test Bot',
-        config: { type: 'scheduled/test-bot', version: '1.0.0' },
-        topic: 'the0-scheduled-custom-bot',
+        id: "test-id",
+        name: "Test Bot",
+        config: { type: "scheduled/test-bot", version: "1.0.0" },
+        topic: "the0-scheduled-custom-bot",
         userId: uid,
       } as Bot;
 
-      jest.spyOn(repository, 'findOne').mockResolvedValue({
+      jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
         data: mockBot,
       });
 
-      jest.spyOn(repository, 'remove').mockResolvedValue({
+      jest.spyOn(repository, "remove").mockResolvedValue({
         success: true,
         error: null,
         data: undefined,
       });
 
-      const result = await service.remove('test-id');
+      const result = await service.remove("test-id");
 
       expect(result.success).toBe(true);
-      expect(repository.findOne).toHaveBeenCalledWith(uid, 'test-id');
-      expect(repository.remove).toHaveBeenCalledWith(uid, 'test-id');
+      expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
+      expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
     });
 
-    it('should handle removal failures', async () => {
-      jest.spyOn(repository, 'remove').mockResolvedValue({
+    it("should handle removal failures", async () => {
+      jest.spyOn(repository, "remove").mockResolvedValue({
         success: false,
-        error: 'Bot not found',
+        error: "Bot not found",
         data: null,
       });
 
-      const result = await service.remove('test-id');
+      const result = await service.remove("test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Bot not found');
+      expect(result.error).toBe("Bot not found");
     });
   });
 });

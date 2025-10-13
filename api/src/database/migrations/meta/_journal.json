@@ -15,6 +15,13 @@
       "when": 1753497594306,
       "tag": "0001_breezy_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1760273667702,
+      "tag": "0002_petite_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

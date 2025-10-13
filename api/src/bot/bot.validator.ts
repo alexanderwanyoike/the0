@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { Result, Failure, Ok } from '@/common/result';
-import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
-import { isValidCron } from 'cron-validator';
-import { CustomBot } from '@/custom-bot/custom-bot.types';
-import { BOT_TYPE_PATTERN } from '@/bot/bot.constants';
+import { Injectable } from "@nestjs/common";
+import { Result, Failure, Ok } from "@/common/result";
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
+import { isValidCron } from "cron-validator";
+import { CustomBot } from "@/custom-bot/custom-bot.types";
+import { BOT_TYPE_PATTERN } from "@/bot/bot.constants";
 
 @Injectable()
 export class BotValidator {
@@ -16,21 +16,21 @@ export class BotValidator {
     const { type } = config;
 
     if (!type) {
-      return Failure<boolean, string[]>(['No type provided']);
+      return Failure<boolean, string[]>(["No type provided"]);
     }
 
     if (BOT_TYPE_PATTERN.test(type) === false) {
       return Failure<boolean, string[]>([
-        'Invalid bot type format. Expected format: type/name',
+        "Invalid bot type format. Expected format: type/name",
       ]);
     }
 
-    const [botType, _] = type.split('/');
+    const [botType, _] = type.split("/");
 
     //Check if it has a schedule
-    if (botType === 'scheduled') {
+    if (botType === "scheduled") {
       if (!config.schedule) {
-        return Failure<boolean, string[]>(['No schedule provided']);
+        return Failure<boolean, string[]>(["No schedule provided"]);
       }
 
       if (!isValidCron(config.schedule)) {
@@ -89,7 +89,7 @@ export class BotValidator {
   }
 
   private filterObjectProperties(obj: any, schema: any): any {
-    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
       return obj;
     }
 
@@ -99,9 +99,9 @@ export class BotValidator {
     for (const key of Object.keys(schemaProperties)) {
       if (obj[key] !== undefined) {
         const propertySchema = schemaProperties[key];
-        
+
         // If property is an object and has its own schema, recursively filter
-        if (propertySchema.type === 'object' && propertySchema.properties) {
+        if (propertySchema.type === "object" && propertySchema.properties) {
           filtered[key] = this.filterObjectProperties(obj[key], propertySchema);
         } else {
           filtered[key] = obj[key];

@@ -1,100 +1,100 @@
-import Ajv from 'ajv';
+import Ajv from "ajv";
 
 const ajv = new Ajv();
 
 export const customBotConfigSchema = {
-  type: 'object',
+  type: "object",
   required: [
-    'name',
-    'version',
-    'entrypoints',
-    'schema',
-    'readme',
-    'type',
-    'runtime',
+    "name",
+    "version",
+    "entrypoints",
+    "schema",
+    "readme",
+    "type",
+    "runtime",
   ],
   properties: {
     name: {
-      type: 'string',
-      pattern: '^[a-z0-9-]+$',
+      type: "string",
+      pattern: "^[a-z0-9-]+$",
       minLength: 3,
       maxLength: 50,
     },
     description: {
-      type: 'string',
+      type: "string",
       maxLength: 500,
     },
     version: {
-      type: 'string',
-      pattern: '^\\d+\\.\\d+\\.\\d+$',
+      type: "string",
+      pattern: "^\\d+\\.\\d+\\.\\d+$",
     },
     runtime: {
-      type: 'string',
-      enum: ['python3.11', 'nodejs20'],
+      type: "string",
+      enum: ["python3.11", "nodejs20"],
     },
     author: {
-      type: 'string',
+      type: "string",
       maxLength: 100,
     },
     type: {
-      type: 'string',
-      enum: ['scheduled', 'realtime', 'event'],
-      default: 'scheduled',
+      type: "string",
+      enum: ["scheduled", "realtime", "event"],
+      default: "scheduled",
     },
     entrypoints: {
-      type: 'object',
-      required: ['bot'],
+      type: "object",
+      required: ["bot"],
       properties: {
         bot: {
-          type: 'string',
-          pattern: '\\.(py|js)$',
+          type: "string",
+          pattern: "\\.(py|js)$",
         },
         backtest: {
-          type: 'string',
-          pattern: '\\.(py|js)$',
+          type: "string",
+          pattern: "\\.(py|js)$",
         },
       },
       additionalProperties: false,
     },
     schema: {
-      type: 'object',
-      required: ['bot'],
+      type: "object",
+      required: ["bot"],
       properties: {
         backtest: {
-          type: 'object',
+          type: "object",
         },
         bot: {
-          type: 'object',
+          type: "object",
         },
       },
       additionalProperties: false,
     },
     readme: {
-      type: 'string',
+      type: "string",
       minLength: 50,
       maxLength: 10000,
     },
     metadata: {
-      type: 'object',
+      type: "object",
       properties: {
         categories: {
-          type: 'array',
-          items: { type: 'string' },
+          type: "array",
+          items: { type: "string" },
           maxItems: 10,
         },
         instruments: {
-          type: 'array',
-          items: { type: 'string' },
+          type: "array",
+          items: { type: "string" },
           maxItems: 20,
         },
         exchanges: {
-          type: 'array',
-          items: { type: 'string' },
+          type: "array",
+          items: { type: "string" },
           maxItems: 20,
         },
         tags: {
-          type: 'array',
-          items: { type: 'string' },
+          type: "array",
+          items: { type: "string" },
           maxItems: 20,
         },
       },
@@ -105,12 +105,12 @@ export const customBotConfigSchema = {
   allOf: [
     {
       if: {
-        properties: { type: { const: 'scheduled' } },
-        required: ['type'],
+        properties: { type: { const: "scheduled" } },
+        required: ["type"],
       },
       then: {
         properties: {
-          runtime: { enum: ['python3.11'] },
+          runtime: { enum: ["python3.11"] },
         },
       },
     },
@@ -118,23 +118,23 @@ export const customBotConfigSchema = {
       if: {
         properties: {
           entrypoints: {
-            type: 'object',
+            type: "object",
             properties: {
-              backtest: { type: 'string' },
+              backtest: { type: "string" },
             },
-            required: ['backtest'],
+            required: ["backtest"],
           },
         },
-        required: ['entrypoints'],
+        required: ["entrypoints"],
       },
       then: {
         properties: {
           schema: {
-            type: 'object',
-            required: ['backtest', 'bot'],
+            type: "object",
+            required: ["backtest", "bot"],
           },
         },
-        required: ['schema'],
+        required: ["schema"],
       },
     },
   ],

@@ -1,15 +1,15 @@
-export type BotType = 'scheduled' | 'realtime' | 'event';
+export type BotType = "scheduled" | "realtime" | "event";
 
-export const BOT_TYPES: BotType[] = ['scheduled', 'realtime', 'event'];
+export const BOT_TYPES: BotType[] = ["scheduled", "realtime", "event"];
 
 export type CustomBotStatus =
-  | 'approved'
-  | 'declined'
-  | 'awaiting_human_review'
-  | 'pending_review'
-  | 'published';
+  | "approved"
+  | "declined"
+  | "awaiting_human_review"
+  | "pending_review"
+  | "published";
 
-export type Runtime = 'python3.11' | 'nodejs20';
+export type Runtime = "python3.11" | "nodejs20";
 
 export interface CustomBotConfig {
   name: string;
@@ -45,7 +45,7 @@ export interface CustomBot {
   filePath: string;
   userId: string;
   status: CustomBotStatus;
-  review?: any; // Security analysis results from 0vers33r  
+  review?: any; // Security analysis results from 0vers33r
   marketplace?: MarketplaceMetadata | null;
   createdAt: Date;
   updatedAt: Date;

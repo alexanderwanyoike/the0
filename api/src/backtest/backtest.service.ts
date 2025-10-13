@@ -1,17 +1,17 @@
-import { Inject, Injectable, Scope } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as Minio from 'minio';
-import { CreateBacktestDto } from './dto/create-backtest.dto';
-import { BacktestRepository } from './backtest.repository';
-import { REQUEST } from '@nestjs/core';
-import { Result, Failure, Ok } from '../common';
-import { Backtest } from './entities/backtest.entity';
-import { BacktestValidator } from './backtest.validator';
-import { CustomBotService } from '@/custom-bot/custom-bot.service';
-import { CustomBot } from '@/custom-bot/custom-bot.types';
-import { NatsService } from '@/nats/nats.service';
-import { BOT_TYPE_PATTERN } from '@/bot/bot.constants';
-import { BACKTEST_TOPICS } from './backtest.constants';
+import { Inject, Injectable, Scope } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import * as Minio from "minio";
+import { CreateBacktestDto } from "./dto/create-backtest.dto";
+import { BacktestRepository } from "./backtest.repository";
+import { REQUEST } from "@nestjs/core";
+import { Result, Failure, Ok } from "../common";
+import { Backtest } from "./entities/backtest.entity";
+import { BacktestValidator } from "./backtest.validator";
+import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { CustomBot } from "@/custom-bot/custom-bot.types";
+import { NatsService } from "@/nats/nats.service";
+import { BOT_TYPE_PATTERN } from "@/bot/bot.constants";
+import { BACKTEST_TOPICS } from "./backtest.constants";
 // FeatureGateService removed for OSS version
 
 @Injectable({ scope: Scope.REQUEST })
@@ -28,13 +28,16 @@ export class BacktestService {
     private readonly natsService: NatsService,
   ) {
     this.minioClient = new Minio.Client({
-      endPoint: this.configService.get<string>('MINIO_ENDPOINT') || 'localhost',
-      port: parseInt(this.configService.get<string>('MINIO_PORT') || '9000'),
-      useSSL: this.configService.get<string>('MINIO_USE_SSL') === 'true',
-      accessKey: this.configService.get<string>('MINIO_ACCESS_KEY') || 'minioadmin',
-      secretKey: this.configService.get<string>('MINIO_SECRET_KEY') || 'minioadmin',
+      endPoint: this.configService.get<string>("MINIO_ENDPOINT") || "localhost",
+      port: parseInt(this.configService.get<string>("MINIO_PORT") || "9000"),
+      useSSL: this.configService.get<string>("MINIO_USE_SSL") === "true",
+      accessKey:
+        this.configService.get<string>("MINIO_ACCESS_KEY") || "minioadmin",
+      secretKey:
+        this.configService.get<string>("MINIO_SECRET_KEY") || "minioadmin",
     });
-    this.backtestBucket = this.configService.get<string>('BACKTEST_BUCKET') || 'backtests';
+    this.backtestBucket =
+      this.configService.get<string>("BACKTEST_BUCKET") || "backtests";
   }
 
   async create(
@@ -57,11 +60,11 @@ export class BacktestService {
     // Create backtest with customBotId
     const result = await this.backtestRepository.create({
       ...createBacktestDto,
-      status: 'pending',
+      status: "pending",
       userId: uid,
       customBotId: customBot.id,
     });
-    
+
     if (result.success) {
       // Create backtest payload for the0-runtime
       const backtestPayload = {
@@ -74,15 +77,15 @@ export class BacktestService {
           Config: customBot.config,
           CreatedAt: customBot.createdAt,
           UpdatedAt: customBot.updatedAt,
-          FilePath: customBot.filePath || '',
+          FilePath: customBot.filePath || "",
           Version: customBot.version,
         },
       };
-      
+
       // Publish backtest creation event to the0-runtime
       await this.natsService.publish(BACKTEST_TOPICS.CREATED, backtestPayload);
     }
-    
+
     return result;
   }
 
@@ -103,19 +106,25 @@ export class BacktestService {
 
     // Load analysis for completed and failed backtests (failed backtests may contain error info)
     console.log(`🔍 Backtest ${id} status: ${backtest.status}`);
-    if (backtest.status === 'completed' || backtest.status === 'failed') {
+    if (backtest.status === "completed" || backtest.status === "failed") {
       console.log(`📥 Loading analysis for ${backtest.status} backtest: ${id}`);
       const analysisResult = await this.loadAnalysisFromGCS(id);
-      console.log(`📊 Analysis load result for ${id}: success=${analysisResult.success}, data=${analysisResult.success ? 'present' : 'none'}`);
+      console.log(
+        `📊 Analysis load result for ${id}: success=${analysisResult.success}, data=${analysisResult.success ? "present" : "none"}`,
+      );
       if (analysisResult.success) {
         backtest.analysis = analysisResult.data;
         console.log(`✅ Analysis attached to backtest ${id}`);
       } else {
-        console.log(`❌ Analysis load failed for ${id}: ${analysisResult.error}`);
+        console.log(
+          `❌ Analysis load failed for ${id}: ${analysisResult.error}`,
+        );
       }
       // Continue even if analysis loading fails - just omit the field
     } else {
-      console.log(`⏸️ Skipping analysis load for ${id} (status: ${backtest.status})`);
+      console.log(
+        `⏸️ Skipping analysis load for ${id} (status: ${backtest.status})`,
+      );
     }
 
     return Ok(backtest);
@@ -134,23 +143,26 @@ export class BacktestService {
       backtestId,
     );
     if (!backtestResult.success) {
-      return Failure('Backtest not found or access denied');
+      return Failure("Backtest not found or access denied");
     }
 
     try {
       const objectName = `${backtestId}/logs.txt`;
-      const stream = await this.minioClient.getObject(this.backtestBucket, objectName);
-      
-      let content = '';
-      stream.on('data', (chunk) => {
+      const stream = await this.minioClient.getObject(
+        this.backtestBucket,
+        objectName,
+      );
+
+      let content = "";
+      stream.on("data", (chunk) => {
         content += chunk.toString();
       });
-      
+
       return new Promise((resolve) => {
-        stream.on('end', () => {
+        stream.on("end", () => {
           resolve(Ok(content));
         });
-        stream.on('error', (error) => {
+        stream.on("error", (error) => {
           resolve(Failure(`Failed to load logs: ${error.message}`));
         });
       });
@@ -165,29 +177,44 @@ export class BacktestService {
     console.log(`🔍 Loading analysis for backtest: ${backtestId}`);
     try {
       const objectName = `${backtestId}/analysis.json`;
-      console.log(`📁 Fetching object: ${objectName} from bucket: ${this.backtestBucket}`);
-      const stream = await this.minioClient.getObject(this.backtestBucket, objectName);
-      
-      let content = '';
-      stream.on('data', (chunk) => {
+      console.log(
+        `📁 Fetching object: ${objectName} from bucket: ${this.backtestBucket}`,
+      );
+      const stream = await this.minioClient.getObject(
+        this.backtestBucket,
+        objectName,
+      );
+
+      let content = "";
+      stream.on("data", (chunk) => {
         content += chunk.toString();
       });
-      
+
       return new Promise((resolve) => {
-        stream.on('end', () => {
-          console.log(`✅ Successfully loaded analysis for ${backtestId}, content length: ${content.length}`);
+        stream.on("end", () => {
+          console.log(
+            `✅ Successfully loaded analysis for ${backtestId}, content length: ${content.length}`,
+          );
           try {
             const analysisData = JSON.parse(content);
-            console.log(`📊 Analysis parsed successfully, has keys: ${Object.keys(analysisData)}`);
+            console.log(
+              `📊 Analysis parsed successfully, has keys: ${Object.keys(analysisData)}`,
+            );
             resolve(Ok(analysisData));
           } catch (parseError) {
-            console.log(`❌ Failed to parse analysis JSON for ${backtestId}: ${parseError.message}`);
-            resolve(Failure(`Failed to parse analysis JSON: ${parseError.message}`));
+            console.log(
+              `❌ Failed to parse analysis JSON for ${backtestId}: ${parseError.message}`,
+            );
+            resolve(
+              Failure(`Failed to parse analysis JSON: ${parseError.message}`),
+            );
           }
         });
-        stream.on('error', (error) => {
-          console.log(`❌ Stream error loading analysis for ${backtestId}: ${error.message}, code: ${(error as any).code}`);
-          if ((error as any).code === 'NoSuchKey') {
+        stream.on("error", (error) => {
+          console.log(
+            `❌ Stream error loading analysis for ${backtestId}: ${error.message}, code: ${(error as any).code}`,
+          );
+          if ((error as any).code === "NoSuchKey") {
             resolve(Ok(null)); // Return null if file doesn't exist
           } else {
             resolve(Failure(`Failed to load analysis: ${error.message}`));
@@ -195,8 +222,10 @@ export class BacktestService {
         });
       });
     } catch (error: any) {
-      console.log(`❌ Exception loading analysis for ${backtestId}: ${error.message}, code: ${error.code}`);
-      if (error.code === 'NoSuchKey') {
+      console.log(
+        `❌ Exception loading analysis for ${backtestId}: ${error.message}, code: ${error.code}`,
+      );
+      if (error.code === "NoSuchKey") {
         return Ok(null); // Return null if file doesn't exist
       }
       return Failure(`Failed to load analysis: ${error.message}`);
@@ -210,22 +239,22 @@ export class BacktestService {
     const { type, version } = config;
 
     if (!type) {
-      return Failure<CustomBot, string>('Bot type is required');
+      return Failure<CustomBot, string>("Bot type is required");
     }
 
     if (!version) {
-      return Failure<CustomBot, string>('Bot version is required');
+      return Failure<CustomBot, string>("Bot version is required");
     }
 
     // Check that type is in the correct format
     if (!BOT_TYPE_PATTERN.test(type)) {
       return Failure<CustomBot, string>(
-        'Invalid bot type format. Expected format: type/name',
+        "Invalid bot type format. Expected format: type/name",
       );
     }
 
     // Extract vendor, type, and name from the bot type
-    const [, name] = type.split('/');
+    const [, name] = type.split("/");
 
     // Get custom bot
     const customBotResult =
@@ -241,13 +270,13 @@ export class BacktestService {
     // Check if bot has backtest entrypoint and schema
     if (!customBot.config.entrypoints.backtest) {
       return Failure<CustomBot, string>(
-        'Bot does not support backtesting: missing backtest entrypoint',
+        "Bot does not support backtesting: missing backtest entrypoint",
       );
     }
 
     if (!customBot.config.schema.backtest) {
       return Failure<CustomBot, string>(
-        'Bot does not support backtesting: missing backtest schema',
+        "Bot does not support backtesting: missing backtest schema",
       );
     }
 
@@ -264,7 +293,7 @@ export class BacktestService {
     );
     if (!validationResult.success) {
       return Failure<CustomBot, string>(
-        `Validation failed: ${validationResult.error.join(', ')}`,
+        `Validation failed: ${validationResult.error.join(", ")}`,
       );
     }
 
@@ -276,13 +305,13 @@ export class BacktestService {
     customBot: CustomBot,
   ): Promise<Result<boolean, string>> {
     // Rule 1: Owner can backtest approved bots
-    if (customBot.userId === userId && customBot.status === 'approved') {
+    if (customBot.userId === userId && customBot.status === "approved") {
       return Ok(true);
     }
 
     // Rule 2: Anyone can backtest published bots
     if (
-      customBot.status === 'published' &&
+      customBot.status === "published" &&
       customBot.marketplace?.isPublished
     ) {
       return Ok(true);
@@ -290,7 +319,7 @@ export class BacktestService {
 
     // Rule 3: Reject all other cases
     return Failure<boolean, string>(
-      'Insufficient permissions: Can only backtest published bots or your own approved bots',
+      "Insufficient permissions: Can only backtest published bots or your own approved bots",
     );
   }
 }

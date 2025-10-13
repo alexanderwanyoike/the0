@@ -1,44 +1,44 @@
-import { BacktestService } from '../backtest.service';
-import { BacktestRepository } from '../backtest.repository';
-import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
-import { Backtest } from '../entities/backtest.entity';
-import { REQUEST } from '@nestjs/core';
-import { BacktestValidator } from '../backtest.validator';
-import { CustomBotService } from '@/custom-bot/custom-bot.service';
-import { NatsService } from '@/nats/nats.service';
-import { Ok, Failure } from '@/common';
+import { BacktestService } from "../backtest.service";
+import { BacktestRepository } from "../backtest.repository";
+import { Test, TestingModule } from "@nestjs/testing";
+import { ConfigService } from "@nestjs/config";
+import { Backtest } from "../entities/backtest.entity";
+import { REQUEST } from "@nestjs/core";
+import { BacktestValidator } from "../backtest.validator";
+import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { NatsService } from "@/nats/nats.service";
+import { Ok, Failure } from "@/common";
 
-describe('BacktestService', () => {
+describe("BacktestService", () => {
   let service: BacktestService;
   let repository: BacktestRepository;
   let backtestValidator: BacktestValidator;
   let customBotService: CustomBotService;
   let natsService: NatsService;
-  const uid = 'test-user-id';
+  const uid = "test-user-id";
 
   const mockCustomBot = {
-    id: 'custom-bot-id',
-    name: 'test-bot',
-    version: '1.0.0',
-    userId: 'test-user-id', // Make the test user the owner
-    status: 'approved',
+    id: "custom-bot-id",
+    name: "test-bot",
+    version: "1.0.0",
+    userId: "test-user-id", // Make the test user the owner
+    status: "approved",
     marketplace: { isPublished: true },
     config: {
       entrypoints: {
-        bot: 'main.py',
-        backtest: 'backtest.py',
+        bot: "main.py",
+        backtest: "backtest.py",
       },
       schema: {
         bot: {
-          type: 'object',
+          type: "object",
           properties: {},
         },
         backtest: {
-          type: 'object',
+          type: "object",
           properties: {
-            type: { type: 'string' },
-            version: { type: 'string' },
+            type: { type: "string" },
+            version: { type: "string" },
           },
         },
       },
@@ -73,7 +73,7 @@ describe('BacktestService', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockReturnValue('test-bucket'),
+            get: jest.fn().mockReturnValue("test-bucket"),
           },
         },
         {
@@ -95,12 +95,12 @@ describe('BacktestService', () => {
     natsService = module.get<NatsService>(NatsService);
   });
 
-  it('should be able to create a backtest', async () => {
+  it("should be able to create a backtest", async () => {
     const backtest = {
-      name: 'Test backtest',
+      name: "Test backtest",
       config: {
-        type: 'scheduled/test-bot',
-        version: '1.0.0',
+        type: "scheduled/test-bot",
+        version: "1.0.0",
       },
     } as Backtest;
 
@@ -117,7 +117,7 @@ describe('BacktestService', () => {
       success: true,
       error: null,
       data: {
-        id: 'test-id',
+        id: "test-id",
         ...backtest,
         customBotId: mockCustomBot.id,
       },
@@ -128,7 +128,7 @@ describe('BacktestService', () => {
       success: true,
       error: null,
       data: {
-        id: 'test-id',
+        id: "test-id",
         ...backtest,
         customBotId: mockCustomBot.id,
       },
@@ -136,18 +136,18 @@ describe('BacktestService', () => {
     expect(repository.create).toHaveBeenCalledWith({
       ...backtest,
       userId: uid,
-      status: 'pending',
+      status: "pending",
       customBotId: mockCustomBot.id,
     });
   });
 
-  it('should be able to get all backtests', async () => {
+  it("should be able to get all backtests", async () => {
     const backtests = [
       {
-        id: 'test-id',
-        name: 'Test backtest',
+        id: "test-id",
+        name: "Test backtest",
         config: {
-          type: 'alpaca/sma',
+          type: "alpaca/sma",
         },
       },
     ];
@@ -167,12 +167,12 @@ describe('BacktestService', () => {
     expect(repository.findAll).toHaveBeenCalledWith(uid);
   });
 
-  it('should be able to get a backtest by id', async () => {
+  it("should be able to get a backtest by id", async () => {
     const backtest = {
-      id: 'test-id',
-      name: 'Test backtest',
+      id: "test-id",
+      name: "Test backtest",
       config: {
-        type: 'alpaca/sma',
+        type: "alpaca/sma",
       },
     } as Backtest;
 
@@ -182,39 +182,38 @@ describe('BacktestService', () => {
       data: backtest,
     });
 
-    const result = await service.findOne('test-id');
+    const result = await service.findOne("test-id");
     expect(result).toEqual({
       success: true,
       error: null,
       data: backtest,
     });
-    expect(repository.findOne).toHaveBeenCalledWith(uid, 'test-id');
+    expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
   });
 
-  it('should be able to remove a backtest', async () => {
+  it("should be able to remove a backtest", async () => {
     repository.remove = jest.fn().mockReturnValue({
       success: true,
       error: null,
       data: null,
     });
 
-    const result = await service.remove('test-id');
+    const result = await service.remove("test-id");
     expect(result).toEqual({
       success: true,
       error: null,
       data: null,
     });
-    expect(repository.remove).toHaveBeenCalledWith(uid, 'test-id');
+    expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
   });
 
-
-  describe('Bot Validation Tests', () => {
-    it('should fail when bot has no backtest entrypoint', async () => {
+  describe("Bot Validation Tests", () => {
+    it("should fail when bot has no backtest entrypoint", async () => {
       const createBacktestDto = {
-        name: 'Test backtest',
+        name: "Test backtest",
         config: {
-          type: 'custom/test-bot',
-          version: '1.0.0',
+          type: "custom/test-bot",
+          version: "1.0.0",
         },
       };
 
@@ -223,7 +222,7 @@ describe('BacktestService', () => {
         config: {
           ...mockCustomBot.config,
           entrypoints: {
-            bot: 'main.py',
+            bot: "main.py",
             // Missing backtest entrypoint
           },
         },
@@ -237,16 +236,16 @@ describe('BacktestService', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        'Bot does not support backtesting: missing backtest entrypoint',
+        "Bot does not support backtesting: missing backtest entrypoint",
       );
     });
 
-    it('should fail when bot has no backtest schema', async () => {
+    it("should fail when bot has no backtest schema", async () => {
       const createBacktestDto = {
-        name: 'Test backtest',
+        name: "Test backtest",
         config: {
-          type: 'custom/test-bot',
-          version: '1.0.0',
+          type: "custom/test-bot",
+          version: "1.0.0",
         },
       };
 
@@ -255,8 +254,8 @@ describe('BacktestService', () => {
         config: {
           ...mockCustomBot.config,
           entrypoints: {
-            bot: 'main.py',
-            backtest: 'backtest.py',
+            bot: "main.py",
+            backtest: "backtest.py",
           },
           schema: {
             bot: {},
@@ -273,16 +272,16 @@ describe('BacktestService', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        'Bot does not support backtesting: missing backtest schema',
+        "Bot does not support backtesting: missing backtest schema",
       );
     });
 
-    it('should fail when bot has neither backtest entrypoint nor schema', async () => {
+    it("should fail when bot has neither backtest entrypoint nor schema", async () => {
       const createBacktestDto = {
-        name: 'Test backtest',
+        name: "Test backtest",
         config: {
-          type: 'custom/test-bot',
-          version: '1.0.0',
+          type: "custom/test-bot",
+          version: "1.0.0",
         },
       };
 
@@ -291,7 +290,7 @@ describe('BacktestService', () => {
         config: {
           ...mockCustomBot.config,
           entrypoints: {
-            bot: 'main.py',
+            bot: "main.py",
             // No backtest entrypoint
           },
           schema: {
@@ -309,7 +308,7 @@ describe('BacktestService', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        'Bot does not support backtesting: missing backtest entrypoint',
+        "Bot does not support backtesting: missing backtest entrypoint",
       );
     });
   });

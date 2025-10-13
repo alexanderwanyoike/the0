@@ -9,14 +9,14 @@ import {
   HttpException,
   UseGuards,
   Request,
-} from '@nestjs/common';
-import { ApiKeyService } from '@/api-key/api-key.service';
-import { CreateApiKeyDto } from '@/api-key/dto/create-api-key.dto';
-import { AuthGuard } from '@nestjs/passport';
-import { ApiKeyCreatedResponseDto } from '@/api-key/dto/api-key-created-response.dto';
-import { ApiKeyResponseDto } from '@/api-key/dto/api-key-response.dto'; // Assuming you have JWT auth
+} from "@nestjs/common";
+import { ApiKeyService } from "@/api-key/api-key.service";
+import { CreateApiKeyDto } from "@/api-key/dto/create-api-key.dto";
+import { AuthGuard } from "@nestjs/passport";
+import { ApiKeyCreatedResponseDto } from "@/api-key/dto/api-key-created-response.dto";
+import { ApiKeyResponseDto } from "@/api-key/dto/api-key-response.dto"; // Assuming you have JWT auth
 
-@Controller('api-keys')
+@Controller("api-keys")
 @UseGuards(AuthGuard())
 export class ApiKeyController {
   constructor(private readonly apiKeyService: ApiKeyService) {}
@@ -42,7 +42,7 @@ export class ApiKeyController {
         {
           statusCode: HttpStatus.BAD_REQUEST,
           message: result.error,
-          error: 'Bad Request',
+          error: "Bad Request",
         },
         HttpStatus.BAD_REQUEST,
       );
@@ -57,15 +57,18 @@ export class ApiKeyController {
    */
   @Get()
   async getApiKeys(@Request() req: any): Promise<ApiKeyResponseDto[]> {
-    console.log('🔑 API Key Controller GET /api-keys called');
-    console.log('🔑 Auth header:', req.headers.authorization ? 'Present' : 'Missing');
-    console.log('🔑 req.user:', JSON.stringify(req.user, null, 2));
-    
+    console.log("🔑 API Key Controller GET /api-keys called");
+    console.log(
+      "🔑 Auth header:",
+      req.headers.authorization ? "Present" : "Missing",
+    );
+    console.log("🔑 req.user:", JSON.stringify(req.user, null, 2));
+
     if (!req.user) {
-      console.log('❌ No user found in request - authentication failed');
-      throw new Error('Authentication required');
+      console.log("❌ No user found in request - authentication failed");
+      throw new Error("Authentication required");
     }
-    
+
     const userId = req.user.uid;
 
     const result = await this.apiKeyService.getUserApiKeys(userId);
@@ -75,7 +78,7 @@ export class ApiKeyController {
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
           message: result.error,
-          error: 'Internal Server Error',
+          error: "Internal Server Error",
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
@@ -88,10 +91,10 @@ export class ApiKeyController {
    * Get a specific API key by ID
    * GET /api-keys/:id
    */
-  @Get(':id')
+  @Get(":id")
   async getApiKeyById(
     @Request() req: any,
-    @Param('id') keyId: string,
+    @Param("id") keyId: string,
   ): Promise<ApiKeyResponseDto> {
     const userId = req.user.uid;
 
@@ -99,7 +102,7 @@ export class ApiKeyController {
 
     if (!result.success) {
       const status =
-        result.error === 'Not found'
+        result.error === "Not found"
           ? HttpStatus.NOT_FOUND
           : HttpStatus.INTERNAL_SERVER_ERROR;
       throw new HttpException(
@@ -108,8 +111,8 @@ export class ApiKeyController {
           message: result.error,
           error:
             status === HttpStatus.NOT_FOUND
-              ? 'Not Found'
-              : 'Internal Server Error',
+              ? "Not Found"
+              : "Internal Server Error",
         },
         status,
       );
@@ -122,21 +125,21 @@ export class ApiKeyController {
    * Delete (deactivate) an API key
    * DELETE /api-keys/:id
    */
-  @Delete(':id')
+  @Delete(":id")
   async deleteApiKey(
     @Request() req: any,
-    @Param('id') keyId: string,
+    @Param("id") keyId: string,
   ): Promise<{ message: string }> {
-    console.log('🔑 DELETE /api-keys/:id endpoint called with keyId:', keyId);
-    console.log('🔑 User ID from request:', req.user.uid);
-    
+    console.log("🔑 DELETE /api-keys/:id endpoint called with keyId:", keyId);
+    console.log("🔑 User ID from request:", req.user.uid);
+
     const userId = req.user.uid;
 
     const result = await this.apiKeyService.deleteApiKey(userId, keyId);
 
     if (!result.success) {
       const status =
-        result.error === 'API key not found'
+        result.error === "API key not found"
           ? HttpStatus.NOT_FOUND
           : HttpStatus.INTERNAL_SERVER_ERROR;
       throw new HttpException(
@@ -145,21 +148,21 @@ export class ApiKeyController {
           message: result.error,
           error:
             status === HttpStatus.NOT_FOUND
-              ? 'Not Found'
-              : 'Internal Server Error',
+              ? "Not Found"
+              : "Internal Server Error",
         },
         status,
       );
     }
 
-    return { message: 'API key deleted successfully' };
+    return { message: "API key deleted successfully" };
   }
 
   /**
    * Get API key statistics
    * GET /api-keys/stats
    */
-  @Get('stats/summary')
+  @Get("stats/summary")
   async getApiKeyStats(
     @Request() req: any,
   ): Promise<{ total: number; active: number }> {
@@ -172,7 +175,7 @@ export class ApiKeyController {
         {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
           message: result.error,
-          error: 'Internal Server Error',
+          error: "Internal Server Error",
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );

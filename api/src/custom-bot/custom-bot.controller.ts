@@ -12,25 +12,22 @@ import {
   HttpCode,
   UseGuards,
   Patch,
-} from '@nestjs/common';
-import { Request } from 'express';
-import { CustomBotService } from './custom-bot.service';
-import { CustomBotConfig } from './custom-bot.types';
-import { AuthCombinedGuard } from '@/auth/auth-combined.guard';
-import { StorageService } from './storage.service';
+  UseInterceptors,
+  UploadedFile,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { Request } from "express";
+import { CustomBotService } from "./custom-bot.service";
+import { CustomBotConfig } from "./custom-bot.types";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { StorageService } from "./storage.service";
 
 interface CustomBotDeployDto {
   config: string; // JSON string
   filePath: string; // Storage path where file was uploaded
 }
 
-interface UploadUrlResponse {
-  uploadUrl: string;
-  filePath: string;
-  expiresAt: string;
-}
-
-@Controller('custom-bots')
+@Controller("custom-bots")
 @UseGuards(AuthCombinedGuard)
 export class CustomBotController {
   constructor(
@@ -38,60 +35,77 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
-  @Post(':name/upload-url')
+  @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
-  async generateUploadUrl(
-    @Param('name') name: string,
-    @Body() body: { version: string },
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadFile(
+    @Param("name") name: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { version?: string },
     @Req() request: Request,
-  ): Promise<UploadUrlResponse> {
+  ) {
     const userId = (request as any).user?.uid;
     if (!userId) {
-      throw new BadRequestException('User ID is required');
+      throw new BadRequestException("User ID is required");
     }
 
+    if (!file) {
+      throw new BadRequestException("File is required");
+    }
+
+    // Validate file type
+    if (
+      file.mimetype !== "application/zip" &&
+      !file.originalname.endsWith(".zip")
+    ) {
+      throw new BadRequestException("Only ZIP files are allowed");
+    }
+
+    // Version must be provided
     if (!body.version) {
-      throw new BadRequestException('Version is required');
+      throw new BadRequestException("Version is required");
     }
 
-    const result = await this.storageService.generateSignedUploadUrl(
+    // Upload to MinIO using internal client
+    const uploadResult = await this.storageService.uploadBotFile(
+      file.buffer,
+      body.version,
       userId,
       name,
-      body.version,
     );
 
-    if (!result.success) {
-      throw new BadRequestException(
-        `Failed to generate upload URL: ${result.error}`,
-      );
+    if (!uploadResult.success) {
+      throw new BadRequestException(`Upload failed: ${uploadResult.error}`);
     }
 
     return {
-      uploadUrl: result.data.uploadUrl,
-      filePath: result.data.filePath,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      success: true,
+      filePath: uploadResult.data,
+      message: "File uploaded successfully",
     };
   }
 
-  @Post(':name')
+  @Post(":name")
   @HttpCode(HttpStatus.CREATED)
   async createCustomBot(
-    @Param('name') name: string,
+    @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
     @Req() request: Request,
   ) {
     const userId = (request as any).user?.uid;
     if (!userId) {
-      throw new BadRequestException('User ID is required');
+      throw new BadRequestException("User ID is required");
     }
 
     // Validate file path
     if (!body.filePath) {
-      throw new BadRequestException('file path is required');
+      throw new BadRequestException("file path is required");
     }
 
     // Validate that file exists at file path
-    const fileExistsResult = await this.storageService.fileExists(body.filePath);
+    const fileExistsResult = await this.storageService.fileExists(
+      body.filePath,
+    );
     if (!fileExistsResult.success) {
       throw new BadRequestException(
         `File validation failed: ${fileExistsResult.error}`,
@@ -99,25 +113,25 @@ export class CustomBotController {
     }
 
     if (!fileExistsResult.data) {
-      throw new BadRequestException('File not found at specified file path');
+      throw new BadRequestException("File not found at specified file path");
     }
 
     // Validate and parse config
     if (!body.config) {
-      throw new BadRequestException('Config field is required');
+      throw new BadRequestException("Config field is required");
     }
 
     let config: CustomBotConfig;
     try {
       config = JSON.parse(body.config);
     } catch (error) {
-      throw new BadRequestException('Config must be valid JSON');
+      throw new BadRequestException("Config must be valid JSON");
     }
 
     // Ensure the name in config matches URL parameter
     if (config.name !== name) {
       throw new BadRequestException(
-        'Bot name in config must match URL parameter',
+        "Bot name in config must match URL parameter",
       );
     }
 
@@ -134,29 +148,31 @@ export class CustomBotController {
     return {
       success: true,
       data: result.data,
-      message: 'Custom bot created successfully',
+      message: "Custom bot created successfully",
     };
   }
 
-  @Put(':name')
+  @Put(":name")
   @HttpCode(HttpStatus.OK)
   async updateCustomBot(
-    @Param('name') name: string,
+    @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
     @Req() request: Request,
   ) {
     const userId = (request as any).user?.uid;
     if (!userId) {
-      throw new BadRequestException('User ID is required');
+      throw new BadRequestException("User ID is required");
     }
 
     // Validate file path
     if (!body.filePath) {
-      throw new BadRequestException('file path is required');
+      throw new BadRequestException("file path is required");
     }
 
     // Validate that file exists at file path
-    const fileExistsResult = await this.storageService.fileExists(body.filePath);
+    const fileExistsResult = await this.storageService.fileExists(
+      body.filePath,
+    );
     if (!fileExistsResult.success) {
       throw new BadRequestException(
         `File validation failed: ${fileExistsResult.error}`,
@@ -164,25 +180,25 @@ export class CustomBotController {
     }
 
     if (!fileExistsResult.data) {
-      throw new BadRequestException('File not found at specified file path');
+      throw new BadRequestException("File not found at specified file path");
     }
 
     // Validate and parse config
     if (!body.config) {
-      throw new BadRequestException('Config field is required');
+      throw new BadRequestException("Config field is required");
     }
 
     let config: CustomBotConfig;
     try {
       config = JSON.parse(body.config);
     } catch (error) {
-      throw new BadRequestException('Config must be valid JSON');
+      throw new BadRequestException("Config must be valid JSON");
     }
 
     // Ensure the name in config matches URL parameter
     if (config.name !== name) {
       throw new BadRequestException(
-        'Bot name in config must match URL parameter',
+        "Bot name in config must match URL parameter",
       );
     }
 
@@ -200,7 +216,7 @@ export class CustomBotController {
     return {
       success: true,
       data: result.data,
-      message: 'Custom bot updated successfully',
+      message: "Custom bot updated successfully",
     };
   }
 
@@ -209,7 +225,7 @@ export class CustomBotController {
   async getUserCustomBots(@Req() request: Request) {
     const userId = (request as any).user?.uid;
     if (!userId) {
-      throw new BadRequestException('User ID is required');
+      throw new BadRequestException("User ID is required");
     }
 
     const result = await this.customBotService.getUserCustomBots(userId);
@@ -221,13 +237,13 @@ export class CustomBotController {
     return {
       success: true,
       data: result.data,
-      message: 'User custom bots retrieved successfully',
+      message: "User custom bots retrieved successfully",
     };
   }
 
-  @Get(':name')
+  @Get(":name")
   @HttpCode(HttpStatus.OK)
-  async getAllVersions(@Param('name') name: string, @Req() request: Request) {
+  async getAllVersions(@Param("name") name: string, @Req() request: Request) {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
     if (!result.success) {
@@ -237,15 +253,15 @@ export class CustomBotController {
     return {
       success: true,
       data: result.data,
-      message: 'Bot versions retrieved successfully',
+      message: "Bot versions retrieved successfully",
     };
   }
 
-  @Get(':name/:version')
+  @Get(":name/:version")
   @HttpCode(HttpStatus.OK)
   async getSpecificVersion(
-    @Param('name') name: string,
-    @Param('version') version: string,
+    @Param("name") name: string,
+    @Param("version") version: string,
     @Req() request: Request,
   ) {
     const result = await this.customBotService.getGlobalSpecificVersion(
@@ -260,7 +276,7 @@ export class CustomBotController {
     return {
       success: true,
       data: result.data,
-      message: 'Bot version retrieved successfully',
+      message: "Bot version retrieved successfully",
     };
   }
 }

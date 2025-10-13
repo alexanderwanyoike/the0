@@ -1,15 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { CustomBotRepository } from './custom-bot.repository';
-import { StorageService } from '@/custom-bot/storage.service';
-import { validateCustomBotConfigPayload } from './custom-bot.schema';
-import { NatsService } from '@/nats/nats.service';
+import { Injectable } from "@nestjs/common";
+import { CustomBotRepository } from "./custom-bot.repository";
+import { StorageService } from "@/custom-bot/storage.service";
+import { validateCustomBotConfigPayload } from "./custom-bot.schema";
+import { NatsService } from "@/nats/nats.service";
 
 import {
   CustomBotConfig,
   CustomBot,
   CustomBotWithVersions,
-} from './custom-bot.types';
-import { Result, Failure, Ok } from '@/common/result';
+} from "./custom-bot.types";
+import { Result, Failure, Ok } from "@/common/result";
 
 @Injectable()
 export class CustomBotService {
@@ -28,7 +28,7 @@ export class CustomBotService {
       // Validate config structure
       const validation = validateCustomBotConfigPayload(config);
       if (!validation.valid) {
-        return Failure(`Validation failed: ${validation.errors?.join(', ')}`);
+        return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
       }
 
       // Check if bot already exists
@@ -40,31 +40,30 @@ export class CustomBotService {
       }
 
       if (
-        config.type === 'realtime' &&
+        config.type === "realtime" &&
         (!config.runtime ||
-          !['python3.11', 'nodejs20'].includes(config.runtime))
+          !["python3.11", "nodejs20"].includes(config.runtime))
       ) {
         return Failure(
-          'Realtime bots must specify a valid runtime (python3.11 or nodejs20)',
+          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
         );
       }
 
-      if (config.type === 'scheduled' && config.runtime !== 'python3.11') {
+      if (config.type === "scheduled" && config.runtime !== "python3.11") {
         return Failure(
-          'Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)',
+          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
         );
       }
 
       if (existsResult.data) {
-        return Failure('Custom bot with this name already exists');
+        return Failure("Custom bot with this name already exists");
       }
 
       // Validate ZIP file structure from uploaded file
-      const zipValidation =
-        await this.storageService.validateZipStructure(
-          filePath,
-          Object.values(config.entrypoints).filter(Boolean),
-        );
+      const zipValidation = await this.storageService.validateZipStructure(
+        filePath,
+        Object.values(config.entrypoints).filter(Boolean),
+      );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
@@ -75,7 +74,7 @@ export class CustomBotService {
         version: config.version,
         config,
         filePath: filePath,
-        status: 'pending_review', // Default status
+        status: "pending_review", // Default status
       };
 
       const result = await this.customBotRepository.createNewGlobalVersion(
@@ -88,15 +87,16 @@ export class CustomBotService {
         return Failure(result.error);
       }
 
-      const createdBotResult = await this.customBotRepository.getSpecificGlobalVersion(
-        config.name,
-        config.version,
-      );
+      const createdBotResult =
+        await this.customBotRepository.getSpecificGlobalVersion(
+          config.name,
+          config.version,
+        );
 
       // Publish custom-bot.submitted event for 0vers33r analysis
       if (createdBotResult.success) {
         const customBotSubmittedEvent = {
-          type: 'custom-bot.submitted',
+          type: "custom-bot.submitted",
           botId: createdBotResult.data.id,
           name: config.name,
           userId: userId,
@@ -106,20 +106,25 @@ export class CustomBotService {
         };
 
         const publishResult = await this.natsService.publish(
-          'custom-bot.submitted',
+          "custom-bot.submitted",
           customBotSubmittedEvent,
         );
 
         if (!publishResult.success) {
-          console.error('Failed to publish custom-bot.submitted event:', publishResult.error);
+          console.error(
+            "Failed to publish custom-bot.submitted event:",
+            publishResult.error,
+          );
         } else {
-          console.log(`📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`);
+          console.log(
+            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
+          );
         }
       }
 
       return createdBotResult;
     } catch (error: any) {
-      console.log('Error creating custom bot:', error);
+      console.log("Error creating custom bot:", error);
       return Failure(`Failed to create custom bot: ${error.message}`);
     }
   }
@@ -134,27 +139,27 @@ export class CustomBotService {
       // Validate config structure
       const validation = validateCustomBotConfigPayload(config);
       if (!validation.valid) {
-        return Failure(`Validation failed: ${validation.errors?.join(', ')}`);
+        return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
       }
 
       // Ensure the name in config matches the parameter
       if (config.name !== name) {
-        return Failure('Bot name in config must match the URL parameter');
+        return Failure("Bot name in config must match the URL parameter");
       }
 
       if (
-        config.type === 'realtime' &&
+        config.type === "realtime" &&
         (!config.runtime ||
-          !['python3.11', 'nodejs20'].includes(config.runtime))
+          !["python3.11", "nodejs20"].includes(config.runtime))
       ) {
         return Failure(
-          'Realtime bots must specify a valid runtime (python3.11 or nodejs20)',
+          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
         );
       }
 
-      if (config.type === 'scheduled' && config.runtime !== 'python3.11') {
+      if (config.type === "scheduled" && config.runtime !== "python3.11") {
         return Failure(
-          'Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)',
+          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
         );
       }
 
@@ -166,7 +171,7 @@ export class CustomBotService {
 
       if (!existsResult.data) {
         return Failure(
-          'Custom bot does not exist. Create it first using POST.',
+          "Custom bot does not exist. Create it first using POST.",
         );
       }
 
@@ -212,11 +217,10 @@ export class CustomBotService {
       }
 
       // Validate ZIP file structure from uploaded file
-      const zipValidation =
-        await this.storageService.validateZipStructure(
-          filePath,
-          Object.values(config.entrypoints).filter(Boolean),
-        );
+      const zipValidation = await this.storageService.validateZipStructure(
+        filePath,
+        Object.values(config.entrypoints).filter(Boolean),
+      );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
@@ -227,15 +231,55 @@ export class CustomBotService {
         version: config.version,
         config,
         filePath: filePath,
-        status: 'pending_review', // Default status
+        status: "pending_review", // Default status
       };
 
-      return await this.customBotRepository.createNewGlobalVersion(
+      const customBot = await this.customBotRepository.createNewGlobalVersion(
         userId,
         botData,
       );
+
+      if (!customBot.success) {
+        return Failure(customBot.error);
+      }
+
+      const createdBotResult =
+        await this.customBotRepository.getSpecificGlobalVersion(
+          config.name,
+          config.version,
+        );
+
+      if (createdBotResult.success) {
+        const customBotSubmittedEvent = {
+          type: "custom-bot.submitted",
+          botId: createdBotResult.data.id,
+          name: config.name,
+          userId: userId,
+          filePath: filePath,
+          config: config,
+          timestamp: new Date().toISOString(),
+        };
+
+        const publishResult = await this.natsService.publish(
+          "custom-bot.submitted",
+          customBotSubmittedEvent,
+        );
+
+        if (!publishResult.success) {
+          console.error(
+            "Failed to publish custom-bot.submitted event:",
+            publishResult.error,
+          );
+        } else {
+          console.log(
+            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
+          );
+        }
+      }
+
+      return createdBotResult;
     } catch (error: any) {
-      console.log('Error updating custom bot:', error);
+      console.log("Error updating custom bot:", error);
       return Failure(`Failed to update custom bot: ${error.message}`);
     }
   }
@@ -252,7 +296,7 @@ export class CustomBotService {
 
       return result;
     } catch (error: any) {
-      console.log('Error getting user custom bots:', error);
+      console.log("Error getting user custom bots:", error);
       return Failure(`Failed to get user custom bots: ${error.message}`);
     }
   }
@@ -291,5 +335,4 @@ export class CustomBotService {
       version,
     );
   }
-
 }

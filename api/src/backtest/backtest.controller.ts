@@ -8,12 +8,12 @@ import {
   NotFoundException,
   BadRequestException,
   UseGuards,
-} from '@nestjs/common';
-import { BacktestService } from './backtest.service';
-import { CreateBacktestDto } from './dto/create-backtest.dto';
-import { AuthCombinedGuard } from '@/auth/auth-combined.guard';
+} from "@nestjs/common";
+import { BacktestService } from "./backtest.service";
+import { CreateBacktestDto } from "./dto/create-backtest.dto";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 
-@Controller('backtest')
+@Controller("backtest")
 @UseGuards(AuthCombinedGuard)
 export class BacktestController {
   constructor(private readonly backtestService: BacktestService) {}
@@ -36,8 +36,8 @@ export class BacktestController {
     return result.data;
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
     const result = await this.backtestService.findOne(id);
     if (!result.success) {
       throw new NotFoundException(result.error);
@@ -45,22 +45,22 @@ export class BacktestController {
     return result.data;
   }
 
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
+  @Delete(":id")
+  async remove(@Param("id") id: string) {
     const result = await this.backtestService.remove(id);
     if (!result.success) {
       throw new NotFoundException(result.error);
     }
   }
 
-  @Get(':id/logs')
-  async getBacktestLogs(@Param('id') id: string) {
+  @Get(":id/logs")
+  async getBacktestLogs(@Param("id") id: string) {
     const result = await this.backtestService.getBacktestLogs(id);
 
     if (!result.success) {
       if (
-        result.error?.includes('not found') ||
-        result.error?.includes('access denied')
+        result.error?.includes("not found") ||
+        result.error?.includes("access denied")
       ) {
         throw new NotFoundException(result.error);
       }
@@ -70,7 +70,7 @@ export class BacktestController {
     return {
       success: true,
       data: result.data,
-      message: 'Logs retrieved successfully',
+      message: "Logs retrieved successfully",
     };
   }
 }

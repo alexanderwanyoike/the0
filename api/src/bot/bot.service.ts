@@ -1,17 +1,21 @@
-import { Inject, Injectable, Scope } from '@nestjs/common';
-import { CreateBotDto } from './dto/create-bot.dto';
-import { UpdateBotDto } from './dto/update-bot.dto';
-import { BotRepository } from './bot.repository';
-import { REQUEST } from '@nestjs/core';
-import { Bot } from './entities/bot.entity';
-import { Failure, Ok, Result } from '@/common/result';
-import { BotValidator } from './bot.validator';
-import { CustomBotService } from '@/custom-bot/custom-bot.service';
-import { CustomBot, BotType } from '@/custom-bot/custom-bot.types';
+import { Inject, Injectable, Scope } from "@nestjs/common";
+import { CreateBotDto } from "./dto/create-bot.dto";
+import { UpdateBotDto } from "./dto/update-bot.dto";
+import { BotRepository } from "./bot.repository";
+import { REQUEST } from "@nestjs/core";
+import { Bot } from "./entities/bot.entity";
+import { Failure, Ok, Result } from "@/common/result";
+import { BotValidator } from "./bot.validator";
+import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { CustomBot, BotType } from "@/custom-bot/custom-bot.types";
 // UserBotsService removed for OSS version
-import { NatsService } from '@/nats/nats.service';
-import * as semver from 'semver';
-import { BOT_TYPE_PATTERN, BOT_TOPICS, SCHEDULED_BOT_TOPICS } from '@/bot/bot.constants';
+import { NatsService } from "@/nats/nats.service";
+import * as semver from "semver";
+import {
+  BOT_TYPE_PATTERN,
+  BOT_TOPICS,
+  SCHEDULED_BOT_TOPICS,
+} from "@/bot/bot.constants";
 
 @Injectable({ scope: Scope.REQUEST })
 export class BotService {
@@ -33,7 +37,7 @@ export class BotService {
 
     if (!validationResult.success) {
       return Failure<Bot, string>(
-        validationResult.error || 'Invalid bot config',
+        validationResult.error || "Invalid bot config",
       );
     }
 
@@ -55,7 +59,7 @@ export class BotService {
     const result = await this.botRepository.create({
       ...createBotDto,
       userId: uid,
-      topic: 'the0-scheduled-custom-bot',
+      topic: "the0-scheduled-custom-bot",
       customBotId: validationResult.data.id,
     });
 
@@ -65,15 +69,15 @@ export class BotService {
 
     // Fetch custom bot data and publish bot creation event (replaces event-handler service)
     const customBotResult = await this.customBotService.getUserSpecificVersion(
-      uid, 
-      validationResult.data.name, 
-      validationResult.data.version
+      uid,
+      validationResult.data.name,
+      validationResult.data.version,
     );
-    
+
     if (customBotResult.success) {
       const customBot = customBotResult.data;
       const topics = this.getTopicsForBotType(customBot);
-      
+
       if (topics) {
         // Format event data for runtime subscriber (bot-scheduler expects flat structure)
         const eventPayload = {
@@ -86,17 +90,25 @@ export class BotService {
             config: customBot.config,
             createdAt: customBot.createdAt,
             updatedAt: customBot.updatedAt,
-            filePath: customBot.filePath || '',
+            filePath: customBot.filePath || "",
             version: customBot.version,
           },
         };
-        
+
         // Publish bot creation event to appropriate runtime service
-        const publishResult = await this.natsService.publish(topics.CREATED, eventPayload);
+        const publishResult = await this.natsService.publish(
+          topics.CREATED,
+          eventPayload,
+        );
         if (!publishResult.success) {
-          console.error('Failed to publish bot creation event:', publishResult.error);
+          console.error(
+            "Failed to publish bot creation event:",
+            publishResult.error,
+          );
         } else {
-          console.log(`📤 Published bot creation event for bot ${result.data.id} to ${topics.CREATED}`);
+          console.log(
+            `📤 Published bot creation event for bot ${result.data.id} to ${topics.CREATED}`,
+          );
         }
       }
     }
@@ -123,27 +135,28 @@ export class BotService {
     );
     if (!validationResult.success) {
       return Failure<Bot, string>(
-        validationResult.error || 'Invalid bot config',
+        validationResult.error || "Invalid bot config",
       );
     }
 
     const { uid } = this.request.user;
     const result = await this.botRepository.update(uid, id, updateBotDto);
-    
+
     if (result.success) {
       // Fetch updated bot and custom bot data for event payload
       const botResult = await this.botRepository.findOne(uid, id);
       if (botResult.success) {
-        const customBotResult = await this.customBotService.getUserSpecificVersion(
-          uid,
-          validationResult.data.name,
-          validationResult.data.version
-        );
-        
+        const customBotResult =
+          await this.customBotService.getUserSpecificVersion(
+            uid,
+            validationResult.data.name,
+            validationResult.data.version,
+          );
+
         if (customBotResult.success) {
           const customBot = customBotResult.data;
           const topics = this.getTopicsForBotType(customBot);
-          
+
           if (topics) {
             // Format event data for runtime subscriber (bot-scheduler expects flat structure)
             const eventPayload = {
@@ -156,68 +169,85 @@ export class BotService {
                 config: customBot.config,
                 createdAt: customBot.createdAt,
                 updatedAt: customBot.updatedAt,
-                filePath: customBot.filePath || '',
+                filePath: customBot.filePath || "",
                 version: customBot.version,
               },
             };
-            
+
             // Publish bot update event to appropriate runtime service
-            const publishResult = await this.natsService.publish(topics.UPDATED, eventPayload);
+            const publishResult = await this.natsService.publish(
+              topics.UPDATED,
+              eventPayload,
+            );
             if (!publishResult.success) {
-              console.error('Failed to publish bot update event:', publishResult.error);
+              console.error(
+                "Failed to publish bot update event:",
+                publishResult.error,
+              );
             } else {
-              console.log(`📤 Published bot update event for bot ${botResult.data.id} to ${topics.UPDATED}`);
+              console.log(
+                `📤 Published bot update event for bot ${botResult.data.id} to ${topics.UPDATED}`,
+              );
             }
           }
         }
       }
     }
-    
+
     return result;
   }
 
   async remove(id: string): Promise<Result<void, string>> {
     const { uid } = this.request.user;
-    
+
     // Fetch bot data before deletion for event payload
     const botResult = await this.botRepository.findOne(uid, id);
     if (!botResult.success) {
-      return Failure('Bot not found');
+      return Failure("Bot not found");
     }
-    
+
     // Get custom bot data to determine correct topic
     let topics = null;
     if (botResult.data.config?.type && botResult.data.config?.version) {
-      const [_, name] = botResult.data.config.type.split('/');
-      const customBotResult = await this.customBotService.getUserSpecificVersion(
-        uid,
-        name,
-        botResult.data.config.version
-      );
-      
+      const [_, name] = botResult.data.config.type.split("/");
+      const customBotResult =
+        await this.customBotService.getUserSpecificVersion(
+          uid,
+          name,
+          botResult.data.config.version,
+        );
+
       if (customBotResult.success) {
         topics = this.getTopicsForBotType(customBotResult.data);
       }
     }
-    
+
     const result = await this.botRepository.remove(uid, id);
-    
+
     if (result.success && topics) {
       // Format event data for runtime subscriber (bot-scheduler expects flat structure)
       const eventPayload = {
         id: botResult.data.id,
         config: botResult.data.config,
       };
-      
+
       // Publish bot deletion event to appropriate runtime service
-      const publishResult = await this.natsService.publish(topics.DELETED, eventPayload);
+      const publishResult = await this.natsService.publish(
+        topics.DELETED,
+        eventPayload,
+      );
       if (!publishResult.success) {
-        console.error('Failed to publish bot deletion event:', publishResult.error);
+        console.error(
+          "Failed to publish bot deletion event:",
+          publishResult.error,
+        );
       } else {
-        console.log(`📤 Published bot deletion event for bot ${botResult.data.id} to ${topics.DELETED}`);
+        console.log(
+          `📤 Published bot deletion event for bot ${botResult.data.id} to ${topics.DELETED}`,
+        );
       }
     }
-    
+
     return result;
   }
 
@@ -229,7 +259,7 @@ export class BotService {
     if (!type) {
       return {
         success: false,
-        error: 'Bot type is required',
+        error: "Bot type is required",
         data: null,
       };
     }
@@ -237,7 +267,7 @@ export class BotService {
     if (!version) {
       return {
         success: false,
-        error: 'Bot version is required',
+        error: "Bot version is required",
         data: null,
       };
     }
@@ -261,7 +291,7 @@ export class BotService {
     }
 
     // Extract vendor, type, and name from the bot type
-    const [_, name] = type.split('/');
+    const [_, name] = type.split("/");
 
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(name, version);
@@ -281,7 +311,7 @@ export class BotService {
     if (!validationResult.success) {
       return {
         success: false,
-        error: validationResult.error.join(', ') || 'Invalid bot config',
+        error: validationResult.error.join(", ") || "Invalid bot config",
         data: null,
       };
     }
@@ -298,13 +328,13 @@ export class BotService {
       if (customBot.userId === userId) {
         // User is the owner, check if the bot is approved
         if (
-          customBot.status === 'approved' ||
-          customBot.status === 'published'
+          customBot.status === "approved" ||
+          customBot.status === "published"
         ) {
           return { success: true, error: null, data: null };
         } else {
           return Failure(
-            'Your custom bot must be approved or published before deployment.',
+            "Your custom bot must be approved or published before deployment.",
           );
         }
       }
@@ -314,7 +344,7 @@ export class BotService {
 
       return { success: true, error: null, data: null };
     } catch (error: any) {
-      console.error('Error checking deployment authorization:', error);
+      console.error("Error checking deployment authorization:", error);
       return Failure(
         `Failed to check deployment authorization: ${error.message}`,
       );
@@ -325,15 +355,19 @@ export class BotService {
     return customBot.config.type;
   }
 
-  private getTopicsForBotType(customBot: CustomBot): { CREATED: string; UPDATED: string; DELETED: string; } | null {
+  private getTopicsForBotType(
+    customBot: CustomBot,
+  ): { CREATED: string; UPDATED: string; DELETED: string } | null {
     const botType = customBot.config.type;
-    
-    if (botType === 'realtime') {
+
+    if (botType === "realtime") {
       return BOT_TOPICS;
-    } else if (botType === 'scheduled') {
+    } else if (botType === "scheduled") {
       return SCHEDULED_BOT_TOPICS;
     } else {
-      console.warn(`Unknown bot type: ${botType}. Expected 'realtime' or 'scheduled'.`);
+      console.warn(
+        `Unknown bot type: ${botType}. Expected 'realtime' or 'scheduled'.`,
+      );
       return null;
     }
   }
