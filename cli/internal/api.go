@@ -102,17 +102,6 @@ type APIResponse struct {
 	Message string `json:"message"`
 }
 
-// UploadUrlRequest represents the request for getting an upload URL
-type UploadUrlRequest struct {
-	Version string `json:"version"`
-}
-
-// UploadUrlResponse represents the response for upload URL generation
-type UploadUrlResponse struct {
-	UploadUrl string `json:"uploadUrl"`
-	FilePath  string `json:"filePath"`
-	ExpiresAt string `json:"expiresAt"`
-}
 
 // CustomBotDeployRequest represents the new deploy request with file path
 type CustomBotDeployRequest struct {
@@ -278,26 +267,19 @@ func (c *APIClient) CheckBotExists(config *BotConfig, auth *Auth) (bool, error) 
 	return true, nil
 }
 
-// DeployBot deploys a bot using the new two-step process: upload to storage, then deploy
+// DeployBot deploys a bot using direct upload: upload file and deploy in one step
 func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isUpdate bool) error {
-	fmt.Println("🚀 Starting two-step deployment process...")
+	fmt.Println("🚀 Starting deployment process...")
 
-	// Step 1: Request upload URL
-	fmt.Println("📡 Requesting upload URL...")
-	uploadResponse, err := c.RequestUploadURL(config.Name, config.Version, auth)
-	if err != nil {
-		return fmt.Errorf("failed to get upload URL: %v", err)
-	}
-
-	// Step 2: Upload ZIP file to API
+	// Step 1: Upload ZIP file directly to API
 	fmt.Printf("📦 Uploading %s to API...\n", filepath.Base(zipPath))
-	err = c.UploadToStorage(zipPath, uploadResponse.UploadUrl, config.Version, auth)
+	filePath, err := c.UploadFileDirect(config.Name, config.Version, zipPath, auth)
 	if err != nil {
 		return fmt.Errorf("failed to upload file: %v", err)
 	}
 	fmt.Println("✅ File uploaded successfully!")
 
-	// Step 3: Deploy with config and GCS path
+	// Step 2: Deploy with config and file path
 	fmt.Println("🔧 Configuring deployment...")
 
 	// Read README content
@@ -367,7 +349,7 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 	// Create deploy request
 	deployRequest := CustomBotDeployRequest{
 		Config:   string(configJSON),
-		FilePath: uploadResponse.FilePath,
+		FilePath: filePath,
 	}
 
 	deployRequestJSON, err := json.Marshal(deployRequest)
@@ -805,58 +787,12 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 	return apiResponse.Data, nil
 }
 
-// RequestUploadURL requests a signed upload URL for deploying a bot
-func (c *APIClient) RequestUploadURL(botName string, version string, auth *Auth) (*UploadUrlResponse, error) {
-	reqBody := UploadUrlRequest{
-		Version: version,
-	}
-
-	reqBodyJSON, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
-	}
-
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/custom-bots/%s/upload-url", c.BaseURL, botName), bytes.NewBuffer(reqBodyJSON))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to get upload URL: HTTP %d - %s", resp.StatusCode, string(body))
-	}
-
-	var uploadResponse UploadUrlResponse
-	if err := json.Unmarshal(body, &uploadResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse upload URL response: %v", err)
-	}
-
-	return &uploadResponse, nil
-}
-
-// UploadToStorage uploads a file to the API using multipart form data
-func (c *APIClient) UploadToStorage(filePath string, uploadURL string, version string, auth *Auth) error {
+// UploadFileDirect uploads a file directly to the API using multipart form data
+func (c *APIClient) UploadFileDirect(botName string, version string, filePath string, auth *Auth) (string, error) {
 	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %v", err)
+		return "", fmt.Errorf("failed to open file: %v", err)
 	}
 	defer file.Close()
 
@@ -867,31 +803,31 @@ func (c *APIClient) UploadToStorage(filePath string, uploadURL string, version s
 	// Add version field
 	err = writer.WriteField("version", version)
 	if err != nil {
-		return fmt.Errorf("failed to write version field: %v", err)
+		return "", fmt.Errorf("failed to write version field: %v", err)
 	}
 
 	// Create the file field
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
-		return fmt.Errorf("failed to create form file: %v", err)
+		return "", fmt.Errorf("failed to create form file: %v", err)
 	}
 
 	// Copy file content to the form
 	_, err = io.Copy(part, file)
 	if err != nil {
-		return fmt.Errorf("failed to copy file content: %v", err)
+		return "", fmt.Errorf("failed to copy file content: %v", err)
 	}
 
 	// Close the writer to finalize the multipart message
 	err = writer.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close writer: %v", err)
+		return "", fmt.Errorf("failed to close writer: %v", err)
 	}
 
 	// Create POST request with multipart form data
-	req, err := http.NewRequest("POST", uploadURL, &requestBody)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/custom-bots/%s/upload", c.BaseURL, botName), &requestBody)
 	if err != nil {
-		return fmt.Errorf("failed to create upload request: %v", err)
+		return "", fmt.Errorf("failed to create upload request: %v", err)
 	}
 
 	// Set required headers
@@ -905,14 +841,39 @@ func (c *APIClient) UploadToStorage(filePath string, uploadURL string, version s
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("upload failed: %v", err)
+		return "", fmt.Errorf("upload failed: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	return nil
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse the response as a flat structure instead of wrapped
+	var uploadResponse struct {
+		Success bool   `json:"success"`
+		FilePath string `json:"filePath"`
+		Message string `json:"message"`
+	}
+
+	if err := json.Unmarshal(body, &uploadResponse); err != nil {
+		return "", fmt.Errorf("failed to parse upload response: %v", err)
+	}
+
+	if !uploadResponse.Success {
+		return "", fmt.Errorf("upload failed: %s", uploadResponse.Message)
+	}
+
+	// Extract file path directly from response
+	if uploadResponse.FilePath == "" {
+		return "", fmt.Errorf("file path not found in response")
+	}
+
+	return uploadResponse.FilePath, nil
 }
