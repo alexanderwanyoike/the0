@@ -242,7 +242,7 @@ export class CustomBotService {
       if (!customBot.success) {
         return Failure(customBot.error);
       }
-      // Publish custom-bot.submitted event for 0vers33r analysis
+
       const createdBotResult =
         await this.customBotRepository.getSpecificGlobalVersion(
           config.name,
