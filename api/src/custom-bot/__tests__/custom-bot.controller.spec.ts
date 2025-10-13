@@ -346,7 +346,6 @@ describe("CustomBotController", () => {
     });
   });
 
-  
   // NEW TEST SECTION
   describe("getUserCustomBots", () => {
     it("should get user custom bots successfully", async () => {

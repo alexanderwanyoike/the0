@@ -490,7 +490,6 @@ describe("Custom Bot API Integration Tests", () => {
     });
   });
 
-  
   describe("GET /custom-bots/:name", () => {
     it("should get all versions successfully", async () => {
       const mockVersionsData = {

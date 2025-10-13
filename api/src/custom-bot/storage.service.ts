@@ -4,7 +4,6 @@ import { Result, Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
 
-
 @Injectable()
 export class StorageService {
   private minioClient: Minio.Client;
@@ -173,8 +172,6 @@ export class StorageService {
     }
   }
 
-
-  
   // Helper method to get object metadata
   async getObjectMetadata(filePath: string): Promise<Result<any, string>> {
     try {

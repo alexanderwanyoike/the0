@@ -271,7 +271,6 @@ describe("StorageService", () => {
     });
   });
 
-  
   describe("downloadFile", () => {
     it("should download file successfully", async () => {
       const fileBuffer = createSampleZipBuffer();

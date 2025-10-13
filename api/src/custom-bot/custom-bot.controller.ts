@@ -27,7 +27,6 @@ interface CustomBotDeployDto {
   filePath: string; // Storage path where file was uploaded
 }
 
-
 @Controller("custom-bots")
 @UseGuards(AuthCombinedGuard)
 export class CustomBotController {
@@ -36,7 +35,6 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
-  
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))
@@ -56,7 +54,10 @@ export class CustomBotController {
     }
 
     // Validate file type
-    if (file.mimetype !== "application/zip" && !file.originalname.endsWith(".zip")) {
+    if (
+      file.mimetype !== "application/zip" &&
+      !file.originalname.endsWith(".zip")
+    ) {
       throw new BadRequestException("Only ZIP files are allowed");
     }
 
