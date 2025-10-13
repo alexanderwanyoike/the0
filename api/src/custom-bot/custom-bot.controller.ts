@@ -12,7 +12,10 @@ import {
   HttpCode,
   UseGuards,
   Patch,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
@@ -24,12 +27,6 @@ interface CustomBotDeployDto {
   filePath: string; // Storage path where file was uploaded
 }
 
-interface UploadUrlResponse {
-  uploadUrl: string;
-  filePath: string;
-  expiresAt: string;
-}
-
 @Controller("custom-bots")
 @UseGuards(AuthCombinedGuard)
 export class CustomBotController {
@@ -38,38 +35,53 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
-  @Post(":name/upload-url")
+  @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
-  async generateUploadUrl(
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadFile(
     @Param("name") name: string,
-    @Body() body: { version: string },
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { version?: string },
     @Req() request: Request,
-  ): Promise<UploadUrlResponse> {
+  ) {
     const userId = (request as any).user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
 
+    if (!file) {
+      throw new BadRequestException("File is required");
+    }
+
+    // Validate file type
+    if (
+      file.mimetype !== "application/zip" &&
+      !file.originalname.endsWith(".zip")
+    ) {
+      throw new BadRequestException("Only ZIP files are allowed");
+    }
+
+    // Version must be provided
     if (!body.version) {
       throw new BadRequestException("Version is required");
     }
 
-    const result = await this.storageService.generateSignedUploadUrl(
+    // Upload to MinIO using internal client
+    const uploadResult = await this.storageService.uploadBotFile(
+      file.buffer,
+      body.version,
       userId,
       name,
-      body.version,
     );
 
-    if (!result.success) {
-      throw new BadRequestException(
-        `Failed to generate upload URL: ${result.error}`,
-      );
+    if (!uploadResult.success) {
+      throw new BadRequestException(`Upload failed: ${uploadResult.error}`);
     }
 
     return {
-      uploadUrl: result.data.uploadUrl,
-      filePath: result.data.filePath,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      success: true,
+      filePath: uploadResult.data,
+      message: "File uploaded successfully",
     };
   }
 

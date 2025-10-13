@@ -234,10 +234,50 @@ export class CustomBotService {
         status: "pending_review", // Default status
       };
 
-      return await this.customBotRepository.createNewGlobalVersion(
+      const customBot = await this.customBotRepository.createNewGlobalVersion(
         userId,
         botData,
       );
+
+      if (!customBot.success) {
+        return Failure(customBot.error);
+      }
+
+      const createdBotResult =
+        await this.customBotRepository.getSpecificGlobalVersion(
+          config.name,
+          config.version,
+        );
+
+      if (createdBotResult.success) {
+        const customBotSubmittedEvent = {
+          type: "custom-bot.submitted",
+          botId: createdBotResult.data.id,
+          name: config.name,
+          userId: userId,
+          filePath: filePath,
+          config: config,
+          timestamp: new Date().toISOString(),
+        };
+
+        const publishResult = await this.natsService.publish(
+          "custom-bot.submitted",
+          customBotSubmittedEvent,
+        );
+
+        if (!publishResult.success) {
+          console.error(
+            "Failed to publish custom-bot.submitted event:",
+            publishResult.error,
+          );
+        } else {
+          console.log(
+            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
+          );
+        }
+      }
+
+      return createdBotResult;
     } catch (error: any) {
       console.log("Error updating custom bot:", error);
       return Failure(`Failed to update custom bot: ${error.message}`);

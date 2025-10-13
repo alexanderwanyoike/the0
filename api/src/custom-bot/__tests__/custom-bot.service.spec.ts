@@ -90,7 +90,6 @@ describe("CustomBotService", () => {
       validateZipStructure: jest.fn(),
       uploadBotFile: jest.fn(),
       fileExists: jest.fn(),
-      generateSignedUploadUrl: jest.fn(),
       deleteFile: jest.fn(),
       downloadFile: jest.fn(),
       getFileInfo: jest.fn(),
@@ -384,20 +383,21 @@ describe("CustomBotService", () => {
       mockRepository.isVersionNewer.mockReturnValue(true);
       mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
       mockStorageService.validateZipStructure.mockResolvedValue(Ok(true));
-      mockRepository.createNewGlobalVersion.mockResolvedValue(
-        Ok({
-          id: "new-version-id",
-          name: "test-bot",
-          version: "1.1.0",
-          config: updateConfig,
-          status: "pending_review",
-          filePath:
-            "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
-          userId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }),
-      );
+      const updatedBot = {
+        id: "new-version-id",
+        name: "test-bot",
+        version: "1.1.0",
+        config: updateConfig,
+        status: "pending_review" as const,
+        filePath:
+          "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+        userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockRepository.createNewGlobalVersion.mockResolvedValue(Ok(updatedBot));
+      mockRepository.getSpecificGlobalVersion.mockResolvedValue(Ok(updatedBot));
 
       const result = await service.updateCustomBot(
         userId,

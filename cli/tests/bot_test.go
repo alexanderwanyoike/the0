@@ -589,7 +589,7 @@ func TestAPIClient_FindBotByNameOrID(t *testing.T) {
 	}
 }
 
-func TestAPIClient_RequestUploadURL(t *testing.T) {
+func TestAPIClient_UploadFileDirect(t *testing.T) {
 	tests := []struct {
 		name          string
 		botName       string
@@ -598,18 +598,20 @@ func TestAPIClient_RequestUploadURL(t *testing.T) {
 		responseBody  string
 		expectedError bool
 		errorContains string
+		expectedPath  string
 	}{
 		{
-			name:       "successful upload URL request",
+			name:       "successful direct upload",
 			botName:    "test-bot",
 			version:    "1.0.0",
 			statusCode: 200,
 			responseBody: `{
-				"uploadUrl": "https://storage.googleapis.com/bucket/path?signature=abc123",
-				"FilePath": "gs://bucket/user123/test-bot/1.0.0/test-bot_1.0.0_1234567890.zip",
-				"expiresAt": "2024-01-01T13:00:00Z"
+				"success": true,
+				"filePath": "user123/test-bot/1.0.0",
+				"message": "File uploaded successfully"
 			}`,
 			expectedError: false,
+			expectedPath:  "user123/test-bot/1.0.0",
 		},
 		{
 			name:          "invalid auth",
@@ -618,16 +620,16 @@ func TestAPIClient_RequestUploadURL(t *testing.T) {
 			statusCode:    401,
 			responseBody:  `{"error": "Unauthorized"}`,
 			expectedError: true,
-			errorContains: "authentication failed",
+			errorContains: "upload failed with status 401",
 		},
 		{
-			name:          "missing version",
+			name:          "upload failed",
 			botName:       "test-bot",
 			version:       "1.0.0",
 			statusCode:    400,
-			responseBody:  `{"error": "Version is required"}`,
+			responseBody:  `{"error": "Bad Request"}`,
 			expectedError: true,
-			errorContains: "failed to get upload URL",
+			errorContains: "upload failed with status 400",
 		},
 		{
 			name:          "server error",
@@ -636,100 +638,31 @@ func TestAPIClient_RequestUploadURL(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "failed to get upload URL",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				expectedPath := "/custom-bots/" + tt.botName + "/upload-url"
-				if r.URL.Path != expectedPath {
-					t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
-				}
-
-				if r.Method != "POST" {
-					t.Errorf("Expected POST method, got %s", r.Method)
-				}
-
-				authHeader := r.Header.Get("Authorization")
-				if !strings.HasPrefix(authHeader, "ApiKey ") {
-					t.Errorf("Expected Authorization header with ApiKey prefix, got %s", authHeader)
-				}
-
-				contentType := r.Header.Get("Content-Type")
-				if contentType != "application/json" {
-					t.Errorf("Expected Content-Type application/json, got %s", contentType)
-				}
-
-				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.responseBody))
-			}))
-			defer server.Close()
-
-			client := internal.NewAPIClient(server.URL)
-			auth := &internal.Auth{
-				APIKey:    "test-key",
-				CreatedAt: time.Now(),
-			}
-
-			response, err := client.RequestUploadURL(tt.botName, tt.version, auth)
-
-			if tt.expectedError {
-				if err == nil {
-					t.Errorf("RequestUploadURL() expected error but got nil")
-				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
-					t.Errorf("RequestUploadURL() error = %v, expected to contain %v", err, tt.errorContains)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("RequestUploadURL() unexpected error = %v", err)
-				}
-				if response == nil {
-					t.Errorf("RequestUploadURL() returned nil response")
-				} else {
-					if response.UploadUrl == "" {
-						t.Errorf("RequestUploadURL() returned empty upload URL")
-					}
-					if response.FilePath == "" {
-						t.Errorf("RequestUploadURL() returned empty GCS path")
-					}
-					if !strings.HasPrefix(response.FilePath, "gs://") {
-						t.Errorf("RequestUploadURL() returned invalid GCS path format: %s", response.FilePath)
-					}
-				}
-			}
-		})
-	}
-}
-
-func TestAPIClient_UploadToStorage(t *testing.T) {
-	tests := []struct {
-		name          string
-		statusCode    int
-		responseBody  string
-		expectedError bool
-		errorContains string
-	}{
-		{
-			name:          "successful upload",
-			statusCode:    200,
-			responseBody:  "",
-			expectedError: false,
-		},
-		{
-			name:          "upload failed",
-			statusCode:    400,
-			responseBody:  "Bad Request",
-			expectedError: true,
-			errorContains: "upload failed with status 400",
-		},
-		{
-			name:          "server error",
-			statusCode:    500,
-			responseBody:  "Internal Server Error",
-			expectedError: true,
 			errorContains: "upload failed with status 500",
+		},
+		{
+			name:          "API success false",
+			botName:       "test-bot",
+			version:       "1.0.0",
+			statusCode:    200,
+			responseBody: `{
+				"success": false,
+				"message": "Invalid file format"
+			}`,
+			expectedError: true,
+			errorContains: "upload failed: Invalid file format",
+		},
+		{
+			name:          "missing filePath in response",
+			botName:       "test-bot",
+			version:       "1.0.0",
+			statusCode:    200,
+			responseBody: `{
+				"success": true,
+				"message": "File uploaded successfully"
+			}`,
+			expectedError: true,
+			errorContains: "file path not found in response",
 		},
 	}
 
@@ -744,18 +677,23 @@ func TestAPIClient_UploadToStorage(t *testing.T) {
 			defer os.Remove(tmpFile)
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != "PUT" {
-					t.Errorf("Expected PUT method, got %s", r.Method)
+				expectedPath := "/custom-bots/" + tt.botName + "/upload"
+				if r.URL.Path != expectedPath {
+					t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+
+				if r.Method != "POST" {
+					t.Errorf("Expected POST method, got %s", r.Method)
+				}
+
+				authHeader := r.Header.Get("Authorization")
+				if !strings.HasPrefix(authHeader, "ApiKey ") {
+					t.Errorf("Expected Authorization header with ApiKey prefix, got %s", authHeader)
 				}
 
 				contentType := r.Header.Get("Content-Type")
-				if contentType != "application/zip" {
-					t.Errorf("Expected Content-Type application/zip, got %s", contentType)
-				}
-
-				contentLength := r.Header.Get("Content-Length")
-				if contentLength == "" {
-					t.Errorf("Expected Content-Length header to be set")
+				if !strings.Contains(contentType, "multipart/form-data") {
+					t.Errorf("Expected Content-Type to contain multipart/form-data, got %s", contentType)
 				}
 
 				w.WriteHeader(tt.statusCode)
@@ -763,19 +701,26 @@ func TestAPIClient_UploadToStorage(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := internal.NewAPIClient("")
+			client := internal.NewAPIClient(server.URL)
+			auth := &internal.Auth{
+				APIKey:    "test-key",
+				CreatedAt: time.Now(),
+			}
 
-			err := client.UploadToStorage(tmpFile, server.URL)
+			filePath, err := client.UploadFileDirect(tt.botName, tt.version, tmpFile, auth)
 
 			if tt.expectedError {
 				if err == nil {
-					t.Errorf("UploadToStorage() expected error but got nil")
+					t.Errorf("UploadFileDirect() expected error but got nil")
 				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
-					t.Errorf("UploadToStorage() error = %v, expected to contain %v", err, tt.errorContains)
+					t.Errorf("UploadFileDirect() error = %v, expected to contain %v", err, tt.errorContains)
 				}
 			} else {
 				if err != nil {
-					t.Errorf("UploadToStorage() unexpected error = %v", err)
+					t.Errorf("UploadFileDirect() unexpected error = %v", err)
+				}
+				if filePath != tt.expectedPath {
+					t.Errorf("UploadFileDirect() returned path %s, expected %s", filePath, tt.expectedPath)
 				}
 			}
 		})
