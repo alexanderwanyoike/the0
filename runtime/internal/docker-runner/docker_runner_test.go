@@ -29,10 +29,7 @@ func TestIntegration_EntrypointScriptGeneration_BotVsBacktest(t *testing.T) {
 	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
-	runner := &dockerRunner{
-		logger:  logger,
-		tempDir: tempDir,
-	}
+	scriptManager := NewScriptManager(logger)
 
 	tests := []struct {
 		name            string
@@ -87,7 +84,7 @@ func TestIntegration_EntrypointScriptGeneration_BotVsBacktest(t *testing.T) {
 			require.NoError(t, err)
 
 			// Generate entrypoint script
-			scriptPath, err := runner.createEntrypointScript(test.executable, botDir)
+			scriptPath, err := scriptManager.Create(context.Background(), test.executable, botDir)
 			require.NoError(t, err)
 			assert.NotEmpty(t, scriptPath)
 
@@ -116,10 +113,7 @@ func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
 	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
-	runner := &dockerRunner{
-		logger:  logger,
-		tempDir: tempDir,
-	}
+	scriptManager := NewScriptManager(logger)
 
 	executable := model.Executable{
 		ID:         "test-nodejs-bot",
@@ -140,7 +134,7 @@ func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate entrypoint script
-	scriptPath, err := runner.createEntrypointScript(executable, botDir)
+	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, scriptPath)
 
@@ -177,12 +171,10 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -247,12 +239,10 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -344,12 +334,10 @@ func TestIntegration_RealDocker_StartStopContainer_BacktestEntrypoint(t *testing
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -402,12 +390,10 @@ func TestIntegration_RealDocker_DifferentExecutables_SameContainer(t *testing.T)
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -598,12 +584,10 @@ func TestIntegration_RealDocker_NodeJSBacktest(t *testing.T) {
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -683,12 +667,10 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -762,12 +744,10 @@ func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
 	minioServer := startMinIOTestServer(t)
 	defer minioServer.Close()
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -852,12 +832,10 @@ func TestStoreAnalysisResult(t *testing.T) {
 	os.Setenv("MINIO_BACKTESTS_BUCKET", "test-backtests")
 	defer os.Unsetenv("MINIO_BACKTESTS_BUCKET")
 
-	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger:  logger,
-		TempDir: tempDir,
+		Logger: logger,
 	})
 	require.NoError(t, err)
 	defer runner.Close()

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -84,8 +83,7 @@ func (factory *ScheduledBotDockerRunnerFactory) CreateDockerRunner(
 	worker *ScheduledBotWorker,
 ) (dockerrunner.DockerRunner, error) {
 	return dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
-		Logger:  &util.DefaultLogger{},
-		TempDir: os.Getenv("DOCKER_TEMP_DIR"),
+		Logger: &util.DefaultLogger{},
 	})
 }
 
