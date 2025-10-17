@@ -55,23 +55,31 @@ func setupMinIOTestContainer(t *testing.T) (testcontainers.Container, string, st
 func TestNewMinIOLogger(t *testing.T) {
 	// Test missing environment variables
 	t.Run("MissingEndpoint", func(t *testing.T) {
-		os.Setenv("MINIO_ENDPOINT", "")
-		os.Setenv("MINIO_ACCESS_KEY", "test")
-		os.Setenv("MINIO_SECRET_KEY", "test")
 
-		_, err := NewMinIOLogger(context.Background())
+		_, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      "",
+			AccessKey:     "test",
+			SecretKey:     "test",
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "MINIO_ENDPOINT")
+		assert.Contains(t, err.Error(), "endpoint is required")
 	})
 
 	t.Run("MissingAccessKey", func(t *testing.T) {
-		os.Setenv("MINIO_ENDPOINT", "localhost:9000")
-		os.Setenv("MINIO_ACCESS_KEY", "")
-		os.Setenv("MINIO_SECRET_KEY", "test")
 
-		_, err := NewMinIOLogger(context.Background())
+		_, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      "localhost:9000",
+			AccessKey:     "",
+			SecretKey:     "test",
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "MINIO_ACCESS_KEY")
+		assert.Contains(t, err.Error(), "access key is required")
 	})
 
 	t.Run("MissingSecretKey", func(t *testing.T) {
@@ -79,9 +87,16 @@ func TestNewMinIOLogger(t *testing.T) {
 		os.Setenv("MINIO_ACCESS_KEY", "test")
 		os.Setenv("MINIO_SECRET_KEY", "")
 
-		_, err := NewMinIOLogger(context.Background())
+		_, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      "localhost:9000",
+			AccessKey:     "test",
+			SecretKey:     "",
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "MINIO_SECRET_KEY")
+		assert.Contains(t, err.Error(), "secret key is required")
 	})
 
 	t.Run("SuccessfulConnection", func(t *testing.T) {
@@ -94,7 +109,14 @@ func TestNewMinIOLogger(t *testing.T) {
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
 
-		logger, err := NewMinIOLogger(context.Background())
+		logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      endpoint,
+			AccessKey:     accessKey,
+			SecretKey:     secretKey,
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, logger)
 
@@ -158,7 +180,14 @@ func TestAppendBotLogs(t *testing.T) {
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
 
-		logger, err := NewMinIOLogger(context.Background())
+		logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      endpoint,
+			AccessKey:     accessKey,
+			SecretKey:     secretKey,
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		require.NoError(t, err)
 		defer logger.Close()
 
@@ -204,7 +233,14 @@ func TestAppendBotLogs(t *testing.T) {
 		os.Setenv("MINIO_USE_SSL", "false")
 		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
 
-		logger, err := NewMinIOLogger(context.Background())
+		logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      endpoint,
+			AccessKey:     accessKey,
+			SecretKey:     secretKey,
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		require.NoError(t, err)
 		defer logger.Close()
 
@@ -266,13 +302,14 @@ func TestStoreFinalLogs(t *testing.T) {
 		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
 		defer container.Terminate(context.Background())
 
-		os.Setenv("MINIO_ENDPOINT", endpoint)
-		os.Setenv("MINIO_ACCESS_KEY", accessKey)
-		os.Setenv("MINIO_SECRET_KEY", secretKey)
-		os.Setenv("MINIO_USE_SSL", "false")
-		os.Setenv("MINIO_LOGS_BUCKET", "test-logs")
-
-		logger, err := NewMinIOLogger(context.Background())
+		logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+			Endpoint:      endpoint,
+			AccessKey:     accessKey,
+			SecretKey:     secretKey,
+			UseSSL:        false,
+			LogsBucket:    "test-logs",
+			ResultsBucket: "test-results",
+		})
 		require.NoError(t, err)
 		defer logger.Close()
 
@@ -291,7 +328,7 @@ func TestStoreFinalLogs(t *testing.T) {
 
 		objectPath := fmt.Sprintf("%s/logs.txt", botID)
 
-		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
+		obj, err := client.GetObject(context.Background(), "test-results", objectPath, minio.GetObjectOptions{})
 		require.NoError(t, err)
 		defer obj.Close()
 
@@ -397,7 +434,7 @@ func TestGetMutexConcurrency(t *testing.T) {
 func TestMinIOLoggerInterface(t *testing.T) {
 	// Test that minIOLogger implements MinIOLogger interface
 	var logger MinIOLogger = &minIOLogger{
-		bucketName:    "test",
+		logsBucket:    "test",
 		resultsBucket: "test",
 		mutexes:       make(map[string]*sync.Mutex),
 		mutexesMu:     sync.RWMutex{},

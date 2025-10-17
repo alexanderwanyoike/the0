@@ -148,7 +148,14 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 	}
 
 	// Create MinIO logger for bot logs
-	minioLogger, err := miniologger.NewMinIOLogger(context.Background())
+	minioLogger, err := miniologger.NewMinIOLogger(context.Background(), miniologger.MinioLoggerOptions{
+		Endpoint:      config.MinIOEndpoint,
+		AccessKey:     config.MinIOAccessKeyID,
+		SecretKey:     config.MinIOSecretAccessKey,
+		UseSSL:        config.MinIOUseSSL,
+		LogsBucket:    config.MinioLogsBucket,
+		ResultsBucket: config.MinioResultsBucket,
+	})
 	if err != nil {
 		logger.Info("Warning: Failed to create MinIO logger, bot logs will not be persisted", "error", err.Error())
 		// Continue without MinIO logging rather than failing completely
@@ -252,9 +259,7 @@ func (r *dockerRunner) initializeLogCollector() LogCollector {
 
 		filter := filters.NewArgs()
 		filter.Add("label", "runtime.managed=true")
-		if currentSegment != -1 {
-			filter.Add("label", fmt.Sprintf("runtime.segment=%d", currentSegment))
-		}
+		filter.Add("label", fmt.Sprintf("runtime.segment=%d", currentSegment))
 
 		containers, err := r.orchestrator.ListContainer(ctx, filter)
 		if err != nil {
@@ -623,6 +628,7 @@ func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, re
 
 	// Write JSON to MinIO
 	reader := bytes.NewReader(result)
+	r.logger.Info("Storing analysis result to MinIO", "bot_id", botID, "object", objectName, "bucket", r.resultsBucket)
 	_, err := r.minioClient.PutObject(ctx, r.resultsBucket, objectName, reader, int64(len(result)), minio.PutObjectOptions{
 		ContentType: "application/json",
 	})

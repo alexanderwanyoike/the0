@@ -17,6 +17,7 @@ type DockerRunnerConfig struct {
 	MinIOUseSSL          bool   // Whether to use SSL/TLS for MinIO connections
 	MinIOCodeBucket      string // Bucket containing bot code archives
 	MinioResultsBucket   string // Bucket for storing backtest results
+	MinioLogsBucket      string // Bucket for storing logs
 	TempDir              string // Temporary directory for extracted bot code
 	MemoryLimitMB        int64  // Memory limit in bytes for containers
 	CPUShares            int64  // CPU shares allocated to containers
@@ -46,17 +47,22 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 
 	resultsBucket := os.Getenv("MINIO_BACKTESTS_BUCKET")
 	if resultsBucket == "" {
-		resultsBucket = "test-results"
+		resultsBucket = "backtests"
 	}
 
-	tempDir := os.Getenv("TEMP_DIR")
-	if tempDir == "" {
-		tempDir = "/tmp/runtime"
+	logsBucket := os.Getenv("MINIO_LOGS_BUCKET")
+	if logsBucket == "" {
+		logsBucket = "bot-logs"
 	}
 
 	codeBucket := os.Getenv("MINIO_CODE_BUCKET")
 	if codeBucket == "" {
 		codeBucket = "custom-bots"
+	}
+
+	tempDir := os.Getenv("TEMP_DIR")
+	if tempDir == "" {
+		tempDir = "/tmp/runtime"
 	}
 
 	return &DockerRunnerConfig{

@@ -93,7 +93,7 @@ func (lc *logCollector) collectAllLogs() {
 
 // collectAndStoreLogs fetches logs from a single container and stores them in MinIO.
 func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
-	lc.logger.Info("Log Collector: Collecting logs", "container_id", containerInfo.ID, "bot_id", containerInfo.ID)
+	lc.logger.Info("Log Collector: Collecting logs", "container_id", containerInfo.ContainerID, "bot_id", containerInfo.ID)
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
