@@ -79,6 +79,46 @@ describe("Custom Bot Schema Validation", () => {
       });
     });
 
+    it("should fail when bot schema is invalid JSON schema", () => {
+      const configWithInvalidBotSchema = {
+        ...validConfig,
+        schema: {
+          bot: {
+            type: "invalid-type",
+            properties: "not-an-object",
+          },
+        },
+      };
+      const result = validateCustomBotConfigPayload(configWithInvalidBotSchema);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+    });
+
+    it("should fail when backtest schema is invalid JSON schema", () => {
+      const configWithInvalidBacktestSchema = {
+        ...validConfig,
+        entrypoints: {
+          bot: "main.py",
+          backtest: "backtest.py",
+        },
+        schema: {
+          bot: {
+            type: "object",
+            properties: { param1: { type: "string" } },
+          },
+          backtest: {
+            type: "invalid-type",
+            properties: "not-an-object",
+          },
+        },
+      };
+      const result = validateCustomBotConfigPayload(
+        configWithInvalidBacktestSchema,
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors).toBeDefined();
+    });
+
     it("should validate realtime bot with nodejs20 runtime", () => {
       const realtimeConfig = {
         ...validConfig,
@@ -595,7 +635,7 @@ describe("Custom Bot Schema Validation", () => {
     });
 
     it("should validate missing optional fields", () => {
-      const minimalConfig = {
+      const minimalConfig: Partial<CustomBotConfig> = {
         name: "minimal-bot",
         version: "1.0.0",
         type: "scheduled",
@@ -605,8 +645,18 @@ describe("Custom Bot Schema Validation", () => {
           backtest: "backtest.py",
         },
         schema: {
-          bot: {},
-          backtest: {},
+          bot: {
+            type: "object",
+            properties: { param1: { type: "string" } },
+          },
+          backtest: {
+            type: "object",
+            properties: {
+              startDate: { type: "string", format: "date" },
+              endDate: { type: "string", format: "date" },
+            },
+            required: ["startDate", "endDate"],
+          },
         },
         readme:
           "This is a minimal but valid readme that meets the length requirement for validation.",
