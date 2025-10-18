@@ -3,7 +3,7 @@ import addFormats from "ajv-formats";
 import { CustomBotConfig } from "./custom-bot.types";
 
 const ajv = new Ajv();
-const schemaAjv = new Ajv({ strict: true, strictSchema: true });
+const schemaAjv = new Ajv({ strict: true, strictSchema: false });
 addFormats(schemaAjv);
 
 export const customBotConfigSchema = {
