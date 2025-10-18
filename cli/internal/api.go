@@ -45,7 +45,7 @@ type APIBotConfig struct {
 type CustomBotVersion struct {
 	Version   string       `json:"version"`
 	Config    APIBotConfig `json:"config"`
-	FilePath   string       `json:"FilePath"`
+	FilePath  string       `json:"FilePath"`
 	CreatedAt string       `json:"createdAt"`
 	UpdatedAt string       `json:"updatedAt"`
 }
@@ -57,8 +57,8 @@ type CustomBotData struct {
 	UserId        string             `json:"userId"`
 	LatestVersion string             `json:"latestVersion"`
 	Versions      []CustomBotVersion `json:"versions"`
-	CreatedAt     string `json:"createdAt"`
-	UpdatedAt     string `json:"updatedAt"`
+	CreatedAt     string             `json:"createdAt"`
+	UpdatedAt     string             `json:"updatedAt"`
 }
 
 // CustomBotAPIResponse represents the full API response structure
@@ -70,14 +70,28 @@ type CustomBotAPIResponse struct {
 
 // BotInstance represents a deployed bot instance
 type BotInstance struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Config    map[string]any `json:"config"`
-	Topic     string         `json:"topic"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
-	UserID      string `json:"userId"`
-	CustomBotId string `json:"customBotId"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Config      map[string]any `json:"config"`
+	Topic       string         `json:"topic"`
+	CreatedAt   string         `json:"createdAt"`
+	UpdatedAt   string         `json:"updatedAt"`
+	UserID      string         `json:"userId"`
+	CustomBotId string         `json:"customBotId"`
+}
+
+// BacktestInstance represents a deployed backtest instance
+type BacktestInstance struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Config      map[string]any `json:"config"`
+	Status      string         `json:"status"`
+	Progress    float64        `json:"progress,omitempty"`
+	Results     map[string]any `json:"results,omitempty"`
+	CreatedAt   string         `json:"createdAt"`
+	UpdatedAt   string         `json:"updatedAt"`
+	UserID      string         `json:"userId"`
+	CustomBotId string         `json:"customBotId"`
 }
 
 // BotListResponse represents the response for listing bot instances
@@ -95,13 +109,18 @@ type BotUpdateRequest struct {
 	Config map[string]any `json:"config"`
 }
 
+// BacktestDeployRequest represents the request for deploying a backtest
+type BacktestDeployRequest struct {
+	Name   string         `json:"name"`
+	Config map[string]any `json:"config"`
+}
+
 // APIResponse represents a generic API response
 type APIResponse struct {
 	Success bool   `json:"success"`
 	Data    any    `json:"data,omitempty"`
 	Message string `json:"message"`
 }
-
 
 // CustomBotDeployRequest represents the new deploy request with file path
 type CustomBotDeployRequest struct {
@@ -404,6 +423,20 @@ type BotListAPIResponse struct {
 	Message string        `json:"message"`
 }
 
+// BacktestAPIResponse represents the full API response structure for backtests
+type BacktestAPIResponse struct {
+	Success bool               `json:"success"`
+	Data    []BacktestInstance `json:"data"`
+	Message string             `json:"message"`
+}
+
+// SingleBacktestAPIResponse represents API response for single backtest operations
+type SingleBacktestAPIResponse struct {
+	Success bool             `json:"success"`
+	Data    BacktestInstance `json:"data"`
+	Message string           `json:"message"`
+}
+
 // ListBots retrieves the list of deployed bot instances
 func (c *APIClient) ListBots(auth *Auth) ([]BotInstance, error) {
 	req, err := http.NewRequest("GET", c.BaseURL+"/bot", nil)
@@ -534,7 +567,7 @@ type UserBot struct {
 	ID            string         `json:"id"`
 	CustomBotName string         `json:"customBotName"`
 	CustomBot     *CustomBotData `json:"customBot,omitempty"`
-	AcquiredAt    string `json:"acquiredAt"`
+	AcquiredAt    string         `json:"acquiredAt"`
 }
 
 // UserBotListResponse represents the response for listing user bots
@@ -857,9 +890,9 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 
 	// Parse the response as a flat structure instead of wrapped
 	var uploadResponse struct {
-		Success bool   `json:"success"`
+		Success  bool   `json:"success"`
 		FilePath string `json:"filePath"`
-		Message string `json:"message"`
+		Message  string `json:"message"`
 	}
 
 	if err := json.Unmarshal(body, &uploadResponse); err != nil {
@@ -876,4 +909,122 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 	}
 
 	return uploadResponse.FilePath, nil
+}
+
+// CreateBacktest deploys a new backtest instance
+func (c *APIClient) CreateBacktest(auth *Auth, request *BacktestDeployRequest) (*BacktestInstance, error) {
+	requestData, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", c.BaseURL+"/backtest", bytes.NewBuffer(requestData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		return nil, fmt.Errorf("API error: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	var backtest BacktestInstance
+	if err := json.Unmarshal(body, &backtest); err != nil {
+		return nil, fmt.Errorf("failed to parse API response: %v", err)
+	}
+
+	return &backtest, nil
+}
+
+// ListBacktests retrieves all backtest instances for the authenticated user
+func (c *APIClient) ListBacktests(auth *Auth) ([]BacktestInstance, error) {
+	req, err := http.NewRequest("GET", c.BaseURL+"/backtest", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+	}
+
+	// Try to parse as wrapped response first
+	var apiResponse BacktestAPIResponse
+	if err := json.Unmarshal(body, &apiResponse); err == nil {
+		if !apiResponse.Success {
+			return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
+		}
+		return apiResponse.Data, nil
+	}
+
+	// Fallback: try to parse as direct array (for backward compatibility)
+	var backtests []BacktestInstance
+	if err := json.Unmarshal(body, &backtests); err != nil {
+		return nil, fmt.Errorf("failed to parse API response: %v", err)
+	}
+
+	return backtests, nil
+}
+
+// DeleteBacktest deletes a specific backtest instance
+func (c *APIClient) DeleteBacktest(auth *Auth, backtestID string) error {
+	req, err := http.NewRequest("DELETE", c.BaseURL+"/backtest/"+backtestID, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("backtest not found: %s", backtestID)
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return fmt.Errorf("API error: %d", resp.StatusCode)
+	}
+
+	return nil
 }

@@ -35,6 +35,7 @@ the0 CLI - Terminal-based trading bot management`,
 	// Add command groups
 	rootCmd.AddCommand(cmd.NewCustomBotCmd())
 	rootCmd.AddCommand(cmd.NewBotCmd())
+	rootCmd.AddCommand(cmd.NewBacktestCmd())
 	rootCmd.AddCommand(cmd.NewAuthCmd())
 	rootCmd.AddCommand(cmd.NewCheckUpdateCmd())
 	rootCmd.AddCommand(cmd.NewSelfUpdateCmd())

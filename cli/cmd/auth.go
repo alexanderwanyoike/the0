@@ -129,22 +129,22 @@ func authConfig(cmd *cobra.Command, args []string) {
 		// Show current API URL
 		currentURL := internal.GetAPIBaseURL()
 		envURL := os.Getenv("THE0_API_URL")
-		
+
 		fmt.Println("Current API Configuration:")
 		fmt.Printf("  API URL: %s\n", currentURL)
-		
+
 		if envURL != "" {
 			fmt.Printf("  Source: THE0_API_URL environment variable\n")
 		} else {
 			fmt.Printf("  Source: Default (http://localhost:3000)\n")
 		}
-		
+
 		fmt.Println("\nTo change the API URL:")
 		fmt.Println("  the0 auth config <new-url>")
 		fmt.Println("  export THE0_API_URL=<new-url>")
 		return
 	}
-	
+
 	// Set API URL via environment variable hint
 	newURL := args[0]
 	fmt.Printf("To set API URL to %s, use one of these methods:\n\n", newURL)
