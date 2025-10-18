@@ -55,7 +55,7 @@ export class BotValidator {
     // Filter config if additionalProperties is false
     const configToValidate = this.filterConfigForSchema(config, bot);
 
-    const ajv = new Ajv({ allErrors: true });
+    const ajv = new Ajv({ allErrors: true, strictSchema: false });
     addFormats(ajv);
     const validate = ajv.compile(bot);
     if (validate(configToValidate)) {

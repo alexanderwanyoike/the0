@@ -49,7 +49,7 @@ export class BacktestValidator {
     // Filter config if additionalProperties is false
     const configToValidate = this.filterConfigForSchema(config, backtest);
 
-    const ajv = new Ajv({ allErrors: true });
+    const ajv = new Ajv({ allErrors: true, strictSchema: false });
     addFormats(ajv);
     const validate = ajv.compile(backtest);
     if (validate(configToValidate)) {

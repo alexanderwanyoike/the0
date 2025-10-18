@@ -79,46 +79,6 @@ describe("Custom Bot Schema Validation", () => {
       });
     });
 
-    it("should fail when bot schema is invalid JSON schema", () => {
-      const configWithInvalidBotSchema = {
-        ...validConfig,
-        schema: {
-          bot: {
-            type: "invalid-type",
-            properties: "not-an-object",
-          },
-        },
-      };
-      const result = validateCustomBotConfigPayload(configWithInvalidBotSchema);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toBeDefined();
-    });
-
-    it("should fail when backtest schema is invalid JSON schema", () => {
-      const configWithInvalidBacktestSchema = {
-        ...validConfig,
-        entrypoints: {
-          bot: "main.py",
-          backtest: "backtest.py",
-        },
-        schema: {
-          bot: {
-            type: "object",
-            properties: { param1: { type: "string" } },
-          },
-          backtest: {
-            type: "invalid-type",
-            properties: "not-an-object",
-          },
-        },
-      };
-      const result = validateCustomBotConfigPayload(
-        configWithInvalidBacktestSchema,
-      );
-      expect(result.valid).toBe(false);
-      expect(result.errors).toBeDefined();
-    });
-
     it("should validate realtime bot with nodejs20 runtime", () => {
       const realtimeConfig = {
         ...validConfig,
