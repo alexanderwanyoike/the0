@@ -57,6 +57,8 @@ the0 backtest deploy <config.json>
 
 ### Common Backtest Parameters
 
+> **Note**: These parameters are examples and may vary depending on your custom bot strategy. Each strategy defines its own configuration schema.
+
 - **initial_capital**: Starting capital for the backtest
 - **timeframe**: Time interval for data (e.g., "1m", "5m", "1h", "1d")
 - **start_date**: Backtest start date (YYYY-MM-DD format)
@@ -155,7 +157,7 @@ the0 backtest list
 ┌──────────────┬─────────────────────┬─────────────┬────────────────────┬────────────────────┐
 │      ID      │        NAME         │   STATUS    │     CREATED AT     │     UPDATED AT     │
 ├──────────────┼─────────────────────┼─────────────┼────────────────────┼────────────────────┤
-│ bt_123456789 │ rsi-momentum-test   │ ✅ Completed │ 2025-01-15 10:30   │ 2025-01-15 12:45   │
+│ bt_123456789 │ rsi-momentum-test   │ ✅ Completed│ 2025-01-15 10:30   │ 2025-01-15 12:45   │
 │ bt_987654321 │ portfolio-backtest  │ 🔄 Running  │ 2025-01-15 14:20   │ 2025-01-15 15:30   │
 └──────────────┴─────────────────────┴─────────────┴────────────────────┴────────────────────┘
 
@@ -181,18 +183,17 @@ the0 backtest delete <backtest_id>
 
 - Requires confirmation before deletion
 - Cannot be undone
-- Results and historical data are permanently removed
 
 #### Example
 
 ```bash
-the0 backtest delete bt_123456789
-⚠️ Are you sure you want to delete backtest 'bt_123456789'?
+the0 backtest delete 123456789
+⚠️ Are you sure you want to delete backtest '123456789'?
 This action cannot be undone
 Type 'yes' to confirm: yes
 
 🗑️ Starting backtest deletion process...
-✅ Backtest 'bt_123456789' deleted successfully 🗑️
+✅ Backtest '123456789' deleted successfully 🗑️
 ```
 
 ## Backtest Examples
@@ -279,15 +280,6 @@ Type 'yes' to confirm: yes
 4. **Monitor running backtests** to track progress and catch issues early
 5. **Document your parameters** to easily reproduce successful backtests
 6. **Clean up old backtests** to keep your workspace organized
-
-## Common Timeframes
-
-| Timeframe | Description | Best For |
-|-----------|-------------|-----------|
-| `1m`, `5m` | Intraday | High-frequency strategies, scalping |
-| `15m`, `30m`, `1h` | Short-term | Day trading, swing trading |
-| `4h`, `1d` | Medium-term | Position trading, trend following |
-| `1w` | Long-term | Investment strategies, fundamental analysis |
 
 ## Related Commands
 
