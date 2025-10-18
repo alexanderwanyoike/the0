@@ -151,7 +151,6 @@ func TestAPIClient_ListBacktests(t *testing.T) {
 					"id": "bt_123",
 					"name": "backtest-1",
 					"status": "completed",
-					"progress": 1.0,
 					"config": {"type": "test"},
 					"createdAt": "2024-01-01T00:00:00Z",
 					"updatedAt": "2024-01-01T01:00:00Z"
@@ -160,7 +159,6 @@ func TestAPIClient_ListBacktests(t *testing.T) {
 					"id": "bt_456",
 					"name": "backtest-2",
 					"status": "running",
-					"progress": 0.5,
 					"config": {"type": "test"},
 					"createdAt": "2024-01-02T00:00:00Z",
 					"updatedAt": "2024-01-02T00:30:00Z"

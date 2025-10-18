@@ -86,7 +86,6 @@ type BacktestInstance struct {
 	Name        string         `json:"name"`
 	Config      map[string]any `json:"config"`
 	Status      string         `json:"status"`
-	Progress    float64        `json:"progress,omitempty"`
 	Results     map[string]any `json:"results,omitempty"`
 	CreatedAt   string         `json:"createdAt"`
 	UpdatedAt   string         `json:"updatedAt"`

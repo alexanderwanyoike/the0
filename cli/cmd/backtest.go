@@ -197,11 +197,10 @@ func listBacktests(cmd *cobra.Command, args []string) {
 
 	// Create table
 	table := tablewriter.NewWriter(os.Stdout)
-	table.Header("ID", "Name", "Status", "Progress", "Created At", "Updated At")
+	table.Header("ID", "Name", "Status", "Created At", "Updated At")
 
 	for _, backtest := range backtests {
 		status := formatBacktestStatus(backtest.Status)
-		progress := formatProgress(backtest.Progress)
 
 		// Convert ISO timestamps to readable dates
 		createdTime, err := time.Parse(time.RFC3339, backtest.CreatedAt)
@@ -220,7 +219,7 @@ func listBacktests(cmd *cobra.Command, args []string) {
 			updatedStr = updatedTime.Format("2006-01-02 15:04")
 		}
 
-		table.Append(truncateID(backtest.ID), backtest.Name, status, progress, createdStr, updatedStr)
+		table.Append(backtest.ID, backtest.Name, status, createdStr, updatedStr)
 	}
 
 	if err := table.Render(); err != nil {
@@ -306,18 +305,4 @@ func formatBacktestStatus(status string) string {
 	default:
 		return "❓ Unknown"
 	}
-}
-
-func formatProgress(progress float64) string {
-	if progress == 0 {
-		return "-"
-	}
-	return fmt.Sprintf("%.1f%%", progress*100)
-}
-
-func truncateID(id string) string {
-	if len(id) <= 8 {
-		return id
-	}
-	return id[:8] + "..."
 }
