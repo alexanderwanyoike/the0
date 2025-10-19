@@ -123,7 +123,7 @@ Tabular data for detailed analysis:
 ### Python Structure
 
 ```python
-def backtest(id: str, config: dict) -> dict:
+def main(id: str, config: dict) -> dict:
     # Your backtesting logic here
 
     return {
@@ -176,7 +176,7 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime, timedelta
 
-def backtest(id: str, config: dict) -> dict:
+def main(id: str, config: dict) -> dict:
   """
   Simple backtest implementation example
   """
