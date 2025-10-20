@@ -344,6 +344,7 @@ func setupTestEnvironment(t *testing.T) (mongoUri string, minioEndpoint string, 
 	// Set database environment variables for worker
 	os.Setenv("DB_NAME", "test_backtest_db")
 	os.Setenv("COLLECTION_NAME", "backtests")
+	os.Setenv("TEMP_DIR", "/tmp")
 
 	cleanupAll = func() {
 		os.Unsetenv("MINIO_ENDPOINT")
@@ -367,8 +368,7 @@ func (factory *TestBacktestDockerRunnerFactory) CreateDockerRunner(
 	// Create Docker runner with MinIO configuration from environment
 	// The MinIO environment variables are set by the test setup
 	return dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
-		Logger:  &util.DefaultLogger{},
-		TempDir: "/tmp",
+		Logger: &util.DefaultLogger{},
 	})
 }
 

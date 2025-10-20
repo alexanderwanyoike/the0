@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -22,38 +21,50 @@ type MinIOLogger interface {
 
 type minIOLogger struct {
 	client        *minio.Client
-	bucketName    string
+	logsBucket    string
 	resultsBucket string
 	mutexes       map[string]*sync.Mutex // Per-bot mutexes to prevent concurrent writes
 	mutexesMu     sync.RWMutex           // Protects the mutexes map
 }
 
-func NewMinIOLogger(ctx context.Context) (*minIOLogger, error) {
-	endpoint := os.Getenv("MINIO_ENDPOINT")
-	if endpoint == "" {
-		return nil, fmt.Errorf("MINIO_ENDPOINT environment variable is required")
+type MinioLoggerOptions struct {
+	LogsBucket    string
+	ResultsBucket string
+	Endpoint      string
+	AccessKey     string
+	SecretKey     string
+	UseSSL        bool
+}
+
+func NewMinIOLogger(
+	ctx context.Context,
+	options MinioLoggerOptions,
+) (*minIOLogger, error) {
+	if options.Endpoint == "" {
+		return nil, fmt.Errorf("endpoint is required")
 	}
 
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	if accessKey == "" {
-		return nil, fmt.Errorf("MINIO_ACCESS_KEY environment variable is required")
+	if options.AccessKey == "" {
+		return nil, fmt.Errorf("access key is required")
 	}
 
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if secretKey == "" {
-		return nil, fmt.Errorf("MINIO_SECRET_KEY environment variable is required")
+	if options.SecretKey == "" {
+		return nil, fmt.Errorf("secret key is required")
 	}
 
-	bucketName := os.Getenv("MINIO_LOGS_BUCKET")
-	if bucketName == "" {
-		bucketName = "bot-logs" // Default bucket name
+	if options.LogsBucket == "" {
+		options.LogsBucket = "bot-logs" // Default bucket name
 	}
 
-	useSSL := os.Getenv("MINIO_USE_SSL") == "true" || os.Getenv("MINIO_SSL") == "true"
+	if options.ResultsBucket == "" {
+		options.ResultsBucket = "backtest" // Use same bucket by default
+	}
+
+	useSSL := options.UseSSL
 
 	// Initialize MinIO client
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+	client, err := minio.New(options.Endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(options.AccessKey, options.SecretKey, ""),
 		Secure: useSSL,
 	})
 	if err != nil {
@@ -61,28 +72,41 @@ func NewMinIOLogger(ctx context.Context) (*minIOLogger, error) {
 	}
 
 	// Ensure bucket exists
-	exists, err := client.BucketExists(ctx, bucketName)
+	exists, err := client.BucketExists(ctx, options.LogsBucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if bucket exists: %v", err)
 	}
 
 	if !exists {
-		err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+		err = client.MakeBucket(ctx, options.LogsBucket, minio.MakeBucketOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %v", err)
 		}
 	}
 
 	// Set results bucket - same as main bucket for now, but could be different
-	resultsBucket := os.Getenv("MINIO_RESULTS_BUCKET")
-	if resultsBucket == "" {
-		resultsBucket = bucketName // Use same bucket by default
+
+	if options.ResultsBucket == "" {
+		options.ResultsBucket = "backtest" // Use same bucket by default
+	}
+
+	// Create results bucket if it doesn't exist
+	exists, err = client.BucketExists(ctx, options.ResultsBucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if results bucket exists: %v", err)
+	}
+
+	if !exists {
+		err = client.MakeBucket(ctx, options.ResultsBucket, minio.MakeBucketOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create results bucket: %v", err)
+		}
 	}
 
 	return &minIOLogger{
 		client:        client,
-		bucketName:    bucketName,
-		resultsBucket: resultsBucket,
+		logsBucket:    options.LogsBucket,
+		resultsBucket: options.ResultsBucket,
 		mutexes:       make(map[string]*sync.Mutex),
 		mutexesMu:     sync.RWMutex{},
 	}, nil
@@ -127,11 +151,11 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	// Generate file path: logs/{bot_id}/{YYYYMMDD}.log
 	timestamp := time.Now().Format("20060102") // YYYYMMDD format
 	objectPath := fmt.Sprintf("logs/%s/%s.log", id, timestamp)
-	fmt.Printf("DEBUG: Attempting to append logs to MinIO path: %s, bucket: %s\n", objectPath, m.bucketName)
+	fmt.Printf("DEBUG: Attempting to append logs to MinIO path: %s, bucket: %s\n", objectPath, m.logsBucket)
 
 	// Read existing content if file exists
 	var existingContent []byte
-	obj, err := m.client.GetObject(ctx, m.bucketName, objectPath, minio.GetObjectOptions{})
+	obj, err := m.client.GetObject(ctx, m.logsBucket, objectPath, minio.GetObjectOptions{})
 	if err != nil {
 		// Check if error is NoSuchKey (file doesn't exist) using string contains
 		fmt.Printf("DEBUG: GetObject error: %v\n", err)
@@ -174,7 +198,7 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	// Write the combined content back to MinIO
 	reader := bytes.NewReader(buffer.Bytes())
 	fmt.Printf("DEBUG: Writing %d bytes to MinIO\n", buffer.Len())
-	_, err = m.client.PutObject(ctx, m.bucketName, objectPath, reader, int64(buffer.Len()), minio.PutObjectOptions{
+	_, err = m.client.PutObject(ctx, m.logsBucket, objectPath, reader, int64(buffer.Len()), minio.PutObjectOptions{
 		ContentType: "text/plain",
 	})
 	if err != nil {

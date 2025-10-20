@@ -316,6 +316,7 @@ func setupTestEnvironment(t *testing.T) (mongoUri string, minioEndpoint string, 
 	// Set database environment variables for worker
 	os.Setenv("DB_NAME", "test_db")
 	os.Setenv("COLLECTION_NAME", "bots")
+	os.Setenv("TEMP_DIR", "/tmp")
 
 	cleanupAll = func() {
 		os.Unsetenv("MINIO_ENDPOINT")
@@ -337,8 +338,7 @@ func (factory *TestBotDockerRunnerFactory) CreateDockerRunner(
 	worker *BotWorker,
 ) (dockerrunner.DockerRunner, error) {
 	return dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
-		Logger:  &util.DefaultLogger{},
-		TempDir: "/tmp",
+		Logger: &util.DefaultLogger{},
 	})
 }
 

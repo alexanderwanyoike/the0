@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -84,8 +83,7 @@ func (factory *ScheduledBotDockerRunnerFactory) CreateDockerRunner(
 	worker *ScheduledBotWorker,
 ) (dockerrunner.DockerRunner, error) {
 	return dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
-		Logger:  &util.DefaultLogger{},
-		TempDir: os.Getenv("DOCKER_TEMP_DIR"),
+		Logger: &util.DefaultLogger{},
 	})
 }
 
@@ -263,10 +261,23 @@ func (w *ScheduledBotWorker) performScheduledBotExecution(ctx context.Context, s
 }
 
 // executeScheduledBot executes a single scheduled bot
+// NOTE: This function is called while holding stateMutex in performScheduledBotExecution
 func (w *ScheduledBotWorker) executeScheduledBot(botSchedule model.BotSchedule) {
 	entrypoint := "bot" // Always use "bot" entrypoint for scheduled bots
 
 	util.LogWorker("Starting scheduled bot execution %s with entrypoint %s", botSchedule.ID, entrypoint)
+
+	// Mark as running BEFORE starting goroutine to prevent duplicate concurrent executions
+	// This ensures that the reconciliation loop's "already running" check (line 250) works correctly
+	// NOTE: Caller already holds stateMutex, so we don't need to lock here
+	w.state.RunningBots[botSchedule.ID] = &ScheduledBotExecution{
+		BotID:       botSchedule.ID,
+		ContainerID: "", // Will be updated after container starts
+		Status:      "starting",
+		StartTime:   time.Now(),
+		BotSchedule: botSchedule,
+		Entrypoint:  entrypoint,
+	}
 
 	// Start container (non-blocking since AutoRemove=true handles cleanup)
 	go func() {
@@ -277,6 +288,7 @@ func (w *ScheduledBotWorker) executeScheduledBot(botSchedule model.BotSchedule) 
 			util.LogWorker("Failed to start scheduled bot %s: %v", botSchedule.ID, err)
 			w.stateMutex.Lock()
 			w.state.FailedRestarts++
+			delete(w.state.RunningBots, botSchedule.ID) // Clean up state on failure
 			w.stateMutex.Unlock()
 			return
 		}
@@ -286,19 +298,16 @@ func (w *ScheduledBotWorker) executeScheduledBot(botSchedule model.BotSchedule) 
 			util.LogWorker("Scheduled bot %s started with message: %s, error: %s", botSchedule.ID, result.Message, result.Error)
 			w.stateMutex.Lock()
 			w.state.FailedRestarts++
+			delete(w.state.RunningBots, botSchedule.ID) // Clean up state on error
 			w.stateMutex.Unlock()
 			return
 		}
 
-		// Update tracking with new container info
+		// Update tracking with container ID
 		w.stateMutex.Lock()
-		w.state.RunningBots[botSchedule.ID] = &ScheduledBotExecution{
-			BotID:       botSchedule.ID,
-			ContainerID: result.ContainerID,
-			Status:      "running",
-			StartTime:   time.Now(),
-			BotSchedule: botSchedule,
-			Entrypoint:  entrypoint,
+		if execution, exists := w.state.RunningBots[botSchedule.ID]; exists {
+			execution.ContainerID = result.ContainerID
+			execution.Status = "running"
 		}
 		w.stateMutex.Unlock()
 
