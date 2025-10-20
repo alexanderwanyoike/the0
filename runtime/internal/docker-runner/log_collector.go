@@ -19,6 +19,9 @@ type LogCollector interface {
 
 	// Stop gracefully stops the log collection service.
 	Stop()
+
+	// StoreLogs appends the given logs for the specified bot ID in MinIO.
+	StoreLogs(botID string, logs string) error
 }
 
 // logCollector implements LogCollector with periodic log collection.
@@ -110,7 +113,7 @@ func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
 		return
 	}
 
-	if err := lc.minioLogger.AppendBotLogs(ctx, containerInfo.ID, logs); err != nil {
+	if err := lc.StoreLogs(containerInfo.ID, logs); err != nil {
 		lc.logger.Info("Log Collector: Failed to store logs in MinIO", "bot_id", containerInfo.ID, "error", err.Error())
 		return
 	}
@@ -120,4 +123,10 @@ func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
 		"bot_id", containerInfo.ID,
 		"duration", time.Since(start).String(),
 		"log_size", len(logs))
+}
+
+func (lc *logCollector) StoreLogs(botID string, logs string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return lc.minioLogger.AppendBotLogs(ctx, botID, logs)
 }

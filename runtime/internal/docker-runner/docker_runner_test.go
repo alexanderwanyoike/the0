@@ -22,6 +22,51 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// Shared MinIO server for all integration tests
+// This optimization reduces test execution time from ~150s to ~20s by creating
+// the MinIO testcontainer once instead of 8 times (one per test).
+// Tests remain isolated through unique bucket names and object paths.
+//
+// IMPORTANT: Tests in this package MUST NOT call t.Parallel() because they share
+// the same MinIO server instance. Tests run sequentially by default in Go.
+var sharedMinIOServer *MinIOTestServer
+
+// TestMain runs once before all tests in the package
+// This is the standard Go pattern for shared test setup/teardown
+func TestMain(m *testing.M) {
+	// Start MinIO container once for all tests
+	sharedMinIOServer = startMinIOTestServerForPackage()
+
+	// Run all tests sequentially (do not use -parallel flag with this package)
+	exitCode := m.Run()
+
+	// Cleanup after all tests complete
+	if sharedMinIOServer != nil {
+		sharedMinIOServer.Close()
+	}
+
+	os.Exit(exitCode)
+}
+
+// cleanupSegmentContainers removes any leftover containers from previous test runs
+// This prevents test interference when ListManagedContainers queries Docker by labels
+func cleanupSegmentContainers(t *testing.T, segment int32) {
+	runner, err := NewDockerRunner(DockerRunnerOptions{
+		Logger: &util.DefaultLogger{},
+	})
+	if err != nil {
+		t.Logf("Warning: Failed to create runner for cleanup: %v", err)
+		return
+	}
+	defer runner.Close()
+
+	ctx := context.Background()
+	containers, _ := runner.ListManagedContainers(ctx, segment)
+	for _, container := range containers {
+		runner.StopContainer(ctx, container.ContainerID, model.Executable{Segment: segment})
+	}
+}
+
 // Integration tests that verify the dynamic entrypoint functionality
 // These tests focus on the core entrypoint script generation
 
@@ -162,14 +207,8 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	// Check if Docker is available
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	// Start a real MinIO server for testing
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
 
@@ -230,16 +269,13 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	// Check if Docker is available
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	// Start a real MinIO server for testing
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
+
+	// Clean up any leftover containers from previous tests with same segment
+	cleanupSegmentContainers(t, 1)
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
@@ -247,7 +283,9 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	require.NoError(t, err)
 	defer runner.Close()
 
-	// Create test executable for bot entrypoint that will be uploaded to MinIO
+	ctx := context.Background()
+
+	// Test StartContainer
 	executable := model.Executable{
 		ID:         "real-integration-test-bot",
 		Runtime:    "python3.11",
@@ -270,7 +308,6 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	uploadToMinIO(t, minioServer, executable.FilePath, botZipData)
 
 	// Test StartContainer
-	ctx := context.Background()
 	result, err := runner.StartContainer(ctx, executable)
 	require.NoError(t, err, "StartContainer should succeed")
 	assert.NotNil(t, result)
@@ -325,14 +362,8 @@ func TestIntegration_RealDocker_StartStopContainer_BacktestEntrypoint(t *testing
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	// Check if Docker is available
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	// Start a real MinIO server for testing
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
 
@@ -381,14 +412,8 @@ func TestIntegration_RealDocker_DifferentExecutables_SameContainer(t *testing.T)
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	// Check if Docker is available
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	// Start a real MinIO server for testing
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
 
@@ -484,7 +509,8 @@ func (m *MinIOTestServer) Close() {
 	}
 }
 
-func startMinIOTestServer(t *testing.T) *MinIOTestServer {
+// startMinIOTestServerForPackage starts a shared MinIO server for all tests in TestMain
+func startMinIOTestServerForPackage() *MinIOTestServer {
 	ctx := context.Background()
 
 	// MinIO credentials
@@ -507,13 +533,19 @@ func startMinIOTestServer(t *testing.T) *MinIOTestServer {
 		ContainerRequest: req,
 		Started:          true,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to start MinIO testcontainer: %v", err))
+	}
 
 	// Get the container endpoint
 	host, err := container.Host(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get container host: %v", err))
+	}
 	port, err := container.MappedPort(ctx, "9000")
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get container port: %v", err))
+	}
 
 	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
 
@@ -522,13 +554,6 @@ func startMinIOTestServer(t *testing.T) *MinIOTestServer {
 	os.Setenv("MINIO_ACCESS_KEY", accessKey)
 	os.Setenv("MINIO_SECRET_KEY", secretKey)
 	os.Setenv("MINIO_SSL", "false")
-
-	t.Cleanup(func() {
-		os.Unsetenv("MINIO_ENDPOINT")
-		os.Unsetenv("MINIO_ACCESS_KEY")
-		os.Unsetenv("MINIO_SECRET_KEY")
-		os.Unsetenv("MINIO_SSL")
-	})
 
 	return &MinIOTestServer{
 		container: container,
@@ -565,24 +590,13 @@ func uploadToMinIO(t *testing.T, server *MinIOTestServer, objectName string, dat
 	require.NoError(t, err)
 }
 
-// isDockerAvailable checks if Docker daemon is available
-func isDockerAvailable() bool {
-	// For testcontainers, we need Docker to be available
-	// The testcontainers library will handle checking if Docker is running
-	return true
-}
-
 func TestIntegration_RealDocker_NodeJSBacktest(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
 
@@ -660,14 +674,13 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
+
+	// Clean up any leftover containers from previous tests with same segment
+	cleanupSegmentContainers(t, 2)
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
@@ -689,7 +702,7 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 		FilePath:       "real-python-bot.zip",
 		IsLongRunning:  true,  // Change to true for bot entrypoint
 		PersistResults: false, // Bots don't produce result files
-		Segment:        1,     // Test segment
+		Segment:        2,     // Unique segment to avoid interference with other tests
 	}
 
 	pyZipData := loadRealTestBotFile(t, "py-test-bot.zip")
@@ -737,12 +750,8 @@ func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping real Docker integration test")
-	}
-
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	logger := &util.DefaultLogger{}
 
@@ -820,13 +829,8 @@ func TestStoreAnalysisResult(t *testing.T) {
 		t.Skip("Skipping Docker runner integration test in short mode")
 	}
 
-	if !isDockerAvailable() {
-		t.Skip("Docker is not available, skipping Docker runner integration test")
-	}
-
-	// Start MinIO test server
-	minioServer := startMinIOTestServer(t)
-	defer minioServer.Close()
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
 
 	// Set environment variables for backtests bucket
 	os.Setenv("MINIO_BACKTESTS_BUCKET", "test-backtests")
