@@ -641,10 +641,10 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			errorContains: "upload failed with status 500",
 		},
 		{
-			name:          "API success false",
-			botName:       "test-bot",
-			version:       "1.0.0",
-			statusCode:    200,
+			name:       "API success false",
+			botName:    "test-bot",
+			version:    "1.0.0",
+			statusCode: 200,
 			responseBody: `{
 				"success": false,
 				"message": "Invalid file format"
@@ -653,10 +653,10 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			errorContains: "upload failed: Invalid file format",
 		},
 		{
-			name:          "missing filePath in response",
-			botName:       "test-bot",
-			version:       "1.0.0",
-			statusCode:    200,
+			name:       "missing filePath in response",
+			botName:    "test-bot",
+			version:    "1.0.0",
+			statusCode: 200,
 			responseBody: `{
 				"success": true,
 				"message": "File uploaded successfully"

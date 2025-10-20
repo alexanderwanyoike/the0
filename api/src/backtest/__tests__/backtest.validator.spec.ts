@@ -286,7 +286,10 @@ describe("BacktestValidator", () => {
 
       await validator.validate(validConfig, mockCustomBot);
 
-      expect(Ajv).toHaveBeenCalledWith({ allErrors: true });
+      expect(Ajv).toHaveBeenCalledWith({
+        allErrors: true,
+        strictSchema: false,
+      });
     });
 
     it("should handle mixed case in bot type validation", async () => {

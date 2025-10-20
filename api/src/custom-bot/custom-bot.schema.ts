@@ -1,6 +1,10 @@
 import Ajv from "ajv";
+import addFormats from "ajv-formats";
+import { CustomBotConfig } from "./custom-bot.types";
 
 const ajv = new Ajv();
+const schemaAjv = new Ajv({ strict: true, strictSchema: false });
+addFormats(schemaAjv);
 
 export const customBotConfigSchema = {
   type: "object",
@@ -140,10 +144,11 @@ export const customBotConfigSchema = {
   ],
 };
 
-// Remove the old schema that included gcsPath since we're now handling file uploads
 export const validateCustomBotConfig = ajv.compile(customBotConfigSchema);
 
-export function validateCustomBotConfigPayload(config: any): {
+export function validateCustomBotConfigPayload(
+  config: Partial<CustomBotConfig>,
+): {
   valid: boolean;
   errors?: string[];
 } {
@@ -157,8 +162,43 @@ export function validateCustomBotConfigPayload(config: any): {
         ) || [],
     };
   }
+
+  if (config.schema.bot) {
+    const schemaValidationResult = validateSchema(config.schema.bot);
+    if (!schemaValidationResult.valid) {
+      return {
+        valid: false,
+        errors: schemaValidationResult.errors,
+      };
+    }
+  }
+
+  if (config.schema.backtest) {
+    const backtestSchemaValidationResult = validateSchema(
+      config.schema.backtest,
+    );
+    if (!backtestSchemaValidationResult.valid) {
+      return {
+        valid: false,
+        errors: backtestSchemaValidationResult.errors,
+      };
+    }
+  }
+
   return { valid: true };
 }
+
+// Validates the actual custom bots schemas using a separate AJV instance
+const validateSchema = (
+  schema: object,
+): { valid: boolean; errors?: string[] } => {
+  try {
+    schemaAjv.compile(schema);
+    return { valid: true };
+  } catch (error: any) {
+    return { valid: false, errors: [error.message] };
+  }
+};
 
 // Keep the old validation function name for compatibility but update it
 export function validateCustomBotPayload(payload: any): {

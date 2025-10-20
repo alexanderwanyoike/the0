@@ -11,7 +11,7 @@ The `bot` commands allow you to deploy, manage, and monitor your trading bot ins
 
 ## Overview
 
-Bot instances are deployed configurations of either Custom Bots. These commands help you:
+Bot instances are deployed configurations of Custom Bots. These commands help you:
 
 - Deploy new bot instances
 - List and monitor active bots
@@ -33,10 +33,12 @@ the0 bot deploy <config.json>
 ```json
 {
   "name": "my-trading-bot",
-  "type": "scheduled/alpaca-sma", // "{customBotType}/{customBotName}" for custom bots
+  "type": "scheduled/rsi-momentum", // "{customBotType}/{customBotName}" for custom bots
   "version": "1.0.0",
-  "schedule": "0 0 * * *"
-  // Other parameters specific to the bot type
+  "schedule": "0 0 * * *",
+  "symbol": "BTCUSDT",
+  "risk_level": "medium"
+  // Other parameters specific to the bot type (flat structure)
 }
 ```
 
@@ -157,10 +159,12 @@ the0 bot update <bot_id> <config.json>
 cat > updated-config.json << EOF
 {
   "name": "my-trading-bot-updated",
-  "type": "scheduled/alpaca-sma", // "{customBotType}/{customBotName}" for custom bots
+  "type": "scheduled/rsi-momentum", // "{customBotType}/{customBotName}" for custom bots
   "version": "1.0.0",
   "schedule": "0 0 * * *",
-  // Other parameters specific to the bot type
+  "symbol": "BTCUSDT",
+  "risk_level": "low"
+  // Other parameters specific to the bot type (flat structure)
 }
 EOF
 
@@ -215,5 +219,6 @@ For scheduled bots, use standard cron expressions:
 
 ## Related Commands
 
-- [Custom Bot Commands](/docs/the0-cli/custom-bot-commands) - Deploy your own bot templates
+- [Backtest Commands](/docs/the0-cli/backtest-commands) - Manage backtest instances
+- [Custom Bot Commands](/docs/the0-cli/custom-bot-commands) - Deploy your own bot templates and get schemas
 - [Authentication](/docs/the0-cli/authentication) - Set up API access

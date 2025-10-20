@@ -47,13 +47,23 @@ export THE0_API_URL=http://api.the0.local:3000
 2. **Deploy a bot instance:**
    ```bash
    # Create a config.json file with your bot configuration
-   echo '{"name": "my-trading-bot", "type": "trading", "version": "1.0.0"}' > config.json
+   echo '{"name": "my-trading-bot", "type": "scheduled/rsi-momentum", "version": "1.0.0"}' > config.json
    the0 bot deploy config.json
    ```
 
 3. **List your deployed bots:**
    ```bash
    the0 bot list
+   ```
+
+4. **Deploy and manage backtests:**
+   ```bash
+   # Deploy a backtest
+   echo '{"name": "my-backtest", "type": "scheduled/rsi-momentum", "version": "1.0.0"}' > backtest-config.json
+   the0 backtest deploy backtest-config.json
+
+   # List all backtests
+   the0 backtest list
    ```
 
 ## Commands Reference
@@ -95,13 +105,11 @@ Deploy a new bot instance using a configuration file. The bot name is automatica
 ```json
 {
   "name": "my-trading-bot",
-  "type": "trading",
+  "type": "scheduled/rsi-momentum",
   "version": "1.0.0",
   "schedule": "0 0 * * *",
-  "parameters": {
-    "risk_level": "medium",
-    "max_position_size": 1000
-  }
+  "risk_level": "medium",
+  "max_position_size": 1000
 }
 ```
 
@@ -151,6 +159,76 @@ the0 bot delete bot_123
 # Type 'yes' to confirm: yes
 # 💀 Bot deleted successfully!
 ```
+
+### 📊 Backtest Management
+Deploy, monitor, and manage your trading strategy backtests.
+
+#### Deploy Backtest
+```bash
+the0 backtest deploy <config.json>
+```
+Deploy a new backtest instance using a JSON configuration file. The backtest name is automatically extracted from the config file.
+
+**Backtest config file format:**
+```json
+{
+  "name": "strategy-backtest",
+  "type": "scheduled/rsi-momentum",
+  "version": "1.0.0",
+  "initial_capital": 10000,
+  "timeframe": "1h",
+  "start_date": "2023-01-01",
+  "end_date": "2023-12-31",
+  "symbols": ["BTCUSDT", "ETHUSDT"]
+}
+```
+
+#### List Backtests
+```bash
+the0 backtest list
+```
+Display all your backtest instances with their status, progress, and execution details.
+
+#### Delete Backtest
+```bash
+the0 backtest delete <backtest-id>
+```
+Delete a backtest instance. Requires confirmation for safety.
+
+**Examples:**
+```bash
+# Deploy a new backtest
+the0 backtest deploy my-strategy-backtest.json
+# 📊 Analyzing market data with backtest configuration...
+# 📦 Backtest name: momentum-strategy
+# ✅ Config loaded
+# ✅ Authenticated
+# ✅ Backtest deployed to the0 📊
+# ID: bt_123456789
+# Name: momentum-strategy
+# Status: pending
+# 📝 Use 'the0 backtest list' to monitor progress
+
+# List all backtests
+the0 backtest list
+# 📊 Found 2 backtest(s):
+# ID        | Name                | Status   | Progress | Created At      | Updated At
+# bt_123.. | momentum-strategy   | ✅ Completed | 100.0%   | 2024-01-15 10:30 | 2024-01-15 12:45
+# bt_789.. | rsi-backtest        | 🔄 Running   | 67.5%    | 2024-01-15 14:20 | 2024-01-15 15:30
+
+# Delete a backtest (with confirmation)
+the0 backtest delete bt_123456789
+# ⚠️ Are you sure you want to delete backtest 'bt_123456789'?
+# This action cannot be undone
+# Type 'yes' to confirm: yes
+# ✅ Backtest 'bt_123456789' deleted successfully 🗑️
+```
+
+**Status Indicators:**
+- ⏳ **Pending** - Backtest is queued and waiting to start
+- 🔄 **Running** - Backtest is currently executing
+- ✅ **Completed** - Backtest finished successfully
+- ❌ **Failed** - Backtest encountered an error during execution
 
 ### 🛠️ Custom Bot Development
 Deploy and manage your custom trading algorithms to the the0 marketplace.
@@ -358,23 +436,27 @@ the0 self-update --force --yes
 
 ### Configuration Files
 - **Bot instances**: Use JSON configuration files with required fields (`name`, `type`, `version`)
+- **Backtest instances**: Use JSON configuration files with required fields (`name`, `type`, `version`)
 - **Custom bots**: Use YAML configuration files (`bot-config.yaml`) with comprehensive metadata
 - **Authentication**: API keys stored securely in user's home directory
 
-## Bot Configuration Examples
+## Configuration Examples
+
+### Bot Instance Configuration
+Required fields: `name`, `type`, `version`
+
+### Backtest Configuration
+Required fields: `name`, `type`, `version`
 
 ### Simple Trading Bot
 ```json
 {
   "name": "simple-trader",
-  "type": "trading",
+  "type": "scheduled/momentum",
   "version": "1.0.0",
   "schedule": "*/15 * * * *",
-  "parameters": {
-    "symbol": "BTCUSDT",
-    "strategy": "momentum",
-    "risk_level": "low"
-  }
+  "symbol": "BTCUSDT",
+  "risk_level": "low"
 }
 ```
 
@@ -382,13 +464,11 @@ the0 self-update --force --yes
 ```json
 {
   "name": "market-analyzer",
-  "type": "analysis",
+  "type": "scheduled/technical-analysis",
   "version": "2.0.1",
-  "parameters": {
-    "timeframe": "1h",
-    "indicators": ["RSI", "MACD", "Bollinger"],
-    "alert_threshold": 0.05
-  }
+  "timeframe": "1h",
+  "indicators": ["RSI", "MACD", "Bollinger"],
+  "alert_threshold": 0.05
 }
 ```
 
@@ -396,13 +476,64 @@ the0 self-update --force --yes
 ```json
 {
   "name": "news-trader",
-  "type": "event",
+  "type": "realtime/news-trading",
   "version": "1.2.0",
-  "parameters": {
-    "sources": ["twitter", "reddit", "news"],
-    "sentiment_threshold": 0.7,
-    "max_trades_per_day": 5
-  }
+  "sources": ["twitter", "reddit", "news"],
+  "sentiment_threshold": 0.7,
+  "max_trades_per_day": 5
+}
+```
+
+### Backtest Examples
+
+#### Simple Strategy Backtest
+```json
+{
+  "name": "ma-crossover-backtest",
+  "type": "scheduled/moving-average-crossover",
+  "version": "1.0.0",
+  "initial_capital": 10000,
+  "timeframe": "4h",
+  "start_date": "2023-01-01",
+  "end_date": "2023-12-31",
+  "symbol": "BTCUSDT",
+  "fast_ma": 20,
+  "slow_ma": 50
+}
+```
+
+#### Multi-Asset Portfolio Backtest
+```json
+{
+  "name": "portfolio-backtest",
+  "type": "scheduled/portfolio-rebalancing",
+  "version": "2.1.0",
+  "initial_capital": 50000,
+  "timeframe": "1d",
+  "start_date": "2022-01-01",
+  "end_date": "2023-12-31",
+  "symbols": ["BTCUSDT", "ETHUSDT", "ADAUSDT"],
+  "allocation_btcusdt": 0.5,
+  "allocation_ethusdt": 0.3,
+  "allocation_adausdt": 0.2,
+  "rebalance_frequency": "monthly"
+}
+```
+
+#### Risk Management Backtest
+```json
+{
+  "name": "risk-management-backtest",
+  "type": "scheduled/risk-parity",
+  "version": "1.3.0",
+  "initial_capital": 25000,
+  "timeframe": "1h",
+  "start_date": "2023-06-01",
+  "end_date": "2023-12-31",
+  "max_position_size": 5000,
+  "stop_loss": 0.02,
+  "take_profit": 0.06,
+  "risk_per_trade": 0.01
 }
 ```
 
@@ -423,6 +554,16 @@ the0 bot list
 # Bot not found
 the0 bot delete nonexistent-bot
 # ❌ bot not found: nonexistent-bot
+
+# Backtest configuration errors
+the0 backtest deploy invalid-backtest.json
+# ❌ Missing required field: name
+# ❌ Missing required field: type
+# ❌ Missing required field: version
+
+# Backtest not found
+the0 backtest delete nonexistent-backtest
+# ❌ backtest not found: nonexistent-backtest
 ```
 
 ## Development
@@ -462,6 +603,7 @@ make verify         # Full verification (format + lint + test + build)
 ├── main.go              # CLI entry point
 ├── cmd/                 # Command implementations
 │   ├── auth.go         # Authentication commands
+│   ├── backtest.go     # Backtest management
 │   ├── bot.go          # Bot instance management
 │   ├── custom_bot.go   # Custom bot development
 │   ├── user_bot.go     # User bot management
@@ -479,7 +621,9 @@ make verify         # Full verification (format + lint + test + build)
 ├── tests/             # Test files
 │   ├── api_test.go    # API client tests
 │   ├── auth_test.go   # Authentication tests
+│   ├── backtest_test.go # Backtest management tests
 │   ├── bot_test.go    # Bot management tests
+│   ├── cli_backtest_test.go # CLI backtest command tests
 │   ├── cli_test.go    # CLI command tests
 │   ├── config_test.go # Configuration tests
 │   ├── ignore_test.go # File ignore pattern tests
@@ -510,6 +654,9 @@ The CLI interacts with the the0 platform API:
 - `POST /bot` - Deploy bot instance
 - `PUT /bot/{id}` - Update bot instance
 - `DELETE /bot/{id}` - Delete bot instance
+- `GET /backtest` - List backtest instances
+- `POST /backtest` - Deploy backtest instance
+- `DELETE /backtest/{id}` - Delete backtest instance
 - `GET /custom-bots` - List custom bots
 - `POST /custom-bots/{name}` - Deploy custom bot
 - `GET /user-bots` - List user bots
