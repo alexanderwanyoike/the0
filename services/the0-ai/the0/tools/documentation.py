@@ -6,13 +6,13 @@ Provides access to internal documentation via the documentation API.
 import os
 import logging
 import httpx
-from typing import List, Dict, Any
 from google.adk.tools.tool_context import ToolContext
 
 logger = logging.getLogger(__name__)
 
 # Get docs endpoint from environment variable
 DOCS_ENDPOINT = os.getenv("DOCS_ENDPOINT", "http://localhost:3002")
+USER_DOCS_URL = os.getenv("USER_DOCS_URL", "https://the0.dev/docs")
 
 
 async def list_documentation(tool_context: ToolContext) -> str:
@@ -47,12 +47,13 @@ async def list_documentation(tool_context: ToolContext) -> str:
                 path = doc.get("path", "")
                 title = doc.get("title", path)
                 description = doc.get("description", "")
+                link_path = f"{USER_DOCS_URL}/docs/{path}"
 
                 if description:
-                    result.append(f"- **{title}** (`{path}`)")
+                    result.append(f"- **{title}** (`{path}`) - [View Online]({link_path})")
                     result.append(f"  {description}")
                 else:
-                    result.append(f"- **{title}** (`{path}`)")
+                    result.append(f"- **{title}** (`{path}`) - [View Online]({link_path})")
 
             result.append(f"\nTotal: {len(docs)} document(s)")
             result.append(
@@ -96,6 +97,7 @@ async def get_documentation(path: str, tool_context: ToolContext) -> str:
 
         # Construct the API URL (with trailing slash as required by Next.js)
         api_url = f"{DOCS_ENDPOINT}/api/docs/raw/{path}/"
+        user_link = f"{USER_DOCS_URL}/docs/{path}"
 
         logger.info(f"Fetching documentation from: {api_url}")
 
@@ -116,7 +118,7 @@ async def get_documentation(path: str, tool_context: ToolContext) -> str:
             # Format the response with metadata
             result = [
                 f"# Documentation: {path}",
-                f"**Source**: {DOCS_ENDPOINT}/api/docs/raw/{path}/",
+                f"**Source**: {user_link}",
                 "",
                 "---",
                 "",
