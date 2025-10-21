@@ -11,8 +11,16 @@ const fontSans = FontSans({
 
 export const metadata: Metadata = {
   title: "the0 Documentation",
-  description: "Comprehensive documentation for the0 algorithmic trading platform",
-  keywords: ["trading bots", "documentation", "API", "guide", "the0", "algorithmic trading"],
+  description:
+    "Comprehensive documentation for the0 algorithmic trading platform",
+  keywords: [
+    "trading bots",
+    "documentation",
+    "API",
+    "guide",
+    "the0",
+    "algorithmic trading",
+  ],
 };
 
 export default function RootLayout({

@@ -6,8 +6,8 @@ const nextConfig = withMarkdoc()({
   pageExtensions: ["md", "mdoc", "js", "jsx", "ts", "tsx"],
   trailingSlash: true,
   images: {
-    unoptimized: true
-  }
+    unoptimized: true,
+  },
 });
 
 export default nextConfig;

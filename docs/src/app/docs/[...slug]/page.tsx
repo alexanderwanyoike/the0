@@ -9,7 +9,7 @@ interface DocsPageProps {
 export async function generateStaticParams() {
   const fileSystem = new DocsFileSystem();
   const allDocs = await fileSystem.getAllDocs();
-  
+
   return allDocs.map((doc) => ({
     slug: doc.slug,
   }));
