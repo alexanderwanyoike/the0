@@ -1,3 +1,4 @@
+import os
 from google.adk.agents import Agent
 from the0.tools.save_artifact import save_artifact
 from the0.tools.web_browser import browse_url, search_web
@@ -42,44 +43,17 @@ root_agent = Agent(
     - Technical analysis and trading strategy information
 
     Use the list_documentation and get_documentation tools to access internal the0-specific documentation:
-    - Check available local documentation with `list_documentation`
-    - Read specific guides, examples, and references with `get_documentation`
-    - Prefer internal documentation when available as it may contain the0-specific implementation details
+    - ALWAYS call `list_documentation` first to see all available documentation with descriptions
+    - The list is fetched from the live documentation API and includes descriptions to help you choose relevant docs
+    - Read specific guides using `get_documentation(path)` with the path from the list
+    - Prefer internal documentation when available as it contains the0-specific implementation details
 
-    **Available Internal Documentation Files:**
-    
-    **Main Documentation:**
-    - Note you do not have to go through the entire documentation, you can use the `list_documentation` tool to see what is available and then use the `get_documentation` tool to read specific files.
-    - `index.md` - Main documentation index and overview of the0 platform documentation
-    - `welcome-to-the0.md` - Introduction to the0 platform, its features for creating, deploying, and managing trading bots
-
-    **Custom Bot Development:** (custom-bot-development/)
-    - `index.md` - Introduction to custom bot development on the0 platform
-    - `quick-start-guide.md` - Step-by-step guide to build your first trading bot in 15 minutes using DCA strategy
-    - `overview.md` - Comprehensive overview of custom bot development concepts and capabilities
-    - `configuration.md` - Complete guide to bot configuration, schemas, and metadata setup
-    - `bot-types.md` - Different types of bots available and their characteristics
-    - `testing.md` - Testing strategies and methodologies for custom bots
-    - `backtesting.md` - How to implement comprehensive backtesting solutions for custom bots
-    - `deployment.md` - Complete deployment process from local development to production
-    - `compliance.md` - Compliance requirements and guidelines for bot development
-
-    **Terminology:** (terminology/)
-    - `index.md` - Key terms and concepts in algorithmic trading and the0 platform
-    - `bots.md` - Definition and explanation of bots in the trading context
-    - `custom-bots.md` - Explanation of custom bots and their capabilities
-    - `user-bots.md` - User bot concepts and management
-    - `backtesting.md` - Backtesting terminology and concepts
-    - `bot-deployment.md` - Bot deployment terminology and processes
-    - `marketplace.md` - Marketplace concepts for bot sharing and discovery
-
-    **the0 CLI:** (the0-CLI/)
-    - `index.md` - Command-line interface overview for the0 platform
-    - `installation.md` - CLI installation and setup instructions
-    - `authentication.md` - Authentication methods and setup for CLI
-    - `bot-commands.md` - CLI commands for bot management
-    - `custom-bot-commands.md` - CLI commands specific to custom bot development
-    - `user-bot-commands.md` - CLI commands for user bot management
+    **Key Documentation Areas:**
+    - **Getting Started**: Look for welcome/quick-start guides
+    - **Custom Bot Development**: Guides on creating, testing, and deploying bots
+    - **CLI Commands**: the0-CLI commands for bot management
+    - **Terminology**: Platform-specific concepts and definitions
+    - **Backtesting**: How to test strategies with historical data
 
     **IMPORTANT CITATION REQUIREMENTS:**
     - Always cite sources using markdown links when referencing information from web searches or browsing

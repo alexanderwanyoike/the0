@@ -501,18 +501,23 @@ the0AiAgent:
   env:
     # Database configuration
     DATABASE_URL: "postgresql://the0:the0_password@the0-postgres:5432/the0_oss?sslmode=disable"
-    
+
     # NATS configuration
     NATS_URL: "nats://the0-nats:4222"
-    
+
     # MinIO configuration
     MINIO_ENDPOINT: "the0-minio:9000"
     MINIO_ACCESS_KEY: "the0admin"
     MINIO_SECRET_KEY: "the0password"
     MINIO_USE_SSL: "false"
     CUSTOM_BOTS_BUCKET: "custom-bots"
-    AI_ARTIFACTS_BUCKET: "ai-artifacts"
-    
+    AI_ARTIFACTS_BUCKET: "ai-artifacts"`
+
+    # Documentation API configuration
+    DOCS_ENDPOINT: "http://the0-docs:3000"
+    USER_DOCS_URL: "http://localhost:3002"
+
+
     # Service configuration
     PYTHONPATH: "/app"
     PYTHONUNBUFFERED: "1"
