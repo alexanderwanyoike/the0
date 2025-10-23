@@ -1,6 +1,6 @@
 ---
 title: "Data Architecture"
-description: "Polyglot persistence patterns with PostgreSQL, MongoDB, NATS JetStream, and MinIO for distributed data management"
+description: "Actual data architecture implementation with PostgreSQL for AI chat, MongoDB for runtime services, NATS JetStream for events, and MinIO for object storage"
 order: 30
 ---
 
@@ -23,11 +23,10 @@ The0 platform employs a sophisticated polyglot persistence architecture that com
 
 | Technology | Version | Purpose | Data Type |
 |------------|---------|---------|
-| PostgreSQL | 15+ | Relational data, transactions, analytics |
-| MongoDB | 7+ | Document storage, flexible schemas, high throughput |
-| NATS JetStream | 2.10+ | Event streaming, message queuing, persistence |
-| MinIO | Latest | Object storage, file uploads, backups |
-| Redis | 7+ | Caching, session storage, rate limiting |
+| PostgreSQL | 15+ | AI chat sessions and artifact metadata | Relational |
+| MongoDB | 7+ | Runtime bot execution data | Document storage |
+| NATS JetStream | 2.10+ | Event streaming, message persistence | Events |
+| MinIO | Latest | Object storage for bots and artifacts | Object storage |
 
 ## 🏗️ Architecture & Design
 
@@ -44,26 +43,25 @@ graph TB
 
     subgraph "Application Layer"
         API_SERVER[the0 API<br/>NestJS Backend]
-        AI_AGENT[AI Assistant<br/>FastAPI Service]
-        RUNTIME[Runtime Services<br/>Go Microservices]
+        AI_AGENT[AI Assistant<br/>FastAPI Service<br/>Chat & Artifacts]
+        RUNTIME[Runtime Services<br/>Go Microservices<br/>Bot Execution]
+        SECURITY[0vers33r Security<br/>Analysis Service]
     end
 
     subgraph "Event Streaming Layer"
-        NATS_STREAM[NATS JetStream<br/>Message Broker]
-        EVENT_STORE[Event Store<br/>Persistent Events]
-        STREAM_PROCESSOR[Stream Processor<br/>Real-time Analytics]
+        NATS_STREAM[NATS JetStream<br/>THE0_EVENTS Stream]
+        HYBRID_NATS[Hybrid NATS<br/>JetStream + Regular]
     end
 
     subgraph "Data Storage Layer"
-        POSTGRES_CLUSTER[(PostgreSQL Cluster<br/>Primary Data)]
-        MONGO_CLUSTER[(MongoDB Cluster<br/>Document Storage)]
-        MINIO_CLUSTER[(MinIO Cluster<br/>Object Storage)]
-        REDIS_CLUSTER[(Redis Cluster<br/>Cache Layer)]
+        POSTGRES_AI[(PostgreSQL<br/>AI Chat Sessions)]
+        MONGO_RUNTIME[(MongoDB<br/>Runtime Services<br/>3 Databases)]
+        MINIO_STORAGE[(MinIO<br/>Object Storage<br/>Custom Bots & Files)]
     end
 
     subgraph "Integration Layer"
         EXTERNAL_APIS[External Services<br/>Market Data<br/>Exchange APIs]
-        DATA_PIPELINE[ETL Pipeline<br/>Data Processing<br/>Transformation]
+        GOOGLE_AI[Google Gemini<br/>AI Model]
     end
 ```
 
@@ -71,112 +69,130 @@ graph TB
 
 ```mermaid
 classDiagram
-    class User {
-        +id: String
-        +email: String
-        +created_at: DateTime
-        +updated_at: DateTime
-        +profile: UserProfile
-    }
-
-    class Bot {
+    class ChatSession {
         +id: String
         +user_id: String
-        +name: String
-        +type: BotType
-        +config: BotConfiguration
-        +status: BotStatus
+        +title: String
+        +is_active: Boolean
         +created_at: DateTime
         +updated_at: DateTime
-        +deployments: BotDeployment[]
+        +messages: ChatMessage[]
+        +artifacts: Artifact[]
     }
 
-    class BotDeployment {
-        +id: String
-        +bot_id: String
-        +runtime_config: RuntimeConfiguration
-        +deployment_status: DeploymentStatus
-        +environment: DeploymentEnvironment
-        +created_at: DateTime
-        +updated_at: DateTime
-    }
-
-    class Backtest {
-        +id: String
-        +user_id: String
-        +bot_config: BotConfiguration
-        +status: BacktestStatus
-        +results: BacktestResults
-        +created_at: DateTime
-        +updated_at: DateTime
-    }
-
-    class MarketData {
-        +id: String
-        +symbol: String
-        +price: Decimal
-        +volume: Decimal
+    class ChatMessage {
+        +id: Integer
+        +session_id: String
+        +role: String
+        +content: Text
+        +artifacts_created: String[]
         +timestamp: DateTime
-        +source: String
     }
 
-    User "1" -- "owns" --> Bot "1"
-    User "1" -- "creates" --> Backtest "1"
-    Bot "1" -- "has" --> BotDeployment "1"
+    class Artifact {
+        +id: Integer
+        +session_id: String
+        +filename: String
+        +file_path: String
+        +mime_type: String
+        +version: Integer
+        +created_at: DateTime
+    }
+
+    class RuntimeBot {
+        +id: String
+        +segment_id: Integer
+        +config: Map
+        +custom: CustomBotVersion
+        +enabled: Boolean
+    }
+
+    class CustomBotVersion {
+        +version: String
+        +config: APIBotConfig
+        +filePath: String
+        +createdAt: DateTime
+        +updatedAt: DateTime
+    }
+
+    class BacktestExecution {
+        +id: String
+        +segment_id: Integer
+        +config: Map
+        +status: String
+        +results: Map
+    }
+
+    class BotSchedule {
+        +id: String
+        +segment_id: Integer
+        +schedule: Map
+        +next_execution: DateTime
+    }
+
+    ChatSession "1" -- "*" ChatMessage : contains
+    ChatSession "1" -- "*" Artifact : generates
+    RuntimeBot "1" -- "1" CustomBotVersion : has
 ```
 
 ## 📡 Database Architecture
 
 ### PostgreSQL - Primary Relational Database
 
-**Purpose**: ACID-compliant transactional data storage for user accounts, authentication, configurations, and structured business data.
+**Purpose**: AI agent chat sessions and artifact metadata storage for the the0-ai service using SQLAlchemy 2.0 with asyncpg driver.
 
-**Schema Design**:
+**Actual Schema Design**:
 ```sql
--- Users table
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    email_verified BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE
-    two_factor_enabled BOOLEAN DEFAULT FALSE,
-    last_login_at TIMESTAMP WITH TIME ZONE
+-- Chat sessions table for AI conversations
+CREATE TABLE chat_sessions (
+    id VARCHAR(255) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    title TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Bots table
-CREATE TABLE bots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(100) NOT NULL,
-    description TEXT,
-    config JSONB NOT NULL,
-    status VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    version VARCHAR(50) NOT NULL,
-    tags TEXT[],
-    risk_level INTEGER DEFAULT 1,
-    max_position_size DECIMAL(20,8),
-    api_key_id UUID REFERENCES api_keys(id)
+-- Chat messages table for conversation history
+CREATE TABLE chat_messages (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    artifacts_created TEXT[],
+    timestamp TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
 );
 
--- API Keys table
-CREATE TABLE api_keys (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name VARCHAR(255) NOT NULL,
-    key_hash VARCHAR(255) NOT NULL,
-    permissions JSONB NOT NULL,
-    last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Artifacts table for AI-generated files
+CREATE TABLE artifacts (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    file_path TEXT NOT NULL,
+    mime_type VARCHAR(100) DEFAULT 'text/plain',
+    version INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    UNIQUE (session_id, filename)
+);
+
+-- Settings table for AI configuration
+CREATE TABLE settings (
+    id SERIAL PRIMARY KEY,
+    key VARCHAR(255) UNIQUE NOT NULL,
+    value TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 ```
+
+**Technology Integration**:
+- **SQLAlchemy 2.0**: Modern async ORM with relationship mapping
+- **AsyncPG Driver**: High-performance PostgreSQL async driver
+- **Google ADK Integration**: AI development kit for tool orchestration
+- **Alembic Migrations**: Database version control and schema management
 
 **Performance Optimizations**:
 ```sql
@@ -193,220 +209,203 @@ CREATE INDEX bots_performance_idx ON bots (status, risk_level, created_at);
 
 ### MongoDB - Document Storage
 
-**Purpose**: Flexible schema storage for runtime data, logs, analytics, and unstructured content.
+**Purpose**: Runtime services data storage with segmentation-based partitioning for bot execution, backtesting, and scheduling operations.
 
-**Database Design**:
+**Actual Database Structure**:
+The MongoDB implementation spans **three separate databases** for different runtime services:
+
 ```javascript
-// User session data
+// bot_runner database - bots collection
 {
-  _id: ObjectId,
-  userId: String,
-  sessionId: String,
-  createdAt: Date,
-  lastActivity: Date,
-  context: Object,
-  active: Boolean
-}
-
-// Bot execution data
-{
-  _id: ObjectId,
-  botId: String,
-  userId: String,
-  executionId: String,
-  status: String,
-  startTime: Date,
-  endTime: Date,
-  duration: Number,
-  metrics: {
-    trades: Number,
-    profit: Number,
-    drawdown: Number,
-    winRate: Number
+  "_id": ObjectId("..."),
+  "id": "bot-123",
+  "segment_id": 1,
+  "config": {
+    "enabled": true,
+    "settings": {...}
   },
-  logs: [{
-    timestamp: Date,
-    level: String, // 'info', 'warn', 'error'
-    message: String,
-    metadata: Object
-  }],
-  trades: [{
-    timestamp: Date,
-    symbol: String,
-    side: String, // 'buy', 'sell'
-    quantity: Number,
-    price: Number,
-    fees: Number
-  }],
-  error: {
-    code: String,
-    message: String,
-    timestamp: Date,
-    stack: String
+  "custom": {
+    "version": "1.0.0",
+    "config": {
+      "name": "My Trading Bot",
+      "description": "Algorithmic trading strategy",
+      "runtime": "python3.11",
+      "version": "1.0.0",
+      "author": "Developer Name",
+      "type": "trading",
+      "entrypoints": {...},
+      "schema": {...},
+      "readme": "Bot documentation",
+      "metadata": {...}
+    },
+    "filePath": "/path/to/bot",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
 
-// Backtest results
+// backtest_runner database - backtests collection
 {
-  _id: ObjectId,
-  botId: String,
-  userId: String,
-  config: Object,
-  results: {
-    totalReturn: Number,
-    maxDrawdown: Number,
-    sharpeRatio: Number,
-    trades: [ /* Trade objects */ ],
-    equityCurve: [{ /* Price points */ }],
-    metrics: Object,
-    summary: String
-  },
-  createdAt: Date,
-  completedAt: Date,
-  status: String // 'running', 'completed', 'failed'
+  "_id": ObjectId("..."),
+  "id": "backtest-456",
+  "segment_id": 1,
+  "config": {...},
+  "status": "running",
+  "results": {
+    "performance": {...},
+    "trades": [...],
+    "metrics": {...}
+  }
+}
+
+// bot_scheduler database - bot_schedules collection
+{
+  "_id": ObjectId("..."),
+  "id": "schedule-789",
+  "segment_id": 1,
+  "schedule": {
+    "enabled": true,
+    "cron": "0 9 * * 1-5",
+    "timezone": "UTC"
+  }
 }
 ```
 
-**Sharding Strategy**:
+**Supporting Collections**:
 ```javascript
-// Shard key based on user_id for user data isolation
-shardKey: { userId: user123, shard: 0-499 }
-
-// Bot execution data sharded by botId for performance
+// partitions collection (across all databases)
 {
-  _id: ObjectId,
-  botId: "bot-123",
-  userId: "user123",
-  shardKey: { botId: "bot-123", shard: 0-999 },
-  executionData: ExecutionData
+  "_id": int32(1),
+  "bot_count": 5,
+  "max_capacity": 10
+}
+
+// counters collection for sequence generation
+{
+  "_id": "bot_id_sequence",
+  "seq": 1000
 }
 ```
+
+**Segmentation Strategy**:
+- **No Sharding**: Unlike documented, no MongoDB sharding is implemented
+- **Application-Level Segmentation**: Services use segment_id for partitioning
+- **Database Isolation**: Separate databases per service (`bot_runner`, `backtest_runner`, `bot_scheduler`)
+- **Partition Management**: Dynamic partition allocation with capacity tracking
 
 ### NATS JetStream - Event Streaming
 
-**Purpose**: Real-time event streaming, message queuing, and event sourcing for microservices communication.
+**Purpose**: Real-time event streaming and message persistence for platform microservices communication using a hybrid JetStream and regular NATS approach.
 
-**Stream Architecture**:
-```yaml
-# Stream configuration for different event types
-streams:
-  # Bot lifecycle events
-  bot.lifecycle:
-    subjects: ["bot.created", "bot.updated", "bot.deleted"]
-    storage: file
-    retention: "30d"
-    ack_wait: 30s
-    max_age: "72h"
-
-  # Trading events
-  trading.events:
-    subjects: ["trade.executed", "trade.completed", "trade.failed"]
-    storage: file
-    retention: "7d"
-    ack_wait: 10s
-    max_age: "24h"
-
-  # Monitoring events
-  monitoring.metrics:
-    subjects: ["system.health", "performance.metrics", "error.events"]
-    storage: file
-    retention: "14d"
-    max_age: "7d"
-
-  # Analytics events
-  analytics.events:
-    subjects: ["user.interaction", "bot.performance", "market.data"]
-    storage: file
-    retention: "90d"
-    max_age: "365d"
+**Actual Stream Configuration**:
+```typescript
+// THE0_EVENTS stream configuration from API service
+await this.jetStreamManager.streams.add({
+  name: "THE0_EVENTS",
+  subjects: [
+    "custom-bot.submitted",
+    "custom-bot.approved",
+    "custom-bot.declined",
+    "custom-bot.awaiting-human-review",
+    "custom-bot.analysis-failed",
+    "the0.bot.created",
+    "the0.bot.updated",
+    "the0.bot.deleted",
+    "the0.bot-schedule.created",
+    "the0.bot-schedule.updated",
+    "the0.bot-schedule.deleted",
+    "the0.backtest.created",
+    "the0.backtest.completed",
+  ],
+  retention: RetentionPolicy.Limits,
+  max_age: 7 * 24 * 60 * 60 * 1000000, // 7 days in nanoseconds
+  storage: StorageType.File,
+});
 ```
 
-**Consumer Configuration**:
-```javascript
-// NATS consumer with durable subscriptions
-const NATS = require('nats');
+**Hybrid Architecture Pattern**:
+- **JetStream for Critical Events**: Bot lifecycle and scheduling events use persistent storage
+- **Regular NATS for High-Volume**: Backtest events use standard NATS publishing for performance
+- **Selective Persistence**: Only events requiring durability and replay use JetStream
+- **File-Based Storage**: Persistent events stored in file system for reliability
 
-class EventConsumer {
-  constructor(streamName, config) {
-    this.connection = nats.connect(config.natsUrl);
-    this.jetstream = nc.jetstream();
-    this.consumer = null;
-  }
+**Actual Consumer Implementation**:
+```go
+// Runtime service NATS subscriber pattern (Go implementation)
+type NATSSubscriber struct {
+    connection     *nats.Conn
+    jetStream      jetstream.JetStream
+    mongoClient    *mongo.Client
+    dbName         string
+    collectionName string
+    maxBotsPerPartition int32
+}
 
-  async initialize() {
-    // Create consumer
-    this.consumer = await this.jetstream.consumers(streamName, {
-      durable_name: `${streamName}-consumer`,
-      ack_policy: nats.AckPolicy.All,
-      ack_wait: 30 * 1000, // 30 seconds
-      max_deliver: 100,
-      deliver_policy: nats.DeliverPolicy.New,
-      stream: streamName,
-      config: {
-        deliver_subject: `${streamName}.*`,
-        ack_policy: nats.AckPolicy.All,
-        max_waiting: 500,
-        ack_policy: nats.AckPolicy.All,
-      }
-    });
+// Subscribe with queue group for load balancing
+func (s *NATSSubscriber) Subscribe() error {
+    _, err := s.connection.QueueSubscribe(
+        "custom-bot.submitted",
+        "bot-runner-workers", // Queue group for load balancing
+        s.handleMessage,
+        nats.Durable("bot-runner-durable"),
+    )
+    return err
+}
 
-    this.consumer.closed
-      .then(() => {
-        console.log(`Consumer connected to stream: ${streamName}`);
-        this.startMessageProcessing();
-      })
-      .catch((err) => {
-        console.error(`Failed to connect to NATS: ${err}`);
-      });
-  }
+// Message handling with MongoDB persistence
+func (s *NATSSubscriber) handleMessage(msg *nats.Msg) {
+    var message CustomBotEvent
+    json.Unmarshal(msg.Data, &message)
 
-  startMessageProcessing() {
-    this.consumer.on('message', async (err, msg) => {
-      if (err) {
-        console.error('Consumer error:', err);
-        return;
-      }
-
-      try {
-        const eventData = JSON.parse(msg.data);
-        await this.processMessage(eventData);
-        msg.ack();
-      } catch (processError) {
-        console.error('Message processing error:', processError);
-        msg.nak();
-      }
-    });
-  }
+    // Store in MongoDB with segmentation
+    collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
+    // ... persistence logic
 }
 ```
 
 ### MinIO - Object Storage
 
-**Purpose**: S3-compatible object storage for bot code, configuration files, backtest results, logs, and large binary data.
+**Purpose**: S3-compatible object storage for custom bots, AI artifacts, and platform files with user-based segmentation.
 
-**Bucket Structure**:
+**Actual Bucket Implementation**:
 ```bash
-# MinIO bucket organization
+# Primary MinIO buckets in use
 the0-platform/
-├── bot-code/
-│   ├── user-{userId}/
-│   │   ├── bots/{botId}/
-│   │   └── versions/{version}/
-│   └── shared/
-│       └── libraries/
-├── backtest-results/
-│   └── user-{userId}/
+├── custom-bots/           # Custom bot ZIP submissions
+│   └── {userId}/
+│       └── {botId}.zip
+├── bot-code/             # Extracted bot source code
+│   └── {userId}/
+│       └── {botId}/
+├── backtest-results/     # Backtest execution outputs
+│   └── {userId}/
 │       └── {backtestId}/
-├── logs/
-│   ├── api/
-│   ├── runtime/
-│   ├── analyzer/
-│   └── ai-agent/
-├── backups/
-│   ├── database/
-│   └── minio/
-└── ai-artifacts/
-    └── sessions/
+├── ai-artifacts/         # AI session generated files
+│   └── sessions/
+│       └── {sessionId}/
+│           └── {filename}
+└── logs/                 # Application and service logs
+```
+
+**Real Implementation Pattern**:
+```python
+# 0vers33r service MinIO client usage
+class MinIOStorageClient:
+    def __init__(self):
+        self.bucket_name = os.getenv('CUSTOM_BOTS_BUCKET', 'custom-bots')
+        self.client = Minio(
+            endpoint=self.endpoint,
+            access_key=self.access_key,
+            secret_key=self.secret_key,
+            secure=self.secure
+        )
+
+    def download_file(self, file_path: str) -> bytes:
+        """Download with 1GB size limit for security"""
+        obj_info = self.client.stat_object(self.bucket_name, file_path)
+        if obj_info.size > 1 * 1024 * 1024 * 1024:
+            raise ValueError(f"File too large: {obj_info.size} bytes")
+        # ... download logic
 ```
 
 **Storage Class Configuration**:
@@ -442,61 +441,21 @@ storageClass:
       type: kubernetes.io/no-provisioner
 ```
 
-### Redis - Caching Layer
+### Redis - Not Implemented
 
-**Purpose**: High-performance in-memory caching for session storage, API rate limiting, and frequently accessed data.
+**Status**: Redis is included as a dependency in the API service but is **not implemented** in the current architecture.
 
-**Data Patterns**:
-```javascript
-// Session storage with TTL expiration
-const Redis = require('redis');
-const client = new Redis({
-  host: process.env.REDIS_HOST,
-  port: process.env.REDIS_PORT,
-  password: process.env.REDIS_PASSWORD,
-  db: 0 // Use database 0 for caching
-});
+**Current Implementation**:
+- **Package Dependency**: Redis v4.6.10 exists in `package.json`
+- **Test Mocks**: Redis is mocked in test files only
+- **No Service Configuration**: No Redis service in Docker compose
+- **No Code Usage**: No actual Redis client implementation in production code
 
-class SessionManager {
-  async createSession(sessionData, ttl = 3600) {
-    const sessionId = generateSessionId();
-    await client.setex(
-      `session:${sessionId}`,
-      'data', JSON.stringify(sessionData),
-      'EX', ttl // Set expiration
-    );
-    return sessionId;
-  }
-
-  async getSession(sessionId) {
-    const data = await client.get(`session:${sessionId}`);
-    return data ? JSON.parse(data) : null;
-  }
-}
-
-// API rate limiting with sliding window
-class RateLimiter {
-  constructor(redisClient, windowSize = 60, maxRequests = 100) {
-    this.redis = redisClient;
-    this.windowSize = windowSize;
-    this.maxRequests = maxRequests;
-  }
-
-  async isAllowed(clientId, endpoint) {
-    const key = `rate_limit:${clientId}:${endpoint}`;
-    const count = await this.redis.incr(key);
-
-    // Set expiration for the window
-    await this.redis.expire(key, this.windowSize);
-
-    // Get current window count
-    const windowCount = await this.redis.get(key) || 0;
-
-    return windowCount <= this.maxRequests;
-  }
-}
-```
-
+**Recommendations**:
+- Implement Redis for session caching and API rate limiting
+- Add Redis service to Docker compose for development
+- Consider Redis for caching frequently accessed bot configurations
+- Add Redis clustering for high availability in production
 ## 🔧 Configuration
 
 ### Database Configuration
@@ -1110,6 +1069,129 @@ mc admin info local
 - **Microservices Platform**: Service mesh for advanced networking and observability
 - **Serverless Components**: AWS Lambda functions for burst workloads
 
+## ⚠️ Implementation Gaps & Recommendations
+
+### Missing Components
+
+**Database Connection Pooling**
+- **Current State**: Basic database connections only
+- **Impact**: Potential connection exhaustion under load
+- **Recommendation**: Implement PgBouncer for PostgreSQL and connection pooling for MongoDB
+
+**Comprehensive Backup Strategy**
+- **Current State**: No automated backup configurations documented
+- **Impact**: Risk of data loss in production
+- **Recommendation**:
+  - PostgreSQL: Implement WAL-E/WAL-G for continuous archiving
+  - MongoDB: Configure regular snapshots with point-in-time recovery
+  - MinIO: Cross-region replication and lifecycle policies
+
+**Advanced Monitoring & Observability**
+- **Current State**: Basic health checks only
+- **Impact**: Limited visibility into performance issues
+- **Recommendation**:
+  - Implement Prometheus exporters for all databases
+  - Add distributed tracing with Jaeger
+  - Database-specific monitoring (pgBadger, MongoDB Atlas monitoring)
+
+**Caching Layer**
+- **Current State**: Redis dependency exists but not implemented
+- **Impact**: Increased database load and slower response times
+- **Recommendation**:
+  - Implement Redis for session caching and API rate limiting
+  - Add Redis Cluster for high availability
+  - Consider application-level caching for frequently accessed bot configurations
+
+### Performance Optimizations
+
+**PostgreSQL Optimizations**
+```sql
+-- Recommended indexes for AI chat workloads
+CREATE INDEX CONCURRENTLY idx_chat_sessions_user_active
+ON chat_sessions (user_id, is_active)
+WHERE is_active = true;
+
+CREATE INDEX CONCURRENTLY idx_chat_messages_session_timestamp
+ON chat_messages (session_id, timestamp DESC);
+
+-- Partition large tables by time
+CREATE TABLE chat_messages_y2024m01 PARTITION OF chat_messages
+FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+```
+
+**MongoDB Optimizations**
+```javascript
+// Recommended indexes for runtime queries
+db.bots.createIndex({ "segment_id": 1, "config.enabled": 1 });
+db.backtests.createIndex({ "segment_id": 1, "status": 1, "created_at": -1 });
+db.bot_schedules.createIndex({ "segment_id": 1, "schedule.next_execution": 1 });
+
+// Implement read preferences for analytics
+db.getMongo().setReadPref("secondaryPreferred");
+```
+
+### Security Enhancements
+
+**Data Encryption at Rest**
+- **PostgreSQL**: Enable TDE (Transparent Data Encryption)
+- **MongoDB**: Enable storage engine encryption
+- **MinIO**: Configure server-side encryption with AWS KMS
+
+**Network Security**
+- Implement TLS 1.3 for all database connections
+- Configure private network endpoints
+- Add database firewalls and access control lists
+
+**Audit Logging**
+- PostgreSQL: Enable pg_audit extension
+- MongoDB: Configure audit filters for sensitive operations
+- MinIO: Enable access logging and monitoring
+
+### Scalability Improvements
+
+**Horizontal Scaling**
+```yaml
+# PostgreSQL read replicas for AI chat scaling
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+
+  # Bootstrap configuration
+  bootstrap:
+    initdb:
+      database: the0_ai
+      owner: the0_user
+      secret:
+        name: postgres-credentials
+
+# MongoDB replica sets for runtime services
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb-replica
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: mongodb
+        command:
+        - mongod
+        - --replSet
+        - mongodb-rs
+        - --bind_ip_all
+```
+
+**High Availability Architecture**
+- Multi-AZ deployment for all databases
+- Automatic failover configurations
+- Data replication across geographic regions
+- Disaster recovery procedures with RTO/RPO targets
+
 ## 📚 Additional Resources
 
 ### Documentation
@@ -1122,8 +1204,8 @@ mc admin info local
 
 ### Tools & Utilities
 
-- **Database Tools**: pgAdmin, MongoDB Compass, Redis Commander
-- **Migration Tools**: Flyway, Liquibase
+- **Database Tools**: pgAdmin, MongoDB Compass
+- **Migration Tools**: Alembic (PostgreSQL), Mongomirror (MongoDB)
 - **Monitoring Tools**: Prometheus, Grafana, Jaeger
 - **Performance Tools**: Database Benchmarking, Load Testing
 
