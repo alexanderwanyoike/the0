@@ -12,3 +12,4 @@ dist/
 build/
 .pytest_cache/
 */**/__pycache__
+.langgraph_api/
