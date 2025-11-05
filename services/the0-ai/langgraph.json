@@ -1,7 +1,11 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "the0-agent": "the0.agent.graph:agent" 
+    "the0-supervisor": "the0.agents.supervisor.graph:agent", 
+    "the0-researcher": "the0.agents.researcher.graph:agent", 
+    "the0-analyst": "the0.agents.analyst.graph:agent",
+    "the0-developer": "the0.agents.developer.graph:agent",
+    "the0-docs": "the0.agents.docs.graph:agent"
   },
   "env": ".env"
 }
