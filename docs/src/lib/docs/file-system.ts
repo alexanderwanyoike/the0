@@ -9,6 +9,7 @@ export interface DocItem {
   children?: DocItem[];
   type: "file" | "folder";
   order?: number;
+  description?: string;
 }
 
 export interface DocFrontmatter {
@@ -81,6 +82,7 @@ export class DocsFileSystem {
             path: relativePath.replace(/\.(md|mdoc)$/, ""),
             type: "file",
             order: frontmatter.order,
+            description: frontmatter.description,
           });
         }
       }

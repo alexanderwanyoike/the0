@@ -12,6 +12,7 @@ The `backtest` commands allow you to deploy, monitor, and manage your trading st
 ## Overview
 
 Backtests are historical simulations of trading strategies that help you:
+
 - Test trading strategies on historical data
 - Analyze performance metrics and risk factors
 - Compare different strategy parameters

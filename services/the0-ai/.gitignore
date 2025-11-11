@@ -1,10 +1,9 @@
 venv
-.claude
-CLAUDE.md
 INTIAL.md
 .env
 bots
 testprompt.md
+notes/
 .data/
 data/
 **/*.pyc

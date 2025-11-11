@@ -614,10 +614,10 @@ services:
     environment:
       # Database configuration
       DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss
-      
+
       # NATS configuration
       NATS_URL: nats://nats:4222
-      
+
       # MinIO configuration
       MINIO_ENDPOINT: minio:9000
       MINIO_USE_SSL: "false"
@@ -625,7 +625,11 @@ services:
       MINIO_SECRET_KEY: the0password
       CUSTOM_BOTS_BUCKET: custom-bots
       AI_ARTIFACTS_BUCKET: ai-artifacts
-      
+
+      # Documentation API configuration
+      DOCS_ENDPOINT: http://the0-docs:3000
+      USER_DOCS_URL: http://localhost:3002
+
       # Service configuration
       PYTHONPATH: /app
       PYTHONUNBUFFERED: "1"

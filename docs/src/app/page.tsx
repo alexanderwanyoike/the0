@@ -27,7 +27,9 @@ export default async function HomePage() {
         <BookOpen className="h-16 w-16 text-muted-foreground mx-auto" />
         <h1 className="text-4xl font-bold tracking-tight">Documentation</h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Welcome to the comprehensive documentation for the0 platform. This documentation covers everything you need to know about algorithmic trading with the0.
+          Welcome to the comprehensive documentation for the0 platform. This
+          documentation covers everything you need to know about algorithmic
+          trading with the0.
         </p>
       </div>
       <Card className="max-w-2xl mx-auto">
@@ -39,7 +41,8 @@ export default async function HomePage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Use the navigation menu to explore different sections and learn how to create and deploy trading bots.
+            Use the navigation menu to explore different sections and learn how
+            to create and deploy trading bots.
           </p>
         </CardContent>
       </Card>
