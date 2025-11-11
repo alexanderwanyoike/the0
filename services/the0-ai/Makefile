@@ -1,7 +1,7 @@
 # the0-ai API Makefile
 # Provides commands for development, testing, formatting, and running the AI agent API
 
-.PHONY: help install-deps dev test format lint clean clean-deps run-agent setup
+.PHONY: help install-deps dev test format lint clean clean-deps run-agent setup agent-cli agent-web
 
 # Default target
 help:
@@ -14,6 +14,10 @@ help:
 	@echo "Development:"
 	@echo "  make dev          - Run AI agent API in development mode"
 	@echo "  make run-agent    - Run AI agent API server"
+	@echo ""
+	@echo "Agent Testing (ADK Tools):"
+	@echo "  make agent-cli    - Test agent with interactive CLI (adk run)"
+	@echo "  make agent-web    - Test agent with web UI (adk web)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make format       - Format code with black"
@@ -90,3 +94,20 @@ clean-deps:
 	@echo "🧹 Cleaning up unused dependencies..."
 	. venv/bin/activate && pip-autoremove -y || echo "Install pip-autoremove with: pip install pip-autoremove"
 	@echo "✅ Dependencies cleaned!"
+
+# Test agent with interactive CLI using ADK
+agent-cli:
+	@echo "🤖 Starting ADK interactive CLI for the0 agent..."
+	@echo "💡 Tip: Type your messages to chat with the agent. Use Ctrl+C to exit."
+	@echo "🔍 Test Tavily search by asking the agent to search the web!"
+	@echo ""
+	. venv/bin/activate && adk run the0
+
+# Test agent with web UI using ADK
+agent-web:
+	@echo "🌐 Starting ADK web UI for the0 agent..."
+	@echo "💡 Access the web interface at: http://localhost:8000"
+	@echo "🔍 Test Tavily search by asking the agent to search the web!"
+	@echo "⚠️  Note: Make sure to set TAVILY_API_KEY in .env or via API endpoint"
+	@echo ""
+	. venv/bin/activate && adk web --port 8000

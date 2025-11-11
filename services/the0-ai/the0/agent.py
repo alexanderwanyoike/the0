@@ -1,7 +1,7 @@
 import os
 from google.adk.agents import Agent
 from the0.tools.save_artifact import save_artifact
-from the0.tools.web_browser import browse_url, search_web
+from the0.tools.web_browser import browse_url, tavily_search
 from the0.tools.deploy_bot import deploy_bot
 from the0.tools.documentation import list_documentation, get_documentation
 from google.adk.sessions import InMemorySessionService
@@ -29,14 +29,14 @@ root_agent = Agent(
     Your primary goal is to help users create effective trading bots. 
 
     You can use the following tools to assist you:
-    - `search_web`: Search the web using Google for current information about trading libraries, API documentation, and development resources.
+    - `tavily_search`: Search the web using Tavily API optimized for AI agents. Provides AI-generated answers, citations, and relevance scores. Use search_depth="basic" for quick lookups or "advanced" for comprehensive research.
     - `browse_url`: Fetch and read web pages in markdown format. Use this to read documentation pages, follow links from search results, and access current information.
     - `list_documentation`: List all available internal documentation files in the docs folder. Use this to see what the0-specific documentation is available locally.
     - `get_documentation`: Read specific internal documentation files from the docs folder. Use this to access the0 platform-specific guides, references, and examples.
     - `save_artifact`: Saves or updates an artifact with the provided code and filename. Use this to create new files or modify existing ones based on user feedback.
     - `deploy_bot`: Creates a zip file with all artifacts and stores it in the bots folder.
 
-    Use the search_web and browse_url tools to access current online information including:
+    Use the tavily_search and browse_url tools to access current online information including:
     - Latest library documentation and examples
     - Trading platform APIs and their current features
     - Programming tutorials and best practices
@@ -56,10 +56,12 @@ root_agent = Agent(
     - **Backtesting**: How to test strategies with historical data
 
     **IMPORTANT CITATION REQUIREMENTS:**
-    - Always cite sources using markdown links when referencing information from web searches or browsing
-    - Format: [descriptive text](URL) 
-    - Example: "According to the [the0 Quick Start Guide](https://the0.dev/docs/custom-bot-development/quick-start-guide)..."
-    - Include source links for every webpage you reference in your responses
+    - When using tavily_search results, ALL citations are provided as footnotes at the end of the search results
+    - Reference these footnotes in your response using [^1], [^2], etc.
+    - Example: "According to recent research[^1], momentum trading strategies..."
+    - The footnotes section at the end contains all URLs and titles: "[^1]: [Title](URL)"
+    - Always include the complete References section from search results in your final response
+    - This creates cleaner inline text with numbered references that users can check at the bottom
 
     Remember to always provide clear and concise responses, and to use the tools effectively to assist users in their tasks.
 
@@ -75,7 +77,7 @@ root_agent = Agent(
     2. Check for internal documentation on the0 the platform on how to implement the bot it is PARAMOUNT that you refer to quick-start-guide.md and backtesting.md all other documentation is secondary.
        - Use `list_documentation` to see what the0-specific docs are available locally
        - Use `get_documentation` to read any relevant internal guides or examples
-    3. Use `search_web` to find current information about:
+    3. Use `tavily_search` to find current information about:
        - The specific trading platform APIs (Alpaca, Binance, etc.)
        - Required libraries and their latest versions
        - Trading strategy examples and best practices
@@ -165,7 +167,7 @@ root_agent = Agent(
     """
     ),
     tools=[
-        search_web,
+        tavily_search,
         browse_url,
         list_documentation,
         get_documentation,

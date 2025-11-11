@@ -135,36 +135,172 @@ def browse_multiple_urls(urls: list) -> str:
     return "\n".join(results)
 
 
-def search_web(query: str) -> str:
+async def tavily_search(
+    query: str,
+    search_depth: str = "basic",
+    max_results: int = 5,
+    include_answer: bool = True,
+    tool_context=None,
+) -> str:
     """
-    Search the web using Google search and return URLs for further browsing.
+    Search the web using Tavily API optimized for AI agents.
+
+    Tavily provides high-quality, AI-optimized search results with citations,
+    relevance scores, and AI-generated answers. Designed specifically for LLMs.
 
     Args:
         query (str): The search query
+        search_depth (str): "basic" for quick results (cheaper, ~0.5s) or
+                           "advanced" for comprehensive research (expensive, ~2s)
+                           Default: "basic"
+        max_results (int): Number of results to return (1-20). Default: 5
+        include_answer (bool): Include AI-generated answer synthesizing results.
+                              Default: True
+        tool_context: ADK ToolContext (optional, for session tracking)
 
     Returns:
-        str: Search results with URLs that can be used with browse_url
+        str: Formatted search results with citations and optional AI answer
+
+    Cost:
+        - Basic search: ~$0.005 per search
+        - Advanced search: ~$0.01 per search
+        - Free tier: 1,000 searches/month
+
+    Example:
+        results = await tavily_search(
+            query="momentum trading strategies",
+            search_depth="advanced",
+            max_results=5,
+            include_answer=True
+        )
     """
     try:
-        from googlesearch import search
+        from tavily import AsyncTavilyClient
+        import os
 
-        results = [f"# Search Results for: {query}\n"]
+        # Get API key from environment or database
+        api_key = os.getenv("TAVILY_API_KEY")
 
-        # Use googlesearch library to get clean URLs
-        search_results = list(search(query, num_results=8, sleep_interval=1))
+        if not api_key:
+            # Try database settings as fallback
+            try:
+                from api.database import get_db_session
+                from api.repositories import get_settings_repository
 
-        for i, url in enumerate(search_results, 1):
-            domain = urlparse(url).netloc
-            results.append(f"## {i}. {domain}")
-            results.append(f"**URL**: {url}\n")
+                async with get_db_session() as db_session:
+                    settings_repo = get_settings_repository(db_session)
+                    api_key = await settings_repo.get_setting("tavily_api_key")
+            except Exception:
+                pass  # Database not available or key not set
 
-        if len(search_results) == 0:
-            results.append("No search results found.")
+        if not api_key:
+            return (
+                "Error: Tavily API key not configured.\n\n"
+                "Please set the API key using one of these methods:\n"
+                "1. Environment variable: TAVILY_API_KEY=tvly-your-key\n"
+                "2. API endpoint: POST /settings/tavily-api-key\n\n"
+                "Get your free API key at: https://tavily.com"
+            )
 
-        results.append(
-            "**Note**: Use `browse_url(URL)` to read the full content of any result."
+        # Initialize async Tavily client
+        client = AsyncTavilyClient(api_key=api_key)
+
+        # Perform search with timeout
+        response = await client.search(
+            query=query,
+            search_depth=search_depth,
+            max_results=max_results,
+            include_answer=include_answer,
+            include_raw_content=False,  # We use browse_url for full content
+            timeout=30.0,
         )
-        return "\n".join(results)
+
+        # Format results with markdown and footnote-style citations
+        result_parts = [f"# Search Results: {query}\n"]
+
+        # Add search metadata
+        result_parts.append(
+            f"**Search Type**: {search_depth.capitalize()} "
+            f"| **Results**: {len(response.get('results', []))} "
+            f"| **Response Time**: {response.get('response_time', 0):.2f}s\n"
+        )
+
+        # Add AI-generated answer if available
+        if include_answer and response.get("answer"):
+            result_parts.append("## AI-Generated Summary\n")
+            result_parts.append(f"{response['answer']}\n")
+
+        # Add individual search results with inline footnote references
+        results = response.get("results", [])
+        if results:
+            result_parts.append("## Top Results\n")
+            for i, result in enumerate(results, 1):
+                title = result.get("title", "No title")
+                url = result.get("url", "")
+                content = result.get("content", "No content available")
+                score = result.get("score", 0.0)
+
+                # Add result with footnote reference [i]
+                result_parts.append(f"### {i}. {title} [^{i}]")
+                result_parts.append(f"**Relevance**: {score:.2f}/1.00")
+                result_parts.append(f"\n{content}\n")
+        else:
+            result_parts.append("No results found for this query.\n")
+
+        # Add footnotes section at the end with all citations
+        if results:
+            result_parts.append("---\n")
+            result_parts.append("## References\n")
+            for i, result in enumerate(results, 1):
+                title = result.get("title", "No title")
+                url = result.get("url", "")
+                result_parts.append(f"[^{i}]: [{title}]({url})")
+
+        result_parts.append(
+            "\n**Tip**: Use `browse_url(URL)` to read full content of any result."
+        )
+
+        return "\n".join(result_parts)
+
+    except TimeoutError:
+        return (
+            f"Error: Tavily search timed out (>30s) for query: {query}\n"
+            "Please try again or use a more specific query."
+        )
+
+    except ImportError:
+        return (
+            "Error: Tavily SDK not installed.\n" "Please run: pip install tavily-python"
+        )
 
     except Exception as e:
-        return f"Error: Search failed for query: {query}. Details: {str(e)}"
+        error_msg = str(e)
+
+        # Handle rate limiting
+        if "rate limit" in error_msg.lower() or "429" in error_msg:
+            return (
+                f"Error: Tavily API rate limit exceeded.\n"
+                "Please wait a moment before searching again.\n\n"
+                "Free tier: 1,000 searches/month\n"
+                "Upgrade at: https://tavily.com/pricing"
+            )
+
+        # Handle authentication errors
+        if (
+            "authentication" in error_msg.lower()
+            or "401" in error_msg
+            or "403" in error_msg
+        ):
+            return (
+                "Error: Invalid Tavily API key.\n"
+                "Please check your API key configuration.\n\n"
+                "Set via: POST /settings/tavily-api-key\n"
+                "Get a new key at: https://tavily.com"
+            )
+
+        # Generic error
+        return (
+            f"Error: Tavily search failed for query: {query}\n"
+            f"Details: {error_msg}\n\n"
+            "If this persists, please check your API key and network connection."
+        )
