@@ -14,6 +14,7 @@ Enable users to configure the Tavily API key from the frontend AI chat component
 ## User Stories
 
 ### As a User
+
 - I want to configure my Tavily API key from the frontend settings
 - I want to see the status of my Tavily configuration (database vs environment)
 - I want the option to add Tavily during initial setup
@@ -21,6 +22,7 @@ Enable users to configure the Tavily API key from the frontend AI chat component
 - I want to be able to reset my Tavily key if needed
 
 ### As a Developer
+
 - I want consistent API key management patterns between Google AI and Tavily
 - I want proper validation of Tavily keys (tvly- prefix)
 - I want clear documentation on the Tavily integration
@@ -29,7 +31,9 @@ Enable users to configure the Tavily API key from the frontend AI chat component
 ## Current State
 
 ### Backend (the0-ai service)
+
 The backend already has full Tavily integration:
+
 - ✅ Three API endpoints implemented:
   - `GET /settings/tavily-api-key/status` - Check configuration status
   - `POST /settings/tavily-api-key` - Set API key
@@ -40,7 +44,9 @@ The backend already has full Tavily integration:
 - ✅ Comprehensive error handling and tests
 
 ### Frontend
+
 Currently missing Tavily configuration:
+
 - ❌ No UI to configure Tavily API key
 - ❌ No status checking for Tavily
 - ❌ No onboarding for Tavily setup
@@ -51,12 +57,14 @@ Currently missing Tavily configuration:
 ## Acceptance Criteria
 
 ### 1. API Service Extensions
+
 - [ ] Add `checkTavilyApiKeyStatus()` method to ApiService
 - [ ] Add `setTavilyApiKey(apiKey: string)` method to ApiService
 - [ ] Add `resetTavilyApiKey()` method to ApiService
 - [ ] Methods call existing backend endpoints via `/api/ai-agent/settings`
 
 ### 2. Settings Modal Updates
+
 - [ ] Add Tavily API key section after Google AI section
 - [ ] Include input field for Tavily key (password type)
 - [ ] Add "Save" and "Reset" buttons for Tavily key
@@ -68,6 +76,7 @@ Currently missing Tavily configuration:
 - [ ] Maintain existing Google AI key functionality
 
 ### 3. Initial Setup (Onboarding)
+
 - [ ] Extend ApiKeySetup component to include Tavily
 - [ ] Add second section/step for Tavily API key
 - [ ] Make Tavily optional with clear messaging
@@ -76,12 +85,14 @@ Currently missing Tavily configuration:
 - [ ] Allow skipping Tavily setup while requiring Google AI
 
 ### 4. Main Page Updates
+
 - [ ] Check both Google AI and Tavily status on mount
 - [ ] Show setup modal if Google AI key is missing (required)
 - [ ] Optionally prompt for Tavily if missing (with skip option)
 - [ ] Display status of both API keys in UI (optional)
 
 ### 5. User Experience
+
 - [ ] Consistent UI patterns with Google API key management
 - [ ] Clear visual distinction between required (Google) and optional (Tavily)
 - [ ] Helpful error messages if validation fails
@@ -89,6 +100,7 @@ Currently missing Tavily configuration:
 - [ ] Confirmation for destructive actions (reset)
 
 ### 6. Documentation
+
 - [x] Update CLAUDE.md with AI Agent section
 - [x] Document Tavily integration patterns
 - [x] Include API key management examples
@@ -99,11 +111,13 @@ Currently missing Tavily configuration:
 ### Files to Modify
 
 1. **`/src/lib/ai-agent/api.ts`**
+
    - Add three new methods for Tavily key management
    - Follow existing patterns from Google AI key methods
    - Return types match backend response formats
 
 2. **`/src/components/ai-agent/settings/SettingsModal.tsx`**
+
    - Add new state for Tavily key, loading, status
    - Add Tavily section between API Key and Chat Settings sections
    - Implement handlers for save/reset Tavily key
@@ -111,6 +125,7 @@ Currently missing Tavily configuration:
    - Include validation for tvly- prefix
 
 3. **`/src/components/ai-agent/setup/ApiKeySetup.tsx`**
+
    - Refactor to support two API keys
    - Add Tavily section/step with optional flag
    - Update instructions and help text
@@ -195,6 +210,7 @@ SettingsModal
 ## Testing Checklist
 
 ### Manual Testing
+
 - [ ] Open AI Agent page for first time - sees setup modal
 - [ ] Enter Google AI key (required) - saves successfully
 - [ ] Enter Tavily key (optional) - saves successfully
@@ -208,12 +224,14 @@ SettingsModal
 - [ ] Test with no Tavily configured
 
 ### Integration Testing
+
 - [ ] Frontend successfully calls backend endpoints
 - [ ] Error handling works for network failures
 - [ ] Loading states display correctly
 - [ ] Success messages appear after operations
 
 ### Build Validation
+
 - [ ] `yarn build` completes without errors
 - [ ] No TypeScript errors
 - [ ] No ESLint warnings
@@ -231,11 +249,13 @@ SettingsModal
 ## Dependencies
 
 ### Backend
+
 - the0-ai service running at configured URL (default: http://localhost:8000)
 - PostgreSQL database for settings storage
 - Tavily Python SDK installed (already in requirements.txt)
 
 ### Frontend
+
 - Existing UI components (Dialog, Button, Input, etc.)
 - API service infrastructure
 - Settings modal and setup components
