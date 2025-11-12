@@ -18,15 +18,12 @@ class DatabaseManager:
         database_url = os.environ.get("DATABASE_URL")
         if not database_url:
             raise RuntimeError(
-                "DATABASE_URL environment variable is required. "
-                "Please provide a PostgreSQL connection string."
+                "DATABASE_URL environment variable is required. " "Please provide a PostgreSQL connection string."
             )
 
         # Convert to async URL if needed
         if database_url.startswith("postgresql://"):
-            database_url = database_url.replace(
-                "postgresql://", "postgresql+asyncpg://", 1
-            )
+            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif not database_url.startswith("postgresql+asyncpg://"):
             raise RuntimeError(
                 "DATABASE_URL must be a PostgreSQL connection string. "
@@ -45,9 +42,7 @@ class DatabaseManager:
                 pool_recycle=3600,
             )
 
-            self.async_session_maker = async_sessionmaker(
-                bind=self.engine, class_=AsyncSession, expire_on_commit=False
-            )
+            self.async_session_maker = async_sessionmaker(bind=self.engine, class_=AsyncSession, expire_on_commit=False)
 
     async def create_all_tables(self):
         """Create all tables (for development only - use Alembic in production)."""
@@ -72,9 +67,7 @@ class DatabaseManager:
     def database_url_for_adk(self) -> str:
         """Get the database URL for ADK DatabaseSessionService."""
         # ADK expects sync URL format
-        sync_url = self.database_url.replace(
-            "postgresql+asyncpg://", "postgresql://", 1
-        )
+        sync_url = self.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
         return sync_url
 
 

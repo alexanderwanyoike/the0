@@ -11,9 +11,7 @@ class TestSettingsEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_settings_repository")
-    def test_check_api_key_status_false(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_check_api_key_status_false(self, mock_get_repo, mock_get_session, test_client):
         """Test checking API key status when no key exists."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()
@@ -33,9 +31,7 @@ class TestSettingsEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_settings_repository")
-    def test_check_api_key_status_true(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_check_api_key_status_true(self, mock_get_repo, mock_get_session, test_client):
         """Test checking API key status when key exists."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()
@@ -53,9 +49,7 @@ class TestSettingsEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_settings_repository")
-    def test_check_api_key_status_error(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_check_api_key_status_error(self, mock_get_repo, mock_get_session, test_client):
         """Test checking API key status with database error."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()
@@ -73,9 +67,7 @@ class TestSettingsEndpoints:
     @patch("api.main.agent_service")
     @patch("api.main.get_db_session")
     @patch("api.main.get_settings_repository")
-    def test_set_api_key_success(
-        self, mock_get_repo, mock_get_session, mock_agent, test_client
-    ):
+    def test_set_api_key_success(self, mock_get_repo, mock_get_session, mock_agent, test_client):
         """Test setting API key successfully."""
         api_key_data = {"api_key": "test-api-key-12345"}
 
@@ -125,9 +117,7 @@ class TestSettingsEndpoints:
     @patch("api.main.agent_service")
     @patch("api.main.get_db_session")
     @patch("api.main.get_settings_repository")
-    def test_set_api_key_database_error(
-        self, mock_get_repo, mock_get_session, mock_agent, test_client
-    ):
+    def test_set_api_key_database_error(self, mock_get_repo, mock_get_session, mock_agent, test_client):
         """Test setting API key with database error."""
         api_key_data = {"api_key": "test-api-key-12345"}
 
@@ -166,9 +156,7 @@ class TestSettingsEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_settings_repository")
-    def test_reset_api_key_not_found(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_reset_api_key_not_found(self, mock_get_repo, mock_get_session, test_client):
         """Test resetting API key when none exists."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()

@@ -14,9 +14,7 @@ class TestGetMimeTypeFromFilename:
     def test_python_file(self):
         """Test MIME type for Python files."""
         assert get_mime_type_from_filename("bot.py") == "text/x-python"
-        assert (
-            get_mime_type_from_filename("script.PY") == "text/x-python"
-        )  # Case insensitive
+        assert get_mime_type_from_filename("script.PY") == "text/x-python"  # Case insensitive
 
     def test_javascript_file(self):
         """Test MIME type for JavaScript files."""
@@ -98,14 +96,10 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repository
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repository):
 
             # Mock context manager
-            mock_get_db.return_value.__aenter__ = AsyncMock(
-                return_value=mock_db_session
-            )
+            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await save_artifact(code, filename, mock_tool_context)
@@ -118,12 +112,8 @@ class TestSaveArtifact:
             assert result["version"] == 1
 
             # Verify calls
-            mock_storage_service.save_artifact.assert_called_once_with(
-                "test-session-123", filename, code
-            )
-            mock_chat_repository.get_artifact.assert_called_once_with(
-                "test-session-123", filename
-            )
+            mock_storage_service.save_artifact.assert_called_once_with("test-session-123", filename, code)
+            mock_chat_repository.get_artifact.assert_called_once_with("test-session-123", filename)
             mock_chat_repository.save_artifact.assert_called_once()
             mock_tool_context.save_artifact.assert_called_once()
 
@@ -145,13 +135,9 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repository
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repository):
 
-            mock_get_db.return_value.__aenter__ = AsyncMock(
-                return_value=mock_db_session
-            )
+            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await save_artifact(code, filename, mock_tool_context)
@@ -161,9 +147,7 @@ class TestSaveArtifact:
             assert "updated" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_save_artifact_session_fallback(
-        self, mock_storage_service, mock_db_session, mock_chat_repository
-    ):
+    async def test_save_artifact_session_fallback(self, mock_storage_service, mock_db_session, mock_chat_repository):
         """Test save_artifact with session ID fallback."""
         code = "print('Test')"
         filename = "test.py"
@@ -177,26 +161,18 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repository
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repository):
 
-            mock_get_db.return_value.__aenter__ = AsyncMock(
-                return_value=mock_db_session
-            )
+            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await save_artifact(code, filename, mock_context)
 
             assert result["status"] == "success"
-            mock_storage_service.save_artifact.assert_called_once_with(
-                "fallback-session", filename, code
-            )
+            mock_storage_service.save_artifact.assert_called_once_with("fallback-session", filename, code)
 
     @pytest.mark.asyncio
-    async def test_save_artifact_default_session(
-        self, mock_storage_service, mock_db_session, mock_chat_repository
-    ):
+    async def test_save_artifact_default_session(self, mock_storage_service, mock_db_session, mock_chat_repository):
         """Test save_artifact with default session when no session ID found."""
         code = "print('Test')"
         filename = "test.py"
@@ -210,21 +186,15 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repository
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repository):
 
-            mock_get_db.return_value.__aenter__ = AsyncMock(
-                return_value=mock_db_session
-            )
+            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await save_artifact(code, filename, mock_context)
 
             assert result["status"] == "success"
-            mock_storage_service.save_artifact.assert_called_once_with(
-                "default", filename, code
-            )
+            mock_storage_service.save_artifact.assert_called_once_with("default", filename, code)
 
     @pytest.mark.asyncio
     async def test_save_artifact_storage_error(self, mock_tool_context):
@@ -240,9 +210,7 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repo
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repo):
 
             # Mock context manager
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -270,18 +238,14 @@ class TestSaveArtifact:
 
         # Mock the other services to avoid them interfering
         mock_storage_service = MagicMock()
-        mock_storage_service.save_artifact = AsyncMock(
-            return_value="/path/to/artifact.py"
-        )
+        mock_storage_service.save_artifact = AsyncMock(return_value="/path/to/artifact.py")
 
         mock_chat_repo = MagicMock()
         mock_chat_repo.get_artifact = AsyncMock(return_value=None)
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repo
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repo):
 
             # Mock context manager
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -311,21 +275,15 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repository
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repository):
 
-            mock_get_db.return_value.__aenter__ = AsyncMock(
-                return_value=mock_db_session
-            )
+            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             # Should still succeed since database error is caught but logged
             result = await save_artifact(code, filename, mock_tool_context)
 
-            assert (
-                result["status"] == "success"
-            )  # Storage succeeded, DB metadata failed but caught
+            assert result["status"] == "success"  # Storage succeeded, DB metadata failed but caught
             assert result["filename"] == filename
 
     @pytest.mark.asyncio
@@ -342,19 +300,13 @@ class TestSaveArtifact:
 
         with patch("api.storage.storage_service", mock_storage_service), patch(
             "api.database.get_db_session"
-        ) as mock_get_db, patch(
-            "api.repositories.get_chat_repository", return_value=mock_chat_repository
-        ):
+        ) as mock_get_db, patch("api.repositories.get_chat_repository", return_value=mock_chat_repository):
 
-            mock_get_db.return_value.__aenter__ = AsyncMock(
-                return_value=mock_db_session
-            )
+            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await save_artifact(code, filename, mock_tool_context)
 
             assert result["status"] == "success"
             assert result["filename"] == filename
-            mock_storage_service.save_artifact.assert_called_once_with(
-                "test-session-123", filename, code
-            )
+            mock_storage_service.save_artifact.assert_called_once_with("test-session-123", filename, code)

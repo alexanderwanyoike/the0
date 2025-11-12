@@ -125,9 +125,7 @@ class TestDeployBot:
         mock_tool_context.load_artifact = AsyncMock(return_value=mock_artifact)
 
         # Mock zipfile to raise an exception
-        with patch(
-            "zipfile.ZipFile", side_effect=PermissionError("Cannot create zip file")
-        ):
+        with patch("zipfile.ZipFile", side_effect=PermissionError("Cannot create zip file")):
             result = await deploy_bot(bot_name, mock_tool_context)
 
             assert result["status"] == "error"
@@ -254,9 +252,7 @@ class TestDeployBot:
             try:
                 # Mock datetime to get predictable timestamp
                 with patch("the0.tools.deploy_bot.datetime") as mock_datetime:
-                    mock_datetime.now.return_value.strftime.return_value = (
-                        "20240101_120000"
-                    )
+                    mock_datetime.now.return_value.strftime.return_value = "20240101_120000"
 
                     result = await deploy_bot(bot_name, mock_tool_context)
 

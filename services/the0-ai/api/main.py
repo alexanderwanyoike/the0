@@ -47,9 +47,7 @@ async def health_check():
 async def chat(request: ChatRequest):
     """Send a message to the agent and get a response."""
     try:
-        response = await agent_service.chat(
-            message=request.message, session_id=request.session_id
-        )
+        response = await agent_service.chat(message=request.message, session_id=request.session_id)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -61,17 +59,13 @@ async def chat_stream(request: ChatRequest):
 
     async def generate_stream():
         try:
-            async for chunk in agent_service.chat_stream(
-                message=request.message, session_id=request.session_id
-            ):
+            async for chunk in agent_service.chat_stream(message=request.message, session_id=request.session_id):
                 # Format as Server-Sent Events
                 chunk_json = chunk.model_dump_json()
                 yield f"data: {chunk_json}\n\n"
         except Exception as e:
             # Send error as final chunk
-            error_chunk = StreamChunk(
-                type="error", error=str(e), session_id=request.session_id
-            )
+            error_chunk = StreamChunk(type="error", error=str(e), session_id=request.session_id)
             yield f"data: {error_chunk.model_dump_json()}\n\n"
 
         # Send final done signal
@@ -115,9 +109,7 @@ async def download_artifacts():
         zip_path = await agent_service.create_artifacts_zip()
         if zip_path is None:
             raise HTTPException(status_code=404, detail="No artifacts found")
-        return FileResponse(
-            zip_path, media_type="application/zip", filename="trading-bot.zip"
-        )
+        return FileResponse(zip_path, media_type="application/zip", filename="trading-bot.zip")
     except HTTPException:
         raise
     except Exception as e:
@@ -333,9 +325,7 @@ async def get_tavily_api_key_status():
         return {
             "configured_in_database": db_key is not None,
             "configured_in_environment": env_key is not None,
-            "active_source": (
-                "environment" if env_key else ("database" if db_key else "none")
-            ),
+            "active_source": ("environment" if env_key else ("database" if db_key else "none")),
             "has_api_key": bool(env_key or db_key),
         }
     except Exception as e:
@@ -353,9 +343,7 @@ async def delete_tavily_api_key():
             if success:
                 return {"message": "Tavily API key removed successfully"}
             else:
-                raise HTTPException(
-                    status_code=404, detail="No Tavily API key found to remove"
-                )
+                raise HTTPException(status_code=404, detail="No Tavily API key found to remove")
     except HTTPException:
         raise
     except Exception as e:

@@ -40,6 +40,10 @@ from the0.agents.base import DEFAULT_MODEL, STATE_KEY_BOT_METADATA, STATE_KEY_RE
 from the0.tools.save_artifact import save_artifact
 from the0.tools.deploy_bot import deploy_bot
 from the0.tools.documentation import list_documentation, get_documentation
+from the0.tools.execute_command import execute_command
+from the0.tools.read_file import read_file
+from the0.tools.filesystem import list_directory
+from the0.tools.web_browser import tavily_search, browse_url
 
 
 # Agent Description - Critical for LLM-driven delegation (Story 4)
@@ -543,6 +547,31 @@ Return to Supervisor when:
    - Args: path (str), tool_context
    - Returns: Full markdown content with metadata
 
+5. **execute_command**: Execute bash/python/node commands
+   - Args: command (str), working_directory (str), timeout (int), tool_context
+   - Returns: status, stdout, stderr, exit_code, timed_out
+   - Use for: pip install, python main.py, python backtest.py, grep, etc.
+
+6. **read_file**: Read file contents from disk
+   - Args: file_path (str), tool_context
+   - Returns: status, content, file_path, size_bytes, lines
+   - Use for: Read generated code, error logs, config files
+
+7. **list_directory**: List directory contents
+   - Args: directory_path (str), recursive (bool), tool_context
+   - Returns: status, files, total_count, truncated
+   - Use for: Verify artifacts created, check file structure
+
+8. **tavily_search**: Search web for APIs, libraries, documentation
+   - Args: query (str), search_depth (str), include_answer (bool), max_results (int)
+   - Returns: AI summary + ranked results with citations
+   - Use for: Quick research during development
+
+9. **browse_url**: Read web pages and documentation
+   - Args: url (str), tool_context
+   - Returns: Markdown content with citations
+   - Use for: Reading API docs, Stack Overflow, tutorials
+
 ## IMPORTANT REMINDERS
 
 - **ALWAYS** consult quick-start-guide.md and backtesting.md first
@@ -592,5 +621,10 @@ developer_agent = Agent(
         deploy_bot,
         list_documentation,
         get_documentation,
+        execute_command,
+        read_file,
+        list_directory,
+        tavily_search,
+        browse_url,
     ],
 )

@@ -27,21 +27,15 @@ class ChatSession(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Relationships
-    messages = relationship(
-        "ChatMessage", back_populates="session", cascade="all, delete-orphan"
-    )
-    artifacts = relationship(
-        "Artifact", back_populates="session", cascade="all, delete-orphan"
-    )
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+    artifacts = relationship("Artifact", back_populates="session", cascade="all, delete-orphan")
 
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(
-        String(255), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False
-    )
+    session_id = Column(String(255), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     artifacts_created = Column(ARRAY(String), nullable=True)
@@ -55,9 +49,7 @@ class Artifact(Base):
     __tablename__ = "artifacts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(
-        String(255), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False
-    )
+    session_id = Column(String(255), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
     filename = Column(String(255), nullable=False)
     file_path = Column(Text, nullable=False)
     mime_type = Column(String(100), default="text/plain")

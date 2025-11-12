@@ -23,9 +23,7 @@ class TestChatEndpoints:
     """Tests for chat-related endpoints."""
 
     @patch("api.main.agent_service")
-    def test_chat_endpoint_success(
-        self, mock_agent, test_client, sample_chat_request, sample_chat_response
-    ):
+    def test_chat_endpoint_success(self, mock_agent, test_client, sample_chat_request, sample_chat_response):
         """Test successful chat request."""
         mock_agent.chat = AsyncMock(return_value=sample_chat_response)
 
@@ -53,17 +51,13 @@ class TestChatEndpoints:
         assert "Service error" in response.json()["detail"]
 
     @patch("api.main.agent_service")
-    def test_chat_stream_endpoint_success(
-        self, mock_agent, test_client, sample_chat_request
-    ):
+    def test_chat_stream_endpoint_success(self, mock_agent, test_client, sample_chat_request):
         """Test successful streaming chat request."""
         from api.schemas import StreamChunk
 
         # Mock async generator
         async def mock_stream():
-            yield StreamChunk(
-                type="content", content="Hello", session_id="test-session"
-            )
+            yield StreamChunk(type="content", content="Hello", session_id="test-session")
             yield StreamChunk(type="complete", session_id="test-session")
 
         mock_agent.chat_stream = AsyncMock(return_value=mock_stream())

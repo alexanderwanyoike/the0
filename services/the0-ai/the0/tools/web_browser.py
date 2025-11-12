@@ -52,9 +52,7 @@ def browse_url(url: str) -> str:
             md_converter = MarkItDown(enable_plugins=False)
 
             # Create temporary file for markitdown
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".html", delete=False, encoding="utf-8"
-            ) as temp_file:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False, encoding="utf-8") as temp_file:
                 temp_file.write(response.text)
                 temp_file_path = temp_file.name
 
@@ -71,10 +69,7 @@ def browse_url(url: str) -> str:
 
                 # Limit content length to prevent overwhelming responses
                 if len(final_content) > 15000:
-                    final_content = (
-                        final_content[:15000]
-                        + f"\n\n... (Content truncated. Original URL: {url})"
-                    )
+                    final_content = final_content[:15000] + f"\n\n... (Content truncated. Original URL: {url})"
 
                 return final_content
 
@@ -256,9 +251,7 @@ async def tavily_search(
                 url = result.get("url", "")
                 result_parts.append(f"[^{i}]: [{title}]({url})")
 
-        result_parts.append(
-            "\n**Tip**: Use `browse_url(URL)` to read full content of any result."
-        )
+        result_parts.append("\n**Tip**: Use `browse_url(URL)` to read full content of any result.")
 
         return "\n".join(result_parts)
 
@@ -269,9 +262,7 @@ async def tavily_search(
         )
 
     except ImportError:
-        return (
-            "Error: Tavily SDK not installed.\n" "Please run: pip install tavily-python"
-        )
+        return "Error: Tavily SDK not installed.\n" "Please run: pip install tavily-python"
 
     except Exception as e:
         error_msg = str(e)
@@ -286,11 +277,7 @@ async def tavily_search(
             )
 
         # Handle authentication errors
-        if (
-            "authentication" in error_msg.lower()
-            or "401" in error_msg
-            or "403" in error_msg
-        ):
+        if "authentication" in error_msg.lower() or "401" in error_msg or "403" in error_msg:
             return (
                 "Error: Invalid Tavily API key.\n"
                 "Please check your API key configuration.\n\n"

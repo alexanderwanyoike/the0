@@ -50,14 +50,10 @@ async def list_documentation(tool_context: ToolContext) -> str:
                 link_path = f"{USER_DOCS_URL}/docs/{path}"
 
                 if description:
-                    result.append(
-                        f"- **{title}** (`{path}`) - [View Online]({link_path})"
-                    )
+                    result.append(f"- **{title}** (`{path}`) - [View Online]({link_path})")
                     result.append(f"  {description}")
                 else:
-                    result.append(
-                        f"- **{title}** (`{path}`) - [View Online]({link_path})"
-                    )
+                    result.append(f"- **{title}** (`{path}`) - [View Online]({link_path})")
 
             result.append(f"\nTotal: {len(docs)} document(s)")
             result.append(
@@ -139,9 +135,7 @@ async def get_documentation(path: str, tool_context: ToolContext) -> str:
             logger.warning(error_msg)
             return f"{error_msg}\n\nUse `list_documentation()` to see all available documentation files."
         else:
-            error_msg = (
-                f"HTTP error {e.response.status_code} fetching documentation '{path}'"
-            )
+            error_msg = f"HTTP error {e.response.status_code} fetching documentation '{path}'"
             logger.error(error_msg)
             return f"{error_msg}\n\nThe documentation API returned an error."
     except httpx.RequestError as e:

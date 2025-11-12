@@ -47,9 +47,7 @@ class TestResearcherAgent:
         instruction = researcher_agent.instruction
 
         # Check instruction length (minimum 150 lines, ~1000+ characters)
-        assert (
-            len(instruction) > 1000
-        ), "Instruction should be comprehensive (>1000 chars)"
+        assert len(instruction) > 1000, "Instruction should be comprehensive (>1000 chars)"
         lines = instruction.split("\n")
         assert len(lines) >= 150, "Instruction should have 150+ lines"
 
@@ -71,23 +69,13 @@ class TestResearcherAgent:
             "authority",
         ]
         for keyword in required_keywords:
-            assert (
-                keyword in instruction_lower
-            ), f"Instruction missing keyword: {keyword}"
+            assert keyword in instruction_lower, f"Instruction missing keyword: {keyword}"
 
         # Check for structured sections
-        assert (
-            "## Core Responsibilities" in instruction
-            or "core responsibilit" in instruction_lower
-        )
+        assert "## Core Responsibilities" in instruction or "core responsibilit" in instruction_lower
         assert "## Research Workflow" in instruction or "workflow" in instruction_lower
-        assert (
-            "## Citation Requirements" in instruction or "citation" in instruction_lower
-        )
-        assert (
-            "## Quality Standards" in instruction
-            or "quality standard" in instruction_lower
-        )
+        assert "## Citation Requirements" in instruction or "citation" in instruction_lower
+        assert "## Quality Standards" in instruction or "quality standard" in instruction_lower
         assert "## Examples" in instruction or "example" in instruction_lower
 
     def test_researcher_tools_assigned(self):
@@ -95,9 +83,7 @@ class TestResearcherAgent:
         # Verify tools list exists and has correct count
         assert hasattr(researcher_agent, "tools")
         assert researcher_agent.tools is not None
-        assert (
-            len(researcher_agent.tools) == 4
-        ), "Researcher should have exactly 4 tools"
+        assert len(researcher_agent.tools) == 4, "Researcher should have exactly 4 tools"
 
         # Verify tool names (tools may be wrapped, check by name or function)
         tool_names = set()
@@ -117,9 +103,7 @@ class TestResearcherAgent:
             "list_documentation",
             "get_documentation",
         }
-        assert (
-            tool_names == expected_tools
-        ), f"Expected tools {expected_tools}, got {tool_names}"
+        assert tool_names == expected_tools, f"Expected tools {expected_tools}, got {tool_names}"
 
     def test_researcher_state_key_reference(self):
         """Test that instruction references STATE_KEY_RESEARCH constant."""
@@ -147,11 +131,7 @@ class TestResearcherAgent:
 
         # Should show good vs bad patterns
         assert "✅" in instruction or "good" in instruction.lower()
-        assert (
-            "❌" in instruction
-            or "bad" in instruction.lower()
-            or "not" in instruction.lower()
-        )
+        assert "❌" in instruction or "bad" in instruction.lower() or "not" in instruction.lower()
 
 
 class TestResearcherConstants:

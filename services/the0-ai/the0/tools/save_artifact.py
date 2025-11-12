@@ -56,10 +56,7 @@ async def save_artifact(
             print(f"Saving artifact {filename} for session {session_id}")
         except AttributeError:
             # Fallback to state if session ID was stored there
-            if (
-                hasattr(tool_context, "state")
-                and "current_session_id" in tool_context.state
-            ):
+            if hasattr(tool_context, "state") and "current_session_id" in tool_context.state:
                 session_id = tool_context.state["current_session_id"]
             elif hasattr(tool_context, "state") and "session_id" in tool_context.state:
                 session_id = tool_context.state["session_id"]
@@ -86,9 +83,7 @@ async def save_artifact(
 
         # Also save to ADK artifact service for backward compatibility
         code_artifact = types.Part.from_text(text=code)
-        version = await tool_context.save_artifact(
-            filename=filename, artifact=code_artifact
-        )
+        version = await tool_context.save_artifact(filename=filename, artifact=code_artifact)
 
         # Save artifact metadata to database
         try:

@@ -24,9 +24,7 @@ class TestBrowseUrl:
 
         # Mock HTTP response
         mock_response = MagicMock()
-        mock_response.text = (
-            "<html><body><h1>Test Page</h1><p>Content</p></body></html>"
-        )
+        mock_response.text = "<html><body><h1>Test Page</h1><p>Content</p></body></html>"
         mock_response.headers = {"content-type": "text/html; charset=utf-8"}
         mock_response.raise_for_status.return_value = None
         mock_requests.return_value = mock_response
@@ -39,9 +37,7 @@ class TestBrowseUrl:
         mock_markitdown.return_value = mock_converter
 
         # Mock tempfile operations
-        with patch("tempfile.NamedTemporaryFile") as mock_tempfile, patch(
-            "os.unlink"
-        ) as mock_unlink:
+        with patch("tempfile.NamedTemporaryFile") as mock_tempfile, patch("os.unlink") as mock_unlink:
 
             mock_file = MagicMock()
             mock_file.name = "/tmp/test.html"
@@ -225,9 +221,7 @@ class TestBrowseUrl:
         url = "https://example.com"
 
         mock_response = MagicMock()
-        mock_response.headers = {
-            "content-type": "application/pdf"
-        }  # Will cause early return
+        mock_response.headers = {"content-type": "application/pdf"}  # Will cause early return
         mock_requests.return_value = mock_response
 
         browse_url(url)
@@ -305,26 +299,18 @@ class TestTavilySearch:
         mock_client.search = AsyncMock(
             return_value={
                 "query": query,
-                "answer": (
-                    "Python asyncio is a library for concurrent programming "
-                    "using async/await syntax."
-                ),
+                "answer": ("Python asyncio is a library for concurrent programming " "using async/await syntax."),
                 "results": [
                     {
                         "title": "Python Asyncio Tutorial",
                         "url": "https://docs.python.org/3/library/asyncio.html",
-                        "content": (
-                            "asyncio is a library to write concurrent code "
-                            "using async/await syntax."
-                        ),
+                        "content": ("asyncio is a library to write concurrent code " "using async/await syntax."),
                         "score": 0.98,
                     },
                     {
                         "title": "Real Python Asyncio Guide",
                         "url": "https://realpython.com/async-io-python/",
-                        "content": (
-                            "Complete guide to asynchronous programming in " "Python."
-                        ),
+                        "content": ("Complete guide to asynchronous programming in " "Python."),
                         "score": 0.95,
                     },
                 ],
@@ -380,9 +366,7 @@ class TestTavilySearch:
         mock_client_class.return_value = mock_client
 
         with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-test-key"}):
-            result = await tavily_search(
-                "test", search_depth="advanced", include_answer=False
-            )
+            result = await tavily_search("test", search_depth="advanced", include_answer=False)
 
         assert "# Search Results: test" in result
         assert "AI-Generated Summary" not in result  # No answer requested
@@ -439,9 +423,7 @@ class TestTavilySearch:
     async def test_tavily_search_auth_error(self, mock_client_class):
         """Test authentication error handling."""
         mock_client = AsyncMock()
-        mock_client.search = AsyncMock(
-            side_effect=Exception("401 authentication failed")
-        )
+        mock_client.search = AsyncMock(side_effect=Exception("401 authentication failed"))
         mock_client_class.return_value = mock_client
 
         with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-invalid"}):
@@ -476,9 +458,7 @@ class TestTavilySearch:
     async def test_tavily_search_import_error(self, mock_client_class):
         """Test error when Tavily SDK not installed."""
         # Simulate import error
-        with patch(
-            "builtins.__import__", side_effect=ImportError("No module named 'tavily'")
-        ):
+        with patch("builtins.__import__", side_effect=ImportError("No module named 'tavily'")):
             result = await tavily_search("test")
 
         assert "Error: Tavily SDK not installed" in result

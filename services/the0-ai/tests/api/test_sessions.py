@@ -12,9 +12,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_list_chat_sessions_empty(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_list_chat_sessions_empty(self, mock_get_repo, mock_get_session, test_client):
         """Test listing chat sessions when none exist."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()
@@ -33,9 +31,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_list_chat_sessions_with_data(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_list_chat_sessions_with_data(self, mock_get_repo, mock_get_session, test_client):
         """Test listing chat sessions with existing sessions."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()
@@ -55,9 +51,7 @@ class TestSessionEndpoints:
         mock_session_2.updated_at = datetime(2024, 1, 2, 11, 0, 0)
         mock_session_2.is_active = True
 
-        mock_repo.list_sessions = AsyncMock(
-            return_value=[mock_session_1, mock_session_2]
-        )
+        mock_repo.list_sessions = AsyncMock(return_value=[mock_session_1, mock_session_2])
 
         mock_get_session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_get_session.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -81,9 +75,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_list_chat_sessions_error(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_list_chat_sessions_error(self, mock_get_repo, mock_get_session, test_client):
         """Test listing chat sessions with database error."""
         mock_session = AsyncMock()
         mock_repo = AsyncMock()
@@ -100,9 +92,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_get_chat_session_not_found(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_get_chat_session_not_found(self, mock_get_repo, mock_get_session, test_client):
         """Test getting non-existent chat session."""
         session_id = "nonexistent-session"
 
@@ -121,9 +111,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_update_session_title_missing_title(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_update_session_title_missing_title(self, mock_get_repo, mock_get_session, test_client):
         """Test updating session title without providing title."""
         session_id = "test-session"
 
@@ -134,9 +122,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_update_session_title_success(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_update_session_title_success(self, mock_get_repo, mock_get_session, test_client):
         """Test successfully updating session title."""
         session_id = "test-session"
         new_title = "My Trading Bot Chat"
@@ -149,9 +135,7 @@ class TestSessionEndpoints:
         mock_get_session.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_get_repo.return_value = mock_repo
 
-        response = test_client.put(
-            f"/chat/sessions/{session_id}/title", params={"title": new_title}
-        )
+        response = test_client.put(f"/chat/sessions/{session_id}/title", params={"title": new_title})
 
         assert response.status_code == 200
         data = response.json()
@@ -161,9 +145,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_update_session_title_not_found(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_update_session_title_not_found(self, mock_get_repo, mock_get_session, test_client):
         """Test updating title for non-existent session."""
         session_id = "nonexistent-session"
         new_title = "New Title"
@@ -176,18 +158,14 @@ class TestSessionEndpoints:
         mock_get_session.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_get_repo.return_value = mock_repo
 
-        response = test_client.put(
-            f"/chat/sessions/{session_id}/title", params={"title": new_title}
-        )
+        response = test_client.put(f"/chat/sessions/{session_id}/title", params={"title": new_title})
 
         assert response.status_code == 404
         assert "Session not found" in response.json()["detail"]
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_delete_chat_session_success(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_delete_chat_session_success(self, mock_get_repo, mock_get_session, test_client):
         """Test successfully deleting a session."""
         session_id = "test-session"
 
@@ -209,9 +187,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_delete_chat_session_not_found(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_delete_chat_session_not_found(self, mock_get_repo, mock_get_session, test_client):
         """Test deleting non-existent session."""
         session_id = "nonexistent-session"
 
@@ -230,9 +206,7 @@ class TestSessionEndpoints:
 
     @patch("api.main.get_db_session")
     @patch("api.main.get_chat_repository")
-    def test_delete_chat_session_error(
-        self, mock_get_repo, mock_get_session, test_client
-    ):
+    def test_delete_chat_session_error(self, mock_get_repo, mock_get_session, test_client):
         """Test deleting session with database error."""
         session_id = "test-session"
 

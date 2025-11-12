@@ -56,13 +56,13 @@ run-agent:
 # Format code with black
 format:
 	@echo "🎨 Formatting code with black..."
-	. venv/bin/activate && black api/ the0/ tests/ --line-length 88
+	. venv/bin/activate && black api/ the0/ tests/ --line-length 120
 	@echo "✅ Code formatted!"
 
 # Lint code with flake8
 lint:
 	@echo "🔍 Linting code with flake8..."
-	. venv/bin/activate && flake8 api/ the0/ tests/ --max-line-length=88 --ignore=E203,W503
+	. venv/bin/activate && flake8 api/ the0/ tests/ --max-line-length=120 --ignore=E203,W503
 	@echo "✅ Code linted!"
 
 # Run all tests with pytest

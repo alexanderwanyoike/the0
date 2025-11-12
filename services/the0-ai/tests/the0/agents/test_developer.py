@@ -47,9 +47,7 @@ class TestDeveloperAgent:
         instruction = developer_agent.instruction
 
         # Check instruction length (minimum 200 lines, ~1000+ characters)
-        assert (
-            len(instruction) > 1000
-        ), "Instruction should be comprehensive (>1000 chars)"
+        assert len(instruction) > 1000, "Instruction should be comprehensive (>1000 chars)"
         lines = instruction.split("\n")
         assert len(lines) >= 200, "Instruction should have 200+ lines"
 
@@ -72,37 +70,21 @@ class TestDeveloperAgent:
             "class",
         ]
         for keyword in required_keywords:
-            assert (
-                keyword in instruction_lower
-            ), f"Instruction missing keyword: {keyword}"
+            assert keyword in instruction_lower, f"Instruction missing keyword: {keyword}"
 
         # Check for structured sections
-        assert (
-            "## Core Responsibilities" in instruction
-            or "core responsibilit" in instruction_lower
-        )
-        assert (
-            "## Development Workflow" in instruction or "workflow" in instruction_lower
-        )
-        assert (
-            "## Engineering Principles" in instruction
-            or "engineering principle" in instruction_lower
-        )
-        assert (
-            "## Library Preferences" in instruction
-            or "library preference" in instruction_lower
-        )
-        assert (
-            "## Credentials Handling" in instruction
-            or "credential" in instruction_lower
-        )
+        assert "## Core Responsibilities" in instruction or "core responsibilit" in instruction_lower
+        assert "## Development Workflow" in instruction or "workflow" in instruction_lower
+        assert "## Engineering Principles" in instruction or "engineering principle" in instruction_lower
+        assert "## Library Preferences" in instruction or "library preference" in instruction_lower
+        assert "## Credentials Handling" in instruction or "credential" in instruction_lower
 
     def test_developer_tools_assigned(self):
         """Test that all required tools are assigned to the agent."""
         # Verify tools list exists and has correct count
         assert hasattr(developer_agent, "tools")
         assert developer_agent.tools is not None
-        assert len(developer_agent.tools) == 4, "Developer should have exactly 4 tools"
+        assert len(developer_agent.tools) == 9, "Developer should have exactly 9 tools"
 
         # Verify tool names (tools may be wrapped, check by name or function)
         tool_names = set()
@@ -121,10 +103,13 @@ class TestDeveloperAgent:
             "deploy_bot",
             "list_documentation",
             "get_documentation",
+            "execute_command",
+            "read_file",
+            "list_directory",
+            "tavily_search",
+            "browse_url",
         }
-        assert (
-            tool_names == expected_tools
-        ), f"Expected tools {expected_tools}, got {tool_names}"
+        assert tool_names == expected_tools, f"Expected tools {expected_tools}, got {tool_names}"
 
     def test_developer_state_key_reference(self):
         """Test instruction references state key constants."""
@@ -153,11 +138,7 @@ class TestDeveloperAgent:
 
         # Should show good vs bad patterns
         assert "✅" in instruction or "good" in instruction.lower()
-        assert (
-            "❌" in instruction
-            or "bad" in instruction.lower()
-            or "don't" in instruction.lower()
-        )
+        assert "❌" in instruction or "bad" in instruction.lower() or "don't" in instruction.lower()
 
     def test_developer_instruction_executable_validation(self):
         """Test that instruction includes executable validation sections."""
@@ -166,15 +147,9 @@ class TestDeveloperAgent:
 
         # Must include executable validation keywords
         assert "environment" in instruction_lower, "Missing environment setup section"
-        assert (
-            "execute" in instruction_lower or "execution" in instruction_lower
-        ), "Missing execution section"
-        assert (
-            "validate" in instruction_lower or "validation" in instruction_lower
-        ), "Missing validation section"
-        assert (
-            "credentials" in instruction_lower
-        ), "Missing credentials handling section"
+        assert "execute" in instruction_lower or "execution" in instruction_lower, "Missing execution section"
+        assert "validate" in instruction_lower or "validation" in instruction_lower, "Missing validation section"
+        assert "credentials" in instruction_lower, "Missing credentials handling section"
 
     def test_developer_instruction_library_preferences(self):
         """Test that instruction includes library preference guidelines."""
@@ -184,9 +159,7 @@ class TestDeveloperAgent:
         # Must include library preference keywords
         assert "library" in instruction_lower or "libraries" in instruction_lower
         # Should mention specific libraries
-        assert any(
-            lib in instruction_lower for lib in ["ccxt", "pandas", "ta-lib", "talib"]
-        )
+        assert any(lib in instruction_lower for lib in ["ccxt", "pandas", "ta-lib", "talib"])
 
 
 class TestDeveloperConstants:
