@@ -161,6 +161,28 @@ class TestDeveloperAgent:
         # Should mention specific libraries
         assert any(lib in instruction_lower for lib in ["ccxt", "pandas", "ta-lib", "talib"])
 
+    def test_developer_instruction_iterative_error_fixing(self):
+        """Test that instruction includes iterative error fixing workflow."""
+        instruction = developer_agent.instruction
+        instruction_lower = instruction.lower()
+
+        # Must include iterative error fixing keywords
+        assert "iterative" in instruction_lower or "iterate" in instruction_lower, "Missing iterative keyword"
+        assert "max attempts:" in instruction_lower, "Missing max attempts configuration"
+        assert "attempt" in instruction_lower, "Missing attempt tracking"
+        assert "escalate" in instruction_lower, "Missing escalation condition"
+
+        # Should mention retry logic
+        assert "re-test" in instruction_lower or "retest" in instruction_lower, "Missing re-test instruction"
+        assert "diagnose" in instruction_lower or "debug" in instruction_lower, "Missing diagnostic guidance"
+
+        # Should have actual numeric value injected
+        import re
+
+        max_attempts_match = re.search(r"max attempts: (\d+)", instruction_lower)
+        assert max_attempts_match is not None, "Missing max attempts value"
+        assert int(max_attempts_match.group(1)) > 0, "Max attempts should be positive number"
+
 
 class TestDeveloperConstants:
     """Test agent constants and configuration."""

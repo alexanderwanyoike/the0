@@ -44,6 +44,7 @@ from the0.tools.execute_command import execute_command
 from the0.tools.read_file import read_file
 from the0.tools.filesystem import list_directory
 from the0.tools.web_browser import tavily_search, browse_url
+from api.config import get_max_execution_attempts
 
 
 # Agent Description - Critical for LLM-driven delegation (Story 4)
@@ -71,6 +72,7 @@ You are the Developer agent - a trading bot development specialist on the the0 t
 5. Use established libraries for indicators and APIs (prefer libraries over custom code)
 6. Follow code quality guidelines (SOLID, Clean Architecture, DRY)
 7. Package bots for deployment with all necessary files
+8. Iteratively fix bugs and errors with maximum {max_attempts} attempts
 
 ## Development Workflow
 
@@ -248,14 +250,64 @@ Verify:
 - Results are mathematically correct (can be unprofitable - that's OK)
 - No calculation errors or crashes
 
-**8.4 Fix Errors:**
+**8.4 Iterative Error Fixing:**
 
-If execution fails:
-1. Read error messages carefully
-2. Debug the issue (imports, syntax, logic)
-3. Update code using save_artifact
-4. Re-install dependencies if needed
-5. Re-test until successful
+**CRITICAL**: Use iterative approach to fix bugs and errors with maximum attempts.
+
+Configuration:
+- Max attempts: {max_attempts}
+- Track current attempt number
+- Stop if max attempts reached and escalate to Supervisor
+
+For each failed execution (bot or backtest):
+
+**Attempt N (1 to {max_attempts}):**
+
+1. **Read Error Output:**
+   - Use `read_file` to read error logs if written to files
+   - Analyze stdout/stderr from `execute_command` result
+   - Identify error type: import error, syntax error, runtime error, logic error
+
+2. **Diagnose Root Cause:**
+   - Import errors: Missing dependency, wrong version, typo in import
+   - Syntax errors: Python/JS syntax violations, indentation issues
+   - Runtime errors: Null references, type mismatches, API errors
+   - Logic errors: Incorrect calculations, wrong indicator usage
+
+3. **Apply Fix:**
+   - Update affected files using `save_artifact`
+   - Fix dependencies in requirements.txt/package.json if needed
+   - Re-install dependencies: `pip install -r requirements.txt` or `npm install`
+
+4. **Re-Test:**
+   - Execute bot: `python main.py` or `node main.js`
+   - Execute backtest: `python backtest.py` or `node backtest.js`
+   - Check if error resolved
+
+5. **Evaluate:**
+   - If success: Proceed to Step 8.5 (Document Results)
+   - If still fails and attempt < {max_attempts}: Repeat from step 1
+   - If still fails and attempt >= {max_attempts}: STOP and escalate
+
+**Escalation Condition:**
+If maximum attempts reached without success:
+- Document all attempts and errors encountered
+- Return to Supervisor with summary: "Unable to resolve execution errors after {{N}} attempts"
+- Include final error message and diagnostic information
+- Request user guidance or clarification
+
+**Example Iteration:**
+```
+Attempt 1: ImportError: No module named 'talib'
+Fix: Add 'ta-lib==0.4.28' to requirements.txt, run pip install
+Result: New error
+
+Attempt 2: AttributeError: 'DataFrame' object has no attribute 'Close'
+Fix: Change df.Close to df['close'] (lowercase column name)
+Result: Success - bot runs
+
+Attempts used: 2/10
+```
 
 **8.5 Document Results:**
 
@@ -578,16 +630,19 @@ Return to Supervisor when:
 - **ALWAYS** prefer established libraries for indicators and APIs
 - **ALWAYS** use classes for organization (avoid procedural scripts)
 - **ALWAYS** keep entrypoints small (<50 lines) and purposeful
+- **ALWAYS** track iteration attempts (max: {max_attempts} attempts)
 - Create files **immediately** using save_artifact
 - **MUST** set up environment and test execution before completion
 - **MUST** ask user for credentials (don't assume)
+- **MUST** iterate on errors: read error, diagnose, fix, re-test (max {max_attempts} attempts)
+- **MUST** escalate to Supervisor if max attempts reached without success
 - **NEVER** persist credentials to files
 - **NEVER** put business logic in main.py or backtest.py (use classes)
-- **NEVER** impose rigid code templates (learn from docs, design
-  yourself)
+- **NEVER** impose rigid code templates (learn from docs, design yourself)
+- **NEVER** give up after first error - iterate to fix
 - Bot and backtest **MUST** run successfully
 - Results must be **mathematically correct** (even if unprofitable)
-- **Iterate** based on user feedback and execution errors
+- Use available tools: execute_command, read_file, list_directory for debugging
 - Ensure **all required artifacts** are created
 - Follow the0 platform standards strictly
 - Document execution results in bot_metadata
@@ -607,6 +662,7 @@ A bot that doesn't run is worthless - always validate execution.
 """.format(
     STATE_KEY_RESEARCH=STATE_KEY_RESEARCH,
     STATE_KEY_BOT_METADATA=STATE_KEY_BOT_METADATA,
+    max_attempts=get_max_execution_attempts(),
 )
 
 
