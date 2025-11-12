@@ -12,9 +12,7 @@ class TestArtifactEndpoints:
     @patch("api.main.agent_service")
     def test_list_artifacts(self, mock_agent, test_client):
         """Test listing all artifacts."""
-        mock_agent.list_artifact_keys = AsyncMock(
-            return_value=["bot1.py", "config.yaml"]
-        )
+        mock_agent.list_artifact_keys = AsyncMock(return_value=["bot1.py", "config.yaml"])
 
         response = test_client.get("/artifacts")
 
@@ -26,9 +24,7 @@ class TestArtifactEndpoints:
     @patch("api.main.agent_service")
     def test_list_artifacts_error(self, mock_agent, test_client):
         """Test listing artifacts with service error."""
-        mock_agent.list_artifact_keys = AsyncMock(
-            side_effect=Exception("Service error")
-        )
+        mock_agent.list_artifact_keys = AsyncMock(side_effect=Exception("Service error"))
 
         response = test_client.get("/artifacts")
 
@@ -39,9 +35,7 @@ class TestArtifactEndpoints:
     def test_list_session_artifacts(self, mock_agent, test_client):
         """Test listing session artifacts."""
         session_id = "test-session-123"
-        mock_agent.list_session_artifact_keys = AsyncMock(
-            return_value=["session_bot.py"]
-        )
+        mock_agent.list_session_artifact_keys = AsyncMock(return_value=["session_bot.py"])
 
         response = test_client.get(f"/artifacts/session/{session_id}")
 
@@ -55,9 +49,7 @@ class TestArtifactEndpoints:
     def test_list_session_artifacts_error(self, mock_agent, test_client):
         """Test listing session artifacts with error."""
         session_id = "test-session-123"
-        mock_agent.list_session_artifact_keys = AsyncMock(
-            side_effect=Exception("Session error")
-        )
+        mock_agent.list_session_artifact_keys = AsyncMock(side_effect=Exception("Session error"))
 
         response = test_client.get(f"/artifacts/session/{session_id}")
 
@@ -65,9 +57,7 @@ class TestArtifactEndpoints:
         assert "Session error" in response.json()["detail"]
 
     @patch("api.main.agent_service")
-    def test_get_artifact_success(
-        self, mock_agent, test_client, sample_artifact_response
-    ):
+    def test_get_artifact_success(self, mock_agent, test_client, sample_artifact_response):
         """Test getting an artifact successfully."""
         filename = "trading_bot.py"
         session_id = "test-session"
@@ -106,9 +96,7 @@ class TestArtifactEndpoints:
         assert "Storage error" in response.json()["detail"]
 
     @patch("api.main.agent_service")
-    def test_get_session_artifact(
-        self, mock_agent, test_client, sample_artifact_response
-    ):
+    def test_get_session_artifact(self, mock_agent, test_client, sample_artifact_response):
         """Test getting session-specific artifact."""
         session_id = "test-session"
         filename = "bot.py"

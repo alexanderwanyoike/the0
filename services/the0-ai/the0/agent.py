@@ -12,9 +12,7 @@ from google.adk.runners import Runner
 root_agent = Agent(
     name="the0",
     model="gemini-2.5-flash",
-    description=(
-        "Agent that helps you build and deploy automated trading bots on the0 plaform."
-    ),
+    description=("Agent that helps you build and deploy automated trading bots on the0 plaform."),
     instruction=(
         """
     You are the0, an agent that helps users build and deploy automated trading bots on the0 platform. 

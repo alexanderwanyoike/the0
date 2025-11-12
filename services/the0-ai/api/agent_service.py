@@ -69,9 +69,7 @@ class AgentService:
                 elif os.getenv("GOOGLE_API_KEY"):
                     print("Using Google AI API key from environment")
                 else:
-                    print(
-                        "Warning: No Google AI API key found. Please configure one via the settings."
-                    )
+                    print("Warning: No Google AI API key found. Please configure one via the settings.")
         except Exception as e:
             print(f"Error setting up API key: {e}")
 
@@ -79,9 +77,7 @@ class AgentService:
         """Refresh the API key from database (call this when API key is updated)."""
         await self._setup_api_key()
 
-    async def chat(
-        self, message: str, session_id: Optional[str] = None
-    ) -> ChatResponse:
+    async def chat(self, message: str, session_id: Optional[str] = None) -> ChatResponse:
         """Send a message to the agent and get a response."""
         await self.initialize()
 
@@ -121,14 +117,10 @@ class AgentService:
                 print(f"Error storing user message: {e}")
 
             # Create content object
-            content = types.Content(
-                role="user", parts=[types.Part.from_text(text=message)]
-            )
+            content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
 
             # Send message to agent
-            events = self.runner.run_async(
-                user_id="default-user", session_id=session_id, new_message=content
-            )
+            events = self.runner.run_async(user_id="default-user", session_id=session_id, new_message=content)
 
             # Process events to get final response
             response = ""
@@ -145,34 +137,21 @@ class AgentService:
                     if hasattr(event, "content") and event.content is not None:
                         print(f"Event has content: {type(event.content)}")
 
-                        if (
-                            hasattr(event.content, "parts")
-                            and event.content.parts is not None
-                        ):
+                        if hasattr(event.content, "parts") and event.content.parts is not None:
                             print(f"Content has {len(event.content.parts)} parts")
                             # Extract all text parts from the response
                             text_parts = []
                             for i, part in enumerate(event.content.parts):
-                                print(
-                                    f"Part {i}: {type(part)}, has text: {hasattr(part, 'text')}"
-                                )
+                                print(f"Part {i}: {type(part)}, has text: {hasattr(part, 'text')}")
                                 if hasattr(part, "text") and part.text:
                                     text_parts.append(part.text)
                                     print(f"Added text: {part.text[:100]}...")
-                            response = (
-                                " ".join(text_parts)
-                                if text_parts
-                                else "Agent completed the task."
-                            )
+                            response = " ".join(text_parts) if text_parts else "Agent completed the task."
                         else:
-                            print(
-                                f"Warning: Event content has no parts or parts is None. Content: {event.content}"
-                            )
+                            print(f"Warning: Event content has no parts or parts is None. Content: {event.content}")
                             response = "Agent completed the task."
                     else:
-                        print(
-                            f"Warning: Event has no content or content is None. Event: {event}"
-                        )
+                        print(f"Warning: Event has no content or content is None. Event: {event}")
                         response = "Agent completed the task."
                     break
 
@@ -190,9 +169,7 @@ class AgentService:
                         session_id,
                         "assistant",
                         response,
-                        artifacts_created=(
-                            artifacts_created if artifacts_created else None
-                        ),
+                        artifacts_created=(artifacts_created if artifacts_created else None),
                     )
             except Exception as e:
                 print(f"Error storing assistant message: {e}")
@@ -248,14 +225,10 @@ class AgentService:
                 print(f"Error storing user message: {e}")
 
             # Create content object
-            content = types.Content(
-                role="user", parts=[types.Part.from_text(text=message)]
-            )
+            content = types.Content(role="user", parts=[types.Part.from_text(text=message)])
 
             # Send message to agent and stream events
-            events = self.runner.run_async(
-                user_id="default-user", session_id=session_id, new_message=content
-            )
+            events = self.runner.run_async(user_id="default-user", session_id=session_id, new_message=content)
 
             accumulated_response = ""
 
@@ -277,9 +250,7 @@ class AgentService:
                     # Get artifacts that were created
                     artifacts = await self.list_session_artifact_keys(session_id)
                     if artifacts:
-                        yield StreamChunk(
-                            type="artifacts", artifacts=artifacts, session_id=session_id
-                        )
+                        yield StreamChunk(type="artifacts", artifacts=artifacts, session_id=session_id)
 
                     # Store assistant message in database
                     try:
@@ -315,9 +286,7 @@ class AgentService:
             print(f"Error listing artifacts: {e}")
             return []
 
-    async def get_artifact(
-        self, filename: str, session_id: Optional[str] = None
-    ) -> Optional[ArtifactResponse]:
+    async def get_artifact(self, filename: str, session_id: Optional[str] = None) -> Optional[ArtifactResponse]:
         """Get a specific artifact by filename."""
         try:
             if not session_id:

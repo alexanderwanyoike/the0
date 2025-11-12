@@ -55,3 +55,19 @@ def ensure_user_data_dir():
     print(f"Sessions data directory: {data_dir}")
 
     return user_data_dir
+
+
+def get_max_execution_attempts() -> int:
+    """
+    Get the maximum number of execution attempts for the Developer Agent.
+
+    The Developer Agent will attempt to fix bot execution errors up to this many times
+    before escalating to the Supervisor. Configurable via MAX_EXECUTION_ATTEMPTS env var.
+
+    Returns:
+        int: Maximum execution attempts (default: 10)
+    """
+    try:
+        return int(os.getenv("MAX_EXECUTION_ATTEMPTS", "10"))
+    except (ValueError, TypeError):
+        return 10

@@ -21,9 +21,7 @@ class ChatRepository:
         title: Optional[str] = None,
     ) -> ChatSession:
         """Create a new chat session."""
-        chat_session = ChatSession(
-            id=session_id, user_id=user_id, title=title, is_active=True
-        )
+        chat_session = ChatSession(id=session_id, user_id=user_id, title=title, is_active=True)
 
         self.session.add(chat_session)
         try:
@@ -42,9 +40,7 @@ class ChatRepository:
 
     async def get_session(self, session_id: str) -> Optional[ChatSession]:
         """Get a chat session by ID."""
-        result = await self.session.execute(
-            select(ChatSession).where(ChatSession.id == session_id)
-        )
+        result = await self.session.execute(select(ChatSession).where(ChatSession.id == session_id))
         return result.scalar_one_or_none()
 
     async def list_sessions(self, user_id: str = "default-user") -> List[ChatSession]:
@@ -57,14 +53,10 @@ class ChatRepository:
         )
         return list(result.scalars().all())
 
-    async def get_session_with_messages(
-        self, session_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_session_with_messages(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get a session with all its messages."""
         result = await self.session.execute(
-            select(ChatSession)
-            .options(selectinload(ChatSession.messages))
-            .where(ChatSession.id == session_id)
+            select(ChatSession).options(selectinload(ChatSession.messages)).where(ChatSession.id == session_id)
         )
         session = result.scalar_one_or_none()
 
@@ -73,17 +65,13 @@ class ChatRepository:
 
         return {
             "session": session,
-            "messages": sorted(
-                session.messages, key=lambda m: m.timestamp or datetime.min
-            ),
+            "messages": sorted(session.messages, key=lambda m: m.timestamp or datetime.min),
         }
 
     async def update_session_title(self, session_id: str, title: str) -> bool:
         """Update the title of a chat session."""
         result = await self.session.execute(
-            update(ChatSession)
-            .where(ChatSession.id == session_id)
-            .values(title=title, updated_at=datetime.utcnow())
+            update(ChatSession).where(ChatSession.id == session_id).values(title=title, updated_at=datetime.utcnow())
         )
         await self.session.commit()
         return result.rowcount > 0
@@ -119,9 +107,7 @@ class ChatRepository:
 
         # Update session's updated_at timestamp
         await self.session.execute(
-            update(ChatSession)
-            .where(ChatSession.id == session_id)
-            .values(updated_at=datetime.utcnow())
+            update(ChatSession).where(ChatSession.id == session_id).values(updated_at=datetime.utcnow())
         )
         await self.session.commit()
 
@@ -138,9 +124,7 @@ class ChatRepository:
         """Save artifact metadata to the database."""
         # Check if artifact already exists
         existing_result = await self.session.execute(
-            select(Artifact)
-            .where(Artifact.session_id == session_id)
-            .where(Artifact.filename == filename)
+            select(Artifact).where(Artifact.session_id == session_id).where(Artifact.filename == filename)
         )
         existing = existing_result.scalar_one_or_none()
 
@@ -168,18 +152,14 @@ class ChatRepository:
     async def get_artifact(self, session_id: str, filename: str) -> Optional[Artifact]:
         """Get artifact metadata from the database."""
         result = await self.session.execute(
-            select(Artifact)
-            .where(Artifact.session_id == session_id)
-            .where(Artifact.filename == filename)
+            select(Artifact).where(Artifact.session_id == session_id).where(Artifact.filename == filename)
         )
         return result.scalar_one_or_none()
 
     async def get_session_artifacts(self, session_id: str) -> List[Artifact]:
         """Get all artifacts for a session."""
         result = await self.session.execute(
-            select(Artifact)
-            .where(Artifact.session_id == session_id)
-            .order_by(Artifact.created_at.desc())
+            select(Artifact).where(Artifact.session_id == session_id).order_by(Artifact.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -199,9 +179,7 @@ class SettingsRepository:
     async def set_setting(self, key: str, value: str) -> None:
         """Set a setting value."""
         # Check if setting exists
-        existing_result = await self.session.execute(
-            select(Setting).where(Setting.key == key)
-        )
+        existing_result = await self.session.execute(select(Setting).where(Setting.key == key))
         existing = existing_result.scalar_one_or_none()
 
         if existing:
