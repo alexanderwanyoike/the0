@@ -106,12 +106,16 @@ class TestResearcherAgent:
         assert tool_names == expected_tools, f"Expected tools {expected_tools}, got {tool_names}"
 
     def test_researcher_state_key_reference(self):
-        """Test that instruction references STATE_KEY_RESEARCH constant."""
-        # Check that state key constant is used in instruction or documentation
+        """Test that instruction references state management."""
+        # Check that instruction mentions state management (Story 5 Part 2 - Integration)
         instruction = researcher_agent.instruction
 
-        # Should reference the state key or research_data
-        assert STATE_KEY_RESEARCH in instruction or "research_data" in instruction
+        # Should reference SessionStateManager (new approach) or research_data/STATE_KEY
+        assert (
+            "SessionStateManager" in instruction
+            or "research_data" in instruction
+            or STATE_KEY_RESEARCH in instruction
+        )
 
     def test_researcher_agent_export(self):
         """Test that researcher_agent can be imported from package."""

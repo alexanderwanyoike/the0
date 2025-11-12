@@ -44,6 +44,7 @@ from the0.tools.execute_command import execute_command
 from the0.tools.read_file import read_file
 from the0.tools.filesystem import list_directory
 from the0.tools.web_browser import tavily_search, browse_url
+from the0.tools.state_management import get_research_data, store_bot_metadata
 from api.config import get_max_execution_attempts
 
 
@@ -101,24 +102,63 @@ These documents define:
 
 ### Step 3: Analyze Research Findings
 
-Read research_data from session state (if available):
+**Call the `get_research_data` tool to retrieve research from session state:**
 
-```python
-research = session.state.get('{STATE_KEY_RESEARCH}', {{}})
-if research:
-    summary = research.get('summary', '')
-    findings = research.get('findings', [])
-    recommendations = research.get('recommendations', [])
-    sources = research.get('sources', [])
+The Researcher agent may have already gathered information about APIs, libraries, and strategies.
+Use this research to inform your implementation.
+
+**Tool Call:**
+```
+result = get_research_data()
 ```
 
-Review:
-- API capabilities and limitations
-- Recommended libraries and versions
-- Implementation best practices
-- Source documentation URLs
+**Handle the Response:**
 
-If research data is missing but needed, escalate to Supervisor for research.
+If `result["status"] == "success"`:
+- Extract research data from `result["data"]`:
+  - `query`: Original research request
+  - `summary`: Executive summary (2-3 sentences)
+  - `findings`: List of key findings with `point`, `source`, `confidence`
+  - `recommendations`: Actionable recommendations for implementation
+  - `sources`: All sources used with `title`, `url`, `relevance`
+  - `researcher_notes`: Additional context or caveats
+
+If `result["status"] == "not_found"`:
+- No research data available
+- Proceed based on user requirements alone
+- Document assumptions you're making
+
+**Review research insights:**
+- **API capabilities and limitations**: Check findings for supported endpoints, rate limits, authentication
+- **Recommended libraries and versions**: Look for specific library recommendations in findings/recommendations
+- **Implementation best practices**: Review findings for best practices, gotchas, performance tips
+- **Source documentation URLs**: Access `sources` list for official documentation links
+
+**Example: Using Research Data**
+```
+result = get_research_data()
+
+if result["status"] == "success":
+    research = result["data"]
+    print(f"Research Summary: {{{{research['summary']}}}}")
+
+    # Review key findings
+    for finding in research["findings"]:
+        print(f"- {{{{finding['point']}}}} (confidence: {{{{finding['confidence']}}}}")
+
+    # Apply recommendations to implementation
+    for rec in research["recommendations"]:
+        print(f"Recommendation: {{{{rec}}}}")
+
+    # Access source URLs if needed
+    for source in research["sources"]:
+        print(f"Reference: {{{{source['title']}}}} - {{{{source['url']}}}}")
+```
+
+**If research data is missing but needed:**
+- Check if user requirements are clear enough to proceed without research
+- If research would help: Escalate to Supervisor and request specific research
+- If proceeding without research: Document assumptions and limitations in bot README
 
 ### Step 4: Design Bot Architecture
 
@@ -309,23 +349,112 @@ Result: Success - bot runs
 Attempts used: 2/10
 ```
 
-**8.5 Document Results:**
+**8.5 Document Results and Store Metadata:**
 
-Update bot_metadata with:
-- execution_verified: true/false
-- backtest_verified: true/false
-- test_results: {{bot_execution, backtest_execution, backtest_trades,
-  backtest_pnl, used_mock_data}}
+**CRITICAL: Call `store_bot_metadata` tool to save bot creation results**
+
+After validating bot and backtest execution, store comprehensive metadata in session state.
+
+**Tool Call:**
+```
+result = store_bot_metadata(
+    bot_name="momentum_btc_binance",
+    language="python",  # or "javascript"
+    files_created=[
+        "main.py",
+        "bot-config.yaml",
+        "requirements.txt",
+        "bot-schema.json",
+        "README.md",
+        "backtest.py",
+        "backtest-schema.json"
+    ],
+    strategy_type="momentum",  # e.g., "momentum", "arbitrage", "DCA"
+    platform="binance",  # e.g., "binance", "alpaca", "kraken"
+    status="ready_for_deploy",  # "ready_for_deploy" or "needs_fixes"
+    execution_verified=True,  # Did bot run successfully?
+    backtest_verified=True,  # Did backtest run successfully?
+    libraries_used=[
+        "ccxt==4.1.0",
+        "pandas-ta==0.3.14b0",
+        "pandas==2.1.4"
+    ],
+    test_results={{
+        "bot_execution": "success",  # "success" or "failed"
+        "backtest_execution": "success",  # "success" or "failed"
+        "backtest_trades": 42,
+        "backtest_pnl": -2.3,  # Can be negative
+        "used_mock_data": False
+    }},
+    developer_notes="Bot created successfully. All tests passing."
+)
+```
+
+**Handle the Response:**
+- If `result["status"] == "success"`: Metadata stored successfully
+- If `result["status"] == "error"`: Log the error and retry
+
+**What to include in metadata:**
+
+**Required Parameters:**
+- **bot_name**: Descriptive name following pattern: `{{strategy}}_{{asset}}_{{platform}}`
+  - Examples: "momentum_btc_binance", "dca_eth_alpaca", "arbitrage_multi_kraken"
+- **language**: "python" or "javascript"
+- **files_created**: Complete list of all files created with save_artifact
+  - Must include: main.py, bot-config.yaml, requirements.txt/package.json
+  - Should include: README.md, backtest.py, bot-schema.json, backtest-schema.json
+- **strategy_type**: Trading strategy category (momentum, DCA, arbitrage, grid, etc.)
+- **platform**: Trading platform (binance, alpaca, kraken, coinbase, etc.)
+- **status**: Bot deployment status
+  - "ready_for_deploy": Both bot and backtest verified successfully
+  - "needs_fixes": Errors occurred during execution or validation
+
+**Verification Flags:**
+- **execution_verified**: True only if bot executed without errors
+- **backtest_verified**: True only if backtest executed and produced results
+
+**Optional but Recommended:**
+- **libraries_used**: All dependencies with exact pinned versions
+  - Extract from requirements.txt or package.json
+  - Include version numbers for reproducibility
+- **test_results**: Dictionary with execution details
+  - bot_execution: "success" or "failed"
+  - backtest_execution: "success" or "failed"
+  - backtest_trades: Number of trades in backtest (if available)
+  - backtest_pnl: Profit/loss from backtest (can be negative)
+  - used_mock_data: True if mock data was used instead of real credentials
+  - error_message: Error details if execution failed (optional)
+- **developer_notes**: Additional implementation context
+  - Document any assumptions made
+  - Note if certain features couldn't be implemented
+  - Mention if mock data was used due to missing credentials
 
 ### Step 9: Package for Deployment
 
 After successful execution validation:
 
-1. Verify all required files are present
-2. Verify execution and backtest passed
-3. Use `deploy_bot` tool to create distribution ZIP
-4. Store bot_metadata in session state (key: `{STATE_KEY_BOT_METADATA}`)
-5. Report completion to Supervisor with summary
+1. **Verify all required files are present**
+   - Check that all files from Required Artifacts Checklist were created
+   - Ensure no files are missing from files_created list
+
+2. **Verify execution and backtest passed**
+   - Confirm execution_verified=True (bot ran successfully)
+   - Confirm backtest_verified=True (backtest ran successfully)
+   - Review test_results for any warnings or issues
+
+3. **Use `deploy_bot` tool to create distribution ZIP**
+   - Package all artifacts into deployable format
+   - Verify ZIP created successfully
+
+4. **Confirm bot_metadata stored in session state**
+   - Metadata already stored in Step 8.5 (SessionStateManager.store_bot_metadata)
+   - Optional: Verify using `SessionStateManager.get_state_summary(session.state)`
+   - Confirm state shows: `has_bot_metadata=True`
+
+5. **Report completion to Supervisor with summary**
+   - Transfer back to Supervisor
+   - Provide summary of bot created, files, and status
+   - Mention that metadata is available in session state for review
 
 ## Required Artifacts Checklist
 
@@ -682,5 +811,7 @@ developer_agent = Agent(
         list_directory,
         tavily_search,
         browse_url,
+        get_research_data,
+        store_bot_metadata,
     ],
 )

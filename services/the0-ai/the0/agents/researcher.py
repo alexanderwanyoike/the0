@@ -37,9 +37,10 @@ Example Usage:
 """
 
 from google.adk.agents import Agent
-from the0.agents.base import DEFAULT_MODEL, STATE_KEY_RESEARCH
+from the0.agents.base import DEFAULT_MODEL
 from the0.tools.web_browser import tavily_search, browse_url
 from the0.tools.documentation import list_documentation, get_documentation
+from the0.tools.state_management import store_research_data
 
 
 # Agent Description - Critical for LLM-driven delegation (Story 4)
@@ -195,37 +196,119 @@ Based on the research, I recommend:
 
 ## Session State Storage
 
-After completing research, store findings in structured format
-using state key: `{STATE_KEY_RESEARCH}`
+**CRITICAL: After completing research, use the `store_research_data` tool to save findings**
 
-Expected JSON structure:
-{{
-    "query": "Original research request from Supervisor",
-    "summary": "Executive summary of findings",
-    "findings": [
-        {{
-            "point": "Key finding or insight",
-            "source": "https://source-url.com",
-            "confidence": "high|medium|low"
-        }}
+### Storage Workflow
+
+1. **Collect all findings** from your research (Tavily, browse_url, documentation)
+2. **Call the `store_research_data` tool** with structured parameters
+3. **Verify tool returns success** - check the response status
+4. **Return to Supervisor** to present results
+
+### Tool Parameters
+
+Call `store_research_data` with these parameters:
+
+- **query** (required): The original research request from the user
+- **summary** (required): Executive summary of findings (2-3 sentences)
+- **findings** (required): List of key findings, each containing:
+  - `point`: The finding description
+  - `source`: Source URL where you found this
+  - `confidence`: "high" | "medium" | "low"
+- **recommendations** (required): List of actionable recommendations for Developer
+- **sources** (required): List of all sources used, each containing:
+  - `title`: Source title
+  - `url`: Source URL
+  - `relevance`: Why this source matters (optional)
+  - `published`: Publication date if available (optional)
+- **researcher_notes** (optional): Additional context, caveats, or observations
+
+### Example Tool Call
+
+```
+store_research_data(
+    query="Research Binance API for momentum trading bot",
+    summary="Binance API v3 provides comprehensive REST and WebSocket endpoints. WebSocket recommended for real-time data to avoid rate limits. python-binance library (v1.0.19) provides clean async interface.",
+    findings=[
+        {
+            "point": "WebSocket available for real-time trade data at wss://stream.binance.com:9443",
+            "source": "https://binance-docs.github.io/apidocs/spot/en/#websocket-market-streams",
+            "confidence": "high"
+        },
+        {
+            "point": "python-binance library recommended for easier integration with async support",
+            "source": "https://pypi.org/project/python-binance/",
+            "confidence": "high"
+        },
+        {
+            "point": "Rate limit is 1200 weight per minute for REST API",
+            "source": "https://binance-docs.github.io/apidocs/spot/en/#limits",
+            "confidence": "high"
+        }
     ],
-    "recommendations": [
-        "Actionable recommendation 1",
-        "Actionable recommendation 2"
+    recommendations=[
+        "Use WebSocket for real-time data to avoid rate limits",
+        "Implement python-binance library v1.0.19 for easier integration",
+        "Add reconnection logic for WebSocket disconnections",
+        "Store API credentials securely in environment variables"
     ],
-    "sources": [
-        {{
-            "title": "Source Title",
-            "url": "https://source-url.com",
-            "relevance": "Why this source matters",
+    sources=[
+        {
+            "title": "Binance API Documentation - Spot",
+            "url": "https://binance-docs.github.io/apidocs/spot/en/",
+            "relevance": "Official API specification and reference",
             "published": "2025-01-15"
-        }}
+        },
+        {
+            "title": "python-binance PyPI Package",
+            "url": "https://pypi.org/project/python-binance/",
+            "relevance": "Python library package information and versions"
+        }
     ],
-    "timestamp": "ISO 8601 timestamp"
-}}
+    researcher_notes="All information verified from official Binance documentation. Library actively maintained with recent updates."
+)
+```
 
-NOTE: State writing will be implemented in Story 5.
-For now, document findings in text output.
+### Confidence Levels
+
+**Findings Confidence Guide:**
+- `"high"`: Official documentation, verified facts, authoritative sources
+- `"medium"`: Established technical blogs, tutorials from experts
+- `"low"`: Forum posts, unverified claims, outdated information
+
+### What to Include
+
+**Findings**: Extract key insights discovered during research
+- Focus on actionable technical details
+- Include specific URLs, versions, endpoints
+- Note any limitations or caveats
+
+**Recommendations**: Actionable next steps for Developer agent
+- Library choices with specific versions
+- API endpoint preferences
+- Implementation approaches
+- Architecture suggestions
+- Security considerations
+
+**Sources**: All references cited in findings
+- Prioritize official documentation
+- Include technical blogs and tutorials
+- Add academic papers if relevant
+- Note Stack Overflow threads for specific issues
+
+### When to Store
+
+Call `store_research_data` when:
+- ✅ All research tasks completed
+- ✅ Findings structured and verified
+- ✅ Recommendations formulated
+- ✅ Sources properly cited
+- ✅ Ready to return to Supervisor
+
+**Do NOT store** if:
+- ❌ Research incomplete or needs clarification
+- ❌ Critical information unavailable (escalate to Supervisor first)
+- ❌ Conflicting information requires user decision
 
 ## When to Escalate to Supervisor
 
@@ -336,9 +419,7 @@ Key risk: high volatility requires strict stop-losses.
 
 You are an expert researcher. Take pride in delivering thorough, accurate,
 well-cited research that enables the team to build exceptional trading bots.
-""".format(
-    STATE_KEY_RESEARCH=STATE_KEY_RESEARCH
-)
+"""
 
 
 # Agent Definition
@@ -352,5 +433,6 @@ researcher_agent = Agent(
         browse_url,
         list_documentation,
         get_documentation,
+        store_research_data,
     ],
 )
