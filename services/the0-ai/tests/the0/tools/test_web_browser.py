@@ -2,13 +2,15 @@
 Unit tests for the web_browser tool.
 """
 
-import pytest
-import tempfile
 import os
-from unittest.mock import patch, MagicMock, mock_open
-from urllib.parse import urlparse
+import pytest
+from unittest.mock import patch, MagicMock, AsyncMock
 
-from the0.tools.web_browser import browse_url, browse_multiple_urls, search_web
+from the0.tools.web_browser import (
+    browse_url,
+    browse_multiple_urls,
+    tavily_search,
+)
 
 
 class TestBrowseUrl:
@@ -289,107 +291,232 @@ class TestBrowseMultipleUrls:
             mock_sleep.assert_not_called()  # No sleep for single URL
 
 
-class TestSearchWeb:
-    """Tests for the search_web function."""
+class TestTavilySearch:
+    """Tests for the tavily_search function."""
 
-    @patch("googlesearch.search")
-    def test_search_web_success(self, mock_search):
-        """Test successful web search."""
-        query = "python tutorial"
-        search_results = [
-            "https://docs.python.org/3/tutorial/",
-            "https://realpython.com/python-basics/",
-            "https://w3schools.com/python/",
-        ]
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_basic_success(self, mock_client_class):
+        """Test basic Tavily search with AI answer."""
+        query = "python asyncio tutorial"
 
-        mock_search.return_value = iter(search_results)
+        # Mock Tavily API response
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(
+            return_value={
+                "query": query,
+                "answer": (
+                    "Python asyncio is a library for concurrent programming "
+                    "using async/await syntax."
+                ),
+                "results": [
+                    {
+                        "title": "Python Asyncio Tutorial",
+                        "url": "https://docs.python.org/3/library/asyncio.html",
+                        "content": (
+                            "asyncio is a library to write concurrent code "
+                            "using async/await syntax."
+                        ),
+                        "score": 0.98,
+                    },
+                    {
+                        "title": "Real Python Asyncio Guide",
+                        "url": "https://realpython.com/async-io-python/",
+                        "content": (
+                            "Complete guide to asynchronous programming in " "Python."
+                        ),
+                        "score": 0.95,
+                    },
+                ],
+                "response_time": 1.23,
+            }
+        )
+        mock_client_class.return_value = mock_client
 
-        result = search_web(query)
+        # Set API key in environment
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-test-key"}):
+            result = await tavily_search(query, search_depth="basic", max_results=5)
 
-        assert f"# Search Results for: {query}" in result
-        assert "## 1. docs.python.org" in result
-        assert "## 2. realpython.com" in result
-        assert "## 3. w3schools.com" in result
+        # Verify result formatting
+        assert f"# Search Results: {query}" in result
+        assert "AI-Generated Summary" in result
+        assert "Python asyncio is a library" in result
+        assert "Python Asyncio Tutorial" in result
+        assert "https://docs.python.org/3/library/asyncio.html" in result
+        assert "0.98" in result  # Check relevance score
+        assert "## References" in result  # Footnotes section
+        assert "[^1]:" in result  # Footnote format
+        assert "[^2]:" in result  # Multiple footnotes
 
-        for url in search_results:
-            assert f"**URL**: {url}" in result
+        # Verify API was called correctly
+        mock_client.search.assert_called_once_with(
+            query=query,
+            search_depth="basic",
+            max_results=5,
+            include_answer=True,
+            include_raw_content=False,
+            timeout=30.0,
+        )
 
-        assert "browse_url(URL)" in result  # Usage instruction
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_advanced_no_answer(self, mock_client_class):
+        """Test advanced search without AI answer."""
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(
+            return_value={
+                "query": "test",
+                "results": [
+                    {
+                        "title": "Test",
+                        "url": "https://test.com",
+                        "content": "Content",
+                        "score": 0.9,
+                    }
+                ],
+                "response_time": 2.1,
+            }
+        )
+        mock_client_class.return_value = mock_client
 
-        # Verify search was called with correct parameters
-        mock_search.assert_called_once_with(query, num_results=8, sleep_interval=1)
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-test-key"}):
+            result = await tavily_search(
+                "test", search_depth="advanced", include_answer=False
+            )
 
-    @patch("googlesearch.search")
-    def test_search_web_no_results(self, mock_search):
-        """Test web search with no results."""
-        query = "extremely rare query that returns nothing"
-        mock_search.return_value = iter([])
+        assert "# Search Results: test" in result
+        assert "AI-Generated Summary" not in result  # No answer requested
+        assert "Advanced" in result  # Search type should be capitalized
+        assert "2.10s" in result  # Response time
 
-        result = search_web(query)
+    @pytest.mark.asyncio
+    async def test_tavily_search_no_api_key(self):
+        """Test error when API key not configured."""
+        # Clear environment and mock database failure
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("api.database.get_db_session") as mock_db:
+                mock_db.side_effect = Exception("DB not available")
 
-        assert f"# Search Results for: {query}" in result
-        assert "No search results found." in result
+                result = await tavily_search("test query")
 
-    @patch("googlesearch.search")
-    def test_search_web_import_error(self, mock_search):
-        """Test web search when googlesearch library is not available."""
-        query = "test query"
+        assert "Error: Tavily API key not configured" in result
+        assert "TAVILY_API_KEY" in result
+        assert "POST /settings/tavily-api-key" in result
+        assert "https://tavily.com" in result
 
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_timeout(self, mock_client_class):
+        """Test timeout handling."""
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(side_effect=TimeoutError())
+        mock_client_class.return_value = mock_client
+
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-test-key"}):
+            result = await tavily_search("test query")
+
+        assert "Error: Tavily search timed out" in result
+        assert "test query" in result
+        assert "30s" in result
+
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_rate_limit(self, mock_client_class):
+        """Test rate limit error handling."""
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(side_effect=Exception("429 rate limit exceeded"))
+        mock_client_class.return_value = mock_client
+
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-test-key"}):
+            result = await tavily_search("test query")
+
+        assert "Error: Tavily API rate limit exceeded" in result
+        assert "1,000 searches/month" in result
+        assert "https://tavily.com/pricing" in result
+
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_auth_error(self, mock_client_class):
+        """Test authentication error handling."""
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(
+            side_effect=Exception("401 authentication failed")
+        )
+        mock_client_class.return_value = mock_client
+
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-invalid"}):
+            result = await tavily_search("test query")
+
+        assert "Error: Invalid Tavily API key" in result
+        assert "POST /settings/tavily-api-key" in result
+        assert "https://tavily.com" in result
+
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_no_results(self, mock_client_class):
+        """Test handling of empty results."""
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(
+            return_value={
+                "query": "extremely rare query",
+                "results": [],
+                "response_time": 0.5,
+            }
+        )
+        mock_client_class.return_value = mock_client
+
+        with patch.dict("os.environ", {"TAVILY_API_KEY": "tvly-test-key"}):
+            result = await tavily_search("extremely rare query")
+
+        assert "# Search Results: extremely rare query" in result
+        assert "No results found" in result
+
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_import_error(self, mock_client_class):
+        """Test error when Tavily SDK not installed."""
+        # Simulate import error
         with patch(
-            "googlesearch.search",
-            side_effect=ImportError("No module named 'googlesearch'"),
+            "builtins.__import__", side_effect=ImportError("No module named 'tavily'")
         ):
-            # Need to patch the import itself
-            with patch.dict("sys.modules", {"googlesearch": None}):
-                result = search_web(query)
-                assert result.startswith("Error: Search failed")
-                assert query in result
+            result = await tavily_search("test")
 
-    @patch("googlesearch.search")
-    def test_search_web_search_exception(self, mock_search):
-        """Test web search when search function raises exception."""
-        query = "test query"
-        mock_search.side_effect = Exception("Search service unavailable")
+        assert "Error: Tavily SDK not installed" in result
+        assert "pip install tavily-python" in result
 
-        result = search_web(query)
-        assert result.startswith("Error: Search failed")
-        assert query in result
-        assert "Search service unavailable" in result
+    @pytest.mark.asyncio
+    @patch("tavily.AsyncTavilyClient")
+    async def test_tavily_search_database_fallback(self, mock_client_class):
+        """Test API key retrieval from database when env var not set."""
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(
+            return_value={
+                "query": "test",
+                "results": [
+                    {
+                        "title": "T",
+                        "url": "https://t.com",
+                        "content": "C",
+                        "score": 0.9,
+                    }
+                ],
+                "response_time": 1.0,
+            }
+        )
+        mock_client_class.return_value = mock_client
 
-    @patch("googlesearch.search")
-    def test_search_web_url_parsing(self, mock_search):
-        """Test that domains are correctly parsed from URLs."""
-        query = "test"
-        search_results = [
-            "https://www.example.com/path/to/page",
-            "http://subdomain.test.org/article",
-            "https://simple.net",
-        ]
+        # Mock database session and repository
+        mock_settings_repo = AsyncMock()
+        mock_settings_repo.get_setting = AsyncMock(return_value="tvly-db-key")
 
-        mock_search.return_value = iter(search_results)
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("api.database.get_db_session"):
+                with patch(
+                    "api.repositories.get_settings_repository",
+                    return_value=mock_settings_repo,
+                ):
+                    result = await tavily_search("test")
 
-        result = search_web(query)
-
-        assert "## 1. www.example.com" in result
-        assert "## 2. subdomain.test.org" in result
-        assert "## 3. simple.net" in result
-
-    def test_search_web_empty_query(self):
-        """Test web search with empty query."""
-        with patch("googlesearch.search") as mock_search:
-            result = search_web("")
-
-            # Should still attempt search
-            assert "# Search Results for:" in result
-            mock_search.assert_called_once()
-
-    @patch("googlesearch.search")
-    def test_search_web_special_characters_query(self, mock_search):
-        """Test web search with special characters in query."""
-        query = "C++ programming & algorithms (advanced)"
-        mock_search.return_value = iter(["https://example.com"])
-
-        result = search_web(query)
-
-        assert f"# Search Results for: {query}" in result
-        mock_search.assert_called_once_with(query, num_results=8, sleep_interval=1)
+        # Should succeed using database key
+        assert "# Search Results: test" in result
+        mock_settings_repo.get_setting.assert_called_once_with("tavily_api_key")

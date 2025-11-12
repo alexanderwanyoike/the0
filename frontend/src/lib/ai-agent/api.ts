@@ -295,6 +295,40 @@ class ApiService {
     });
   };
 
+  // Tavily API key management endpoints
+  checkTavilyApiKeyStatus = async (): Promise<{
+    configured_in_database: boolean;
+    configured_in_environment: boolean;
+    active_source: "environment" | "database" | "none";
+    has_api_key: boolean;
+  }> => {
+    return this.request<{
+      configured_in_database: boolean;
+      configured_in_environment: boolean;
+      active_source: "environment" | "database" | "none";
+      has_api_key: boolean;
+    }>("/settings?endpoint=tavily-api-key/status");
+  };
+
+  setTavilyApiKey = async (apiKey: string): Promise<{ message: string }> => {
+    return this.request<{ message: string }>(
+      "/settings?endpoint=tavily-api-key",
+      {
+        method: "POST",
+        body: JSON.stringify({ api_key: apiKey }),
+      },
+    );
+  };
+
+  resetTavilyApiKey = async (): Promise<{ message: string }> => {
+    return this.request<{ message: string }>(
+      "/settings?endpoint=tavily-api-key",
+      {
+        method: "DELETE",
+      },
+    );
+  };
+
   // Update management endpoints
   checkForUpdates = async (): Promise<{
     update_available: boolean;

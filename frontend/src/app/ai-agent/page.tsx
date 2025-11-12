@@ -20,6 +20,7 @@ function AIAgentPage() {
   const shouldShowArtifacts = forceShow && files.length > 0;
 
   const [, setHasApiKey] = useState<boolean | null>(null);
+  const [, setHasTavilyKey] = useState<boolean | null>(null);
   const [showApiKeySetup, setShowApiKeySetup] = useState(false);
 
   // Handle zoom in/out with +/- keys
@@ -51,10 +52,22 @@ function AIAgentPage() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // Check Google AI key (REQUIRED)
         const status = await apiService.checkApiKeyStatus();
         setHasApiKey(status.has_api_key);
         if (!status.has_api_key) {
           setShowApiKeySetup(true);
+          return; // Don't proceed without Google AI key
+        }
+
+        // Check Tavily key (OPTIONAL - don't block on this)
+        try {
+          const tavilyStatus = await apiService.checkTavilyApiKeyStatus();
+          setHasTavilyKey(tavilyStatus.has_api_key);
+        } catch (tavilyErr) {
+          console.error("Failed to check Tavily status:", tavilyErr);
+          // Continue anyway, Tavily is optional
+          setHasTavilyKey(false);
         }
 
         // Load sessions and restore most recent session for the main page

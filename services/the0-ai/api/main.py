@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List
 import json
+import os
 from api.schemas import (
     ChatRequest,
     ChatResponse,
@@ -287,6 +288,74 @@ async def reset_api_key():
                 return {"message": "API key reset successfully"}
             else:
                 raise HTTPException(status_code=404, detail="No API key found to reset")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Tavily API Key Management
+@app.post("/settings/tavily-api-key")
+async def set_tavily_api_key(request: dict):
+    """Set Tavily API key in database."""
+    try:
+        api_key = request.get("api_key")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key is required")
+
+        # Validate key format (should start with tvly-)
+        if not api_key.startswith("tvly-"):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Tavily API key format. Key should start with 'tvly-'",
+            )
+
+        async with get_db_session() as session:
+            settings_repo = get_settings_repository(session)
+            await settings_repo.set_setting("tavily_api_key", api_key)
+            return {"message": "Tavily API key configured successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/settings/tavily-api-key/status")
+async def get_tavily_api_key_status():
+    """Check if Tavily API key is configured."""
+    try:
+        async with get_db_session() as session:
+            settings_repo = get_settings_repository(session)
+            db_key = await settings_repo.get_setting("tavily_api_key")
+
+        env_key = os.getenv("TAVILY_API_KEY")
+
+        return {
+            "configured_in_database": db_key is not None,
+            "configured_in_environment": env_key is not None,
+            "active_source": (
+                "environment" if env_key else ("database" if db_key else "none")
+            ),
+            "has_api_key": bool(env_key or db_key),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/settings/tavily-api-key")
+async def delete_tavily_api_key():
+    """Remove Tavily API key from database."""
+    try:
+        async with get_db_session() as session:
+            settings_repo = get_settings_repository(session)
+            success = await settings_repo.delete_setting("tavily_api_key")
+
+            if success:
+                return {"message": "Tavily API key removed successfully"}
+            else:
+                raise HTTPException(
+                    status_code=404, detail="No Tavily API key found to remove"
+                )
     except HTTPException:
         raise
     except Exception as e:
