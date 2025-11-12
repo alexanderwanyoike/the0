@@ -9,7 +9,7 @@ from google.adk.sessions import DatabaseSessionService, InMemorySessionService
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.runners import Runner
 from google.genai import types
-from the0.agent import root_agent
+from the0.agent import supervisor_agent
 from api.schemas import ChatResponse, ArtifactResponse, StreamChunk
 from api.database import get_database_url, init_database, get_db_session
 from api.repositories import get_chat_repository, get_settings_repository
@@ -49,7 +49,7 @@ class AgentService:
 
         self.runner = Runner(
             app_name="the0-api",
-            agent=root_agent,
+            agent=supervisor_agent,
             artifact_service=self.artifact_service,
             session_service=self.session_service,
         )
