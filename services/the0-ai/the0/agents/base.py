@@ -3,13 +3,15 @@ Shared utilities and base configurations for the0 agents.
 """
 
 # Agent configuration constants
+import logging
+import os
+import shutil
+
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_TEMPERATURE = 0.7
 
-# State management keys (used in Story 5)
-STATE_KEY_RESEARCH = "research_data"
-STATE_KEY_BOT_METADATA = "bot_metadata"
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Shared utility functions
 def format_citations(sources: list) -> str:
@@ -28,3 +30,11 @@ def format_citations(sources: list) -> str:
         url = source.get("url", "")
         citations.append(f"{i}. [{title}]({url})")
     return "\n".join(citations)
+
+WORKSPACE_DIR = os.path.abspath("workspace")
+
+def setup_workspace():
+  """Clears and creates a fresh workspace for the agent."""
+  shutil.rmtree(WORKSPACE_DIR, ignore_errors=True)
+  os.makedirs(WORKSPACE_DIR, exist_ok=True)
+  logger.info(f"Workspace set up at {WORKSPACE_DIR}")
