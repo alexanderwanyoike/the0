@@ -9,8 +9,9 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 
-from the0.agents.base import DEFAULT_MODEL, setup_workspace, workspace_id_var
-from the0.agents.engineer import engineering_agent, read_file, list_files
+import os
+from the0.agents.base import DEFAULT_MODEL, setup_workspace, workspace_id_var, get_workspace_path
+from the0.agents.engineer import engineering_agent
 from the0.agents.researcher import researcher_agent
 from the0.agents.agent_delegator import AgentDelegator
 from the0.tools.save_artifact import save_artifact
@@ -41,6 +42,50 @@ async def instruct_engineer(instruction: str) -> str:
   """Helper to instruct the engineering agent to perform tasks."""
   return await engineering_delegator.run_task(task_description=instruction)
 
+def list_engineer_files(path: str = ".") -> str:
+  """
+  Lists files in the engineering agent's workspace.
+  Use this to inspect what the engineer has built.
+  """
+  if not engineering_delegator.session_id:
+    return "Error: Engineer has not started a session yet."
+  
+  workspace_path = get_workspace_path(engineering_delegator.session_id)
+  abs_path = os.path.abspath(os.path.join(workspace_path, path))
+  
+  if not abs_path.startswith(workspace_path):
+    return "Error: Invalid path"
+
+  tree = []
+  for root, dirs, files in os.walk(abs_path):
+    rel_root = os.path.relpath(root, workspace_path)
+    if rel_root == ".":
+      rel_root = ""
+    for d in dirs:
+      tree.append(f"{rel_root}/{d}/")
+    for f in files:
+      tree.append(f"{rel_root}/{f}")
+  return "Engineer's Workspace Files:\n" + "\n".join(tree)
+
+def read_engineer_file(path: str) -> str:
+  """
+  Reads a file from the engineering agent's workspace.
+  Use this to get the content of files to save as artifacts.
+  """
+  if not engineering_delegator.session_id:
+    return "Error: Engineer has not started a session yet."
+  
+  workspace_path = get_workspace_path(engineering_delegator.session_id)
+  abs_path = os.path.abspath(os.path.join(workspace_path, path))
+  
+  if not abs_path.startswith(workspace_path):
+    return "Error: Invalid path"
+    
+  try:
+    with open(abs_path, "r") as f:
+      return f.read()
+  except Exception as e:
+    return f"Error reading file: {str(e)}"
 
 ORCHESTRATOR_DESCRIPTION = """
 You are the Orchestrator and 'Product Owner' of the0 AI system.
@@ -55,8 +100,8 @@ Your goal is to build and deploy automated trading bots on the0 platform using a
 2. **Implement**: Create a plan and instruct the engineer to build the bot using `instruct_engineer`. Keep it simple and aligned with the0 platform standards.
 3. **Save Artifacts (CRITICAL)**:
    - Once the engineer has completed the implementation and testing, YOU must inspect their work.
-   - Use `list_files` to see what was created in the workspace.
-   - Use `read_file` to get the content of relevant source files (e.g., .py, .json, .yaml, .md).
+   - Use `list_engineer_files` to see what was created in the engineer's workspace.
+   - Use `read_engineer_file` to get the content of relevant source files (e.g., .py, .json, .yaml, .md).
    - Use `save_artifact` to save these files as system artifacts.
    - **IMPORTANT**: DO NOT save the `venv` folder, `node_modules` folder, or any files within them. Only save the source code and configuration files.
 
@@ -74,8 +119,8 @@ orchestrator_agent = LlmAgent(
     FunctionTool(ask_researcher),
     FunctionTool(instruct_engineer),
     FunctionTool(save_artifact),
-    FunctionTool(list_files),
-    FunctionTool(read_file),
+    FunctionTool(list_engineer_files),
+    FunctionTool(read_engineer_file),
   ]
 )
 

@@ -8,19 +8,34 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
+from google.adk.tools.tool_context import ToolContext
 from google.genai import types
 from the0.agents.base import get_workspace_path
+from the0.tools.documentation import list_documentation, get_documentation
+
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def get_session_id(tool_context: ToolContext) -> str:
+  """Helper to safely extract session ID from tool context."""
+  try:
+    return tool_context._invocation_context.session.id
+  except AttributeError:
+    # Fallback logic similar to save_artifact
+    if hasattr(tool_context, "state"):
+      if "current_session_id" in tool_context.state:
+        return tool_context.state["current_session_id"]
+      if "session_id" in tool_context.state:
+        return tool_context.state["session_id"]
+  return "default"
 
 
-def get_safe_path(file_path: str) -> str:
+def get_safe_path(file_path: str, session_id: str = None) -> str:
   """Ensure file paths are within the current workspace."""
-  workspace_path = get_workspace_path()
+  workspace_path = get_workspace_path(session_id)
   abs_path = os.path.abspath(
     os.path.join(workspace_path, file_path)
   )
@@ -30,7 +45,7 @@ def get_safe_path(file_path: str) -> str:
   return abs_path
 
 # Engineering Agent Tools
-def write_file(path: str, content: str) -> str:
+def write_file(path: str, content: str, tool_context: ToolContext) -> str:
   """
   Creates or overwrites a file with the given content.
   `path` is relative to the workspace.
@@ -38,7 +53,8 @@ def write_file(path: str, content: str) -> str:
   content: str - Content to write into the file.
   """
   try:
-    safe_path = get_safe_path(path)
+    session_id = get_session_id(tool_context)
+    safe_path = get_safe_path(path, session_id)
     # Ensure parent directories exist
     os.makedirs(os.path.dirname(safe_path), exist_ok=True)
     with open(safe_path, "w") as f:
@@ -48,14 +64,15 @@ def write_file(path: str, content: str) -> str:
   except Exception as e:
     return f"Error writing file {path}: {str(e)}"
 
-def read_file(path: str) -> str:
+def read_file(path: str, tool_context: ToolContext) -> str:
   """
   Reads and returns the content of a file.
   `path` is relative to the workspace.
   path: str - Relative file path within the workspace.
   """
   try:
-    safe_path = get_safe_path(path)
+    session_id = get_session_id(tool_context)
+    safe_path = get_safe_path(path, session_id)
     with open(safe_path, "r") as f:
       content = f.read()
     logger.info(f"File read: {safe_path}")
@@ -63,15 +80,16 @@ def read_file(path: str) -> str:
   except Exception as e:
     return f"Error reading file {path}: {str(e)}"
   
-def list_files(path: str = ".") -> str:
+def list_files(path: str, tool_context: ToolContext) -> str:
   """
   Lists files and directories at the given path.
   `path` is relative to the workspace.
   path: str - Relative directory path within the workspace.
   """
   try:
-    workspace_path = get_workspace_path()
-    safe_path = get_safe_path(path)
+    session_id = get_session_id(tool_context)
+    workspace_path = get_workspace_path(session_id)
+    safe_path = get_safe_path(path, session_id)
     tree = []
     for root, dirs, files in os.walk(safe_path):
       rel_root = os.path.relpath(root, workspace_path)
@@ -87,7 +105,7 @@ def list_files(path: str = ".") -> str:
     return f"Error listing files in {path}: {str(e)}"
 
 
-def run_shell_command(command: str) -> str:
+def run_shell_command(command: str, tool_context: ToolContext) -> str:
   """
   Runs a shell command *inside the project workspace* and returns the output.
   Returns the combined stdout and stderr.
@@ -96,7 +114,8 @@ def run_shell_command(command: str) -> str:
   """
   logger.info(f"EXECUTING: {command}")
   try:
-    workspace_path = get_workspace_path()
+    session_id = get_session_id(tool_context)
+    workspace_path = get_workspace_path(session_id)
     # Ensure directory exists before running command
     os.makedirs(workspace_path, exist_ok=True)
     
@@ -131,6 +150,8 @@ You must use you available tools to engineer a solution.
 - read_file(path: str) -> str: Reads and returns the content of a file.
 - list_files(path: str = ".") -> str: Lists files and directories at the given path.
 - run_shell_command(command: str) -> str: Runs a shell command inside the project workspace and returns the output.
+- list_documentation() -> str: Lists available the0 bot development documentation topics.
+- get_documentation(topic: str) -> str: Retrieves the0 bot development documentation content for a specific topic.
 
 
 **Your task:**
@@ -138,6 +159,10 @@ You must use you available tools to engineer a solution.
 2. **Execute:** Use the available tools to implement your plan.
 3. **Observe:** After each action, review the results and adjust your plan as necessary.
 4. **Iterate:** Repeat the Execute and Observe steps until the task is complete.
+
+**Important Notes:**
+- You build trading bots for the0 platform. Follow the0 coding standards and best practices as outlined in the documentation.
+- Always test your code to ensure it works as expected.
 
 **Python venv project setup (CRITICAL)**
 - To create a venv run: `python3 -m venv venv` or `virtualenv venv`
@@ -158,5 +183,7 @@ engineering_agent = LlmAgent(
     FunctionTool(read_file),
     FunctionTool(list_files),
     FunctionTool(run_shell_command),
+    list_documentation,
+    get_documentation
   ],
 )

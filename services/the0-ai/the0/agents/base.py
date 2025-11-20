@@ -36,10 +36,19 @@ def format_citations(sources: list) -> str:
 # ContextVar to store the current workspace ID (session ID)
 workspace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("workspace_id", default="default")
 
-def get_workspace_path() -> str:
-  """Returns the path to the current workspace based on the context."""
-  workspace_id = workspace_id_var.get()
-  return os.path.abspath(os.path.join("workspace", workspace_id))
+def get_workspace_path(session_id: Optional[str] = None) -> str:
+  """
+  Returns the path to the current workspace.
+  If session_id is provided, uses it. Otherwise falls back to context or default.
+  """
+  if session_id is None:
+    # Fallback to context var if available, else default
+    try:
+      session_id = workspace_id_var.get()
+    except LookupError:
+      session_id = "default"
+      
+  return os.path.abspath(os.path.join("workspace", session_id))
 
 def setup_workspace(session_id: Optional[str] = None):
   """
@@ -49,7 +58,7 @@ def setup_workspace(session_id: Optional[str] = None):
   if session_id:
     workspace_id_var.set(session_id)
   
-  workspace_path = get_workspace_path()
+  workspace_path = get_workspace_path(session_id)
   
   # Only clear if it exists? Or always clear?
   # Usually for a new session we want a clean slate.

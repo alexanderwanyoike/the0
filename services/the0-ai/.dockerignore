@@ -1,0 +1,4 @@
+bots
+.claude
+.pytest_cache
+htmlcov/
