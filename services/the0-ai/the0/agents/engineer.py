@@ -9,7 +9,7 @@ from google.adk.tools import FunctionTool
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
-from the0.agents.base import WORKSPACE_DIR
+from the0.agents.base import get_workspace_path
 
 
 logging.basicConfig(level=logging.INFO)
@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_safe_path(file_path: str) -> str:
-  """Ensure file paths are within the WORKSPACE_DIR."""
+  """Ensure file paths are within the current workspace."""
+  workspace_path = get_workspace_path()
   abs_path = os.path.abspath(
-    os.path.join(WORKSPACE_DIR, file_path)
+    os.path.join(workspace_path, file_path)
   )
   # Security check ensure the result path is within the workspace
-  if not abs_path.startswith(WORKSPACE_DIR):
-    raise ValueError("Attempted to access a path outside the workspace.")
+  if not abs_path.startswith(workspace_path):
+    raise ValueError(f"Attempted to access a path outside the workspace: {abs_path}")
   return abs_path
 
 # Engineering Agent Tools
@@ -69,10 +70,11 @@ def list_files(path: str = ".") -> str:
   path: str - Relative directory path within the workspace.
   """
   try:
+    workspace_path = get_workspace_path()
     safe_path = get_safe_path(path)
     tree = []
     for root, dirs, files in os.walk(safe_path):
-      rel_root = os.path.relpath(root, WORKSPACE_DIR)
+      rel_root = os.path.relpath(root, workspace_path)
       if rel_root == ".":
         rel_root = ""
       for d in dirs:
@@ -94,10 +96,14 @@ def run_shell_command(command: str) -> str:
   """
   logger.info(f"EXECUTING: {command}")
   try:
+    workspace_path = get_workspace_path()
+    # Ensure directory exists before running command
+    os.makedirs(workspace_path, exist_ok=True)
+    
     result = subprocess.run(
       command,
       shell=True,
-      cwd=WORKSPACE_DIR,
+      cwd=workspace_path,
       capture_output=True,
       text=True,
       timeout=30,
@@ -134,7 +140,7 @@ You must use you available tools to engineer a solution.
 4. **Iterate:** Repeat the Execute and Observe steps until the task is complete.
 
 **Python venv project setup (CRITICAL)**
-- To create a venv run virtualenv venv
+- To create a venv run: `python3 -m venv venv` or `virtualenv venv`
 - **DO NOT** try to run `source venv/bin/activate`. It will not work.
 - To install packages, run: `venv/bin/pip install <package>`
 - To run python scripts, run: `venv/bin/python <script.py>`
@@ -154,4 +160,3 @@ engineering_agent = LlmAgent(
     FunctionTool(run_shell_command),
   ],
 )
-

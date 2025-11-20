@@ -4,18 +4,6 @@ from the0.tools.web_browser import tavily_search, browse_url
 from the0.tools.documentation import list_documentation, get_documentation
 
 
-# Agent Description - Critical for LLM-driven delegation (Story 4)
-# Must be clear, specific, and explain when to use this agent
-# RESEARCHER_DESCRIPTION = (
-#     "Quantitative research specialist that performs web searches, "
-#     "analyzes market data, and researches trading strategies, APIs, "
-#     "and technical documentation. Returns structured research findings "
-#     "with citations. Use this agent when you need to gather information "
-#     "about trading platforms, strategies, libraries, or market analysis "
-#     "before building a bot."
-# )
-
-
 RESEARCHER_INSTRUCTION = """
 You are a research specialist that conducts web research and provides findings with proper citations.
 

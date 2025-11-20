@@ -154,6 +154,7 @@ tzlocal==5.3.1
 uritemplate==4.2.0
 urllib3==2.5.0
 uvicorn==0.35.0
+virtualenv==20.25.0
 watchdog==6.0.0
 websockets==15.0.1
 wrapt==1.17.2

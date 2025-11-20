@@ -9,10 +9,11 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 
-from the0.agents.base import DEFAULT_MODEL, setup_workspace
-from the0.agents.engineer import engineering_agent
+from the0.agents.base import DEFAULT_MODEL, setup_workspace, workspace_id_var
+from the0.agents.engineer import engineering_agent, read_file, list_files
 from the0.agents.researcher import researcher_agent
 from the0.agents.agent_delegator import AgentDelegator
+from the0.tools.save_artifact import save_artifact
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,18 +43,27 @@ async def instruct_engineer(instruction: str) -> str:
 
 
 ORCHESTRATOR_DESCRIPTION = """
-Your are the 'Product Owner' and Main Orchestrator.
-You have two specialised teams (tools) at your disposal:
+You are the Orchestrator and 'Product Owner' of the0 AI system.
+Your goal is to build and deploy automated trading bots on the0 platform using a research-driven engineering approach.
 
-1. `ask_researcher`: Use this to find libraries docs or facts.
-2. `instruct_engineer`: Use this to build software full on software applications.
+**Your Team:**
+1. `ask_researcher`: Your researcher who can find library docs, facts, and platform documentation.
+2. `instruct_engineer`: Your software engineer who builds and executes code in a dedicated workspace.
 
+**Your Process:**
+1. **Analyze & Research**: Understand the user's request. If you need documentation, library info, or "the0 way" of doing things, use `ask_researcher`.
+2. **Implement**: Create a plan and instruct the engineer to build the bot using `instruct_engineer`. Keep it simple and aligned with the0 platform standards.
+3. **Save Artifacts (CRITICAL)**:
+   - Once the engineer has completed the implementation and testing, YOU must inspect their work.
+   - Use `list_files` to see what was created in the workspace.
+   - Use `read_file` to get the content of relevant source files (e.g., .py, .json, .yaml, .md).
+   - Use `save_artifact` to save these files as system artifacts.
+   - **IMPORTANT**: DO NOT save the `venv` folder, `node_modules` folder, or any files within them. Only save the source code and configuration files.
 
-**Your process:**
-1. Analyze the user's request.
-2. If you need more information, call `ask_researcher` (docs, versions, how-tos, facts, documentation).
-3. Once you have the information create a plan and tell `instruct_engineer` to execute it.
-4. Dont write code yourself, always delegate to the engineering agent.
+**Core Principles:**
+- **Delegate**: Don't write code yourself. Tell the engineer what to do.
+- **The0 Way**: Follow the platform's best practices (ask researcher if unsure).
+- **Simple**: Avoid over-engineering. Build a working bot.
 """
 
 orchestrator_agent = LlmAgent(
@@ -63,6 +73,9 @@ orchestrator_agent = LlmAgent(
   tools=[
     FunctionTool(ask_researcher),
     FunctionTool(instruct_engineer),
+    FunctionTool(save_artifact),
+    FunctionTool(list_files),
+    FunctionTool(read_file),
   ]
 )
 
@@ -73,7 +86,6 @@ async def main():
       logger.error("GOOGLE_API_KEY environment variable not set.")
       return
     
-    setup_workspace()
     APP_NAME = "orchestrator_app"
     USER_ID = "test_user"
 
@@ -81,6 +93,10 @@ async def main():
       app_name=APP_NAME,
       user_id=USER_ID,
     )
+
+    # Set the workspace context to the current session ID
+    workspace_id_var.set(session.id)
+    setup_workspace(session_id=session.id)
 
     runner = Runner(
       app_name=APP_NAME,
