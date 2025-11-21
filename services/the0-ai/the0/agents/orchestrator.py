@@ -8,7 +8,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 
-from the0.agents.base import DEFAULT_MODEL, setup_workspace, workspace_id_var, get_workspace_path
+from the0.agents.base import DEFAULT_MODEL, DEFAULT_GENERATE_CONTENT_CONFIG, setup_workspace, workspace_id_var, get_workspace_path
 from the0.agents.engineer import engineering_agent
 from the0.agents.researcher import researcher_agent
 from the0.agents.agent_delegator import AgentDelegator
@@ -152,6 +152,7 @@ Your goal is to build and deploy automated trading bots on the0 platform using a
 orchestrator_agent = LlmAgent(
   name="orchestrator_agent",
   model=DEFAULT_MODEL,
+  generate_content_config=DEFAULT_GENERATE_CONTENT_CONFIG,
   instruction=ORCHESTRATOR_DESCRIPTION,
   tools=[
     FunctionTool(ask_researcher),

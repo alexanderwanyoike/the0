@@ -1,13 +1,16 @@
 import os
 import subprocess 
 import logging
-from google.adk.agents import LlmAgent
+from google.adk.agents import LlmAgent, LoopAgent
 from google.adk.tools import FunctionTool
+from google.adk.sessions import InMemorySessionService
+from google.adk.runners import Runner
 from google.adk.tools.tool_context import ToolContext
-from the0.agents.base import get_workspace_path
+from google.genai import types
+from the0.agents.base import get_workspace_path, DEFAULT_MODEL, DEFAULT_GENERATE_CONTENT_CONFIG
 from the0.tools.documentation import list_documentation, get_documentation
 from the0.tools.web_browser import browse_url, tavily_search
-
+from the0.tools.control import task_complete
 
 
 logging.basicConfig(level=logging.INFO)
@@ -160,6 +163,7 @@ You must use you available tools to engineer a solution.
 - get_documentation(topic: str) -> str: Retrieves the0 bot development documentation content for a specific topic.
 - tavily_search(query: str, search_depth: str = "basic") -> str: Searches the web for information about libraries, APIs, and programming concepts.
 - browse_url(url: str) -> str: Browses a specific URL and returns the content related to library documentation or programming concepts.
+- task_complete(result: str) -> str: Signals that the assigned task is fully complete. You MUST call this to finish.
 
 
 **Your task:**
@@ -175,29 +179,6 @@ You must use you available tools to engineer a solution.
    - **Code Quality (OOP):** You MUST write clean, object-oriented code.
      - Create a `Strategy` class for the core trading logic.
      - Create a `Backtest` class for backtesting.
-     - All classes should be in their own files in the ROOT directory.
-     - Entrypoints (`main.py`, `backtest.py`) should utilize these classes and have minimal logic.
-     - For testability, ensure logic is encapsulated within classes and methods.
-     - Create a trading client class if needed for live trading API interactions.
-     - For testing and backtesting create a mock trading client that simulates API interactions.
-     - For data acquisition eg stock price data, create a data handler class.
-     - For testing create a mock data handler that simulates data retrieval.
-     - For backtesting use create a backtesting implementation of the trading client but not the live data handler.
-     - For live trading (thats not testing or backtesting) use a live trading client implementation and the live data handler.
-     - For testing use mock implementations of both trading client and data handler.
-     - Testing should only really test the Strategy class logic.
-     - Relie on libraries for heavy lifting (e.g., pandas for data manipulation, numpy for calculations, ta-lib for technical indicators, statsmodels for statistical analysis, scipy for scientific computing, scikit-learn for ML).
-     - Only unit test feasible logic - do not try to unit test external API calls or data retrieval.
-     - Only test deterministic logic - do not try to unit test stochastic/ml/non-deterministic logic.
-     - Use dependency injection to pass dependencies (e.g., trading client, data handler) into classes for testability.
-     - Write clear, concise docstrings for all classes and methods.
-     - Write a readme.md that explains the project structure and how to run the bot and backtest.
-     - In main.py and backtest.py in the __main__ block call main() or backtest() functions for user testability (use argparse and json config files for parameters).
-     - Realtime bots use while True loops in this case use an Executor class to manage the loop and allow for clean exits.
-     - When testing Executor class use a --test or --dry-run flag to run a single iteration and exit cleanly.
-     - Stategy class MUST NOT contain while True loops.
-     - Backtest class MUST NOT contain while True loops.
-     - All logging should use the logging module with appropriate log levels.
      - The `Backtest` class MUST utilize the `Strategy` class logic (no code duplication).
      - Ensure entry points (`main.py`, `backtest.py`) use these classes cleanly.
 
@@ -213,6 +194,10 @@ You must use you available tools to engineer a solution.
    - If you must run the bot, ensure it has a mechanism to exit quickly.
    - Verify API key handling (use env vars).
 
+5. **Finish:**
+   - When all files are created and tested, you **MUST** call the `task_complete` tool to signal completion.
+   - Do not just say "I am done". Call the tool.
+
 **Python venv project setup (CRITICAL)**
 - To create a venv run: `python3 -m venv venv` or `virtualenv venv`
 - **DO NOT** try to run `source venv/bin/activate`. It will not work.
@@ -221,12 +206,14 @@ You must use you available tools to engineer a solution.
 - To run tests, run: `venv/bin/python -m unittest <test_file.py>`
 
 **Workflow Summary:**
-1. **READ DOCS** -> 2. Plan -> 3. venv -> 4. Code (OOP, ROOT) -> 5. **TEST SAFELY**.
+1. **READ DOCS** -> 2. Plan -> 3. venv -> 4. Code (OOP, ROOT) -> 5. **TEST SAFELY** -> 6. **CALL TASK_COMPLETE**.
 """
 
-engineering_agent = LlmAgent(
-  name="engineering_agent",
-  model="gemini-2.5-flash",
+# Base LLM Agent
+_engineering_agent_llm = LlmAgent(
+  name="engineering_agent_llm",
+  model=DEFAULT_MODEL,
+  generate_content_config=DEFAULT_GENERATE_CONTENT_CONFIG,
   instruction=AGENT_INSTRUCTIONS,
   tools=[
     FunctionTool(write_file),
@@ -237,5 +224,13 @@ engineering_agent = LlmAgent(
     get_documentation,
     tavily_search,
     browse_url,
+    FunctionTool(task_complete),
   ],
+)
+
+# Wrapped in LoopAgent for autonomous execution until task_complete (escalate)
+engineering_agent = LoopAgent(
+    name="engineering_agent",
+    sub_agents=[_engineering_agent_llm],
+    max_iterations=30 
 )
