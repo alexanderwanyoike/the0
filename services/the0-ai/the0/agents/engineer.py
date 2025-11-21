@@ -1,17 +1,12 @@
 import os
-import asyncio
 import subprocess 
 import logging
-import shutil
-import traceback
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
-from google.adk.sessions import InMemorySessionService
-from google.adk.runners import Runner
 from google.adk.tools.tool_context import ToolContext
-from google.genai import types
 from the0.agents.base import get_workspace_path
 from the0.tools.documentation import list_documentation, get_documentation
+from the0.tools.web_browser import browse_url, tavily_search
 
 
 
@@ -75,6 +70,11 @@ def read_file(path: str, tool_context: ToolContext) -> str:
     safe_path = get_safe_path(path, session_id)
     with open(safe_path, "r") as f:
       content = f.read()
+    
+    # Truncate if too long to prevent context window issues and rate limits
+    if len(content) > 5000:
+      content = content[:5000] + "\n...[Content truncated due to size limit]..."
+      
     logger.info(f"File read: {safe_path}")
     return content
   except Exception as e:
@@ -128,13 +128,18 @@ def run_shell_command(command: str, tool_context: ToolContext) -> str:
       timeout=30,
     )
     output = f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    
+    # Truncate output to prevent context window issues and rate limits
+    if len(output) > 5000:
+      output = output[:5000] + "\n...[Output truncated due to size limit]..."
+
     logger.info(f"Command executed with return code {result.returncode}")
     logger.info(f"Command output: \n{output}")
     if result.returncode != 0:
       output = f"Command exited with code {result.returncode}.\n" + output
     return output
   except subprocess.TimeoutExpired:
-    return f"Error: Command '{command}' timed out."
+    return f"Error: Command '{command}' timed out (30s limit)."
   except Exception as e:
     return f"Error executing command '{command}': {str(e)}"
 
@@ -145,6 +150,7 @@ You must use you available tools to engineer a solution.
 
 **Environment:**
 - You have dedicated workspace.
+- **File Structure**: All files must be created in the **ROOT** of your workspace. Do NOT create a project subfolder (e.g., do not create `bot/main.py`, create `main.py`).
 **Available Tools:**
 - write_file(path: str, content: str) -> str: Creates or overwrites a file with the given content.
 - read_file(path: str) -> str: Reads and returns the content of a file.
@@ -152,32 +158,60 @@ You must use you available tools to engineer a solution.
 - run_shell_command(command: str) -> str: Runs a shell command inside the project workspace and returns the output.
 - list_documentation() -> str: Lists available the0 bot development documentation topics.
 - get_documentation(topic: str) -> str: Retrieves the0 bot development documentation content for a specific topic.
+- tavily_search(query: str, search_depth: str = "basic") -> str: Searches the web for information about libraries, APIs, and programming concepts.
+- browse_url(url: str) -> str: Browses a specific URL and returns the content related to library documentation or programming concepts.
 
 
 **Your task:**
-1. **Document (MANDATORY):**
-   - FIRST, call `list_documentation()` to see what guides are available.
-   - SECOND, call `get_documentation(topic)` to read relevant guides (e.g., quick-start, backtesting, best practices).
-   - You MUST follow the patterns and standards found in the internal documentation.
+1. **Document (CRITICAL - MUST DO FIRST):**
+   - You **MUST** start by calling `list_documentation()` to see what guides are available.
+   - You **MUST** read relevant guides using `get_documentation(topic)` (e.g., quick-start, backtesting).
+   - **FAILURE to consult internal documentation will result in incompatible code.**
+   - **DO NOT ask the Orchestrator for platform details.** You have the documentation tools; use them to find the answers yourself.
 
 2. **Plan & Design:**
    - Think step-by-step about how to accomplish the user's request based on the internal documentation.
+   - **Technical Ownership**: YOU are responsible for determining the implementation details (libraries, specific code patterns) by consulting the internal documentation.
    - **Code Quality (OOP):** You MUST write clean, object-oriented code.
      - Create a `Strategy` class for the core trading logic.
      - Create a `Backtest` class for backtesting.
+     - All classes should be in their own files in the ROOT directory.
+     - Entrypoints (`main.py`, `backtest.py`) should utilize these classes and have minimal logic.
+     - For testability, ensure logic is encapsulated within classes and methods.
+     - Create a trading client class if needed for live trading API interactions.
+     - For testing and backtesting create a mock trading client that simulates API interactions.
+     - For data acquisition eg stock price data, create a data handler class.
+     - For testing create a mock data handler that simulates data retrieval.
+     - For backtesting use create a backtesting implementation of the trading client but not the live data handler.
+     - For live trading (thats not testing or backtesting) use a live trading client implementation and the live data handler.
+     - For testing use mock implementations of both trading client and data handler.
+     - Testing should only really test the Strategy class logic.
+     - Relie on libraries for heavy lifting (e.g., pandas for data manipulation, numpy for calculations, ta-lib for technical indicators, statsmodels for statistical analysis, scipy for scientific computing, scikit-learn for ML).
+     - Only unit test feasible logic - do not try to unit test external API calls or data retrieval.
+     - Only test deterministic logic - do not try to unit test stochastic/ml/non-deterministic logic.
+     - Use dependency injection to pass dependencies (e.g., trading client, data handler) into classes for testability.
+     - Write clear, concise docstrings for all classes and methods.
+     - Write a readme.md that explains the project structure and how to run the bot and backtest.
+     - In main.py and backtest.py in the __main__ block call main() or backtest() functions for user testability (use argparse and json config files for parameters).
+     - Realtime bots use while True loops in this case use an Executor class to manage the loop and allow for clean exits.
+     - When testing Executor class use a --test or --dry-run flag to run a single iteration and exit cleanly.
+     - Stategy class MUST NOT contain while True loops.
+     - Backtest class MUST NOT contain while True loops.
+     - All logging should use the logging module with appropriate log levels.
      - The `Backtest` class MUST utilize the `Strategy` class logic (no code duplication).
      - Ensure entry points (`main.py`, `backtest.py`) use these classes cleanly.
 
 3. **Execute:**
    - Create a virtual environment (venv).
-   - Write code files.
+   - Write code files (in ROOT).
    - Install dependencies.
 
-4. **Test (MANDATORY):**
-   - You MUST verify your code runs.
-   - Run `python -m unittest` or execute the script directly.
-   - Check for errors and fix them.
-   - If API keys are required, use environment variables (do not hardcode).
+4. **Test (SAFE EXECUTION REQUIRED):**
+   - **DO NOT RUN INFINITE LOOPS** (like `while True`) directly in the shell. This will hang the agent.
+   - Implement a `--dry-run` or `--test` flag in your bot to run a single iteration and exit.
+   - **Unit Tests:** Prefer creating and running unit tests (`python -m unittest`) to verify logic.
+   - If you must run the bot, ensure it has a mechanism to exit quickly.
+   - Verify API key handling (use env vars).
 
 **Python venv project setup (CRITICAL)**
 - To create a venv run: `python3 -m venv venv` or `virtualenv venv`
@@ -187,7 +221,7 @@ You must use you available tools to engineer a solution.
 - To run tests, run: `venv/bin/python -m unittest <test_file.py>`
 
 **Workflow Summary:**
-1. Read Docs -> 2. Create venv -> 3. Write Code -> 4. Install Deps -> 5. Run/Test Code.
+1. **READ DOCS** -> 2. Plan -> 3. venv -> 4. Code (OOP, ROOT) -> 5. **TEST SAFELY**.
 """
 
 engineering_agent = LlmAgent(
@@ -200,6 +234,8 @@ engineering_agent = LlmAgent(
     FunctionTool(list_files),
     FunctionTool(run_shell_command),
     list_documentation,
-    get_documentation
+    get_documentation,
+    tavily_search,
+    browse_url,
   ],
 )

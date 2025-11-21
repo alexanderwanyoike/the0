@@ -1,4 +1,3 @@
-
 import os
 import asyncio
 import logging
@@ -9,12 +8,12 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 
-import os
 from the0.agents.base import DEFAULT_MODEL, setup_workspace, workspace_id_var, get_workspace_path
 from the0.agents.engineer import engineering_agent
 from the0.agents.researcher import researcher_agent
 from the0.agents.agent_delegator import AgentDelegator
 from the0.tools.save_artifact import save_artifact
+from the0.tools.documentation import list_documentation, get_documentation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,33 +97,44 @@ Your goal is to build and deploy automated trading bots on the0 platform using a
 
 **Your Workflow (Strict Sequential Process):**
 
-**Phase 1: Discovery**
-- Before doing ANY research or code, you MUST ask the user clarifying questions to define the scope.
-- Ask about:
-    - Asset Class (Crypto, Stocks, Forex?)
-    - Trading Platform/Exchange (Alpaca, Binance, etc?)
-    - Risk Management preferences?
-    - **API Keys**: Do they have keys available for testing? (Note: Never ask them to paste keys in chat, just confirm availability for local testing).
+**Phase 1: Discovery & Requirements**
+- **Platform Requirements:** Use `list_documentation` and `get_documentation` to understand the0 platform concepts and bot specifications.
+- **Strategy Requirements:** Use `ask_researcher` to determine what quantitative data/inputs are needed for the user's requested strategy.
+- **Clarification:** Combine the platform and strategy requirements to ask the User **targeted clarifying questions**.
+  - Fill gaps in Asset Class, Platform, Risk, Timeframes, etc.
+  - **Always confirm API Key availability** for testing.
 
-**Phase 2: Research & Strategy**
-- Use `ask_researcher` to gather necessary information (libraries, API docs, "the0 way" standards).
+**Note:** The Researcher focuses on *Concepts*. You (Orchestrator) focus on *Platform Concepts*.
+
+**Phase 2: Detailed Research & Strategy**
+- Use `ask_researcher` to gather necessary information (libraries, API docs and internal documentation for building bots using the0 specification).
 - Create a **Research Report**:
-    - Save it as an artifact `docs/research_findings.md` using `save_artifact`.
+  - Must include a **Summary of Findings** with **References/Citations** from the research.
+  - Save it as an artifact `docs/research_findings.md` using `save_artifact`.
 - Create an **Implementation Plan**:
-    - Detailed architecture, file structure, and logic.
-    - Save it as an artifact `docs/implementation_plan.md` using `save_artifact`.
-    - **Architecture Requirement**: The plan MUST specify a clean OOP design with a `Strategy` class and a `Backtest` class. The Backtest must utilize the Strategy class.
+  - Detailed architecture, file structure, and logic.
+  - Save it as an artifact `docs/implementation_plan.md` using `save_artifact`.
+  - **Architecture Requirement**: The plan MUST specify a clean OOP design with a `Strategy` class and a `Backtest` class. The Backtest must utilize the Strategy class.
 
 **Phase 3: Review**
-- **STOP** and present the plan to the user.
+- **STOP** and present the following to the user:
+  1.  A **Summary of Research Findings** (highlighting key libraries/APIs selected).
+  2.  The **Implementation Plan** overview.
 - Ask for confirmation or feedback. DO NOT proceed to coding until the user approves the plan.
 
-**Phase 4: Execution**
+**Phase 4: Execution (Active Driving)**
 - Once confirmed, use `instruct_engineer` to build the bot.
 - Explicitly instruct the engineer to:
     1. Read internal documentation first.
     2. Implement the agreed plan.
     3. **TEST** the implementation (verify it runs, check API connections if keys avail).
+- **CRITICAL**: The Engineer might pause to report progress or ask questions.
+    - **If it's a progress report** (e.g., "I am about to start main.py"): IMMEDIATELY instruct them to **"Proceed"** or **"Continue implementation"**. Do not stop and wait for the user.
+    - **If it's a question/blocker**:
+        - **Quantitative/Math**: Ask the `researcher`.
+        - **Platform/Docs**: **REJECT**. Instruct the Engineer to use their own documentation tools (`list_documentation`, `get_documentation`). Do NOT answer for them.
+        - **Critical/Credentials**: **STOP** and relay the question to the **User**.
+- Keep driving the Engineer until they confirm **ALL** files are created and tested.
 
 **Phase 5: Validation & Artifacts**
 - Once the engineer reports completion:
@@ -135,8 +145,8 @@ Your goal is to build and deploy automated trading bots on the0 platform using a
 
 **Core Principles:**
 - **Delegate**: Don't write code yourself.
-- **The0 Way**: Always research internal docs first.
-- **Iterative**: Plan -> Confirm -> Build -> Test.
+- **The0 specification bots only**: Always research internal docs first.
+- **Iterative**: Research -> Clarify -> Deepen Research -> Confirm -> Plan -> Confirm -> Build -> Test.
 """
 
 orchestrator_agent = LlmAgent(
@@ -149,6 +159,8 @@ orchestrator_agent = LlmAgent(
     FunctionTool(save_artifact),
     FunctionTool(list_engineer_files),
     FunctionTool(read_engineer_file),
+    list_documentation,
+    get_documentation,
   ]
 )
 
