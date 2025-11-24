@@ -1,5 +1,5 @@
 from google.adk.agents import Agent
-from the0.agents.base import DEFAULT_MODEL, DEFAULT_GENERATE_CONTENT_CONFIG
+from the0.agents.base import DEFAULT_MODEL
 from the0.tools.web_browser import tavily_search, browse_url
 
 
@@ -48,7 +48,6 @@ Avoid discussing Python libraries (pandas, numpy) or APIs (Alpaca, Binance). Foc
 researcher_agent = Agent(
     name="researcher",
     model=DEFAULT_MODEL,
-    generate_content_config=DEFAULT_GENERATE_CONTENT_CONFIG,
     # description=RESEARCHER_DESCRIPTION,
     instruction=RESEARCHER_INSTRUCTION,
     tools=[

@@ -8,29 +8,9 @@ import os
 import shutil
 import contextvars
 from typing import Optional
-from google.genai import types
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_TEMPERATURE = 0.7
-
-# Configure robust retry options for rate limits
-DEFAULT_RETRY_OPTIONS = types.HttpRetryOptions(
-    attempts=10,  # High retry count for rate limits
-    initial_delay=5.0,
-    max_delay=60.0,
-    exp_base=2.0,
-    jitter=1.0,
-    http_status_codes=[429, 503]
-)
-
-DEFAULT_HTTP_OPTIONS = types.HttpOptions(
-    retry_options=DEFAULT_RETRY_OPTIONS
-)
-
-DEFAULT_GENERATE_CONTENT_CONFIG = types.GenerateContentConfig(
-    http_options=DEFAULT_HTTP_OPTIONS,
-    temperature=DEFAULT_TEMPERATURE
-)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

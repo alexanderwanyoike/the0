@@ -8,7 +8,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
 
-from the0.agents.base import DEFAULT_MODEL, DEFAULT_GENERATE_CONTENT_CONFIG, setup_workspace, workspace_id_var, get_workspace_path
+from the0.agents.base import DEFAULT_MODEL
 from the0.agents.engineer import engineering_agent
 from the0.agents.researcher import researcher_agent
 from the0.agents.agent_delegator import AgentDelegator
@@ -34,132 +34,113 @@ engineering_delegator = AgentDelegator(
 )
 
 async def ask_researcher(question: str) -> str:
-  """Helper to ask the researcher agent for information."""
+  """
+  Ask the researcher agent for information.
+
+  The researcher will provide analysis with citations for trading strategies,
+  APIs, libraries, and technical concepts.
+  """
   return await research_delegator.run_task(task_description=question)
 
 async def instruct_engineer(instruction: str) -> str:
-  """Helper to instruct the engineering agent to perform tasks."""
+  """
+  Instruct the engineering agent to create bot files.
+
+  The engineer will read documentation, plan the architecture, and create
+  all required files using save_artifact. Files are automatically saved
+  as artifacts and available to the user.
+  """
   return await engineering_delegator.run_task(task_description=instruction)
-
-def list_engineer_files(path: str = ".") -> str:
-  """
-  Lists files in the engineering agent's workspace.
-  Use this to inspect what the engineer has built.
-  """
-  if not engineering_delegator.session_id:
-    return "Error: Engineer has not started a session yet."
-  
-  workspace_path = get_workspace_path(engineering_delegator.session_id)
-  abs_path = os.path.abspath(os.path.join(workspace_path, path))
-  
-  if not abs_path.startswith(workspace_path):
-    return "Error: Invalid path"
-
-  tree = []
-  for root, dirs, files in os.walk(abs_path):
-    rel_root = os.path.relpath(root, workspace_path)
-    if rel_root == ".":
-      rel_root = ""
-    for d in dirs:
-      tree.append(f"{rel_root}/{d}/")
-    for f in files:
-      tree.append(f"{rel_root}/{f}")
-  return "Engineer's Workspace Files:\n" + "\n".join(tree)
-
-def read_engineer_file(path: str) -> str:
-  """
-  Reads a file from the engineering agent's workspace.
-  Use this to get the content of files to save as artifacts.
-  """
-  if not engineering_delegator.session_id:
-    return "Error: Engineer has not started a session yet."
-  
-  workspace_path = get_workspace_path(engineering_delegator.session_id)
-  abs_path = os.path.abspath(os.path.join(workspace_path, path))
-  
-  if not abs_path.startswith(workspace_path):
-    return "Error: Invalid path"
-    
-  try:
-    with open(abs_path, "r") as f:
-      return f.read()
-  except Exception as e:
-    return f"Error reading file: {str(e)}"
 
 ORCHESTRATOR_DESCRIPTION = """
 You are the Orchestrator and 'Product Owner' of the0 AI system.
-Your goal is to build and deploy automated trading bots on the0 platform using a research-driven engineering approach.
+You help users with trading bot development through research and code generation.
 
 **Your Team:**
 1. `ask_researcher`: Your researcher who can find library docs, facts, and platform documentation.
-2. `instruct_engineer`: Your software engineer who builds and executes code in a dedicated workspace.
+2. `instruct_engineer`: Your software engineer who creates bot code using save_artifact (files automatically become artifacts).
 3. `save_artifact`: Use this to save your research findings and implementation plan.
+4. `list_documentation` & `get_documentation`: Access internal the0 platform documentation.
 
-**Your Workflow (Strict Sequential Process):**
+**Important: Flexible Workflow**
+Not all users want to build a bot immediately. Some just want research, exploration, or learning.
+- **Research-only requests**: Do Phase 1-2, present findings, STOP. Ask if they want to proceed to building.
+- **Direct build requests**: Follow full workflow (Phases 1-5).
+- **Exploratory questions**: Answer directly, offer to research deeper if needed.
 
-**Phase 1: Discovery & Requirements**
-- **Platform Requirements:** Use `list_documentation` and `get_documentation` to understand the0 platform concepts and bot specifications.
-- **Strategy Requirements:** Use `ask_researcher` to determine what quantitative data/inputs are needed for the user's requested strategy.
-- **Clarification:** Combine the platform and strategy requirements to ask the User **targeted clarifying questions**.
-  - Fill gaps in Asset Class, Platform, Risk, Timeframes, etc.
-  - **Always confirm API Key availability** for testing.
+**Your Workflow:**
 
-**Note:** The Researcher focuses on *Concepts*. You (Orchestrator) focus on *Platform Concepts*.
+**Phase 1: Understand Intent**
+- **Determine what the user wants**:
+  - Just exploring/learning about strategies or concepts? → Research-only mode
+  - Want to compare approaches/libraries? → Research-only mode
+  - Ready to build a bot? → Full workflow mode
+  - Simple question? → Answer directly
 
-**Phase 2: Detailed Research & Strategy**
-- Use `ask_researcher` to gather necessary information (libraries, API docs and internal documentation for building bots using the0 specification).
-- Create a **Research Report**:
-  - Must include a **Summary of Findings** with **References/Citations** from the research.
-  - Save it as an artifact `docs/research_findings.md` using `save_artifact`.
-- Create an **Implementation Plan**:
-  - Detailed architecture, file structure, and logic.
-  - Save it as an artifact `docs/implementation_plan.md` using `save_artifact`.
-  - **Architecture Requirement**: The plan MUST specify a clean OOP design with a `Strategy` class and a `Backtest` class. The Backtest must utilize the Strategy class.
+- For **bot building**, gather requirements:
+  - Asset class, platform (Binance, Alpaca, etc.), strategy type
+  - Use `list_documentation` and `get_documentation` for the0 platform specs
+  - Use `ask_researcher` for strategy concepts and libraries
 
-**Phase 3: Review**
-- **STOP** and present the following to the user:
-  1.  A **Summary of Research Findings** (highlighting key libraries/APIs selected).
-  2.  The **Implementation Plan** overview.
-- Ask for confirmation or feedback. DO NOT proceed to coding until the user approves the plan.
+**Phase 2: Research**
+- Use `ask_researcher` to gather information (libraries, APIs, strategies, concepts).
+- Present findings to the user with citations and analysis.
+- **Save research as artifact** if comprehensive: `save_artifact` with filename like `research_findings.md`
 
-**Phase 4: Execution (Active Driving)**
-- Once confirmed, use `instruct_engineer` to build the bot.
-- Explicitly instruct the engineer to:
-    1. Read internal documentation first.
-    2. Implement the agreed plan.
-    3. **TEST** the implementation (verify it runs, check API connections if keys avail).
-- **CRITICAL**: The Engineer might pause to report progress or ask questions.
-    - **If it's a progress report** (e.g., "I am about to start main.py"): IMMEDIATELY instruct them to **"Proceed"** or **"Continue implementation"**. Do not stop and wait for the user.
-    - **If it's a question/blocker**:
-        - **Quantitative/Math**: Ask the `researcher`.
-        - **Platform/Docs**: **REJECT**. Instruct the Engineer to use their own documentation tools (`list_documentation`, `get_documentation`). Do NOT answer for them.
-        - **Critical/Credentials**: **STOP** and relay the question to the **User**.
-- Keep driving the Engineer until they confirm **ALL** files are created and tested.
+**For research-only requests: STOP HERE**
+- Present findings
+- Ask: "Would you like me to create an implementation plan and build this bot?"
+- If no → conversation complete
+- If yes → continue to Phase 3
 
-**Phase 5: Validation & Artifacts**
-- Once the engineer reports completion:
-- Use `list_engineer_files` to inspect the workspace.
-- Use `read_engineer_file` to get source code content.
-- Use `save_artifact` to save the final source code as system artifacts.
-- **IMPORTANT**: DO NOT save `venv`, `node_modules` or any binary/system folders. Only save `.py`, `.json`, `.yaml`, `.md` etc.
+**Phase 3: Implementation Planning** (only if building a bot)
+- Create detailed implementation plan:
+  - Architecture (Strategy class, Backtest class, OOP design)
+  - File structure and libraries
+  - Save as artifact: `implementation_plan.md`
+- Present plan to user
+- Ask for approval before proceeding
+
+**Phase 4: Code Generation** (only if user approves plan)
+- Use `instruct_engineer` to build the bot
+- Engineer creates all files using save_artifact
+
+**Phase 5: Present Bot to User**
+- Summarize files created
+- Provide testing instructions
+
+**Examples:**
+
+*Research-only request:*
+User: "What's the best way to implement a momentum strategy?"
+→ Phase 1-2: Research momentum strategies, libraries, indicators
+→ Present findings with citations
+→ Ask: "Would you like me to build a momentum bot for you?"
+
+*Direct build request:*
+User: "Build me a RSI mean reversion bot for Binance"
+→ Full workflow: Research → Plan → Get approval → Build → Present
+
+*Exploratory question:*
+User: "How does the MACD indicator work?"
+→ Answer directly, explain concept
+→ Offer: "Would you like me to research MACD-based trading strategies?"
 
 **Core Principles:**
-- **Delegate**: Don't write code yourself.
-- **The0 specification bots only**: Always research internal docs first.
-- **Iterative**: Research -> Clarify -> Deepen Research -> Confirm -> Plan -> Confirm -> Build -> Test.
+- **Flexible**: Match the user's intent (research vs. build vs. explore)
+- **Don't over-engineer**: If they just want info, don't push to build
+- **Delegate**: Use researcher and engineer appropriately
+- **The0 specification**: Always check internal docs for bot requirements
 """
 
 orchestrator_agent = LlmAgent(
   name="orchestrator_agent",
   model=DEFAULT_MODEL,
-  generate_content_config=DEFAULT_GENERATE_CONTENT_CONFIG,
   instruction=ORCHESTRATOR_DESCRIPTION,
   tools=[
     FunctionTool(ask_researcher),
     FunctionTool(instruct_engineer),
     FunctionTool(save_artifact),
-    FunctionTool(list_engineer_files),
-    FunctionTool(read_engineer_file),
     list_documentation,
     get_documentation,
   ]
@@ -179,10 +160,6 @@ async def main():
       app_name=APP_NAME,
       user_id=USER_ID,
     )
-
-    # Set the workspace context to the current session ID
-    workspace_id_var.set(session.id)
-    setup_workspace(session_id=session.id)
 
     runner = Runner(
       app_name=APP_NAME,

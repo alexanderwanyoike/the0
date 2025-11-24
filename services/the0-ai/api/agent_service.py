@@ -2,6 +2,8 @@ import uuid
 import zipfile
 import tempfile
 import os
+import asyncio
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
@@ -18,6 +20,8 @@ from api.storage import storage_service
 # Load environment variables from .env file
 load_dotenv()
 
+MAX_RETRIES = 10
+BASE_DELAY = 5
 
 class AgentService:
     def __init__(self):
@@ -124,57 +128,93 @@ class AgentService:
             content = types.Content(
                 role="user", parts=[types.Part.from_text(text=message)]
             )
-
-            # Send message to agent
-            events = self.runner.run_async(
-                user_id="default-user", session_id=session_id, new_message=content
-            )
-
-            # Process events to get final response
+            
+            message_to_send = content
             response = ""
-            event_count = 0
 
-            async for event in events:
-                event_count += 1
-                print(f"Processing event {event_count}: {type(event)}")
+            # Run the agent with retries
+            for attempt in range(MAX_RETRIES):
+                try:
+                    # Send message to agent
+                    events = self.runner.run_async(
+                        user_id="default-user", session_id=session_id, new_message=message_to_send
+                    )
 
-                if event.is_final_response():
-                    print(f"Found final response event: {event}")
+                    # Process events to get final response
+                    event_count = 0
 
-                    # Check if event has content and content has parts
-                    if hasattr(event, "content") and event.content is not None:
-                        print(f"Event has content: {type(event.content)}")
+                    async for event in events:
+                        event_count += 1
+                        print(f"Processing event {event_count}: {type(event)}")
 
-                        if (
-                            hasattr(event.content, "parts")
-                            and event.content.parts is not None
-                        ):
-                            print(f"Content has {len(event.content.parts)} parts")
-                            # Extract all text parts from the response
-                            text_parts = []
-                            for i, part in enumerate(event.content.parts):
+                        if event.is_final_response():
+                            print(f"Found final response event: {event}")
+
+                            # Check if event has content and content has parts
+                            if hasattr(event, "content") and event.content is not None:
+                                print(f"Event has content: {type(event.content)}")
+
+                                if (
+                                    hasattr(event.content, "parts")
+                                    and event.content.parts is not None
+                                ):
+                                    print(f"Content has {len(event.content.parts)} parts")
+                                    # Extract all text parts from the response
+                                    text_parts = []
+                                    for i, part in enumerate(event.content.parts):
+                                        print(
+                                            f"Part {i}: {type(part)}, has text: {hasattr(part, 'text')}"
+                                        )
+                                        if hasattr(part, "text") and part.text:
+                                            text_parts.append(part.text)
+                                            print(f"Added text: {part.text[:100]}...")
+                                    response = (
+                                        " ".join(text_parts)
+                                        if text_parts
+                                            else "Agent completed the task."
+                                    )
+                                else:
+                                    print(
+                                        f"Warning: Event content has no parts or parts is None. Content: {event.content}"
+                                    )
+                                    response = "Agent completed the task."
+                            else:
                                 print(
-                                    f"Part {i}: {type(part)}, has text: {hasattr(part, 'text')}"
+                                    f"Warning: Event has no content or content is None. Event: {event}"
                                 )
-                                if hasattr(part, "text") and part.text:
-                                    text_parts.append(part.text)
-                                    print(f"Added text: {part.text[:100]}...")
-                            response = (
-                                " ".join(text_parts)
-                                if text_parts
-                                else "Agent completed the task."
-                            )
-                        else:
-                            print(
-                                f"Warning: Event content has no parts or parts is None. Content: {event.content}"
-                            )
-                            response = "Agent completed the task."
-                    else:
-                        print(
-                            f"Warning: Event has no content or content is None. Event: {event}"
-                        )
-                        response = "Agent completed the task."
+                                response = "Agent completed the task."
+                            break
+                    
+                    # If we finished the loop successfully, break the retry loop
                     break
+
+                except Exception as e:
+                    error_str = str(e)
+                    is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
+
+                    if is_rate_limit and attempt < MAX_RETRIES - 1:
+                        print(f"Rate limit hit. Attempt {attempt + 1}/{MAX_RETRIES}.")
+                        
+                        # If we hit rate limit, the message was likely appended. Don't resend it on retry.
+                        if message_to_send is not None:
+                            message_to_send = None
+
+                        # Parse retry delay from error message
+                        delay = BASE_DELAY * (2 ** attempt) # Default exponential backoff
+                        match = re.search(r"retry in (\d+(\.\d+)?)s", error_str)
+                        if match:
+                            try:
+                                parsed_delay = float(match.group(1))
+                                delay = parsed_delay + 1.0 # Add 1s buffer
+                            except ValueError:
+                                pass
+                        
+                        print(f"Waiting {delay:.2f}s before retrying...")
+                        await asyncio.sleep(delay)
+                        continue
+                    
+                    # Non-retriable error or max retries reached
+                    raise e
 
             # Fallback if no response was generated
             if not response:
@@ -252,50 +292,85 @@ class AgentService:
                 role="user", parts=[types.Part.from_text(text=message)]
             )
 
-            # Send message to agent and stream events
-            events = self.runner.run_async(
-                user_id="default-user", session_id=session_id, new_message=content
-            )
-
+            message_to_send = content
             accumulated_response = ""
+            
+            for attempt in range(MAX_RETRIES):
+                try:
+                    # Send message to agent and stream events
+                    events = self.runner.run_async(
+                        user_id="default-user", session_id=session_id, new_message=message_to_send
+                    )
 
-            async for event in events:
-                print(f"Streaming event: {type(event)}")
+                    async for event in events:
+                        print(f"Streaming event: {type(event)}")
 
-                if hasattr(event, "content") and event.content is not None:
-                    if hasattr(event.content, "parts") and event.content.parts:
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
-                                accumulated_response += part.text
+                        if hasattr(event, "content") and event.content is not None:
+                            if hasattr(event.content, "parts") and event.content.parts:
+                                for part in event.content.parts:
+                                    if hasattr(part, "text") and part.text:
+                                        # TODO: Handle potential duplicate chunks on retry if retry happens mid-stream?
+                                        # For now, just yield. Usually retry happens before generation starts.
+                                        accumulated_response += part.text
+                                        yield StreamChunk(
+                                            type="content",
+                                            content=part.text,
+                                            session_id=session_id,
+                                        )
+
+                        if event.is_final_response():
+                            # Get artifacts that were created
+                            artifacts = await self.list_session_artifact_keys(session_id)
+                            if artifacts:
                                 yield StreamChunk(
-                                    type="content",
-                                    content=part.text,
-                                    session_id=session_id,
+                                    type="artifacts", artifacts=artifacts, session_id=session_id
                                 )
 
-                if event.is_final_response():
-                    # Get artifacts that were created
-                    artifacts = await self.list_session_artifact_keys(session_id)
-                    if artifacts:
-                        yield StreamChunk(
-                            type="artifacts", artifacts=artifacts, session_id=session_id
-                        )
+                            # Store assistant message in database
+                            try:
+                                async with get_db_session() as db_session:
+                                    chat_repo = get_chat_repository(db_session)
+                                    await chat_repo.add_message(
+                                        session_id,
+                                        "assistant",
+                                        accumulated_response,
+                                        artifacts_created=artifacts if artifacts else None,
+                                    )
+                            except Exception as e:
+                                print(f"Error storing assistant message: {e}")
 
-                    # Store assistant message in database
-                    try:
-                        async with get_db_session() as db_session:
-                            chat_repo = get_chat_repository(db_session)
-                            await chat_repo.add_message(
-                                session_id,
-                                "assistant",
-                                accumulated_response,
-                                artifacts_created=artifacts if artifacts else None,
-                            )
-                    except Exception as e:
-                        print(f"Error storing assistant message: {e}")
+                            yield StreamChunk(type="complete", session_id=session_id)
+                            break # Break async for
+                    
+                    if event.is_final_response():
+                        break # Break retry loop
+                
+                except Exception as e:
+                    error_str = str(e)
+                    is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
 
-                    yield StreamChunk(type="complete", session_id=session_id)
-                    break
+                    if is_rate_limit and attempt < MAX_RETRIES - 1:
+                        print(f"Rate limit hit in stream. Attempt {attempt + 1}/{MAX_RETRIES}.")
+                        
+                        if message_to_send is not None:
+                            message_to_send = None
+
+                        # Parse retry delay
+                        delay = BASE_DELAY * (2 ** attempt)
+                        match = re.search(r"retry in (\d+(\.\d+)?)s", error_str)
+                        if match:
+                            try:
+                                parsed_delay = float(match.group(1))
+                                delay = parsed_delay + 1.0
+                            except ValueError:
+                                pass
+                        
+                        print(f"Waiting {delay:.2f}s before retrying stream...")
+                        yield StreamChunk(type="content", content=f"\n[System: Rate limit hit. Retrying in {delay:.0f}s...]\n", session_id=session_id)
+                        await asyncio.sleep(delay)
+                        continue
+                    
+                    raise e
 
         except Exception as e:
             print(f"Error in chat stream: {e}")
