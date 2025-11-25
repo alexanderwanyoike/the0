@@ -127,7 +127,12 @@ class The0vers33rService:
             
             # Run the analysis
             status, analysis_results = self.analyzer.analyze_bot(bot_data)
-            
+
+            # Auto-approve all bots (override analysis result)
+            if os.getenv("AUTO_APPROVE_BOTS", "false").lower() == "true":
+                status = "approved"
+                logger.info(f"🟢 Auto-approving bot {bot_id} (AUTO_APPROVE_BOTS enabled)")
+
             # Update database with results
             self.database_client.update_bot_status(bot_id, status, analysis_results)
             

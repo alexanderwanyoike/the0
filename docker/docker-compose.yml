@@ -124,9 +124,6 @@ services:
       # Bot API configuration (used by frontend API routes)
       BOT_API_URL: http://the0-api:3000
 
-      # Auto-approve all bots (skip 0vers33r review)
-      AUTO_APPROVE_BOTS: "true"
-
     ports:
       - "3000:3000"
     depends_on:
@@ -584,11 +581,14 @@ services:
       # AI Analysis configuration (optional)
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-}
-      
+
       # Service configuration
       PYTHONPATH: /app
       PYTHONUNBUFFERED: "1"
-      
+
+      # Auto-approve all bots (skip security review)
+      AUTO_APPROVE_BOTS: "true"
+
     depends_on:
       postgres:
         condition: service_healthy

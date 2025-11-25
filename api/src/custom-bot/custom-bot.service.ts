@@ -69,13 +69,12 @@ export class CustomBotService {
       }
 
       // Create the bot
-      const autoApprove = process.env.AUTO_APPROVE_BOTS === "true";
       const botData: Partial<CustomBot> = {
         name: config.name,
         version: config.version,
         config,
         filePath: filePath,
-        status: autoApprove ? "approved" : "pending_review",
+        status: "pending_review",
       };
 
       const result = await this.customBotRepository.createNewGlobalVersion(
@@ -95,7 +94,7 @@ export class CustomBotService {
         );
 
       // Publish custom-bot.submitted event for 0vers33r analysis
-      if (createdBotResult.success && !autoApprove) {
+      if (createdBotResult.success) {
         const customBotSubmittedEvent = {
           type: "custom-bot.submitted",
           botId: createdBotResult.data.id,
