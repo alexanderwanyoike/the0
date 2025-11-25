@@ -935,13 +935,25 @@ func (c *APIClient) CreateBacktest(auth *Auth, request *BacktestDeployRequest) (
 		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
 	}
 
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return nil, fmt.Errorf("API error: %d", resp.StatusCode)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		// Try to extract error message from response body
+		var errorResp struct {
+			Message string `json:"message"`
+			Error   string `json:"error"`
+		}
+		if json.Unmarshal(body, &errorResp) == nil && (errorResp.Message != "" || errorResp.Error != "") {
+			if errorResp.Message != "" {
+				return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errorResp.Message)
+			}
+			return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, errorResp.Error)
+		}
+		// Fallback to generic error with body content
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var backtest BacktestInstance
