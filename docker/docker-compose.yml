@@ -123,7 +123,10 @@ services:
       
       # Bot API configuration (used by frontend API routes)
       BOT_API_URL: http://the0-api:3000
-      
+
+      # Auto-approve all bots (skip 0vers33r review)
+      AUTO_APPROVE_BOTS: "true"
+
     ports:
       - "3000:3000"
     depends_on:
