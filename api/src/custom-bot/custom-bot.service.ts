@@ -9,7 +9,7 @@ import {
   CustomBot,
   CustomBotWithVersions,
 } from "./custom-bot.types";
-import { Result, Failure, Ok } from "@/common/result";
+import { Result, Failure } from "@/common/result";
 
 @Injectable()
 export class CustomBotService {
@@ -95,7 +95,7 @@ export class CustomBotService {
         );
 
       // Publish custom-bot.submitted event for 0vers33r analysis
-      if (createdBotResult.success) {
+      if (createdBotResult.success && !autoApprove) {
         const customBotSubmittedEvent = {
           type: "custom-bot.submitted",
           botId: createdBotResult.data.id,
