@@ -69,12 +69,13 @@ export class CustomBotService {
       }
 
       // Create the bot
+      const autoApprove = process.env.AUTO_APPROVE_BOTS === "true";
       const botData: Partial<CustomBot> = {
         name: config.name,
         version: config.version,
         config,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: autoApprove ? "approved" : "pending_review",
       };
 
       const result = await this.customBotRepository.createNewGlobalVersion(
