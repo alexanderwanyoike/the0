@@ -1,0 +1,113 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["type/bug", "status/needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the following information to help us resolve the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I do X, Y happens instead of Z
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Run command '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: I expected...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+      placeholder: Instead...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - Frontend (Next.js UI)
+        - API (NestJS backend)
+        - Runtime (Bot execution services)
+        - CLI (Command-line tool)
+        - AI Service (the0-ai)
+        - 0vers33r (Security analyzer)
+        - Infrastructure (Docker/K8s)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Please provide information about your environment
+      value: |
+        - OS: [e.g., Ubuntu 22.04, macOS 14, Windows 11]
+        - Docker version: [e.g., 24.0.5]
+        - Docker Compose version: [e.g., 2.20.2]
+        - Node.js version (if applicable): [e.g., 20.9.0]
+        - Go version (if applicable): [e.g., 1.21.3]
+        - Python version (if applicable): [e.g., 3.11.5]
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Please paste any relevant logs or error messages
+      placeholder: |
+        ```
+        Paste logs here
+        ```
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here (screenshots, configuration files, etc.)
+      placeholder: Any additional information that might help
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched for existing issues to avoid duplicates
+          required: true
+        - label: I have tested this on the latest version
+          required: true
+        - label: I have provided all requested information
+          required: true
