@@ -1,0 +1,92 @@
+name: Documentation Improvement
+description: Suggest improvements to documentation
+title: "[Docs]: "
+labels: ["type/documentation", "status/needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation!
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation needs improvement?
+      options:
+        - README.md
+        - CONTRIBUTING.md
+        - Code comments
+        - API documentation
+        - Bot development guides
+        - Deployment guides
+        - Architecture documentation
+        - CLI documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is the documentation that needs improvement?
+      placeholder: |
+        File path: /docs/...
+        URL: https://docs.the0.dev/...
+        Function/Component: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What kind of improvement is needed?
+      options:
+        - Missing documentation
+        - Incorrect information
+        - Unclear explanation
+        - Typo or grammar
+        - Broken link
+        - Outdated content
+        - Needs examples
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Documentation
+      description: Quote the current documentation (if applicable)
+      placeholder: |
+        ```
+        Current text or description
+        ```
+      render: markdown
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested Improvement
+      description: What should it say instead? Or what should be added?
+      placeholder: Suggested text or explanation
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, examples, or references
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched for existing documentation issues to avoid duplicates
+          required: true
+        - label: I am willing to submit a PR with these changes
+          required: false
