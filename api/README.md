@@ -1,11 +1,10 @@
 # Theo API
 
-Theo API is the backend service for The0 automated trading platform. It is built using the [NestJS](https://nestjs.com/) framework and provides functionality for managing bots, backtesting strategies, and more.
+Theo API is the backend service for the0 automated trading platform. It is built using the [NestJS](https://nestjs.com/) framework and provides functionality for managing bots and more.
 
 ## Features
 
 - **Bot Validation**: Validate bot configurations against schemas retrieved from an external API.
-- **Backtesting**: Manage and execute backtesting strategies for trading.
 - **Configuration Management**: Centralized configuration using `@nestjs/config`.
 - **API Integration**: Communicates with external services using `@nestjs/axios`.
 
@@ -76,7 +75,6 @@ $ yarn run test:cov
 ## Project Structure
 
 - **`src/bot`**: Contains bot-related logic, including validation (`bot.validator.ts`).
-- **`src/backtest`**: Handles backtesting functionality.
 - **`src/common`**: Shared utilities and types.
 - **`test`**: Unit and e2e tests.
 

@@ -20,10 +20,8 @@ export interface CustomBotConfig {
   author: string;
   entrypoints: {
     bot: string;
-    backtest?: string;
   };
   schema: {
-    backtest?: Record<string, any>;
     bot: Record<string, any>;
   };
   readme: string;

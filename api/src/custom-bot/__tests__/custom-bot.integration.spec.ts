@@ -34,11 +34,9 @@ describe("Custom Bot API Integration Tests", () => {
     runtime: "python3.11",
     entrypoints: {
       bot: "main.py",
-      backtest: "backtest.py",
     },
     schema: {
       bot: { type: "object" },
-      backtest: { type: "object" },
     },
     readme:
       "This is a comprehensive readme for integration testing that meets all requirements.",
@@ -175,7 +173,7 @@ describe("Custom Bot API Integration Tests", () => {
       expect(storageService.fileExists).toHaveBeenCalledWith(filePath);
       expect(storageService.validateZipStructure).toHaveBeenCalledWith(
         filePath,
-        ["main.py", "backtest.py"],
+        ["main.py"],
       );
     });
 
@@ -600,8 +598,8 @@ describe("Custom Bot API Integration Tests", () => {
         type: "scheduled",
         runtime: "python3.11",
         author: "E2E Test",
-        entrypoints: { bot: "main.py", backtest: "backtest.py" },
-        schema: { bot: {}, backtest: {} },
+        entrypoints: { bot: "main.py" },
+        schema: { bot: {} },
         readme:
           "E2E test bot readme with sufficient length for validation requirements.",
       };

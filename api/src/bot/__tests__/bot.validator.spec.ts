@@ -28,10 +28,8 @@ describe("BotValidator", () => {
         author: "test-author",
         entrypoints: {
           bot: "bot.py",
-          backtest: "backtest.py",
         },
         schema: {
-          backtest: {},
           bot: {
             type: "object",
             properties: {
@@ -69,10 +67,8 @@ describe("BotValidator", () => {
         author: "test-author",
         entrypoints: {
           bot: "bot.py",
-          backtest: "backtest.py",
         },
         schema: {
-          backtest: {},
           bot: {
             type: "object",
             properties: {

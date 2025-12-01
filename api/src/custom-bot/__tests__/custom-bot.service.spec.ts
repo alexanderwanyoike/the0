@@ -39,11 +39,9 @@ describe("CustomBotService", () => {
     runtime: "python3.11",
     entrypoints: {
       bot: "main.py",
-      backtest: "backtest.py",
     },
     schema: {
       bot: { type: "object" },
-      backtest: { type: "object" },
     },
     readme:
       "This is a test bot with enough content to pass validation requirements for the readme field.",

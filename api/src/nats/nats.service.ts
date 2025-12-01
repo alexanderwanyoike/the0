@@ -92,8 +92,6 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
           "the0.bot-schedule.created",
           "the0.bot-schedule.updated",
           "the0.bot-schedule.deleted",
-          "the0.backtest.created",
-          "the0.backtest.completed",
         ],
         retention: RetentionPolicy.Limits,
         max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
@@ -114,14 +112,6 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      // For backtest events, use regular NATS publishing (not JetStream)
-      if (topic.startsWith("the0.backtest.")) {
-        this.connection.publish(topic, this.sc.encode(JSON.stringify(payload)));
-        console.log(`✅ Published to NATS topic: ${topic}`);
-        return Ok(undefined);
-      }
-
-      // For other events, use JetStream
       const jetStream = this.connection.jetstream();
       await jetStream.publish(topic, this.sc.encode(JSON.stringify(payload)), {
         timeout: 5000, // 5 second timeout
