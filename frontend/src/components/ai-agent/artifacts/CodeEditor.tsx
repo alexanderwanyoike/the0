@@ -45,7 +45,7 @@ export function CodeEditor({
   const editorRef = useRef<any>(null);
   const { resolvedTheme } = useTheme();
   const language = file.language || getLanguageFromExtension(file.name);
-  
+
   // Use resolved theme (automatically handles system preference)
   const isDark = resolvedTheme === "dark";
 
