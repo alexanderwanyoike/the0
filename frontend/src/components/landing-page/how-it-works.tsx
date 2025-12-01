@@ -1,4 +1,4 @@
-import { Code, TestTube, Container, BarChart3 } from "lucide-react";
+import { Code, Container, BarChart3 } from "lucide-react";
 
 const steps = [
   {
@@ -6,12 +6,6 @@ const steps = [
     title: "Develop",
     description:
       "Create custom trading bots using Python or JavaScript with any libraries you prefer. Use our framework-agnostic approach to build everything from simple DCA strategies to complex multi-asset arbitrage algorithms.",
-  },
-  {
-    icon: TestTube,
-    title: "Test",
-    description:
-      "Validate your strategies with comprehensive backtesting using historical data. Test different parameters, optimize performance, and ensure your algorithms work before deploying to live markets.",
   },
   {
     icon: Container,
@@ -34,7 +28,7 @@ export function HowItWorksSection() {
         <div className="text-center mb-16">
           <h2 className="text-3xl font-bold">How It Works</h2>
           <p className="mt-4 text-xl text-muted-foreground">
-            From development to deployment in 4 simple steps
+            From development to deployment in 3 simple steps
           </p>
         </div>
 

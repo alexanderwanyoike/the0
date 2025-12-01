@@ -1,13 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  ArrowLeft,
-  Copy,
-  Terminal,
-  FileText,
-  Play,
-  BarChart3,
-} from "lucide-react";
+import { ArrowLeft, Copy, Terminal, FileText, Play } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +11,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CustomBotWithVersions } from "@/types/custom-bots";
-import { canBotBeBacktested } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
@@ -71,12 +63,6 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
     );
   };
 
-  const handleBacktest = () => {
-    router.push(
-      `/backtests/create?name=${encodeURIComponent(bot.name)}&version=${encodeURIComponent(selectedVersion)}`,
-    );
-  };
-
   return (
     <>
       <div className="flex flex-col sm:flex-row gap-3">
@@ -89,13 +75,6 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
           <Play className="h-4 w-4" />
           Deploy Bot
         </Button>
-
-        {versionData?.config && canBotBeBacktested(versionData.config) && (
-          <Button variant="outline" onClick={handleBacktest} className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Backtest
-          </Button>
-        )}
 
         <Button
           variant="outline"
