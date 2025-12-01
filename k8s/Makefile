@@ -54,7 +54,6 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		--set the0Frontend.imagePullPolicy=Never \
 		--set the0Docs.imagePullPolicy=Never \
 		--set botRunner.imagePullPolicy=Never \
-		--set backtestRunner.imagePullPolicy=Never \
 		--set botScheduler.imagePullPolicy=Never \
 		--set the0Analyzer.imagePullPolicy=Never \
 		--set minikube.enabled=true \
