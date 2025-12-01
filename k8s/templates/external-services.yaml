@@ -120,32 +120,6 @@ spec:
     app.kubernetes.io/component: bot-runner-master
 
 ---
-# Backtest Runner Master NodePort Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "the0.fullname" . }}-backtest-runner-master-external
-  labels:
-    {{- include "the0.labels" . | nindent 4 }}
-    app.kubernetes.io/component: backtest-runner-master-external
-spec:
-  type: NodePort
-  ports:
-    - port: 8080
-      targetPort: 8080
-      protocol: TCP
-      name: http
-      nodePort: 30081
-    - port: 50052
-      targetPort: 50052
-      protocol: TCP
-      name: grpc
-      nodePort: 30052
-  selector:
-    {{- include "the0.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: backtest-runner-master
-
----
 # Bot Scheduler Master NodePort Service
 apiVersion: v1
 kind: Service

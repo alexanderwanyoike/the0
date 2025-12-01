@@ -1,12 +1,11 @@
 # the0 Runtime
 
-A unified, distributed Docker container orchestration system for the0 platform that manages bot execution, backtests, and scheduled jobs using a master-worker architecture.
+A unified, distributed Docker container orchestration system for the0 platform that manages bot execution and scheduled jobs using a master-worker architecture.
 
 ## Architecture Overview
 
-A unified runtime system for the0 platform that provides three distinct services sharing common infrastructure:
+A unified runtime system for the0 platform that provides two distinct services sharing common infrastructure:
 - **Bot Runner**: Executes live trading bots in isolated Docker containers
-- **Backtest Runner**: Processes backtests for strategy validation
 - **Bot Scheduler**: Manages scheduled bot execution with cron-based timing
 
 All services use a master-worker architecture with Docker-based container isolation and MongoDB for persistence.
@@ -27,7 +26,7 @@ All services use a master-worker architecture with Docker-based container isolat
 
 #### Worker Nodes
 - **Bot Execution**:
-  - Executes bots/backtests in isolated Docker containers
+  - Executes bots in isolated Docker containers
   - Supports Python 3.11 and Node.js 20 runtimes
   - Downloads code from MinIO/S3 storage
 - **Segment Processing**:
@@ -103,7 +102,7 @@ All services use a master-worker architecture with Docker-based container isolat
    - Workers automatically resubscribe on master reconnection
 
 2. **Container Isolation**:
-   - Each bot/backtest runs in isolated Docker container
+   - Each bot runs in isolated Docker container
    - Resource limits (CPU shares and memory)
    - Automatic cleanup of failed containers
    - File system permissions handling for cleanup
@@ -146,7 +145,7 @@ All services use a master-worker architecture with Docker-based container isolat
    - Background log collection for long-running containers
    - Supports Python 3.11 and Node.js 20
 
-3. **bot-runner/**, **backtest-runner/**, **bot-scheduler/**
+3. **bot-runner/**, **bot-scheduler/**
    - Service-specific master/worker implementations
    - NATS subscribers for lifecycle events
    - Database-specific models and logic
@@ -193,11 +192,6 @@ The runtime uses Cobra for a unified command-line interface:
 # Bot Runner (live bot execution)
 ./runtime bot-runner master
 ./runtime bot-runner worker
-
-# Backtest Runner (backtest processing)
-./runtime backtest-runner master
-./runtime backtest-runner worker
-./runtime backtest-runner standalone --node=master|worker
 
 # Bot Scheduler (cron-based scheduled execution)
 ./runtime bot-scheduler master
@@ -253,8 +247,8 @@ Common flags:
 1. **RBAC Configuration**: Optional for autoscaler (falls back gracefully if unavailable)
 2. **Docker Access**: Workers need access to Docker daemon via socket mount
 3. **Storage**: Persistent volumes for temporary file storage
-4. **Network**: Internal gRPC communication on service ports (50051-50053)
-5. **Separate Deployments**: One deployment per service (bot-runner, backtest-runner, bot-scheduler)
+4. **Network**: Internal gRPC communication on service ports (50051, 50053)
+5. **Separate Deployments**: One deployment per service (bot-runner, bot-scheduler)
 6. **Master vs Worker**: Each service has separate master and worker deployments
 
 ### Environment Variables
@@ -267,7 +261,6 @@ MASTER_HOST=localhost  # For standalone mode
 
 # Database (service-specific)
 # Bot Runner uses: bot_runner/bots
-# Backtest Runner uses: backtest_runner/backtests
 # Bot Scheduler uses: bot_scheduler/bot_schedules
 
 # NATS Messaging (optional)
@@ -292,11 +285,6 @@ NAMESPACE=default
 DEPLOYMENT_NAME=runtime-worker
 MIN_REPLICAS=3
 MAX_REPLICAS=4
-
-# Backtest Runner (worker-specific)
-BATCH_SIZE=5
-BATCH_TIMEOUT=300
-BATCH_INTERVAL=10
 ```
 
 ### Segment Assignment Strategy
@@ -335,7 +323,7 @@ This simple approach provides:
 
 1. **Horizontal Scaling**:
    - Native autoscaler automatically adds/removes workers to match segment count
-   - Workers scale independently per service (bot-runner, backtest-runner, bot-scheduler)
+   - Workers scale independently per service (bot-runner, bot-scheduler)
    - 1 worker per active segment for optimal distribution
    - Gradual scaling (+/-1 replica) prevents thundering herd
    - Masters are stateless and can be scaled (though typically run as single instance)
@@ -344,7 +332,6 @@ This simple approach provides:
    - Docker image caching reduces container startup time
    - Rebalance timer interval (default: 10s) can be adjusted
    - Autoscaler check interval (15s) and cooldown (10s) are configurable
-   - Batch processing for backtests (configurable batch size and timeout)
 
 3. **Resource Management**:
    - Container resource limits (CPU shares, memory limits) prevent resource exhaustion
