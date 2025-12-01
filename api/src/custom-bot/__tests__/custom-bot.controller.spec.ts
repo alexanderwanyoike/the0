@@ -28,11 +28,9 @@ describe("CustomBotController", () => {
     author: "Test Author",
     entrypoints: {
       bot: "main.py",
-      backtest: "backtest.py",
     },
     schema: {
       bot: { type: "object" },
-      backtest: { type: "object" },
     },
     readme:
       "This is a test bot with enough content to pass validation requirements.",
