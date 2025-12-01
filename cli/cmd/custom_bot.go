@@ -158,10 +158,10 @@ func NewCustomBotListCmd() *cobra.Command {
 
 func NewCustomBotSchemaCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "schema <bot|backtest> <version> <custom-bot-name>",
+		Use:   "schema <version> <custom-bot-name>",
 		Short: "Get the schema of a custom bot",
-		Long:  "📄 Get the JSON schema for either the bot or backtest entrypoint of a custom bot",
-		Args:  cobra.RangeArgs(2, 3), // 2 or 3 arguments
+		Long:  "📄 Get the JSON schema for a custom bot",
+		Args:  cobra.RangeArgs(1, 2), // 1 or 2 arguments
 		Run:   getCustomBotSchema,
 	}
 }
@@ -254,25 +254,18 @@ func getCustomBotSchema(cmd *cobra.Command, args []string) {
 	red := color.New(color.FgRed)
 	blue := color.New(color.FgBlue)
 
-	entryPointType := args[0] // "bot" or "backtest"
-	version := args[1]
+	version := args[0]
 	var customBotName string
 
-	if len(args) == 3 {
-		customBotName = args[2]
+	if len(args) == 2 {
+		customBotName = args[1]
 	} else {
 		// If version is actually the bot name and no version specified, use latest
 		customBotName = version
 		version = "" // Will use latest version
 	}
 
-	// Validate entry point type
-	if entryPointType != "bot" && entryPointType != "backtest" {
-		red.Fprintf(os.Stderr, "Entry point type must be 'bot' or 'backtest', got: %s\n", entryPointType)
-		os.Exit(1)
-	}
-
-	blue.Printf("📄 Fetching %s schema for custom bot '%s'...\n", entryPointType, customBotName)
+	blue.Printf("📄 Fetching schema for custom bot '%s'...\n", customBotName)
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
@@ -324,16 +317,11 @@ func getCustomBotSchema(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Get the schema for the requested entry point
-	var schema map[string]any
-	if entryPointType == "bot" {
-		schema = targetVersion.Config.Schema.Bot
-	} else {
-		schema = targetVersion.Config.Schema.Backtest
-	}
+	// Get the bot schema
+	schema := targetVersion.Config.Schema.Bot
 
 	if schema == nil || len(schema) == 0 {
-		blue.Printf("📄 No %s schema found for custom bot '%s' version '%s'\n", entryPointType, customBotName, version)
+		blue.Printf("📄 No schema found for custom bot '%s' version '%s'\n", customBotName, version)
 		return
 	}
 
@@ -344,7 +332,7 @@ func getCustomBotSchema(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	green.Printf("📄 Schema for custom bot '%s' version '%s' (%s entry point):\n\n", customBotName, version, entryPointType)
+	green.Printf("📄 Schema for custom bot '%s' version '%s':\n\n", customBotName, version)
 	fmt.Println(string(schemaJSON))
 }
 
