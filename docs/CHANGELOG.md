@@ -7,23 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-
-- Backtest CLI commands documentation (`the0-CLI/backtest-commands.md`)
-- Backtesting terminology page (`terminology/backtesting.md`)
-- Backtesting implementation guide (`custom-bot-development/backtesting.md`)
-- Backtest entry points and schemas from configuration documentation
-- Backtest file references from bot structure examples
-- Backtest entry point documentation from overview
-- Backtest links from navigation and related pages
-- Backtest mentions from testing documentation
-- Backtest validation from compliance checklist
-- Backtest files from deployment checklist
-- "Backtesting" from platform features in welcome page
-
 ### Changed
 
-- Updated custom bot configuration examples to remove backtest entrypoints
-- Updated bot structure examples to show only required files
-- Updated testing documentation to focus on unit and integration tests
-- Updated terminology pages to reflect current platform capabilities
+- **Migrated from Next.js to VitePress** - Simplified documentation framework
+- Updated dark/light mode colors to match frontend exactly
+- Simplified home page to documentation index (removed hero layout)
+- Updated deployment documentation to remove marketplace publishing references
+
+### Added
+
+- VitePress configuration with sidebar navigation and local search
+- Custom theme with the0 brand colors
+- `llms.txt` for AI tool parseability
+- `netlify.toml` for Netlify deployment
+- `nginx.conf` for local Docker serving
+
+### Removed
+
+- Next.js framework and all React components
+- Custom documentation services (file-system.ts, search-service.ts)
+- shadcn/ui components
+- Compliance section and 0vers33r references
+- Marketplace publishing documentation
+- Backtest CLI commands documentation
+- Backtesting terminology and implementation guides
+
+## [0.1.0] - 2024-12-02
+
+### Added
+
+- Initial documentation site with Next.js 15
+- Custom bot development guides
+- CLI documentation
+- Terminology section
