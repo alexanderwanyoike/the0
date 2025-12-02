@@ -14,6 +14,7 @@ import { ActionButtons } from "@/components/custom-bots/action-buttons";
 import { ReadmeComponent } from "@/components/custom-bots/readme-component";
 import { LoadingState } from "@/components/custom-bots/loading-detail-state";
 import { AIReviewSection } from "@/components/custom-bots/ai-review-section";
+import { SchemaDisplay } from "@/components/custom-bots/schema-display";
 
 export const CustomBotDetailPage = ({ botName }: any) => {
   const router = useRouter();
@@ -115,6 +116,12 @@ export const CustomBotDetailPage = ({ botName }: any) => {
           <AIReviewSection
             review={currentBotView.review}
             status={currentBotView.status}
+          />
+
+          {/* Schema Display Section */}
+          <SchemaDisplay
+            schema={currentBotView.config?.schema?.bot}
+            botName={bot.name}
           />
 
           {/* README Section - Show if available in review or config */}
