@@ -142,9 +142,9 @@ func deployBot(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	fmt.Println("Bot uploaded to the plaform ⚡")
+	fmt.Println("Bot uploaded to the platform ⚡")
 	fmt.Printf("'%s' v%s deployed successfully\n", config.Name, config.Version)
-	fmt.Println("Awaiting review by the 0vers33r 👀")
+	fmt.Println("Your bot is ready for deployment 🚀")
 }
 
 func NewCustomBotListCmd() *cobra.Command {

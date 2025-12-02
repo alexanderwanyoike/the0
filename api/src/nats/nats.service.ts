@@ -77,15 +77,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      // Create stream for specific event patterns (avoid wildcards that require no-ack)
+      // Create stream for bot lifecycle events
       await this.jetStreamManager.streams.add({
         name: "THE0_EVENTS",
         subjects: [
-          "custom-bot.submitted",
-          "custom-bot.approved",
-          "custom-bot.declined",
-          "custom-bot.awaiting-human-review",
-          "custom-bot.analysis-failed",
           "the0.bot.created",
           "the0.bot.updated",
           "the0.bot.deleted",

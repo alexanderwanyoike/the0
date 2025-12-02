@@ -38,7 +38,6 @@ Fixes #
 - [ ] Runtime (Bot execution services)
 - [ ] CLI (Command-line tool)
 - [ ] AI Service (the0-ai)
-- [ ] 0vers33r (Security analyzer)
 - [ ] Infrastructure (Docker/K8s)
 - [ ] Documentation
 

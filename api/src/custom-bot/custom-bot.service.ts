@@ -2,7 +2,6 @@ import { Injectable } from "@nestjs/common";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
-import { NatsService } from "@/nats/nats.service";
 
 import {
   CustomBotConfig,
@@ -16,7 +15,6 @@ export class CustomBotService {
   constructor(
     private readonly customBotRepository: CustomBotRepository,
     private readonly storageService: StorageService,
-    private readonly natsService: NatsService,
   ) {}
 
   async createCustomBot(
@@ -74,7 +72,7 @@ export class CustomBotService {
         version: config.version,
         config,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: "active",
       };
 
       const result = await this.customBotRepository.createNewGlobalVersion(
@@ -82,47 +80,14 @@ export class CustomBotService {
         botData,
       );
 
-      // Refetch the created bot
       if (!result.success) {
         return Failure(result.error);
       }
 
-      const createdBotResult =
-        await this.customBotRepository.getSpecificGlobalVersion(
-          config.name,
-          config.version,
-        );
-
-      // Publish custom-bot.submitted event for 0vers33r analysis
-      if (createdBotResult.success) {
-        const customBotSubmittedEvent = {
-          type: "custom-bot.submitted",
-          botId: createdBotResult.data.id,
-          name: config.name,
-          userId: userId,
-          filePath: filePath,
-          config: config,
-          timestamp: new Date().toISOString(),
-        };
-
-        const publishResult = await this.natsService.publish(
-          "custom-bot.submitted",
-          customBotSubmittedEvent,
-        );
-
-        if (!publishResult.success) {
-          console.error(
-            "Failed to publish custom-bot.submitted event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
-          );
-        }
-      }
-
-      return createdBotResult;
+      return await this.customBotRepository.getSpecificGlobalVersion(
+        config.name,
+        config.version,
+      );
     } catch (error: any) {
       console.log("Error creating custom bot:", error);
       return Failure(`Failed to create custom bot: ${error.message}`);
@@ -231,7 +196,7 @@ export class CustomBotService {
         version: config.version,
         config,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: "active",
       };
 
       const customBot = await this.customBotRepository.createNewGlobalVersion(
@@ -243,41 +208,10 @@ export class CustomBotService {
         return Failure(customBot.error);
       }
 
-      const createdBotResult =
-        await this.customBotRepository.getSpecificGlobalVersion(
-          config.name,
-          config.version,
-        );
-
-      if (createdBotResult.success) {
-        const customBotSubmittedEvent = {
-          type: "custom-bot.submitted",
-          botId: createdBotResult.data.id,
-          name: config.name,
-          userId: userId,
-          filePath: filePath,
-          config: config,
-          timestamp: new Date().toISOString(),
-        };
-
-        const publishResult = await this.natsService.publish(
-          "custom-bot.submitted",
-          customBotSubmittedEvent,
-        );
-
-        if (!publishResult.success) {
-          console.error(
-            "Failed to publish custom-bot.submitted event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
-          );
-        }
-      }
-
-      return createdBotResult;
+      return await this.customBotRepository.getSpecificGlobalVersion(
+        config.name,
+        config.version,
+      );
     } catch (error: any) {
       console.log("Error updating custom bot:", error);
       return Failure(`Failed to update custom bot: ${error.message}`);

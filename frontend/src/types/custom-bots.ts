@@ -1,27 +1,10 @@
-// Custom Bot Review Interface
 import { BotSchema } from "@/lib/api/api-client";
 
-export type CustomBotStatus =
-  | "pending_review"
-  | "approved"
-  | "declined"
-  | "awaiting_human_review";
+export type CustomBotStatus = "active";
 
-export interface CustomBotReview {
-  reviewedBy: string;
-  threatSummary: {
-    threatLevel: "none" | "low" | "medium" | "high" | "critical";
-  };
-  score: number;
-  reason: string;
-  issues: string[];
-  scannedFiles: string[];
-  reviewedAt?: Date;
-  overseerBadge?: string;
-  readme?: string; // README content extracted during scanning
-}
 export type BotType = "scheduled" | "realtime" | "event";
 export type Runtime = "python3.11" | "nodejs20";
+
 // Custom Bot Configuration
 export interface CustomBotConfig {
   name: string;
@@ -40,7 +23,7 @@ export interface CustomBotConfig {
   metadata?: {
     [key: string]: any;
   };
-  readme?: string; // README content from config
+  readme?: string;
 }
 
 // Individual Version of a Custom Bot
@@ -52,7 +35,6 @@ export interface CustomBotVersion {
   status: CustomBotStatus;
   config: CustomBotConfig;
   filePath: string;
-  review?: CustomBotReview; // Each version can have its own review
 }
 
 // Custom Bot with All Versions
@@ -66,7 +48,7 @@ export interface CustomBotWithVersions {
   updatedAt: Date;
 }
 
-// Single Custom Bot Document (from Firestore)
+// Single Custom Bot Document
 export interface CustomBot {
   id: string;
   name: string;
@@ -75,7 +57,6 @@ export interface CustomBot {
   status: CustomBotStatus;
   config: CustomBotConfig;
   filePath: string;
-  review?: CustomBotReview;
   createdAt: Date;
   updatedAt: Date;
 }

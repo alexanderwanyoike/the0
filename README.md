@@ -161,7 +161,6 @@ graph TB
         end
         
         subgraph "Supporting Services"
-            SA[🔍 Security Analyzer<br/>Python, YARA<br/>Code analysis]
             AI[🤖 AI Assistant<br/>Python, FastAPI<br/>Development helper]
         end
         
@@ -191,13 +190,11 @@ graph TB
     %% Runtime services
     NATS -->|Events| BR
     NATS -->|Events| BS
-    NATS -->|Events| SA
 
     BR -->|State| MONGO
     BS -->|Schedules| MONGO
 
     BR -->|Logs| MINIO
-    SA -->|Analysis| MINIO
     
     %% Styling
     classDef userClass fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
@@ -211,7 +208,7 @@ graph TB
     class WEB,CLI clientClass
     class API apiClass
     class BR,BS runtimeClass
-    class SA,AI serviceClass
+    class AI serviceClass
     class PG,MONGO,NATS,MINIO dataClass
 ```
 
@@ -226,8 +223,6 @@ graph TB
 **⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
 - **Bot Runner**: Real-time trading bot execution
 - **Bot Scheduler**: Cron-based scheduled execution
-
-**🔍 Security Analyzer** - Python service with YARA rules for automated security analysis of user-submitted bot code
 
 **🤖 AI Assistant** - Standalone service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
 
