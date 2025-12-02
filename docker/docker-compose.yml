@@ -365,8 +365,7 @@ services:
     environment:
       # API configuration (runtime)
       BOT_API_URL: http://the0-api:3000
-      AI_AGENT_API_URL: http://the0-ai-agent:8000
-      
+
       # CLI download configuration
       CLI_DOWNLOAD_BASE_URL: https://github.com/your-org/the0-oss/releases/download
       CLI_INSTALL_BASE_URL: http://localhost:3001
@@ -438,56 +437,6 @@ services:
       - postgres
     profiles:
       - dev
-    networks:
-      - the0-network
-
-  # the0 AI Agent Service
-  the0-ai-agent:
-    build:
-      context: ../services/the0-ai
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-    pull_policy: always
-    environment:
-      # Database configuration
-      DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss
-
-      # NATS configuration
-      NATS_URL: nats://nats:4222
-
-      # MinIO configuration
-      MINIO_ENDPOINT: minio:9000
-      MINIO_USE_SSL: "false"
-      MINIO_ACCESS_KEY: the0admin
-      MINIO_SECRET_KEY: the0password
-      CUSTOM_BOTS_BUCKET: custom-bots
-      AI_ARTIFACTS_BUCKET: ai-artifacts
-
-      # Documentation API configuration
-      DOCS_ENDPOINT: http://the0-docs:3000
-      USER_DOCS_URL: http://localhost:3002
-
-      # Service configuration
-      PYTHONPATH: /app
-      PYTHONUNBUFFERED: "1"
-      
-    ports:
-      - "8003:8000"  # AI Agent API
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8000/health\", timeout=5)' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
     networks:
       - the0-network
 

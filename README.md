@@ -159,11 +159,7 @@ graph TB
             BR[⚡ Bot Runner<br/>Go, gRPC<br/>Real-time execution]
             BS[⏰ Bot Scheduler<br/>Go, gRPC<br/>Cron execution]
         end
-        
-        subgraph "Supporting Services"
-            AI[🤖 AI Assistant<br/>Python, FastAPI<br/>Development helper]
-        end
-        
+
         subgraph "Data Layer"
             PG[(🐘 PostgreSQL<br/>Users, bots, auth)]
             MONGO[(🍃 MongoDB<br/>Runtime state, logs)]
@@ -201,14 +197,12 @@ graph TB
     classDef clientClass fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
     classDef apiClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef runtimeClass fill:#fff8e1,stroke:#f57c00,stroke-width:2px
-    classDef serviceClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     classDef dataClass fill:#e0f2f1,stroke:#00695c,stroke-width:2px
-    
+
     class DEV,TRADER userClass
     class WEB,CLI clientClass
     class API apiClass
     class BR,BS runtimeClass
-    class AI serviceClass
     class PG,MONGO,NATS,MINIO dataClass
 ```
 
@@ -223,8 +217,6 @@ graph TB
 **⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
 - **Bot Runner**: Real-time trading bot execution
 - **Bot Scheduler**: Cron-based scheduled execution
-
-**🤖 AI Assistant** - Standalone service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
 
 **💾 Data Architecture** - Multi-database approach:
 - **PostgreSQL**: User accounts, bot definitions, authentication

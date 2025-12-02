@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- AI Agent Workbench feature and all related code
+  - AI Agent page (`/ai-agent`) and session pages
+  - AI Agent API proxy routes (`/api/ai-agent/*`)
+  - AI Agent components (chat, settings, artifacts, setup, layout)
+  - AI Agent hooks (useChat, useChatSessions, useStreamingChat, useArtifacts, etc.)
+  - AI Agent stores (chatStore, artifactsStore, settingsStore, themeStore)
+  - AI Agent API service (`/lib/ai-agent/api.ts`)
+  - AI Agent types (`/types/ai-agent.ts`)
+  - Artifact ZIP generator utility (`/lib/zipGenerator.ts`)
+  - AI Agent navigation item from dashboard sidebar
+  - `aiAgentUrl` configuration from config.ts
+
 - Deploy page (`/deploy/[name]/[version]`) - Bot deployment now exclusively via CLI
 - Deploy form components (`form-generator`, `bot-update-confirmation-dialog`, `bot-documentation`)
 - "Deploy Bot" button from custom bot detail page
