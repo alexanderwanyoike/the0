@@ -2,7 +2,7 @@ name: Frontend Service
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'release-*' ]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
@@ -35,10 +35,9 @@ jobs:
       working-directory: ./frontend
       run: yarn install --frozen-lockfile
 
-    # TODO: Re-enable tests once they are fixed
-    # - name: Run tests
-    #   working-directory: ./frontend
-    #   run: yarn test
+    - name: Run tests
+      working-directory: ./frontend
+      run: yarn test --passWithNoTests
 
     - name: Build application
       working-directory: ./frontend
