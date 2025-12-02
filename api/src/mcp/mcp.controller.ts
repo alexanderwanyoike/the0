@@ -369,31 +369,6 @@ export class McpController {
         },
       },
 
-      // Analysis Tools
-      {
-        name: "analyze_bot_health",
-        description:
-          "Analyze recent logs to determine bot health status and identify issues",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID to analyze",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-      {
-        name: "analyze_performance",
-        description: "Generate a performance summary across all deployed bots",
-        inputSchema: {
-          type: "object",
-          properties: {},
-          required: [],
-        },
-      },
     ];
   }
 }

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- MCP (Model Context Protocol) server for Claude Code integration (#61)
+  - JSON-RPC 2.0 HTTP transport at `POST /mcp`
+  - 12 MCP tools across 4 categories:
+    - Auth: `auth_status`
+    - Bot Instance: `bot_list`, `bot_get`, `bot_deploy`, `bot_update`, `bot_delete`
+    - Logs: `logs_get`, `logs_summary`
+    - Custom Bot: `custom_bot_list`, `custom_bot_get`, `custom_bot_schema`
+  - API key authentication via `x-api-key` header
+  - Comprehensive test coverage (28 new tests)
+- `getAllGlobalCustomBots()` method to list all custom bots globally
+- `getGlobalLatestVersion()` method to get latest version of a custom bot
 - Structured logging with `nestjs-pino` (#70)
   - Added `LoggerModule` with environment-aware configuration (pretty in dev, JSON in prod)
   - Added `pino-http` for automatic HTTP request/response logging with timing

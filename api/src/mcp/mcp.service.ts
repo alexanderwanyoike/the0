@@ -14,9 +14,6 @@ import {
   LogsGetInput,
   CustomBotGetInput,
   CustomBotSchemaInput,
-  AnalyzeBotHealthInput,
-  BotHealthAnalysis,
-  PerformanceAnalysis,
 } from "./mcp.types";
 import { BotRepository } from "@/bot/bot.repository";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
@@ -255,32 +252,6 @@ export class McpService {
         },
       },
 
-      // Analysis Tools
-      {
-        name: MCP_TOOL_NAMES.ANALYZE_BOT_HEALTH,
-        description:
-          "Analyze recent logs to determine bot health status and identify issues",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID to analyze",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-      {
-        name: MCP_TOOL_NAMES.ANALYZE_PERFORMANCE,
-        description:
-          "Generate a performance summary across all deployed bots",
-        inputSchema: {
-          type: "object" as const,
-          properties: {},
-          required: [],
-        },
-      },
     ];
   }
 
@@ -357,17 +328,6 @@ export class McpService {
           result = await this.handleCustomBotSchema(
             args as unknown as CustomBotSchemaInput,
           );
-          break;
-
-        case MCP_TOOL_NAMES.ANALYZE_BOT_HEALTH:
-          result = await this.handleAnalyzeBotHealth(
-            args as unknown as AnalyzeBotHealthInput,
-            userId,
-          );
-          break;
-
-        case MCP_TOOL_NAMES.ANALYZE_PERFORMANCE:
-          result = await this.handleAnalyzePerformance(userId);
           break;
 
         default:
@@ -617,127 +577,6 @@ export class McpService {
       name: result.data.name,
       version: result.data.version,
       schema: result.data.config?.schema?.bot || {},
-    };
-  }
-
-  // Analysis Handlers
-  private async handleAnalyzeBotHealth(
-    input: AnalyzeBotHealthInput,
-    userId?: string,
-  ): Promise<BotHealthAnalysis> {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-
-    // Get recent logs - use today's date as default
-    const today = new Date();
-    const todayStr =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
-
-    const logsResult = await this.logsService.getLogs(input.bot_id, {
-      date: todayStr,
-      limit: 50,
-      offset: 0,
-    });
-
-    if (!logsResult.success) {
-      return {
-        bot_id: input.bot_id,
-        status: "unknown",
-        recent_errors: 0,
-        summary: "Unable to retrieve logs for analysis",
-      };
-    }
-
-    const logs = logsResult.data || [];
-    const errorCount = logs.filter(
-      (log) =>
-        log.content?.toLowerCase().includes("error") ||
-        log.content?.toLowerCase().includes("failed") ||
-        log.content?.toLowerCase().includes("exception"),
-    ).length;
-
-    const lastRun = logs.length > 0 ? logs[0].date : undefined;
-
-    // Determine health status
-    let status: BotHealthAnalysis["status"];
-    let summary: string;
-
-    if (logs.length === 0) {
-      status = "unknown";
-      summary = "No recent logs found. The bot may not have run recently.";
-    } else if (errorCount === 0) {
-      status = "healthy";
-      summary = `Bot is running smoothly. ${logs.length} recent log entries with no errors.`;
-    } else if (errorCount <= 3) {
-      status = "degraded";
-      summary = `Bot has some issues. Found ${errorCount} errors in ${logs.length} recent log entries.`;
-    } else {
-      status = "failing";
-      summary = `Bot is experiencing significant issues. Found ${errorCount} errors in ${logs.length} recent log entries.`;
-    }
-
-    return {
-      bot_id: input.bot_id,
-      status,
-      recent_errors: errorCount,
-      last_run: lastRun,
-      summary,
-    };
-  }
-
-  private async handleAnalyzePerformance(
-    userId?: string,
-  ): Promise<PerformanceAnalysis> {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-
-    const botsResult = await this.botRepository.findAll(userId);
-    if (!botsResult.success) {
-      throw new Error(botsResult.error || "Failed to retrieve bots");
-    }
-
-    const bots = botsResult.data || [];
-    const totalBots = bots.length;
-
-    // Analyze each bot's health
-    const healthStatuses: Record<string, number> = {
-      healthy: 0,
-      degraded: 0,
-      failing: 0,
-      unknown: 0,
-    };
-
-    for (const bot of bots.slice(0, 10)) {
-      // Limit to 10 to prevent too many calls
-      const health = await this.handleAnalyzeBotHealth(
-        { bot_id: bot.id },
-        userId,
-      );
-      healthStatuses[health.status]++;
-    }
-
-    const activeBots = healthStatuses.healthy + healthStatuses.degraded;
-
-    let summary: string;
-    if (totalBots === 0) {
-      summary = "No bots deployed. Deploy your first bot to get started.";
-    } else if (healthStatuses.failing > 0) {
-      summary = `${healthStatuses.failing} of ${totalBots} bots are failing and need attention.`;
-    } else if (healthStatuses.degraded > 0) {
-      summary = `${healthStatuses.degraded} of ${totalBots} bots have minor issues. Overall system is operational.`;
-    } else {
-      summary = `All ${totalBots} bots are running healthy.`;
-    }
-
-    return {
-      total_bots: totalBots,
-      active_bots: activeBots,
-      bots_by_status: healthStatuses,
-      summary,
     };
   }
 

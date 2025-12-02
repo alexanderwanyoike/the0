@@ -28,8 +28,6 @@ The API includes a built-in MCP (Model Context Protocol) server that enables AI 
 | **Custom Bot** | `custom_bot_list` | List available custom bots |
 | | `custom_bot_get` | Get custom bot details |
 | | `custom_bot_schema` | Get JSON schema for bot configuration |
-| **Analysis** | `analyze_bot_health` | Analyze bot health from recent logs |
-| | `analyze_performance` | Performance summary across all bots |
 
 ### Claude Code Configuration
 
@@ -73,9 +71,9 @@ curl -X POST http://localhost:3000/mcp \
 Once configured, you can ask Claude Code to:
 
 - "List my deployed bots"
-- "Check the health of bot xyz-123"
 - "Show me the logs for my trading bot"
 - "What custom bots are available?"
+- "Get the configuration schema for bot-name"
 - "Deploy a new scheduled bot with this configuration"
 
 ## Prerequisites

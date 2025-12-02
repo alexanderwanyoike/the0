@@ -47,13 +47,6 @@ export interface CustomBotSchemaInput {
   version?: string;
 }
 
-export interface AnalyzeBotHealthInput {
-  bot_id: string;
-}
-
-export interface AnalyzePerformanceInput {
-  // No parameters needed - analyzes all bots
-}
 
 // Tool response types
 export interface BotSummary {
@@ -91,20 +84,6 @@ export interface CustomBotSummary {
   createdAt: string;
 }
 
-export interface BotHealthAnalysis {
-  bot_id: string;
-  status: "healthy" | "degraded" | "failing" | "unknown";
-  recent_errors: number;
-  last_run?: string;
-  summary: string;
-}
-
-export interface PerformanceAnalysis {
-  total_bots: number;
-  active_bots: number;
-  bots_by_status: Record<string, number>;
-  summary: string;
-}
 
 // MCP Tool definition helper type
 export interface McpToolDefinition {
@@ -137,10 +116,6 @@ export const MCP_TOOL_NAMES = {
   CUSTOM_BOT_LIST: "custom_bot_list",
   CUSTOM_BOT_GET: "custom_bot_get",
   CUSTOM_BOT_SCHEMA: "custom_bot_schema",
-
-  // Analysis
-  ANALYZE_BOT_HEALTH: "analyze_bot_health",
-  ANALYZE_PERFORMANCE: "analyze_performance",
 } as const;
 
 export type McpToolName = (typeof MCP_TOOL_NAMES)[keyof typeof MCP_TOOL_NAMES];
