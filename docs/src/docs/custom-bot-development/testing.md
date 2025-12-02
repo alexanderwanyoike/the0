@@ -32,10 +32,9 @@ Comprehensive testing is crucial for reliable trading bots. This guide covers te
 1. **Unit Tests**: Test individual functions and components
 2. **Integration Tests**: Test component interactions
 3. **Schema Tests**: Validate configuration schemas
-4. **Backtest Tests**: Validate backtesting logic
-5. **End-to-End Tests**: Test complete bot workflows
-6. **Performance Tests**: Test under various loads
-7. **Security Tests**: Validate security measures
+4. **End-to-End Tests**: Test complete bot workflows
+5. **Performance Tests**: Test under various loads
+6. **Security Tests**: Validate security measures
 
 ## Unit Testing
 
@@ -320,9 +319,8 @@ class TestBotSchemas(unittest.TestCase):
                 jsonschema.validate(config, self.bot_schema)
 ```
 
-### Other Aspect to consider when testing
+### Other Aspects to Consider When Testing
 
-- **Testing Backtesting Logic**: Ensure your backtesting logic correctly simulates trades and ensure it return the expected structure see [Backtesting](./backtesting) for more details.
 - **Test the unhappy path**: Always test for error conditions, such as API failures, invalid configurations, and edge cases.
 - **Profile Performance**: Use profiling tools to identify bottlenecks in your code. The [Overview](./overview) section outlines limitations that you will need to consider when testing your bot.
 
@@ -331,5 +329,4 @@ class TestBotSchemas(unittest.TestCase):
 ## Related Documentation
 
 - [Quick Start Guide](/docs/custom-bot-development/quick-start-guide) - Build your first bot
-- [Backtesting Guide](/docs/custom-bot-development/backtesting) - Implementing backtesting
 - [Overview](/docs/custom-bot-development/overview) - Understanding custom bot development

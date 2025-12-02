@@ -107,11 +107,9 @@ runtime: python3.11
 
 entrypoints:
   bot: main.py
-  backtest: backtest.py
 
 schema:
   bot: bot-schema.json
-  backtest: backtest-schema.json
 
 readme: README.md
 

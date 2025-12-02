@@ -54,11 +54,9 @@ runtime: python3.11 # or 'nodejs20'
 
 entrypoints:
   bot: main.py
-  backtest: backtest.py # Optional, for backtesting
 
 schema:
   bot: bot-schema.json
-  backtest: backtest-schema.json # Optional, for backtesting
 
 readme: README.md
 
@@ -163,7 +161,7 @@ Custom bot portfolio ready for deployment ⚡
 
 ### Get Custom Bot Schema
 
-Retrieve the JSON schema for bot or backtest configuration:
+Retrieve the JSON schema for bot configuration:
 
 ```bash
 the0 custom-bot schema bot 1.0.0 another-example-bot

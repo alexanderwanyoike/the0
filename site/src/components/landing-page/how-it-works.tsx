@@ -11,7 +11,7 @@ const steps = [
     icon: TestTube,
     title: "Test",
     description:
-      "Validate your strategies with comprehensive backtesting using historical data. Test different parameters, optimize performance, and ensure your algorithms work before deploying to live markets.",
+      "Validate your strategies with paper trading and unit tests. Test different parameters, optimize performance, and ensure your algorithms work before deploying to live markets.",
   },
   {
     icon: Container,

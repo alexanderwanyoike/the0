@@ -25,8 +25,8 @@ Custom Bots serve as reusable programs that:
 ### Key Components
 
 1. **bot-config.yaml**: The main configuration file defining the bot's metadata and structure
-2. **Entry Points**: The main execution functions for bot logic and backtesting
-3. **Schemas**: JSON Schema definitions for bot and backtest configuration
+2. **Entry Points**: The main execution functions for bot logic
+3. **Schemas**: JSON Schema definitions for bot configuration
 4. **Dependencies**: Language-specific dependency files (requirements.txt, package.json)
 
 ### Development Process

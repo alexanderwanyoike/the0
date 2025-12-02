@@ -157,7 +157,6 @@ graph TB
         
         subgraph "Runtime Services"
             BR[⚡ Bot Runner<br/>Go, gRPC<br/>Real-time execution]
-            BT[📈 Backtest Runner<br/>Go, gRPC<br/>Historical testing]
             BS[⏰ Bot Scheduler<br/>Go, gRPC<br/>Cron execution]
         end
         
@@ -191,16 +190,13 @@ graph TB
     
     %% Runtime services
     NATS -->|Events| BR
-    NATS -->|Events| BT  
     NATS -->|Events| BS
     NATS -->|Events| SA
-    
+
     BR -->|State| MONGO
-    BT -->|Jobs| MONGO
     BS -->|Schedules| MONGO
-    
+
     BR -->|Logs| MINIO
-    BT -->|Results| MINIO
     SA -->|Analysis| MINIO
     
     %% Styling
@@ -214,7 +210,7 @@ graph TB
     class DEV,TRADER userClass
     class WEB,CLI clientClass
     class API apiClass
-    class BR,BT,BS runtimeClass
+    class BR,BS runtimeClass
     class SA,AI serviceClass
     class PG,MONGO,NATS,MINIO dataClass
 ```
@@ -229,7 +225,6 @@ graph TB
 
 **⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
 - **Bot Runner**: Real-time trading bot execution
-- **Backtest Runner**: Historical strategy validation  
 - **Bot Scheduler**: Cron-based scheduled execution
 
 **🔍 Security Analyzer** - Python service with YARA rules for automated security analysis of user-submitted bot code
@@ -239,7 +234,7 @@ graph TB
 **💾 Data Architecture** - Multi-database approach:
 - **PostgreSQL**: User accounts, bot definitions, authentication
 - **MongoDB**: Runtime state, job queues, execution logs
-- **MinIO**: Bot code storage, logs, backtest results
+- **MinIO**: Bot code storage and logs
 - **NATS JetStream**: Event streaming and service coordination
 
 ### Key Benefits

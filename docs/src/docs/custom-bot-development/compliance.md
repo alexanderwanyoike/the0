@@ -207,7 +207,7 @@ response = requests.post("http://example.com/api/save", json=config)  # UNAUTHOR
 
 ```bash
 # Run local validation
-python -m py_compile main.py backtest.py
+python -m py_compile main.py
 python -c "import json; json.load(open('bot-schema.json'))"
 python -c "import yaml; yaml.safe_load(open('bot-config.yaml'))"
 

@@ -27,11 +27,9 @@ runtime: string # Required: python3.11 | nodejs20
 
 entrypoints: # Required: Entry point definitions
   bot: string # Required: Main bot file
-  backtest: string # Optional: Backtest file
 
 schema: # Required: Schema definitions
   bot: string # Required: Bot parameter schema file
-  backtest: string # Optional: Backtest parameter schema file
 
 readme: string # Required: Documentation file
 
@@ -72,13 +70,11 @@ readme: README.md
 ```yaml
 entrypoints:
   bot: main.py # Main trading logic
-  backtest: backtest.py # Backtesting logic (optional)
 ```
 
 **Entry Point Types:**
 
 - **bot**: Main execution entry point (required)
-- **backtest**: Backtesting entry point (recommended)
 - **webhook**: Webhook event handler (for event-driven bots)
 - **analysis**: Custom analysis functions
 - **custom**: Any additional entry points
@@ -88,7 +84,6 @@ entrypoints:
 ```yaml
 schema:
   bot: bot-schema.json
-  backtest: backtest-schema.json # Optional: if implementing backtesting
 ```
 
 Each entry point should have a corresponding schema file defining its parameters.
@@ -258,50 +253,6 @@ JSON schemas define the parameters your bot accepts and validate user inputs.
 ```
 
 For more information on JSON Schema, see the [JSON Schema documentation](https://json-schema.org/).
-
-### Backtest Schema Example (backtest-schema.json)
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "title": "Backtest Configuration",
-  "properties": {
-    "start_date": {
-      "type": "string",
-      "format": "date",
-      "description": "Backtest start date (YYYY-MM-DD)"
-    },
-    "end_date": {
-      "type": "string",
-      "format": "date",
-      "description": "Backtest end date (YYYY-MM-DD)"
-    },
-    "initial_balance": {
-      "type": "number",
-      "minimum": 0,
-      "default": 10000,
-      "description": "Starting balance for backtest"
-    },
-    "commission": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 0.01,
-      "default": 0.001,
-      "description": "Trading commission rate (0.001 = 0.1%)"
-    },
-    "slippage": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 0.01,
-      "default": 0.0005,
-      "description": "Slippage rate for realistic execution"
-    }
-  },
-  "required": ["start_date", "end_date"],
-  "additionalProperties": false
-}
-```
 
 ---
 

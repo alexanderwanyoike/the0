@@ -10,9 +10,9 @@ const features = [
     icon: Code,
   },
   {
-    title: "Custom Backtesting",
+    title: "Paper Trading",
     description:
-      "Implement your own backtesting logic using any libraries you prefer. Test strategies with historical data before going live.",
+      "Test your strategies risk-free with paper trading before going live. Validate your bots with simulated funds.",
     icon: TestTube,
   },
   {
