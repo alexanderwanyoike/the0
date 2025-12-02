@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
 import {
   connect,
   NatsConnection,
@@ -16,7 +17,11 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   private jetStreamManager: JetStreamManager | null = null;
   private readonly sc = StringCodec();
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectPinoLogger(NatsService.name)
+    private readonly logger: PinoLogger,
+  ) {}
 
   async onModuleInit() {
     await this.connect();
@@ -42,9 +47,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
       this.jetStreamManager = await this.connection.jetstreamManager();
 
-      console.log("✅ Connected to NATS server");
+      this.logger.info("Connected to NATS server");
     } catch (error) {
-      console.error("❌ Failed to connect to NATS:", error);
+      this.logger.error({ err: error }, "Failed to connect to NATS");
       throw error;
     }
   }
@@ -54,7 +59,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       await this.connection.close();
       this.connection = null;
       this.jetStreamManager = null;
-      console.log("🔌 Disconnected from NATS server");
+      this.logger.info("Disconnected from NATS server");
     }
   }
 
@@ -67,14 +72,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       // Try to delete existing stream first to recreate with new configuration
       try {
         await this.jetStreamManager.streams.delete("THE0_EVENTS");
-        console.log("🗑️ Deleted existing THE0_EVENTS stream");
       } catch (deleteError: any) {
-        if (!deleteError.message?.includes("stream not found")) {
-          console.warn(
-            "⚠️ Failed to delete existing stream:",
-            deleteError.message,
-          );
-        }
+        // Ignore "stream not found" errors
       }
 
       // Create stream for bot lifecycle events
@@ -93,9 +92,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         storage: StorageType.File,
       });
 
-      console.log("📡 NATS JetStream streams initialized");
+      this.logger.info("NATS JetStream initialized");
     } catch (error: any) {
-      console.error("❌ Failed to setup NATS streams:", error);
+      this.logger.error({ err: error }, "Failed to setup NATS streams");
       throw error;
     }
   }
@@ -113,7 +112,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       });
       return Ok(undefined);
     } catch (error: any) {
-      console.error(`Failed to publish to topic ${topic}:`, error);
+      this.logger.error({ err: error, topic }, "Failed to publish to topic");
       return Failure(error.message);
     }
   }

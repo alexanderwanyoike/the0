@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
@@ -15,6 +16,8 @@ export class CustomBotService {
   constructor(
     private readonly customBotRepository: CustomBotRepository,
     private readonly storageService: StorageService,
+    @InjectPinoLogger(CustomBotService.name)
+    private readonly logger: PinoLogger,
   ) {}
 
   async createCustomBot(
@@ -89,7 +92,7 @@ export class CustomBotService {
         config.version,
       );
     } catch (error: any) {
-      console.log("Error creating custom bot:", error);
+      this.logger.error({ err: error }, "Error creating custom bot");
       return Failure(`Failed to create custom bot: ${error.message}`);
     }
   }
@@ -213,7 +216,7 @@ export class CustomBotService {
         config.version,
       );
     } catch (error: any) {
-      console.log("Error updating custom bot:", error);
+      this.logger.error({ err: error }, "Error updating custom bot");
       return Failure(`Failed to update custom bot: ${error.message}`);
     }
   }
@@ -230,7 +233,7 @@ export class CustomBotService {
 
       return result;
     } catch (error: any) {
-      console.log("Error getting user custom bots:", error);
+      this.logger.error({ err: error }, "Error getting user custom bots");
       return Failure(`Failed to get user custom bots: ${error.message}`);
     }
   }

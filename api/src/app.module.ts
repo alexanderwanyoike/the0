@@ -8,6 +8,7 @@ import { CustomBotModule } from "./custom-bot/custom-bot.module";
 import { ApiKeyModule } from "./api-key/api-key.module";
 import { LogsModule } from "./logs/logs.module";
 import { NatsModule } from "./nats/nats.module";
+import { LoggerModule } from "./logger/logger.module";
 import configuration from "./config/configuration";
 
 @Module({
@@ -16,6 +17,7 @@ import configuration from "./config/configuration";
       load: [configuration],
       isGlobal: true,
     }),
+    LoggerModule,
     BotModule,
     AuthModule,
     CustomBotModule,

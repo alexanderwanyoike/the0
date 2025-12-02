@@ -2,6 +2,9 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { migrate as migrateSqlite } from "drizzle-orm/better-sqlite3/migrator";
 import { getDatabase, getDatabaseConfig } from "./connection";
 import { join } from "path";
+import pino from "pino";
+
+const logger = pino({ name: "migrations" });
 
 async function runMigrations() {
   const config = getDatabaseConfig();
@@ -9,19 +12,18 @@ async function runMigrations() {
   const migrationsPath =
     process.env.MIGRATIONS_PATH || join(__dirname, "migrations");
 
-  console.log(`Running migrations for ${config.type} database...`);
-  console.log(`Migration path: ${migrationsPath}`);
+  logger.info({ dbType: config.type, migrationsPath }, "Running migrations");
 
   try {
     if (config.type === "sqlite") {
       migrateSqlite(db, { migrationsFolder: migrationsPath });
-      console.log("✅ SQLite migrations completed successfully");
+      logger.info("SQLite migrations completed successfully");
     } else {
       await migrate(db, { migrationsFolder: migrationsPath });
-      console.log("✅ PostgreSQL migrations completed successfully");
+      logger.info("PostgreSQL migrations completed successfully");
     }
   } catch (error) {
-    console.error("❌ Migration failed:", error);
+    logger.error({ err: error }, "Migration failed");
     process.exit(1);
   }
 }
@@ -30,11 +32,11 @@ async function runMigrations() {
 if (require.main === module) {
   runMigrations()
     .then(() => {
-      console.log("🎉 Database migration completed");
+      logger.info("Database migration completed");
       process.exit(0);
     })
     .catch((error) => {
-      console.error("❌ Migration script failed:", error);
+      logger.error({ err: error }, "Migration script failed");
       process.exit(1);
     });
 }

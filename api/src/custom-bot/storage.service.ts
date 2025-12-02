@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
 import { Result, Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
@@ -9,7 +10,11 @@ export class StorageService {
   private minioClient: Minio.Client;
   private bucketName: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectPinoLogger(StorageService.name)
+    private readonly logger: PinoLogger,
+  ) {
     const endpoint =
       this.configService.get<string>("MINIO_ENDPOINT") || "localhost";
     const port = parseInt(
@@ -32,7 +37,7 @@ export class StorageService {
 
     // Ensure bucket exists on startup
     this.ensureBucket().catch((error) => {
-      console.error("Failed to ensure MinIO bucket exists:", error);
+      this.logger.error({ err: error }, "Failed to ensure MinIO bucket exists");
     });
   }
 
@@ -41,7 +46,7 @@ export class StorageService {
       const exists = await this.minioClient.bucketExists(this.bucketName);
       if (!exists) {
         await this.minioClient.makeBucket(this.bucketName);
-        console.log(`✅ Created MinIO bucket: ${this.bucketName}`);
+        this.logger.info({ bucket: this.bucketName }, "Created MinIO bucket");
       }
       return Ok(undefined);
     } catch (error) {
@@ -136,7 +141,7 @@ export class StorageService {
         },
       );
 
-      console.log(`✅ Uploaded bot file to MinIO: ${filePath}`);
+      this.logger.info({ filePath }, "Uploaded bot file to MinIO");
       return Ok(filePath);
     } catch (error) {
       return Failure(`Error uploading file: ${error.message}`);
