@@ -18,6 +18,9 @@ import (
 	"runtime/internal/util"
 )
 
+// Version is the current version of the runtime
+const Version = "1.0.0"
+
 var (
 	// Global flags
 	maxSegment uint
@@ -86,6 +89,15 @@ var botSchedulerWorkerCmd = &cobra.Command{
 	},
 }
 
+// Version command
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version number",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("the0-runtime version %s\n", Version)
+	},
+}
+
 func main() {
 	// Add persistent flags
 	rootCmd.PersistentFlags().UintVar(&maxSegment, "max-segment", 16, "Max segment for master node")
@@ -99,6 +111,8 @@ func main() {
 
 	rootCmd.AddCommand(botSchedulerCmd)
 	botSchedulerCmd.AddCommand(botSchedulerMasterCmd, botSchedulerWorkerCmd)
+
+	rootCmd.AddCommand(versionCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
