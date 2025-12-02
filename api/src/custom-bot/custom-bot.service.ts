@@ -272,4 +272,14 @@ export class CustomBotService {
       version,
     );
   }
+
+  async getGlobalLatestVersion(name: string): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.getGlobalLatestVersion(name);
+  }
+
+  async getAllGlobalCustomBots(): Promise<
+    Result<CustomBotWithVersions[], string>
+  > {
+    return await this.customBotRepository.getAllGlobalCustomBots();
+  }
 }

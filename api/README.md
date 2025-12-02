@@ -7,6 +7,76 @@ Theo API is the backend service for the0 automated trading platform. It is built
 - **Bot Validation**: Validate bot configurations against schemas retrieved from an external API.
 - **Configuration Management**: Centralized configuration using `@nestjs/config`.
 - **API Integration**: Communicates with external services using `@nestjs/axios`.
+- **MCP Server**: Model Context Protocol server for AI tool integration (Claude Code, etc.).
+
+## MCP Server (Claude Code Integration)
+
+The API includes a built-in MCP (Model Context Protocol) server that enables AI assistants like Claude Code to interact with the0 platform directly.
+
+### Available Tools
+
+| Category | Tool | Description |
+|----------|------|-------------|
+| **Auth** | `auth_status` | Check API key validity and connection status |
+| **Bot Instance** | `bot_list` | List all deployed bot instances |
+| | `bot_get` | Get details of a specific bot instance |
+| | `bot_deploy` | Deploy a new bot instance |
+| | `bot_update` | Update bot instance configuration |
+| | `bot_delete` | Delete a bot instance |
+| **Logs** | `logs_get` | Get execution logs for a bot |
+| | `logs_summary` | Get summarized log statistics |
+| **Custom Bot** | `custom_bot_list` | List available custom bots |
+| | `custom_bot_get` | Get custom bot details |
+| | `custom_bot_schema` | Get JSON schema for bot configuration |
+| **Analysis** | `analyze_bot_health` | Analyze bot health from recent logs |
+| | `analyze_performance` | Performance summary across all bots |
+
+### Claude Code Configuration
+
+#### Option 1: CLI Command
+
+```bash
+claude mcp add the0 --transport http http://localhost:3000/mcp
+```
+
+#### Option 2: Configuration File
+
+Add to your `.mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "the0": {
+      "url": "http://localhost:3000/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+For production deployments, replace `http://localhost:3000` with your API URL.
+
+### Authentication
+
+MCP tools that modify data require authentication via API key. Include the `x-api-key` header with your requests:
+
+```bash
+# Example: Test MCP endpoint
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+```
+
+### Example Usage with Claude Code
+
+Once configured, you can ask Claude Code to:
+
+- "List my deployed bots"
+- "Check the health of bot xyz-123"
+- "Show me the logs for my trading bot"
+- "What custom bots are available?"
+- "Deploy a new scheduled bot with this configuration"
 
 ## Prerequisites
 

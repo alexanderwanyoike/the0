@@ -308,4 +308,76 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
     return this.create(data);
   }
+
+  async getAllGlobalCustomBots(): Promise<
+    Result<CustomBotWithVersions[], string>
+  > {
+    try {
+      // Get all custom bots from the database
+      const records = await this.db
+        .select()
+        .from(this.table)
+        .orderBy(desc(this.table.createdAt));
+
+      if (records.length === 0) {
+        return Ok([]);
+      }
+
+      // Group bots by name
+      const botsByName = new Map<string, CustomBot[]>();
+      for (const record of records) {
+        const bot = this.transformRecordToData(record);
+        if (!botsByName.has(bot.name)) {
+          botsByName.set(bot.name, []);
+        }
+        botsByName.get(bot.name)!.push(bot);
+      }
+
+      // Transform each group to CustomBotWithVersions
+      const customBotsWithVersions: CustomBotWithVersions[] = [];
+
+      for (const [, bots] of botsByName) {
+        // Sort by creation date descending (latest first)
+        bots.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+        const latestBot = bots[0];
+
+        const versions: CustomBotVersion[] = bots.map((bot) => ({
+          id: bot.id,
+          version: bot.version,
+          config: bot.config,
+          userId: bot.userId,
+          filePath: bot.filePath,
+          status: bot.status,
+          createdAt: bot.createdAt,
+          updatedAt: bot.updatedAt,
+        }));
+
+        const customBotWithVersions: CustomBotWithVersions = {
+          id: latestBot.id,
+          name: latestBot.name,
+          userId: latestBot.userId,
+          latestVersion: latestBot.version,
+          versions,
+          createdAt: bots[bots.length - 1].createdAt, // First created
+          updatedAt: latestBot.updatedAt, // Latest updated
+        };
+
+        customBotsWithVersions.push(customBotWithVersions);
+      }
+
+      // Sort by latest update time descending
+      customBotsWithVersions.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+
+      return Ok(customBotsWithVersions);
+    } catch (error: any) {
+      return Failure(error.message);
+    }
+  }
 }
