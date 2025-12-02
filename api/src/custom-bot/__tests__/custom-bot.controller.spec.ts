@@ -362,8 +362,8 @@ describe("CustomBotController", () => {
                 version: "1.2.0",
                 description: "Advanced arbitrage trading bot",
               },
-              status: "approved",
-              marketplace: null,
+              status: "active",
+
               userId: "test-user-123",
               id: "bot-id",
               filePath: "gs://bucket/user123/my-arbitrage-bot/1.2.0/file.zip",
@@ -381,8 +381,8 @@ describe("CustomBotController", () => {
               filePath: "gs://bucket/user123/my-arbitrage-bot/1.1.0/file.zip",
               createdAt: new Date("2025-01-10T09:15:00.000Z"),
               updatedAt: new Date("2025-01-10T09:15:00.000Z"),
-              status: "approved",
-              marketplace: null,
+              status: "active",
+
               userId: "test-user-123",
               id: "bot-id",
             },
@@ -407,8 +407,8 @@ describe("CustomBotController", () => {
               filePath: "gs://bucket/user123/trend-follower/2.0.0/file.zip",
               createdAt: new Date("2025-01-12T14:20:00.000Z"),
               updatedAt: new Date("2025-01-12T14:20:00.000Z"),
-              status: "approved",
-              marketplace: null,
+              status: "active",
+
               userId: "test-user-123",
               id: "bot-id",
             },

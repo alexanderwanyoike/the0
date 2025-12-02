@@ -354,42 +354,6 @@ botScheduler:
         memory: 1Gi
         cpu: 1000m
 
-the0Analyzer:
-  enabled: true
-  replicas: 1
-  # Local image (default)
-  image:
-    repository: the0-analyzer
-    tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/the0-analyzer
-  #   tag: latest
-  env:
-    # NATS configuration
-    NATS_URL: "nats://the0-nats:4222"
-    
-    # MinIO configuration
-    MINIO_ENDPOINT: "the0-minio:9000"
-    MINIO_ACCESS_KEY: "the0admin"
-    MINIO_SECRET_KEY: "the0password"
-    MINIO_USE_SSL: "false"
-    CUSTOM_BOTS_BUCKET: "custom-bots"
-    
-    # Database configuration
-    DATABASE_URL: "postgresql://the0:the0_password@the0-postgres:5432/the0_oss?sslmode=disable"
-    
-    # Analyzer configuration
-    PYTHONPATH: "/app"
-    PYTHONUNBUFFERED: "1"
-  resources:
-    requests:
-      memory: 256Mi
-      cpu: 100m
-    limits:
-      memory: 512Mi
-      cpu: 500m
-
 the0AiAgent:
   enabled: true
   replicas: 1

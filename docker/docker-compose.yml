@@ -441,53 +441,6 @@ services:
     networks:
       - the0-network
 
-  # 0vers33r Security Analysis Service
-  the0-analyzer:
-    build:
-      context: ../services/0vers33r
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-    pull_policy: always
-    environment:
-      # NATS configuration
-      NATS_URL: nats://nats:4222
-      
-      # MinIO configuration  
-      MINIO_ENDPOINT: minio:9000
-      MINIO_USE_SSL: "false"
-      MINIO_ACCESS_KEY: the0admin
-      MINIO_SECRET_KEY: the0password
-      CUSTOM_BOTS_BUCKET: custom-bots
-      
-      # PostgreSQL configuration
-      DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss
-      
-      # AI Analysis configuration (optional)
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-}
-      
-      # Service configuration
-      PYTHONPATH: /app
-      PYTHONUNBUFFERED: "1"
-      
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import asyncio; from src.services.nats_client import NATSClient; asyncio.run(NATSClient().connect())' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-      - the0-network
-
   # the0 AI Agent Service
   the0-ai-agent:
     build:

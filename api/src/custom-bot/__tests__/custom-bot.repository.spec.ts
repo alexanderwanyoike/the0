@@ -1,9 +1,5 @@
 import { CustomBotRepository } from "../custom-bot.repository";
-import {
-  CustomBot,
-  CustomBotConfig,
-  MarketplaceMetadata,
-} from "../custom-bot.types";
+import { CustomBot, CustomBotConfig } from "../custom-bot.types";
 import { Result } from "@/common";
 
 // Mock Drizzle database and dependencies
@@ -277,10 +273,9 @@ describe("CustomBotRepository", () => {
             schema: { bot: {} },
             readme: "Advanced bot with multiple features",
           },
-          status: "approved",
+          status: "active",
           filePath: "/local/path/arbitrage-bot/2.0.0/file.zip",
           userId: "user123",
-          marketplace: null,
           createdAt: new Date("2023-02-01T10:00:00Z"),
           updatedAt: new Date("2023-02-01T10:00:00Z"),
         },
@@ -299,10 +294,9 @@ describe("CustomBotRepository", () => {
             schema: { bot: {} },
             readme: "Advanced bot with multiple features",
           },
-          status: "approved",
+          status: "active",
           filePath: "/local/path/arbitrage-bot/1.0.0/file.zip",
           userId: "user123",
-          marketplace: null,
           createdAt: new Date("2023-01-01T10:00:00Z"),
           updatedAt: new Date("2023-01-01T10:00:00Z"),
         },
@@ -355,10 +349,9 @@ describe("CustomBotRepository", () => {
             schema: { bot: {}, backtest: {} },
             readme: "Advanced trading bot with multiple features",
           },
-          status: "approved",
+          status: "active",
           filePath: "/local/path/trading-bot/2.1.0/file.zip",
           userId: "user123",
-          marketplace: null,
           createdAt: new Date("2023-03-15T10:00:00Z"),
           updatedAt: new Date("2023-03-15T10:00:00Z"),
         },
@@ -377,10 +370,9 @@ describe("CustomBotRepository", () => {
             schema: { bot: {}, backtest: {} },
             readme: "Basic trading bot with minimal features",
           },
-          status: "approved",
+          status: "active",
           filePath: "/local/path/trading-bot/2.0.0/file.zip",
           userId: "user123",
-          marketplace: null,
           createdAt: new Date("2023-01-15T10:00:00Z"),
           updatedAt: new Date("2023-01-15T10:00:00Z"),
         },
@@ -400,7 +392,7 @@ describe("CustomBotRepository", () => {
             schema: { bot: {} },
             readme: "Basic arbitrage bot with minimal features",
           },
-          status: "approved",
+          status: "active",
           filePath: "/local/path/arbitrage-bot/1.0.0/file.zip",
           userId: "user123",
           createdAt: new Date("2023-02-01T10:00:00Z"),

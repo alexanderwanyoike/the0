@@ -32,7 +32,7 @@ describe("BotController - Enhanced Tests", () => {
     version: "1.0.0",
     filePath: "gs://test-bucket/test-custom-bot",
     userId: "another-user-id",
-    status: "approved",
+    status: "active",
     createdAt: new Date(),
     updatedAt: new Date(),
     config: {
@@ -61,10 +61,6 @@ describe("BotController - Enhanced Tests", () => {
         exchanges: ["Binance"],
         tags: ["test", "bot"],
       },
-    },
-    marketplace: {
-      isPublished: true,
-      price: 0,
     },
   };
 

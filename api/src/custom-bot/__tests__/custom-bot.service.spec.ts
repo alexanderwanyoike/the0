@@ -8,9 +8,6 @@ import {
 } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { validateCustomBotConfigPayload } from "../custom-bot.schema";
-import { NatsService } from "@/nats/nats.service";
-import { ConfigService } from "@nestjs/config";
-// Removed StripeConnectService - not needed in OSS version
 
 // Mock dependencies
 jest.mock("../custom-bot.repository");
@@ -23,9 +20,6 @@ describe("CustomBotService", () => {
   let service: CustomBotService;
   let mockRepository: jest.Mocked<CustomBotRepository>;
   let mockStorageService: jest.Mocked<StorageService>;
-  let mockNatsService: jest.Mocked<NatsService>;
-  let mockConfigService: jest.Mocked<ConfigService>;
-  // Removed StripeConnectService mock - not needed in OSS version
   let mockValidateConfig: jest.MockedFunction<
     typeof validateCustomBotConfigPayload
   >;
@@ -80,10 +74,6 @@ describe("CustomBotService", () => {
       getUserCustomBots: jest.fn(),
     } as unknown as jest.Mocked<CustomBotRepository>;
 
-    mockConfigService = {
-      get: jest.fn(),
-    } as unknown as jest.Mocked<ConfigService>;
-
     mockStorageService = {
       validateZipStructure: jest.fn(),
       uploadBotFile: jest.fn(),
@@ -94,23 +84,11 @@ describe("CustomBotService", () => {
       ensureBucket: jest.fn(),
     } as unknown as jest.Mocked<StorageService>;
 
-    mockNatsService = {
-      isConnected: jest.fn(() => false),
-      connect: jest.fn(),
-      disconnect: jest.fn(),
-      publish: jest.fn(() => Promise.resolve(Ok(null))),
-      subscribe: jest.fn(),
-    } as unknown as jest.Mocked<NatsService>;
-
     mockValidateConfig = validateCustomBotConfigPayload as jest.MockedFunction<
       typeof validateCustomBotConfigPayload
     >;
 
-    service = new CustomBotService(
-      mockRepository,
-      mockStorageService,
-      mockNatsService,
-    );
+    service = new CustomBotService(mockRepository, mockStorageService);
   });
 
   afterEach(() => {
@@ -132,7 +110,7 @@ describe("CustomBotService", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        status: "pending_review",
+        status: "active",
         filePath:
           "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId,
@@ -301,7 +279,7 @@ describe("CustomBotService", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        status: "pending_review",
+        status: "active",
         filePath:
           "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId,
@@ -372,7 +350,7 @@ describe("CustomBotService", () => {
           version: "1.0.0",
           config: validConfig,
           filePath: "gs://old-path.zip",
-          status: "approved",
+          status: "active",
           userId,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -386,7 +364,7 @@ describe("CustomBotService", () => {
         name: "test-bot",
         version: "1.1.0",
         config: updateConfig,
-        status: "pending_review" as const,
+        status: "active" as const,
         filePath:
           "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
         userId,
@@ -545,7 +523,7 @@ describe("CustomBotService", () => {
           name: "test-bot",
           version: "2.0.0", // Higher than payload version
           config: validConfig,
-          status: "approved",
+          status: "active",
           filePath: "gs://old-path.zip",
           userId,
           createdAt: new Date(),
@@ -580,7 +558,7 @@ describe("CustomBotService", () => {
           name: "test-bot",
           version: "0.9.0",
           config: validConfig,
-          status: "approved",
+          status: "active",
           filePath: "gs://old-path.zip",
           userId,
           createdAt: new Date(),
@@ -616,7 +594,7 @@ describe("CustomBotService", () => {
           name: "test-bot",
           version: "0.9.0",
           config: validConfig,
-          status: "approved",
+          status: "active",
           filePath: "gs://old-path.zip",
           userId,
           createdAt: new Date(),
@@ -681,8 +659,7 @@ describe("CustomBotService", () => {
                 name: "arbitrage-bot",
                 version: "1.2.0",
               },
-              marketplace: null,
-              status: "approved",
+              status: "active",
               id: "bot-1",
               userId,
               filePath: "gs://bucket/arbitrage-bot/1.2.0/file.zip",
@@ -696,8 +673,7 @@ describe("CustomBotService", () => {
                 name: "arbitrage-bot",
                 version: "1.1.0",
               },
-              marketplace: null,
-              status: "approved",
+              status: "active",
               id: "bot-1",
               userId,
               filePath: "gs://bucket/arbitrage-bot/1.1.0/file.zip",
@@ -721,8 +697,7 @@ describe("CustomBotService", () => {
                 name: "trend-following-bot",
                 version: "2.0.0",
               },
-              marketplace: null,
-              status: "approved",
+              status: "active",
               id: "bot-1",
               userId,
               filePath: "gs://bucket/trend-following-bot/2.0.0/file.zip",
@@ -807,8 +782,7 @@ describe("CustomBotService", () => {
                 name: "multi-version-bot",
                 version: "3.0.0",
               },
-              marketplace: null,
-              status: "approved",
+              status: "active",
               id: "bot-1",
               userId,
               filePath: "gs://bucket/multi-version-bot/3.0.0/file.zip",
@@ -822,8 +796,7 @@ describe("CustomBotService", () => {
                 name: "multi-version-bot",
                 version: "2.1.0",
               },
-              marketplace: null,
-              status: "approved",
+              status: "active",
               id: "bot-1",
               userId,
               filePath: "gs://bucket/multi-version-bot/2.1.0/file.zip",
@@ -837,8 +810,7 @@ describe("CustomBotService", () => {
                 name: "multi-version-bot",
                 version: "1.0.0",
               },
-              marketplace: null,
-              status: "approved",
+              status: "active",
               id: "bot-1",
               userId,
               filePath: "gs://bucket/multi-version-bot/1.0.0/file.zip",
@@ -880,8 +852,7 @@ describe("CustomBotService", () => {
             filePath: "path1",
             createdAt: new Date(),
             updatedAt: new Date(),
-            marketplace: null,
-            status: "approved",
+            status: "active",
             id: "bot-1",
             userId,
           },
@@ -891,8 +862,7 @@ describe("CustomBotService", () => {
             filePath: "path2",
             createdAt: new Date(),
             updatedAt: new Date(),
-            marketplace: null,
-            status: "approved",
+            status: "active",
             id: "bot-1",
             userId,
           },
@@ -943,8 +913,7 @@ describe("CustomBotService", () => {
             filePath: "path1",
             createdAt: new Date(),
             updatedAt: new Date(),
-            marketplace: null,
-            status: "approved",
+            status: "active",
             id: "bot-1",
             userId: "any-user",
           },
@@ -974,7 +943,7 @@ describe("CustomBotService", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        status: "approved",
+        status: "active",
         filePath:
           "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId,
@@ -1030,7 +999,7 @@ describe("CustomBotService", () => {
         config: validConfig,
         filePath: "gs://test-bucket/test-bot/1.0.0/file.zip",
         userId: "any-user",
-        status: "approved",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
       } as CustomBot;

@@ -323,32 +323,8 @@ export class BotService {
     userId: string,
     customBot: CustomBot,
   ): Promise<Result<void, string>> {
-    try {
-      // Check if user is the owner of the custom bot
-      if (customBot.userId === userId) {
-        // User is the owner, check if the bot is approved
-        if (
-          customBot.status === "approved" ||
-          customBot.status === "published"
-        ) {
-          return { success: true, error: null, data: null };
-        } else {
-          return Failure(
-            "Your custom bot must be approved or published before deployment.",
-          );
-        }
-      }
-
-      // OSS version - all bots are free and accessible
-      // No need to check user ownership or payment in the open source version
-
-      return { success: true, error: null, data: null };
-    } catch (error: any) {
-      console.error("Error checking deployment authorization:", error);
-      return Failure(
-        `Failed to check deployment authorization: ${error.message}`,
-      );
-    }
+    // OSS version - all bots are deployable by their owners or anyone (free access)
+    return { success: true, error: null, data: null };
   }
 
   private getBotTypeFromConfig(customBot: CustomBot): BotType {

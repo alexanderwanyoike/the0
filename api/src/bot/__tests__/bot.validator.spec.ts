@@ -18,7 +18,7 @@ describe("BotValidator", () => {
       id: "test-bot",
       name: "test-bot",
       version: "1.0.0",
-      status: "pending_review",
+      status: "active",
       config: {
         name: "test-bot",
         description: "A test bot",
@@ -57,7 +57,7 @@ describe("BotValidator", () => {
       id: "test-non-scheduled-bot",
       name: "test-non-scheduled-bot",
       version: "1.0.0",
-      status: "pending_review",
+      status: "active",
       config: {
         name: "test-bot",
         description: "A test bot",
