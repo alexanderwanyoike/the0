@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - AI Agent Workbench feature and all related code
+
   - AI Agent page (`/ai-agent`) and session pages
   - AI Agent API proxy routes (`/api/ai-agent/*`)
   - AI Agent components (chat, settings, artifacts, setup, layout)
