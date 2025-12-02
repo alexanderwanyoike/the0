@@ -7,10 +7,11 @@ on:
       - 'runtime/**'
       - '.github/workflows/runtime.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'runtime/**'
       - '.github/workflows/runtime.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
