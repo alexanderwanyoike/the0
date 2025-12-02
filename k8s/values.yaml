@@ -143,7 +143,7 @@ the0Frontend:
   env:
     # Frontend configuration (using NodePort URLs)
     # Note: NEXT_PUBLIC_API_URL and NEXT_PUBLIC_DOCS_URL are set via build args in Makefile
-    # Note: BOT_API_URL and AI_AGENT_API_URL are dynamically constructed in the template
+    # Note: BOT_API_URL is dynamically constructed in the template
     NEXT_PUBLIC_APP_NAME: "the0"
     NEXT_PUBLIC_APP_VERSION: "1.0.0"
     NEXT_BASE_URL: "http://the0.local:30001"
@@ -354,49 +354,6 @@ botScheduler:
         memory: 1Gi
         cpu: 1000m
 
-the0AiAgent:
-  enabled: true
-  replicas: 1
-  # Local image (default)
-  image:
-    repository: the0-ai-agent
-    tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/the0-ai-agent
-  #   tag: latest
-  port: 8000
-  env:
-    # Database configuration
-    DATABASE_URL: "postgresql://the0:the0_password@the0-postgres:5432/the0_oss?sslmode=disable"
-
-    # NATS configuration
-    NATS_URL: "nats://the0-nats:4222"
-
-    # MinIO configuration
-    MINIO_ENDPOINT: "the0-minio:9000"
-    MINIO_ACCESS_KEY: "the0admin"
-    MINIO_SECRET_KEY: "the0password"
-    MINIO_USE_SSL: "false"
-    CUSTOM_BOTS_BUCKET: "custom-bots"
-    AI_ARTIFACTS_BUCKET: "ai-artifacts"`
-
-    # Documentation API configuration
-    DOCS_ENDPOINT: "http://the0-docs:3000"
-    USER_DOCS_URL: "http://localhost:3002"
-
-
-    # Service configuration
-    PYTHONPATH: "/app"
-    PYTHONUNBUFFERED: "1"
-  resources:
-    requests:
-      memory: 512Mi
-      cpu: 200m
-    limits:
-      memory: 1Gi
-      cpu: 1000m
-
 # Service configuration
 service:
   type: ClusterIP
@@ -409,10 +366,9 @@ externalServices:
   enabled: true
   nodePort:
     frontend: 30001  # the0.local:30001
-    api: 30000       # api.the0.local:30000  
+    api: 30000       # api.the0.local:30000
     minio: 30002     # minio.the0.local:30002
     docs: 30004      # docs.the0.local:30004
-    aiAgent: 30003   # ai-agent.the0.local:30003
 
 # Minikube configuration  
 minikube:

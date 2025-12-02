@@ -37,7 +37,6 @@ Fixes #
 - [ ] API (NestJS backend)
 - [ ] Runtime (Bot execution services)
 - [ ] CLI (Command-line tool)
-- [ ] AI Service (the0-ai)
 - [ ] Infrastructure (Docker/K8s)
 - [ ] Documentation
 
