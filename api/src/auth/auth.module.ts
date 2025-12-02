@@ -5,6 +5,7 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtStrategy } from "./jwt.strategy";
 import { ApiKeyModule } from "@/api-key/api-key.module";
+import { LoggerModule } from "@/logger/logger.module";
 
 @Global()
 @Module({
@@ -20,6 +21,7 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
       },
     }),
     ApiKeyModule,
+    LoggerModule,
   ],
   providers: [JwtStrategy, AuthService],
   exports: [PassportModule, JwtModule, AuthService],

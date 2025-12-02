@@ -8,6 +8,7 @@ import {
 } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { validateCustomBotConfigPayload } from "../custom-bot.schema";
+import { createMockLogger } from "@/test/mock-logger";
 
 // Mock dependencies
 jest.mock("../custom-bot.repository");
@@ -88,7 +89,8 @@ describe("CustomBotService", () => {
       typeof validateCustomBotConfigPayload
     >;
 
-    service = new CustomBotService(mockRepository, mockStorageService);
+    const mockLogger = createMockLogger();
+    service = new CustomBotService(mockRepository, mockStorageService, mockLogger as any);
   });
 
   afterEach(() => {

@@ -17,6 +17,8 @@ import { ApiKeyService } from "@/api-key/api-key.service";
 import { NatsService } from "@/nats/nats.service";
 // FeatureGateService removed for OSS version
 import { Ok } from "@/common/result";
+import { getLoggerToken } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 
 describe("BotController - Enhanced Tests", () => {
   let controller: BotController;
@@ -109,6 +111,10 @@ describe("BotController - Enhanced Tests", () => {
         {
           provide: REQUEST,
           useValue: { user: { uid } },
+        },
+        {
+          provide: getLoggerToken(BotService.name),
+          useValue: createMockLogger(),
         },
         // FeatureGateService removed for OSS version
       ],
