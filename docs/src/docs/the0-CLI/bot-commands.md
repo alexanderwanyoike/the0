@@ -61,7 +61,7 @@ Other parameters depend on the schema of the custom bot you are deploying.
 you can find out by running the following command:
 
 ```bash
-the0 custom-bot schema <bot|backtest> <version> <custom-bot-name>
+the0 custom-bot schema bot <version> <custom-bot-name>
 ```
 
 This will output the JSON schema for the bot configuration, which you can use to fill in the required parameters.
@@ -118,8 +118,6 @@ the0 custom-bot schema bot 1.0.0 another-example-bot
   "type": "object"
 }
 ```
-
-This can also be used to for backtest schemas
 
 ### List Bot Instances
 
@@ -219,6 +217,5 @@ For scheduled bots, use standard cron expressions:
 
 ## Related Commands
 
-- [Backtest Commands](/docs/the0-cli/backtest-commands) - Manage backtest instances
 - [Custom Bot Commands](/docs/the0-cli/custom-bot-commands) - Deploy your own bot templates and get schemas
 - [Authentication](/docs/the0-cli/authentication) - Set up API access

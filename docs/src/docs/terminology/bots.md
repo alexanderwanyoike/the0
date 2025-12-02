@@ -7,7 +7,7 @@ order: 1
 
 # Bots
 
-These are the actual trading bots instances that you create and run in the platform. They are can either be created on the platform or using the CLI and viewed on the [dashboard](/dashboard). Bots are instances of [Custom Bots](./custom-bots) that are deployed to the platform. They run independently and can be monitored, backtested, and managed through the platform.
+These are the actual trading bots instances that you create and run in the platform. They can either be created on the platform or using the CLI and viewed on the [dashboard](/dashboard). Bots are instances of [Custom Bots](./custom-bots) that are deployed to the platform. They run independently and can be monitored and managed through the platform.
 
 ---
 
@@ -39,7 +39,6 @@ Once deployed, a Bot:
 
 - **Logs**: Access to execution logs and debugging information
 - **Configuration**: Ability to update parameters without redeploying
-- **Backtesting**: Test modifications before applying to live trading
 
 ---
 

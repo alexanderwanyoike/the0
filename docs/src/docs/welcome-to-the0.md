@@ -6,7 +6,7 @@ order: 1
 
 # Welcome to the0
 
-The0 is an automated trading platform that allows users to **create**, **deploy**, and **manage** trading bots of all shapes and sizes. It allows developers to create custom bots in either Python or JavaScript, and provides a marketplace for developers to share and discover bots to traders. The platform also includes features for **backtesting**, **monitoring**, and **deploying** bots in a secure and compliant manner.
+The0 is an automated trading platform that allows users to **create**, **deploy**, and **manage** trading bots of all shapes and sizes. It allows developers to create custom bots in either Python or JavaScript, and provides a marketplace for developers to share and discover bots to traders. The platform includes features for **monitoring** and **deploying** bots in a secure and compliant manner.
 
 ## What is Algorithmic Trading?
 

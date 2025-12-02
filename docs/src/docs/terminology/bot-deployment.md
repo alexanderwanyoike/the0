@@ -72,7 +72,6 @@ During deployment, you must provide:
 
 - Always test with paper trading first
 - Review bot documentation thoroughly
-- If available, backtest the **shit** out of it
 - Understand all configuration parameters
 
 ---

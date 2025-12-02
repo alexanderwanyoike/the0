@@ -34,9 +34,7 @@ Ensure your bot directory contains all required files:
 my-bot/
 ├── bot-config.yaml          ✓ Required
 ├── main.py                  ✓ Required (or main.js)
-├── backtest.py              ✓ Optional (or backtest.js)
 ├── bot-schema.json          ✓ Required
-├── backtest-schema.json     ✓ Optional
 ├── README.md                ✓ Required
 ├── requirements.txt         ✓ Optional for Python
 ├── package.json             ✓ Optional for JavaScript
@@ -52,7 +50,6 @@ my-bot/
 - [ ] Dependencies properly specified
 - [ ] README documentation complete
 - [ ] Local testing successful
-- [ ] Backtesting implemented and tested
 
 ## Deployment Process
 

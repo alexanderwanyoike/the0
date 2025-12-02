@@ -24,9 +24,7 @@ Learn how to create, test, and deploy custom trading bots on the the0 platform. 
 
 - **[Overview](./overview)** - Understanding custom bot development
 - **[Testing and Debugging](./testing-and-debugging)** - Test your bots locally
-- **[Backtesting](./backtesting)** - Implementing backtesting
 
 ## Advanced Topics
 
-- **[Backtesting](./backtesting)** - Test strategies with historical data
 - **[Compliance](./compliance)** - Code review and platform requirements

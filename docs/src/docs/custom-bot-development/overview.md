@@ -18,7 +18,7 @@ Custom bots are the trading algorithms they:
 - Define trading strategies and logic
 - Accept configurable parameters
 - Can be deployed multiple times with different settings
-- Support backtesting and live trading
+- Support live trading
 - Can be shared or sold in the marketplace
 
 ## Development Philosophy
@@ -58,9 +58,7 @@ the0 provides execution models (how bots run) rather than trading strategies (wh
 custom-bot/
 ├── bot-config.yaml          # Bot metadata and configuration
 ├── main.py                  # Main bot execution logic
-├── backtest.py              # Backtesting implementation (optional)
 ├── bot-schema.json          # Bot parameter schema
-├── backtest-schema.json     # Backtest parameter schema (optional but needed when backtesting)
 ├── requirements.txt         # Python dependencies
 ├── vendor/                  # Vendored dependencies (auto-generated)
 ├── lib/                     # Your custom utilities
@@ -76,12 +74,10 @@ custom-bot/
 custom-bot/
 ├── bot-config.yaml          # Bot metadata and configuration
 ├── main.js                  # Main bot execution logic
-├── backtest.js              # Backtesting implementation (optional)
 ├── bot-schema.json          # Bot parameter schema
 ├── node_modules/            # Node.js dependencies
 ├── lib/                     # Your custom utilities
 ├── utils.js                 # Utility functions
-├── backtest-schema.json     # Backtest parameter schema (optional but needed when backtesting)
 └── package.json             # Node.js dependencies
 ```
 
@@ -137,62 +133,6 @@ module.exports = { main };
 
 ---
 
-### Backtest Entry Point
-
-##### Python
-
-```python
-def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Backtest the trading strategy.
-
-    Args:
-        id: Unique backtest run identifier
-        config: Backtest configuration
-
-    Returns:
-        Results with metrics, plots, and tables
-    """
-
-    # NOTE: The structure of the return value must match the this format
-    return {
-        "status": "success",
-        "results": {
-            "metrics": {...},
-            "plots": [...],
-            "tables": [...]
-        }
-    }
-```
-
-##### JavaScript
-
-```javascript
-function main(id, config) {
-    /**
-     * Backtest the trading strategy.
-     *
-     * @param {string} id - Unique backtest run identifier
-     * @param {Object} config - Backtest configuration
-     * @returns {Object} Results with metrics, plots, and tables
-     */
-
-    // NOTE: The structure of the return value must match the this format
-    return {
-        status: "success",
-        results: {
-            metrics: {...},
-            plots: [...],
-            tables: [...]
-        }
-    };
-}
-
-module.exports = { main };
-```
-
----
-
 ## Development Workflow
 
 ### 1. Planning
@@ -200,7 +140,6 @@ module.exports = { main };
 - Define your trading strategy
 - Identify required parameters
 - Choose execution model (scheduled/realtime)
-- Plan backtesting approach (optional)
 - Test your entry points locally
 
 ### 2. Local Development
@@ -211,14 +150,11 @@ module.exports = { main };
 # Develop locally
 code main.py
 code bot-schema.json
-code backtest.py  # Optional, if implementing backtesting
-code backtest-schema.json  # Optional, if implementing backtesting
 code requirements.txt  # Add dependencies
 code bot-config.yaml  # Define metadata
 
 # Test locally
 python main.py
-python backtest.py
 ```
 
 ### 3. Configuration
@@ -232,7 +168,6 @@ python backtest.py
 - Unit test your components
 - Test with various configurations
 - Validate schema compliance
-- Run backtests with historical data
 
 ### 5. Deployment
 
@@ -319,10 +254,9 @@ More information on bot types can be found in [Bot Types](./bot-types).
 
 ### Strategy Development
 
-1. **Backtesting**: Always backtest before live deployment
-2. **Paper Trading**: Test with simulated funds first
-3. **Risk Management**: Implement stop-losses and position limits
-4. **Monitoring**: Set up alerts for bot health and performance
+1. **Paper Trading**: Test with simulated funds first
+2. **Risk Management**: Implement stop-losses and position limits
+3. **Monitoring**: Set up alerts for bot health and performance
 
 ### User Experience
 

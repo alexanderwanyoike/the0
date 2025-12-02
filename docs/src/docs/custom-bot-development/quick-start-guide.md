@@ -76,11 +76,9 @@ runtime: python3.11
 
 entrypoints:
   bot: main.py
-  backtest: backtest.py
 
 schema:
   bot: bot-schema.json
-  backtest: backtest-schema.json
 
 readme: README.md
 
@@ -435,8 +433,6 @@ Congratulations! You've built and deployed your first trading bot. Here's what y
 2. Explore the [Custom Bot Page](/custom-bots) to review your custom bot publish it to the marketplace
 3. Experiment with different asset types (stocks, crypto)
 4. Modify the bot to implement more complex strategies (e.g., stop-loss, take-profit)
-5. Add backtesting functionality to evaluate your strategy with historical data
-
 This is just the tip of the iceberg! DCA is the `hello world` of trading bots. You can build much more complex strategies using the same principles.
 
 ## Advanced Features to Explore
