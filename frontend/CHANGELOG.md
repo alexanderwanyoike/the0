@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Deploy page (`/deploy/[name]/[version]`) - Bot deployment now exclusively via CLI
+- Deploy form components (`form-generator`, `bot-update-confirmation-dialog`, `bot-documentation`)
+- "Deploy Bot" button from custom bot detail page
+- "Update Config" button from running bot detail page (replaced with CLI instructions)
+
+### Added
+
+- Schema display component on custom bot detail page showing full JSON schema
+- "Deploy via CLI" modal with deployment commands, example config, and helpful CLI commands
+- "Update via CLI" modal on running bot detail page with update commands and bot ID copy functionality
+
+### Changed
+
+- Custom bot detail page now emphasizes CLI-first deployment workflow
+- Running bot detail page uses CLI modal instead of navigating to deploy form
+- Simplified action-buttons component by removing unused marketplace approval logic
+
 - Backtest pages (`/backtests`, `/backtests/create`, `/backtests/[id]`)
 - Backtest components (`backtest-creation-form`, `bot-selection-form`, `backtest-results`, `metrics-summary`, `plots-display`, `tables-display`)
 - Backtest hooks (`use-backtests`, `use-backtest`, `use-backtest-creation`, `use-combined-bot-search`, `use-backtest-sse`)
