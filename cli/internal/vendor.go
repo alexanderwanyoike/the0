@@ -95,7 +95,7 @@ func (vm *VendorManager) PerformVendoring() error {
 	blue := color.New(color.FgBlue)
 	green := color.New(color.FgGreen)
 
-	blue.Println("🔮 Installing Python dependencies...")
+	blue.Println("Installing Python dependencies...")
 
 	// Step 1: Pull Python image if needed
 	if err := vm.pullPythonImage(); err != nil {
@@ -123,7 +123,7 @@ func (vm *VendorManager) PerformVendoring() error {
 		return fmt.Errorf("failed to verify vendored files: %v", err)
 	}
 
-	green.Println("✓ Python dependencies installed successfully ⚡")
+	green.Println("v Python dependencies installed")
 	return nil
 }
 
@@ -132,7 +132,7 @@ func (vm *VendorManager) PerformNodeVendoring(hasTypeScript bool) error {
 	blue := color.New(color.FgBlue)
 	green := color.New(color.FgGreen)
 
-	blue.Println("⚡ Installing JavaScript dependencies...")
+	blue.Println("Installing JavaScript dependencies...")
 
 	// Step 1: Pull Node image if needed
 	if err := vm.pullNodeImage(); err != nil {
@@ -180,7 +180,7 @@ func (vm *VendorManager) PerformNodeVendoring(hasTypeScript bool) error {
 		yellow.Printf("⚠️ Warning: failed to cleanup node_modules backup: %v\n", err)
 	}
 
-	green.Println("✓ JavaScript dependencies installed successfully ⚡")
+	green.Println("v JavaScript dependencies installed")
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (vm *VendorManager) pullPythonImage() error {
 	}
 
 	blue := color.New(color.FgBlue)
-	blue.Printf("📥 Downloading Python trading engine: %s...\n", pythonImage)
+	blue.Printf("Pulling Docker image: %s...\n", pythonImage)
 
 	reader, err := vm.dockerClient.ImagePull(ctx, pythonImage, image.PullOptions{})
 	if err != nil {
@@ -254,7 +254,7 @@ func (vm *VendorManager) pullNodeImage() error {
 	}
 
 	blue := color.New(color.FgBlue)
-	blue.Printf("📥 Downloading JavaScript trading engine: %s...\n", nodeImage)
+	blue.Printf("Pulling Docker image: %s...\n", nodeImage)
 
 	reader, err := vm.dockerClient.ImagePull(ctx, nodeImage, image.PullOptions{})
 	if err != nil {
@@ -347,7 +347,7 @@ func (vm *VendorManager) runVendorContainer() (string, error) {
 				// Clean Docker log headers and display output
 				output := vm.cleanDockerLogOutput(buffer[:n])
 				if output != "" {
-					blue.Printf("🔮 %s", output)
+					blue.Printf("  %s", output)
 				}
 			}
 		}
@@ -461,7 +461,7 @@ func (vm *VendorManager) runNodeVendorContainer(hasTypeScript bool) (string, err
 				// Clean Docker log headers and display output
 				output := vm.cleanDockerLogOutput(buffer[:n])
 				if output != "" {
-					green.Printf("⚡ %s", output)
+					green.Printf("  %s", output)
 				}
 			}
 		}
@@ -860,7 +860,7 @@ func PerformVendoringIfNeeded(projectPath string) error {
 
 	// Perform Python vendoring if needed
 	if shouldVendorPython {
-		blue.Println("🐍 Python dependencies detected - starting installation...")
+		blue.Println("Python dependencies detected")
 		if err := vm.PerformVendoring(); err != nil {
 			red.Printf("⚠️ Python dependency installation failed: %v\n", err)
 			red.Println("⚠️ Cannot deploy bot without successfully compiled dependencies")
@@ -870,7 +870,7 @@ func PerformVendoringIfNeeded(projectPath string) error {
 
 	// Perform Node.js vendoring if needed
 	if shouldVendorNode {
-		blue.Println("⚡ JavaScript dependencies detected - starting installation...")
+		blue.Println("JavaScript dependencies detected")
 		hasTypeScript := vm.CheckTypeScriptFiles()
 		if err := vm.PerformNodeVendoring(hasTypeScript); err != nil {
 			red.Printf("⚠️ JavaScript dependency installation failed: %v\n", err)

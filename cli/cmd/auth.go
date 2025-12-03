@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"the0/internal"
+	"the0/internal/logger"
 )
 
 func NewAuthCmd() *cobra.Command {
@@ -68,59 +69,63 @@ Examples:
 }
 
 func authLogin(cmd *cobra.Command, args []string) {
-	fmt.Println("Jacking into the0...")
+	logger.StartSpinner("Logging in")
 
 	auth, err := internal.PromptForNewAPIKey()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Connection failed: %v\n", err)
+		logger.StopSpinnerWithError("Login failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ Access granted - welcome to the0")
-	fmt.Println("Ready to deploy trading bots")
+	logger.UpdateSpinner("Verifying API key")
 
 	// Test the key
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
 	if err := apiClient.TestAPIKey(auth); err != nil {
-		fmt.Printf("⚠️  Auth test failed: %v\n", err)
-		fmt.Println("Check your API key and permissions")
-	} else {
-		fmt.Println("✓ Connection verified")
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		logger.Print("Check your API key and permissions")
+		os.Exit(1)
 	}
+
+	logger.StopSpinnerWithSuccess("Logged in successfully")
+	logger.Verbose("API key saved to ~/.the0/auth.json")
 }
 
 func authStatus(cmd *cobra.Command, args []string) {
-	fmt.Println("Running system diagnostics...")
+	logger.StartSpinner("Checking authentication status")
 
 	auth, err := internal.LoadAuth()
 	if err != nil {
-		fmt.Println("No access codes detected. Run 'the0 auth login' to jack in")
+		logger.StopSpinnerWithError("Not logged in")
+		logger.Print("Run 'the0 auth login' to authenticate")
 		os.Exit(1)
 	}
-
-	fmt.Printf("Connected: %s\n", auth.CreatedAt.Format("2006-01-02 15:04:05"))
 
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
 	if err := apiClient.TestAPIKey(auth); err != nil {
-		fmt.Printf("Connection failed: %v\n", err)
-		fmt.Println("Run 'the0 auth login' to reconnect")
+		logger.StopSpinnerWithError("Connection failed")
+		logger.Error("%v", err)
+		logger.Print("Run 'the0 auth login' to reconnect")
 		os.Exit(1)
-	} else {
-		fmt.Println("✓ Connection active")
 	}
+
+	logger.StopSpinnerWithSuccess("Authenticated")
+	logger.Print("  Connected since: %s", auth.CreatedAt.Format("2006-01-02 15:04:05"))
 }
 
 func authLogout(cmd *cobra.Command, args []string) {
 	if err := internal.RemoveAuth(); err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("No credentials found")
+			logger.Info("No credentials found")
 		} else {
-			fmt.Fprintf(os.Stderr, "Failed to clear credentials: %v\n", err)
+			logger.Error("Failed to clear credentials: %v", err)
 			os.Exit(1)
 		}
 	} else {
-		fmt.Println("✓ Access codes wiped")
-		fmt.Println("Disconnected from the0")
+		logger.Success("Logged out successfully")
+		logger.Verbose("Credentials removed from ~/.the0/auth.json")
 	}
 }
 
