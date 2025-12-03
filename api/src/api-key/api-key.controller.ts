@@ -57,15 +57,7 @@ export class ApiKeyController {
    */
   @Get()
   async getApiKeys(@Request() req: any): Promise<ApiKeyResponseDto[]> {
-    console.log("🔑 API Key Controller GET /api-keys called");
-    console.log(
-      "🔑 Auth header:",
-      req.headers.authorization ? "Present" : "Missing",
-    );
-    console.log("🔑 req.user:", JSON.stringify(req.user, null, 2));
-
     if (!req.user) {
-      console.log("❌ No user found in request - authentication failed");
       throw new Error("Authentication required");
     }
 
@@ -130,9 +122,6 @@ export class ApiKeyController {
     @Request() req: any,
     @Param("id") keyId: string,
   ): Promise<{ message: string }> {
-    console.log("🔑 DELETE /api-keys/:id endpoint called with keyId:", keyId);
-    console.log("🔑 User ID from request:", req.user.uid);
-
     const userId = req.user.uid;
 
     const result = await this.apiKeyService.deleteApiKey(userId, keyId);

@@ -157,15 +157,9 @@ graph TB
         
         subgraph "Runtime Services"
             BR[⚡ Bot Runner<br/>Go, gRPC<br/>Real-time execution]
-            BT[📈 Backtest Runner<br/>Go, gRPC<br/>Historical testing]
             BS[⏰ Bot Scheduler<br/>Go, gRPC<br/>Cron execution]
         end
-        
-        subgraph "Supporting Services"
-            SA[🔍 Security Analyzer<br/>Python, YARA<br/>Code analysis]
-            AI[🤖 AI Assistant<br/>Python, FastAPI<br/>Development helper]
-        end
-        
+
         subgraph "Data Layer"
             PG[(🐘 PostgreSQL<br/>Users, bots, auth)]
             MONGO[(🍃 MongoDB<br/>Runtime state, logs)]
@@ -191,31 +185,24 @@ graph TB
     
     %% Runtime services
     NATS -->|Events| BR
-    NATS -->|Events| BT  
     NATS -->|Events| BS
-    NATS -->|Events| SA
-    
+
     BR -->|State| MONGO
-    BT -->|Jobs| MONGO
     BS -->|Schedules| MONGO
-    
+
     BR -->|Logs| MINIO
-    BT -->|Results| MINIO
-    SA -->|Analysis| MINIO
     
     %% Styling
     classDef userClass fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
     classDef clientClass fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
     classDef apiClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef runtimeClass fill:#fff8e1,stroke:#f57c00,stroke-width:2px
-    classDef serviceClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     classDef dataClass fill:#e0f2f1,stroke:#00695c,stroke-width:2px
-    
+
     class DEV,TRADER userClass
     class WEB,CLI clientClass
     class API apiClass
-    class BR,BT,BS runtimeClass
-    class SA,AI serviceClass
+    class BR,BS runtimeClass
     class PG,MONGO,NATS,MINIO dataClass
 ```
 
@@ -229,17 +216,12 @@ graph TB
 
 **⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
 - **Bot Runner**: Real-time trading bot execution
-- **Backtest Runner**: Historical strategy validation  
 - **Bot Scheduler**: Cron-based scheduled execution
-
-**🔍 Security Analyzer** - Python service with YARA rules for automated security analysis of user-submitted bot code
-
-**🤖 AI Assistant** - Standalone service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
 
 **💾 Data Architecture** - Multi-database approach:
 - **PostgreSQL**: User accounts, bot definitions, authentication
 - **MongoDB**: Runtime state, job queues, execution logs
-- **MinIO**: Bot code storage, logs, backtest results
+- **MinIO**: Bot code storage and logs
 - **NATS JetStream**: Event streaming and service coordination
 
 ### Key Benefits

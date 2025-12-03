@@ -99,8 +99,8 @@ export default function AboutPage() {
                 </h3>
                 <p className="text-muted-foreground">
                   Comprehensive platform with specialized services for bot
-                  execution, backtesting, scheduling, and security analysis.
-                  Each service is designed for scalability and reliability.
+                  execution, scheduling, and security analysis. Each service is
+                  designed for scalability and reliability.
                 </p>
               </div>
 

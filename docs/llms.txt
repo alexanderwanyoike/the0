@@ -1,0 +1,49 @@
+# the0 Documentation
+
+> the0 is an open-source algorithmic trading platform that enables developers and traders to create, test, deploy, and manage trading bots across multiple markets.
+
+## Documentation Structure
+
+- [Welcome to the0](/welcome-to-the0): Platform introduction and overview
+- [Terminology](/terminology/): Key terms and concepts
+  - [Bots](/terminology/bots): Understanding bot instances
+  - [Custom Bots](/terminology/custom-bots): Bot templates and blueprints
+  - [Bot Deployment](/terminology/bot-deployment): Deployment process
+- [the0 CLI](/the0-cli/): Command-line interface documentation
+  - [Installation](/the0-cli/installation): Install and setup
+  - [Authentication](/the0-cli/authentication): API credentials
+  - [Bot Commands](/the0-cli/bot-commands): Managing bot instances
+  - [Custom Bot Commands](/the0-cli/custom-bot-commands): Deploying custom bots
+- [Custom Bot Development](/custom-bot-development/): Build your own trading bots
+  - [Quick Start Guide](/custom-bot-development/quick-start-guide): Build your first bot
+  - [Overview](/custom-bot-development/overview): Development philosophy
+  - [Configuration](/custom-bot-development/configuration): Bot configuration reference
+  - [Bot Types](/custom-bot-development/bot-types): Scheduled vs realtime
+  - [Testing](/custom-bot-development/testing): Testing strategies
+  - [Deployment](/custom-bot-development/deployment): Deployment process
+  - [Compliance](/custom-bot-development/compliance): Code review requirements
+
+## Key Concepts
+
+### Bot Types
+- **Scheduled Bots**: Run on cron schedules (DCA, rebalancing)
+- **Realtime Bots**: Run continuously (market making, arbitrage)
+
+### Supported Languages
+- Python 3.11+
+- JavaScript/Node.js 20+
+
+### Bot Structure
+```
+custom-bot/
+  bot-config.yaml      # Metadata and configuration
+  main.py              # Entry point
+  bot-schema.json      # Parameter schema
+  requirements.txt     # Dependencies
+  README.md            # Documentation
+```
+
+## Links
+- GitHub: https://github.com/alexanderwanyoike/the0
+- Discord: https://discord.gg/g5mp57nK
+- License: Apache 2.0

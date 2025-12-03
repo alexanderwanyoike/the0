@@ -5,14 +5,6 @@ export async function GET(req: NextRequest) {
   return withAdminAuth(req, async (req: NextRequest) => {
     try {
       const token = req.headers.get("Authorization");
-      console.log(
-        "🚀 API proxy - fetching from backend:",
-        `${process.env.BOT_API_URL}/api-keys`,
-      );
-      console.log(
-        "🎫 Forwarding token:",
-        token ? token.substring(0, 20) + "..." : "No token",
-      );
 
       const response = await fetch(`${process.env.BOT_API_URL}/api-keys`, {
         method: "GET",
@@ -22,12 +14,8 @@ export async function GET(req: NextRequest) {
         } as HeadersInit,
       });
 
-      console.log("📡 Backend response status:", response.status);
-      console.log("📡 Backend response ok:", response.ok);
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.log("❌ Backend error:", errorData);
         return NextResponse.json(
           { error: errorData },
           { status: response.status },

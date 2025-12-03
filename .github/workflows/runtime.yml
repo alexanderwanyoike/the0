@@ -3,14 +3,16 @@ name: Runtime Service
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
     paths:
       - 'runtime/**'
       - '.github/workflows/runtime.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'runtime/**'
       - '.github/workflows/runtime.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -82,6 +84,9 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
           type=ref,event=branch
           type=ref,event=pr
           type=sha,prefix={{branch}}-

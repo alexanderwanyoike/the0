@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight, Code, TestTube, Zap, BarChart3 } from "lucide-react";
+import { ArrowRight, Code, Zap, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function HeroSection() {
@@ -35,7 +35,7 @@ export function HeroSection() {
           </div>
 
           {/* Key Features */}
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-4 gap-8 max-w-6xl mx-auto">
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             <div className="text-center">
               <div className="h-12 w-12 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
                 <Code className="h-6 w-6 text-primary" />
@@ -44,17 +44,6 @@ export function HeroSection() {
               <p className="text-sm text-muted-foreground">
                 Build bots in Python or JavaScript (and more in the future) with
                 any libraries you prefer
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="h-12 w-12 mx-auto mb-4 bg-primary/10 rounded-lg flex items-center justify-center">
-                <TestTube className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">Custom Backtesting</h3>
-              <p className="text-sm text-muted-foreground">
-                Test strategies with historical data before going live. Define
-                your own custom backtesting implementation with whatever
-                libraries you prefer.
               </p>
             </div>
             <div className="text-center">

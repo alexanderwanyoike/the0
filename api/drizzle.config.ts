@@ -23,7 +23,6 @@ export default (databaseType === 'sqlite'
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
         './src/database/schema/bots.ts',
-        './src/database/schema/backtests.ts'
       ],
       out: './src/database/migrations',
       driver: 'better-sqlite' as const,
@@ -36,7 +35,6 @@ export default (databaseType === 'sqlite'
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
         './src/database/schema/bots.ts',
-        './src/database/schema/backtests.ts'
       ],
       out: './src/database/migrations', 
       driver: 'pg' as const,

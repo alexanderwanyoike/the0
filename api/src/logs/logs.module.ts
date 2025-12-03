@@ -4,9 +4,10 @@ import { LogsController } from "./logs.controller";
 import { ConfigModule } from "@nestjs/config";
 import { BotModule } from "@/bot/bot.module";
 import { ApiKeyModule } from "@/api-key/api-key.module";
+import { LoggerModule } from "@/logger/logger.module";
 
 @Module({
-  imports: [ConfigModule, BotModule, ApiKeyModule],
+  imports: [ConfigModule, BotModule, ApiKeyModule, LoggerModule],
   controllers: [LogsController],
   providers: [LogsService],
 })

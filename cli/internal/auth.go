@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"the0/internal/logger"
 )
 
 const AUTH_FILE = ".the0/auth.json"
@@ -75,7 +77,7 @@ func RemoveAuth() error {
 func PromptForNewAPIKey() (*Auth, error) {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Print("Enter your the0 API key: ")
+	logger.Printf("Enter your the0 API key: ")
 	apiKey, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, err
@@ -110,7 +112,7 @@ func GetAuthTokenWithRetry() (*Auth, error) {
 	// Test the existing key
 	apiClient := NewAPIClient(GetAPIBaseURL())
 	if err := apiClient.TestAPIKey(auth); err != nil {
-		fmt.Printf("Saved credentials invalid: %v\n", err)
+		logger.Warning("Saved credentials invalid: %v", err)
 		return PromptForNewAPIKey()
 	}
 

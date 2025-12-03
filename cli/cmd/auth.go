@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"the0/internal"
+	"the0/internal/logger"
 )
 
 func NewAuthCmd() *cobra.Command {
@@ -68,59 +68,63 @@ Examples:
 }
 
 func authLogin(cmd *cobra.Command, args []string) {
-	fmt.Println("Jacking into the0...")
+	logger.StartSpinner("Logging in")
 
 	auth, err := internal.PromptForNewAPIKey()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Connection failed: %v\n", err)
+		logger.StopSpinnerWithError("Login failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ Access granted - welcome to the0")
-	fmt.Println("Ready to deploy trading bots")
+	logger.UpdateSpinner("Verifying API key")
 
 	// Test the key
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
 	if err := apiClient.TestAPIKey(auth); err != nil {
-		fmt.Printf("⚠️  Auth test failed: %v\n", err)
-		fmt.Println("Check your API key and permissions")
-	} else {
-		fmt.Println("✓ Connection verified")
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		logger.Print("Check your API key and permissions")
+		os.Exit(1)
 	}
+
+	logger.StopSpinnerWithSuccess("Logged in successfully")
+	logger.Verbose("API key saved to ~/.the0/auth.json")
 }
 
 func authStatus(cmd *cobra.Command, args []string) {
-	fmt.Println("Running system diagnostics...")
+	logger.StartSpinner("Checking authentication status")
 
 	auth, err := internal.LoadAuth()
 	if err != nil {
-		fmt.Println("No access codes detected. Run 'the0 auth login' to jack in")
+		logger.StopSpinnerWithError("Not logged in")
+		logger.Print("Run 'the0 auth login' to authenticate")
 		os.Exit(1)
 	}
-
-	fmt.Printf("Connected: %s\n", auth.CreatedAt.Format("2006-01-02 15:04:05"))
 
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
 	if err := apiClient.TestAPIKey(auth); err != nil {
-		fmt.Printf("Connection failed: %v\n", err)
-		fmt.Println("Run 'the0 auth login' to reconnect")
+		logger.StopSpinnerWithError("Connection failed")
+		logger.Error("%v", err)
+		logger.Print("Run 'the0 auth login' to reconnect")
 		os.Exit(1)
-	} else {
-		fmt.Println("✓ Connection active")
 	}
+
+	logger.StopSpinnerWithSuccess("Authenticated")
+	logger.Print("  Connected since: %s", auth.CreatedAt.Format("2006-01-02 15:04:05"))
 }
 
 func authLogout(cmd *cobra.Command, args []string) {
 	if err := internal.RemoveAuth(); err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("No credentials found")
+			logger.Info("No credentials found")
 		} else {
-			fmt.Fprintf(os.Stderr, "Failed to clear credentials: %v\n", err)
+			logger.Error("Failed to clear credentials: %v", err)
 			os.Exit(1)
 		}
 	} else {
-		fmt.Println("✓ Access codes wiped")
-		fmt.Println("Disconnected from the0")
+		logger.Success("Logged out successfully")
+		logger.Verbose("Credentials removed from ~/.the0/auth.json")
 	}
 }
 
@@ -130,28 +134,32 @@ func authConfig(cmd *cobra.Command, args []string) {
 		currentURL := internal.GetAPIBaseURL()
 		envURL := os.Getenv("THE0_API_URL")
 
-		fmt.Println("Current API Configuration:")
-		fmt.Printf("  API URL: %s\n", currentURL)
+		logger.Print("Current API Configuration:")
+		logger.Print("  API URL: %s", currentURL)
 
 		if envURL != "" {
-			fmt.Printf("  Source: THE0_API_URL environment variable\n")
+			logger.Print("  Source: THE0_API_URL environment variable")
 		} else {
-			fmt.Printf("  Source: Default (http://localhost:3000)\n")
+			logger.Print("  Source: Default (http://localhost:3000)")
 		}
 
-		fmt.Println("\nTo change the API URL:")
-		fmt.Println("  the0 auth config <new-url>")
-		fmt.Println("  export THE0_API_URL=<new-url>")
+		logger.Newline()
+		logger.Print("To change the API URL:")
+		logger.Print("  the0 auth config <new-url>")
+		logger.Print("  export THE0_API_URL=<new-url>")
 		return
 	}
 
 	// Set API URL via environment variable hint
 	newURL := args[0]
-	fmt.Printf("To set API URL to %s, use one of these methods:\n\n", newURL)
-	fmt.Printf("1. Environment variable (recommended):\n")
-	fmt.Printf("   export THE0_API_URL=%s\n\n", newURL)
-	fmt.Printf("2. For this session only:\n")
-	fmt.Printf("   THE0_API_URL=%s the0 <command>\n\n", newURL)
-	fmt.Printf("3. Add to your shell profile (~/.bashrc, ~/.zshrc, etc.):\n")
-	fmt.Printf("   echo 'export THE0_API_URL=%s' >> ~/.bashrc\n", newURL)
+	logger.Print("To set API URL to %s, use one of these methods:", newURL)
+	logger.Newline()
+	logger.Print("1. Environment variable (recommended):")
+	logger.Print("   export THE0_API_URL=%s", newURL)
+	logger.Newline()
+	logger.Print("2. For this session only:")
+	logger.Print("   THE0_API_URL=%s the0 <command>", newURL)
+	logger.Newline()
+	logger.Print("3. Add to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
+	logger.Print("   echo 'export THE0_API_URL=%s' >> ~/.bashrc", newURL)
 }

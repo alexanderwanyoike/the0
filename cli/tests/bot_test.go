@@ -188,7 +188,7 @@ func TestAPIClient_DeployBotInstance(t *testing.T) {
 				},
 			},
 			expectedError: true,
-			errorContains: "deployment failed with status 400",
+			errorContains: "validation error",
 		},
 		{
 			name:          "invalid auth",
@@ -204,7 +204,7 @@ func TestAPIClient_DeployBotInstance(t *testing.T) {
 			responseBody:  `{"error": "Bad Request"}`,
 			request:       &internal.BotDeployRequest{Name: "test-bot", Config: map[string]interface{}{"name": "test-bot"}},
 			expectedError: true,
-			errorContains: "deployment failed with status 400",
+			errorContains: "validation error",
 		},
 	}
 
@@ -321,7 +321,7 @@ func TestAPIClient_UpdateBotInstance(t *testing.T) {
 			botID:         "bot_123",
 			request:       &internal.BotUpdateRequest{Name: "test-bot", Config: map[string]interface{}{"name": "test-bot"}},
 			expectedError: true,
-			errorContains: "update failed with status 400",
+			errorContains: "validation error",
 		},
 	}
 
@@ -620,7 +620,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    401,
 			responseBody:  `{"error": "Unauthorized"}`,
 			expectedError: true,
-			errorContains: "upload failed with status 401",
+			errorContains: "upload failed (HTTP 401)",
 		},
 		{
 			name:          "upload failed",
@@ -629,7 +629,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    400,
 			responseBody:  `{"error": "Bad Request"}`,
 			expectedError: true,
-			errorContains: "upload failed with status 400",
+			errorContains: "validation error",
 		},
 		{
 			name:          "server error",
@@ -638,7 +638,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "upload failed with status 500",
+			errorContains: "upload failed (HTTP 500)",
 		},
 		{
 			name:       "API success false",

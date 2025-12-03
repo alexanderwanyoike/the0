@@ -17,6 +17,8 @@ import { ApiKeyService } from "@/api-key/api-key.service";
 import { NatsService } from "@/nats/nats.service";
 // FeatureGateService removed for OSS version
 import { Ok } from "@/common/result";
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 
 describe("BotController - Enhanced Tests", () => {
   let controller: BotController;
@@ -32,7 +34,7 @@ describe("BotController - Enhanced Tests", () => {
     version: "1.0.0",
     filePath: "gs://test-bucket/test-custom-bot",
     userId: "another-user-id",
-    status: "approved",
+    status: "active",
     createdAt: new Date(),
     updatedAt: new Date(),
     config: {
@@ -61,10 +63,6 @@ describe("BotController - Enhanced Tests", () => {
         exchanges: ["Binance"],
         tags: ["test", "bot"],
       },
-    },
-    marketplace: {
-      isPublished: true,
-      price: 0,
     },
   };
 
@@ -113,6 +111,10 @@ describe("BotController - Enhanced Tests", () => {
         {
           provide: REQUEST,
           useValue: { user: { uid } },
+        },
+        {
+          provide: PinoLogger,
+          useValue: createMockLogger(),
         },
         // FeatureGateService removed for OSS version
       ],

@@ -26,8 +26,48 @@ Object.defineProperty(window, "matchMedia", {
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 
+// Mock data for tests
+const mockCustomBot = {
+  id: "bot-1",
+  name: "test-bot",
+  userId: "user-1",
+  latestVersion: "1.0.0",
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  versions: [
+    {
+      id: "version-1",
+      version: "1.0.0",
+      userId: "user-1",
+      createdAt: new Date().toISOString(),
+      status: "active",
+      config: { name: "test-bot", description: "Test bot" },
+      filePath: "/bots/test-bot/1.0.0",
+    },
+  ],
+};
+
+const mockApiKey = {
+  id: "key-1",
+  userId: "user-1",
+  name: "Test API Key",
+  key: "the0_test_key_123",
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+const mockBotLog = {
+  id: "log-1",
+  botId: "bot-1",
+  level: "info",
+  message: "Bot executed successfully",
+  timestamp: new Date().toISOString(),
+};
+
 // API mocking setup
 const server = setupServer(
+  // User endpoints
   http.get("/api/users/:id", ({ params }) => {
     return HttpResponse.json({
       success: true,
@@ -76,7 +116,82 @@ const server = setupServer(
   http.delete("/api/users/:id", () => {
     return HttpResponse.json({ success: true });
   }),
+
+  // Custom bots endpoints
+  http.get("/api/custom-bots", () => {
+    return HttpResponse.json({
+      success: true,
+      data: [mockCustomBot],
+      message: "Custom bots fetched successfully",
+    });
+  }),
+
+  http.get("/api/custom-bots/:name/:version", ({ params }) => {
+    return HttpResponse.json({
+      ...mockCustomBot.versions[0],
+      name: params.name,
+      version: params.version,
+    });
+  }),
+
+  http.get("/api/custom-bots/:name/versions", () => {
+    return HttpResponse.json(["1.0.0", "0.9.0"]);
+  }),
+
+  // API keys endpoints
+  http.get("/api/api-keys", () => {
+    return HttpResponse.json([mockApiKey]);
+  }),
+
+  http.get("/api/api-keys/stats/summary", () => {
+    return HttpResponse.json({ total: 1, active: 1 });
+  }),
+
+  http.get("/api/api-keys/:id", ({ params }) => {
+    return HttpResponse.json({ ...mockApiKey, id: params.id });
+  }),
+
+  http.post("/api/api-keys", async ({ request }) => {
+    const body = (await request.json()) as { name: string };
+    return HttpResponse.json({
+      ...mockApiKey,
+      id: "new-key-id",
+      name: body.name,
+    });
+  }),
+
+  http.delete("/api/api-keys/:id", () => {
+    return HttpResponse.json({ message: "API key deleted successfully" });
+  }),
+
+  // User bots endpoints
+  http.get("/api/user-bots", () => {
+    return HttpResponse.json([
+      {
+        id: "user-bot-1",
+        botName: "test-bot",
+        installedAt: new Date().toISOString(),
+      },
+    ]);
+  }),
+
+  // Bot logs endpoints
+  http.get("/api/logs/:botId", ({ request }) => {
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get("page") || "1");
+    const limit = parseInt(url.searchParams.get("limit") || "20");
+    return HttpResponse.json({
+      logs: [mockBotLog],
+      total: 1,
+      page,
+      limit,
+      hasMore: false,
+    });
+  }),
 );
+
+// Export server for use in tests that need custom handlers
+export { server };
 
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());

@@ -10,6 +10,7 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
 // UserBotsModule removed for OSS version
 import { NatsModule } from "@/nats/nats.module";
 // FeatureGateModule removed for OSS version
+import { LoggerModule } from "@/logger/logger.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { NatsModule } from "@/nats/nats.module";
     CustomBotModule,
     ApiKeyModule,
     NatsModule,
+    LoggerModule,
   ],
   controllers: [BotController],
   providers: [BotService, BotRepository, BotValidator],

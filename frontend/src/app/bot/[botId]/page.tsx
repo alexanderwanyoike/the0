@@ -11,16 +11,24 @@ import { Switch } from "@/components/ui/switch";
 import {
   Clipboard,
   Loader2,
-  Pencil,
+  Terminal,
   Trash2,
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withAuth } from "@/components/auth/with-auth";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConsoleInterface } from "@/components/bot/console-interface";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useBotLogs } from "@/hooks/use-bot-logs";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
@@ -65,6 +73,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
   const [_, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingEnabled, setIsUpdatingEnabled] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -149,36 +158,23 @@ const BotDetail = ({ params }: BotDetailProps) => {
     });
   };
 
-  // Handle bot update (redirect to deploy page with botId for updates)
-  const handleUpdateBot = () => {
-    if (!bot) return;
+  // Copy update command to clipboard
+  const handleCopyUpdateCommand = () => {
+    const command = `the0 bot update ${botId} config.json`;
+    navigator.clipboard.writeText(command);
+    toast({
+      title: "Command Copied",
+      description: "CLI update command copied to clipboard.",
+    });
+  };
 
-    // Extract bot name from the config.type format (type/name)
-    let botName = "unknown";
-    let botVersion = "latest";
-
-    if (bot.config?.type && bot.config.type.includes("/")) {
-      // Extract name from type/name format
-      const [, extractedName] = bot.config.type.split("/");
-      if (extractedName && extractedName.trim()) {
-        botName = extractedName;
-      }
-    } else if (bot.name) {
-      // Fallback to bot.name if available
-      botName = bot.name;
-    } else if (bot.config?.name) {
-      // Fallback to config.name if available
-      botName = bot.config.name;
-    }
-
-    // Get version from config
-    if (bot.config?.version) {
-      botVersion = bot.config.version;
-    }
-
-    router.push(
-      `/deploy/${encodeURIComponent(botName)}/${encodeURIComponent(botVersion)}?botId=${botId}`,
-    );
+  // Copy bot ID to clipboard
+  const handleCopyBotId = () => {
+    navigator.clipboard.writeText(botId);
+    toast({
+      title: "Bot ID Copied",
+      description: "Bot ID copied to clipboard.",
+    });
   };
 
   // Handle bot deletion
@@ -369,9 +365,13 @@ const BotDetail = ({ params }: BotDetailProps) => {
                       )}
                     </span>
                   </div>
-                  <Button variant="outline" size="sm" onClick={handleUpdateBot}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Update Config
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsUpdateModalOpen(true)}
+                  >
+                    <Terminal className="h-4 w-4 mr-2" />
+                    Update via CLI
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -452,11 +452,11 @@ const BotDetail = ({ params }: BotDetailProps) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleUpdateBot}
+                    onClick={() => setIsUpdateModalOpen(true)}
                     className="flex-1 xs:flex-none py-1"
                   >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Update Config
+                    <Terminal className="h-4 w-4 mr-2" />
+                    Update via CLI
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -632,6 +632,117 @@ const BotDetail = ({ params }: BotDetailProps) => {
           </div>
         </div>
       </div>
+
+      {/* CLI Update Modal */}
+      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Terminal className="h-5 w-5" />
+              Update Bot via CLI
+            </DialogTitle>
+            <DialogDescription>
+              Use the the0 CLI to update your bot configuration.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Bot ID */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Bot ID</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={botId}
+                  readOnly
+                  className="font-mono text-sm bg-muted"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyBotId}
+                  className="gap-2 shrink-0"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            {/* Update Command */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">CLI Update Command</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={`the0 bot update ${botId} config.json`}
+                  readOnly
+                  className="font-mono text-sm bg-muted"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyUpdateCommand}
+                  className="gap-2 shrink-0"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Run this command in your terminal where the the0 CLI is
+                installed.
+              </p>
+            </div>
+
+            {/* Instructions */}
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="space-y-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                  How to update your bot:
+                </p>
+                <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-2 list-decimal list-inside">
+                  <li>
+                    Create a{" "}
+                    <code className="px-1 bg-blue-100 dark:bg-blue-900 rounded">
+                      config.json
+                    </code>{" "}
+                    file with your updated configuration
+                  </li>
+                  <li>Run the update command above in your terminal</li>
+                  <li>The bot will be updated with the new configuration</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Helpful CLI Commands */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Helpful CLI Commands
+              </Label>
+              <div className="space-y-2 text-xs font-mono bg-muted p-4 rounded-lg">
+                <p className="text-muted-foreground"># View bot details</p>
+                <p>the0 bot list</p>
+                <p className="text-muted-foreground mt-2"># View bot logs</p>
+                <p>the0 bot logs {botId}</p>
+                <p className="text-muted-foreground mt-2"># Delete bot</p>
+                <p>the0 bot delete {botId}</p>
+              </div>
+            </div>
+
+            {/* Documentation Link */}
+            <div className="flex items-center gap-2 text-sm">
+              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              <a
+                href="https://docs.the0.dev/the0-CLI/bot-commands"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                View CLI Documentation
+              </a>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

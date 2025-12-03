@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"the0/internal"
+	"the0/internal/logger"
 )
 
 func NewCustomBotCmd() *cobra.Command {
@@ -36,41 +36,46 @@ func NewDeployCmd() *cobra.Command {
 }
 
 func deployBot(cmd *cobra.Command, args []string) {
-	fmt.Println("Deploying custom bot...")
-	fmt.Println("Compiling trading neural pathways")
+	logger.StartSpinner("Starting deployment")
 
 	// Step 1: Load bot config
 	config, err := internal.LoadBotConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		logger.StopSpinnerWithError("Failed to load config")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("✓ Config loaded: %s v%s\n", config.Name, config.Version)
+	logger.Verbose("Config loaded: %s v%s", config.Name, config.Version)
 
 	// Step 2: Validate config
 	if err := internal.ValidateBotConfig(config); err != nil {
-		fmt.Fprintf(os.Stderr, "Config validation failed: %v\n", err)
+		logger.StopSpinnerWithError("Config validation failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ Config validated")
+	logger.UpdateSpinner("Installing dependencies")
 
 	// Step 2.5: Check for dependencies and perform compilation if needed
 	if err := internal.PerformVendoringIfNeeded("."); err != nil {
-		fmt.Fprintf(os.Stderr, "Dependency compilation failed: %v\n", err)
+		logger.StopSpinnerWithError("Dependency installation failed")
+		logger.Error("%v", err)
 		internal.CleanupVendoring(".")
 		os.Exit(1)
 	}
 
+	logger.UpdateSpinner("Authenticating")
+
 	// Step 3: Get auth token (with retry on failure)
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ Access granted")
+	logger.UpdateSpinner("Checking bot status")
 
 	// Step 4: Check if bot exists and validate ownership
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
@@ -78,10 +83,11 @@ func deployBot(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// If auth error, try to get new token and retry
 		if internal.IsAuthError(err) {
-			fmt.Println("Access denied. Reconnecting...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				internal.CleanupVendoring(".")
 				os.Exit(1)
 			}
@@ -89,94 +95,94 @@ func deployBot(cmd *cobra.Command, args []string) {
 			// Retry with new key
 			isUpdate, err = apiClient.CheckBotExists(config, auth)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Bot validation failed: %v\n", err)
+				logger.StopSpinnerWithError("Bot validation failed")
+				logger.Error("%v", err)
 				internal.CleanupVendoring(".")
 				os.Exit(1)
 			}
 		} else {
-			fmt.Fprintf(os.Stderr, "Bot validation failed: %v\n", err)
+			logger.StopSpinnerWithError("Bot validation failed")
+			logger.Error("%v", err)
 			internal.CleanupVendoring(".")
 			os.Exit(1)
 		}
 	}
 
 	if isUpdate {
-		fmt.Println("Updating existing bot")
+		logger.UpdateSpinner("Updating existing bot")
 	} else {
-		fmt.Println("Deploying new bot")
+		logger.UpdateSpinner("Deploying new bot")
 	}
 
 	// Step 5: Create ZIP file
 	zipPath, err := internal.CreateBotZip()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create ZIP: %v\n", err)
+		logger.StopSpinnerWithError("Failed to create package")
+		logger.Error("%v", err)
 		internal.CleanupVendoring(".")
 		os.Exit(1)
 	}
 	defer os.Remove(zipPath)
 
-	fmt.Println("✓ Bot packaged")
+	logger.StopSpinner()
 
-	// Step 6: Deploy to API with multipart upload
+	// Step 6: Deploy to API with multipart upload (DeployBot handles its own spinner)
 	if err := apiClient.DeployBot(config, auth, zipPath, isUpdate); err != nil {
 		// If auth error, try to get new token and retry
 		if internal.IsAuthError(err) {
-			fmt.Println("Access denied. Reconnecting...")
+			logger.StartSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				internal.CleanupVendoring(".")
 				os.Exit(1)
 			}
+			logger.StopSpinner()
 
 			// Retry deployment with new key
 			if err := apiClient.DeployBot(config, auth, zipPath, isUpdate); err != nil {
-				fmt.Fprintf(os.Stderr, "Deployment failed: %v\n", err)
+				logger.Error("Deployment failed: %v", err)
 				internal.CleanupVendoring(".")
 				os.Exit(1)
 			}
 		} else {
-			fmt.Fprintf(os.Stderr, "Deployment failed: %v\n", err)
+			logger.Error("Deployment failed: %v", err)
 			internal.CleanupVendoring(".")
 			os.Exit(1)
 		}
 	}
 
-	fmt.Println("Bot uploaded to the plaform ⚡")
-	fmt.Printf("'%s' v%s deployed successfully\n", config.Name, config.Version)
-	fmt.Println("Awaiting review by the 0vers33r 👀")
+	logger.Print("'%s' v%s deployed successfully", config.Name, config.Version)
 }
 
 func NewCustomBotListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all your deployed custom bots",
-		Long:  "📋 List all the custom bots you have deployed with their details",
+		Long:  "List all the custom bots you have deployed with their details",
 		Run:   listCustomBots,
 	}
 }
 
 func NewCustomBotSchemaCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "schema <bot|backtest> <version> <custom-bot-name>",
+		Use:   "schema <version> <custom-bot-name>",
 		Short: "Get the schema of a custom bot",
-		Long:  "📄 Get the JSON schema for either the bot or backtest entrypoint of a custom bot",
-		Args:  cobra.RangeArgs(2, 3), // 2 or 3 arguments
+		Long:  "Get the JSON schema for a custom bot",
+		Args:  cobra.RangeArgs(1, 2), // 1 or 2 arguments
 		Run:   getCustomBotSchema,
 	}
 }
 
 func listCustomBots(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-
-	blue.Println("Scanning deployed bots...")
+	logger.StartSpinner("Fetching custom bots")
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
@@ -186,27 +192,33 @@ func listCustomBots(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue.Println("🔑 API key appears to be invalid. Let's get a new one...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry listing
 			customBots, err = apiClient.ListCustomBots(auth)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Failed to list custom bots: %v\n", err)
+				logger.StopSpinnerWithError("Failed to list custom bots")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Failed to list custom bots: %v\n", err)
+			logger.StopSpinnerWithError("Failed to list custom bots")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
 
+	logger.StopSpinner()
+
 	if len(customBots) == 0 {
-		blue.Println("No custom bots detected. Deploy your first trading bot 🤖")
+		logger.Info("No custom bots found")
+		logger.Print("Deploy your first bot with 'the0 custom-bot deploy'")
 		return
 	}
 
@@ -241,43 +253,33 @@ func listCustomBots(cmd *cobra.Command, args []string) {
 		table.Append(customBot.Name, customBot.LatestVersion, createdStr, botType)
 	}
 
-	green.Printf("Found %d custom bot(s) ⚡\n\n", len(customBots))
+	logger.Success("Found %d custom bot(s)", len(customBots))
+	logger.Newline()
 	if err := table.Render(); err != nil {
-		red.Fprintf(os.Stderr, "Failed to render table: %v\n", err)
+		logger.Error("Failed to render table: %v", err)
 		os.Exit(1)
 	}
-	green.Println("\nCustom bot portfolio ready for deployment ⚡")
 }
 
 func getCustomBotSchema(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-
-	entryPointType := args[0] // "bot" or "backtest"
-	version := args[1]
+	version := args[0]
 	var customBotName string
 
-	if len(args) == 3 {
-		customBotName = args[2]
+	if len(args) == 2 {
+		customBotName = args[1]
 	} else {
 		// If version is actually the bot name and no version specified, use latest
 		customBotName = version
 		version = "" // Will use latest version
 	}
 
-	// Validate entry point type
-	if entryPointType != "bot" && entryPointType != "backtest" {
-		red.Fprintf(os.Stderr, "Entry point type must be 'bot' or 'backtest', got: %s\n", entryPointType)
-		os.Exit(1)
-	}
-
-	blue.Printf("📄 Fetching %s schema for custom bot '%s'...\n", entryPointType, customBotName)
+	logger.StartSpinner("Fetching schema for " + customBotName)
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
@@ -287,24 +289,29 @@ func getCustomBotSchema(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue.Println("🔑 API key appears to be invalid. Let's get a new one...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry fetching
 			customBot, err = apiClient.GetCustomBot(auth, customBotName)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Failed to get custom bot: %v\n", err)
+				logger.StopSpinnerWithError("Failed to get custom bot")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Failed to get custom bot: %v\n", err)
+			logger.StopSpinnerWithError("Failed to get custom bot")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
+
+	logger.StopSpinner()
 
 	// Find the requested version or use latest
 	var targetVersion *internal.CustomBotVersion
@@ -320,31 +327,27 @@ func getCustomBotSchema(cmd *cobra.Command, args []string) {
 	}
 
 	if targetVersion == nil {
-		red.Fprintf(os.Stderr, "Version '%s' not found for custom bot '%s'\n", version, customBotName)
+		logger.Error("Version '%s' not found for custom bot '%s'", version, customBotName)
 		os.Exit(1)
 	}
 
-	// Get the schema for the requested entry point
-	var schema map[string]any
-	if entryPointType == "bot" {
-		schema = targetVersion.Config.Schema.Bot
-	} else {
-		schema = targetVersion.Config.Schema.Backtest
-	}
+	// Get the bot schema
+	schema := targetVersion.Config.Schema.Bot
 
 	if schema == nil || len(schema) == 0 {
-		blue.Printf("📄 No %s schema found for custom bot '%s' version '%s'\n", entryPointType, customBotName, version)
+		logger.Info("No schema found for custom bot '%s' version '%s'", customBotName, version)
 		return
 	}
 
 	// Pretty print the schema
 	schemaJSON, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
-		red.Fprintf(os.Stderr, "Failed to format schema: %v\n", err)
+		logger.Error("Failed to format schema: %v", err)
 		os.Exit(1)
 	}
 
-	green.Printf("📄 Schema for custom bot '%s' version '%s' (%s entry point):\n\n", customBotName, version, entryPointType)
+	logger.Success("Schema for '%s' v%s:", customBotName, version)
+	logger.Newline()
 	fmt.Println(string(schemaJSON))
 }
 
@@ -352,24 +355,21 @@ func NewCustomBotVersionsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versions <type|name>",
 		Short: "List all versions of a custom bot",
-		Long:  "📋 List all versions for a specific custom bot type",
+		Long:  "List all versions for a specific custom bot type",
 		Args:  cobra.ExactArgs(1),
 		Run:   getCustomBotVersions,
 	}
 }
 
 func getCustomBotVersions(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-
 	typeName := args[0]
 
-	blue.Printf("📋 Fetching versions for custom bot '%s'...\n", typeName)
+	logger.StartSpinner("Fetching versions for " + typeName)
 
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
@@ -377,23 +377,28 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 	customBots, err := apiClient.ListCustomBots(auth)
 	if err != nil {
 		if internal.IsAuthError(err) {
-			blue.Println("🔑 API key appears to be invalid. Let's get a new one...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			customBots, err = apiClient.ListCustomBots(auth)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Failed to list custom bots: %v\n", err)
+				logger.StopSpinnerWithError("Failed to list custom bots")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Failed to list custom bots: %v\n", err)
+			logger.StopSpinnerWithError("Failed to list custom bots")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
+
+	logger.StopSpinner()
 
 	var targetCustomBot *internal.CustomBotData
 	for _, customBot := range customBots {
@@ -414,12 +419,12 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 	}
 
 	if targetCustomBot == nil {
-		red.Fprintf(os.Stderr, "Custom bot not found: %s\n", typeName)
+		logger.Error("Custom bot not found: %s", typeName)
 		os.Exit(1)
 	}
 
 	if len(targetCustomBot.Versions) == 0 {
-		blue.Printf("🤷 No versions found for custom bot '%s'\n", typeName)
+		logger.Info("No versions found for custom bot '%s'", typeName)
 		return
 	}
 
@@ -438,10 +443,10 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 		table.Append(version.Version, createdStr, botType)
 	}
 
-	green.Printf("📋 Found %d version(s) for custom bot '%s':\n\n", len(targetCustomBot.Versions), typeName)
+	logger.Success("Found %d version(s) for '%s':", len(targetCustomBot.Versions), typeName)
+	logger.Newline()
 	if err := table.Render(); err != nil {
-		red.Fprintf(os.Stderr, "Failed to render table: %v\n", err)
+		logger.Error("Failed to render table: %v", err)
 		os.Exit(1)
 	}
-	green.Println("\n🎉 Version history looking solid! 🚀")
 }

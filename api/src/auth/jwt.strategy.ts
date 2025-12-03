@@ -1,6 +1,7 @@
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PassportStrategy } from "@nestjs/passport";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { PinoLogger } from "nestjs-pino";
 import { AuthService } from "./auth.service";
 import { getDatabase, getDatabaseConfig } from "../database/connection";
 import { usersTable, usersTableSqlite } from "../database/schema/users";
@@ -8,7 +9,10 @@ import { eq } from "drizzle-orm";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private authService: AuthService) {
+  constructor(
+    private authService: AuthService,
+    private readonly logger: PinoLogger,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -20,13 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    console.log(
-      "🔍 JWT Strategy validate called with payload:",
-      JSON.stringify(payload, null, 2),
-    );
-
     if (!payload?.sub) {
-      console.log("❌ JWT payload missing sub field");
       throw new UnauthorizedException("Invalid token payload");
     }
 
@@ -50,7 +48,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException("User inactive");
       }
 
-      const userObj = {
+      return {
         uid: user.id || "",
         id: user.id || "",
         username: user.username || "",
@@ -60,14 +58,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         isActive: Boolean(user.isActive),
         isEmailVerified: Boolean(user.isEmailVerified),
       };
-
-      console.log(
-        "🧑 JWT Strategy returning user:",
-        JSON.stringify(userObj, null, 2),
-      );
-      return userObj;
     } catch (error) {
-      console.error("JWT validation error:", error);
+      this.logger.error({ err: error }, "JWT validation error");
       throw new UnauthorizedException("Token validation failed");
     }
   }

@@ -3,6 +3,9 @@ import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
 import Repository from "./repository";
 import { createId } from "@paralleldrive/cuid2";
+import pino from "pino";
+
+const logger = pino({ name: "RoleRepository" });
 
 export abstract class RoleRepository<T> implements Repository {
   protected readonly db = getDatabase();
@@ -28,45 +31,28 @@ export abstract class RoleRepository<T> implements Repository {
         ...data,
       } as T);
     } catch (error: any) {
-      console.log("Error creating document:", error);
+      logger.error({ err: error }, "Error creating document");
       return Failure(error.message);
     }
   }
 
   async findAll(userId: string): Promise<Result<T[], string>> {
     try {
-      console.log(
-        "🔍 RoleRepository.findAll called with userId:",
-        userId,
-        "type:",
-        typeof userId,
-      );
-
       if (!userId) {
-        console.log("❌ User ID is missing or falsy");
         return Failure("User ID is required");
       }
 
-      console.log("📊 Executing query on table:", this.tableName);
       const records = await this.db
         .select()
         .from(this.table)
         .where(eq(this.table.userId, userId))
         .orderBy(desc(this.table.createdAt));
 
-      console.log(
-        "✅ Query executed successfully, found",
-        records.length,
-        "records",
-      );
       return Ok(
         records.map((record) => this.transformSnapshotToData<T>(record)),
       );
     } catch (error: any) {
-      console.log(
-        "❌ RoleRepository.findAll - Error fetching documents:",
-        error,
-      );
+      logger.error({ err: error }, "Error fetching documents");
       return Failure(error.message);
     }
   }
@@ -88,7 +74,7 @@ export abstract class RoleRepository<T> implements Repository {
 
       return Ok(this.transformSnapshotToData<T>(records[0]));
     } catch (error: any) {
-      console.log("Error fetching document:", error);
+      logger.error({ err: error }, "Error fetching document");
       return Failure(error.message);
     }
   }
@@ -115,7 +101,7 @@ export abstract class RoleRepository<T> implements Repository {
 
       return this.findOne(userId, id);
     } catch (error: any) {
-      console.log("Error updating document:", error);
+      logger.error({ err: error }, "Error updating document");
       return Failure(error.message);
     }
   }
@@ -132,7 +118,7 @@ export abstract class RoleRepository<T> implements Repository {
 
       return Ok(null);
     } catch (error: any) {
-      console.log("Error deleting document:", error);
+      logger.error({ err: error }, "Error deleting document");
       return Failure(error.message);
     }
   }

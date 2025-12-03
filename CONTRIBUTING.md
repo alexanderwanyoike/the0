@@ -163,12 +163,6 @@ Use the [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.yml) a
 - Uses Go + Cobra framework
 - Install with `make install`
 
-**AI Service (Python):**
-- Located in `/services/the0-ai`
-- Uses Python 3.11+, FastAPI
-- Model: Google Gemini
-- Testing: pytest
-
 ### AI-Assisted Development
 
 We welcome AI-assisted development:

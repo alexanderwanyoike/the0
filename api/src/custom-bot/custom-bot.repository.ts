@@ -111,8 +111,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
           userId: bot.userId,
           filePath: bot.filePath,
           status: bot.status,
-          marketplace: bot.marketplace,
-          review: bot.review,
           createdAt: bot.createdAt,
           updatedAt: bot.updatedAt,
         }));
@@ -305,47 +303,9 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       version: customBot.version!,
       config: customBot.config!,
       filePath: customBot.filePath!,
-      status: customBot.status || "pending_review",
-      marketplace: customBot.marketplace || null,
+      status: customBot.status || "active",
     };
 
     return this.create(data);
-  }
-
-  async updateBotStatus(
-    botId: string,
-    status: string,
-  ): Promise<Result<void, string>> {
-    try {
-      const result = await this.db
-        .update(this.table)
-        .set({
-          status: status as any,
-          updatedAt: new Date(),
-        })
-        .where(eq(this.table.id, botId));
-
-      return Ok(null);
-    } catch (error: any) {
-      return Failure(`Failed to update bot status: ${error.message}`);
-    }
-  }
-
-  async updateBotAnalysis(
-    botId: string,
-    analysis: any,
-  ): Promise<Result<void, string>> {
-    try {
-      // Add analysis data to the bot record (this would require schema update)
-      // For now, just log the analysis data
-      console.log(
-        `📊 Analysis data for bot ${botId}:`,
-        JSON.stringify(analysis, null, 2),
-      );
-
-      return Ok(null);
-    } catch (error: any) {
-      return Failure(`Failed to update bot analysis: ${error.message}`);
-    }
   }
 }

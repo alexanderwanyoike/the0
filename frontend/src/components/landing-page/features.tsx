@@ -1,6 +1,6 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Code, TestTube, Zap, Container, BarChart3, Globe } from "lucide-react";
+import { Code, Zap, Container, BarChart3, Globe } from "lucide-react";
 
 const features = [
   {
@@ -8,12 +8,6 @@ const features = [
     description:
       "Build trading bots in Python or JavaScript (and more in the future) with any libraries you prefer. Full framework agnostic approach gives you complete flexibility.",
     icon: Code,
-  },
-  {
-    title: "Custom Backtesting",
-    description:
-      "Implement your own backtesting logic using any libraries you prefer. Test strategies with historical data before going live.",
-    icon: TestTube,
   },
   {
     title: "Real-time Execution",

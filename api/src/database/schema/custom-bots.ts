@@ -29,26 +29,7 @@ export interface CustomBotConfig {
   };
 }
 
-export interface MarketplaceMetadata {
-  isPublished: boolean;
-  publishedAt?: Date;
-  price: number; // 0 for free
-  description: string;
-  tags: string[];
-  category?: string;
-  installCount: number;
-  averageRating?: number; // 1-5 scale
-  totalReviews: number;
-  revenue: number; // Total earnings
-  lastUpdated?: Date;
-}
-
-export type CustomBotStatus =
-  | "approved"
-  | "declined"
-  | "awaiting_human_review"
-  | "pending_review"
-  | "published";
+export type CustomBotStatus = "active";
 
 // PostgreSQL Custom Bots table (matches original custom-bots collection)
 export const customBotsTable = pgTable("custom_bots", {
@@ -63,11 +44,9 @@ export const customBotsTable = pgTable("custom_bots", {
   config: jsonb("config").$type<CustomBotConfig>().notNull(),
   filePath: varchar("file_path", { length: 500 }), // Local file storage path
   status: varchar("status", { length: 50 })
-    .default("pending_review")
+    .default("active")
     .notNull()
     .$type<CustomBotStatus>(),
-  review: jsonb("review"), // Security analysis results from 0vers33r
-  marketplace: jsonb("marketplace").$type<MarketplaceMetadata>(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -88,11 +67,7 @@ export const customBotsTableSqlite = sqliteTable("custom_bots", {
   version: text("version").notNull(),
   config: text("config", { mode: "json" }).$type<CustomBotConfig>().notNull(),
   filePath: text("file_path"),
-  status: text("status").default("pending_review").notNull(),
-  review: text("review", { mode: "json" }), // Security analysis results from 0vers33r
-  marketplace: text("marketplace", {
-    mode: "json",
-  }).$type<MarketplaceMetadata>(),
+  status: text("status").default("active").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

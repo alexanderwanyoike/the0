@@ -18,7 +18,7 @@ describe("BotValidator", () => {
       id: "test-bot",
       name: "test-bot",
       version: "1.0.0",
-      status: "pending_review",
+      status: "active",
       config: {
         name: "test-bot",
         description: "A test bot",
@@ -28,10 +28,8 @@ describe("BotValidator", () => {
         author: "test-author",
         entrypoints: {
           bot: "bot.py",
-          backtest: "backtest.py",
         },
         schema: {
-          backtest: {},
           bot: {
             type: "object",
             properties: {
@@ -59,7 +57,7 @@ describe("BotValidator", () => {
       id: "test-non-scheduled-bot",
       name: "test-non-scheduled-bot",
       version: "1.0.0",
-      status: "pending_review",
+      status: "active",
       config: {
         name: "test-bot",
         description: "A test bot",
@@ -69,10 +67,8 @@ describe("BotValidator", () => {
         author: "test-author",
         entrypoints: {
           bot: "bot.py",
-          backtest: "backtest.py",
         },
         schema: {
-          backtest: {},
           bot: {
             type: "object",
             properties: {

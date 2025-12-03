@@ -29,7 +29,6 @@ import { ApiKeySetupDialog } from "./api-key-setup-dialog";
 import { formatDistanceToNow } from "date-fns";
 
 export function ApiKeySection() {
-  console.log("🟢 ApiKeySection component rendered");
   const { user } = useAuth();
   const { toast } = useToast();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -114,7 +113,6 @@ export function ApiKeySection() {
   };
 
   const handleDeleteApiKey = async (apiKey: ApiKey) => {
-    console.log("🗑️ handleDeleteApiKey called for:", apiKey.name, apiKey.id);
     if (!user) return;
 
     try {
@@ -154,7 +152,6 @@ export function ApiKeySection() {
   };
 
   const openDeleteDialog = (apiKey: ApiKey) => {
-    console.log("🗑️ openDeleteDialog called for:", apiKey.name, apiKey.id);
     setSelectedApiKey(apiKey);
     setDeleteDialogOpen(true);
   };
@@ -359,10 +356,7 @@ export function ApiKeySection() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        console.log("🔴 Revoke button clicked!", apiKey.name);
-                        openDeleteDialog(apiKey);
-                      }}
+                      onClick={() => openDeleteDialog(apiKey)}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 sm:mr-2" />

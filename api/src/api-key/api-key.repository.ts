@@ -5,6 +5,9 @@ import { Result, Ok, Failure } from "@/common/result";
 import { eq, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import * as crypto from "crypto";
+import pino from "pino";
+
+const logger = pino({ name: "ApiKeyRepository" });
 
 @Injectable()
 export class ApiKeyRepository extends RoleRepository<ApiKey> {
@@ -89,25 +92,19 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
     id: string,
   ): Promise<Result<void, string>> {
     try {
-      console.log("🔑 Deleting API key:", { userId, id });
-
       // First check if the API key exists and belongs to the user
       const existingKey = await this.findOne(userId, id);
       if (!existingKey.success) {
-        console.log("❌ API key not found:", existingKey.error);
         return Failure("API key not found");
       }
-
-      console.log("✅ Found API key to delete:", existingKey.data.name);
 
       await this.db
         .delete(this.table)
         .where(and(eq(this.table.id, id), eq(this.table.userId, userId)));
 
-      console.log("✅ API key deleted successfully");
       return Ok(null);
     } catch (error: any) {
-      console.log("❌ Error deleting API key:", error);
+      logger.error({ err: error }, "Error deleting API key");
       return Failure(error.message);
     }
   }

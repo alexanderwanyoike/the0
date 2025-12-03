@@ -62,18 +62,6 @@ const services = [
     borderColor: "border-orange-200 dark:border-orange-800",
   },
   {
-    id: "backtest-runner",
-    name: "Backtest Runner",
-    description: "Historical strategy testing",
-    tech: "Go, gRPC",
-    icon: Activity,
-    type: "runtime",
-    color: "bg-orange-500",
-    textColor: "text-orange-700",
-    bgColor: "bg-orange-50 dark:bg-orange-950/20",
-    borderColor: "border-orange-200 dark:border-orange-800",
-  },
-  {
     id: "scheduler",
     name: "Bot Scheduler",
     description: "Cron-based execution",

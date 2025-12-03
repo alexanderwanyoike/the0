@@ -86,6 +86,8 @@ Dockerfile*
 # Documentation
 *.md
 !README.md
+!index.md
+!welcome-to-the0.md
 
 # Tests
 **/__tests__/

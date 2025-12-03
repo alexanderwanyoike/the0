@@ -20,8 +20,6 @@ func TestCreateBotZip(t *testing.T) {
 	// Create test files in temp directory
 	testFiles := []string{
 		"main.py",
-		"backtest.py",
-		"schema.json",
 		"bot-schema.json",
 		"README.md",
 		"utils.py",
@@ -119,8 +117,6 @@ func TestCreateBotZip(t *testing.T) {
 	// Expected files should be in ZIP (including vendored dependencies)
 	expectedFiles := []string{
 		"main.py",
-		"backtest.py",
-		"schema.json",
 		"bot-schema.json",
 		"README.md",
 		"utils.py",

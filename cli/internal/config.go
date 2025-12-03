@@ -18,12 +18,10 @@ type BotConfig struct {
 	Runtime     string `yaml:"runtime,omitempty" json:"runtime,omitempty"` // e.g., "python3.11", "nodejs20", defaults to "none"
 	Type        string `yaml:"type" json:"type"`                           // e.g., "scheduled", "event", "realtime"
 	Entrypoints struct {
-		Bot      string `yaml:"bot" json:"bot"`
-		Backtest string `yaml:"backtest" json:"backtest"`
+		Bot string `yaml:"bot" json:"bot"`
 	} `yaml:"entrypoints" json:"entrypoints"`
 	Schema struct {
-		Backtest string `yaml:"backtest" json:"backtest"`
-		Bot      string `yaml:"bot" json:"bot"`
+		Bot string `yaml:"bot" json:"bot"`
 	} `yaml:"schema" json:"schema"`
 	Readme   string                 `yaml:"readme" json:"readme"`
 	Metadata map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
@@ -82,8 +80,6 @@ func ValidateBotConfig(config *BotConfig) error {
 		return fmt.Errorf("bot entrypoint is required")
 	}
 
-	// Backtest entrypoint and schema are now optional
-
 	if config.Schema.Bot == "" {
 		return fmt.Errorf("bot schema is required")
 	}
@@ -97,14 +93,6 @@ func ValidateBotConfig(config *BotConfig) error {
 		config.Entrypoints.Bot,
 		config.Schema.Bot,
 		config.Readme,
-	}
-
-	// Add backtest files to validation if they are specified
-	if config.Entrypoints.Backtest != "" {
-		requiredFiles = append(requiredFiles, config.Entrypoints.Backtest)
-	}
-	if config.Schema.Backtest != "" {
-		requiredFiles = append(requiredFiles, config.Schema.Backtest)
 	}
 
 	for _, file := range requiredFiles {

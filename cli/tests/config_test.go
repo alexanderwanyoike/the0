@@ -49,22 +49,18 @@ func TestValidateBotConfig(t *testing.T) {
 				Description: "Test bot description",
 				Runtime:     "", // Optional for scheduled bots
 				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Bot:      "main.py",
-					Backtest: "backtest.py",
+					Bot: "main.py",
 				},
 				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Backtest: "schema.json",
-					Bot:      "bot-schema.json",
+					Bot: "bot-schema.json",
 				},
 				Readme: "README.md",
 			},
-			files:   []string{"main.py", "backtest.py", "schema.json", "bot-schema.json", "README.md"},
+			files:   []string{"main.py", "bot-schema.json", "README.md"},
 			wantErr: false,
 		},
 		{
@@ -118,18 +114,14 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test bot description",
 				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Bot:      "missing-main.py",
-					Backtest: "missing-backtest.py",
+					Bot: "missing-main.py",
 				},
 				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Backtest: "missing-schema.json",
-					Bot:      "missing-bot-schema.json",
+					Bot: "missing-bot-schema.json",
 				},
 				Readme: "missing-README.md",
 			},
@@ -180,22 +172,18 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test realtime bot",
 				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Bot:      "main.py",
-					Backtest: "backtest.py",
+					Bot: "main.py",
 				},
 				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Backtest: "schema.json",
-					Bot:      "bot-schema.json",
+					Bot: "bot-schema.json",
 				},
 				Readme: "README.md",
 			},
-			files:   []string{"main.py", "backtest.py", "schema.json", "bot-schema.json", "README.md"},
+			files:   []string{"main.py", "bot-schema.json", "README.md"},
 			wantErr: false,
 		},
 		{
@@ -208,22 +196,18 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test realtime bot",
 				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Bot:      "main.py",
-					Backtest: "backtest.py",
+					Bot: "main.py",
 				},
 				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Backtest: "schema.json",
-					Bot:      "bot-schema.json",
+					Bot: "bot-schema.json",
 				},
 				Readme: "README.md",
 			},
-			files:     []string{"main.py", "backtest.py", "schema.json", "bot-schema.json", "README.md"},
+			files:     []string{"main.py", "bot-schema.json", "README.md"},
 			wantErr:   true,
 			errorType: "missing runtime",
 		},
@@ -237,106 +221,18 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test scheduled bot",
 				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Bot:      "main.py",
-					Backtest: "backtest.py",
+					Bot: "main.py",
 				},
 				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
+					Bot string `yaml:"bot" json:"bot"`
 				}{
-					Backtest: "schema.json",
-					Bot:      "bot-schema.json",
-				},
-				Readme: "README.md",
-			},
-			files:   []string{"main.py", "backtest.py", "schema.json", "bot-schema.json", "README.md"},
-			wantErr: false,
-		},
-		{
-			name: "valid config without backtest entrypoint and schema",
-			config: &internal.BotConfig{
-				Name:        "no-backtest-bot",
-				Version:     "1.0.0",
-				Type:        "scheduled",
-				Author:      "test-author",
-				Description: "Test bot without backtest",
-				Runtime:     "",
-				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
-				}{
-					Bot:      "main.py",
-					Backtest: "", // No backtest entrypoint
-				},
-				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
-				}{
-					Backtest: "", // No backtest schema
-					Bot:      "bot-schema.json",
+					Bot: "bot-schema.json",
 				},
 				Readme: "README.md",
 			},
 			files:   []string{"main.py", "bot-schema.json", "README.md"},
-			wantErr: false,
-		},
-		{
-			name: "valid config with backtest entrypoint but no schema",
-			config: &internal.BotConfig{
-				Name:        "partial-backtest-bot",
-				Version:     "1.0.0",
-				Type:        "scheduled",
-				Author:      "test-author",
-				Description: "Test bot with backtest entrypoint but no schema",
-				Runtime:     "",
-				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
-				}{
-					Bot:      "main.py",
-					Backtest: "backtest.py", // Has backtest entrypoint
-				},
-				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
-				}{
-					Backtest: "", // No backtest schema
-					Bot:      "bot-schema.json",
-				},
-				Readme: "README.md",
-			},
-			files:   []string{"main.py", "backtest.py", "bot-schema.json", "README.md"},
-			wantErr: false,
-		},
-		{
-			name: "valid config with backtest schema but no entrypoint",
-			config: &internal.BotConfig{
-				Name:        "schema-only-backtest-bot",
-				Version:     "1.0.0",
-				Type:        "scheduled",
-				Author:      "test-author",
-				Description: "Test bot with backtest schema but no entrypoint",
-				Runtime:     "",
-				Entrypoints: struct {
-					Bot      string `yaml:"bot" json:"bot"`
-					Backtest string `yaml:"backtest" json:"backtest"`
-				}{
-					Bot:      "main.py",
-					Backtest: "", // No backtest entrypoint
-				},
-				Schema: struct {
-					Backtest string `yaml:"backtest" json:"backtest"`
-					Bot      string `yaml:"bot" json:"bot"`
-				}{
-					Backtest: "schema.json", // Has backtest schema
-					Bot:      "bot-schema.json",
-				},
-				Readme: "README.md",
-			},
-			files:   []string{"main.py", "schema.json", "bot-schema.json", "README.md"},
 			wantErr: false,
 		},
 	}
@@ -452,11 +348,9 @@ runtime: python3.11
 
 entrypoints:
   bot: main.py
-  backtest: backtest.py
 
 schema:
   bot: bot-schema.json
-  backtest: schema.json
 
 readme: README.md
 

@@ -44,7 +44,7 @@ export const VersionHistory = ({
           Version History
         </CardTitle>
         <CardDescription>
-          All versions of this bot and their approval status
+          All versions of this bot
           {versions.length > versionsPerPage && (
             <span className="ml-2 text-xs">
               ({versions.length} total versions)
@@ -75,17 +75,7 @@ export const VersionHistory = ({
                   </div>
                 </div>
               </div>
-              <Badge
-                variant={
-                  version.status === "approved"
-                    ? "default"
-                    : version.status === "declined"
-                      ? "destructive"
-                      : "secondary"
-                }
-              >
-                {version.status?.replace("_", " ") || "pending"}
-              </Badge>
+              <Badge variant="default">{version.status}</Badge>
             </div>
           ))}
         </div>

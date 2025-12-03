@@ -19,7 +19,6 @@ export default () => ({
   // Storage buckets
   CUSTOM_BOTS_BUCKET: process.env.CUSTOM_BOTS_BUCKET || "custom-bots",
   LOG_BUCKET: process.env.LOG_BUCKET || "logs",
-  BACKTEST_BUCKET: process.env.BACKTEST_BUCKET || "backtests",
 
   // Database configuration
   DATABASE_URL: process.env.DATABASE_URL || "sqlite:data.db",
