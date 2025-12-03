@@ -349,7 +349,7 @@ func deleteBotInstance(cmd *cobra.Command, args []string) {
 
 	logger.Warning("Are you sure you want to delete bot '%s'?", botID)
 	logger.Print("This action cannot be undone")
-	fmt.Print("Type 'yes' to confirm: ")
+	logger.Printf("Type 'yes' to confirm: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	confirmation, err := reader.ReadString('\n')
