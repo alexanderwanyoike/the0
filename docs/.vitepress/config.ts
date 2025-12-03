@@ -97,10 +97,11 @@ export default defineConfig({
       text: 'Edit this page on GitHub'
     },
 
-    lastUpdated: {
-      text: 'Last updated',
-      formatOptions: { dateStyle: 'medium' }
-    },
+    // lastUpdated disabled - requires git history which isn't available in Docker builds
+    // lastUpdated: {
+    //   text: 'Last updated',
+    //   formatOptions: { dateStyle: 'medium' }
+    // },
 
     outline: {
       level: [2, 3],

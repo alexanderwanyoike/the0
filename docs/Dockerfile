@@ -1,6 +1,9 @@
 # Build stage
 FROM node:22-alpine AS builder
 
+# Install git (required by VitePress for last updated timestamps)
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 # Copy package files
