@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { Result, Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
@@ -12,7 +12,6 @@ export class StorageService {
 
   constructor(
     private readonly configService: ConfigService,
-    @InjectPinoLogger(StorageService.name)
     private readonly logger: PinoLogger,
   ) {
     const endpoint =

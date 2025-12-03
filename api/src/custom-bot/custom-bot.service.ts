@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
@@ -16,7 +16,6 @@ export class CustomBotService {
   constructor(
     private readonly customBotRepository: CustomBotRepository,
     private readonly storageService: StorageService,
-    @InjectPinoLogger(CustomBotService.name)
     private readonly logger: PinoLogger,
   ) {}
 

@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import {
   connect,
   NatsConnection,
@@ -19,7 +19,6 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
-    @InjectPinoLogger(NatsService.name)
     private readonly logger: PinoLogger,
   ) {}
 

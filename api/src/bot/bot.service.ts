@@ -3,7 +3,7 @@ import { CreateBotDto } from "./dto/create-bot.dto";
 import { UpdateBotDto } from "./dto/update-bot.dto";
 import { BotRepository } from "./bot.repository";
 import { REQUEST } from "@nestjs/core";
-import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { Bot } from "./entities/bot.entity";
 import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
@@ -27,7 +27,6 @@ export class BotService {
     private readonly customBotService: CustomBotService,
     // UserBotsService removed for OSS version
     private readonly natsService: NatsService,
-    @InjectPinoLogger(BotService.name)
     private readonly logger: PinoLogger,
   ) {}
 

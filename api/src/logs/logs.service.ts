@@ -1,6 +1,6 @@
 import { Injectable, Scope } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
 import { Result, Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
@@ -25,7 +25,6 @@ export class LogsService {
   constructor(
     private readonly configService: ConfigService,
     private readonly botService: BotService,
-    @InjectPinoLogger(LogsService.name)
     private readonly logger: PinoLogger,
   ) {
     this.minioClient = new Minio.Client({

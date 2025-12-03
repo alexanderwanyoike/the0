@@ -1,7 +1,7 @@
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PassportStrategy } from "@nestjs/passport";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { PinoLogger, InjectPinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { AuthService } from "./auth.service";
 import { getDatabase, getDatabaseConfig } from "../database/connection";
 import { usersTable, usersTableSqlite } from "../database/schema/users";
@@ -11,7 +11,6 @@ import { eq } from "drizzle-orm";
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private authService: AuthService,
-    @InjectPinoLogger(JwtStrategy.name)
     private readonly logger: PinoLogger,
   ) {
     super({
