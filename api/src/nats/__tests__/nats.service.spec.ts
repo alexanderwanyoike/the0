@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
+import { PinoLogger } from "nestjs-pino";
 import { NatsService } from "../nats.service";
-import { getLoggerToken } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 
 // Mock NATS at the top level to avoid hoisting issues
@@ -73,7 +73,7 @@ describe("NatsService", () => {
           },
         },
         {
-          provide: getLoggerToken(NatsService.name),
+          provide: PinoLogger,
           useValue: createMockLogger(),
         },
       ],

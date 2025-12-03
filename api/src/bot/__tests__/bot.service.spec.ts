@@ -11,7 +11,7 @@ import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { NatsService } from "@/nats/nats.service";
 // FeatureGateService removed for OSS version
 import { Ok, Failure } from "@/common/result";
-import { getLoggerToken } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 
 describe("BotService - Enhanced Tests", () => {
@@ -101,7 +101,7 @@ describe("BotService - Enhanced Tests", () => {
           useValue: { user: { uid } },
         },
         {
-          provide: getLoggerToken(BotService.name),
+          provide: PinoLogger,
           useValue: createMockLogger(),
         },
         // FeatureGateService removed for OSS version

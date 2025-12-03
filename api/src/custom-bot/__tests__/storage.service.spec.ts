@@ -5,7 +5,7 @@ import { Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import { EventEmitter } from "events";
 import AdmZip from "adm-zip";
-import { getLoggerToken } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 
 // Mock the minio module
@@ -72,7 +72,7 @@ describe("StorageService", () => {
           },
         },
         {
-          provide: getLoggerToken(StorageService.name),
+          provide: PinoLogger,
           useValue: createMockLogger(),
         },
       ],
