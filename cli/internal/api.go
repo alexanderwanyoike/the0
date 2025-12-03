@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"the0/internal/logger"
 )
 
 const DEFAULT_API_URL = "http://localhost:3000"
@@ -257,28 +258,29 @@ func (c *APIClient) CheckBotExists(config *BotConfig, auth *Auth) (bool, error) 
 	}
 
 	if !newVersion.GreaterThan(currentVersion) {
-		return false, fmt.Errorf("new version (%s) must be greater than current version (%s). Time to level up! 📈", config.Version, botData.LatestVersion)
+		return false, fmt.Errorf("new version (%s) must be greater than current version (%s)", config.Version, botData.LatestVersion)
 	}
 
-	fmt.Printf("Bot %s is ready for update! Current version: %s, New version: %s\n", config.Name, botData.LatestVersion, config.Version)
+	logger.Verbose("Bot %s ready for update: %s -> %s", config.Name, botData.LatestVersion, config.Version)
 
 	return true, nil
 }
 
 // DeployBot deploys a bot using direct upload: upload file and deploy in one step
 func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isUpdate bool) error {
-	fmt.Println("🚀 Starting deployment process...")
+	logger.StartSpinner("Starting deployment")
 
 	// Step 1: Upload ZIP file directly to API
-	fmt.Printf("📦 Uploading %s to API...\n", filepath.Base(zipPath))
+	logger.UpdateSpinner("Uploading " + filepath.Base(zipPath))
 	filePath, err := c.UploadFileDirect(config.Name, config.Version, zipPath, auth)
 	if err != nil {
+		logger.StopSpinner()
 		return fmt.Errorf("failed to upload file: %v", err)
 	}
-	fmt.Println("✅ File uploaded successfully!")
+	logger.StopSpinnerWithSuccess("Upload complete ⚡")
 
 	// Step 2: Deploy with config and file path
-	fmt.Println("🔧 Configuring deployment...")
+	logger.StartSpinner("Configuring deployment")
 
 	// Read README content
 	readmeContent, err := os.ReadFile(config.Readme)
@@ -364,16 +366,21 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		logger.StopSpinner()
 		return fmt.Errorf("authentication failed: API key is invalid or revoked")
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		logger.StopSpinner()
 		// Try to read error message from response
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("deployment failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return fmt.Errorf("validation error: %s", string(body))
+		}
+		return fmt.Errorf("deployment failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	fmt.Println("🎉 Deployment configured successfully!")
+	logger.StopSpinnerWithSuccess("Deployment successful")
 	return nil
 }
 
@@ -461,7 +468,10 @@ func (c *APIClient) DeployBotInstance(auth *Auth, request *BotDeployRequest) (*B
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return nil, fmt.Errorf("deployment failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return nil, fmt.Errorf("validation error: %s", string(body))
+		}
+		return nil, fmt.Errorf("deployment failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
 	var botInstance BotInstance
@@ -503,7 +513,10 @@ func (c *APIClient) UpdateBotInstance(auth *Auth, botID string, request *BotUpda
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return fmt.Errorf("validation error: %s", string(body))
+		}
+		return fmt.Errorf("update failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -832,7 +845,10 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 	}
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return "", fmt.Errorf("validation error: %s", string(body))
+		}
+		return "", fmt.Errorf("upload failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
 	// Parse the response as a flat structure instead of wrapped
