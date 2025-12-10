@@ -296,6 +296,7 @@ func (vm *VendorManager) runVendorContainer() (string, error) {
 			vm.getPythonInstallCommand(),
 		},
 		WorkingDir: "/app",
+		Env:        getBuildEnvVars(),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -493,6 +494,23 @@ func (vm *VendorManager) runNodeVendorContainer(hasTypeScript bool) (string, err
 	return resp.ID, nil
 }
 
+// getBuildEnvVars returns environment variables for the build container
+func getBuildEnvVars() []string {
+	secrets, err := LoadBuildSecrets()
+	if err != nil || secrets == nil {
+		return nil
+	}
+
+	var envVars []string
+	if secrets.GitHubToken != "" {
+		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
+	}
+	if secrets.PipIndexURL != "" {
+		envVars = append(envVars, fmt.Sprintf("PIP_EXTRA_INDEX_URL=%s", secrets.PipIndexURL))
+	}
+	return envVars
+}
+
 // getPythonInstallCommand returns the pip install command with proper ownership
 func (vm *VendorManager) getPythonInstallCommand() string {
 	// Get current user info for ownership
@@ -507,7 +525,14 @@ func (vm *VendorManager) getPythonInstallCommand() string {
 		gid = "1000"
 	}
 
-	return fmt.Sprintf("pip install --target /vendor -r /requirements.txt --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", uid, gid)
+	// Configure git to use GITHUB_TOKEN for private repos if set
+	// This rewrites git URLs to use the token for authentication
+	gitConfig := `if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:" && git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi`
+
+	// Configure pip to use extra index URL for private PyPI repos if set
+	pipExtraIndex := `PIP_EXTRA_INDEX_FLAG=""; if [ -n "$PIP_EXTRA_INDEX_URL" ]; then PIP_EXTRA_INDEX_FLAG="--extra-index-url $PIP_EXTRA_INDEX_URL"; fi`
+
+	return fmt.Sprintf("%s && %s && pip install --target /vendor -r /requirements.txt $PIP_EXTRA_INDEX_FLAG --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", gitConfig, pipExtraIndex, uid, gid)
 }
 
 // getNodeInstallCommand returns the npm install command with proper ownership

@@ -19,6 +19,7 @@ func NewAuthCmd() *cobra.Command {
 	cmd.AddCommand(NewStatusCmd())
 	cmd.AddCommand(NewLogoutCmd())
 	cmd.AddCommand(NewConfigCmd())
+	cmd.AddCommand(NewSecretsCmd())
 	return cmd
 }
 
@@ -162,4 +163,127 @@ func authConfig(cmd *cobra.Command, args []string) {
 	logger.Newline()
 	logger.Print("3. Add to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
 	logger.Print("   echo 'export THE0_API_URL=%s' >> ~/.bashrc", newURL)
+}
+
+// NewSecretsCmd creates the secrets subcommand for managing build secrets
+func NewSecretsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "secrets",
+		Short: "Manage build secrets for private dependencies",
+		Long: `Manage build-time secrets used during dependency vendoring.
+
+These secrets are used to authenticate with private package repositories
+(like private GitHub repos) when installing dependencies.
+
+Examples:
+  the0 auth secrets show                      # Show configured secrets
+  the0 auth secrets set github-token <token>  # Set GitHub PAT
+  the0 auth secrets clear                     # Remove all secrets`,
+	}
+
+	cmd.AddCommand(NewSecretsShowCmd())
+	cmd.AddCommand(NewSecretsSetCmd())
+	cmd.AddCommand(NewSecretsClearCmd())
+	return cmd
+}
+
+func NewSecretsShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show",
+		Short: "Show configured build secrets",
+		Long:  "Display currently configured build secrets (tokens are masked)",
+		Run:   secretsShow,
+	}
+}
+
+func NewSecretsSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <secret-name> <value>",
+		Short: "Set a build secret",
+		Long: `Set a build secret for dependency vendoring.
+
+Available secrets:
+  github-token    GitHub Personal Access Token for private git repos
+  pip-index-url   Private PyPI index URL (include credentials in URL)
+
+Examples:
+  the0 auth secrets set github-token ghp_xxxxxxxxxxxx
+  the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/`,
+		Args: cobra.ExactArgs(2),
+		Run:  secretsSet,
+	}
+}
+
+func NewSecretsClearCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clear",
+		Short: "Clear all build secrets",
+		Long:  "Remove all saved build secrets from this device",
+		Run:   secretsClear,
+	}
+}
+
+func secretsShow(cmd *cobra.Command, args []string) {
+	secrets, err := internal.LoadBuildSecrets()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load secrets: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Build Secrets:")
+	fmt.Println("--------------")
+
+	if secrets.GitHubToken != "" {
+		fmt.Printf("  github-token:  %s\n", internal.MaskToken(secrets.GitHubToken))
+	} else {
+		fmt.Println("  github-token:  (not set)")
+	}
+
+	if secrets.PipIndexURL != "" {
+		fmt.Printf("  pip-index-url: %s\n", internal.MaskToken(secrets.PipIndexURL))
+	} else {
+		fmt.Println("  pip-index-url: (not set)")
+	}
+
+	fmt.Println("\nThese secrets are used during 'the0 custom-bot deploy' to")
+	fmt.Println("authenticate with private package repositories.")
+}
+
+func secretsSet(cmd *cobra.Command, args []string) {
+	secretName := args[0]
+	secretValue := args[1]
+
+	secrets, err := internal.LoadBuildSecrets()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load existing secrets: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch secretName {
+	case "github-token":
+		secrets.GitHubToken = secretValue
+	case "pip-index-url":
+		secrets.PipIndexURL = secretValue
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown secret: %s\n", secretName)
+		fmt.Println("Available secrets: github-token, pip-index-url")
+		os.Exit(1)
+	}
+
+	if err := internal.SaveBuildSecrets(secrets); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to save secret: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ Secret '%s' saved\n", secretName)
+	fmt.Printf("  Value: %s\n", internal.MaskToken(secretValue))
+}
+
+func secretsClear(cmd *cobra.Command, args []string) {
+	if err := internal.ClearBuildSecrets(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to clear secrets: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("✓ All build secrets cleared")
 }
