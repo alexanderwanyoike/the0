@@ -79,19 +79,12 @@ cd my-awesome-bot/
 
 # Deploy the bot
 the0 custom-bot deploy
-✓ Access granted
-Bot test-scheduled-bot-no-schema is ready for update! Current version: 1.2.0, New version: 1.3.0
-Updating existing bot
-✓ Bot packaged
-🚀 Starting two-step deployment process...
-📡 Requesting upload URL...
-📦 Uploading bot_1751930118.zip to storage...
-✅ File uploaded successfully!
-🔧 Configuring deployment...
-🎉 Deployment configured successfully!
-Bot uploaded to the plaform ⚡
-'test-scheduled-bot-no-schema' v1.3.0 deployed successfully
-Awaiting review by the 0vers33r 👀
+* Starting deployment...
+* Installing dependencies...
+* Authenticating...
+* Uploading bot package...
+* Configuring deployment...
+v 'my-awesome-bot' v1.0.0 deployed successfully
 ```
 
 > Note: Ensure you have Docker installed as it is a requirement for deploying custom bots with dependencies,
@@ -109,33 +102,14 @@ the0 custom-bot versions <type|name>
 #### Examples
 
 ```bash
-# List versions by bot type
-the0 custom-bot versions scheduled/awesome-scheduled-bot
-📋 Fetching versions for custom bot 'scheduled/awesome-scheduled-bot'...
-📋 Found 2 version(s) for custom bot 'scheduled/awesome-scheduled-bot':
+# List versions by bot name
+the0 custom-bot versions awesome-scheduled-bot
+* Fetching versions for awesome-scheduled-bot...
+v Found 2 version(s)
 
-┌─────────┬──────────────────┬────────────────────────────────────────┐
-│ VERSION │    CREATED AT    │                  TYPE                  │
-├─────────┼──────────────────┼────────────────────────────────────────┤
-│ 1.3.0   │ 2025-07-08 00:15 │ scheduled/awesome-scheduled-bot        │
-│ 1.2.0   │ 2025-07-07 21:51 │ scheduled/awesome-scheduled-bot        │
-└─────────┴──────────────────┴────────────────────────────────────────┘
-
-🎉 Version history looking solid! 🚀
-
-# List versions by type
-the0 custom-bot versions trading/awesome-scheduled-bot
-📋 Fetching versions for custom bot 'awesome-scheduled-bot'...
-📋 Found 2 version(s) for custom bot 'awesome-scheduled-bot':
-
-┌─────────┬──────────────────┬────────────────────────────────────────┐
-│ VERSION │    CREATED AT    │                  TYPE                  │
-├─────────┼──────────────────┼────────────────────────────────────────┤
-│ 1.3.0   │ 2025-07-08 00:15 │ scheduled/awesome-scheduled-bot        │
-│ 1.2.0   │ 2025-07-07 21:51 │ scheduled/awesome-scheduled-bot        │
-└─────────┴──────────────────┴────────────────────────────────────────┘
-
-🎉 Version history looking solid! 🚀
+VERSION  CREATED AT        TYPE
+1.3.0    2025-07-08 00:15  scheduled/awesome-scheduled-bot
+1.2.0    2025-07-07 21:51  scheduled/awesome-scheduled-bot
 ```
 
 ### List Custom Bots
@@ -144,19 +118,15 @@ Display all custom bots you've deployed:
 
 ```bash
 the0 custom-bot list
-Found 5 custom bot(s) ⚡
+* Fetching custom bots...
+v Found 5 custom bot(s)
 
-┌──────────────────────────────┬────────────────┬──────────────────┬────────────────────────────────────────┐
-│       CUSTOM BOT NAME        │ LATEST VERSION │    CREATED AT    │                  TYPE                  │
-├──────────────────────────────┼────────────────┼──────────────────┼────────────────────────────────────────┤
-│ dca-accumulator              │ 1.3.0          │ 2025-07-07 21:51 │ scheduled/dca-accumulator              │
-│ arbitrage-scanner            │ 1.12.0         │ 2025-06-29 13:15 │ realtime/arbitrage-scanner             │
-│ momentum-trader              │ 2.11.0         │ 2025-06-30 15:31 │ scheduled/momentum-trader              │
-│ grid-trading-bot             │ 2.22.0         │ 2025-06-22 18:27 │ realtime/grid-trading-bot              │
-│ news-sentiment-trader        │ 1.2.0          │ 2025-06-25 23:16 │ scheduled/news-sentiment-trader        │
-└──────────────────────────────┴────────────────┴──────────────────┴────────────────────────────────────────┘
-
-Custom bot portfolio ready for deployment ⚡
+CUSTOM BOT NAME          LATEST VERSION  CREATED AT        TYPE
+dca-accumulator          1.3.0           2025-07-07 21:51  scheduled/dca-accumulator
+arbitrage-scanner        1.12.0          2025-06-29 13:15  realtime/arbitrage-scanner
+momentum-trader          2.11.0          2025-06-30 15:31  scheduled/momentum-trader
+grid-trading-bot         2.22.0          2025-06-22 18:27  realtime/grid-trading-bot
+news-sentiment-trader    1.2.0           2025-06-25 23:16  scheduled/news-sentiment-trader
 ```
 
 ### Get Custom Bot Schema
@@ -165,8 +135,8 @@ Retrieve the JSON schema for bot configuration:
 
 ```bash
 the0 custom-bot schema bot 1.0.0 another-example-bot
-📄 Fetching bot schema for custom bot 'another-example-bot'...
-📄 Schema for custom bot 'another-example-bot' version '1.0.0' (bot entry point):
+* Fetching schema for another-example-bot...
+v Schema for 'another-example-bot' v1.0.0:
 
 {
   "properties": {
