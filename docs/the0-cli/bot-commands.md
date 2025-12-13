@@ -69,10 +69,10 @@ This will output the JSON schema for the bot configuration, which you can use to
 #### Example
 
 ```bash
-# Create configuration file
+# Get the schema for a custom bot
 the0 custom-bot schema bot 1.0.0 another-example-bot
-📄 Fetching bot schema for custom bot 'another-example-bot'...
-📄 Schema for custom bot 'another-example-bot' version '1.0.0' (bot entry point):
+* Fetching schema for another-example-bot...
+v Schema for 'another-example-bot' v1.0.0:
 
 {
   "properties": {
@@ -131,15 +131,11 @@ the0 bot list
 
 ```bash
 the0 bot list
-Found 1 active bot(s) ⚡
+* Fetching bots...
+v Found 1 bot(s)
 
-┌──────────────────────────────────────┬──────────────────────────────┬────────────────────────────────────────┬─────────┬───────────┬──────────────────┬──────────────────┐
-│                  ID                  │             NAME             │                  TYPE                  │ VERSION │ SCHEDULE  │    CREATED AT    │    UPDATED AT    │
-├──────────────────────────────────────┼──────────────────────────────┼────────────────────────────────────────┼─────────┼───────────┼──────────────────┼──────────────────┤
-│ b838f75d-cf53-4330-ae36-6ebbaf1cc46a │ test-scheduled-bot-no-schema │ scheduled/test-scheduled-bot-no-schema │ 1.2.0   │ * * * * * │ 2025-07-07 23:42 │ 2025-07-07 23:42 │
-└──────────────────────────────────────┴──────────────────────────────┴────────────────────────────────────────┴─────────┴───────────┴──────────────────┴──────────────────┘
-
-Bots locked and loaded. Ready to dominate the markets 📈
+ID                                    NAME                            TYPE                                      VERSION  SCHEDULE   CREATED AT        UPDATED AT
+b838f75d-cf53-4330-ae36-6ebbaf1cc46a  test-scheduled-bot-no-schema    scheduled/test-scheduled-bot-no-schema    1.2.0    * * * * *  2025-07-07 23:42  2025-07-07 23:42
 ```
 
 ### Update Bot Instance
@@ -157,19 +153,19 @@ the0 bot update <bot_id> <config.json>
 cat > updated-config.json << EOF
 {
   "name": "my-trading-bot-updated",
-  "type": "scheduled/rsi-momentum", // "{customBotType}/{customBotName}" for custom bots
+  "type": "scheduled/rsi-momentum",
   "version": "1.0.0",
   "schedule": "0 0 * * *",
   "symbol": "BTCUSDT",
   "risk_level": "low"
-  // Other parameters specific to the bot type (flat structure)
 }
 EOF
 
 # Update the bot
 the0 bot update bot_123 updated-config.json
-# 🔄 Starting bot update process...
-# 🎉 Bot updated successfully!
+* Updating bot...
+v Bot updated successfully
+  ID: bot_123
 ```
 
 ### Delete Bot Instance
@@ -190,14 +186,12 @@ the0 bot delete <bot_id>
 
 ```bash
 the0 bot delete b838f75d-cf53-4330-ae36-6ebbaf1cc46a
-⚠️ Are you sure you want to delete bot 'b838f75d-cf53-4330-ae36-6ebbaf1cc46a'?
+! Are you sure you want to delete bot 'b838f75d-cf53-4330-ae36-6ebbaf1cc46a'?
 This action cannot be undone
 Type 'yes' to confirm: yes
-🗑️ Starting bot deletion process...
-✓ Connected to the matrix
-Bot terminated 💀
-Bot ID: b838f75d-cf53-4330-ae36-6ebbaf1cc46a
-Bot purged from the grid
+* Deleting bot...
+v Bot deleted successfully
+  ID: b838f75d-cf53-4330-ae36-6ebbaf1cc46a
 ```
 
 ## Schedule Format

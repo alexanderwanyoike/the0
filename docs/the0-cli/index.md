@@ -16,7 +16,7 @@ The command-line interface for interacting with the the0 platform. Create, deplo
 ## Bot Management
 
 - **[Bot Commands](./bot-commands)** - Create and manage bots
-- **[Custom Bot Commands](./bot-commands)** - Create and manage custom bots
+- **[Custom Bot Commands](./custom-bot-commands)** - Create and manage custom bots
 
 ## CLI Reference
 

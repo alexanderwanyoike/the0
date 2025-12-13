@@ -33,13 +33,11 @@ the0 auth login
 When prompted, enter your API key:
 
 ```bash
-# Example interaction
-the0 auth login
-Jacking into the0...
-Enter your the0 API key: # your-api-key-here
-✓ Access granted - welcome to the matrix
-Ready to deploy trading bots
-✓ Connection verified
+# Example output
+* Logging in...
+Enter your the0 API key:
+* Verifying API key...
+v Logged in successfully
 ```
 
 ### Check Status
@@ -48,9 +46,9 @@ Verify your API key validity:
 
 ```bash
 the0 auth status
-Running system diagnostics...
-Connected: 2025-07-07 23:02:48
-✓ Connection active
+* Checking authentication status...
+v Authenticated
+  Connected since: 2025-07-07 23:02:48
 ```
 
 ### Logout
@@ -59,8 +57,7 @@ Remove saved API key:
 
 ```bash
 the0 auth logout
-✓ Access codes wiped
-Disconnected from the0
+v Logged out successfully
 ```
 
 ---
@@ -82,7 +79,7 @@ The CLI stores your API key securely in your home directory:
 
 ```bash
 # If you see this error:
-# ❌ Authentication failed: API key is invalid or revoked
+# x Authentication failed: API key is invalid or revoked
 
 # Solution:
 the0 auth logout
@@ -94,12 +91,113 @@ the0 auth login
 
 ```bash
 # If you can't save credentials:
-# ❌ Failed to save credentials: permission denied
+# x Failed to save credentials: permission denied
 
 # Solution: Check directory permissions
 ls -la ~/.the0/
 # Fix permissions if needed
 chmod 700 ~/.the0/
+```
+
+---
+
+## Build Secrets
+
+Build secrets allow you to authenticate with private package repositories when deploying custom bots. These are used during the dependency vendoring process.
+
+### Supported Secrets
+
+| Secret Name | Description |
+|-------------|-------------|
+| `github-token` | GitHub Personal Access Token for accessing private git repositories |
+| `pip-index-url` | Private PyPI index URL (include credentials in the URL) |
+
+### Secrets Commands
+
+#### Show Secrets
+
+Display currently configured secrets (tokens are masked for security):
+
+```bash
+the0 auth secrets show
+```
+
+```bash
+# Example output
+Build Secrets:
+--------------
+  github-token:  ghp_...xxxx
+  pip-index-url: (not set)
+
+These secrets are used during 'the0 custom-bot deploy' to
+authenticate with private package repositories.
+```
+
+#### Set a Secret
+
+Configure a build secret:
+
+```bash
+the0 auth secrets set <secret-name> <value>
+```
+
+**Examples:**
+
+```bash
+# Set GitHub Personal Access Token for private repos
+the0 auth secrets set github-token ghp_xxxxxxxxxxxxxxxxxxxx
+
+# Set private PyPI index URL (include credentials)
+the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/
+```
+
+```bash
+# Example output
+✓ Secret 'github-token' saved
+  Value: ghp_...xxxx
+```
+
+#### Clear Secrets
+
+Remove all saved build secrets:
+
+```bash
+the0 auth secrets clear
+```
+
+```bash
+# Example output
+✓ All build secrets cleared
+```
+
+### Storage Location
+
+Build secrets are stored securely in your home directory:
+
+- **Linux/Mac**: `~/.the0/secrets.json`
+- **Windows**: `%USERPROFILE%\.the0\secrets.json`
+
+> **Security**: Secrets are stored with restricted file permissions (0600). Keep this file secure and never commit it to version control.
+
+### Use Cases
+
+**Private GitHub Repositories**
+
+If your bot depends on packages from private GitHub repos:
+
+```bash
+# Generate a GitHub PAT with repo scope
+# Then set it as a secret
+the0 auth secrets set github-token ghp_your_token_here
+```
+
+**Private PyPI Index**
+
+If your organization uses a private Python package index:
+
+```bash
+# Set the full URL including credentials
+the0 auth secrets set pip-index-url https://username:password@pypi.mycompany.com/simple/
 ```
 
 ---
