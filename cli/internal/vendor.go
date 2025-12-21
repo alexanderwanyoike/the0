@@ -525,14 +525,19 @@ func (vm *VendorManager) getPythonInstallCommand() string {
 		gid = "1000"
 	}
 
+	// Install git if GITHUB_TOKEN is set (needed for private repo dependencies)
+	// The python:3.11-slim image doesn't include git by default
+	gitInstall := `if [ -n "$GITHUB_TOKEN" ]; then apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*; fi`
+
 	// Configure git to use GITHUB_TOKEN for private repos if set
 	// This rewrites git URLs to use the token for authentication
-	gitConfig := `if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:" && git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi`
+	// Handles multiple URL formats: git@github.com:, https://github.com/, ssh://git@github.com/
+	gitConfig := `if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:" && git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; fi`
 
 	// Configure pip to use extra index URL for private PyPI repos if set
 	pipExtraIndex := `PIP_EXTRA_INDEX_FLAG=""; if [ -n "$PIP_EXTRA_INDEX_URL" ]; then PIP_EXTRA_INDEX_FLAG="--extra-index-url $PIP_EXTRA_INDEX_URL"; fi`
 
-	return fmt.Sprintf("%s && %s && pip install --target /vendor -r /requirements.txt $PIP_EXTRA_INDEX_FLAG --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", gitConfig, pipExtraIndex, uid, gid)
+	return fmt.Sprintf("%s && %s && %s && pip install --target /vendor -r /requirements.txt $PIP_EXTRA_INDEX_FLAG --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", gitInstall, gitConfig, pipExtraIndex, uid, gid)
 }
 
 // getNodeInstallCommand returns the npm install command with proper ownership
