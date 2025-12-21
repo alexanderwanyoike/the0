@@ -10,7 +10,7 @@ import {
 import { ApiTags, ApiOperation, ApiHeader, ApiBody } from "@nestjs/swagger";
 import { McpService } from "./mcp.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
-import { InjectPinoLogger, PinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 
 /**
  * JSON-RPC 2.0 Request structure
@@ -42,7 +42,6 @@ export class McpController {
   constructor(
     private readonly mcpService: McpService,
     private readonly apiKeyService: ApiKeyService,
-    @InjectPinoLogger(McpController.name)
     private readonly logger: PinoLogger,
   ) {}
 

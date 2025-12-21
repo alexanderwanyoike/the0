@@ -6,7 +6,7 @@ import { LogsService } from "@/logs/logs.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { Ok, Failure } from "@/common/result";
 import { createMockLogger } from "@/test/mock-logger";
-import { getLoggerToken } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 
 describe("McpService", () => {
   let service: McpService;
@@ -103,7 +103,7 @@ describe("McpService", () => {
           useValue: mockApiKeyService,
         },
         {
-          provide: getLoggerToken(McpService.name),
+          provide: PinoLogger,
           useValue: createMockLogger(),
         },
       ],

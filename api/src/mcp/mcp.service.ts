@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { InjectPinoLogger, PinoLogger } from "nestjs-pino";
+import { PinoLogger } from "nestjs-pino";
 import {
   MCP_TOOL_NAMES,
   BotDeployInput,
@@ -29,7 +29,6 @@ export class McpService {
     private readonly customBotService: CustomBotService,
     private readonly logsService: LogsService,
     private readonly apiKeyService: ApiKeyService,
-    @InjectPinoLogger(McpService.name)
     private readonly logger: PinoLogger,
   ) {
     this.initializeServer();
