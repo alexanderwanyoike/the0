@@ -18,6 +18,10 @@ The command-line interface for interacting with the the0 platform. Create, deplo
 - **[Bot Commands](./bot-commands)** - Create and manage bots
 - **[Custom Bot Commands](./custom-bot-commands)** - Create and manage custom bots
 
+## Advanced
+
+- **[Secrets & Private Dependencies](./secrets)** - Configure access to private GitHub and PyPI repos
+
 ## CLI Reference
 
 Complete command reference and examples for all CLI operations.

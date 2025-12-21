@@ -87,9 +87,11 @@ the0 custom-bot deploy
 v 'my-awesome-bot' v1.0.0 deployed successfully
 ```
 
-> Note: Ensure you have Docker installed as it is a requirement for deploying custom bots with dependencies,
+> **Note**: Docker is required for deploying custom bots with dependencies.
 
-> Note: That every deployment will need a new version number, so make sure to update the `version` field in `bot-config.yaml` before deploying. We follow [semantic versioning](https://semver.org/) (MAJOR.MINOR.PATCH) for bot versions.
+> **Note**: Every deployment needs a new version number. Update the `version` field in `bot-config.yaml` before deploying. We follow [semantic versioning](https://semver.org/) (MAJOR.MINOR.PATCH).
+
+> **Note**: For private GitHub or PyPI dependencies, see [Secrets & Private Dependencies](./secrets).
 
 ### List Custom Bot Versions
 
@@ -216,3 +218,4 @@ docs/
 
 - [Bot Commands](./bot-commands) - Deploy bot instances
 - [Authentication](./authentication) - Set up API access
+- [Secrets & Private Dependencies](./secrets) - Configure private repo access
