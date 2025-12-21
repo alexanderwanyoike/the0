@@ -198,8 +198,11 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_deploy",
           {
-            name: "Test Bot",
-            config: { type: "scheduled/test-bot", version: "1.0.0" },
+            config: {
+              name: "Test Bot",
+              type: "scheduled/test-bot",
+              version: "1.0.0",
+            },
           },
           userId,
         );
@@ -218,8 +221,11 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_deploy",
           {
-            name: "Test Bot",
-            config: { type: "scheduled/nonexistent-bot", version: "1.0.0" },
+            config: {
+              name: "Test Bot",
+              type: "scheduled/nonexistent-bot",
+              version: "1.0.0",
+            },
           },
           userId,
         );

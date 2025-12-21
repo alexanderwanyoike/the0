@@ -109,17 +109,13 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {
-            name: {
-              type: "string",
-              description: "Name for the bot instance",
-            },
             config: {
               type: "object",
               description:
-                "Bot configuration including type (e.g., scheduled/bot-name), version, and bot-specific settings",
+                "Bot configuration including name, type (e.g., scheduled/bot-name), version, and bot-specific settings",
             },
           },
-          required: ["name", "config"],
+          required: ["config"],
         },
       },
       {
@@ -394,9 +390,14 @@ export class McpService {
       throw new Error("Authentication required");
     }
 
-    // Resolve customBotId from type and version
+    // Extract fields from config
+    const configName = input.config?.name as string;
     const configType = input.config?.type as string;
     const configVersion = input.config?.version as string;
+
+    if (!configName) {
+      throw new Error("Config must include 'name' field");
+    }
 
     if (!configType || !configVersion) {
       throw new Error("Config must include 'type' and 'version' fields");
@@ -421,7 +422,7 @@ export class McpService {
     }
 
     const result = await this.botRepository.create({
-      name: input.name,
+      name: configName,
       config: input.config,
       userId,
       topic: "the0-scheduled-custom-bot",

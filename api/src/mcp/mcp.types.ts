@@ -12,7 +12,6 @@ export interface BotGetInput {
 }
 
 export interface BotDeployInput {
-  name: string;
   config: Record<string, unknown>;
 }
 
