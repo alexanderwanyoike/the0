@@ -746,10 +746,7 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 		return nil, fmt.Errorf("network error: %v", err)
 	}
 	defer resp.Body.Close()
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
+
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
