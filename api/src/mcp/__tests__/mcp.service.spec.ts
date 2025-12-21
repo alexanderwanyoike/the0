@@ -190,6 +190,9 @@ describe("McpService", () => {
 
     describe("bot_deploy", () => {
       it("should deploy a new bot", async () => {
+        customBotService.getGlobalSpecificVersion.mockResolvedValue(
+          Ok(mockCustomBot),
+        );
         botRepository.create.mockResolvedValue(Ok(mockBot));
 
         const result = await service.handleToolCall(
@@ -205,6 +208,24 @@ describe("McpService", () => {
         const data = JSON.parse(result.content[0].text);
         expect(data.message).toBe("Bot deployed successfully");
         expect(data.bot.id).toBe("bot-123");
+      });
+
+      it("should fail if custom bot not found", async () => {
+        customBotService.getGlobalSpecificVersion.mockResolvedValue(
+          Failure("Custom bot not found"),
+        );
+
+        const result = await service.handleToolCall(
+          "bot_deploy",
+          {
+            name: "Test Bot",
+            config: { type: "scheduled/nonexistent-bot", version: "1.0.0" },
+          },
+          userId,
+        );
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain("not found");
       });
     });
 
