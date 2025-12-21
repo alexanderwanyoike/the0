@@ -9,6 +9,7 @@ import { ApiKeyModule } from "./api-key/api-key.module";
 import { LogsModule } from "./logs/logs.module";
 import { NatsModule } from "./nats/nats.module";
 import { LoggerModule } from "./logger/logger.module";
+import { McpModule } from "./mcp/mcp.module";
 import configuration from "./config/configuration";
 
 @Module({
@@ -24,6 +25,7 @@ import configuration from "./config/configuration";
     ApiKeyModule,
     LogsModule,
     NatsModule,
+    McpModule,
   ],
   controllers: [AppController],
   providers: [AppService],

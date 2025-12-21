@@ -134,6 +134,62 @@ For more CLI commands and usage, see the CLI documentation.
 
 ---
 
+## MCP Server (Claude Code Integration)
+
+the0 includes a built-in MCP (Model Context Protocol) server that enables AI assistants like Claude Code to interact directly with the platform. This allows you to manage bots, view logs, and deploy configurations using natural language.
+
+### Configure Claude Code
+
+**Option 1: CLI Command**
+
+```bash
+claude mcp add the0 --transport http http://localhost:3000/mcp
+```
+
+**Option 2: Configuration File**
+
+Add to your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "the0": {
+      "url": "http://localhost:3000/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+| Category | Tool | Description |
+|----------|------|-------------|
+| **Auth** | `auth_status` | Check API key validity |
+| **Bot Instance** | `bot_list` | List deployed bots |
+| | `bot_get` | Get bot details |
+| | `bot_deploy` | Deploy a new bot |
+| | `bot_update` | Update bot configuration |
+| | `bot_delete` | Delete a bot |
+| **Logs** | `logs_get` | Get execution logs |
+| | `logs_summary` | Get log statistics |
+| **Custom Bot** | `custom_bot_list` | List available custom bots |
+| | `custom_bot_get` | Get custom bot details |
+| | `custom_bot_schema` | Get configuration schema |
+
+### Example Usage
+
+Once configured, ask Claude Code:
+
+- *"List my deployed bots"*
+- *"Show me the logs for my trading bot"*
+- *"What custom bots are available?"*
+- *"Deploy a new scheduled bot with this configuration"*
+
+**Note:** MCP tools require authentication via API key. Generate one from the web dashboard or CLI.
+
+---
+
 ## Architecture
 
 the0 is built as a microservices execution engine that enables algorithmic trading bot deployment and management:

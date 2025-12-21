@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",
+    "@modelcontextprotocol/sdk": "^1.24.1",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.2",
@@ -63,7 +64,8 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.2.0",
     "semver": "^7.7.2",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
