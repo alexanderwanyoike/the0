@@ -393,11 +393,39 @@ export class McpService {
     if (!userId) {
       throw new Error("Authentication required");
     }
+
+    // Resolve customBotId from type and version
+    const configType = input.config?.type as string;
+    const configVersion = input.config?.version as string;
+
+    if (!configType || !configVersion) {
+      throw new Error("Config must include 'type' and 'version' fields");
+    }
+
+    // Extract custom bot name from type (e.g., "scheduled/alpaca-mixture-of-experts" -> "alpaca-mixture-of-experts")
+    const customBotName = configType.includes("/")
+      ? configType.split("/")[1]
+      : configType;
+
+    // Look up the custom bot to get its ID
+    const customBotResult =
+      await this.customBotService.getGlobalSpecificVersion(
+        customBotName,
+        configVersion,
+      );
+
+    if (!customBotResult.success || !customBotResult.data) {
+      throw new Error(
+        `Custom bot '${customBotName}' version '${configVersion}' not found`,
+      );
+    }
+
     const result = await this.botRepository.create({
       name: input.name,
       config: input.config,
       userId,
       topic: "the0-scheduled-custom-bot",
+      customBotId: customBotResult.data.id,
     });
     if (!result.success) {
       throw new Error(result.error || "Failed to deploy bot");
