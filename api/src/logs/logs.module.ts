@@ -10,5 +10,6 @@ import { LoggerModule } from "@/logger/logger.module";
   imports: [ConfigModule, BotModule, ApiKeyModule, LoggerModule],
   controllers: [LogsController],
   providers: [LogsService],
+  exports: [LogsService],
 })
 export class LogsModule {}
