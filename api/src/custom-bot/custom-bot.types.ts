@@ -20,6 +20,8 @@ export interface CustomBotConfig {
     bot: Record<string, any>;
   };
   readme: string;
+  /** Whether this bot has a custom frontend dashboard */
+  hasFrontend?: boolean;
   metadata?: {
     categories?: string[];
     instruments?: string[];

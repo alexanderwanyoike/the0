@@ -90,7 +90,11 @@ describe("CustomBotService", () => {
     >;
 
     const mockLogger = createMockLogger();
-    service = new CustomBotService(mockRepository, mockStorageService, mockLogger as any);
+    service = new CustomBotService(
+      mockRepository,
+      mockStorageService,
+      mockLogger as any,
+    );
   });
 
   afterEach(() => {

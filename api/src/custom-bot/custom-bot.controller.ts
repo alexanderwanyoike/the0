@@ -8,6 +8,7 @@ import {
   BadRequestException,
   NotFoundException,
   Req,
+  Res,
   HttpStatus,
   HttpCode,
   UseGuards,
@@ -16,7 +17,7 @@ import {
   UploadedFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { Request } from "express";
+import { Request, Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
@@ -255,6 +256,47 @@ export class CustomBotController {
       data: result.data,
       message: "Bot versions retrieved successfully",
     };
+  }
+
+  @Get(":name/frontend")
+  async getFrontendBundle(@Param("name") name: string, @Res() res: Response) {
+    // Get the latest version of the bot
+    const result = await this.customBotService.getAllGlobalVersions(name);
+
+    if (!result.success || !result.data) {
+      throw new NotFoundException(`Bot not found: ${name}`);
+    }
+
+    const latestVersion = result.data.latestVersion;
+    const versions = result.data.versions;
+    const versionInfo = versions.find((v) => v.version === latestVersion);
+
+    if (!versionInfo) {
+      throw new NotFoundException(`Version not found: ${latestVersion}`);
+    }
+
+    // Check if bot has frontend
+    if (!versionInfo.config.hasFrontend) {
+      throw new NotFoundException("This bot does not have a custom frontend");
+    }
+
+    // Get frontend bundle from storage
+    // Frontend is stored separately at: {userId}/{botName}/{version}/frontend.js
+    const frontendPath = this.storageService.getFrontendPath(
+      versionInfo.userId,
+      name,
+      versionInfo.version,
+    );
+    const bundleResult = await this.storageService.getBotFrontend(frontendPath);
+
+    if (!bundleResult.success || !bundleResult.data) {
+      throw new NotFoundException("Frontend bundle not found");
+    }
+
+    // Serve the JavaScript bundle
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.send(bundleResult.data);
   }
 
   @Get(":name/:version")

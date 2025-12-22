@@ -14,8 +14,10 @@ import {
   RefreshCw,
   Filter,
   X,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
 
 export interface LogEntry {
   date: string;
@@ -137,6 +139,79 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       </span>
     </div>
   );
+};
+
+/**
+ * Component for rendering metric entries with visual distinction.
+ */
+const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
+  log,
+}) => {
+  const event = parseLogLine(log.content);
+
+  if (!isMetricEvent(event)) {
+    return <LogEntryComponent log={log} index={0} />;
+  }
+
+  const metricData = event.data as Record<string, unknown>;
+  const metricType = event.metricType || "metric";
+
+  // Format timestamp
+  const timestamp = event.timestamp;
+  const month = String(timestamp.getMonth() + 1).padStart(2, "0");
+  const day = String(timestamp.getDate()).padStart(2, "0");
+  const hours = String(timestamp.getHours()).padStart(2, "0");
+  const minutes = String(timestamp.getMinutes()).padStart(2, "0");
+  const seconds = String(timestamp.getSeconds()).padStart(2, "0");
+  const formattedTime = `${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+  // Get display values (exclude _metric key)
+  const displayData = Object.entries(metricData)
+    .filter(([key]) => key !== "_metric")
+    .map(([key, value]) => ({
+      key,
+      value: typeof value === "object" ? JSON.stringify(value) : String(value),
+    }));
+
+  return (
+    <div className="flex items-start gap-3 py-1 px-3 bg-blue-950/20 dark:bg-blue-950/30 hover:bg-blue-950/30 dark:hover:bg-blue-950/40 border-l-2 border-blue-500 font-mono text-sm transition-colors">
+      <span className="text-blue-400 dark:text-blue-300 text-sm min-w-[110px] flex-shrink-0">
+        {formattedTime}
+      </span>
+      <BarChart3 className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+      <div className="flex-1 flex items-center gap-2 flex-wrap">
+        <Badge
+          variant="outline"
+          className="text-xs bg-blue-900/50 border-blue-700 text-blue-300"
+        >
+          {metricType}
+        </Badge>
+        {displayData.map(({ key, value }) => (
+          <span key={key} className="text-blue-200">
+            <span className="text-blue-400">{key}:</span>{" "}
+            <span className="text-blue-100">{value}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Smart entry component that detects metrics vs logs.
+ */
+const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
+  log,
+  index,
+}) => {
+  // Check if this is a metric by trying to parse
+  const event = parseLogLine(log.content);
+
+  if (isMetricEvent(event)) {
+    return <MetricEntryComponent log={log} index={index} />;
+  }
+
+  return <LogEntryComponent log={log} index={index} />;
 };
 
 export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
@@ -358,7 +433,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           ) : (
             <>
               {filteredLogs.map((log, index) => (
-                <LogEntryComponent
+                <SmartLogEntry
                   key={`log-${index}-${log.content.slice(0, 20)}`}
                   log={log}
                   index={index}

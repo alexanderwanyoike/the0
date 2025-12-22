@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withAuth } from "@/components/auth/with-auth";
-import { ConsoleInterface } from "@/components/bot/console-interface";
+import { BotFrontendLoader } from "@/components/bot/BotFrontendLoader";
 import {
   Dialog,
   DialogContent,
@@ -514,10 +514,12 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 <TradingViewWidget symbol={bot.config.symbol} />
               </div>
 
-              {/* Console */}
+              {/* Console / Custom Frontend */}
               <div className="h-[600px] md:h-[600px] bg-muted/30">
-                <ConsoleInterface
+                <BotFrontendLoader
                   botId={botId}
+                  botName={bot.config.name}
+                  hasFrontend={bot.config.hasFrontend ?? false}
                   logs={logs}
                   loading={logsLoading}
                   onRefresh={refreshLogs}
@@ -529,10 +531,12 @@ const BotDetail = ({ params }: BotDetailProps) => {
               </div>
             </div>
           ) : (
-            /* Console takes full width when no symbol */
+            /* Console / Custom Frontend takes full width when no symbol */
             <div className="h-[600px] md:h-[600px] bg-muted/30">
-              <ConsoleInterface
+              <BotFrontendLoader
                 botId={botId}
+                botName={bot.config.name}
+                hasFrontend={bot.config.hasFrontend ?? false}
                 logs={logs}
                 loading={logsLoading}
                 onRefresh={refreshLogs}
