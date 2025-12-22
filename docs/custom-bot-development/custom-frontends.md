@@ -42,7 +42,7 @@ Your `frontend/index.tsx` must export a default React component:
 ```tsx
 // frontend/index.tsx
 import React from 'react';
-import { useThe0Events } from '@the0/sdk';
+import { useThe0Events } from '@the0/react';
 import { PortfolioChart } from './components/PortfolioChart';
 import { TradeTable } from './components/TradeTable';
 
@@ -143,7 +143,7 @@ const portfolioSeries = utils.extractTimeSeries('portfolio_value', 'value');
 ```tsx
 // components/PortfolioChart.tsx
 import React from 'react';
-import { BotEvent } from '@the0/sdk';
+import { BotEvent } from '@the0/react';
 
 interface Props {
   data: BotEvent[];
@@ -171,7 +171,7 @@ export function PortfolioChart({ data }: Props) {
 ```tsx
 // components/TradeTable.tsx
 import React from 'react';
-import { BotEvent } from '@the0/sdk';
+import { BotEvent } from '@the0/react';
 
 interface Props {
   trades: BotEvent[];

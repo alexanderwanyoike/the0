@@ -18,7 +18,28 @@ interface BotEventsContextValue {
   botId: string;
 }
 
-const BotEventsContext = createContext<BotEventsContextValue | null>(null);
+// Shared context - also accessible via @the0/react SDK
+declare global {
+  interface Window {
+    __THE0_EVENTS_CONTEXT__?: React.Context<BotEventsContextValue | null>;
+  }
+}
+
+function getSharedContext(): React.Context<BotEventsContextValue | null> {
+  if (typeof window !== "undefined" && window.__THE0_EVENTS_CONTEXT__) {
+    return window.__THE0_EVENTS_CONTEXT__;
+  }
+
+  const context = createContext<BotEventsContextValue | null>(null);
+
+  if (typeof window !== "undefined") {
+    window.__THE0_EVENTS_CONTEXT__ = context;
+  }
+
+  return context;
+}
+
+const BotEventsContext = getSharedContext();
 
 interface BotEventsProviderProps {
   children: ReactNode;
