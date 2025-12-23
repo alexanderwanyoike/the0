@@ -1,6 +1,6 @@
 {
   "name": "@alexanderwanyoike/the0-react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React SDK for the0 bot custom frontends",
   "repository": {
     "type": "git",
@@ -14,24 +14,40 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "bin": {
+    "the0-build": "./dist/cli.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./build": {
+      "types": "./dist/build.d.ts",
+      "import": "./dist/build.mjs",
+      "require": "./dist/build.js"
+    },
+    "./esbuild": {
+      "types": "./dist/esbuild.d.ts",
+      "import": "./dist/esbuild.mjs",
+      "require": "./dist/esbuild.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --external react",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --external react --watch",
+    "build": "tsup src/index.ts src/build.ts src/esbuild.ts src/cli.ts --format cjs,esm --dts --external react --external esbuild",
+    "dev": "tsup src/index.ts src/build.ts src/esbuild.ts src/cli.ts --format cjs,esm --dts --external react --external esbuild --watch",
     "test": "jest",
     "test:watch": "jest --watch"
   },
   "peerDependencies": {
     "react": ">=18.0.0"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
@@ -51,7 +67,8 @@
     "trading",
     "bot",
     "dashboard",
-    "react"
+    "react",
+    "esbuild"
   ],
   "license": "Apache-2.0"
 }
