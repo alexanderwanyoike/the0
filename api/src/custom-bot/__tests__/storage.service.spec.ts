@@ -361,7 +361,7 @@ describe("StorageService", () => {
     });
   });
 
-  describe("getBotFrontend", () => {
+  describe("getBotFrontendStream", () => {
     it("should get frontend bundle successfully", async () => {
       const frontendContent =
         'export default function Dashboard() { return "Hello"; }';
@@ -372,12 +372,12 @@ describe("StorageService", () => {
       };
       mockMinioClient.getObject.mockResolvedValue(mockStream as any);
 
-      const result = await service.getBotFrontend(
+      const result = await service.getBotFrontendStream(
         "user123/test-bot/1.0.0/frontend.js",
       );
 
       expect(result.success).toBe(true);
-      expect(result.data).toBe(frontendContent);
+      expect(result.data).toBe(mockStream);
       expect(mockMinioClient.getObject).toHaveBeenCalledWith(
         "custom-bots",
         "user123/test-bot/1.0.0/frontend.js",
@@ -389,7 +389,7 @@ describe("StorageService", () => {
       error.code = "NoSuchKey";
       mockMinioClient.getObject.mockRejectedValue(error);
 
-      const result = await service.getBotFrontend(
+      const result = await service.getBotFrontendStream(
         "user123/test-bot/1.0.0/frontend.js",
       );
 
@@ -400,7 +400,7 @@ describe("StorageService", () => {
     it("should handle other errors", async () => {
       mockMinioClient.getObject.mockRejectedValue(new Error("Network error"));
 
-      const result = await service.getBotFrontend(
+      const result = await service.getBotFrontendStream(
         "user123/test-bot/1.0.0/frontend.js",
       );
 
