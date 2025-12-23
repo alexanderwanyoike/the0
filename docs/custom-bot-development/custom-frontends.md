@@ -32,6 +32,7 @@ my-bot/
 ├── requirements.txt     # Python dependencies
 └── frontend/
     ├── package.json     # Frontend dependencies
+    ├── tsconfig.json    # TypeScript configuration
     └── index.tsx        # Dashboard component (required)
 ```
 
@@ -46,14 +47,38 @@ Create `frontend/package.json`:
   "private": true,
   "main": "index.tsx",
   "scripts": {
-    "build": "esbuild index.tsx --bundle --format=esm --outfile=dist/bundle.js --external:react --external:react-dom --minify"
+    "build": "the0-build",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@alexanderwanyoike/the0-react": "^0.1.0",
+    "@alexanderwanyoike/the0-react": "^0.2.0",
     "@types/react": "^19.0.0",
-    "esbuild": "^0.24.0",
     "typescript": "^5.0.0"
   }
+}
+```
+
+The `the0-build` command is provided by the SDK and handles all the React bundling configuration automatically.
+
+### Step 3: Add TypeScript Config
+
+Create `frontend/tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": ["*.tsx", "*.ts"],
+  "exclude": ["node_modules", "dist"]
 }
 ```
 
@@ -64,7 +89,7 @@ cd frontend
 npm install
 ```
 
-### Step 3: Create Your Dashboard
+### Step 5: Create Your Dashboard
 
 Create `frontend/index.tsx`:
 
@@ -138,7 +163,7 @@ export default function Dashboard() {
 }
 ```
 
-### Step 4: Deploy
+### Step 6: Deploy
 
 ```bash
 the0 custom-bot deploy
@@ -340,10 +365,41 @@ If your frontend fails to load, the platform falls back to the standard console 
 | Issue | Solution |
 |-------|----------|
 | Dashboard not appearing | Ensure `frontend/package.json` exists with a `build` script |
-| "React not found" error | React is provided by the platform - ensure you externalize it in your build script |
+| "React not found" error | Ensure you're using `@alexanderwanyoike/the0-react` v0.2.0+ with `the0-build` |
 | Metrics not showing | Check your bot emits `_metric` field in logs |
 | Build errors during deploy | Check the CLI output for npm/esbuild errors in your frontend code |
 | Docker not available | The CLI uses Docker to build frontends - ensure Docker is running |
+
+## Advanced: Custom Build Configuration
+
+For advanced users who need custom esbuild configuration, you can import the plugin directly:
+
+```javascript
+// esbuild.config.mjs
+import * as esbuild from "esbuild";
+import { reactGlobalPlugin } from "@alexanderwanyoike/the0-react/esbuild";
+
+await esbuild.build({
+  entryPoints: ["index.tsx"],
+  bundle: true,
+  format: "esm",
+  outfile: "dist/bundle.js",
+  minify: true,
+  plugins: [reactGlobalPlugin, /* your custom plugins */],
+});
+```
+
+Or use the build function with options:
+
+```javascript
+import { build } from "@alexanderwanyoike/the0-react/build";
+
+await build({
+  entryPoint: "src/Dashboard.tsx",
+  outfile: "build/bundle.js",
+  minify: false,
+});
+```
 
 ---
 
