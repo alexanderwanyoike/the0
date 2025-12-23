@@ -6,78 +6,152 @@ order: 7
 
 # Custom Frontends
 
-the0 allows you to build custom React dashboards for your trading bots. Instead of viewing raw logs, you can create rich visualizations - charts, tables, status cards, and more - that bring your trading data to life.
+Build custom React dashboards for your trading bots. This guide walks you through creating a frontend from scratch.
 
-## How It Works
+## Prerequisites
 
-1. Your bot emits [structured metrics](./metrics) alongside regular logs
-2. You include a `frontend/` directory in your bot package with React components
-3. The CLI bundles your frontend during deployment
-4. the0 serves your custom dashboard when viewing the bot
+Before starting, ensure your bot emits structured metrics. See [Metrics & Logging](./metrics) for details.
 
-If no custom frontend is provided, bots display the standard console view with parsed metrics.
+## Quick Start
 
-## Project Structure
+### Step 1: Create the Frontend Directory
 
-Add a `frontend/` directory to your bot package:
+Add a `frontend/` folder to your bot project:
+
+```bash
+cd my-bot
+mkdir -p frontend
+```
+
+Your project should look like:
 
 ```
 my-bot/
-├── main.py                 # Bot entry point
-├── bot-config.yaml         # Bot configuration
-├── requirements.txt        # Python dependencies
+├── main.py              # Bot entry point
+├── bot-config.yaml      # Bot configuration
+├── requirements.txt     # Python dependencies
 └── frontend/
-    ├── package.json        # Frontend dependencies
-    ├── index.tsx           # Dashboard entry point (required)
-    └── components/         # Your custom components
-        ├── PortfolioChart.tsx
-        ├── TradeTable.tsx
-        └── MetricCard.tsx
+    ├── package.json     # Frontend dependencies
+    └── index.tsx        # Dashboard component (required)
 ```
 
-## Entry Point Contract
+### Step 2: Initialize package.json
 
-Your `frontend/index.tsx` must export a default React component:
+Create `frontend/package.json`:
+
+```json
+{
+  "name": "my-bot-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.tsx",
+  "scripts": {
+    "build": "esbuild index.tsx --bundle --format=esm --outfile=dist/bundle.js --external:react --external:react-dom --minify"
+  },
+  "devDependencies": {
+    "@alexanderwanyoike/the0-react": "^0.1.0",
+    "@types/react": "^19.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.0.0"
+  }
+}
+```
+
+Install dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+### Step 3: Create Your Dashboard
+
+Create `frontend/index.tsx`:
 
 ```tsx
-// frontend/index.tsx
-import React from 'react';
-import { useThe0Events } from '@the0/react';
-import { PortfolioChart } from './components/PortfolioChart';
-import { TradeTable } from './components/TradeTable';
+import React from "react";
+import { useThe0Events, BotEvent } from "@alexanderwanyoike/the0-react";
 
 export default function Dashboard() {
-  const { events, utils, loading } = useThe0Events();
+  const { events, utils, loading, error } = useThe0Events();
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-green-400 font-mono">Loading metrics...</div>
+      </div>
+    );
   }
 
-  // Filter events by type
-  const portfolioHistory = utils.filterByType('portfolio_value');
-  const trades = utils.filterByType('trade');
-  const signals = utils.filterByType('signal');
+  if (error) {
+    return (
+      <div className="p-4 bg-red-950/30 border border-red-800 rounded">
+        <p className="text-red-400">Error: {error}</p>
+      </div>
+    );
+  }
+
+  // Get your bot's metrics
+  const portfolioValues = utils.filterByType("portfolio_value");
+  const trades = utils.filterByType("trade");
+  const latestPortfolio = utils.latest("portfolio_value");
 
   return (
-    <div className="p-4 space-y-6">
-      <h1 className="text-2xl font-bold">My Trading Bot</h1>
+    <div className="p-4 space-y-6 font-mono">
+      <h1 className="text-xl font-bold text-green-400">My Bot Dashboard</h1>
 
-      {/* Portfolio Value Chart */}
-      <PortfolioChart data={portfolioHistory} />
+      {/* Latest Portfolio Value */}
+      {latestPortfolio && (
+        <div className="bg-gray-900 border border-green-900/50 rounded p-6">
+          <div className="text-sm text-gray-500">Portfolio Value</div>
+          <div className="text-3xl font-bold text-green-400">
+            ${(latestPortfolio.data as any).value?.toLocaleString()}
+          </div>
+        </div>
+      )}
 
-      {/* Recent Trades Table */}
-      <TradeTable trades={trades.slice(-20)} />
-
-      {/* Signal Summary */}
-      <div className="grid grid-cols-3 gap-4">
-        {signals.slice(-3).map((signal, i) => (
-          <SignalCard key={i} signal={signal} />
-        ))}
+      {/* Trade History */}
+      <div className="bg-gray-900 border border-gray-800 rounded p-4">
+        <h2 className="text-sm font-semibold text-gray-400 mb-3">
+          Recent Trades ({trades.length})
+        </h2>
+        {trades.length === 0 ? (
+          <p className="text-gray-500 text-sm">No trades yet</p>
+        ) : (
+          <div className="space-y-2">
+            {trades.slice(-5).reverse().map((event, i) => {
+              const data = event.data as any;
+              return (
+                <div key={i} className="flex justify-between text-sm">
+                  <span className="text-gray-400">{data.symbol}</span>
+                  <span className={data.side === "buy" ? "text-green-400" : "text-red-400"}>
+                    {data.side.toUpperCase()} {data.quantity}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 ```
+
+### Step 4: Deploy
+
+```bash
+the0 custom-bot deploy
+```
+
+The CLI automatically:
+1. Detects your `frontend/` directory
+2. Builds the bundle using Docker (runs `npm run build`)
+3. Packages and deploys your bot with the frontend
+
+No manual build step required.
+
+---
 
 ## The Events API
 
@@ -88,14 +162,12 @@ const {
   events,      // All parsed events (logs + metrics)
   loading,     // Loading state
   error,       // Error state
-  utils,       // Utility functions (see below)
+  utils,       // Utility functions
   refresh,     // Manual refresh function
 } = useThe0Events();
 ```
 
 ### Event Structure
-
-Each event has the following shape:
 
 ```typescript
 interface BotEvent {
@@ -110,247 +182,82 @@ interface BotEvent {
 
 ### Utility Functions
 
-The `utils` object provides powerful filtering and aggregation:
-
 ```typescript
-// Time-based filtering
-const recent = utils.since('1h');           // Events from last hour
-const today = utils.since('24h');           // Events from last 24 hours
-const window = utils.between(startDate, endDate);
-
-// Type filtering
+// Filter by metric type
 const trades = utils.filterByType('trade');
-const signals = utils.filterByType('signal');
+const portfolioValues = utils.filterByType('portfolio_value');
+
+// Get the latest metric of a type
+const latestPortfolio = utils.latest('portfolio_value');
+
+// Get all metrics or all logs
 const allMetrics = utils.metrics();
 const allLogs = utils.logs();
 
-// Aggregation
-const latestPortfolio = utils.latest('portfolio_value');
-const byType = utils.groupByMetricType();
+// Time-based filtering
+const recent = utils.since('1h');           // Last hour
+const today = utils.since('24h');           // Last 24 hours
+const window = utils.between(startDate, endDate);
 
 // For scheduled bots - group events by execution run
 const runs = utils.groupByRun();
 
 // Extract time series for charting
-const portfolioSeries = utils.extractTimeSeries('portfolio_value', 'value');
+const series = utils.extractTimeSeries('portfolio_value', 'value');
 // Returns: [{ timestamp: Date, value: number }, ...]
 ```
 
-## Building Components
+---
 
-### Portfolio Chart Example
+## Working Example
+
+See `example-bots/python-portfolio-tracker/` for a complete working example:
+
+```
+example-bots/python-portfolio-tracker/
+├── main.py              # Bot with structlog metrics
+├── bot-config.yaml      # Configuration
+├── requirements.txt     # Python deps
+└── frontend/
+    ├── package.json     # Uses @alexanderwanyoike/the0-react
+    └── index.tsx        # Full dashboard with multiple components
+```
+
+**Bot (main.py)** emits metrics:
+
+```python
+logger.info(
+    "portfolio_snapshot",
+    _metric="portfolio_value",
+    value=portfolio["total_value"],
+    change_pct=portfolio["change_pct"]
+)
+
+logger.info(
+    "trade_executed",
+    _metric="trade",
+    symbol=trade["symbol"],
+    side=trade["side"],
+    quantity=trade["quantity"],
+    price=trade["price"]
+)
+```
+
+**Frontend (index.tsx)** consumes them:
 
 ```tsx
-// components/PortfolioChart.tsx
-import React from 'react';
-import { BotEvent } from '@the0/react';
-
-interface Props {
-  data: BotEvent[];
-}
-
-export function PortfolioChart({ data }: Props) {
-  // Transform events to chart data
-  const chartData = data.map(event => ({
-    time: event.timestamp,
-    value: (event.data as any).value
-  }));
-
-  return (
-    <div className="bg-gray-900 p-4 rounded-lg">
-      <h2 className="text-lg font-semibold mb-4">Portfolio Value</h2>
-      {/* Use your preferred charting library */}
-      <LineChart data={chartData} />
-    </div>
-  );
-}
+const portfolioValues = utils.filterByType("portfolio_value");
+const trades = utils.filterByType("trade");
+const latestPortfolio = utils.latest("portfolio_value");
 ```
 
-### Trade Table Example
-
-```tsx
-// components/TradeTable.tsx
-import React from 'react';
-import { BotEvent } from '@the0/react';
-
-interface Props {
-  trades: BotEvent[];
-}
-
-export function TradeTable({ trades }: Props) {
-  return (
-    <div className="bg-gray-900 p-4 rounded-lg">
-      <h2 className="text-lg font-semibold mb-4">Recent Trades</h2>
-      <table className="w-full">
-        <thead>
-          <tr className="text-left text-gray-400">
-            <th>Time</th>
-            <th>Symbol</th>
-            <th>Side</th>
-            <th>Quantity</th>
-            <th>Price</th>
-          </tr>
-        </thead>
-        <tbody>
-          {trades.map((trade, i) => {
-            const data = trade.data as any;
-            return (
-              <tr key={i} className="border-t border-gray-800">
-                <td>{trade.timestamp.toLocaleTimeString()}</td>
-                <td>{data.symbol}</td>
-                <td className={data.side === 'buy' ? 'text-green-400' : 'text-red-400'}>
-                  {data.side.toUpperCase()}
-                </td>
-                <td>{data.quantity}</td>
-                <td>${data.price.toLocaleString()}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-```
-
-### Metric Card Example
-
-```tsx
-// components/MetricCard.tsx
-import React from 'react';
-
-interface Props {
-  title: string;
-  value: string | number;
-  change?: number;
-  icon?: React.ReactNode;
-}
-
-export function MetricCard({ title, value, change, icon }: Props) {
-  return (
-    <div className="bg-gray-900 p-4 rounded-lg">
-      <div className="flex items-center justify-between">
-        <span className="text-gray-400 text-sm">{title}</span>
-        {icon}
-      </div>
-      <div className="mt-2">
-        <span className="text-2xl font-bold">{value}</span>
-        {change !== undefined && (
-          <span className={`ml-2 text-sm ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {change >= 0 ? '+' : ''}{change.toFixed(2)}%
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-```
-
-## Frontend Package Configuration
-
-Your `frontend/package.json` should include:
-
-```json
-{
-  "name": "my-bot-frontend",
-  "version": "1.0.0",
-  "private": true,
-  "main": "index.tsx",
-  "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "devDependencies": {
-    "@types/react": "^19.0.0",
-    "typescript": "^5.0.0"
-  }
-}
-```
-
-> **Note**: React and ReactDOM are provided by the0's runtime and will be externalized during bundling. You don't need to bundle them.
-
-## Supported Bundle Locations
-
-The CLI looks for your frontend bundle in these locations (in order):
-
-1. `frontend/dist/bundle.js`
-2. `frontend/dist/index.js`
-3. `frontend/bundle.js`
-4. `frontend.js`
-5. `dist/frontend.js`
-
-For most setups, build to `frontend/dist/bundle.js`.
-
-## Building Your Frontend
-
-### With esbuild (Recommended)
-
-```bash
-# Install esbuild
-npm install -D esbuild
-
-# Build command
-npx esbuild frontend/index.tsx \
-  --bundle \
-  --format=esm \
-  --outfile=frontend/dist/bundle.js \
-  --external:react \
-  --external:react-dom \
-  --minify
-```
-
-### With Vite
-
-```javascript
-// vite.config.js
-export default {
-  build: {
-    lib: {
-      entry: 'frontend/index.tsx',
-      formats: ['es'],
-      fileName: 'bundle'
-    },
-    outDir: 'frontend/dist',
-    rollupOptions: {
-      external: ['react', 'react-dom']
-    }
-  }
-}
-```
-
-### Build Script in package.json
-
-```json
-{
-  "scripts": {
-    "build:frontend": "esbuild frontend/index.tsx --bundle --format=esm --outfile=frontend/dist/bundle.js --external:react --external:react-dom --minify"
-  }
-}
-```
-
-## Deployment
-
-When you deploy your bot with `the0 deploy`:
-
-1. The CLI detects the `frontend/` directory
-2. If a built bundle exists, it's extracted and stored separately
-3. The bot's config is updated with `hasFrontend: true`
-4. Your dashboard is served at `/api/custom-bots/{bot-name}/frontend`
-
-```bash
-# Build frontend first
-cd my-bot
-npm run build:frontend
-
-# Then deploy
-the0 deploy
-```
+---
 
 ## Styling
 
-Your frontend runs inside the0's dashboard context. You have access to:
+Your frontend has access to:
 
-- **Tailwind CSS** - All utility classes available
+- **Tailwind CSS** - All utility classes
 - **CSS Variables** - Theme-aware colors:
 
 ```css
@@ -364,38 +271,55 @@ Your frontend runs inside the0's dashboard context. You have access to:
 }
 ```
 
-Use these for consistent theming:
+Use them for consistent theming:
 
 ```tsx
-<div style={{
-  backgroundColor: 'var(--the0-card)',
-  borderColor: 'var(--the0-border)'
-}}>
+<div className="bg-gray-900 border border-green-900/50 rounded p-4">
   ...
 </div>
 ```
 
-## Charting Libraries
+---
 
-You can use any charting library that works with React. Popular choices:
+## Adding Charts
 
-- **Lightweight Charts** - TradingView-style financial charts
-- **Recharts** - Simple, composable charts
-- **Plotly** - Interactive scientific charts
-- **Victory** - Modular charting components
+Use any React charting library. Add to `package.json`:
 
-Just add them to your `frontend/package.json` and import as needed.
+```json
+{
+  "dependencies": {
+    "recharts": "^2.0.0"
+  }
+}
+```
+
+Example with time series:
+
+```tsx
+import { LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
+
+function PortfolioChart() {
+  const { utils } = useThe0Events();
+  const series = utils.extractTimeSeries('portfolio_value', 'value');
+
+  return (
+    <LineChart width={600} height={300} data={series}>
+      <XAxis dataKey="timestamp" />
+      <YAxis />
+      <Tooltip />
+      <Line type="monotone" dataKey="value" stroke="#22c55e" />
+    </LineChart>
+  );
+}
+```
+
+---
 
 ## Error Handling
 
-If your frontend fails to load, the platform falls back to the standard console view. Common issues:
-
-- **Missing default export** - Ensure `index.tsx` exports a default component
-- **Build errors** - Check your bundle builds correctly before deploying
-- **Runtime errors** - Use error boundaries in your React code
+Add error boundaries for resilience:
 
 ```tsx
-// Add error boundary for resilience
 import { ErrorBoundary } from 'react-error-boundary';
 
 export default function Dashboard() {
@@ -407,41 +331,21 @@ export default function Dashboard() {
 }
 ```
 
-## Example: Complete Bot with Frontend
+If your frontend fails to load, the platform falls back to the standard console view.
 
-Check out the `example-bots/` directory in the repository for complete working examples:
+---
 
-### Portfolio Tracker (Python + React)
+## Troubleshooting
 
-Location: `example-bots/python-portfolio-tracker/`
+| Issue | Solution |
+|-------|----------|
+| Dashboard not appearing | Ensure `frontend/package.json` exists with a `build` script |
+| "React not found" error | React is provided by the platform - ensure you externalize it in your build script |
+| Metrics not showing | Check your bot emits `_metric` field in logs |
+| Build errors during deploy | Check the CLI output for npm/esbuild errors in your frontend code |
+| Docker not available | The CLI uses Docker to build frontends - ensure Docker is running |
 
-A scheduled bot that demonstrates:
-- Structured metric emission using structlog
-- Custom React dashboard with portfolio value display
-- Position tracking and trade history visualization
-- Using `utils.groupByRun()` for scheduled bot data
-
-```
-example-bots/python-portfolio-tracker/
-├── main.py                 # Bot entry point with structlog metrics
-├── bot-config.yaml         # Bot configuration
-├── requirements.txt        # Python dependencies
-└── frontend/
-    ├── package.json        # React + TypeScript dependencies
-    └── index.tsx           # Complete dashboard implementation
-```
-
-Key features in the frontend:
-- `useThe0Events()` hook for accessing bot metrics
-- `utils.filterByType()` for getting specific metric types
-- `utils.latest()` for getting the most recent value
-- `utils.groupByRun()` for grouping scheduled bot executions
-
-### TypeScript Price Alerts
-
-Location: `example-bots/typescript-price-alerts/`
-
-A Node.js bot showing TypeScript development patterns for bot logic.
+---
 
 ## Next Steps
 
