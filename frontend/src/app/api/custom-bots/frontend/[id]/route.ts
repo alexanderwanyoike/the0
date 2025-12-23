@@ -41,12 +41,12 @@ export async function GET(
     // Get the JavaScript bundle (already built as IIFE by CLI)
     const bundle = await response.text();
 
-    // Return as JavaScript
+    // Return as JavaScript - no caching to ensure fresh bundles after deploys
     return new NextResponse(bundle, {
       status: 200,
       headers: {
         "Content-Type": "application/javascript",
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "no-store, must-revalidate",
       },
     });
   } catch (error) {
