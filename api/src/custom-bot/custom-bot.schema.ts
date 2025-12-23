@@ -51,7 +51,7 @@ export const customBotConfigSchema = {
       properties: {
         bot: {
           type: "string",
-          pattern: "\\.(py|js|ts)$",
+          pattern: "\\.(py|js)$",
         },
       },
       additionalProperties: false,

@@ -12,6 +12,7 @@ example-bots/*/frontend/.npmrc
 example-bots/*/vendor/
 example-bots/*/*.lock
 example-bots/*/package-lock.json
+example-bots/**/main.js
 
 # SDK
 sdk/react/.npmrc

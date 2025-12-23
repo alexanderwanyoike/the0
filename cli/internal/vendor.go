@@ -945,7 +945,9 @@ func (vm *VendorManager) CheckFrontendExists() bool {
 	return err == nil
 }
 
-// ShouldBuildFrontend checks if frontend needs to be built
+// ShouldBuildFrontend checks if frontend exists and needs to be built.
+// Always returns true if frontend/package.json exists - we don't cache builds
+// to ensure fresh bundles after any source changes.
 func ShouldBuildFrontend(projectPath string) (bool, error) {
 	frontendPath := filepath.Join(projectPath, "frontend")
 	packageJsonPath := filepath.Join(frontendPath, "package.json")
@@ -955,33 +957,8 @@ func ShouldBuildFrontend(projectPath string) (bool, error) {
 		return false, nil
 	}
 
-	// Check if bundle already exists
-	bundlePath := filepath.Join(frontendPath, "dist", "bundle.js")
-	bundleInfo, err := os.Stat(bundlePath)
-	if os.IsNotExist(err) {
-		// Bundle doesn't exist, need to build
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-
-	// Check if any source files are newer than bundle
-	packageJsonInfo, _ := os.Stat(packageJsonPath)
-	if packageJsonInfo.ModTime().After(bundleInfo.ModTime()) {
-		return true, nil
-	}
-
-	// Check index.tsx modification time
-	indexTsxPath := filepath.Join(frontendPath, "index.tsx")
-	if indexInfo, err := os.Stat(indexTsxPath); err == nil {
-		if indexInfo.ModTime().After(bundleInfo.ModTime()) {
-			return true, nil
-		}
-	}
-
-	// Bundle is up to date
-	return false, nil
+	// Always build when frontend exists - don't trust cached builds
+	return true, nil
 }
 
 // BuildFrontend builds the frontend bundle in a Docker container
@@ -990,6 +967,10 @@ func (vm *VendorManager) BuildFrontend() error {
 	green := color.New(color.FgGreen)
 
 	blue.Println("Building frontend bundle...")
+
+	// Step 0: Clean dist directory to ensure fresh build
+	distPath := filepath.Join(vm.projectPath, "frontend", "dist")
+	os.RemoveAll(distPath)
 
 	// Step 1: Pull Node image if needed
 	if err := vm.pullNodeImage(); err != nil {

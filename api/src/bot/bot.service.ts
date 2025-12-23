@@ -58,24 +58,21 @@ export class BotService {
       return Failure<Bot, string>(deploymentAuthResult.error);
     }
 
-    // Fetch custom bot data first to get hasFrontend flag
+    // Fetch custom bot data to check if it has a custom frontend
     const customBotResult = await this.customBotService.getUserSpecificVersion(
       uid,
       validationResult.data.name,
       validationResult.data.version,
     );
 
-    // Include hasFrontend in config for frontend rendering
-    const configWithFrontendFlag = {
-      ...createBotDto.config,
-      hasFrontend: customBotResult.success
-        ? customBotResult.data.config?.hasFrontend ?? false
-        : false,
-    };
+    // Merge user config with hasFrontend flag from custom bot metadata
+    const hasCustomFrontend = customBotResult.success
+      ? customBotResult.data.config?.hasFrontend ?? false
+      : false;
 
     const result = await this.botRepository.create({
       ...createBotDto,
-      config: configWithFrontendFlag,
+      config: { ...createBotDto.config, hasFrontend: hasCustomFrontend },
       userId: uid,
       topic: "the0-scheduled-custom-bot",
       customBotId: validationResult.data.id,

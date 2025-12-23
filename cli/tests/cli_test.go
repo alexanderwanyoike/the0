@@ -335,3 +335,98 @@ func TestBotCommand_HasLogsSubcommand(t *testing.T) {
 		t.Error("Expected bot command to have 'logs' subcommand")
 	}
 }
+
+func TestBotDeleteCommand_Arguments(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "correct single argument",
+			args:        []string{"bot_123"},
+			expectError: false,
+		},
+		{
+			name:        "no arguments",
+			args:        []string{},
+			expectError: true,
+			errorMsg:    "accepts 1 arg(s), received 0",
+		},
+		{
+			name:        "too many arguments",
+			args:        []string{"bot_123", "extra"},
+			expectError: true,
+			errorMsg:    "accepts 1 arg(s), received 2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := cmd.NewBotDeleteCmd()
+
+			err := cmd.Args(cmd, tt.args)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got nil")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error to contain '%s', got: %s", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestBotDeleteCommand_Usage(t *testing.T) {
+	cmd := cmd.NewBotDeleteCmd()
+
+	expectedUsage := "delete <bot_id>"
+	if cmd.Use != expectedUsage {
+		t.Errorf("Expected usage '%s', got '%s'", expectedUsage, cmd.Use)
+	}
+
+	expectedShort := "Delete a bot instance"
+	if cmd.Short != expectedShort {
+		t.Errorf("Expected short description '%s', got '%s'", expectedShort, cmd.Short)
+	}
+}
+
+func TestBotDeleteCommand_YesFlag(t *testing.T) {
+	cmd := cmd.NewBotDeleteCmd()
+
+	// Test that yes flag exists
+	yesFlag := cmd.Flag("yes")
+	if yesFlag == nil {
+		t.Error("Expected command to have 'yes' flag")
+	} else {
+		if yesFlag.Shorthand != "y" {
+			t.Errorf("Expected yes flag shorthand 'y', got '%s'", yesFlag.Shorthand)
+		}
+		if yesFlag.DefValue != "false" {
+			t.Errorf("Expected yes flag default value 'false', got '%s'", yesFlag.DefValue)
+		}
+	}
+}
+
+func TestBotCommand_HasDeleteSubcommand(t *testing.T) {
+	cmd := cmd.NewBotCmd()
+
+	subcommands := cmd.Commands()
+
+	var hasDelete bool
+	for _, subcmd := range subcommands {
+		if subcmd.Name() == "delete" {
+			hasDelete = true
+		}
+	}
+
+	if !hasDelete {
+		t.Error("Expected bot command to have 'delete' subcommand")
+	}
+}

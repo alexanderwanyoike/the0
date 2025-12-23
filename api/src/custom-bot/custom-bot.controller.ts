@@ -258,47 +258,6 @@ export class CustomBotController {
     };
   }
 
-  @Get(":name/frontend")
-  async getFrontendBundle(@Param("name") name: string, @Res() res: Response) {
-    // Get the latest version of the bot
-    const result = await this.customBotService.getAllGlobalVersions(name);
-
-    if (!result.success || !result.data) {
-      throw new NotFoundException(`Bot not found: ${name}`);
-    }
-
-    const latestVersion = result.data.latestVersion;
-    const versions = result.data.versions;
-    const versionInfo = versions.find((v) => v.version === latestVersion);
-
-    if (!versionInfo) {
-      throw new NotFoundException(`Version not found: ${latestVersion}`);
-    }
-
-    // Check if bot has frontend
-    if (!versionInfo.config.hasFrontend) {
-      throw new NotFoundException("This bot does not have a custom frontend");
-    }
-
-    // Get frontend bundle from storage
-    // Frontend is stored separately at: {userId}/{botName}/{version}/frontend.js
-    const frontendPath = this.storageService.getFrontendPath(
-      versionInfo.userId,
-      name,
-      versionInfo.version,
-    );
-    const bundleResult = await this.storageService.getBotFrontend(frontendPath);
-
-    if (!bundleResult.success || !bundleResult.data) {
-      throw new NotFoundException("Frontend bundle not found");
-    }
-
-    // Serve the JavaScript bundle
-    res.setHeader("Content-Type", "application/javascript");
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.send(bundleResult.data);
-  }
-
   @Get("by-id/:id/frontend")
   async getFrontendBundleById(@Param("id") id: string, @Res() res: Response) {
     // Get custom bot by ID (includes specific version info)
@@ -315,23 +274,24 @@ export class CustomBotController {
       throw new NotFoundException("This bot does not have a custom frontend");
     }
 
-    // Get frontend bundle from storage
+    // Get frontend bundle from storage as a stream
     // Frontend is stored separately at: {userId}/{botName}/{version}/frontend.js
     const frontendPath = this.storageService.getFrontendPath(
       customBot.userId,
       customBot.name,
       customBot.version,
     );
-    const bundleResult = await this.storageService.getBotFrontend(frontendPath);
+    const streamResult =
+      await this.storageService.getBotFrontendStream(frontendPath);
 
-    if (!bundleResult.success || !bundleResult.data) {
+    if (!streamResult.success || !streamResult.data) {
       throw new NotFoundException("Frontend bundle not found");
     }
 
-    // Serve the JavaScript bundle
+    // Serve the JavaScript bundle as a stream to avoid memory issues with large bundles
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.send(bundleResult.data);
+    streamResult.data.pipe(res);
   }
 
   @Get(":name/:version")

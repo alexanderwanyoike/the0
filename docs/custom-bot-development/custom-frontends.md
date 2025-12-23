@@ -409,11 +409,39 @@ export default function Dashboard() {
 
 ## Example: Complete Bot with Frontend
 
-See our example repositories for complete bot + frontend implementations:
+Check out the `example-bots/` directory in the repository for complete working examples:
 
-- **Momentum Bot** - Real-time bot with portfolio tracking dashboard
-- **DCA Bot** - Scheduled bot with trade history visualization
-- **Signal Bot** - Event-driven bot with signal monitoring
+### Portfolio Tracker (Python + React)
+
+Location: `example-bots/python-portfolio-tracker/`
+
+A scheduled bot that demonstrates:
+- Structured metric emission using structlog
+- Custom React dashboard with portfolio value display
+- Position tracking and trade history visualization
+- Using `utils.groupByRun()` for scheduled bot data
+
+```
+example-bots/python-portfolio-tracker/
+├── main.py                 # Bot entry point with structlog metrics
+├── bot-config.yaml         # Bot configuration
+├── requirements.txt        # Python dependencies
+└── frontend/
+    ├── package.json        # React + TypeScript dependencies
+    └── index.tsx           # Complete dashboard implementation
+```
+
+Key features in the frontend:
+- `useThe0Events()` hook for accessing bot metrics
+- `utils.filterByType()` for getting specific metric types
+- `utils.latest()` for getting the most recent value
+- `utils.groupByRun()` for grouping scheduled bot executions
+
+### TypeScript Price Alerts
+
+Location: `example-bots/typescript-price-alerts/`
+
+A Node.js bot showing TypeScript development patterns for bot logic.
 
 ## Next Steps
 

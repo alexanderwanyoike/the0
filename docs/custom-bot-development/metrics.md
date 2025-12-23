@@ -138,98 +138,116 @@ You can emit any metric type you need. Here are some common patterns:
 ### Portfolio Metrics
 
 ```python
-emit_metric("portfolio_value", {
-    "total_value": 10500.00,
-    "cash": 2500.00,
-    "positions_value": 8000.00,
-    "unrealized_pnl": 350.00,
-    "daily_return_pct": 1.2
-})
+logger.info(
+    "portfolio_snapshot",
+    _metric="portfolio_value",
+    total_value=10500.00,
+    cash=2500.00,
+    positions_value=8000.00,
+    unrealized_pnl=350.00,
+    daily_return_pct=1.2
+)
 
-emit_metric("position", {
-    "symbol": "BTC/USD",
-    "quantity": 0.5,
-    "avg_entry": 44000.00,
-    "current_price": 45000.00,
-    "unrealized_pnl": 500.00,
-    "weight_pct": 21.4
-})
+logger.info(
+    "position_update",
+    _metric="position",
+    symbol="BTC/USD",
+    quantity=0.5,
+    avg_entry=44000.00,
+    current_price=45000.00,
+    unrealized_pnl=500.00,
+    weight_pct=21.4
+)
 ```
 
 ### Trade Metrics
 
 ```python
-emit_metric("trade", {
-    "symbol": "ETH/USD",
-    "side": "buy",
-    "quantity": 2.5,
-    "price": 2400.00,
-    "total_value": 6000.00,
-    "fees": 6.00,
-    "order_type": "market",
-    "execution_time_ms": 45
-})
+logger.info(
+    "trade_executed",
+    _metric="trade",
+    symbol="ETH/USD",
+    side="buy",
+    quantity=2.5,
+    price=2400.00,
+    total_value=6000.00,
+    fees=6.00,
+    order_type="market",
+    execution_time_ms=45
+)
 
-emit_metric("order", {
-    "order_id": "ord_789",
-    "status": "filled",
-    "symbol": "BTC/USD",
-    "side": "sell",
-    "filled_qty": 0.1,
-    "avg_fill_price": 45100.00
-})
+logger.info(
+    "order_filled",
+    _metric="order",
+    order_id="ord_789",
+    status="filled",
+    symbol="BTC/USD",
+    side="sell",
+    filled_qty=0.1,
+    avg_fill_price=45100.00
+)
 ```
 
 ### Signal & Strategy Metrics
 
 ```python
-emit_metric("signal", {
-    "symbol": "SOL/USD",
-    "direction": "long",
-    "strength": 0.78,
-    "strategy": "momentum_breakout",
-    "timeframe": "4h"
-})
+logger.info(
+    "signal_generated",
+    _metric="signal",
+    symbol="SOL/USD",
+    direction="long",
+    strength=0.78,
+    strategy="momentum_breakout",
+    timeframe="4h"
+)
 
-emit_metric("strategy_state", {
-    "name": "mean_reversion",
-    "status": "active",
-    "positions_open": 3,
-    "signals_generated": 12,
-    "win_rate": 0.65
-})
+logger.info(
+    "strategy_update",
+    _metric="strategy_state",
+    name="mean_reversion",
+    status="active",
+    positions_open=3,
+    signals_generated=12,
+    win_rate=0.65
+)
 ```
 
 ### Market Data Metrics
 
 ```python
-emit_metric("market_snapshot", {
-    "symbol": "BTC/USD",
-    "bid": 44990.00,
-    "ask": 45010.00,
-    "spread_bps": 4.4,
-    "volume_24h": 1250000000
-})
+logger.info(
+    "market_data",
+    _metric="market_snapshot",
+    symbol="BTC/USD",
+    bid=44990.00,
+    ask=45010.00,
+    spread_bps=4.4,
+    volume_24h=1250000000
+)
 
-emit_metric("indicator", {
-    "symbol": "BTC/USD",
-    "name": "RSI",
-    "value": 68.5,
-    "timeframe": "1h",
-    "signal": "overbought"
-})
+logger.info(
+    "indicator_value",
+    _metric="indicator",
+    symbol="BTC/USD",
+    name="RSI",
+    value=68.5,
+    timeframe="1h",
+    signal="overbought"
+)
 ```
 
 ### Risk Metrics
 
 ```python
-emit_metric("risk", {
-    "portfolio_var_95": 1250.00,
-    "max_drawdown_pct": 5.2,
-    "sharpe_ratio": 1.8,
-    "exposure_pct": 75.0,
-    "margin_used_pct": 45.0
-})
+logger.info(
+    "risk_metrics",
+    _metric="risk",
+    portfolio_var_95=1250.00,
+    max_drawdown_pct=5.2,
+    sharpe_ratio=1.8,
+    exposure_pct=75.0,
+    margin_used_pct=45.0
+)
 ```
 
 ## Best Practices
@@ -239,15 +257,14 @@ emit_metric("risk", {
 Define a standard set of metric types for your bot and stick to them:
 
 ```python
-# Good - consistent naming
-emit_metric("trade", {...})
-emit_metric("portfolio_value", {...})
-emit_metric("signal", {...})
+# Good - consistent naming (use snake_case for _metric values)
+logger.info("trade_executed", _metric="trade", ...)
+logger.info("portfolio_snapshot", _metric="portfolio_value", ...)
+logger.info("signal_generated", _metric="signal", ...)
 
 # Avoid - inconsistent naming
-emit_metric("Trade", {...})
-emit_metric("portfolio-value", {...})
-emit_metric("SIGNAL", {...})
+logger.info("Trade", _metric="Trade", ...)  # Not snake_case
+logger.info("value", _metric="portfolio-value", ...)  # Dashes instead of underscores
 ```
 
 ### 2. Include Relevant Context
@@ -255,13 +272,15 @@ emit_metric("SIGNAL", {...})
 Add fields that help with filtering and analysis:
 
 ```python
-emit_metric("trade", {
-    "symbol": "BTC/USD",      # Always include symbol
-    "strategy": "momentum",    # Which strategy generated this
-    "timeframe": "1h",        # Relevant timeframe
-    "run_id": run_id,         # Link to specific bot run
+logger.info(
+    "trade_executed",
+    _metric="trade",
+    symbol="BTC/USD",      # Always include symbol
+    strategy="momentum",    # Which strategy generated this
+    timeframe="1h",        # Relevant timeframe
+    run_id=run_id,         # Link to specific bot run
     # ... other fields
-})
+)
 ```
 
 ### 3. Use Numeric Values for Charting
@@ -270,10 +289,10 @@ Ensure values you want to chart are numbers, not strings:
 
 ```python
 # Good - numeric values
-emit_metric("portfolio_value", {"value": 10500.00})
+logger.info("portfolio_snapshot", _metric="portfolio_value", value=10500.00)
 
 # Avoid - string values that can't be charted
-emit_metric("portfolio_value", {"value": "$10,500.00"})
+logger.info("portfolio_snapshot", _metric="portfolio_value", value="$10,500.00")
 ```
 
 ### 4. Emit at Key Moments
@@ -294,11 +313,11 @@ Balance granularity with storage:
 ```python
 # For real-time bots, emit portfolio value periodically
 if time.time() - last_snapshot > 300:  # Every 5 minutes
-    emit_metric("portfolio_value", {...})
+    logger.info("portfolio_snapshot", _metric="portfolio_value", value=portfolio.total_value)
     last_snapshot = time.time()
 
 # Always emit trade events immediately
-emit_metric("trade", {...})
+logger.info("trade_executed", _metric="trade", symbol=trade.symbol, side=trade.side)
 ```
 
 ## Viewing Metrics

@@ -212,23 +212,18 @@ export class StorageService {
   }
 
   /**
-   * Get bot frontend bundle from storage.
-   * Returns the JavaScript bundle content as a string.
+   * Get bot frontend bundle from storage as a stream.
+   * Uses streaming to avoid loading large bundles into memory.
    */
-  async getBotFrontend(frontendPath: string): Promise<Result<string, string>> {
+  async getBotFrontendStream(
+    frontendPath: string,
+  ): Promise<Result<NodeJS.ReadableStream, string>> {
     try {
       const stream = await this.minioClient.getObject(
         this.bucketName,
         frontendPath,
       );
-      const chunks: Buffer[] = [];
-
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
-
-      const buffer = Buffer.concat(chunks);
-      return Ok(buffer.toString("utf-8"));
+      return Ok(stream);
     } catch (error) {
       if (
         error.code === "NoSuchKey" ||
