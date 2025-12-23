@@ -33,6 +33,8 @@ interface ConsoleInterfaceProps {
   onDateRangeChange: (startDate: string, endDate: string) => void;
   onExport: () => void;
   className?: string;
+  /** When true, hides the header (title, badges) - useful when embedded in a parent with its own header */
+  compact?: boolean;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -125,16 +127,17 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
   };
 
   return (
-    <div className="flex items-start gap-3 py-0.5 px-3 hover:bg-green-950/10 dark:hover:bg-green-950/10 hover:bg-green-100/20 font-mono text-sm transition-colors">
-      <span className="text-green-600 dark:text-green-400 text-sm min-w-[110px] flex-shrink-0">
+    <div
+      className="group flex items-center gap-3 py-1 px-3 hover:bg-gray-200 dark:hover:bg-green-950/30 font-mono text-sm cursor-default"
+      title={log.content}
+    >
+      <span className="text-gray-500 dark:text-green-600 flex-shrink-0 text-xs">
         {parsed.timestamp}
       </span>
-      <span
-        className={`text-sm leading-none ${getStatusColor(parsed.level)} flex-shrink-0`}
-      >
+      <span className={`flex-shrink-0 ${getStatusColor(parsed.level)}`}>
         {getStatusIndicator(parsed.level)}
       </span>
-      <span className="flex-1 text-gray-800 dark:text-green-300 leading-tight">
+      <span className="text-gray-700 dark:text-green-300 truncate flex-1">
         {parsed.message}
       </span>
     </div>
@@ -173,26 +176,26 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       value: typeof value === "object" ? JSON.stringify(value) : String(value),
     }));
 
+  const fullContent = displayData.map(({ key, value }) => `${key}: ${value}`).join(" | ");
+
   return (
-    <div className="flex items-start gap-3 py-1 px-3 bg-blue-950/20 dark:bg-blue-950/30 hover:bg-blue-950/30 dark:hover:bg-blue-950/40 border-l-2 border-blue-500 font-mono text-sm transition-colors">
-      <span className="text-blue-400 dark:text-blue-300 text-sm min-w-[110px] flex-shrink-0">
+    <div
+      className="group flex items-center gap-3 py-1 px-3 bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/40 border-l-2 border-blue-500 font-mono text-sm cursor-default"
+      title={`[${metricType}] ${fullContent}`}
+    >
+      <span className="text-blue-600 dark:text-blue-400 flex-shrink-0 text-xs">
         {formattedTime}
       </span>
-      <BarChart3 className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
-      <div className="flex-1 flex items-center gap-2 flex-wrap">
-        <Badge
-          variant="outline"
-          className="text-xs bg-blue-900/50 border-blue-700 text-blue-300"
-        >
-          {metricType}
-        </Badge>
-        {displayData.map(({ key, value }) => (
-          <span key={key} className="text-blue-200">
-            <span className="text-blue-400">{key}:</span>{" "}
-            <span className="text-blue-100">{value}</span>
-          </span>
-        ))}
-      </div>
+      <BarChart3 className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+      <Badge
+        variant="outline"
+        className="text-[10px] py-0 px-1.5 bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-300"
+      >
+        {metricType}
+      </Badge>
+      <span className="text-blue-700 dark:text-blue-200 truncate flex-1">
+        {fullContent}
+      </span>
     </div>
   );
 };
@@ -223,30 +226,48 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   onDateRangeChange,
   onExport,
   className,
+  compact = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [autoScroll, setAutoScroll] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: "",
     end: "",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs, autoScroll]);
+  // Track if user is at the bottom of the scroll
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-  const filteredLogs = logs.filter(
-    (log) =>
-      searchQuery === "" ||
-      log.content.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+    const threshold = 50; // pixels from bottom
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    setIsUserAtBottom(isAtBottom);
+  };
+
+  // Only auto-scroll if user is already at bottom or autoScroll is manually enabled
+  useEffect(() => {
+    if ((autoScroll || isUserAtBottom) && bottomRef.current && scrollContainerRef.current) {
+      // Use scrollTop instead of scrollIntoView to avoid page-level scroll issues
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll, isUserAtBottom]);
+
+  // Filter and reverse logs so newest is first
+  const filteredLogs = logs
+    .filter(
+      (log) =>
+        searchQuery === "" ||
+        log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .slice()
+    .reverse();
 
   const handleDateChange = (value: string) => {
     setSelectedDate(value);
@@ -278,40 +299,64 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full bg-white dark:bg-black border border-gray-300 dark:border-green-900/50",
+        "flex flex-col h-full bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-green-400",
+        !compact && "border border-gray-300 dark:border-green-900/50",
         className,
       )}
     >
-      <div className="border-b border-gray-300 dark:border-green-900/50 bg-gray-50 dark:bg-black p-4 space-y-3">
+      {/* Toolbar - always visible, but simplified in compact mode */}
+      <div
+        className={cn(
+          "border-b border-gray-300 dark:border-green-900/50 bg-gray-50 dark:bg-gray-900",
+          compact ? "px-2 py-1" : "p-4 space-y-3",
+        )}
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ScrollText className="h-5 w-5 text-green-600 dark:text-green-400" />
-            <h3 className="font-medium text-green-600 dark:text-green-400 font-mono">
-              CONSOLE
-            </h3>
-            <Badge
-              variant="outline"
-              className="text-xs bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-800 text-green-600 dark:text-green-400"
-            >
-              {filteredLogs.length} entries
-            </Badge>
-          </div>
+          {!compact && (
+            <div className="flex items-center gap-2">
+              <ScrollText className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <h3 className="font-medium text-green-600 dark:text-green-400 font-mono">
+                CONSOLE
+              </h3>
+              <Badge
+                variant="outline"
+                className="text-xs bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-800 text-green-600 dark:text-green-400"
+              >
+                {filteredLogs.length} entries
+              </Badge>
+            </div>
+          )}
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
-              className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
-            >
-              <Filter className="h-4 w-4" />
-            </Button>
+          <div className={cn("flex items-center gap-1", compact && "w-full justify-end")}>
+            {compact && (
+              <div className="flex-1 mr-2">
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-7 text-xs"
+                />
+              </div>
+            )}
+            {!compact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
+              >
+                <Filter className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={onRefresh}
               disabled={loading}
-              className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
+              className={cn(
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
+                compact && "h-7 w-7 p-0",
+              )}
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
@@ -324,6 +369,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                 autoScroll
                   ? "bg-green-200 dark:bg-green-950/50 text-green-700 dark:text-green-300"
                   : "",
+                compact && "h-7 w-7 p-0",
               )}
             >
               {autoScroll ? (
@@ -336,14 +382,17 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               variant="ghost"
               size="sm"
               onClick={onExport}
-              className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
+              className={cn(
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
+                compact && "h-7 w-7 p-0",
+              )}
             >
               <Download className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {showFilters && (
+        {!compact && showFilters && (
           <div className="space-y-3 pt-3 border-t">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -418,17 +467,18 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
       <div className="flex-1 relative overflow-hidden">
         <div
           ref={scrollContainerRef}
-          className="h-full overflow-auto bg-white dark:bg-black"
+          onScroll={handleScroll}
+          className="h-full overflow-auto bg-gray-100 dark:bg-gray-950"
         >
           {loading && logs.length === 0 ? (
             <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-green-600 dark:text-green-400" />
+              <RefreshCw className="h-6 w-6 animate-spin text-gray-500 dark:text-green-500" />
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-600 dark:text-green-600 font-mono">
+            <div className="flex items-center justify-center h-32 text-gray-500 dark:text-green-600 font-mono text-sm">
               {logs.length === 0
-                ? "> No logs available"
-                : "> No logs match your filters"}
+                ? "> Waiting for logs..."
+                : "> No logs match filter"}
             </div>
           ) : (
             <>

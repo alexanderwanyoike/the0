@@ -537,7 +537,8 @@ func (vm *VendorManager) getPythonInstallCommand() string {
 	// Configure pip to use extra index URL for private PyPI repos if set
 	pipExtraIndex := `PIP_EXTRA_INDEX_FLAG=""; if [ -n "$PIP_EXTRA_INDEX_URL" ]; then PIP_EXTRA_INDEX_FLAG="--extra-index-url $PIP_EXTRA_INDEX_URL"; fi`
 
-	return fmt.Sprintf("%s && %s && %s && pip install --target /vendor -r /requirements.txt $PIP_EXTRA_INDEX_FLAG --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", gitInstall, gitConfig, pipExtraIndex, uid, gid)
+	// Always fix ownership even on failure, then exit with original status
+	return fmt.Sprintf("%s && %s && %s && pip install --target /vendor -r /requirements.txt $PIP_EXTRA_INDEX_FLAG --no-cache-dir --disable-pip-version-check; STATUS=$?; chown -R %s:%s /vendor 2>/dev/null || true; exit $STATUS", gitInstall, gitConfig, pipExtraIndex, uid, gid)
 }
 
 // getNodeInstallCommand returns the npm install command with proper ownership
@@ -556,11 +557,13 @@ func (vm *VendorManager) getNodeInstallCommand(hasTypeScript bool) string {
 
 	cmd := "npm install --production"
 	if hasTypeScript {
-		// Install dev dependencies for TypeScript compilation
-		cmd = "npm install && npm run build || true" // Don't fail if no build script
+		// Install all dependencies (including devDependencies for TypeScript compilation)
+		// Then run the build script - this MUST succeed for TypeScript projects
+		cmd = "npm install && npm run build"
 	}
 
-	return fmt.Sprintf("%s && chown -R %s:%s /app/node_modules", cmd, uid, gid)
+	// Always fix ownership even on failure, then exit with original status
+	return fmt.Sprintf("%s; STATUS=$?; chown -R %s:%s /app/node_modules 2>/dev/null || true; exit $STATUS", cmd, uid, gid)
 }
 
 // verifyVendoredFiles verifies that vendoring was successful
@@ -933,4 +936,243 @@ func CleanupVendoring(projectPath string) {
 			os.Remove(file)
 		}
 	}
+}
+
+// CheckFrontendExists checks if a frontend directory with package.json exists
+func (vm *VendorManager) CheckFrontendExists() bool {
+	frontendPackageJson := filepath.Join(vm.projectPath, "frontend", "package.json")
+	_, err := os.Stat(frontendPackageJson)
+	return err == nil
+}
+
+// ShouldBuildFrontend checks if frontend needs to be built
+func ShouldBuildFrontend(projectPath string) (bool, error) {
+	frontendPath := filepath.Join(projectPath, "frontend")
+	packageJsonPath := filepath.Join(frontendPath, "package.json")
+
+	// Check if frontend/package.json exists
+	if _, err := os.Stat(packageJsonPath); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	// Check if bundle already exists
+	bundlePath := filepath.Join(frontendPath, "dist", "bundle.js")
+	bundleInfo, err := os.Stat(bundlePath)
+	if os.IsNotExist(err) {
+		// Bundle doesn't exist, need to build
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Check if any source files are newer than bundle
+	packageJsonInfo, _ := os.Stat(packageJsonPath)
+	if packageJsonInfo.ModTime().After(bundleInfo.ModTime()) {
+		return true, nil
+	}
+
+	// Check index.tsx modification time
+	indexTsxPath := filepath.Join(frontendPath, "index.tsx")
+	if indexInfo, err := os.Stat(indexTsxPath); err == nil {
+		if indexInfo.ModTime().After(bundleInfo.ModTime()) {
+			return true, nil
+		}
+	}
+
+	// Bundle is up to date
+	return false, nil
+}
+
+// BuildFrontend builds the frontend bundle in a Docker container
+func (vm *VendorManager) BuildFrontend() error {
+	blue := color.New(color.FgBlue)
+	green := color.New(color.FgGreen)
+
+	blue.Println("Building frontend bundle...")
+
+	// Step 1: Pull Node image if needed
+	if err := vm.pullNodeImage(); err != nil {
+		return fmt.Errorf("failed to pull Node image: %v", err)
+	}
+
+	// Step 2: Run frontend build container
+	containerID, err := vm.runFrontendBuildContainer()
+	if err != nil {
+		return fmt.Errorf("failed to run frontend build container: %v", err)
+	}
+	defer vm.cleanupContainer(containerID)
+
+	// Step 3: Verify bundle was created
+	bundlePath := filepath.Join(vm.projectPath, "frontend", "dist", "bundle.js")
+	if _, err := os.Stat(bundlePath); os.IsNotExist(err) {
+		return fmt.Errorf("frontend build did not produce dist/bundle.js")
+	}
+
+	// Get bundle size
+	bundleInfo, _ := os.Stat(bundlePath)
+	sizeStr := vm.formatFileSize(bundleInfo.Size())
+
+	green.Printf("✓ Frontend bundle built (%s)\n", sizeStr)
+	return nil
+}
+
+// runFrontendBuildContainer creates and runs a container for frontend building
+func (vm *VendorManager) runFrontendBuildContainer() (string, error) {
+	ctx := context.Background()
+
+	// Generate unique container name
+	containerName := fmt.Sprintf("%sfrontend-%d", containerName, time.Now().Unix())
+
+	// Prepare absolute paths for volume mounting
+	absProjectPath, err := filepath.Abs(vm.projectPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute project path: %v", err)
+	}
+
+	// Get current user info for ownership
+	currentUser, err := user.Current()
+	var uid, gid string
+	if err == nil {
+		uid = currentUser.Uid
+		gid = currentUser.Gid
+	} else {
+		uid = "1000"
+		gid = "1000"
+	}
+
+	// Configure npm auth for GitHub Packages if GITHUB_TOKEN is set
+	npmAuthSetup := `if [ -n "$GITHUB_TOKEN" ]; then echo "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN" >> ~/.npmrc; fi`
+
+	// Build command: setup auth, install deps, run build script
+	// The build script in package.json should output ESM with external react
+	buildCmd := fmt.Sprintf(
+		"%s && cd /project/frontend && npm install && npm run build; STATUS=$?; chown -R %s:%s /project/frontend/dist /project/frontend/node_modules 2>/dev/null || true; exit $STATUS",
+		npmAuthSetup, uid, gid,
+	)
+
+	config := &container.Config{
+		Image: nodeImage,
+		Cmd: []string{
+			"sh", "-c",
+			buildCmd,
+		},
+		WorkingDir: "/project/frontend",
+		Env:        getBuildEnvVars(),
+	}
+
+	hostConfig := &container.HostConfig{
+		Binds: []string{
+			fmt.Sprintf("%s:/project", absProjectPath),
+		},
+		AutoRemove: false,
+	}
+
+	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
+	if err != nil {
+		return "", err
+	}
+
+	if err := vm.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return "", err
+	}
+
+	// Stream logs in real-time
+	logReader, err := vm.dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+		Timestamps: false,
+	})
+	if err != nil {
+		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
+	}
+
+	logDone := make(chan struct{})
+	go func() {
+		defer close(logDone)
+		defer logReader.Close()
+
+		blue := color.New(color.FgBlue)
+		buffer := make([]byte, 1024)
+		for {
+			n, err := logReader.Read(buffer)
+			if err != nil {
+				if err != io.EOF {
+					blue.Printf("Log read error: %v\n", err)
+				}
+				break
+			}
+			if n > 0 {
+				output := vm.cleanDockerLogOutput(buffer[:n])
+				if output != "" {
+					blue.Printf("  %s", output)
+				}
+			}
+		}
+	}()
+
+	// Wait for container to finish
+	statusCh, errCh := vm.dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return resp.ID, err
+		}
+	case status := <-statusCh:
+		<-logDone
+		if status.StatusCode != 0 {
+			logs, _ := vm.getContainerLogs(resp.ID)
+			red := color.New(color.FgRed)
+			red.Printf("Frontend build failed with exit code %d\n", status.StatusCode)
+			if logs != "" {
+				red.Printf("Full error log:\n%s\n", logs)
+			}
+			return resp.ID, fmt.Errorf("frontend build failed with exit code %d", status.StatusCode)
+		}
+	}
+
+	return resp.ID, nil
+}
+
+// BuildFrontendIfNeeded builds frontend only if needed and Docker is available
+func BuildFrontendIfNeeded(projectPath string) error {
+	blue := color.New(color.FgBlue)
+	red := color.New(color.FgRed)
+
+	shouldBuild, err := ShouldBuildFrontend(projectPath)
+	if err != nil {
+		return err
+	}
+
+	if !shouldBuild {
+		return nil
+	}
+
+	blue.Println("Frontend detected, building bundle...")
+
+	// Check Docker availability
+	if err := CheckDockerInstalled(); err != nil {
+		red.Printf("Docker required for frontend build: %v\n", err)
+		red.Println("Solution: Install Docker or pre-build the frontend with 'npm run build'")
+		return fmt.Errorf("docker unavailable for frontend build")
+	}
+
+	vm, err := NewVendorManager(projectPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vendor manager: %v", err)
+	}
+	defer vm.Close()
+
+	if err := vm.CheckDockerRunning(); err != nil {
+		red.Printf("Docker daemon not running: %v\n", err)
+		red.Println("Solution: Start Docker or pre-build the frontend")
+		return fmt.Errorf("docker daemon not running for frontend build")
+	}
+
+	if err := vm.BuildFrontend(); err != nil {
+		return fmt.Errorf("frontend build failed: %v", err)
+	}
+
+	return nil
 }

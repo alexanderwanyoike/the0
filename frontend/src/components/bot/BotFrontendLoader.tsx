@@ -1,14 +1,21 @@
 "use client";
 
 import React, { useState, useEffect, ComponentType } from "react";
+import * as ReactJSXRuntime from "react/jsx-runtime";
 import { BotEventsProvider } from "@/contexts/bot-events-context";
 import { ConsoleInterface, LogEntry } from "./console-interface";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Expose React globally for the shared module endpoints to access
+if (typeof window !== "undefined") {
+  (window as any).__THE0_REACT__ = React;
+  (window as any).__THE0_REACT_JSX__ = ReactJSXRuntime;
+}
+
 interface BotFrontendLoaderProps {
   botId: string;
-  botName: string;
+  customBotId?: string;
   hasFrontend: boolean;
   /** Fallback props for console view */
   logs: LogEntry[];
@@ -28,7 +35,7 @@ type DashboardComponent = ComponentType<Record<string, never>>;
  */
 export function BotFrontendLoader({
   botId,
-  botName,
+  customBotId,
   hasFrontend,
   logs,
   loading,
@@ -45,7 +52,7 @@ export function BotFrontendLoader({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!hasFrontend) {
+    if (!hasFrontend || !customBotId) {
       setBotDashboard(null);
       setLoadError(null);
       return;
@@ -54,9 +61,9 @@ export function BotFrontendLoader({
     setIsLoading(true);
     setLoadError(null);
 
-    const frontendUrl = `/api/custom-bots/${encodeURIComponent(botName)}/frontend`;
+    const frontendUrl = `/api/custom-bots/frontend/${encodeURIComponent(customBotId)}`;
 
-    // Dynamic import of ESM bundle
+    // Dynamic import - import map resolves react to host-served modules
     import(/* webpackIgnore: true */ frontendUrl)
       .then((mod) => {
         if (mod.default) {
@@ -72,10 +79,10 @@ export function BotFrontendLoader({
       .finally(() => {
         setIsLoading(false);
       });
-  }, [botName, hasFrontend]);
+  }, [customBotId, hasFrontend]);
 
-  // No custom frontend - show default console
-  if (!hasFrontend) {
+  // No custom frontend or no customBotId - show default console
+  if (!hasFrontend || !customBotId) {
     return (
       <ConsoleInterface
         botId={botId}

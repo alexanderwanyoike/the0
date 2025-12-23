@@ -65,6 +65,15 @@ func deployBot(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Step 2.6: Build frontend if frontend/ directory exists
+	logger.UpdateSpinner("Building frontend")
+	if err := internal.BuildFrontendIfNeeded("."); err != nil {
+		logger.StopSpinnerWithError("Frontend build failed")
+		logger.Error("%v", err)
+		internal.CleanupVendoring(".")
+		os.Exit(1)
+	}
+
 	logger.UpdateSpinner("Authenticating")
 
 	// Step 3: Get auth token (with retry on failure)

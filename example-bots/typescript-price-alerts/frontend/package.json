@@ -1,0 +1,16 @@
+{
+  "name": "price-alerts-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Custom dashboard for price alerts bot",
+  "main": "index.tsx",
+  "scripts": {
+    "build": "esbuild index.tsx --bundle --format=esm --outfile=dist/bundle.js --external:react --external:react-dom --minify"
+  },
+  "devDependencies": {
+    "@alexanderwanyoike/the0-react": "^0.1.0",
+    "@types/react": "^19.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -18,7 +18,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
+      <head>
+        {/* Import map for custom bot frontends - points to host-served React modules */}
+        <script
+          type="importmap"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              imports: {
+                "react": "/api/shared/react",
+                "react/jsx-runtime": "/api/shared/react-jsx-runtime",
+                "react/jsx-dev-runtime": "/api/shared/react-jsx-runtime",
+              },
+            }),
+          }}
+        />
+      </head>
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",

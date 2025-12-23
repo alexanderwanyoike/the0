@@ -1,7 +1,16 @@
 {
-  "name": "@the0/react",
+  "name": "@alexanderwanyoike/the0-react",
   "version": "0.1.0",
   "description": "React SDK for the0 bot custom frontends",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexanderwanyoike/the0.git",
+    "directory": "sdk/react"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

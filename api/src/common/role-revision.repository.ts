@@ -84,6 +84,24 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     }
   }
 
+  async findOneById(id: string): Promise<Result<T, string>> {
+    try {
+      const records = await this.db
+        .select()
+        .from(this.table)
+        .where(eq(this.table.id, id));
+
+      if (records.length === 0) {
+        return Failure("Not found");
+      }
+
+      return Ok(this.transformRecordToData(records[0]));
+    } catch (error: any) {
+      logger.error({ err: error }, "Error fetching document by ID");
+      return Failure(error.message);
+    }
+  }
+
   async update(
     userId: string,
     id: string,

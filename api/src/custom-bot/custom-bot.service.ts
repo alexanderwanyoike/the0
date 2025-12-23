@@ -325,4 +325,8 @@ export class CustomBotService {
   > {
     return await this.customBotRepository.getAllGlobalCustomBots();
   }
+
+  async getById(id: string): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.findOneById(id);
+  }
 }

@@ -1,0 +1,2 @@
+# Structured logging for metric emission
+structlog>=24.0.0

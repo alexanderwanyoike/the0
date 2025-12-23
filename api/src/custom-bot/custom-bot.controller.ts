@@ -299,6 +299,41 @@ export class CustomBotController {
     res.send(bundleResult.data);
   }
 
+  @Get("by-id/:id/frontend")
+  async getFrontendBundleById(@Param("id") id: string, @Res() res: Response) {
+    // Get custom bot by ID (includes specific version info)
+    const result = await this.customBotService.getById(id);
+
+    if (!result.success || !result.data) {
+      throw new NotFoundException(`Custom bot not found: ${id}`);
+    }
+
+    const customBot = result.data;
+
+    // Check if bot has frontend
+    if (!customBot.config.hasFrontend) {
+      throw new NotFoundException("This bot does not have a custom frontend");
+    }
+
+    // Get frontend bundle from storage
+    // Frontend is stored separately at: {userId}/{botName}/{version}/frontend.js
+    const frontendPath = this.storageService.getFrontendPath(
+      customBot.userId,
+      customBot.name,
+      customBot.version,
+    );
+    const bundleResult = await this.storageService.getBotFrontend(frontendPath);
+
+    if (!bundleResult.success || !bundleResult.data) {
+      throw new NotFoundException("Frontend bundle not found");
+    }
+
+    // Serve the JavaScript bundle
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.send(bundleResult.data);
+  }
+
   @Get(":name/:version")
   @HttpCode(HttpStatus.OK)
   async getSpecificVersion(

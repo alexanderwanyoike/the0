@@ -58,8 +58,24 @@ export class BotService {
       return Failure<Bot, string>(deploymentAuthResult.error);
     }
 
+    // Fetch custom bot data first to get hasFrontend flag
+    const customBotResult = await this.customBotService.getUserSpecificVersion(
+      uid,
+      validationResult.data.name,
+      validationResult.data.version,
+    );
+
+    // Include hasFrontend in config for frontend rendering
+    const configWithFrontendFlag = {
+      ...createBotDto.config,
+      hasFrontend: customBotResult.success
+        ? customBotResult.data.config?.hasFrontend ?? false
+        : false,
+    };
+
     const result = await this.botRepository.create({
       ...createBotDto,
+      config: configWithFrontendFlag,
       userId: uid,
       topic: "the0-scheduled-custom-bot",
       customBotId: validationResult.data.id,
@@ -68,13 +84,6 @@ export class BotService {
     if (!result.success) {
       return Failure<Bot, string>(result.error);
     }
-
-    // Fetch custom bot data and publish bot creation event (replaces event-handler service)
-    const customBotResult = await this.customBotService.getUserSpecificVersion(
-      uid,
-      validationResult.data.name,
-      validationResult.data.version,
-    );
 
     if (customBotResult.success) {
       const customBot = customBotResult.data;
