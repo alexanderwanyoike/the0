@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, ComponentType } from "react";
+import * as ReactDOM from "react-dom";
 import * as ReactJSXRuntime from "react/jsx-runtime";
 import { BotEventsProvider } from "@/contexts/bot-events-context";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Expose React globally for the shared module endpoints to access
+// Expose React globals for custom bot frontends
+// The esbuild plugin in bot frontends transforms React imports to use these
 if (typeof window !== "undefined") {
   (window as any).__THE0_REACT__ = React;
+  (window as any).__THE0_REACT_DOM__ = ReactDOM;
   (window as any).__THE0_REACT_JSX__ = ReactJSXRuntime;
 }
 
