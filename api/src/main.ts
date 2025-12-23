@@ -1,15 +1,21 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
 import { runMigrations } from "./database/migrate";
 
 async function bootstrap() {
   // Run database migrations before starting the application
-  console.log("🔄 Running database migrations...");
+  // Note: migrations run before NestJS app is created, so we use console here
+  console.log("Running database migrations...");
   await runMigrations();
-  console.log("✅ Database migrations completed");
+  console.log("Database migrations completed");
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Use Pino logger
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
   // Enable CORS for OSS version
   app.enableCors({
@@ -29,10 +35,10 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port, "0.0.0.0");
 
-  console.log(`🚀 The0 API is running on port ${port}`);
+  logger.log(`the0 API started on port ${port}`);
 }
 
 bootstrap().catch((error) => {
-  console.error("Failed to start The0 API:", error);
+  console.error("Failed to start the0 API:", error);
   process.exit(1);
 });

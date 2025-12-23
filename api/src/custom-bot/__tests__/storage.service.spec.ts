@@ -5,6 +5,8 @@ import { Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import { EventEmitter } from "events";
 import AdmZip from "adm-zip";
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 
 // Mock the minio module
 jest.mock("minio");
@@ -68,6 +70,10 @@ describe("StorageService", () => {
               return config[key];
             }),
           },
+        },
+        {
+          provide: PinoLogger,
+          useValue: createMockLogger(),
         },
       ],
     }).compile();

@@ -53,10 +53,6 @@ export const customBotConfigSchema = {
           type: "string",
           pattern: "\\.(py|js)$",
         },
-        backtest: {
-          type: "string",
-          pattern: "\\.(py|js)$",
-        },
       },
       additionalProperties: false,
     },
@@ -64,9 +60,6 @@ export const customBotConfigSchema = {
       type: "object",
       required: ["bot"],
       properties: {
-        backtest: {
-          type: "object",
-        },
         bot: {
           type: "object",
         },
@@ -118,29 +111,6 @@ export const customBotConfigSchema = {
         },
       },
     },
-    {
-      if: {
-        properties: {
-          entrypoints: {
-            type: "object",
-            properties: {
-              backtest: { type: "string" },
-            },
-            required: ["backtest"],
-          },
-        },
-        required: ["entrypoints"],
-      },
-      then: {
-        properties: {
-          schema: {
-            type: "object",
-            required: ["backtest", "bot"],
-          },
-        },
-        required: ["schema"],
-      },
-    },
   ],
 };
 
@@ -169,18 +139,6 @@ export function validateCustomBotConfigPayload(
       return {
         valid: false,
         errors: schemaValidationResult.errors,
-      };
-    }
-  }
-
-  if (config.schema.backtest) {
-    const backtestSchemaValidationResult = validateSchema(
-      config.schema.backtest,
-    );
-    if (!backtestSchemaValidationResult.valid) {
-      return {
-        valid: false,
-        errors: backtestSchemaValidationResult.errors,
       };
     }
   }

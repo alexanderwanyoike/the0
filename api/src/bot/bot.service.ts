@@ -3,6 +3,7 @@ import { CreateBotDto } from "./dto/create-bot.dto";
 import { UpdateBotDto } from "./dto/update-bot.dto";
 import { BotRepository } from "./bot.repository";
 import { REQUEST } from "@nestjs/core";
+import { PinoLogger } from "nestjs-pino";
 import { Bot } from "./entities/bot.entity";
 import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
@@ -26,6 +27,7 @@ export class BotService {
     private readonly customBotService: CustomBotService,
     // UserBotsService removed for OSS version
     private readonly natsService: NatsService,
+    private readonly logger: PinoLogger,
   ) {}
 
   async create(createBotDto: CreateBotDto): Promise<Result<Bot, string>> {
@@ -101,13 +103,9 @@ export class BotService {
           eventPayload,
         );
         if (!publishResult.success) {
-          console.error(
-            "Failed to publish bot creation event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published bot creation event for bot ${result.data.id} to ${topics.CREATED}`,
+          this.logger.error(
+            { error: publishResult.error, botId: result.data.id },
+            "Failed to publish bot creation event",
           );
         }
       }
@@ -180,13 +178,9 @@ export class BotService {
               eventPayload,
             );
             if (!publishResult.success) {
-              console.error(
-                "Failed to publish bot update event:",
-                publishResult.error,
-              );
-            } else {
-              console.log(
-                `📤 Published bot update event for bot ${botResult.data.id} to ${topics.UPDATED}`,
+              this.logger.error(
+                { error: publishResult.error, botId: botResult.data.id },
+                "Failed to publish bot update event",
               );
             }
           }
@@ -237,13 +231,9 @@ export class BotService {
         eventPayload,
       );
       if (!publishResult.success) {
-        console.error(
-          "Failed to publish bot deletion event:",
-          publishResult.error,
-        );
-      } else {
-        console.log(
-          `📤 Published bot deletion event for bot ${botResult.data.id} to ${topics.DELETED}`,
+        this.logger.error(
+          { error: publishResult.error, botId: botResult.data.id },
+          "Failed to publish bot deletion event",
         );
       }
     }
@@ -323,32 +313,8 @@ export class BotService {
     userId: string,
     customBot: CustomBot,
   ): Promise<Result<void, string>> {
-    try {
-      // Check if user is the owner of the custom bot
-      if (customBot.userId === userId) {
-        // User is the owner, check if the bot is approved
-        if (
-          customBot.status === "approved" ||
-          customBot.status === "published"
-        ) {
-          return { success: true, error: null, data: null };
-        } else {
-          return Failure(
-            "Your custom bot must be approved or published before deployment.",
-          );
-        }
-      }
-
-      // OSS version - all bots are free and accessible
-      // No need to check user ownership or payment in the open source version
-
-      return { success: true, error: null, data: null };
-    } catch (error: any) {
-      console.error("Error checking deployment authorization:", error);
-      return Failure(
-        `Failed to check deployment authorization: ${error.message}`,
-      );
-    }
+    // OSS version - all bots are deployable by their owners or anyone (free access)
+    return { success: true, error: null, data: null };
   }
 
   private getBotTypeFromConfig(customBot: CustomBot): BotType {
@@ -365,9 +331,7 @@ export class BotService {
     } else if (botType === "scheduled") {
       return SCHEDULED_BOT_TOPICS;
     } else {
-      console.warn(
-        `Unknown bot type: ${botType}. Expected 'realtime' or 'scheduled'.`,
-      );
+      this.logger.warn({ botType }, "Unknown bot type");
       return null;
     }
   }

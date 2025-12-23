@@ -43,8 +43,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		docker build -t the0-api:latest ../api && \
 		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30004 -t the0-frontend:latest ../frontend && \
 		docker build -t the0-docs:latest ../docs && \
-		docker build -t runtime:latest ../runtime && \
-		docker build -t the0-analyzer:latest ../services/0vers33r
+		docker build -t runtime:latest ../runtime
 	@echo "🚀 Deploying to minikube..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
@@ -54,9 +53,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		--set the0Frontend.imagePullPolicy=Never \
 		--set the0Docs.imagePullPolicy=Never \
 		--set botRunner.imagePullPolicy=Never \
-		--set backtestRunner.imagePullPolicy=Never \
 		--set botScheduler.imagePullPolicy=Never \
-		--set the0Analyzer.imagePullPolicy=Never \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""

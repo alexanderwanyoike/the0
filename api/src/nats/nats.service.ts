@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { PinoLogger } from "nestjs-pino";
 import {
   connect,
   NatsConnection,
@@ -16,7 +17,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   private jetStreamManager: JetStreamManager | null = null;
   private readonly sc = StringCodec();
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly logger: PinoLogger,
+  ) {}
 
   async onModuleInit() {
     await this.connect();
@@ -42,9 +46,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
       this.jetStreamManager = await this.connection.jetstreamManager();
 
-      console.log("✅ Connected to NATS server");
+      this.logger.info("Connected to NATS server");
     } catch (error) {
-      console.error("❌ Failed to connect to NATS:", error);
+      this.logger.error({ err: error }, "Failed to connect to NATS");
       throw error;
     }
   }
@@ -54,7 +58,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       await this.connection.close();
       this.connection = null;
       this.jetStreamManager = null;
-      console.log("🔌 Disconnected from NATS server");
+      this.logger.info("Disconnected from NATS server");
     }
   }
 
@@ -67,42 +71,29 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       // Try to delete existing stream first to recreate with new configuration
       try {
         await this.jetStreamManager.streams.delete("THE0_EVENTS");
-        console.log("🗑️ Deleted existing THE0_EVENTS stream");
       } catch (deleteError: any) {
-        if (!deleteError.message?.includes("stream not found")) {
-          console.warn(
-            "⚠️ Failed to delete existing stream:",
-            deleteError.message,
-          );
-        }
+        // Ignore "stream not found" errors
       }
 
-      // Create stream for specific event patterns (avoid wildcards that require no-ack)
+      // Create stream for bot lifecycle events
       await this.jetStreamManager.streams.add({
         name: "THE0_EVENTS",
         subjects: [
-          "custom-bot.submitted",
-          "custom-bot.approved",
-          "custom-bot.declined",
-          "custom-bot.awaiting-human-review",
-          "custom-bot.analysis-failed",
           "the0.bot.created",
           "the0.bot.updated",
           "the0.bot.deleted",
           "the0.bot-schedule.created",
           "the0.bot-schedule.updated",
           "the0.bot-schedule.deleted",
-          "the0.backtest.created",
-          "the0.backtest.completed",
         ],
         retention: RetentionPolicy.Limits,
         max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
         storage: StorageType.File,
       });
 
-      console.log("📡 NATS JetStream streams initialized");
+      this.logger.info("NATS JetStream initialized");
     } catch (error: any) {
-      console.error("❌ Failed to setup NATS streams:", error);
+      this.logger.error({ err: error }, "Failed to setup NATS streams");
       throw error;
     }
   }
@@ -114,21 +105,13 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      // For backtest events, use regular NATS publishing (not JetStream)
-      if (topic.startsWith("the0.backtest.")) {
-        this.connection.publish(topic, this.sc.encode(JSON.stringify(payload)));
-        console.log(`✅ Published to NATS topic: ${topic}`);
-        return Ok(undefined);
-      }
-
-      // For other events, use JetStream
       const jetStream = this.connection.jetstream();
       await jetStream.publish(topic, this.sc.encode(JSON.stringify(payload)), {
         timeout: 5000, // 5 second timeout
       });
       return Ok(undefined);
     } catch (error: any) {
-      console.error(`Failed to publish to topic ${topic}:`, error);
+      this.logger.error({ err: error, topic }, "Failed to publish to topic");
       return Failure(error.message);
     }
   }

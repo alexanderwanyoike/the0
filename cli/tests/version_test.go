@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"strings"
 	"testing"
 	"the0/internal"
 )
@@ -191,101 +190,4 @@ func TestNormalizeVersion(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGetPlatformInfo(t *testing.T) {
-	testCases := []struct {
-		name    string
-		channel internal.UpdateChannel
-	}{
-		{
-			name:    "Production channel",
-			channel: internal.ProductionChannel,
-		},
-		{
-			name:    "Staging channel",
-			channel: internal.StagingChannel,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			info := internal.GetPlatformInfo(tc.channel)
-
-			if info.OS == "" {
-				t.Error("OS should not be empty")
-			}
-			if info.Arch == "" {
-				t.Error("Arch should not be empty")
-			}
-			if info.BinaryName == "" {
-				t.Error("BinaryName should not be empty")
-			}
-			if info.DownloadURL == "" {
-				t.Error("DownloadURL should not be empty")
-			}
-			if info.ChecksumURL == "" {
-				t.Error("ChecksumURL should not be empty")
-			}
-
-			// Check URL contains correct bucket
-			if tc.channel == internal.ProductionChannel {
-				if !contains(info.DownloadURL, "the0-cli-releases") {
-					t.Error("Production URL should contain 'the0-cli-releases'")
-				}
-			} else {
-				if !contains(info.DownloadURL, "the0-cli-releases-staging") {
-					t.Error("Staging URL should contain 'the0-cli-releases-staging'")
-				}
-			}
-		})
-	}
-}
-
-func TestGetUpdateChannel(t *testing.T) {
-	testCases := []struct {
-		name     string
-		envValue string
-		expected internal.UpdateChannel
-	}{
-		{
-			name:     "Production channel (default)",
-			envValue: "",
-			expected: internal.ProductionChannel,
-		},
-		{
-			name:     "Staging channel",
-			envValue: "staging",
-			expected: internal.StagingChannel,
-		},
-		{
-			name:     "Production channel (explicit)",
-			envValue: "production",
-			expected: internal.ProductionChannel,
-		},
-		{
-			name:     "Unknown channel defaults to production",
-			envValue: "unknown",
-			expected: internal.ProductionChannel,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Set environment variable
-			if tc.envValue != "" {
-				t.Setenv("THE0_CLI_UPDATE_CHANNEL", tc.envValue)
-			}
-
-			result := internal.GetUpdateChannel()
-			if result != tc.expected {
-				t.Errorf("Expected %s, but got %s", tc.expected, result)
-			}
-		})
-	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }

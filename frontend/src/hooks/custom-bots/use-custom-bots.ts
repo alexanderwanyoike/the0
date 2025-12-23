@@ -44,11 +44,6 @@ export const useCustomBots = (): UseCustomBotsReturn => {
       }
     } catch (err: any) {
       console.error("Error fetching custom bots:", err);
-      console.error("Error stack:", err.stack);
-      if (err.message && err.message.includes("forEach")) {
-        console.error("❌ This is the forEach error we are looking for!");
-        console.error("❌ Error details:", err);
-      }
       setError(err.message || "Failed to load custom bots");
       setBots([]);
     } finally {

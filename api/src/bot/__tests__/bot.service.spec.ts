@@ -11,6 +11,8 @@ import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { NatsService } from "@/nats/nats.service";
 // FeatureGateService removed for OSS version
 import { Ok, Failure } from "@/common/result";
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 
 describe("BotService - Enhanced Tests", () => {
   let service: BotService;
@@ -26,7 +28,7 @@ describe("BotService - Enhanced Tests", () => {
     version: "1.0.0",
     filePath: "gs://test-bucket/test-custom-bot",
     userId: "another-user-id",
-    status: "approved",
+    status: "active",
     createdAt: new Date(),
     updatedAt: new Date(),
     config: {
@@ -55,10 +57,6 @@ describe("BotService - Enhanced Tests", () => {
         exchanges: ["Binance"],
         tags: ["test", "bot"],
       },
-    },
-    marketplace: {
-      isPublished: true,
-      price: 0,
     },
   };
 
@@ -101,6 +99,10 @@ describe("BotService - Enhanced Tests", () => {
         {
           provide: REQUEST,
           useValue: { user: { uid } },
+        },
+        {
+          provide: PinoLogger,
+          useValue: createMockLogger(),
         },
         // FeatureGateService removed for OSS version
       ],
@@ -229,7 +231,7 @@ describe("BotService - Enhanced Tests", () => {
     });
 
     describe("deployment authorization", () => {
-      it("should allow deployment for bot owner with approved bot", async () => {
+      it("should allow deployment for bot owner", async () => {
         jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
@@ -244,30 +246,15 @@ describe("BotService - Enhanced Tests", () => {
           .fn()
           .mockResolvedValue({
             success: true,
-            data: { ...mockCustomBot, userId: uid, status: "approved" },
+            data: { ...mockCustomBot, userId: uid, status: "active" },
           });
 
         const result = await service.create(validBotData);
 
         expect(result.success).toBe(true);
-        // Owner doesn't need to check hasUserBot
       });
 
-      it("should reject deployment for bot owner with unapproved bot", async () => {
-        mockCustomBotService.getGlobalSpecificVersion = jest
-          .fn()
-          .mockResolvedValue({
-            success: true,
-            data: { ...mockCustomBot, userId: uid, status: "pending" },
-          });
-
-        const result = await service.create(validBotData);
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain("must be approved");
-      });
-
-      it("should auto-install free bots for non-owners", async () => {
+      it("should allow deployment for non-owners in OSS version", async () => {
         jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
@@ -288,10 +275,9 @@ describe("BotService - Enhanced Tests", () => {
           .fn()
           .mockResolvedValue({
             success: true,
-            data: { ...mockCustomBot, marketplace: { price: 1000 } },
+            data: { ...mockCustomBot },
           });
 
-        // Mock successful repository operations - using repository instead of mockRepository
         jest.spyOn(repository, "create").mockResolvedValue({
           success: true,
           data: { ...validBotData, id: "test-id" },
@@ -310,11 +296,8 @@ describe("BotService - Enhanced Tests", () => {
 
         const result = await service.create(validBotData);
 
-        if (!result.success) {
-          console.log("Bot service create failed with error:", result.error);
-        }
         expect(result.success).toBe(true);
-        // OSS version allows all bots regardless of price
+        // OSS version allows all bots - no approval gate
       });
     });
   });

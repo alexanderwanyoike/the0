@@ -91,7 +91,6 @@ jest.mock("@/database/connection", () => ({
       customBotId: "customBotId",
       createdAt: "createdAt",
     },
-    backtests: { id: "id", userId: "userId", createdAt: "createdAt" },
     botLogs: { id: "id", userId: "userId", createdAt: "createdAt" },
     botExecutions: { id: "id", userId: "userId", createdAt: "createdAt" },
     systemLogs: { id: "id", createdAt: "createdAt" },

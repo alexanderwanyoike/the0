@@ -3,14 +3,16 @@ name: CLI Service
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
     paths:
       - 'cli/**'
       - '.github/workflows/cli.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'cli/**'
       - '.github/workflows/cli.yml'
+  workflow_dispatch:
 
 jobs:
   test:

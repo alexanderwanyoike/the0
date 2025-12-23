@@ -8,7 +8,6 @@ export interface CustomBotVersion {
   config: CustomBotConfig;
   userId: string;
   id: string;
-  marketplace?: MarketplaceMetadata | null;
   gcsPath: string;
   status: CustomBotStatus;
   createdAt: string;
@@ -22,19 +21,7 @@ export interface UserBotSummary {
   customBot?: CustomBotWithVersions;
 }
 
-export type CustomBotStatus =
-  | "approved"
-  | "declined"
-  | "awaiting_human_review"
-  | "pending_review"
-  | "published";
-
-interface MarketplaceMetadata {
-  isPublished?: boolean;
-  [key: string]: any;
-}
-
-// Remove Firestore Timestamp interface - now using standard ISO strings
+export type CustomBotStatus = "active";
 
 interface UseUserBotsReturn {
   userBots: UserBotSummary[];

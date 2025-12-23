@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"the0/internal/logger"
 )
 
 const DEFAULT_API_URL = "http://localhost:3000"
@@ -24,8 +25,7 @@ type APIClient struct {
 
 // Schema represents the JSON schema structure
 type Schema struct {
-	Backtest map[string]any `json:"backtest"`
-	Bot      map[string]any `json:"bot"`
+	Bot map[string]any `json:"bot"`
 }
 
 // APIBotConfig represents the config structure returned by the API
@@ -80,19 +80,6 @@ type BotInstance struct {
 	CustomBotId string         `json:"customBotId"`
 }
 
-// BacktestInstance represents a deployed backtest instance
-type BacktestInstance struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	Config      map[string]any `json:"config"`
-	Status      string         `json:"status"`
-	Results     map[string]any `json:"results,omitempty"`
-	CreatedAt   string         `json:"createdAt"`
-	UpdatedAt   string         `json:"updatedAt"`
-	UserID      string         `json:"userId"`
-	CustomBotId string         `json:"customBotId"`
-}
-
 // BotListResponse represents the response for listing bot instances
 type BotListResponse []BotInstance
 
@@ -104,12 +91,6 @@ type BotDeployRequest struct {
 
 // BotUpdateRequest represents the request for updating a bot instance
 type BotUpdateRequest struct {
-	Name   string         `json:"name"`
-	Config map[string]any `json:"config"`
-}
-
-// BacktestDeployRequest represents the request for deploying a backtest
-type BacktestDeployRequest struct {
 	Name   string         `json:"name"`
 	Config map[string]any `json:"config"`
 }
@@ -277,28 +258,29 @@ func (c *APIClient) CheckBotExists(config *BotConfig, auth *Auth) (bool, error) 
 	}
 
 	if !newVersion.GreaterThan(currentVersion) {
-		return false, fmt.Errorf("new version (%s) must be greater than current version (%s). Time to level up! 📈", config.Version, botData.LatestVersion)
+		return false, fmt.Errorf("new version (%s) must be greater than current version (%s)", config.Version, botData.LatestVersion)
 	}
 
-	fmt.Printf("Bot %s is ready for update! Current version: %s, New version: %s\n", config.Name, botData.LatestVersion, config.Version)
+	logger.Verbose("Bot %s ready for update: %s -> %s", config.Name, botData.LatestVersion, config.Version)
 
 	return true, nil
 }
 
 // DeployBot deploys a bot using direct upload: upload file and deploy in one step
 func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isUpdate bool) error {
-	fmt.Println("🚀 Starting deployment process...")
+	logger.StartSpinner("Starting deployment")
 
 	// Step 1: Upload ZIP file directly to API
-	fmt.Printf("📦 Uploading %s to API...\n", filepath.Base(zipPath))
+	logger.UpdateSpinner("Uploading " + filepath.Base(zipPath))
 	filePath, err := c.UploadFileDirect(config.Name, config.Version, zipPath, auth)
 	if err != nil {
+		logger.StopSpinner()
 		return fmt.Errorf("failed to upload file: %v", err)
 	}
-	fmt.Println("✅ File uploaded successfully!")
+	logger.StopSpinnerWithSuccess("Upload complete ⚡")
 
 	// Step 2: Deploy with config and file path
-	fmt.Println("🔧 Configuring deployment...")
+	logger.StartSpinner("Configuring deployment")
 
 	// Read README content
 	readmeContent, err := os.ReadFile(config.Readme)
@@ -306,19 +288,7 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 		return fmt.Errorf("failed to read README: %v", err)
 	}
 
-	// Read and parse JSON schema files
-	var backtestSchema map[string]any
-	if config.Schema.Backtest != "" {
-		backtestSchemaData, err := os.ReadFile(config.Schema.Backtest)
-		if err != nil {
-			return fmt.Errorf("failed to read backtest schema: %v", err)
-		}
-
-		if err := json.Unmarshal(backtestSchemaData, &backtestSchema); err != nil {
-			return fmt.Errorf("invalid JSON in backtest schema: %v", err)
-		}
-	}
-
+	// Read and parse bot schema
 	botSchemaData, err := os.ReadFile(config.Schema.Bot)
 	if err != nil {
 		return fmt.Errorf("failed to read bot schema: %v", err)
@@ -329,20 +299,14 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 		return fmt.Errorf("invalid JSON in bot schema: %v", err)
 	}
 
-	// Prepare entrypoints (only include backtest if specified)
+	// Prepare entrypoints
 	entrypoints := map[string]any{
 		"bot": config.Entrypoints.Bot,
 	}
-	if config.Entrypoints.Backtest != "" {
-		entrypoints["backtest"] = config.Entrypoints.Backtest
-	}
 
-	// Prepare schema (only include backtest if specified)
+	// Prepare schema
 	schema := map[string]any{
 		"bot": botSchema,
-	}
-	if backtestSchema != nil {
-		schema["backtest"] = backtestSchema
 	}
 
 	// Prepare config payload
@@ -402,16 +366,21 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		logger.StopSpinner()
 		return fmt.Errorf("authentication failed: API key is invalid or revoked")
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		logger.StopSpinner()
 		// Try to read error message from response
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("deployment failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return fmt.Errorf("validation error: %s", string(body))
+		}
+		return fmt.Errorf("deployment failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	fmt.Println("🎉 Deployment configured successfully!")
+	logger.StopSpinnerWithSuccess("Deployment successful")
 	return nil
 }
 
@@ -420,20 +389,6 @@ type BotListAPIResponse struct {
 	Success bool          `json:"success"`
 	Data    []BotInstance `json:"data"`
 	Message string        `json:"message"`
-}
-
-// BacktestAPIResponse represents the full API response structure for backtests
-type BacktestAPIResponse struct {
-	Success bool               `json:"success"`
-	Data    []BacktestInstance `json:"data"`
-	Message string             `json:"message"`
-}
-
-// SingleBacktestAPIResponse represents API response for single backtest operations
-type SingleBacktestAPIResponse struct {
-	Success bool             `json:"success"`
-	Data    BacktestInstance `json:"data"`
-	Message string           `json:"message"`
 }
 
 // ListBots retrieves the list of deployed bot instances
@@ -513,7 +468,10 @@ func (c *APIClient) DeployBotInstance(auth *Auth, request *BotDeployRequest) (*B
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return nil, fmt.Errorf("deployment failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return nil, fmt.Errorf("validation error: %s", string(body))
+		}
+		return nil, fmt.Errorf("deployment failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
 	var botInstance BotInstance
@@ -555,7 +513,10 @@ func (c *APIClient) UpdateBotInstance(auth *Auth, botID string, request *BotUpda
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return fmt.Errorf("validation error: %s", string(body))
+		}
+		return fmt.Errorf("update failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -785,10 +746,7 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 		return nil, fmt.Errorf("network error: %v", err)
 	}
 	defer resp.Body.Close()
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
+
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
@@ -884,7 +842,10 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 	}
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == 400 {
+			return "", fmt.Errorf("validation error: %s", string(body))
+		}
+		return "", fmt.Errorf("upload failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
 	// Parse the response as a flat structure instead of wrapped
@@ -908,122 +869,4 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 	}
 
 	return uploadResponse.FilePath, nil
-}
-
-// CreateBacktest deploys a new backtest instance
-func (c *APIClient) CreateBacktest(auth *Auth, request *BacktestDeployRequest) (*BacktestInstance, error) {
-	requestData, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
-	}
-
-	req, err := http.NewRequest("POST", c.BaseURL+"/backtest", bytes.NewBuffer(requestData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
-	}
-
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		return nil, fmt.Errorf("API error: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	var backtest BacktestInstance
-	if err := json.Unmarshal(body, &backtest); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	return &backtest, nil
-}
-
-// ListBacktests retrieves all backtest instances for the authenticated user
-func (c *APIClient) ListBacktests(auth *Auth) ([]BacktestInstance, error) {
-	req, err := http.NewRequest("GET", c.BaseURL+"/backtest", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
-	}
-
-	// Try to parse as wrapped response first
-	var apiResponse BacktestAPIResponse
-	if err := json.Unmarshal(body, &apiResponse); err == nil {
-		if !apiResponse.Success {
-			return nil, fmt.Errorf("API returned error: %s", apiResponse.Message)
-		}
-		return apiResponse.Data, nil
-	}
-
-	// Fallback: try to parse as direct array (for backward compatibility)
-	var backtests []BacktestInstance
-	if err := json.Unmarshal(body, &backtests); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	return backtests, nil
-}
-
-// DeleteBacktest deletes a specific backtest instance
-func (c *APIClient) DeleteBacktest(auth *Auth, backtestID string) error {
-	req, err := http.NewRequest("DELETE", c.BaseURL+"/backtest/"+backtestID, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("network error: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("authentication failed: API key is invalid or revoked")
-	}
-
-	if resp.StatusCode == 404 {
-		return fmt.Errorf("backtest not found: %s", backtestID)
-	}
-
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return fmt.Errorf("API error: %d", resp.StatusCode)
-	}
-
-	return nil
 }

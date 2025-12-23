@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -13,12 +12,14 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 
-	backtestRunner "runtime/internal/backtest-runner/server"
 	botRunner "runtime/internal/bot-runner/server"
 	botScheduler "runtime/internal/bot-scheduler/server"
 	"runtime/internal/constants"
 	"runtime/internal/util"
 )
+
+// Version is the current version of the runtime
+const Version = "1.0.0"
 
 var (
 	// Global flags
@@ -31,16 +32,13 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "the0-runtime",
-	Short: "Unified runtime for bot-runner, backtest-runner, and bot-scheduler",
-	Long: `the0-runtime is a unified executable that provides command-based service selection 
-for bot execution, backtest processing, and scheduled bot management.
+	Short: "Unified runtime for bot-runner and bot-scheduler",
+	Long: `the0-runtime is a unified executable that provides command-based service selection
+for bot execution and scheduled bot management.
 
 Examples:
   the0-runtime bot-runner master
   the0-runtime bot-runner worker
-  the0-runtime backtest-runner master --max-segment=16
-  the0-runtime backtest-runner worker
-  the0-runtime backtest-runner standalone --node=master --max-segment=16
   the0-runtime bot-scheduler master
   the0-runtime bot-scheduler worker`,
 }
@@ -68,38 +66,6 @@ var botRunnerWorkerCmd = &cobra.Command{
 	},
 }
 
-// Backtest Runner Commands
-var backtestRunnerCmd = &cobra.Command{
-	Use:   "backtest-runner",
-	Short: "Run backtest processing service",
-	Long:  `Manages backtest execution with leader election and standalone/cluster modes`,
-}
-
-var backtestRunnerMasterCmd = &cobra.Command{
-	Use:   "master",
-	Short: "Run backtest-runner in master mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		runBacktestRunnerMaster()
-	},
-}
-
-var backtestRunnerWorkerCmd = &cobra.Command{
-	Use:   "worker",
-	Short: "Run backtest-runner in worker mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		runBacktestRunnerWorker()
-	},
-}
-
-var backtestRunnerStandaloneCmd = &cobra.Command{
-	Use:   "standalone",
-	Short: "Run backtest-runner in standalone mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		nodeType, _ := cmd.Flags().GetString("node")
-		runBacktestRunnerStandalone(nodeType)
-	},
-}
-
 // Bot Scheduler Commands
 var botSchedulerCmd = &cobra.Command{
 	Use:   "bot-scheduler",
@@ -123,6 +89,15 @@ var botSchedulerWorkerCmd = &cobra.Command{
 	},
 }
 
+// Version command
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version number",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("the0-runtime version %s\n", Version)
+	},
+}
+
 func main() {
 	// Add persistent flags
 	rootCmd.PersistentFlags().UintVar(&maxSegment, "max-segment", 16, "Max segment for master node")
@@ -130,18 +105,14 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&mongoUri, "mongo-uri", getEnv("MONGO_URI", "mongodb://localhost:27017"), "MongoDB connection URI")
 	rootCmd.PersistentFlags().StringVar(&workerId, "worker-id", getEnv("WORKER_ID", generateWorkerID()), "Unique worker ID")
 
-	// Add service-specific flags
-	backtestRunnerStandaloneCmd.Flags().String("node", "master", "Node type to run (master or worker)")
-
 	// Build command tree
 	rootCmd.AddCommand(botRunnerCmd)
 	botRunnerCmd.AddCommand(botRunnerMasterCmd, botRunnerWorkerCmd)
 
-	rootCmd.AddCommand(backtestRunnerCmd)
-	backtestRunnerCmd.AddCommand(backtestRunnerMasterCmd, backtestRunnerWorkerCmd, backtestRunnerStandaloneCmd)
-
 	rootCmd.AddCommand(botSchedulerCmd)
 	botSchedulerCmd.AddCommand(botSchedulerMasterCmd, botSchedulerWorkerCmd)
+
+	rootCmd.AddCommand(versionCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
@@ -223,111 +194,6 @@ func runBotRunnerWorker() {
 
 	worker.Start() // This blocks until shutdown
 	util.LogWorker("Bot-runner worker stopped")
-}
-
-// Backtest Runner Implementation
-func runBacktestRunnerMaster() {
-	util.LogMaster("Starting backtest-runner master...")
-	util.LogMaster("Database: %s, Collection: %s", constants.BACKTEST_RUNNER_DB_NAME, constants.BACKTEST_COLLECTION)
-
-	if mode == "standalone" {
-		runBacktestRunnerStandalone("master")
-		return
-	}
-	runBacktestRunnerCluster()
-}
-
-func runBacktestRunnerWorker() {
-	util.LogWorker("Starting backtest-runner worker...")
-	util.LogWorker("Worker ID: %s", workerId)
-	util.LogWorker("Database: %s, Collection: %s", constants.BACKTEST_RUNNER_DB_NAME, constants.BACKTEST_COLLECTION)
-
-	if mode == "standalone" {
-		runBacktestRunnerStandalone("worker")
-		return
-	}
-	runBacktestRunnerCluster()
-}
-
-func runBacktestRunnerStandalone(nodeType string) {
-	switch nodeType {
-	case "master":
-		// Create master with proper configuration
-		address := fmt.Sprintf(":%d", constants.BACKTEST_RUNNER_PORT)
-		master := backtestRunner.NewMaster(
-			mongoUri,
-			constants.BACKTEST_RUNNER_DB_NAME,
-			constants.BACKTEST_COLLECTION,
-			address,
-		)
-		util.LogMaster("Backtest-runner master listening on %s", address)
-		master.Start()
-	case "worker":
-		// Get master service address from environment
-		masterHost := getEnv("MASTER_HOST", "localhost")
-		masterAddress := fmt.Sprintf("%s:%d", masterHost, constants.BACKTEST_RUNNER_PORT)
-
-		// Create MongoDB client
-		mongoClient, err := createMongoClient(mongoUri)
-		if err != nil {
-			util.LogWorker("Failed to create MongoDB client: %v", err)
-			os.Exit(1)
-		}
-		defer mongoClient.Disconnect(context.Background())
-
-		// Get batch configuration from environment
-		batchSize, _ := strconv.Atoi(getEnv("BATCH_SIZE", "5"))
-		batchTimeoutSec, _ := strconv.Atoi(getEnv("BATCH_TIMEOUT", "300"))
-		batchIntervalSec, _ := strconv.Atoi(getEnv("BATCH_INTERVAL", "10"))
-
-		options := backtestRunner.BacktestWorkerOptions{
-			BatchSize:     batchSize,
-			BatchTimeout:  time.Duration(batchTimeoutSec) * time.Second,
-			BatchInterval: time.Duration(batchIntervalSec) * time.Second,
-		}
-
-		// Create worker with proper configuration
-		ctx := context.Background()
-		worker, err := backtestRunner.NewWorker(
-			ctx,
-			workerId,
-			mongoUri,
-			constants.BACKTEST_RUNNER_DB_NAME,
-			constants.BACKTEST_COLLECTION,
-			masterAddress,
-			&backtestRunner.WorkerDockerRunnerFactory{},
-			&backtestRunner.WorkerSubscriberFactory{},
-			mongoClient,
-			options,
-		)
-		if err != nil {
-			util.LogWorker("Failed to create backtest-runner worker: %v", err)
-			os.Exit(1)
-		}
-
-		// Setup signal handling
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-		go func() {
-			<-ch
-			fmt.Println("Backtest worker shutting down...")
-			worker.Stop()
-		}()
-
-		worker.Start()
-	default:
-		panic(fmt.Sprintf("Unknown node type: %s", nodeType))
-	}
-}
-
-func runBacktestRunnerCluster() {
-	// TODO: Implement cluster mode with proper leader election
-	// This needs to be updated to work with the new architecture
-
-	// For now, we'll run in standalone mode until cluster mode is implemented
-	util.LogMaster("Cluster mode not yet implemented with new architecture")
-	util.LogMaster("Falling back to standalone mode...")
-	runBacktestRunnerStandalone("master")
 }
 
 // Bot Scheduler Implementation

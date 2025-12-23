@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
+import { PinoLogger } from "nestjs-pino";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
-import { NatsService } from "@/nats/nats.service";
 
 import {
   CustomBotConfig,
@@ -16,7 +16,7 @@ export class CustomBotService {
   constructor(
     private readonly customBotRepository: CustomBotRepository,
     private readonly storageService: StorageService,
-    private readonly natsService: NatsService,
+    private readonly logger: PinoLogger,
   ) {}
 
   async createCustomBot(
@@ -74,7 +74,7 @@ export class CustomBotService {
         version: config.version,
         config,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: "active",
       };
 
       const result = await this.customBotRepository.createNewGlobalVersion(
@@ -82,49 +82,16 @@ export class CustomBotService {
         botData,
       );
 
-      // Refetch the created bot
       if (!result.success) {
         return Failure(result.error);
       }
 
-      const createdBotResult =
-        await this.customBotRepository.getSpecificGlobalVersion(
-          config.name,
-          config.version,
-        );
-
-      // Publish custom-bot.submitted event for 0vers33r analysis
-      if (createdBotResult.success) {
-        const customBotSubmittedEvent = {
-          type: "custom-bot.submitted",
-          botId: createdBotResult.data.id,
-          name: config.name,
-          userId: userId,
-          filePath: filePath,
-          config: config,
-          timestamp: new Date().toISOString(),
-        };
-
-        const publishResult = await this.natsService.publish(
-          "custom-bot.submitted",
-          customBotSubmittedEvent,
-        );
-
-        if (!publishResult.success) {
-          console.error(
-            "Failed to publish custom-bot.submitted event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
-          );
-        }
-      }
-
-      return createdBotResult;
+      return await this.customBotRepository.getSpecificGlobalVersion(
+        config.name,
+        config.version,
+      );
     } catch (error: any) {
-      console.log("Error creating custom bot:", error);
+      this.logger.error({ err: error }, "Error creating custom bot");
       return Failure(`Failed to create custom bot: ${error.message}`);
     }
   }
@@ -231,7 +198,7 @@ export class CustomBotService {
         version: config.version,
         config,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: "active",
       };
 
       const customBot = await this.customBotRepository.createNewGlobalVersion(
@@ -243,43 +210,12 @@ export class CustomBotService {
         return Failure(customBot.error);
       }
 
-      const createdBotResult =
-        await this.customBotRepository.getSpecificGlobalVersion(
-          config.name,
-          config.version,
-        );
-
-      if (createdBotResult.success) {
-        const customBotSubmittedEvent = {
-          type: "custom-bot.submitted",
-          botId: createdBotResult.data.id,
-          name: config.name,
-          userId: userId,
-          filePath: filePath,
-          config: config,
-          timestamp: new Date().toISOString(),
-        };
-
-        const publishResult = await this.natsService.publish(
-          "custom-bot.submitted",
-          customBotSubmittedEvent,
-        );
-
-        if (!publishResult.success) {
-          console.error(
-            "Failed to publish custom-bot.submitted event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
-          );
-        }
-      }
-
-      return createdBotResult;
+      return await this.customBotRepository.getSpecificGlobalVersion(
+        config.name,
+        config.version,
+      );
     } catch (error: any) {
-      console.log("Error updating custom bot:", error);
+      this.logger.error({ err: error }, "Error updating custom bot");
       return Failure(`Failed to update custom bot: ${error.message}`);
     }
   }
@@ -296,7 +232,7 @@ export class CustomBotService {
 
       return result;
     } catch (error: any) {
-      console.log("Error getting user custom bots:", error);
+      this.logger.error({ err: error }, "Error getting user custom bots");
       return Failure(`Failed to get user custom bots: ${error.message}`);
     }
   }
@@ -334,5 +270,15 @@ export class CustomBotService {
       name,
       version,
     );
+  }
+
+  async getGlobalLatestVersion(name: string): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.getGlobalLatestVersion(name);
+  }
+
+  async getAllGlobalCustomBots(): Promise<
+    Result<CustomBotWithVersions[], string>
+  > {
+    return await this.customBotRepository.getAllGlobalCustomBots();
   }
 }

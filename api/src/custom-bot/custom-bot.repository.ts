@@ -111,8 +111,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
           userId: bot.userId,
           filePath: bot.filePath,
           status: bot.status,
-          marketplace: bot.marketplace,
-          review: bot.review,
           createdAt: bot.createdAt,
           updatedAt: bot.updatedAt,
         }));
@@ -305,47 +303,81 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       version: customBot.version!,
       config: customBot.config!,
       filePath: customBot.filePath!,
-      status: customBot.status || "pending_review",
-      marketplace: customBot.marketplace || null,
+      status: customBot.status || "active",
     };
 
     return this.create(data);
   }
 
-  async updateBotStatus(
-    botId: string,
-    status: string,
-  ): Promise<Result<void, string>> {
+  async getAllGlobalCustomBots(): Promise<
+    Result<CustomBotWithVersions[], string>
+  > {
     try {
-      const result = await this.db
-        .update(this.table)
-        .set({
-          status: status as any,
-          updatedAt: new Date(),
-        })
-        .where(eq(this.table.id, botId));
+      // Get all custom bots from the database
+      const records = await this.db
+        .select()
+        .from(this.table)
+        .orderBy(desc(this.table.createdAt));
 
-      return Ok(null);
-    } catch (error: any) {
-      return Failure(`Failed to update bot status: ${error.message}`);
-    }
-  }
+      if (records.length === 0) {
+        return Ok([]);
+      }
 
-  async updateBotAnalysis(
-    botId: string,
-    analysis: any,
-  ): Promise<Result<void, string>> {
-    try {
-      // Add analysis data to the bot record (this would require schema update)
-      // For now, just log the analysis data
-      console.log(
-        `📊 Analysis data for bot ${botId}:`,
-        JSON.stringify(analysis, null, 2),
+      // Group bots by name
+      const botsByName = new Map<string, CustomBot[]>();
+      for (const record of records) {
+        const bot = this.transformRecordToData(record);
+        if (!botsByName.has(bot.name)) {
+          botsByName.set(bot.name, []);
+        }
+        botsByName.get(bot.name)!.push(bot);
+      }
+
+      // Transform each group to CustomBotWithVersions
+      const customBotsWithVersions: CustomBotWithVersions[] = [];
+
+      for (const [, bots] of botsByName) {
+        // Sort by creation date descending (latest first)
+        bots.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+        const latestBot = bots[0];
+
+        const versions: CustomBotVersion[] = bots.map((bot) => ({
+          id: bot.id,
+          version: bot.version,
+          config: bot.config,
+          userId: bot.userId,
+          filePath: bot.filePath,
+          status: bot.status,
+          createdAt: bot.createdAt,
+          updatedAt: bot.updatedAt,
+        }));
+
+        const customBotWithVersions: CustomBotWithVersions = {
+          id: latestBot.id,
+          name: latestBot.name,
+          userId: latestBot.userId,
+          latestVersion: latestBot.version,
+          versions,
+          createdAt: bots[bots.length - 1].createdAt, // First created
+          updatedAt: latestBot.updatedAt, // Latest updated
+        };
+
+        customBotsWithVersions.push(customBotWithVersions);
+      }
+
+      // Sort by latest update time descending
+      customBotsWithVersions.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       );
 
-      return Ok(null);
+      return Ok(customBotsWithVersions);
     } catch (error: any) {
-      return Failure(`Failed to update bot analysis: ${error.message}`);
+      return Failure(error.message);
     }
   }
 }

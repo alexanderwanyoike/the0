@@ -95,7 +95,7 @@ func (vm *VendorManager) PerformVendoring() error {
 	blue := color.New(color.FgBlue)
 	green := color.New(color.FgGreen)
 
-	blue.Println("🔮 Installing Python dependencies...")
+	blue.Println("Installing Python dependencies...")
 
 	// Step 1: Pull Python image if needed
 	if err := vm.pullPythonImage(); err != nil {
@@ -123,7 +123,7 @@ func (vm *VendorManager) PerformVendoring() error {
 		return fmt.Errorf("failed to verify vendored files: %v", err)
 	}
 
-	green.Println("✓ Python dependencies installed successfully ⚡")
+	green.Println("v Python dependencies installed")
 	return nil
 }
 
@@ -132,7 +132,7 @@ func (vm *VendorManager) PerformNodeVendoring(hasTypeScript bool) error {
 	blue := color.New(color.FgBlue)
 	green := color.New(color.FgGreen)
 
-	blue.Println("⚡ Installing JavaScript dependencies...")
+	blue.Println("Installing JavaScript dependencies...")
 
 	// Step 1: Pull Node image if needed
 	if err := vm.pullNodeImage(); err != nil {
@@ -180,7 +180,7 @@ func (vm *VendorManager) PerformNodeVendoring(hasTypeScript bool) error {
 		yellow.Printf("⚠️ Warning: failed to cleanup node_modules backup: %v\n", err)
 	}
 
-	green.Println("✓ JavaScript dependencies installed successfully ⚡")
+	green.Println("v JavaScript dependencies installed")
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (vm *VendorManager) pullPythonImage() error {
 	}
 
 	blue := color.New(color.FgBlue)
-	blue.Printf("📥 Downloading Python trading engine: %s...\n", pythonImage)
+	blue.Printf("Pulling Docker image: %s...\n", pythonImage)
 
 	reader, err := vm.dockerClient.ImagePull(ctx, pythonImage, image.PullOptions{})
 	if err != nil {
@@ -254,7 +254,7 @@ func (vm *VendorManager) pullNodeImage() error {
 	}
 
 	blue := color.New(color.FgBlue)
-	blue.Printf("📥 Downloading JavaScript trading engine: %s...\n", nodeImage)
+	blue.Printf("Pulling Docker image: %s...\n", nodeImage)
 
 	reader, err := vm.dockerClient.ImagePull(ctx, nodeImage, image.PullOptions{})
 	if err != nil {
@@ -296,6 +296,7 @@ func (vm *VendorManager) runVendorContainer() (string, error) {
 			vm.getPythonInstallCommand(),
 		},
 		WorkingDir: "/app",
+		Env:        getBuildEnvVars(),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -347,7 +348,7 @@ func (vm *VendorManager) runVendorContainer() (string, error) {
 				// Clean Docker log headers and display output
 				output := vm.cleanDockerLogOutput(buffer[:n])
 				if output != "" {
-					blue.Printf("🔮 %s", output)
+					blue.Printf("  %s", output)
 				}
 			}
 		}
@@ -461,7 +462,7 @@ func (vm *VendorManager) runNodeVendorContainer(hasTypeScript bool) (string, err
 				// Clean Docker log headers and display output
 				output := vm.cleanDockerLogOutput(buffer[:n])
 				if output != "" {
-					green.Printf("⚡ %s", output)
+					green.Printf("  %s", output)
 				}
 			}
 		}
@@ -493,6 +494,23 @@ func (vm *VendorManager) runNodeVendorContainer(hasTypeScript bool) (string, err
 	return resp.ID, nil
 }
 
+// getBuildEnvVars returns environment variables for the build container
+func getBuildEnvVars() []string {
+	secrets, err := LoadBuildSecrets()
+	if err != nil || secrets == nil {
+		return nil
+	}
+
+	var envVars []string
+	if secrets.GitHubToken != "" {
+		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
+	}
+	if secrets.PipIndexURL != "" {
+		envVars = append(envVars, fmt.Sprintf("PIP_EXTRA_INDEX_URL=%s", secrets.PipIndexURL))
+	}
+	return envVars
+}
+
 // getPythonInstallCommand returns the pip install command with proper ownership
 func (vm *VendorManager) getPythonInstallCommand() string {
 	// Get current user info for ownership
@@ -507,7 +525,19 @@ func (vm *VendorManager) getPythonInstallCommand() string {
 		gid = "1000"
 	}
 
-	return fmt.Sprintf("pip install --target /vendor -r /requirements.txt --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", uid, gid)
+	// Install git if GITHUB_TOKEN is set (needed for private repo dependencies)
+	// The python:3.11-slim image doesn't include git by default
+	gitInstall := `if [ -n "$GITHUB_TOKEN" ]; then apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*; fi`
+
+	// Configure git to use GITHUB_TOKEN for private repos if set
+	// This rewrites git URLs to use the token for authentication
+	// Handles multiple URL formats: git@github.com:, https://github.com/, ssh://git@github.com/
+	gitConfig := `if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:" && git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; fi`
+
+	// Configure pip to use extra index URL for private PyPI repos if set
+	pipExtraIndex := `PIP_EXTRA_INDEX_FLAG=""; if [ -n "$PIP_EXTRA_INDEX_URL" ]; then PIP_EXTRA_INDEX_FLAG="--extra-index-url $PIP_EXTRA_INDEX_URL"; fi`
+
+	return fmt.Sprintf("%s && %s && %s && pip install --target /vendor -r /requirements.txt $PIP_EXTRA_INDEX_FLAG --no-cache-dir --disable-pip-version-check && chown -R %s:%s /vendor", gitInstall, gitConfig, pipExtraIndex, uid, gid)
 }
 
 // getNodeInstallCommand returns the npm install command with proper ownership
@@ -860,7 +890,7 @@ func PerformVendoringIfNeeded(projectPath string) error {
 
 	// Perform Python vendoring if needed
 	if shouldVendorPython {
-		blue.Println("🐍 Python dependencies detected - starting installation...")
+		blue.Println("Python dependencies detected")
 		if err := vm.PerformVendoring(); err != nil {
 			red.Printf("⚠️ Python dependency installation failed: %v\n", err)
 			red.Println("⚠️ Cannot deploy bot without successfully compiled dependencies")
@@ -870,7 +900,7 @@ func PerformVendoringIfNeeded(projectPath string) error {
 
 	// Perform Node.js vendoring if needed
 	if shouldVendorNode {
-		blue.Println("⚡ JavaScript dependencies detected - starting installation...")
+		blue.Println("JavaScript dependencies detected")
 		hasTypeScript := vm.CheckTypeScriptFiles()
 		if err := vm.PerformNodeVendoring(hasTypeScript); err != nil {
 			red.Printf("⚠️ JavaScript dependency installation failed: %v\n", err)
