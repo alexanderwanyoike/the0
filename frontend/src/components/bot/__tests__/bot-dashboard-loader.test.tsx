@@ -3,7 +3,13 @@ import { BotDashboardLoader } from "../bot-dashboard-loader";
 
 // Mock the BotEventsProvider
 jest.mock("@/contexts/bot-events-context", () => ({
-  BotEventsProvider: ({ children, botId }: { children: React.ReactNode; botId: string }) => (
+  BotEventsProvider: ({
+    children,
+    botId,
+  }: {
+    children: React.ReactNode;
+    botId: string;
+  }) => (
     <div data-testid="bot-events-provider" data-bot-id={botId}>
       {children}
     </div>
@@ -56,7 +62,9 @@ describe("BotDashboardLoader", () => {
       render(<BotDashboardLoader {...defaultProps} customBotId="" />);
 
       await waitFor(() => {
-        expect(screen.queryByText("Loading dashboard...")).not.toBeInTheDocument();
+        expect(
+          screen.queryByText("Loading dashboard..."),
+        ).not.toBeInTheDocument();
       });
     });
   });
@@ -78,7 +86,9 @@ describe("BotDashboardLoader", () => {
       render(<BotDashboardLoader {...defaultProps} className="test-class" />);
 
       // During loading state
-      const loadingContainer = screen.getByText("Loading dashboard...").closest("div");
+      const loadingContainer = screen
+        .getByText("Loading dashboard...")
+        .closest("div");
       expect(loadingContainer).toHaveClass("test-class");
     });
   });
@@ -106,11 +116,17 @@ describe("BotDashboardLoader", () => {
 
     it("applies className to no dashboard placeholder", async () => {
       render(
-        <BotDashboardLoader {...defaultProps} customBotId="" className="custom-placeholder" />
+        <BotDashboardLoader
+          {...defaultProps}
+          customBotId=""
+          className="custom-placeholder"
+        />,
       );
 
       await waitFor(() => {
-        const placeholder = screen.getByText("No dashboard available").closest("div");
+        const placeholder = screen
+          .getByText("No dashboard available")
+          .closest("div");
         expect(placeholder).toHaveClass("custom-placeholder");
       });
     });

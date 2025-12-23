@@ -176,7 +176,9 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       value: typeof value === "object" ? JSON.stringify(value) : String(value),
     }));
 
-  const fullContent = displayData.map(({ key, value }) => `${key}: ${value}`).join(" | ");
+  const fullContent = displayData
+    .map(({ key, value }) => `${key}: ${value}`)
+    .join(" | ");
 
   return (
     <div
@@ -247,15 +249,22 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
     if (!container) return;
 
     const threshold = 50; // pixels from bottom
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    const isAtBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      threshold;
     setIsUserAtBottom(isAtBottom);
   };
 
   // Only auto-scroll if user is already at bottom or autoScroll is manually enabled
   useEffect(() => {
-    if ((autoScroll || isUserAtBottom) && bottomRef.current && scrollContainerRef.current) {
+    if (
+      (autoScroll || isUserAtBottom) &&
+      bottomRef.current &&
+      scrollContainerRef.current
+    ) {
       // Use scrollTop instead of scrollIntoView to avoid page-level scroll issues
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      scrollContainerRef.current.scrollTop =
+        scrollContainerRef.current.scrollHeight;
     }
   }, [logs, autoScroll, isUserAtBottom]);
 
@@ -327,7 +336,12 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             </div>
           )}
 
-          <div className={cn("flex items-center gap-1", compact && "w-full justify-end")}>
+          <div
+            className={cn(
+              "flex items-center gap-1",
+              compact && "w-full justify-end",
+            )}
+          >
             {compact && (
               <div className="flex-1 mr-2">
                 <Input

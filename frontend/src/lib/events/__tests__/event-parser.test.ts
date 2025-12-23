@@ -87,7 +87,8 @@ describe("event-parser", () => {
     });
 
     it("should handle JSON without _metric as regular log", () => {
-      const line = '[2024-01-20 10:30:00] {"some": "json", "without": "metric"}';
+      const line =
+        '[2024-01-20 10:30:00] {"some": "json", "without": "metric"}';
       const event = parseLogLine(line);
 
       expect(event.type).toBe("log");
@@ -113,8 +114,7 @@ describe("event-parser", () => {
     });
 
     it("should preserve the raw log line", () => {
-      const line =
-        '[2024-01-20 10:30:00] {"_metric": "signal", "type": "buy"}';
+      const line = '[2024-01-20 10:30:00] {"_metric": "signal", "type": "buy"}';
       const event = parseLogLine(line);
 
       expect(event.raw).toBe(line);

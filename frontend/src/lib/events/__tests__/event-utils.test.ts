@@ -407,16 +407,8 @@ describe("event-utils", () => {
   describe("latestByType", () => {
     it("should return latest event for each metric type", () => {
       const events = [
-        createMetricEvent(
-          "trade",
-          { id: 1 },
-          new Date("2024-01-20T10:00:00"),
-        ),
-        createMetricEvent(
-          "trade",
-          { id: 2 },
-          new Date("2024-01-20T11:00:00"),
-        ),
+        createMetricEvent("trade", { id: 1 }, new Date("2024-01-20T10:00:00")),
+        createMetricEvent("trade", { id: 2 }, new Date("2024-01-20T11:00:00")),
         createMetricEvent(
           "portfolio_value",
           { value: 1000 },

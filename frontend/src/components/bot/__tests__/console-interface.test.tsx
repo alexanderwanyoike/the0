@@ -58,8 +58,14 @@ describe("ConsoleInterface", () => {
   describe("rendering", () => {
     it("renders console header with title and entry count", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log 1" },
-        { date: "2024-01-01", content: "[2024-01-01 10:01:00] INFO: Test log 2" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] INFO: Test log 1",
+        },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:01:00] INFO: Test log 2",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -76,7 +82,7 @@ describe("ConsoleInterface", () => {
 
     it("renders loading state", () => {
       const { container } = render(
-        <ConsoleInterface {...defaultProps} loading={true} logs={[]} />
+        <ConsoleInterface {...defaultProps} loading={true} logs={[]} />,
       );
 
       // Should show loading spinner (RefreshCw with animate-spin class)
@@ -86,7 +92,7 @@ describe("ConsoleInterface", () => {
 
     it("applies custom className", () => {
       const { container } = render(
-        <ConsoleInterface {...defaultProps} className="custom-class" />
+        <ConsoleInterface {...defaultProps} className="custom-class" />,
       );
 
       expect(container.firstChild).toHaveClass("custom-class");
@@ -104,14 +110,19 @@ describe("ConsoleInterface", () => {
       render(<ConsoleInterface {...defaultProps} compact={true} />);
 
       // Filter button should not be visible in compact mode
-      expect(screen.queryByRole("button", { name: /filter/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /filter/i }),
+      ).not.toBeInTheDocument();
     });
   });
 
   describe("log entries", () => {
     it("renders log entries with correct content", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Starting bot" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] INFO: Starting bot",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -121,8 +132,14 @@ describe("ConsoleInterface", () => {
 
     it("displays logs in reverse order (newest first)", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: First log" },
-        { date: "2024-01-01", content: "[2024-01-01 10:01:00] INFO: Second log" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] INFO: First log",
+        },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:01:00] INFO: Second log",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -134,7 +151,10 @@ describe("ConsoleInterface", () => {
 
     it("renders ERROR logs with appropriate styling", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] ERROR: Something failed" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] ERROR: Something failed",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -144,7 +164,10 @@ describe("ConsoleInterface", () => {
 
     it("renders WARN logs", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] WARN: Warning message" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] WARN: Warning message",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -154,7 +177,10 @@ describe("ConsoleInterface", () => {
 
     it("renders DEBUG logs", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] DEBUG: Debug info" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] DEBUG: Debug info",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -168,7 +194,8 @@ describe("ConsoleInterface", () => {
       const logs: LogEntry[] = [
         {
           date: "2024-01-01",
-          content: '[2024-01-01 10:00:00] {"_metric": "portfolio_value", "value": 10000}',
+          content:
+            '[2024-01-01 10:00:00] {"_metric": "portfolio_value", "value": 10000}',
         },
       ];
 
@@ -284,7 +311,9 @@ describe("ConsoleInterface", () => {
       const user = userEvent.setup();
       const onDateChange = jest.fn();
 
-      render(<ConsoleInterface {...defaultProps} onDateChange={onDateChange} />);
+      render(
+        <ConsoleInterface {...defaultProps} onDateChange={onDateChange} />,
+      );
 
       // Need to open filter panel first
       const buttons = screen.getAllByRole("button");
@@ -306,13 +335,17 @@ describe("ConsoleInterface", () => {
       const filterButton = buttons[0];
 
       // Initially filters are hidden
-      expect(screen.queryByPlaceholderText("Search logs...")).not.toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText("Search logs..."),
+      ).not.toBeInTheDocument();
 
       await user.click(filterButton);
 
       // After click, search input should be visible
       await waitFor(() => {
-        expect(screen.getByPlaceholderText("Search logs...")).toBeInTheDocument();
+        expect(
+          screen.getByPlaceholderText("Search logs..."),
+        ).toBeInTheDocument();
       });
     });
 
@@ -320,7 +353,9 @@ describe("ConsoleInterface", () => {
       const user = userEvent.setup();
       const onDateChange = jest.fn();
 
-      render(<ConsoleInterface {...defaultProps} onDateChange={onDateChange} />);
+      render(
+        <ConsoleInterface {...defaultProps} onDateChange={onDateChange} />,
+      );
 
       // Open filter panel
       const buttons = screen.getAllByRole("button");
@@ -342,9 +377,15 @@ describe("ConsoleInterface", () => {
   describe("entry count badge", () => {
     it("shows correct count after filtering", async () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Match this" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:00:00] INFO: Match this",
+        },
         { date: "2024-01-01", content: "[2024-01-01 10:01:00] INFO: No match" },
-        { date: "2024-01-01", content: "[2024-01-01 10:02:00] INFO: Match this too" },
+        {
+          date: "2024-01-01",
+          content: "[2024-01-01 10:02:00] INFO: Match this too",
+        },
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -355,7 +396,10 @@ describe("ConsoleInterface", () => {
 
     it("updates count when logs change", () => {
       const { rerender } = render(
-        <ConsoleInterface {...defaultProps} logs={[{ date: "2024-01-01", content: "Log 1" }]} />
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "2024-01-01", content: "Log 1" }]}
+        />,
       );
 
       expect(screen.getByText("1 entries")).toBeInTheDocument();
@@ -367,7 +411,7 @@ describe("ConsoleInterface", () => {
             { date: "2024-01-01", content: "Log 1" },
             { date: "2024-01-01", content: "Log 2" },
           ]}
-        />
+        />,
       );
 
       expect(screen.getByText("2 entries")).toBeInTheDocument();

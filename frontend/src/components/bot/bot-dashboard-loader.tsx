@@ -91,9 +91,7 @@ export function BotDashboardLoader({
         <div className="bg-red-950/30 border border-red-800 p-4 rounded-lg flex items-start gap-3 max-w-md">
           <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-red-300 font-medium">
-              Failed to load dashboard
-            </p>
+            <p className="text-red-300 font-medium">Failed to load dashboard</p>
             <p className="text-red-400/70 text-sm mt-1">{loadError.message}</p>
           </div>
         </div>

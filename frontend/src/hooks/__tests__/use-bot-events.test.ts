@@ -52,16 +52,19 @@ jest.mock("@/lib/events/event-utils", () => ({
   since: jest.fn((events) => events),
   between: jest.fn((events) => events),
   filterByType: jest.fn((events, type) =>
-    events.filter((e: any) => e.metricType === type)
+    events.filter((e: any) => e.metricType === type),
   ),
   logs: jest.fn((events) => events.filter((e: any) => e.type === "log")),
   metrics: jest.fn((events) => events.filter((e: any) => e.type === "metric")),
-  latest: jest.fn((events, type) =>
-    events.filter((e: any) => e.metricType === type).pop() || null
+  latest: jest.fn(
+    (events, type) =>
+      events.filter((e: any) => e.metricType === type).pop() || null,
   ),
-  getMetricTypes: jest.fn((events) =>
-    [...new Set(events.filter((e: any) => e.metricType).map((e: any) => e.metricType))]
-  ),
+  getMetricTypes: jest.fn((events) => [
+    ...new Set(
+      events.filter((e: any) => e.metricType).map((e: any) => e.metricType),
+    ),
+  ]),
   groupByMetricType: jest.fn((events) => {
     const grouped: Record<string, any[]> = {};
     events.forEach((e: any) => {
@@ -96,7 +99,7 @@ jest.mock("@/lib/events/event-utils", () => ({
       .map((e: any) => ({
         timestamp: e.timestamp,
         value: e.data?.[valueKey] || 0,
-      }))
+      })),
   ),
 }));
 
@@ -107,7 +110,8 @@ describe("useBotEvents", () => {
     { date: "20240101", content: "[2024-01-01 10:00:00] INFO: Starting bot" },
     {
       date: "20240101",
-      content: '[2024-01-01 10:01:00] {"_metric": "portfolio_value", "value": 10000}',
+      content:
+        '[2024-01-01 10:01:00] {"_metric": "portfolio_value", "value": 10000}',
     },
   ];
 
@@ -146,14 +150,18 @@ describe("useBotEvents", () => {
 
     it("passes autoRefresh option to useBotLogs", () => {
       renderHook(() =>
-        useBotEvents({ botId: "bot-123", autoRefresh: true, refreshInterval: 5000 })
+        useBotEvents({
+          botId: "bot-123",
+          autoRefresh: true,
+          refreshInterval: 5000,
+        }),
       );
 
       expect(mockUseBotLogs).toHaveBeenCalledWith(
         expect.objectContaining({
           autoRefresh: true,
           refreshInterval: 5000,
-        })
+        }),
       );
     });
 
@@ -162,7 +170,7 @@ describe("useBotEvents", () => {
         useBotEvents({
           botId: "bot-123",
           dateRange: { start: "20240101", end: "20240131" },
-        })
+        }),
       );
 
       expect(mockUseBotLogs).toHaveBeenCalledWith(
@@ -170,7 +178,7 @@ describe("useBotEvents", () => {
           initialQuery: expect.objectContaining({
             dateRange: "20240101-20240131",
           }),
-        })
+        }),
       );
     });
   });
@@ -193,7 +201,9 @@ describe("useBotEvents", () => {
     it("parses metric events correctly", () => {
       const { result } = renderHook(() => useBotEvents({ botId: "bot-123" }));
 
-      const metricEvents = result.current.events.filter((e) => e.type === "metric");
+      const metricEvents = result.current.events.filter(
+        (e) => e.type === "metric",
+      );
       expect(metricEvents.length).toBeGreaterThan(0);
     });
   });
@@ -386,7 +396,10 @@ describe("useBotEvents", () => {
       expect(result.current.setDateRangeFilter).toBe(mockSetDateRangeFilter);
 
       result.current.setDateRangeFilter("20240101", "20240131");
-      expect(mockSetDateRangeFilter).toHaveBeenCalledWith("20240101", "20240131");
+      expect(mockSetDateRangeFilter).toHaveBeenCalledWith(
+        "20240101",
+        "20240131",
+      );
     });
 
     it("exposes exportLogs function", () => {
@@ -408,7 +421,7 @@ describe("useBotEvents", () => {
   describe("memoization", () => {
     it("memoizes utils object", () => {
       const { result, rerender } = renderHook(() =>
-        useBotEvents({ botId: "bot-123" })
+        useBotEvents({ botId: "bot-123" }),
       );
 
       const utils1 = result.current.utils;
@@ -421,7 +434,7 @@ describe("useBotEvents", () => {
 
     it("updates utils when events change", () => {
       const { result, rerender } = renderHook(() =>
-        useBotEvents({ botId: "bot-123" })
+        useBotEvents({ botId: "bot-123" }),
       );
 
       const utils1 = result.current.utils;

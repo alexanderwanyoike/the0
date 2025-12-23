@@ -25,7 +25,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               imports: {
-                "react": "/api/shared/react",
+                react: "/api/shared/react",
                 "react/jsx-runtime": "/api/shared/react-jsx-runtime",
                 "react/jsx-dev-runtime": "/api/shared/react-jsx-runtime",
               },

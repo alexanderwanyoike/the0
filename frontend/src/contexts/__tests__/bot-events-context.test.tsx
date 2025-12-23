@@ -75,7 +75,7 @@ describe("BotEventsContext", () => {
       render(
         <BotEventsProvider botId="bot-123">
           <div data-testid="child">Child content</div>
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       expect(screen.getByTestId("child")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("BotEventsContext", () => {
       render(
         <BotEventsProvider botId="test-bot-id">
           <TestComponent />
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       expect(screen.getByTestId("bot-id")).toHaveTextContent("test-bot-id");
@@ -109,9 +109,13 @@ describe("BotEventsContext", () => {
       const { useBotEvents } = require("@/hooks/use-bot-events");
 
       render(
-        <BotEventsProvider botId="bot-123" autoRefresh={true} refreshInterval={5000}>
+        <BotEventsProvider
+          botId="bot-123"
+          autoRefresh={true}
+          refreshInterval={5000}
+        >
           <div>Child</div>
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       expect(useBotEvents).toHaveBeenCalledWith(
@@ -119,7 +123,7 @@ describe("BotEventsContext", () => {
           botId: "bot-123",
           autoRefresh: true,
           refreshInterval: 5000,
-        })
+        }),
       );
     });
 
@@ -130,14 +134,14 @@ describe("BotEventsContext", () => {
       render(
         <BotEventsProvider botId="bot-123" dateRange={dateRange}>
           <div>Child</div>
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       expect(useBotEvents).toHaveBeenCalledWith(
         expect.objectContaining({
           botId: "bot-123",
           dateRange,
-        })
+        }),
       );
     });
 
@@ -147,7 +151,7 @@ describe("BotEventsContext", () => {
       render(
         <BotEventsProvider botId="bot-123">
           <div>Child</div>
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       expect(useBotEvents).toHaveBeenCalledWith(
@@ -155,7 +159,7 @@ describe("BotEventsContext", () => {
           botId: "bot-123",
           autoRefresh: true,
           refreshInterval: 30000,
-        })
+        }),
       );
     });
   });
@@ -178,7 +182,9 @@ describe("BotEventsContext", () => {
 
     it("throws error when used outside provider", () => {
       // Suppress console.error for this test
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       expect(() => {
         renderHook(() => useBotEventsContext());
@@ -216,15 +222,21 @@ describe("BotEventsContext", () => {
         <BotEventsProvider botId="bot-123">{children}</BotEventsProvider>
       );
 
-      const { result: result1 } = renderHook(() => useBotEventsContext(), { wrapper });
-      const { result: result2 } = renderHook(() => useThe0Events(), { wrapper });
+      const { result: result1 } = renderHook(() => useBotEventsContext(), {
+        wrapper,
+      });
+      const { result: result2 } = renderHook(() => useThe0Events(), {
+        wrapper,
+      });
 
       expect(result1.current.botId).toBe(result2.current.botId);
       expect(result1.current.events).toEqual(result2.current.events);
     });
 
     it("throws same error when used outside provider", () => {
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       expect(() => {
         renderHook(() => useThe0Events());
@@ -241,7 +253,7 @@ describe("BotEventsContext", () => {
       render(
         <BotEventsProvider botId="bot-123">
           <div>Child</div>
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       // Provider should render successfully with shared context pattern
@@ -259,7 +271,7 @@ describe("BotEventsContext", () => {
       render(
         <BotEventsProvider botId="bot-123">
           <TestComponent />
-        </BotEventsProvider>
+        </BotEventsProvider>,
       );
 
       const button = screen.getByRole("button", { name: "Refresh" });
