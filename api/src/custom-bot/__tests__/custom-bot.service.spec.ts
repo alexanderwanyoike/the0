@@ -83,6 +83,8 @@ describe("CustomBotService", () => {
       downloadFile: jest.fn(),
       getFileInfo: jest.fn(),
       ensureBucket: jest.fn(),
+      extractAndStoreFrontend: jest.fn().mockResolvedValue(Ok(null)),
+      getFrontendBundle: jest.fn(),
     } as unknown as jest.Mocked<StorageService>;
 
     mockValidateConfig = validateCustomBotConfigPayload as jest.MockedFunction<

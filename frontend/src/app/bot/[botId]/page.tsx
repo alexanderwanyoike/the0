@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withAuth } from "@/components/auth/with-auth";
-import { BotDashboardLoader } from "@/components/bot/BotDashboardLoader";
+import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
 import { ConsoleInterface } from "@/components/bot/console-interface";
 import {
   Dialog,
