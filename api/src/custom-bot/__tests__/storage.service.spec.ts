@@ -363,7 +363,8 @@ describe("StorageService", () => {
 
   describe("getBotFrontend", () => {
     it("should get frontend bundle successfully", async () => {
-      const frontendContent = 'export default function Dashboard() { return "Hello"; }';
+      const frontendContent =
+        'export default function Dashboard() { return "Hello"; }';
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
           yield Buffer.from(frontendContent);
@@ -371,7 +372,9 @@ describe("StorageService", () => {
       };
       mockMinioClient.getObject.mockResolvedValue(mockStream as any);
 
-      const result = await service.getBotFrontend("user123/test-bot/1.0.0/frontend.js");
+      const result = await service.getBotFrontend(
+        "user123/test-bot/1.0.0/frontend.js",
+      );
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(frontendContent);
@@ -386,7 +389,9 @@ describe("StorageService", () => {
       error.code = "NoSuchKey";
       mockMinioClient.getObject.mockRejectedValue(error);
 
-      const result = await service.getBotFrontend("user123/test-bot/1.0.0/frontend.js");
+      const result = await service.getBotFrontend(
+        "user123/test-bot/1.0.0/frontend.js",
+      );
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Frontend bundle not found");
@@ -395,7 +400,9 @@ describe("StorageService", () => {
     it("should handle other errors", async () => {
       mockMinioClient.getObject.mockRejectedValue(new Error("Network error"));
 
-      const result = await service.getBotFrontend("user123/test-bot/1.0.0/frontend.js");
+      const result = await service.getBotFrontend(
+        "user123/test-bot/1.0.0/frontend.js",
+      );
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Network error");
@@ -412,8 +419,11 @@ describe("StorageService", () => {
     };
 
     it("should extract frontend from frontend/dist/bundle.js", async () => {
-      const frontendContent = 'export default function() {}';
-      const zipBuffer = createZipWithFrontend("frontend/dist/bundle.js", frontendContent);
+      const frontendContent = "export default function() {}";
+      const zipBuffer = createZipWithFrontend(
+        "frontend/dist/bundle.js",
+        frontendContent,
+      );
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
           yield zipBuffer;
@@ -443,7 +453,7 @@ describe("StorageService", () => {
     });
 
     it("should extract frontend from frontend.js", async () => {
-      const frontendContent = 'export default function() {}';
+      const frontendContent = "export default function() {}";
       const zipBuffer = createZipWithFrontend("frontend.js", frontendContent);
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {

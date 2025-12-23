@@ -432,11 +432,7 @@ describe("McpService", () => {
 
     describe("unknown tool", () => {
       it("should return error for unknown tool", async () => {
-        const result = await service.handleToolCall(
-          "unknown_tool",
-          {},
-          userId,
-        );
+        const result = await service.handleToolCall("unknown_tool", {}, userId);
 
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain("Unknown tool: unknown_tool");

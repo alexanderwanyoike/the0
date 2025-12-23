@@ -67,7 +67,7 @@ export class BotService {
 
     // Merge user config with hasFrontend flag from custom bot metadata
     const hasCustomFrontend = customBotResult.success
-      ? customBotResult.data.config?.hasFrontend ?? false
+      ? (customBotResult.data.config?.hasFrontend ?? false)
       : false;
 
     const result = await this.botRepository.create({
