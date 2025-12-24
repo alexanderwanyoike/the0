@@ -103,9 +103,9 @@ int main() {
 
 ---
 
-## Step 4: Using the SDK (Optional)
+## Step 4: Using the SDK (Recommended)
 
-Copy `the0.h` from `sdk/cpp/` for cleaner code:
+Copy `the0.h` and `json.hpp` from `sdk/cpp/` for proper JSON handling:
 
 ```cpp
 #include "the0.h"
@@ -115,12 +115,20 @@ int main() {
 
     std::cerr << "Bot " << bot_id << " starting..." << std::endl;
 
+    // Access config values with type safety
+    std::string symbol = config.value("symbol", "BTC/USDT");
+    double amount = config.value("amount", 100.0);
+
+    std::cerr << "Trading " << symbol << " with " << amount << std::endl;
+
     // Your trading logic here
 
     the0::success("Bot executed successfully");
     return 0;
 }
 ```
+
+The SDK uses [nlohmann/json](https://github.com/nlohmann/json) for robust JSON handling.
 
 ---
 
@@ -190,16 +198,28 @@ The build happens automatically in Docker - no need to compile locally!
 
 ## SDK API Reference
 
-The `the0.h` header provides these functions in the `the0` namespace:
+The `the0.h` header provides these functions in the `the0` namespace.
+Uses `nlohmann::json` (aliased as `the0::json`) for type-safe JSON handling.
 
-### `the0::parse() -> std::pair<std::string, std::string>`
+### `the0::parse() -> std::pair<std::string, the0::json>`
 
 Parse bot configuration from environment variables.
 
 ```cpp
 auto [bot_id, config] = the0::parse();
 // bot_id: Value of BOT_ID env var
-// config: Value of BOT_CONFIG env var (JSON string)
+// config: Parsed JSON object from BOT_CONFIG
+
+std::string symbol = config.value("symbol", "BTC/USDT");
+double amount = config.value("amount", 100.0);
+```
+
+### `the0::parse_raw() -> std::pair<std::string, std::string>`
+
+Parse configuration returning raw string (if you prefer a different JSON library).
+
+```cpp
+auto [bot_id, config_str] = the0::parse_raw();
 ```
 
 ### `the0::success(const std::string& message)`
@@ -221,56 +241,27 @@ the0::error("Failed to connect");
 // Exits with code 1
 ```
 
-### `the0::result(const std::string& json_str)`
+### `the0::result(const the0::json& data)`
 
 Output a custom JSON result.
 
 ```cpp
-the0::result("{\"status\":\"success\",\"trade_id\":\"abc123\"}");
+the0::result({
+    {"status", "success"},
+    {"trade_id", "abc123"},
+    {"filled_amount", 0.5}
+});
 ```
 
----
+### `the0::result(status, message, data)`
 
-## Adding Dependencies
-
-For JSON parsing, consider [nlohmann/json](https://github.com/nlohmann/json):
+Output a result with status, message, and additional data.
 
 ```cpp
-#include "the0.h"
-#include <nlohmann/json.hpp>
-
-int main() {
-    auto [bot_id, config_str] = the0::parse();
-
-    auto config = nlohmann::json::parse(config_str);
-    std::string symbol = config.value("symbol", "BTC/USDT");
-    double amount = config.value("amount", 100.0);
-
-    std::cerr << "Trading " << symbol << " with amount " << amount << std::endl;
-
-    the0::success("Bot executed");
-    return 0;
-}
-```
-
-Update your `CMakeLists.txt`:
-
-```cmake
-cmake_minimum_required(VERSION 3.10)
-project(my-cpp-bot)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-include(FetchContent)
-FetchContent_Declare(json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-)
-FetchContent_MakeAvailable(json)
-
-add_executable(my-cpp-bot main.cpp)
-target_link_libraries(my-cpp-bot PRIVATE nlohmann_json::nlohmann_json)
+the0::result("success", "Trade executed", {
+    {"trade_id", "abc123"},
+    {"price", 45000.50}
+});
 ```
 
 ---

@@ -702,3 +702,150 @@ func createRustTestBotZip(t *testing.T, botPath string) []byte {
 
 	return buf.Bytes()
 }
+
+func TestIntegration_RealDocker_CppBot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping real Docker integration test in short mode")
+	}
+
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
+
+	logger := &util.DefaultLogger{}
+
+	runner, err := NewDockerRunner(DockerRunnerOptions{
+		Logger: logger,
+	})
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Build C++ test bot if binary doesn't exist
+	cppBotPath := filepath.Join("..", "fixtures", "cpp-test-bot")
+	binaryPath := filepath.Join(cppBotPath, "build", "cpp-test-bot")
+
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Log("Building C++ test bot in Docker...")
+		buildCppTestBot(t, cppBotPath)
+	}
+
+	// Create ZIP with the binary
+	cppZipData := createCppTestBotZip(t, cppBotPath)
+
+	executable := model.Executable{
+		ID:         "real-cpp-bot-test",
+		Runtime:    "gcc13",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "build/cpp-test-bot",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+		FilePath:       "real-cpp-bot.zip",
+		IsLongRunning:  false,
+		PersistResults: false,
+	}
+
+	uploadToMinIO(t, minioServer, executable.FilePath, cppZipData)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	result, err := runner.StartContainer(ctx, executable)
+	require.NoError(t, err, "StartContainer should succeed")
+	assert.NotNil(t, result)
+
+	t.Logf("C++ bot result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
+	if result.Output != "" {
+		t.Logf("C++ bot output: %s", result.Output)
+	}
+
+	require.Equal(t, "success", result.Status, "C++ bot should complete successfully")
+	require.Equal(t, 0, result.ExitCode, "C++ bot should exit with code 0")
+
+	// Verify JSON output
+	lines := strings.Split(result.Output, "\n")
+	var jsonLine string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "{") {
+			jsonLine = line
+			break
+		}
+	}
+	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+
+	var botResult map[string]any
+	err = json.Unmarshal([]byte(jsonLine), &botResult)
+	require.NoError(t, err, "Bot output should be valid JSON")
+	assert.Equal(t, "success", botResult["status"], "Result should have success status")
+	assert.Equal(t, "real-cpp-bot-test", botResult["bot_id"], "Result should contain bot_id")
+}
+
+// buildCppTestBot builds the C++ test bot in Docker
+func buildCppTestBot(t *testing.T, botPath string) {
+	t.Helper()
+
+	absPath, err := filepath.Abs(botPath)
+	require.NoError(t, err)
+
+	// Run cmake and make in Docker
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", fmt.Sprintf("%s:/project", absPath),
+		"-w", "/project",
+		"gcc:13",
+		"bash", "-c", "apt-get update && apt-get install -y --no-install-recommends cmake >/dev/null 2>&1 && mkdir -p build && cd build && cmake .. && make")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build C++ test bot: %v\nOutput: %s", err, string(output))
+	}
+
+	t.Logf("C++ build output: %s", string(output))
+
+	// Verify binary was created
+	binaryPath := filepath.Join(botPath, "build", "cpp-test-bot")
+	_, err = os.Stat(binaryPath)
+	require.NoError(t, err, "C++ binary should exist after build")
+}
+
+// createCppTestBotZip creates a ZIP containing the C++ binary
+func createCppTestBotZip(t *testing.T, botPath string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// Add the binary to the ZIP
+	binaryPath := filepath.Join(botPath, "build", "cpp-test-bot")
+	binaryData, err := os.ReadFile(binaryPath)
+	require.NoError(t, err, "Failed to read C++ binary")
+
+	// Create directory structure in ZIP
+	header := &zip.FileHeader{
+		Name:   "build/cpp-test-bot",
+		Method: zip.Deflate,
+	}
+	header.SetMode(0755) // Executable permission
+
+	writer, err := zipWriter.CreateHeader(header)
+	require.NoError(t, err)
+
+	_, err = writer.Write(binaryData)
+	require.NoError(t, err)
+
+	// Add CMakeLists.txt (needed for project detection)
+	cmakePath := filepath.Join(botPath, "CMakeLists.txt")
+	cmakeData, err := os.ReadFile(cmakePath)
+	require.NoError(t, err)
+
+	cmakeWriter, err := zipWriter.Create("CMakeLists.txt")
+	require.NoError(t, err)
+	_, err = cmakeWriter.Write(cmakeData)
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	return buf.Bytes()
+}

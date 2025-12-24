@@ -2,9 +2,13 @@
 
 Header-only SDK for building trading bots on the0 platform in C or C++.
 
+Uses [nlohmann/json](https://github.com/nlohmann/json) for robust JSON handling.
+
 ## Installation
 
-Simply copy `the0.h` to your project or include it directly:
+Copy both files to your project:
+- `the0.h` - The SDK header
+- `json.hpp` - nlohmann/json library (MIT licensed)
 
 ```cpp
 #include "the0.h"
@@ -12,8 +16,8 @@ Simply copy `the0.h` to your project or include it directly:
 
 ## Requirements
 
-- C++11 or later
-- Standard library only (no external dependencies)
+- C++17 or later
+- nlohmann/json (included as `json.hpp`)
 
 ## Usage
 
@@ -28,7 +32,12 @@ int main() {
     auto [bot_id, config] = the0::parse();
 
     std::cerr << "Bot " << bot_id << " starting" << std::endl;
-    std::cerr << "Config: " << config << std::endl;
+
+    // Access configuration values with type safety
+    std::string symbol = config.value("symbol", "BTC/USDT");
+    double amount = config.value("amount", 100.0);
+
+    std::cerr << "Trading " << symbol << " with amount " << amount << std::endl;
 
     // Your trading logic here
 
@@ -37,16 +46,16 @@ int main() {
 }
 ```
 
-### C++11 Compatible Version
+### C++11/14 Compatible Version
 
 ```cpp
 #include "the0.h"
 #include <iostream>
 
 int main() {
-    std::pair<std::string, std::string> input = the0::parse();
+    std::pair<std::string, the0::json> input = the0::parse();
     std::string bot_id = input.first;
-    std::string config = input.second;
+    the0::json config = input.second;
 
     std::cerr << "Bot " << bot_id << " starting" << std::endl;
 
@@ -57,13 +66,28 @@ int main() {
 
 ## API Reference
 
-### `the0::parse() -> std::pair<std::string, std::string>`
+### `the0::parse() -> std::pair<std::string, the0::json>`
 
 Parse bot configuration from environment variables.
 
 - Returns: `(bot_id, config)` tuple
 - `bot_id`: Value of `BOT_ID` environment variable (empty string if not set)
-- `config`: Value of `BOT_CONFIG` environment variable (defaults to `"{}"`)
+- `config`: Parsed JSON object from `BOT_CONFIG` (empty object if not set or invalid)
+
+```cpp
+auto [bot_id, config] = the0::parse();
+std::string symbol = config.value("symbol", "BTC/USDT");
+int count = config.value("count", 10);
+```
+
+### `the0::parse_raw() -> std::pair<std::string, std::string>`
+
+Parse bot configuration, returning raw config string. Use if you prefer a different JSON library.
+
+```cpp
+auto [bot_id, config_str] = the0::parse_raw();
+// Parse config_str with your preferred JSON library
+```
 
 ### `the0::success(const std::string& message)`
 
@@ -71,7 +95,7 @@ Output a success result to stdout.
 
 ```cpp
 the0::success("Trade completed");
-// Outputs: {"status":"success","message":"Trade completed"}
+// Outputs: {"message":"Trade completed","status":"success"}
 ```
 
 ### `the0::error(const std::string& message)`
@@ -80,16 +104,32 @@ Output an error result to stdout and exit with code 1.
 
 ```cpp
 the0::error("Failed to connect");
-// Outputs: {"status":"error","message":"Failed to connect"}
+// Outputs: {"message":"Failed to connect","status":"error"}
 // Then exits with code 1
 ```
 
-### `the0::result(const std::string& json_str)`
+### `the0::result(const the0::json& data)`
 
 Output a custom JSON result to stdout.
 
 ```cpp
-the0::result("{\"status\":\"success\",\"trade_id\":\"abc123\",\"amount\":100.5}");
+the0::result({
+    {"status", "success"},
+    {"trade_id", "abc123"},
+    {"filled_amount", 0.5}
+});
+```
+
+### `the0::result(status, message, data)`
+
+Output a result with status, message, and additional data.
+
+```cpp
+the0::result("success", "Trade executed", {
+    {"trade_id", "abc123"},
+    {"price", 45000.50}
+});
+// Outputs: {"message":"Trade executed","price":45000.5,"status":"success","trade_id":"abc123"}
 ```
 
 ## Project Setup
@@ -157,14 +197,6 @@ The CLI automatically builds your C++ project in Docker before deployment.
 
 ## Best Practices
 
-### Logging
-
-Use stderr for logs (stdout is reserved for JSON output):
-
-```cpp
-std::cerr << "DEBUG: Processing trade..." << std::endl;
-```
-
 ### Error Handling
 
 ```cpp
@@ -175,9 +207,19 @@ int main() {
     try {
         auto [bot_id, config] = the0::parse();
 
-        // Your trading logic
+        if (bot_id.empty()) {
+            the0::error("Bot ID not provided");
+        }
 
-        the0::success("Trade completed");
+        // Validate required config
+        if (!config.contains("symbol")) {
+            the0::error("Missing required field: symbol");
+        }
+
+        std::string symbol = config["symbol"];
+
+        // Your trading logic
+        the0::success("Trade completed for " + symbol);
         return 0;
     } catch (const std::exception& e) {
         the0::error(e.what());
@@ -185,28 +227,85 @@ int main() {
 }
 ```
 
-### Configuration Parsing
+### Logging
 
-For JSON parsing, consider using a library like nlohmann/json:
+Use stderr for logs (stdout is reserved for JSON output):
 
 ```cpp
-#include "the0.h"
-#include <nlohmann/json.hpp>
+std::cerr << "DEBUG: Processing trade..." << std::endl;  // Logs
+std::cout << "...";  // Reserved for JSON result - use the0::result() instead
+```
 
-int main() {
-    auto [bot_id, config_str] = the0::parse();
+### Working with JSON Config
 
-    auto config = nlohmann::json::parse(config_str);
-    std::string symbol = config.value("symbol", "BTC/USDT");
-    double amount = config.value("amount", 100.0);
+```cpp
+auto [bot_id, config] = the0::parse();
 
-    std::cerr << "Trading " << symbol << " with amount " << amount << std::endl;
+// Get with default value
+std::string symbol = config.value("symbol", "BTC/USDT");
+double amount = config.value("amount", 100.0);
+bool dry_run = config.value("dry_run", false);
 
-    the0::success("Bot executed");
-    return 0;
+// Check if key exists
+if (config.contains("api_key")) {
+    std::string api_key = config["api_key"];
 }
+
+// Iterate over array
+if (config.contains("symbols") && config["symbols"].is_array()) {
+    for (const auto& sym : config["symbols"]) {
+        std::cerr << "Symbol: " << sym << std::endl;
+    }
+}
+
+// Nested objects
+if (config.contains("exchange")) {
+    std::string name = config["exchange"].value("name", "unknown");
+    bool testnet = config["exchange"].value("testnet", false);
+}
+```
+
+### Custom Result Data
+
+```cpp
+the0::result("success", "Trade executed", {
+    {"trade_id", "12345"},
+    {"symbol", "BTC/USDT"},
+    {"side", "buy"},
+    {"price", 45000.50},
+    {"quantity", 0.1},
+    {"timestamp", "2024-01-15T10:30:00Z"}
+});
+```
+
+## Testing
+
+The SDK includes a comprehensive test suite using [doctest](https://github.com/doctest/doctest):
+
+```bash
+cd tests
+
+# Build tests (using Docker)
+docker run --rm -v "$(pwd)/..:/sdk" -w /sdk/tests gcc:13 bash -c \
+  "apt-get update && apt-get install -y cmake >/dev/null 2>&1 && \
+   mkdir -p build && cd build && cmake .. && make"
+
+# Run tests
+docker run --rm -v "$(pwd)/..:/sdk" -w /sdk/tests gcc:13 ./build/the0_test
+```
+
+Or build locally:
+
+```bash
+cd tests
+mkdir -p build && cd build
+cmake ..
+make
+./the0_test
 ```
 
 ## License
 
-Apache 2.0 - See LICENSE file in the root of this repository.
+- SDK (`the0.h`): Apache 2.0 - See LICENSE file in the root of this repository.
+- JSON library (`json.hpp`): MIT License - Copyright (c) 2013-2022 Niels Lohmann
+- doctest (`tests/doctest.h`): MIT License - Copyright (c) 2016-2023 Viktor Kirilov

@@ -104,20 +104,25 @@ set -e
 cd "/{{ .EntryPointType }}"
 
 # Find the pre-built binary in build/ (CMake) or project root (Makefile)
+# Note: ZIP extraction may not preserve executable bits, so we look for regular files
+# and exclude known non-executable extensions
 BINARY=""
 if [ -d "build" ]; then
-    BINARY=$(find build -maxdepth 1 -type f -executable ! -name "*.o" ! -name "*.a" 2>/dev/null | head -1)
+    BINARY=$(find build -maxdepth 1 -type f ! -name "*.o" ! -name "*.a" ! -name "*.cmake" ! -name "Makefile" ! -name "CMakeCache.txt" 2>/dev/null | head -1)
 fi
 
 if [ -z "$BINARY" ]; then
     # Try project root for Makefile builds
-    BINARY=$(find . -maxdepth 1 -type f -executable ! -name "*.o" ! -name "*.a" ! -name "Makefile" ! -name "CMakeLists.txt" 2>/dev/null | head -1)
+    BINARY=$(find . -maxdepth 1 -type f ! -name "*.o" ! -name "*.a" ! -name "*.c" ! -name "*.cpp" ! -name "*.h" ! -name "*.hpp" ! -name "Makefile" ! -name "CMakeLists.txt" ! -name "*.txt" ! -name "*.md" ! -name "*.json" ! -name "*.yaml" ! -name "*.yml" 2>/dev/null | head -1)
 fi
 
 if [ -z "$BINARY" ]; then
     echo '{"status":"error","message":"No pre-built binary found"}'
     exit 1
 fi
+
+# Ensure the binary is executable (ZIP extraction may not preserve permissions)
+chmod +x "$BINARY"
 
 export BOT_ID="{{ .BotId }}"
 export BOT_CONFIG='{{ .BotConfig }}'
