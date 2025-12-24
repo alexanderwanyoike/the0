@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **C/C++ GCC 13 language support** - Build C/C++ bots locally using Docker before deployment
+  - `CppBuilder` implementation of `LanguageBuilder` interface
+  - Detects `CMakeLists.txt` (priority) or `Makefile` projects
+  - CMake projects: installs cmake, builds with `cmake .. && make`
+  - Makefile projects: builds with `make`
+  - Uses `gcc:13` Docker image for cross-platform builds
 - **C# .NET 8 language support** - Build C# bots locally using Docker before deployment
   - `DotnetBuilder` implementation of `LanguageBuilder` interface
   - Detects `.csproj` projects and builds with `dotnet publish -c Release`

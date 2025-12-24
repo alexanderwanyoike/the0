@@ -97,6 +97,33 @@ export BOT_CONFIG='{{ .BotConfig }}'
 exec dotnet "$DLL"
 `
 
+// gcc13BashEntrypoint executes pre-built C/C++ binary (built by CLI)
+const gcc13BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Find the pre-built binary in build/ (CMake) or project root (Makefile)
+BINARY=""
+if [ -d "build" ]; then
+    BINARY=$(find build -maxdepth 1 -type f -executable ! -name "*.o" ! -name "*.a" 2>/dev/null | head -1)
+fi
+
+if [ -z "$BINARY" ]; then
+    # Try project root for Makefile builds
+    BINARY=$(find . -maxdepth 1 -type f -executable ! -name "*.o" ! -name "*.a" ! -name "Makefile" ! -name "CMakeLists.txt" 2>/dev/null | head -1)
+fi
+
+if [ -z "$BINARY" ]; then
+    echo '{"status":"error","message":"No pre-built binary found"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec "$BINARY"
+`
+
 type bashEntrypointFactory struct {
 	EntryPointType string
 	ScriptContent  string
@@ -136,6 +163,8 @@ func (p *bashEntrypointFactory) BuildBashEntrypoint(
 		selectedEntrypoint = rustBashEntrypoint
 	case runtime == "dotnet8":
 		selectedEntrypoint = dotnet8BashEntrypoint
+	case runtime == "gcc13":
+		selectedEntrypoint = gcc13BashEntrypoint
 	default:
 		return "", fmt.Errorf("unsupported runtime: %s", runtime)
 	}
