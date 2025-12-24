@@ -50,8 +50,8 @@ pub mod input {
 
 // RustBacktestEntrypoint is the bash script that handles Rust backtest execution.
 // It injects the helper library, builds if needed, and runs the binary.
+// The wrapper captures output and formats it based on exit code, making the SDK optional.
 const RustBacktestEntrypoint = `#!/bin/bash
-set -e
 
 echo "STARTUP: Rust backtest wrapper starting" >&2
 echo "STARTUP: Working directory: $(pwd)" >&2
@@ -110,15 +110,28 @@ export BACKTEST_CONFIG='{{ .BotConfig }}'
 export BOT_ID="{{ .BotId }}"
 export BOT_CONFIG='{{ .BotConfig }}'
 
-# Execute the binary
+# Execute the binary and capture output
 echo "EXECUTE: Running $BINARY_PATH" >&2
-exec "./$BINARY_PATH"
+OUTPUT=$("./$BINARY_PATH")
+EXIT_CODE=$?
+
+# Check if output has JSON with status field - use it regardless of exit code
+if echo "$OUTPUT" | grep -q '"status"'; then
+    # Pass through as-is (developer provided custom status)
+    echo "$OUTPUT"
+elif [ $EXIT_CODE -eq 0 ]; then
+    # No structured output, success exit
+    echo '{"status":"success","message":"Bot executed successfully"}'
+else
+    # No structured output, error exit
+    echo '{"status":"error","message":"Bot execution failed"}'
+fi
 `
 
 // RustBotEntrypoint is the bash script that handles Rust bot execution.
 // It injects the helper library, builds if needed, and runs the binary.
+// The wrapper captures output and formats it based on exit code, making the SDK optional.
 const RustBotEntrypoint = `#!/bin/bash
-set -e
 
 echo "STARTUP: Rust bot wrapper starting" >&2
 echo "STARTUP: Working directory: $(pwd)" >&2
@@ -192,7 +205,20 @@ export BOT_CONFIG='{{ .BotConfig }}'
 export SCRIPT_PATH="{{ .ScriptPath }}"
 export ENTRYPOINT_TYPE="{{ .EntryPointType }}"
 
-# Execute the binary
+# Execute the binary and capture output
 echo "EXECUTE: Running $BINARY_PATH" >&2
-exec "./$BINARY_PATH"
+OUTPUT=$("./$BINARY_PATH")
+EXIT_CODE=$?
+
+# Check if output has JSON with status field - use it regardless of exit code
+if echo "$OUTPUT" | grep -q '"status"'; then
+    # Pass through as-is (developer provided custom status)
+    echo "$OUTPUT"
+elif [ $EXIT_CODE -eq 0 ]; then
+    # No structured output, success exit
+    echo '{"status":"success","message":"Bot executed successfully"}'
+else
+    # No structured output, error exit
+    echo '{"status":"error","message":"Bot execution failed"}'
+fi
 `
