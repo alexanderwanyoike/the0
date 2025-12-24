@@ -1,12 +1,14 @@
 package dockerrunner
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/internal/model"
 	"runtime/internal/util"
@@ -200,6 +202,58 @@ func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
 
 	// Verify Node.js specific script path (without .js extension)
 	assert.Contains(t, scriptContent, "main") // Script path should be "main" not "main.js"
+}
+
+func TestIntegration_EntrypointScriptGeneration_Rust(t *testing.T) {
+	tempDir := t.TempDir()
+	logger := &util.DefaultLogger{}
+
+	scriptManager := NewScriptManager(logger)
+
+	executable := model.Executable{
+		ID:         "test-rust-bot",
+		Runtime:    "rust-stable",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot":      "target/release/my-bot",
+			"backtest": "target/release/my-bot",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+	}
+
+	// Create bot directory
+	botDir := filepath.Join(tempDir, executable.ID)
+	err := os.MkdirAll(botDir, 0755)
+	require.NoError(t, err)
+
+	// Generate entrypoint script
+	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, scriptPath)
+
+	// Read and verify script content
+	content, err := os.ReadFile(scriptPath)
+	require.NoError(t, err)
+	scriptContent := string(content)
+
+	// Verify the script is a bash script
+	assert.Contains(t, scriptContent, "#!/bin/bash")
+
+	// Verify Rust-specific content (simplified - just executes pre-built binary)
+	assert.Contains(t, scriptContent, "target/release", "Should look for binary in target/release")
+	assert.Contains(t, scriptContent, "find", "Should use find to locate binary")
+	assert.Contains(t, scriptContent, "BOT_ID", "Should set BOT_ID environment variable")
+	assert.Contains(t, scriptContent, "BOT_CONFIG", "Should set BOT_CONFIG environment variable")
+
+	// Verify bot ID is in the script
+	assert.Contains(t, scriptContent, executable.ID)
+
+	// Verify the entrypoint executes the binary (no compilation at runtime)
+	assert.Contains(t, scriptContent, "exec", "Should exec the binary")
+	assert.NotContains(t, scriptContent, "cargo build", "Should NOT compile at runtime (CLI does this)")
 }
 
 func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
@@ -928,4 +982,153 @@ func TestStoreAnalysisResult(t *testing.T) {
 	assert.NotNil(t, results["tables"], "Analysis should contain tables")
 
 	t.Logf("Analysis file successfully stored and verified: %s", string(content))
+}
+
+// TestIntegration_RealDocker_RustBot tests a real Rust bot execution
+// This test builds the Rust bot in Docker if not already built, then executes it
+func TestIntegration_RealDocker_RustBot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping real Docker integration test in short mode")
+	}
+
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
+
+	logger := &util.DefaultLogger{}
+
+	runner, err := NewDockerRunner(DockerRunnerOptions{
+		Logger: logger,
+	})
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Build Rust test bot if binary doesn't exist
+	rustBotPath := filepath.Join("..", "fixtures", "rust-test-bot")
+	binaryPath := filepath.Join(rustBotPath, "target", "release", "rust-test-bot")
+
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Log("Building Rust test bot in Docker...")
+		buildRustTestBot(t, rustBotPath)
+	}
+
+	// Create ZIP with the binary
+	rustZipData := createRustTestBotZip(t, rustBotPath)
+
+	executable := model.Executable{
+		ID:         "real-rust-bot-test",
+		Runtime:    "rust-stable",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "target/release/rust-test-bot",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+		FilePath:       "real-rust-bot.zip",
+		IsLongRunning:  false,
+		PersistResults: false,
+	}
+
+	uploadToMinIO(t, minioServer, executable.FilePath, rustZipData)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	result, err := runner.StartContainer(ctx, executable)
+	require.NoError(t, err, "StartContainer should succeed")
+	assert.NotNil(t, result)
+
+	t.Logf("Rust bot result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
+	if result.Output != "" {
+		t.Logf("Rust bot output: %s", result.Output)
+	}
+
+	require.Equal(t, "success", result.Status, "Rust bot should complete successfully")
+	require.Equal(t, 0, result.ExitCode, "Rust bot should exit with code 0")
+
+	// Verify JSON output
+	lines := strings.Split(result.Output, "\n")
+	var jsonLine string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "{") {
+			jsonLine = line
+			break
+		}
+	}
+	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+
+	var botResult map[string]any
+	err = json.Unmarshal([]byte(jsonLine), &botResult)
+	require.NoError(t, err, "Bot output should be valid JSON")
+	assert.Equal(t, "success", botResult["status"], "Result should have success status")
+	assert.Equal(t, "real-rust-bot-test", botResult["bot_id"], "Result should contain bot_id")
+}
+
+// buildRustTestBot builds the Rust test bot in Docker
+func buildRustTestBot(t *testing.T, botPath string) {
+	t.Helper()
+
+	absPath, err := filepath.Abs(botPath)
+	require.NoError(t, err)
+
+	// Run cargo build in Docker
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", fmt.Sprintf("%s:/project", absPath),
+		"-w", "/project",
+		"rust:latest",
+		"cargo", "build", "--release")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build Rust test bot: %v\nOutput: %s", err, string(output))
+	}
+
+	t.Logf("Rust build output: %s", string(output))
+
+	// Verify binary was created
+	binaryPath := filepath.Join(botPath, "target", "release", "rust-test-bot")
+	_, err = os.Stat(binaryPath)
+	require.NoError(t, err, "Rust binary should exist after build")
+}
+
+// createRustTestBotZip creates a ZIP containing the Rust binary
+func createRustTestBotZip(t *testing.T, botPath string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// Add the binary to the ZIP
+	binaryPath := filepath.Join(botPath, "target", "release", "rust-test-bot")
+	binaryData, err := os.ReadFile(binaryPath)
+	require.NoError(t, err, "Failed to read Rust binary")
+
+	// Create directory structure in ZIP
+	header := &zip.FileHeader{
+		Name:   "target/release/rust-test-bot",
+		Method: zip.Deflate,
+	}
+	header.SetMode(0755) // Executable permission
+
+	writer, err := zipWriter.CreateHeader(header)
+	require.NoError(t, err)
+
+	_, err = writer.Write(binaryData)
+	require.NoError(t, err)
+
+	// Add Cargo.toml (needed for project detection)
+	cargoTomlPath := filepath.Join(botPath, "Cargo.toml")
+	cargoTomlData, err := os.ReadFile(cargoTomlPath)
+	require.NoError(t, err)
+
+	cargoWriter, err := zipWriter.Create("Cargo.toml")
+	require.NoError(t, err)
+	_, err = cargoWriter.Write(cargoTomlData)
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	return buf.Bytes()
 }

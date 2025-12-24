@@ -181,7 +181,7 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 }
 
 func (r *dockerRunner) isValidRuntime(runtime string) bool {
-	validRuntimes := []string{"python3.11", "nodejs20"}
+	validRuntimes := []string{"python3.11", "nodejs20", "rust-stable"}
 	for _, valid := range validRuntimes {
 		if runtime == valid {
 			return true
@@ -196,6 +196,8 @@ func (r *dockerRunner) getDockerImage(runtime string) string {
 		return "python:3.11-slim"
 	case "nodejs20":
 		return "node:20-alpine"
+	case "rust-stable":
+		return "rust:latest"
 	default:
 		return "python:3.11-slim" // fallback
 	}
