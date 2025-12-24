@@ -164,7 +164,7 @@ func (b *DotnetBuilder) pullImage(vm *VendorManager) error {
 func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 	ctx := context.Background()
 
-	containerName := fmt.Sprintf("%sdotnet-%d", containerName, time.Now().Unix())
+	ctrName := fmt.Sprintf("%sdotnet-%d", vendorContainerName, time.Now().Unix())
 
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
@@ -205,7 +205,7 @@ func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		AutoRemove: false,
 	}
 
-	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
+	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, ctrName)
 	if err != nil {
 		return "", err
 	}
