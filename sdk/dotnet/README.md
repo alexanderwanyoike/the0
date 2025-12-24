@@ -1,22 +1,39 @@
 # the0 C#/.NET SDK
 
-SDK for building trading bots on the0 platform using C#/.NET 8.
+Optional SDK for building trading bots on the0 platform using C#/.NET 8.
 
-## Installation
+**Note:** This SDK is optional. The the0 runtime automatically wraps your bot's output:
+- Exit code 0 → `{"status":"success","message":"Bot executed successfully"}`
+- Exit code non-zero → `{"status":"error","message":"Bot execution failed"}`
+- If you output JSON with a `"status"` field, it's passed through as-is
 
-Add to your project:
+## Minimal Example (No SDK)
 
-```bash
-dotnet add package The0
+```csharp
+// No SDK needed - just run your code and exit normally
+var botId = Environment.GetEnvironmentVariable("BOT_ID");
+var configJson = Environment.GetEnvironmentVariable("BOT_CONFIG");
+
+Console.Error.WriteLine($"Bot {botId} running...");
+
+// Your trading logic here
+
+// Exit normally - runtime outputs {"status":"success",...}
 ```
 
-Or add to your `.csproj`:
+## With SDK (Optional)
+
+The SDK provides convenience methods for parsing config and outputting custom results.
+
+### Installation
+
+Add to your `.csproj`:
 
 ```xml
 <PackageReference Include="The0" Version="0.1.0" />
 ```
 
-## Usage
+### Usage
 
 ```csharp
 using The0;
@@ -32,8 +49,8 @@ var amount = config?["amount"]?.GetValue<decimal>() ?? 100m;
 
 // Your trading logic here
 
-// Signal success when done
-Input.Success("Bot executed successfully");
+// Optionally output custom result (otherwise runtime generates it)
+Input.Success("Trade executed for " + symbol);
 ```
 
 ## API Reference

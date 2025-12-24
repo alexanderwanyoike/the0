@@ -2,8 +2,8 @@ package entrypoints
 
 // Dotnet8BotEntrypoint is the bash script that handles .NET 8 bot execution.
 // It finds and runs the pre-built DLL from bin/Release/net8.0/publish/.
+// The wrapper captures output and formats it based on exit code, making the SDK optional.
 const Dotnet8BotEntrypoint = `#!/bin/bash
-set -e
 
 echo "STARTUP: .NET 8 bot wrapper starting" >&2
 echo "STARTUP: Working directory: $(pwd)" >&2
@@ -44,7 +44,20 @@ export BOT_CONFIG='{{ .BotConfig }}'
 export SCRIPT_PATH="{{ .ScriptPath }}"
 export ENTRYPOINT_TYPE="{{ .EntryPointType }}"
 
-# Execute the .NET application
+# Execute the .NET application and capture output
 echo "EXECUTE: Running dotnet $DLL" >&2
-exec dotnet "$DLL"
+OUTPUT=$(dotnet "$DLL")
+EXIT_CODE=$?
+
+# Check if output has JSON with status field - use it regardless of exit code
+if echo "$OUTPUT" | grep -q '"status"'; then
+    # Pass through as-is (developer provided custom status)
+    echo "$OUTPUT"
+elif [ $EXIT_CODE -eq 0 ]; then
+    # No structured output, success exit
+    echo '{"status":"success","message":"Bot executed successfully"}'
+else
+    # No structured output, error exit
+    echo '{"status":"error","message":"Bot execution failed"}'
+fi
 `

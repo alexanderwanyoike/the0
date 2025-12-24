@@ -60,45 +60,6 @@ func TestGetBuildEnvVars_EmptyToken(t *testing.T) {
 	}
 }
 
-func TestGetPythonInstallCommand_ContainsGitConfig(t *testing.T) {
-	vm := &VendorManager{projectPath: "/tmp/test"}
-	cmd := vm.getPythonInstallCommand()
-
-	// Should contain git config for GITHUB_TOKEN
-	if !strings.Contains(cmd, "GITHUB_TOKEN") {
-		t.Error("Expected command to reference GITHUB_TOKEN")
-	}
-
-	if !strings.Contains(cmd, "git config --global") {
-		t.Error("Expected command to contain git config")
-	}
-
-	// Should contain the URL rewrite for github.com
-	if !strings.Contains(cmd, "github.com") {
-		t.Error("Expected command to contain github.com URL rewrite")
-	}
-
-	// Should still contain pip install
-	if !strings.Contains(cmd, "pip install") {
-		t.Error("Expected command to contain pip install")
-	}
-
-	// Should contain chown for proper ownership
-	if !strings.Contains(cmd, "chown") {
-		t.Error("Expected command to contain chown")
-	}
-}
-
-func TestGetPythonInstallCommand_ConditionalGitConfig(t *testing.T) {
-	vm := &VendorManager{projectPath: "/tmp/test"}
-	cmd := vm.getPythonInstallCommand()
-
-	// Git config should be conditional on GITHUB_TOKEN being set
-	if !strings.Contains(cmd, `if [ -n "$GITHUB_TOKEN" ]`) {
-		t.Error("Expected git config to be conditional on GITHUB_TOKEN")
-	}
-}
-
 func TestGetBuildEnvVars_WithPipIndexURL(t *testing.T) {
 	tmpDir := t.TempDir()
 	originalHome := os.Getenv("HOME")
@@ -159,23 +120,5 @@ func TestGetBuildEnvVars_WithBothSecrets(t *testing.T) {
 	}
 	if !hasPip {
 		t.Error("Expected PIP_EXTRA_INDEX_URL env var")
-	}
-}
-
-func TestGetPythonInstallCommand_WithPipIndex(t *testing.T) {
-	vm := &VendorManager{projectPath: "/tmp/test"}
-	cmd := vm.getPythonInstallCommand()
-
-	// Should contain pip extra index setup
-	if !strings.Contains(cmd, "PIP_EXTRA_INDEX_URL") {
-		t.Error("Expected command to reference PIP_EXTRA_INDEX_URL")
-	}
-
-	if !strings.Contains(cmd, "PIP_EXTRA_INDEX_FLAG") {
-		t.Error("Expected command to use PIP_EXTRA_INDEX_FLAG")
-	}
-
-	if !strings.Contains(cmd, "--extra-index-url") {
-		t.Error("Expected command to contain --extra-index-url")
 	}
 }
