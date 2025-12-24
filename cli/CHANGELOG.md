@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Rust language support** - Build Rust bots locally using Docker before deployment
+  - `ShouldBuildRust()` - Detects Cargo.toml projects
+  - `PerformRustBuild()` - Compiles Rust projects in `rust:latest` Docker container
+  - `BuildRustIfNeeded()` - Entry point for conditional Rust building
+  - Private git dependency support via `GITHUB_TOKEN` environment variable
 - **Centralized logger package** - New `internal/logger` package with modern CLI output (spinners, colored icons)
 - **Verbose mode** - Added `-v/--verbose` global flag for detailed output during operations
 - **Improved error messages** - Validation errors (HTTP 400) now display full response details

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rust runtime support** - Added `rust-stable` to the Runtime type union for Rust bot deployment
 - MCP (Model Context Protocol) server for Claude Code integration (#61)
   - JSON-RPC 2.0 HTTP transport at `POST /mcp`
   - 12 MCP tools across 4 categories:
