@@ -78,6 +78,25 @@ export BOT_CONFIG='{{ .BotConfig }}'
 exec "$BINARY"
 `
 
+// dotnet8BashEntrypoint executes pre-built .NET DLL (built by CLI)
+const dotnet8BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Find the pre-built DLL in bin/Release/net8.0/publish/
+DLL=$(find bin/Release/net8.0/publish -maxdepth 1 -name "*.dll" ! -name "*.deps.json" ! -name "*.runtimeconfig.json" 2>/dev/null | head -1)
+
+if [ -z "$DLL" ]; then
+    echo '{"status":"error","message":"No pre-built DLL found in bin/Release/net8.0/publish/"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec dotnet "$DLL"
+`
+
 type bashEntrypointFactory struct {
 	EntryPointType string
 	ScriptContent  string
@@ -115,7 +134,8 @@ func (p *bashEntrypointFactory) BuildBashEntrypoint(
 		selectedEntrypoint = pythonBashEntrypoint
 	case runtime == "rust-stable":
 		selectedEntrypoint = rustBashEntrypoint
-	// Add more cases for other runtimes as needed
+	case runtime == "dotnet8":
+		selectedEntrypoint = dotnet8BashEntrypoint
 	default:
 		return "", fmt.Errorf("unsupported runtime: %s", runtime)
 	}

@@ -181,7 +181,7 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 }
 
 func (r *dockerRunner) isValidRuntime(runtime string) bool {
-	validRuntimes := []string{"python3.11", "nodejs20", "rust-stable"}
+	validRuntimes := []string{"python3.11", "nodejs20", "rust-stable", "dotnet8"}
 	for _, valid := range validRuntimes {
 		if runtime == valid {
 			return true
@@ -198,6 +198,8 @@ func (r *dockerRunner) getDockerImage(runtime string) string {
 		return "node:20-alpine"
 	case "rust-stable":
 		return "rust:latest"
+	case "dotnet8":
+		return "mcr.microsoft.com/dotnet/runtime:8.0"
 	default:
 		return "python:3.11-slim" // fallback
 	}
