@@ -313,7 +313,7 @@ the0::result("success", "Trade executed", {
 
 ## Testing
 
-The SDK includes a comprehensive test suite using [doctest](https://github.com/doctest/doctest):
+The SDK includes a comprehensive test suite using [doctest](https://github.com/doctest/doctest) (fetched via CMake FetchContent):
 
 ```bash
 cd tests
@@ -325,5 +325,4 @@ make
 
 ## License
 
-- SDK (`the0.h`): Apache 2.0 - See LICENSE file in the root of this repository.
-- doctest (`tests/doctest.h`): MIT License - Copyright (c) 2016-2023 Viktor Kirilov
+SDK (`the0.h`): Apache 2.0 - See LICENSE file in the root of this repository.
