@@ -1,0 +1,25 @@
+# SMA Crossover Bot Configuration (Rust)
+# A realtime bot using Yahoo Finance for live stock data
+
+name: rust-sma-crossover
+description: "SMA crossover strategy bot using Rust with Yahoo Finance data"
+version: 1.0.0
+author: "the0"
+type: realtime
+runtime: rust-stable
+
+entrypoints:
+  bot: target/release/sma-bot
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [example, sma, crossover, rust]
+  complexity: beginner

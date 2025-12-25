@@ -1,0 +1,9 @@
+{
+  "name": "test-cpp-sma",
+  "type": "realtime/cpp-sma-crossover",
+  "version": "1.0.2",
+  "symbol": "GOOGL",
+  "short_period": 5,
+  "long_period": 20,
+  "update_interval_ms": 60000
+}

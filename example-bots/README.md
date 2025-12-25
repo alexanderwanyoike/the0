@@ -4,10 +4,39 @@ This directory contains example bots demonstrating how to build custom trading b
 
 ## Examples
 
+### Original Examples (Mock Data)
+
 | Example | Type | Runtime | Description |
 |---------|------|---------|-------------|
 | [python-portfolio-tracker](./python-portfolio-tracker/) | Scheduled | Python 3.11 | Simulates portfolio tracking with value history and trades |
 | [typescript-price-alerts](./typescript-price-alerts/) | Realtime | Node.js 20 | Monitors prices and emits alerts/signals |
+
+### SMA Crossover Strategy (Yahoo Finance Data)
+
+These examples implement the same Simple Moving Average (SMA) crossover trading strategy across different languages, using real market data from Yahoo Finance:
+
+| Example | Type | Runtime | Description |
+|---------|------|---------|-------------|
+| [csharp-sma-crossover](./csharp-sma-crossover/) | Realtime | .NET 8 | SMA crossover using C# with System.Text.Json |
+| [rust-sma-crossover](./rust-sma-crossover/) | Realtime | Rust | SMA crossover using Rust with reqwest/serde |
+| [cpp-sma-crossover](./cpp-sma-crossover/) | Realtime | GCC 13 | SMA crossover using C++ with libcurl/nlohmann-json |
+| [scala-sma-crossover](./scala-sma-crossover/) | Realtime | Scala 3 | SMA crossover using Scala with sttp/circe |
+| [haskell-sma-crossover](./haskell-sma-crossover/) | Scheduled | GHC 9.6 | SMA crossover using Haskell with http-conduit/aeson |
+
+#### SMA Crossover Strategy Overview
+
+The SMA crossover strategy monitors two moving averages:
+- **Short SMA (5-day)**: Fast-moving average for recent price trends
+- **Long SMA (20-day)**: Slow-moving average for overall trend
+
+**Trading Signals:**
+- **BUY (Golden Cross)**: When short SMA crosses above long SMA
+- **SELL (Death Cross)**: When short SMA crosses below long SMA
+
+All SMA bots emit the same metric types:
+- `price`: Current stock price with change percentage
+- `sma`: Short and long SMA values
+- `signal`: BUY/SELL signals with confidence score
 
 ## Key Concepts
 
