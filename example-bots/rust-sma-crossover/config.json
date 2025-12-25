@@ -1,0 +1,9 @@
+{
+  "name": "test-rust-sma",
+  "type": "realtime/rust-sma-crossover",
+  "version": "1.0.0",
+  "symbol": "MSFT",
+  "short_period": 5,
+  "long_period": 20,
+  "update_interval_ms": 60000
+}

@@ -88,11 +88,24 @@ func ValidateBotConfig(config *BotConfig) error {
 		return fmt.Errorf("readme file is required")
 	}
 
+	// Compiled runtimes - entrypoint is built server-side, don't validate file exists
+	compiledRuntimes := map[string]bool{
+		"rust-stable": true,
+		"dotnet8":     true,
+		"gcc13":       true,
+		"scala3":      true,
+		"ghc96":       true,
+	}
+
 	// Check if required files exist
 	requiredFiles := []string{
-		config.Entrypoints.Bot,
 		config.Schema.Bot,
 		config.Readme,
+	}
+
+	// Only check entrypoint for non-compiled runtimes
+	if !compiledRuntimes[config.Runtime] {
+		requiredFiles = append(requiredFiles, config.Entrypoints.Bot)
 	}
 
 	for _, file := range requiredFiles {

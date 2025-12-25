@@ -1,3 +1,34 @@
-# Frontend build artifacts
+# Dependencies
+*/node_modules/
 */frontend/node_modules/
+*/vendor/
+
+# Build outputs - Frontend
 */frontend/dist/
+
+# Build outputs - C++
+*/build/
+
+# Build outputs - Rust
+*/target/
+
+# Build outputs - C# .NET
+*/bin/
+*/obj/
+
+# Build outputs - Haskell
+*/dist-newstyle/
+
+# Build outputs - Scala
+*/.scala-build/
+*/project/target/
+*/project/project/target/
+
+# Lock files
+*/*.lock
+*/package-lock.json
+*/frontend/package-lock.json
+*/frontend/yarn.lock
+
+# Compiled JS (from TypeScript)
+**/main.js

@@ -39,19 +39,11 @@ export class CustomBotService {
         return Failure(existsResult.error);
       }
 
-      if (
-        config.type === "realtime" &&
-        (!config.runtime ||
-          !["python3.11", "nodejs20"].includes(config.runtime))
-      ) {
-        return Failure(
-          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
-        );
-      }
+      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
 
-      if (config.type === "scheduled" && config.runtime !== "python3.11") {
+      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
-          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
+          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
         );
       }
 
@@ -59,10 +51,16 @@ export class CustomBotService {
         return Failure("Custom bot with this name already exists");
       }
 
+      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
+      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const requiredFiles = compiledRuntimes.includes(config.runtime)
+        ? [] // Skip entrypoint validation for compiled languages
+        : Object.values(config.entrypoints).filter(Boolean);
+
       // Validate ZIP file structure from uploaded file
       const zipValidation = await this.storageService.validateZipStructure(
         filePath,
-        Object.values(config.entrypoints).filter(Boolean),
+        requiredFiles,
       );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
@@ -135,19 +133,11 @@ export class CustomBotService {
         return Failure("Bot name in config must match the URL parameter");
       }
 
-      if (
-        config.type === "realtime" &&
-        (!config.runtime ||
-          !["python3.11", "nodejs20"].includes(config.runtime))
-      ) {
-        return Failure(
-          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
-        );
-      }
+      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
 
-      if (config.type === "scheduled" && config.runtime !== "python3.11") {
+      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
-          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
+          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
         );
       }
 
@@ -204,10 +194,16 @@ export class CustomBotService {
         return Failure(`Version ${config.version} already exists for this bot`);
       }
 
+      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
+      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const requiredFiles = compiledRuntimes.includes(config.runtime)
+        ? [] // Skip entrypoint validation for compiled languages
+        : Object.values(config.entrypoints).filter(Boolean);
+
       // Validate ZIP file structure from uploaded file
       const zipValidation = await this.storageService.validateZipStructure(
         filePath,
-        Object.values(config.entrypoints).filter(Boolean),
+        requiredFiles,
       );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);

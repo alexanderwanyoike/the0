@@ -34,7 +34,7 @@ export const customBotConfigSchema = {
     },
     runtime: {
       type: "string",
-      enum: ["python3.11", "nodejs20"],
+      enum: ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"],
     },
     author: {
       type: "string",
@@ -51,7 +51,7 @@ export const customBotConfigSchema = {
       properties: {
         bot: {
           type: "string",
-          pattern: "\\.(py|js)$",
+          // Allow various file extensions and paths for compiled languages
         },
       },
       additionalProperties: false,
@@ -107,7 +107,7 @@ export const customBotConfigSchema = {
       },
       then: {
         properties: {
-          runtime: { enum: ["python3.11"] },
+          runtime: { enum: ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"] },
         },
       },
     },

@@ -66,12 +66,16 @@ set -e
 cd "/{{ .EntryPointType }}"
 
 # Find the pre-built binary in target/release/
-BINARY=$(find target/release -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.so" 2>/dev/null | head -1)
+# Note: ZIP extraction may not preserve executable bits, so we look for regular files
+BINARY=$(find target/release -maxdepth 1 -type f ! -name "*.d" ! -name "*.so" ! -name "*.rlib" ! -name ".cargo-lock" 2>/dev/null | head -1)
 
 if [ -z "$BINARY" ]; then
     echo '{"status":"error","message":"No pre-built binary found in target/release/"}'
     exit 1
 fi
+
+# Ensure the binary is executable (ZIP extraction may not preserve permissions)
+chmod +x "$BINARY"
 
 export BOT_ID="{{ .BotId }}"
 export BOT_CONFIG='{{ .BotConfig }}'
@@ -155,13 +159,17 @@ set -e
 cd "/{{ .EntryPointType }}"
 
 # Find the pre-built Haskell binary in dist-newstyle/
-# Cabal builds to: dist-newstyle/build/[arch]/ghc-[version]/[pkg]-[version]/x/[exe]/build/[exe]/[exe]
-BINARY=$(find dist-newstyle -type f -executable ! -name "*.hi" ! -name "*.o" ! -name "*.dyn_hi" ! -name "*.dyn_o" ! -name "*.a" ! -name "*.so" 2>/dev/null | grep -E '/x/.*/build/[^/]+$' | head -1)
+# Cabal builds to: dist-newstyle/build/[arch]/ghc-[version]/[pkg]-[version]/x/[exe]/opt/build/[exe]/[exe]
+# Note: ZIP extraction may not preserve executable bits, so we look for regular files
+BINARY=$(find dist-newstyle -type f ! -name "*.hi" ! -name "*.o" ! -name "*.dyn_hi" ! -name "*.dyn_o" ! -name "*.a" ! -name "*.so" ! -name "*.hs" ! -name "*.h" ! -name "*.conf*" ! -name "*.lock" ! -name "*.cache" 2>/dev/null | grep -E '/x/[^/]+/.*/build/[^/]+/[^/]+$' | head -1)
 
 if [ -z "$BINARY" ]; then
     echo '{"status":"error","message":"No pre-built Haskell binary found in dist-newstyle/"}'
     exit 1
 fi
+
+# Ensure the binary is executable (ZIP extraction may not preserve permissions)
+chmod +x "$BINARY"
 
 export BOT_ID="{{ .BotId }}"
 export BOT_CONFIG='{{ .BotConfig }}'

@@ -1,0 +1,25 @@
+# SMA Crossover Bot Configuration (Scala 3)
+# A realtime bot using Yahoo Finance for live stock data
+
+name: scala-sma-crossover
+description: "SMA crossover strategy bot using Scala 3 with Yahoo Finance data"
+version: 1.0.1
+author: "the0"
+type: realtime
+runtime: scala3
+
+entrypoints:
+  bot: target/scala-3.3.1/sma-bot-assembly-1.0.1.jar
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [example, sma, crossover, scala, functional]
+  complexity: beginner
