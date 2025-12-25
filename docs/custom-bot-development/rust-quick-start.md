@@ -324,11 +324,12 @@ fn main() {
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for results):
+You can use stdout or stderr for logging - the SDK writes results to a file:
 
 ```rust
-eprintln!("DEBUG: Processing trade...");  // Logs to stderr
-println!("...");  // Reserved for JSON result output
+println!("Starting trade...");   // Logs to stdout
+eprintln!("DEBUG: Details...");  // Logs to stderr
+// Both appear in your bot's logs
 ```
 
 ---

@@ -9,6 +9,33 @@ namespace The0;
 public static class Input
 {
     /// <summary>
+    /// Get the path to the result file.
+    /// </summary>
+    private static string ResultFilePath
+    {
+        get
+        {
+            var mountDir = Environment.GetEnvironmentVariable("CODE_MOUNT_DIR") ?? "bot";
+            return $"/{mountDir}/result.json";
+        }
+    }
+
+    /// <summary>
+    /// Write result to the result file.
+    /// </summary>
+    private static void WriteResult(string content)
+    {
+        try
+        {
+            File.WriteAllText(ResultFilePath, content);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"RESULT_ERROR: Failed to write result file: {e.Message}");
+        }
+    }
+
+    /// <summary>
     /// Parse bot configuration from environment variables.
     /// Returns a tuple of (BotId, Config) where Config is a JsonNode.
     /// </summary>
@@ -42,36 +69,36 @@ public static class Input
     }
 
     /// <summary>
-    /// Output a success result to stdout.
-    /// Prints a JSON object with status "success" and the provided message.
+    /// Output a success result to the result file.
+    /// Writes a JSON object with status "success" and the provided message.
     /// </summary>
     /// <param name="message">The success message to include in the output</param>
     public static void Success(string message)
     {
         var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        Console.WriteLine($"{{\"status\":\"success\",\"message\":\"{escaped}\"}}");
+        WriteResult($"{{\"status\":\"success\",\"message\":\"{escaped}\"}}");
     }
 
     /// <summary>
-    /// Output an error result to stdout and exit with code 1.
-    /// Prints a JSON object with status "error" and the provided message,
+    /// Output an error result to the result file and exit with code 1.
+    /// Writes a JSON object with status "error" and the provided message,
     /// then terminates the process with exit code 1.
     /// </summary>
     /// <param name="message">The error message to include in the output</param>
     public static void Error(string message)
     {
         var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        Console.WriteLine($"{{\"status\":\"error\",\"message\":\"{escaped}\"}}");
+        WriteResult($"{{\"status\":\"error\",\"message\":\"{escaped}\"}}");
         Environment.Exit(1);
     }
 
     /// <summary>
-    /// Output a custom JSON result to stdout.
-    /// Serializes the provided object as JSON and prints it.
+    /// Output a custom JSON result to the result file.
+    /// Serializes the provided object as JSON and writes it.
     /// </summary>
     /// <param name="data">The object to serialize and output</param>
     public static void Result(object data)
     {
-        Console.WriteLine(JsonSerializer.Serialize(data));
+        WriteResult(JsonSerializer.Serialize(data));
     }
 }

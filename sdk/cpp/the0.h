@@ -26,6 +26,7 @@
 
 #include <nlohmann/json.hpp>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -33,6 +34,27 @@
 namespace the0 {
 
 using json = nlohmann::json;
+
+/**
+ * Get the path to the result file.
+ */
+inline std::string result_file_path() {
+    const char* mount = std::getenv("CODE_MOUNT_DIR");
+    return std::string("/") + (mount ? mount : "bot") + "/result.json";
+}
+
+/**
+ * Write result to the result file.
+ */
+inline void write_result(const std::string& content) {
+    std::ofstream f(result_file_path());
+    if (f.is_open()) {
+        f << content;
+        f.close();
+    } else {
+        std::cerr << "RESULT_ERROR: Failed to write result file" << std::endl;
+    }
+}
 
 /**
  * Parse bot configuration from environment variables.
@@ -76,46 +98,46 @@ inline std::pair<std::string, std::string> parse_raw() {
 }
 
 /**
- * Output a success result to stdout.
+ * Output a success result to the result file.
  *
- * Prints a JSON object with status "success" and the provided message.
+ * Writes a JSON object with status "success" and the provided message.
  * The message is properly escaped for JSON.
  *
  * @param message The success message to include in the output
  */
 inline void success(const std::string& message) {
-    json result = {
+    json r = {
         {"status", "success"},
         {"message", message}
     };
-    std::cout << result.dump() << std::endl;
+    write_result(r.dump());
 }
 
 /**
- * Output an error result to stdout and exit with code 1.
+ * Output an error result to the result file and exit with code 1.
  *
- * Prints a JSON object with status "error" and the provided message,
+ * Writes a JSON object with status "error" and the provided message,
  * then terminates the process with exit code 1.
  * The message is properly escaped for JSON.
  *
  * @param message The error message to include in the output
  */
 [[noreturn]] inline void error(const std::string& message) {
-    json result = {
+    json r = {
         {"status", "error"},
         {"message", message}
     };
-    std::cout << result.dump() << std::endl;
+    write_result(r.dump());
     std::exit(1);
 }
 
 /**
- * Output a custom JSON result to stdout.
+ * Output a custom JSON result to the result file.
  *
  * @param data The JSON object to output
  */
 inline void result(const json& data) {
-    std::cout << data.dump() << std::endl;
+    write_result(data.dump());
 }
 
 /**
@@ -136,7 +158,7 @@ inline void result(const std::string& status, const std::string& message, const 
     for (auto& [key, value] : data.items()) {
         output[key] = value;
     }
-    std::cout << output.dump() << std::endl;
+    write_result(output.dump());
 }
 
 } // namespace the0

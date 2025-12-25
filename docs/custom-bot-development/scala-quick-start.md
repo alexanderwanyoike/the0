@@ -83,19 +83,25 @@ addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.1.5")
 Create `src/main/scala/Main.scala`:
 
 ```scala
+import java.io.{File, PrintWriter}
+
 object Main extends App {
   // Get bot configuration from environment
   val botId = sys.env.getOrElse("BOT_ID", "unknown")
   val config = sys.env.getOrElse("BOT_CONFIG", "{}")
+  val mountDir = sys.env.getOrElse("CODE_MOUNT_DIR", "bot")
+  val resultPath = s"/$mountDir/result.json"
 
-  System.err.println(s"Bot $botId starting...")
-  System.err.println(s"Config: $config")
+  println(s"Bot $botId starting...")
+  println(s"Config: $config")
 
   // Your trading logic here
   // Example: Parse config, fetch prices, execute trades
 
-  // Output success result
-  println("""{"status":"success","message":"Bot executed successfully"}""")
+  // Write result to file
+  val pw = new PrintWriter(new File(resultPath))
+  pw.write("""{"status":"success","message":"Bot executed successfully"}""")
+  pw.close()
 }
 ```
 
@@ -339,11 +345,12 @@ object Main extends App {
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for JSON output):
+You can use stdout or stderr for logging - the SDK writes results to a file:
 
 ```scala
-System.err.println("DEBUG: Processing trade...")  // Logs
-println("{...}")  // Reserved for JSON result - use Input methods instead
+println("Starting trade...")                      // Logs to stdout
+System.err.println("DEBUG: Details...")           // Logs to stderr
+// Both appear in your bot's logs
 ```
 
 ### Async Operations with Futures

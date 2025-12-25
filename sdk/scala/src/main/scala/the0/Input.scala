@@ -1,6 +1,7 @@
 package the0
 
 import scala.util.{Try, Success, Failure}
+import java.io.{File, PrintWriter}
 
 /**
  * the0 SDK for Scala trading bots.
@@ -24,6 +25,31 @@ import scala.util.{Try, Success, Failure}
 object Input {
 
   /**
+   * Get the path to the result file.
+   */
+  private def resultFilePath: String = {
+    val mountDir = sys.env.getOrElse("CODE_MOUNT_DIR", "bot")
+    s"/$mountDir/result.json"
+  }
+
+  /**
+   * Write result to the result file.
+   */
+  private def writeResult(content: String): Unit = {
+    try {
+      val pw = new PrintWriter(new File(resultFilePath))
+      try {
+        pw.write(content)
+      } finally {
+        pw.close()
+      }
+    } catch {
+      case e: Exception =>
+        System.err.println(s"RESULT_ERROR: Failed to write result file: ${e.getMessage}")
+    }
+  }
+
+  /**
    * Parse bot configuration from environment variables.
    *
    * @return A tuple of (botId, configJson) where:
@@ -37,28 +63,28 @@ object Input {
   }
 
   /**
-   * Output a success result to stdout.
+   * Output a success result to the result file.
    *
    * @param message The success message to include in the output
    */
   def success(message: String): Unit = {
     val escaped = escapeJson(message)
-    println(s"""{"status":"success","message":"$escaped"}""")
+    writeResult(s"""{"status":"success","message":"$escaped"}""")
   }
 
   /**
-   * Output an error result to stdout and exit with code 1.
+   * Output an error result to the result file and exit with code 1.
    *
    * @param message The error message to include in the output
    */
   def error(message: String): Nothing = {
     val escaped = escapeJson(message)
-    println(s"""{"status":"error","message":"$escaped"}""")
+    writeResult(s"""{"status":"error","message":"$escaped"}""")
     sys.exit(1)
   }
 
   /**
-   * Output a custom result to stdout.
+   * Output a custom result to the result file.
    *
    * @param status The status string (e.g., "success", "error")
    * @param message The message string
@@ -66,16 +92,16 @@ object Input {
   def result(status: String, message: String): Unit = {
     val escapedStatus = escapeJson(status)
     val escapedMessage = escapeJson(message)
-    println(s"""{"status":"$escapedStatus","message":"$escapedMessage"}""")
+    writeResult(s"""{"status":"$escapedStatus","message":"$escapedMessage"}""")
   }
 
   /**
-   * Output a raw JSON string to stdout.
+   * Output a raw JSON string to the result file.
    *
    * @param json The JSON string to output (must be valid JSON)
    */
   def resultRaw(json: String): Unit = {
-    println(json)
+    writeResult(json)
   }
 
   /**

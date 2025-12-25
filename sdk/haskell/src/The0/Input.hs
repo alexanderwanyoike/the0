@@ -35,6 +35,8 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
+import System.IO (hPutStrLn, stderr)
+import Control.Exception (catch, SomeException)
 
 -- | Parse bot configuration from environment variables.
 --
@@ -72,29 +74,44 @@ parseAsMap = do
                            (decode (BL.pack configStr))
     pure (botId, config)
 
--- | Output a success result to stdout.
+-- | Get the path to the result file.
+resultFilePath :: IO FilePath
+resultFilePath = do
+    mountDir <- fromMaybe "bot" <$> lookupEnv "CODE_MOUNT_DIR"
+    pure $ "/" ++ mountDir ++ "/result.json"
+
+-- | Write result to the result file.
+writeResult :: String -> IO ()
+writeResult content = do
+    path <- resultFilePath
+    writeFile path content `catch` handleError
+  where
+    handleError :: SomeException -> IO ()
+    handleError e = hPutStrLn stderr $ "RESULT_ERROR: Failed to write result file: " ++ show e
+
+-- | Output a success result to the result file.
 --
--- Prints a JSON object with status "success" and the provided message.
+-- Writes a JSON object with status "success" and the provided message.
 success :: String -> IO ()
 success msg = do
     let escaped = escapeJson msg
-    putStrLn $ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
+    writeResult $ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
 
--- | Output an error result to stdout and exit with code 1.
+-- | Output an error result to the result file and exit with code 1.
 --
--- Prints a JSON object with status "error" and the provided message,
+-- Writes a JSON object with status "error" and the provided message,
 -- then terminates the process with exit code 1.
 error :: String -> IO a
 error msg = do
     let escaped = escapeJson msg
-    putStrLn $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
+    writeResult $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
     exitWith (ExitFailure 1)
 
--- | Output a custom JSON result to stdout.
+-- | Output a custom JSON result to the result file.
 --
--- Serializes the provided 'Value' as JSON and prints it.
+-- Serializes the provided 'Value' as JSON and writes it.
 result :: Value -> IO ()
-result val = BL.putStrLn (encode val)
+result val = writeResult $ BL.unpack (encode val)
 
 -- | Escape special characters for JSON string output.
 escapeJson :: String -> String

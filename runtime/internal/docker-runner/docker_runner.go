@@ -513,10 +513,8 @@ func (r *dockerRunner) startTerminatingContainer(
 	// Add logging for debugging short-lived containers
 	defer os.RemoveAll(botDir) // Ensure bot directory is cleaned up
 
-	resultFilePath := ""
-	if exec.PersistResults {
-		resultFilePath = fmt.Sprintf("/%s/result.json", exec.Entrypoint)
-	}
+	// Always try to read result file - bots write their result to this file
+	resultFilePath := fmt.Sprintf("/%s/result.json", exec.Entrypoint)
 
 	runResult, err := r.orchestrator.RunAndWait(ctx, config, hostConfig, resultFilePath)
 	if err != nil {
@@ -529,6 +527,7 @@ func (r *dockerRunner) startTerminatingContainer(
 		}, nil
 	}
 
+	// Store result to MinIO if we have result file contents and PersistResults is true
 	if exec.PersistResults && len(runResult.ResultFileContents) > 0 {
 		if err := r.StoreAnalysisResult(ctx, exec.ID, runResult.ResultFileContents); err != nil {
 			r.logger.Info("Failed to store analysis result to MinIO", "bot_id", exec.ID, "error", err.Error())
@@ -544,17 +543,37 @@ func (r *dockerRunner) startTerminatingContainer(
 		r.logCollector.StoreLogs(exec.ID, logs)
 	}
 
-	finalStatus := "success"
-	errorMessage := ""
-	if runResult.ExitCode != 0 {
-		finalStatus = "error"
-		errorMessage = fmt.Sprintf("Container exited with non-zero status code: %d", runResult.ExitCode)
+	// Determine output based on result file and exit code
+	var output string
+	var finalStatus string
+	var errorMessage string
+
+	if len(runResult.ResultFileContents) > 0 {
+		// Result file exists - use its contents as the output
+		output = string(runResult.ResultFileContents)
+		// Parse status from result file if possible, otherwise infer from exit code
+		if runResult.ExitCode == 0 {
+			finalStatus = "success"
+		} else {
+			finalStatus = "error"
+			errorMessage = fmt.Sprintf("Container exited with code %d", runResult.ExitCode)
+		}
+	} else {
+		// No result file - generate default result based on exit code
+		if runResult.ExitCode == 0 {
+			finalStatus = "success"
+			output = `{"status":"success","result":null}`
+		} else {
+			finalStatus = "error"
+			errorMessage = fmt.Sprintf("Container exited with code %d", runResult.ExitCode)
+			output = fmt.Sprintf(`{"status":"error","message":"Bot exited with code %d"}`, runResult.ExitCode)
+		}
 	}
 
 	return &ExecutionResult{
 		Status:             finalStatus,
 		Message:            "Container run completed",
-		Output:             runResult.Logs,
+		Output:             output,
 		Error:              errorMessage,
 		ExitCode:           runResult.ExitCode,
 		ResultFileContents: runResult.ResultFileContents,

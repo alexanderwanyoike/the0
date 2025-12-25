@@ -11,6 +11,20 @@ const path = require('path');
 
 const controller = new AbortController();
 
+function getResultFilePath() {
+    const codeMountDir = process.env.CODE_MOUNT_DIR || 'bot';
+    return '/' + codeMountDir + '/result.json';
+}
+
+function writeResult(data) {
+    const resultPath = getResultFilePath();
+    try {
+        fs.writeFileSync(resultPath, JSON.stringify(data));
+    } catch (error) {
+        console.error('RESULT_ERROR: Failed to write result file: ' + error.message);
+    }
+}
+
 function handleSignal(signal) {
     console.error('SIGNAL: Received ' + signal + ', triggering abort.');
     // --- Trigger the abort signal ---
@@ -80,7 +94,7 @@ function importMainModule(scriptPath) {
     } catch (error) {
         console.error('IMPORT_ERROR: Import failed: ' + error.message);
         console.error('IMPORT_ERROR: Stack trace: ' + error.stack);
-        console.log(JSON.stringify({"status": "error", "message": error.message}));
+        writeResult({"status": "error", "message": error.message});
         process.exit(1);
     }
 }
@@ -111,12 +125,12 @@ function main() {
         .then(result => {
             console.error('EXECUTE_SUCCESS: Bot execution completed on its own.');
             const output = result || {"status": "success", "message": "Bot executed successfully"};
-            console.log(JSON.stringify(output));
+            writeResult(output);
             process.exit(0);
         })
         .catch(error => {
             console.error('EXECUTE_ERROR: Bot execution failed: ' + error.message, error.stack);
-            console.log(JSON.stringify({ "status": "error", "message": error.message }));
+            writeResult({ "status": "error", "message": error.message });
             process.exit(1);
         });
 }

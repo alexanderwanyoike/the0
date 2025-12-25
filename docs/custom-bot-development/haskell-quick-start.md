@@ -363,13 +363,14 @@ main = do
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for results):
+You can use stdout or stderr for logging - the SDK writes results to a file:
 
 ```haskell
 import System.IO (hPutStrLn, stderr)
 
-hPutStrLn stderr "DEBUG: Processing trade..."  -- Logs to stderr
-putStrLn "..."  -- Reserved for JSON result output
+putStrLn "Starting trade..."                    -- Logs to stdout
+hPutStrLn stderr "DEBUG: Details..."            -- Logs to stderr
+-- Both appear in your bot's logs
 ```
 
 ---
