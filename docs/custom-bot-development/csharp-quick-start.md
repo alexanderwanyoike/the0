@@ -329,12 +329,19 @@ Input.Success("Validation passed");
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for results):
+You can freely use `Console.WriteLine` for debugging - the SDK's output functions use a special marker (`THE0_RESULT:`) that the runtime recognizes:
 
 ```csharp
-Console.Error.WriteLine("DEBUG: Processing trade...");  // Logs to stderr
-Console.WriteLine("...");  // Reserved for JSON result output
+// These all go to logs - use freely for debugging
+Console.WriteLine("Starting trade execution...");
+Console.WriteLine($"Current price: {price}");
+Console.Error.WriteLine("Warning: High volatility detected");
+
+// This is the bot's result (automatically prefixed with marker)
+Input.Success("Trade completed successfully");
 ```
+
+For structured logging and metrics, see the [Bot Metrics & Logging](/custom-bot-development/metrics) guide.
 
 ### Async Programming
 

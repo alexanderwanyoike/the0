@@ -10,12 +10,24 @@ the0 provides a powerful logging system that goes beyond simple text logs. By em
 
 ## The Concept
 
-Logs in the0 are treated as **temporal event streams**. Your bot emits two types of events:
+Logs in the0 are treated as **temporal event streams**. Your bot emits two types of output:
 
-1. **Regular logs** - Text messages for debugging and monitoring
-2. **Structured metrics** - JSON objects that represent measurable data points
+1. **Logs** - Text messages for debugging, monitoring, and structured metrics (goes to log storage)
+2. **Result** - The final status/data returned by your bot (parsed by runtime)
 
-The platform automatically detects and parses metrics from your log output, making them available for visualization.
+The platform uses the `THE0_RESULT:` marker to distinguish between logs and results. This means **you can freely use print statements for debugging** in any language - they won't interfere with your bot's result output.
+
+### How It Works
+
+All SDK output functions (like `success()`, `error()`, `result()`) automatically prefix their output with `THE0_RESULT:`. The runtime:
+
+1. Scans for the `THE0_RESULT:` marker in stdout
+2. Uses the **last occurrence** as the bot's result (allows overwriting)
+3. Everything else becomes log output
+
+**For backtests:** Results are parsed and returned to the UI. Logs are stored for debugging.
+
+**For long-running bots:** There's no "result" - all output is just logs. The marker is harmless if used.
 
 ## Emitting Metrics
 
@@ -130,6 +142,108 @@ logger.info({
 ```
 
 The `_metric` field is **required** - it identifies the JSON object as a metric and specifies its type. the0 automatically detects and parses these from your log output.
+
+### Compiled Languages (Rust, C++, C#, Scala, Haskell)
+
+All compiled language SDKs support the same logging pattern. Use your language's standard print functions for logging - they won't interfere with the bot's result output.
+
+**Rust:**
+
+```rust
+use the0::input;
+
+fn main() {
+    let (bot_id, config) = input::parse();
+
+    // Free to use println! for debugging - goes to logs
+    println!("Starting bot {} with config: {:?}", bot_id, config);
+    println!("Processing trade for BTC/USD");
+
+    // Your trading logic here
+
+    // Final result - uses THE0_RESULT: marker automatically
+    input::success("Trade executed successfully");
+}
+```
+
+**C++:**
+
+```cpp
+#include "the0.h"
+
+int main() {
+    auto [bot_id, config] = the0::parse();
+
+    // Free to use std::cout for debugging - goes to logs
+    std::cout << "Starting bot " << bot_id << std::endl;
+    std::cout << "Processing trade..." << std::endl;
+
+    // Your trading logic here
+
+    // Final result - uses THE0_RESULT: marker automatically
+    the0::success("Trade executed successfully");
+    return 0;
+}
+```
+
+**C#:**
+
+```csharp
+using The0;
+
+class Program {
+    static void Main() {
+        var (botId, config) = Input.Parse();
+
+        // Free to use Console.WriteLine for debugging - goes to logs
+        Console.WriteLine($"Starting bot {botId}");
+        Console.WriteLine("Processing trade...");
+
+        // Your trading logic here
+
+        // Final result - uses THE0_RESULT: marker automatically
+        Input.Success("Trade executed successfully");
+    }
+}
+```
+
+**Scala:**
+
+```scala
+import the0.Input
+
+object Main extends App {
+  val (botId, config) = Input.parse()
+
+  // Free to use println for debugging - goes to logs
+  println(s"Starting bot $botId")
+  println("Processing trade...")
+
+  // Your trading logic here
+
+  // Final result - uses THE0_RESULT: marker automatically
+  Input.success("Trade executed successfully")
+}
+```
+
+**Haskell:**
+
+```haskell
+import The0.Input
+
+main :: IO ()
+main = do
+    (botId, config) <- parse
+
+    -- Free to use putStrLn for debugging - goes to logs
+    putStrLn $ "Starting bot " ++ botId
+    putStrLn "Processing trade..."
+
+    -- Your trading logic here
+
+    -- Final result - uses THE0_RESULT: marker automatically
+    success "Trade executed successfully"
+```
 
 ## Metric Types
 

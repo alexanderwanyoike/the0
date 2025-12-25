@@ -36,6 +36,11 @@ import qualified Data.Text as T
 import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 
+-- | Result marker for output protocol - runtime parses this to extract results.
+-- All output functions use this prefix so you can freely use putStrLn for logging.
+resultMarker :: String
+resultMarker = "THE0_RESULT:"
+
 -- | Parse bot configuration from environment variables.
 --
 -- Returns a tuple of (botId, config) where config is an Aeson 'Value'.
@@ -75,26 +80,29 @@ parseAsMap = do
 -- | Output a success result to stdout.
 --
 -- Prints a JSON object with status "success" and the provided message.
+-- Uses the THE0_RESULT: marker so you can freely use putStrLn for logging.
 success :: String -> IO ()
 success msg = do
     let escaped = escapeJson msg
-    putStrLn $ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
+    putStrLn $ resultMarker ++ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
 
 -- | Output an error result to stdout and exit with code 1.
 --
 -- Prints a JSON object with status "error" and the provided message,
 -- then terminates the process with exit code 1.
+-- Uses the THE0_RESULT: marker so you can freely use putStrLn for logging.
 error :: String -> IO a
 error msg = do
     let escaped = escapeJson msg
-    putStrLn $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
+    putStrLn $ resultMarker ++ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
     exitWith (ExitFailure 1)
 
 -- | Output a custom JSON result to stdout.
 --
 -- Serializes the provided 'Value' as JSON and prints it.
+-- Uses the THE0_RESULT: marker so you can freely use putStrLn for logging.
 result :: Value -> IO ()
-result val = BL.putStrLn (encode val)
+result val = putStrLn $ resultMarker ++ BL.unpack (encode val)
 
 -- | Escape special characters for JSON string output.
 escapeJson :: String -> String

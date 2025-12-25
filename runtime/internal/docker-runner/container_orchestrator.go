@@ -25,7 +25,9 @@ import (
 // ContainerRunResult contains the outcome of a completed container execution.
 type ContainerRunResult struct {
 	ExitCode           int    // Container exit code
-	Logs               string // Combined stdout/stderr
+	Stdout             string // Standard output from container
+	Stderr             string // Standard error from container
+	Logs               string // Combined stdout/stderr (deprecated, use Stdout/Stderr)
 	ResultFileContents []byte // Optional result file contents
 }
 
@@ -67,7 +69,8 @@ type ContainerOrchestrator interface {
 	Stop(ctx context.Context, containerID string, timeout time.Duration) error
 
 	// GetLogs retrieves the last N lines of logs from a container.
-	GetLogs(ctx context.Context, containerID string, tail int) (string, error)
+	// Returns stdout, stderr, and any error.
+	GetLogs(ctx context.Context, containerID string, tail int) (stdout, stderr string, err error)
 
 	// CopyFromContainer extracts a file from a running container.
 	CopyFromContainer(ctx context.Context, containerID, srcPath string) ([]byte, error)
@@ -165,10 +168,12 @@ func (r *dockerOrchestrator) RunAndWait(
 	case status := <-statusCh:
 		r.logger.Info("Container completed", "container_id", resp.ID, "exit_code", status.StatusCode)
 
-		// Get logs
-		logs, err := r.GetLogs(ctx, resp.ID, 1000)
+		// Get logs (stdout and stderr separately)
+		stdout, stderr, err := r.GetLogs(ctx, resp.ID, 1000)
 		if err != nil {
-			logs = fmt.Sprintf("Failed to get logs: %v", err)
+			errorMsg := fmt.Sprintf("Failed to get logs: %v", err)
+			stdout = errorMsg
+			stderr = ""
 		}
 
 		// Try to copy result file before cleanup
@@ -182,7 +187,9 @@ func (r *dockerOrchestrator) RunAndWait(
 
 		return &ContainerRunResult{
 			ExitCode:           int(status.StatusCode),
-			Logs:               logs,
+			Stdout:             stdout,
+			Stderr:             stderr,
+			Logs:               stdout + stderr, // Backwards compatibility
 			ResultFileContents: resultFileContents,
 		}, nil
 	case <-ctx.Done():
@@ -214,7 +221,7 @@ func (r *dockerOrchestrator) Stop(ctx context.Context, containerID string, timeo
 	return nil
 }
 
-func (r *dockerOrchestrator) GetLogs(ctx context.Context, containerID string, tail int) (string, error) {
+func (r *dockerOrchestrator) GetLogs(ctx context.Context, containerID string, tail int) (string, string, error) {
 	logOptions := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -226,7 +233,7 @@ func (r *dockerOrchestrator) GetLogs(ctx context.Context, containerID string, ta
 	// 1. Request the log stream from the Docker daemon
 	logs, err := r.dockerClient.ContainerLogs(ctx, containerID, logOptions)
 	if err != nil {
-		return "", fmt.Errorf("failed to get logs for container %s: %v", containerID, err)
+		return "", "", fmt.Errorf("failed to get logs for container %s: %v", containerID, err)
 	}
 	defer logs.Close()
 
@@ -236,11 +243,11 @@ func (r *dockerOrchestrator) GetLogs(ctx context.Context, containerID string, ta
 	var stdout, stderr bytes.Buffer
 	_, err = stdcopy.StdCopy(&stdout, &stderr, logs)
 	if err != nil {
-		return "", fmt.Errorf("failed to read logs for container %s: %v", containerID, err)
+		return "", "", fmt.Errorf("failed to read logs for container %s: %v", containerID, err)
 	}
 
-	// 3. Combine stdout and stderr for return
-	return stdout.String() + stderr.String(), nil
+	// 3. Return stdout and stderr separately
+	return stdout.String(), stderr.String(), nil
 }
 
 func (r *dockerOrchestrator) CopyFromContainer(ctx context.Context, containerID, srcPath string) ([]byte, error) {

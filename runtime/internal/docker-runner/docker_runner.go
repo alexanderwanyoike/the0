@@ -536,12 +536,37 @@ func (r *dockerRunner) startTerminatingContainer(
 		}
 	}
 
+	// Parse output to separate result (THE0_RESULT:) from logs
+	parsed := ParseContainerOutput(runResult.Stdout, runResult.Stderr)
+
 	// Terminating containers store logs after completion they do not use background log collection
 	// since they run quickly and we want all logs immediately after completion
 	// They are not part of the managedContainers map since they are short-lived
-	logs := runResult.Logs
-	if len(logs) > 0 {
-		r.logCollector.StoreLogs(exec.ID, logs)
+	if len(parsed.Logs) > 0 {
+		r.logCollector.StoreLogs(exec.ID, parsed.Logs)
+	}
+
+	// Determine output based on marker presence
+	var finalOutput string
+	if parsed.HasMarker {
+		// Validate the JSON result
+		if err := ValidateResultJSON(parsed.Result); err != nil {
+			r.logger.Info("Invalid JSON in result marker", "bot_id", exec.ID, "error", err.Error())
+			// Return error with full output for debugging
+			return &ExecutionResult{
+				Status:             "error",
+				Message:            "Invalid JSON in result marker",
+				Output:             runResult.Stdout + runResult.Stderr,
+				Error:              err.Error(),
+				ExitCode:           runResult.ExitCode,
+				ResultFileContents: runResult.ResultFileContents,
+				Duration:           time.Since(startTime),
+			}, nil
+		}
+		finalOutput = parsed.Result
+	} else {
+		// No marker found - backwards compatibility mode
+		finalOutput = runResult.Stdout + runResult.Stderr
 	}
 
 	finalStatus := "success"
@@ -554,7 +579,7 @@ func (r *dockerRunner) startTerminatingContainer(
 	return &ExecutionResult{
 		Status:             finalStatus,
 		Message:            "Container run completed",
-		Output:             runResult.Logs,
+		Output:             finalOutput,
 		Error:              errorMessage,
 		ExitCode:           runResult.ExitCode,
 		ResultFileContents: runResult.ResultFileContents,
@@ -626,5 +651,9 @@ func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, re
 }
 
 func (r *dockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
-	return r.orchestrator.GetLogs(ctx, containerID, tail)
+	stdout, stderr, err := r.orchestrator.GetLogs(ctx, containerID, tail)
+	if err != nil {
+		return "", err
+	}
+	return stdout + stderr, nil
 }

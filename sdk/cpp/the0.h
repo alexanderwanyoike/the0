@@ -34,6 +34,10 @@ namespace the0 {
 
 using json = nlohmann::json;
 
+/// Result marker for output protocol - runtime parses this to extract results.
+/// All output functions use this prefix so you can freely use std::cout for logging.
+constexpr const char* RESULT_MARKER = "THE0_RESULT:";
+
 /**
  * Parse bot configuration from environment variables.
  *
@@ -79,7 +83,7 @@ inline std::pair<std::string, std::string> parse_raw() {
  * Output a success result to stdout.
  *
  * Prints a JSON object with status "success" and the provided message.
- * The message is properly escaped for JSON.
+ * Uses the THE0_RESULT: marker so you can freely use std::cout for logging.
  *
  * @param message The success message to include in the output
  */
@@ -88,7 +92,7 @@ inline void success(const std::string& message) {
         {"status", "success"},
         {"message", message}
     };
-    std::cout << result.dump() << std::endl;
+    std::cout << RESULT_MARKER << result.dump() << std::endl;
 }
 
 /**
@@ -96,7 +100,7 @@ inline void success(const std::string& message) {
  *
  * Prints a JSON object with status "error" and the provided message,
  * then terminates the process with exit code 1.
- * The message is properly escaped for JSON.
+ * Uses the THE0_RESULT: marker so you can freely use std::cout for logging.
  *
  * @param message The error message to include in the output
  */
@@ -105,23 +109,25 @@ inline void success(const std::string& message) {
         {"status", "error"},
         {"message", message}
     };
-    std::cout << result.dump() << std::endl;
+    std::cout << RESULT_MARKER << result.dump() << std::endl;
     std::exit(1);
 }
 
 /**
  * Output a custom JSON result to stdout.
+ * Uses the THE0_RESULT: marker so you can freely use std::cout for logging.
  *
  * @param data The JSON object to output
  */
 inline void result(const json& data) {
-    std::cout << data.dump() << std::endl;
+    std::cout << RESULT_MARKER << data.dump() << std::endl;
 }
 
 /**
  * Output a custom result with additional data fields.
  *
  * Creates a JSON object with status, message, and any additional fields.
+ * Uses the THE0_RESULT: marker so you can freely use std::cout for logging.
  *
  * @param status The status string (e.g., "success", "error")
  * @param message The message string
@@ -136,7 +142,7 @@ inline void result(const std::string& status, const std::string& message, const 
     for (auto& [key, value] : data.items()) {
         output[key] = value;
     }
-    std::cout << output.dump() << std::endl;
+    std::cout << RESULT_MARKER << output.dump() << std::endl;
 }
 
 } // namespace the0

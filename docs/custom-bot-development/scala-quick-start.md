@@ -339,12 +339,19 @@ object Main extends App {
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for JSON output):
+You can freely use `println` for debugging - the SDK's output functions use a special marker (`THE0_RESULT:`) that the runtime recognizes:
 
 ```scala
-System.err.println("DEBUG: Processing trade...")  // Logs
-println("{...}")  // Reserved for JSON result - use Input methods instead
+// These all go to logs - use freely for debugging
+println("Starting trade execution...")
+println(s"Current price: $price")
+System.err.println("Warning: High volatility detected")
+
+// This is the bot's result (automatically prefixed with marker)
+Input.success("Trade completed successfully")
 ```
+
+For structured logging and metrics, see the [Bot Metrics & Logging](/custom-bot-development/metrics) guide.
 
 ### Async Operations with Futures
 

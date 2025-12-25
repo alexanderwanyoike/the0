@@ -15,6 +15,9 @@ import traceback
 import threading
 import logging
 
+# Result marker for output protocol - runtime parses this to extract results
+RESULT_MARKER = "THE0_RESULT:"
+
 # Signal handling for graceful shutdown
 main_thread = None
 shutdown_timer = None
@@ -34,7 +37,7 @@ def graceful_exit(status, message):
     global shutdown_timer
     if shutdown_timer:
         shutdown_timer.cancel()
-    print(json.dumps({"status": status, "message": message}))
+    print(f"{RESULT_MARKER}{json.dumps({'status': status, 'message': message})}")
     sys.exit(0)
 
 def run_main_with_callback(main_func, bot_id, config):
@@ -182,14 +185,14 @@ def main():
     try:
         result = run_main_with_callback(main_func, bot_id, config)
         if shutdown_event.is_set():
-            print(json.dumps({"status": "terminated", "message": "Bot execution terminated by signal"}))
+            print(f"{RESULT_MARKER}{json.dumps({'status': 'terminated', 'message': 'Bot execution terminated by signal'})}")
             sys.exit(0) # Exit gracefully if shutdown event is set
         else:
-            print(json.dumps({"status": "success", "message": "Bot executed successfully"}))
+            print(f"{RESULT_MARKER}{json.dumps({'status': 'success', 'message': 'Bot executed successfully'})}")
     except Exception as e:
         print(f"EXECUTE_ERROR: Bot execution failed: {e}", file=sys.stderr)
         print(f"EXECUTE_ERROR: Traceback: {traceback.format_exc()}", file=sys.stderr)
-        print(json.dumps({"status": "error", "message": str(e)}))
+        print(f"{RESULT_MARKER}{json.dumps({'status': 'error', 'message': str(e)})}")
         sys.exit(1)
 
 if __name__ == "__main__":

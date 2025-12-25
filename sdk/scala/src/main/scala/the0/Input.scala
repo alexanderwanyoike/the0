@@ -23,6 +23,11 @@ import scala.util.{Try, Success, Failure}
  */
 object Input {
 
+  /** Result marker for output protocol - runtime parses this to extract results.
+    * All output functions use this prefix so you can freely use println for logging.
+    */
+  private val ResultMarker = "THE0_RESULT:"
+
   /**
    * Parse bot configuration from environment variables.
    *
@@ -38,27 +43,30 @@ object Input {
 
   /**
    * Output a success result to stdout.
+   * Uses the THE0_RESULT: marker so you can freely use println for logging.
    *
    * @param message The success message to include in the output
    */
   def success(message: String): Unit = {
     val escaped = escapeJson(message)
-    println(s"""{"status":"success","message":"$escaped"}""")
+    println(s"""${ResultMarker}{"status":"success","message":"$escaped"}""")
   }
 
   /**
    * Output an error result to stdout and exit with code 1.
+   * Uses the THE0_RESULT: marker so you can freely use println for logging.
    *
    * @param message The error message to include in the output
    */
   def error(message: String): Nothing = {
     val escaped = escapeJson(message)
-    println(s"""{"status":"error","message":"$escaped"}""")
+    println(s"""${ResultMarker}{"status":"error","message":"$escaped"}""")
     sys.exit(1)
   }
 
   /**
    * Output a custom result to stdout.
+   * Uses the THE0_RESULT: marker so you can freely use println for logging.
    *
    * @param status The status string (e.g., "success", "error")
    * @param message The message string
@@ -66,16 +74,17 @@ object Input {
   def result(status: String, message: String): Unit = {
     val escapedStatus = escapeJson(status)
     val escapedMessage = escapeJson(message)
-    println(s"""{"status":"$escapedStatus","message":"$escapedMessage"}""")
+    println(s"""${ResultMarker}{"status":"$escapedStatus","message":"$escapedMessage"}""")
   }
 
   /**
    * Output a raw JSON string to stdout.
+   * Uses the THE0_RESULT: marker so you can freely use println for logging.
    *
    * @param json The JSON string to output (must be valid JSON)
    */
   def resultRaw(json: String): Unit = {
-    println(json)
+    println(s"${ResultMarker}$json")
   }
 
   /**

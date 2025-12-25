@@ -9,9 +9,10 @@
 //!
 //! fn main() {
 //!     let (bot_id, config) = input::parse();
-//!     println!("Bot {} starting with config: {:?}", bot_id, config);
+//!     eprintln!("Bot {} starting with config: {:?}", bot_id, config);
 //!
 //!     // Your trading logic here
+//!     // Use eprintln! for debug output, println! works too but goes to logs
 //!
 //!     input::success("Bot executed successfully");
 //! }
@@ -20,6 +21,10 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
+
+/// Result marker for output protocol - runtime parses this to extract results.
+/// All output functions use this prefix so users can freely use println! for logging.
+const RESULT_MARKER: &str = "THE0_RESULT:";
 
 /// Input parsing and output formatting utilities
 pub mod input {
@@ -58,27 +63,37 @@ pub mod input {
     /// Output a success result to stdout.
     ///
     /// Prints a JSON object with status "success" and the provided message.
+    /// Uses the THE0_RESULT: marker so you can freely use println! for logging.
     pub fn success(message: &str) {
         let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        println!(r#"{{"status":"success","message":"{}"}}"#, escaped);
+        println!(
+            r#"{}{{"status":"success","message":"{}"}}"#,
+            RESULT_MARKER, escaped
+        );
     }
 
     /// Output an error result to stdout and exit with code 1.
     ///
     /// Prints a JSON object with status "error" and the provided message,
     /// then terminates the process with exit code 1.
+    /// Uses the THE0_RESULT: marker so you can freely use println! for logging.
     pub fn error(message: &str) -> ! {
         let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        println!(r#"{{"status":"error","message":"{}"}}"#, escaped);
+        println!(
+            r#"{}{{"status":"error","message":"{}"}}"#,
+            RESULT_MARKER, escaped
+        );
         std::process::exit(1);
     }
 
     /// Output a custom JSON result to stdout.
     ///
     /// Serializes the provided Value as JSON and prints it.
+    /// Uses the THE0_RESULT: marker so you can freely use println! for logging.
     pub fn result(data: &Value) {
         println!(
-            "{}",
+            "{}{}",
+            RESULT_MARKER,
             serde_json::to_string(data).expect("Failed to serialize result")
         );
     }

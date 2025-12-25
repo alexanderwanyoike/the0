@@ -363,14 +363,19 @@ main = do
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for results):
+You can freely use `putStrLn` for debugging - the SDK's output functions use a special marker (`THE0_RESULT:`) that the runtime recognizes:
 
 ```haskell
-import System.IO (hPutStrLn, stderr)
+-- These all go to logs - use freely for debugging
+putStrLn "Starting trade execution..."
+putStrLn $ "Current price: " ++ show price
+hPutStrLn stderr "Warning: High volatility detected"
 
-hPutStrLn stderr "DEBUG: Processing trade..."  -- Logs to stderr
-putStrLn "..."  -- Reserved for JSON result output
+-- This is the bot's result (automatically prefixed with marker)
+success "Trade completed successfully"
 ```
+
+For structured logging and metrics, see the [Bot Metrics & Logging](/custom-bot-development/metrics) guide.
 
 ---
 

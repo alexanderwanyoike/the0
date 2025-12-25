@@ -9,6 +9,9 @@ const NodeJsBotEntrypoint = `#!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
 
+// Result marker for output protocol - runtime parses this to extract results
+const RESULT_MARKER = 'THE0_RESULT:';
+
 const controller = new AbortController();
 
 function handleSignal(signal) {
@@ -80,7 +83,7 @@ function importMainModule(scriptPath) {
     } catch (error) {
         console.error('IMPORT_ERROR: Import failed: ' + error.message);
         console.error('IMPORT_ERROR: Stack trace: ' + error.stack);
-        console.log(JSON.stringify({"status": "error", "message": error.message}));
+        console.log(RESULT_MARKER + JSON.stringify({"status": "error", "message": error.message}));
         process.exit(1);
     }
 }
@@ -111,12 +114,12 @@ function main() {
         .then(result => {
             console.error('EXECUTE_SUCCESS: Bot execution completed on its own.');
             const output = result || {"status": "success", "message": "Bot executed successfully"};
-            console.log(JSON.stringify(output));
+            console.log(RESULT_MARKER + JSON.stringify(output));
             process.exit(0);
         })
         .catch(error => {
             console.error('EXECUTE_ERROR: Bot execution failed: ' + error.message, error.stack);
-            console.log(JSON.stringify({ "status": "error", "message": error.message }));
+            console.log(RESULT_MARKER + JSON.stringify({ "status": "error", "message": error.message }));
             process.exit(1);
         });
 }

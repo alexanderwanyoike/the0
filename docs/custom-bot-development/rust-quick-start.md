@@ -324,12 +324,19 @@ fn main() {
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for results):
+You can freely use `println!` for debugging - the SDK's output functions use a special marker (`THE0_RESULT:`) that the runtime recognizes:
 
 ```rust
-eprintln!("DEBUG: Processing trade...");  // Logs to stderr
-println!("...");  // Reserved for JSON result output
+// These all go to logs - use freely for debugging
+println!("Starting trade execution...");
+println!("Current price: {}", price);
+eprintln!("Warning: High volatility detected");
+
+// This is the bot's result (automatically prefixed with marker)
+input::success("Trade completed successfully");
 ```
+
+For structured logging and metrics, see the [Bot Metrics & Logging](/custom-bot-development/metrics) guide.
 
 ---
 

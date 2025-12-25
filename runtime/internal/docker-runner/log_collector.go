@@ -102,12 +102,14 @@ func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
 	defer cancel()
 
 	// Delegate log fetching to the orchestrator for incremental collection
-	logs, err := lc.orchestrator.GetLogs(ctx, containerInfo.ContainerID, 100)
+	// For long-running bots, we combine stdout and stderr as logs (no marker parsing needed)
+	stdout, stderr, err := lc.orchestrator.GetLogs(ctx, containerInfo.ContainerID, 100)
 	if err != nil {
 		lc.logger.Info("Log Collector: Failed to get logs", "container_id", containerInfo.ContainerID, "error", err.Error())
 		return
 	}
 
+	logs := stdout + stderr
 	if len(logs) == 0 {
 		// No new logs to process
 		return
