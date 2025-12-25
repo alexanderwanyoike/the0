@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **C# .NET 8 language support** - Build C# bots locally using Docker before deployment
+  - `DotnetBuilder` implementation of `LanguageBuilder` interface
+  - Detects `.csproj` projects and builds with `dotnet publish -c Release`
+  - Uses `mcr.microsoft.com/dotnet/sdk:8.0` Docker image for cross-platform builds
+- **LanguageBuilder interface** - Refactored language builds with common interface
+  - Extracted Rust builder to `builder_rust.go`
+  - Added `builder_dotnet.go` for C# support
+  - Extensible pattern for adding new compiled languages
 - **Rust language support** - Build Rust bots locally using Docker before deployment
   - `ShouldBuildRust()` - Detects Cargo.toml projects
   - `PerformRustBuild()` - Compiles Rust projects in `rust:latest` Docker container

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **C# Quick Start Guide** - Complete guide for building C# trading bots with the0 SDK
+  - SDK installation and usage with `The0.Input` class
+  - Project structure and .NET 8 configuration examples
+  - Best practices for error handling, async programming, and logging
 - **Rust Quick Start Guide** - Complete guide for building Rust trading bots with the0 SDK
   - SDK installation and usage with `the0::input` module
   - Project structure and configuration examples
