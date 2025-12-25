@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Haskell GHC 9.6 runtime support** - Added `ghc96` to the Runtime type union for Haskell bot deployment
 - **Scala 3 runtime support** - Added `scala3` to the Runtime type union for Scala bot deployment
 - **C/C++ GCC 13 runtime support** - Added `gcc13` to the Runtime type union for C/C++ bot deployment
 - **C# .NET 8 runtime support** - Added `dotnet8` to the Runtime type union for C# bot deployment

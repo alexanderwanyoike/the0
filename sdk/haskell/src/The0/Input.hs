@@ -1,0 +1,108 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : The0.Input
+-- Description : Input parsing and output formatting for the0 trading bots
+-- License     : Apache-2.0
+--
+-- This module provides utilities for building trading bots on the0 platform.
+--
+-- = Example
+--
+-- @
+-- import The0.Input
+--
+-- main :: IO ()
+-- main = do
+--     (botId, config) <- parse
+--     putStrLn $ "Bot " ++ botId ++ " starting"
+--     -- Your trading logic here
+--     success "Bot executed successfully"
+-- @
+module The0.Input
+    ( parse
+    , parseAsMap
+    , success
+    , The0.Input.error
+    , result
+    ) where
+
+import Data.Aeson (Value, decode, encode, object, (.=))
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import System.Environment (lookupEnv)
+import System.Exit (exitWith, ExitCode(ExitFailure))
+
+-- | Parse bot configuration from environment variables.
+--
+-- Returns a tuple of (botId, config) where config is an Aeson 'Value'.
+--
+-- Throws an error if BOT_ID or BOT_CONFIG environment variables are not set,
+-- or if BOT_CONFIG is not valid JSON.
+parse :: IO (String, Value)
+parse = do
+    botId <- lookupEnv "BOT_ID" >>= \case
+        Just bid -> pure bid
+        Nothing -> Prelude.error "BOT_ID environment variable not set"
+    configStr <- lookupEnv "BOT_CONFIG" >>= \case
+        Just cfg -> pure cfg
+        Nothing -> Prelude.error "BOT_CONFIG environment variable not set"
+    let config = fromMaybe (Prelude.error "Failed to parse BOT_CONFIG as JSON")
+                           (decode (BL.pack configStr))
+    pure (botId, config)
+
+-- | Parse bot configuration with config as a Map.
+--
+-- Returns a tuple of (botId, config) where config is a 'Map.Map' String 'Value'.
+--
+-- Throws an error if BOT_ID or BOT_CONFIG environment variables are not set,
+-- or if BOT_CONFIG is not valid JSON.
+parseAsMap :: IO (String, Map.Map String Value)
+parseAsMap = do
+    botId <- lookupEnv "BOT_ID" >>= \case
+        Just bid -> pure bid
+        Nothing -> Prelude.error "BOT_ID environment variable not set"
+    configStr <- lookupEnv "BOT_CONFIG" >>= \case
+        Just cfg -> pure cfg
+        Nothing -> Prelude.error "BOT_CONFIG environment variable not set"
+    let config = fromMaybe (Prelude.error "Failed to parse BOT_CONFIG as JSON")
+                           (decode (BL.pack configStr))
+    pure (botId, config)
+
+-- | Output a success result to stdout.
+--
+-- Prints a JSON object with status "success" and the provided message.
+success :: String -> IO ()
+success msg = do
+    let escaped = escapeJson msg
+    putStrLn $ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
+
+-- | Output an error result to stdout and exit with code 1.
+--
+-- Prints a JSON object with status "error" and the provided message,
+-- then terminates the process with exit code 1.
+error :: String -> IO a
+error msg = do
+    let escaped = escapeJson msg
+    putStrLn $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
+    exitWith (ExitFailure 1)
+
+-- | Output a custom JSON result to stdout.
+--
+-- Serializes the provided 'Value' as JSON and prints it.
+result :: Value -> IO ()
+result val = BL.putStrLn (encode val)
+
+-- | Escape special characters for JSON string output.
+escapeJson :: String -> String
+escapeJson = concatMap escapeChar
+  where
+    escapeChar '\\' = "\\\\"
+    escapeChar '"'  = "\\\""
+    escapeChar '\n' = "\\n"
+    escapeChar '\r' = "\\r"
+    escapeChar '\t' = "\\t"
+    escapeChar c    = [c]

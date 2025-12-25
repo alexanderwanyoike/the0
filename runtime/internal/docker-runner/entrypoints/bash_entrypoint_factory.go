@@ -148,6 +148,26 @@ export BOT_CONFIG='{{ .BotConfig }}'
 exec java -jar "$JAR"
 `
 
+// ghc96BashEntrypoint executes pre-built Haskell binary (built by CLI with Cabal)
+const ghc96BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Find the pre-built Haskell binary in dist-newstyle/
+# Cabal builds to: dist-newstyle/build/[arch]/ghc-[version]/[pkg]-[version]/x/[exe]/build/[exe]/[exe]
+BINARY=$(find dist-newstyle -type f -executable ! -name "*.hi" ! -name "*.o" ! -name "*.dyn_hi" ! -name "*.dyn_o" ! -name "*.a" ! -name "*.so" 2>/dev/null | grep -E '/x/.*/build/[^/]+$' | head -1)
+
+if [ -z "$BINARY" ]; then
+    echo '{"status":"error","message":"No pre-built Haskell binary found in dist-newstyle/"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec "$BINARY"
+`
+
 type bashEntrypointFactory struct {
 	EntryPointType string
 	ScriptContent  string
@@ -191,6 +211,8 @@ func (p *bashEntrypointFactory) BuildBashEntrypoint(
 		selectedEntrypoint = gcc13BashEntrypoint
 	case runtime == "scala3":
 		selectedEntrypoint = scala3BashEntrypoint
+	case runtime == "ghc96":
+		selectedEntrypoint = ghc96BashEntrypoint
 	default:
 		return "", fmt.Errorf("unsupported runtime: %s", runtime)
 	}

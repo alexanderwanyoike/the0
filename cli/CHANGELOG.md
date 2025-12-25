@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Haskell GHC 9.6 language support** - Build Haskell bots locally using Docker before deployment
+  - `HaskellBuilder` implementation of `LanguageBuilder` interface
+  - Detects `.cabal` projects and builds with `cabal build --enable-optimization=2`
+  - Uses `haskell:9.6-bookworm` Docker image for cross-platform builds
 - **Scala 3 language support** - Build Scala bots locally using Docker before deployment
   - `ScalaBuilder` implementation of `LanguageBuilder` interface
   - Detects `build.sbt` projects and builds with `sbt assembly`
