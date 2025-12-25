@@ -32,6 +32,8 @@ func (f *codeEntrypointFactory) GetCode() (string, error) {
 			return Dotnet8BotEntrypoint, nil
 		case "gcc13":
 			return Gcc13BotEntrypoint, nil
+		case "scala3":
+			return Scala3BotEntrypoint, nil
 		}
 	}
 	return "", fmt.Errorf("unsupported entry point type or runtime: %s, %s", f.entryPointType, f.runtime)
