@@ -353,19 +353,12 @@ int main() {
 
 ### Logging
 
-You can freely use `std::cout` for debugging - the SDK's output functions use a special marker (`THE0_RESULT:`) that the runtime recognizes:
+Use stderr for logs (stdout is reserved for JSON output):
 
 ```cpp
-// These all go to logs - use freely for debugging
-std::cout << "Starting trade execution..." << std::endl;
-std::cout << "Current price: " << price << std::endl;
-std::cerr << "Warning: High volatility detected" << std::endl;
-
-// This is the bot's result (automatically prefixed with marker)
-the0::success("Trade completed successfully");
+std::cerr << "DEBUG: Processing trade..." << std::endl;  // Logs
+std::cout << "{...}";  // Reserved for JSON result
 ```
-
-For structured logging and metrics, see the [Bot Metrics & Logging](/custom-bot-development/metrics) guide.
 
 ### Memory Safety
 
