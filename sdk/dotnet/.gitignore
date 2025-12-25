@@ -1,12 +1,19 @@
 # Build artifacts
-/target/
-Cargo.lock
+bin/
+obj/
+out/
+
+# NuGet
+*.nupkg
+packages/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*.user
+*.suo
 
 # OS
 .DS_Store

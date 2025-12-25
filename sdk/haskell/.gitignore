@@ -1,21 +1,20 @@
 # Build artifacts
-build/
-cmake-build-*/
+dist/
+dist-newstyle/
+.stack-work/
+*.hi
 *.o
-*.obj
 *.exe
-*.out
-*.a
-*.so
-*.dylib
+
+# Cabal
+cabal.sandbox.config
+.cabal-sandbox/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-.cache/
-compile_commands.json
 
 # OS
 .DS_Store

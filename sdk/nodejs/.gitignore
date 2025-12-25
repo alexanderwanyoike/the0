@@ -3,7 +3,6 @@ node_modules/
 
 # Build output
 dist/
-build/
 
 # Test coverage
 coverage/
@@ -27,4 +26,3 @@ Thumbs.db
 # Environment
 .env
 .env.local
-.npmrc
