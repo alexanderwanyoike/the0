@@ -92,6 +92,7 @@ Create `main.cpp`:
 
 ```cpp
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -99,18 +100,21 @@ int main() {
     // Get bot configuration from environment
     const char* bot_id_env = std::getenv("BOT_ID");
     const char* config_env = std::getenv("BOT_CONFIG");
+    const char* mount_dir = std::getenv("CODE_MOUNT_DIR");
 
     std::string bot_id = bot_id_env ? bot_id_env : "unknown";
     std::string config = config_env ? config_env : "{}";
+    std::string result_path = std::string("/") + (mount_dir ? mount_dir : "bot") + "/result.json";
 
-    std::cerr << "Bot " << bot_id << " starting..." << std::endl;
-    std::cerr << "Config: " << config << std::endl;
+    std::cout << "Bot " << bot_id << " starting..." << std::endl;
+    std::cout << "Config: " << config << std::endl;
 
     // Your trading logic here
     // Example: Parse config, fetch prices, execute trades
 
-    // Output success result
-    std::cout << "{\"status\":\"success\",\"message\":\"Bot executed successfully\"}" << std::endl;
+    // Write result to file
+    std::ofstream result_file(result_path);
+    result_file << "{\"status\":\"success\",\"message\":\"Bot executed successfully\"}";
 
     return 0;
 }
@@ -353,11 +357,12 @@ int main() {
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for JSON output):
+You can use stdout or stderr for logging - the SDK writes results to a file:
 
 ```cpp
-std::cerr << "DEBUG: Processing trade..." << std::endl;  // Logs
-std::cout << "{...}";  // Reserved for JSON result
+std::cout << "Starting trade..." << std::endl;  // Logs to stdout
+std::cerr << "DEBUG: Details..." << std::endl;  // Logs to stderr
+// Both appear in your bot's logs
 ```
 
 ### Memory Safety

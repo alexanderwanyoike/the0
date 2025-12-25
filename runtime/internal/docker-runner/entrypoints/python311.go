@@ -26,6 +26,20 @@ def signal_handler(signum, frame):
     # --- Set the event to signal all threads to stop ---
     shutdown_event.set()
 
+def get_result_file_path():
+    """Get the path to the result file"""
+    code_mount_dir = os.environ.get('CODE_MOUNT_DIR', 'bot')
+    return f"/{code_mount_dir}/result.json"
+
+def write_result(data):
+    """Write result to the result file"""
+    result_path = get_result_file_path()
+    try:
+        with open(result_path, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"RESULT_ERROR: Failed to write result file: {e}", file=sys.stderr)
+
 def force_exit():
     print("SIGNAL: Timeout reached, forcing exit", file=sys.stderr)
     sys.exit(0)
@@ -34,7 +48,7 @@ def graceful_exit(status, message):
     global shutdown_timer
     if shutdown_timer:
         shutdown_timer.cancel()
-    print(json.dumps({"status": status, "message": message}))
+    write_result({"status": status, "message": message})
     sys.exit(0)
 
 def run_main_with_callback(main_func, bot_id, config):
@@ -182,14 +196,14 @@ def main():
     try:
         result = run_main_with_callback(main_func, bot_id, config)
         if shutdown_event.is_set():
-            print(json.dumps({"status": "terminated", "message": "Bot execution terminated by signal"}))
+            write_result({"status": "terminated", "message": "Bot execution terminated by signal"})
             sys.exit(0) # Exit gracefully if shutdown event is set
         else:
-            print(json.dumps({"status": "success", "message": "Bot executed successfully"}))
+            write_result({"status": "success", "message": "Bot executed successfully"})
     except Exception as e:
         print(f"EXECUTE_ERROR: Bot execution failed: {e}", file=sys.stderr)
         print(f"EXECUTE_ERROR: Traceback: {traceback.format_exc()}", file=sys.stderr)
-        print(json.dumps({"status": "error", "message": str(e)}))
+        write_result({"status": "error", "message": str(e)})
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -20,10 +20,25 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 
 /// Input parsing and output formatting utilities
 pub mod input {
     use super::*;
+
+    /// Get the path to the result file
+    fn result_file_path() -> String {
+        let mount_dir = env::var("CODE_MOUNT_DIR").unwrap_or_else(|_| "bot".to_string());
+        format!("/{}/result.json", mount_dir)
+    }
+
+    /// Write result to the result file
+    fn write_result(content: &str) {
+        let path = result_file_path();
+        if let Err(e) = fs::write(&path, content) {
+            eprintln!("RESULT_ERROR: Failed to write result file: {}", e);
+        }
+    }
 
     /// Parse bot configuration from environment variables.
     ///
@@ -55,32 +70,29 @@ pub mod input {
         (id, config)
     }
 
-    /// Output a success result to stdout.
+    /// Output a success result to the result file.
     ///
-    /// Prints a JSON object with status "success" and the provided message.
+    /// Writes a JSON object with status "success" and the provided message.
     pub fn success(message: &str) {
         let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        println!(r#"{{"status":"success","message":"{}"}}"#, escaped);
+        write_result(&format!(r#"{{"status":"success","message":"{}"}}"#, escaped));
     }
 
-    /// Output an error result to stdout and exit with code 1.
+    /// Output an error result to the result file and exit with code 1.
     ///
-    /// Prints a JSON object with status "error" and the provided message,
+    /// Writes a JSON object with status "error" and the provided message,
     /// then terminates the process with exit code 1.
     pub fn error(message: &str) -> ! {
         let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        println!(r#"{{"status":"error","message":"{}"}}"#, escaped);
+        write_result(&format!(r#"{{"status":"error","message":"{}"}}"#, escaped));
         std::process::exit(1);
     }
 
-    /// Output a custom JSON result to stdout.
+    /// Output a custom JSON result to the result file.
     ///
-    /// Serializes the provided Value as JSON and prints it.
+    /// Serializes the provided Value as JSON and writes it.
     pub fn result(data: &Value) {
-        println!(
-            "{}",
-            serde_json::to_string(data).expect("Failed to serialize result")
-        );
+        write_result(&serde_json::to_string(data).expect("Failed to serialize result"));
     }
 }
 

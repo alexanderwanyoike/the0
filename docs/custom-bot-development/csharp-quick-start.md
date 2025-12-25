@@ -329,11 +329,12 @@ Input.Success("Validation passed");
 
 ### Logging
 
-Use stderr for logs (stdout is reserved for results):
+You can use stdout or stderr for logging - the SDK writes results to a file:
 
 ```csharp
-Console.Error.WriteLine("DEBUG: Processing trade...");  // Logs to stderr
-Console.WriteLine("...");  // Reserved for JSON result output
+Console.WriteLine("Starting trade...");       // Logs to stdout
+Console.Error.WriteLine("DEBUG: Details...");  // Logs to stderr
+// Both appear in your bot's logs
 ```
 
 ### Async Programming
