@@ -559,14 +559,22 @@ func (r *dockerRunner) startTerminatingContainer(
 			errorMessage = fmt.Sprintf("Container exited with code %d", runResult.ExitCode)
 		}
 	} else {
-		// No result file - generate default result based on exit code
+		// No result file - use stdout/stderr logs as output if available
 		if runResult.ExitCode == 0 {
 			finalStatus = "success"
-			output = `{"status":"success","result":null}`
+			if runResult.Logs != "" {
+				output = runResult.Logs
+			} else {
+				output = `{"status":"success","result":null}`
+			}
 		} else {
 			finalStatus = "error"
 			errorMessage = fmt.Sprintf("Container exited with code %d", runResult.ExitCode)
-			output = fmt.Sprintf(`{"status":"error","message":"Bot exited with code %d"}`, runResult.ExitCode)
+			if runResult.Logs != "" {
+				output = runResult.Logs
+			} else {
+				output = fmt.Sprintf(`{"status":"error","message":"Bot exited with code %d"}`, runResult.ExitCode)
+			}
 		}
 	}
 

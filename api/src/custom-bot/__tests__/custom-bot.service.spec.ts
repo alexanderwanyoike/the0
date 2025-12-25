@@ -305,23 +305,39 @@ describe("CustomBotService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
+        "Bots must specify a valid runtime (python3.11, nodejs20, rust-stable, dotnet8, gcc13, scala3, ghc96)",
       );
       expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
     });
 
-    it("should fail when scheduled bot uses nodejs20 runtime", async () => {
+    it("should succeed when scheduled bot uses nodejs20 runtime", async () => {
       const userId = "user123";
       const scheduledNodeConfig = {
         ...validConfig,
         type: "scheduled" as const,
-        runtime: "nodejs20" as const, // Invalid for scheduled bots
+        runtime: "nodejs20" as const, // Valid for scheduled bots
       };
       const filePath =
         "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
 
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
+      mockStorageService.validateZipStructure.mockResolvedValue(Ok(true));
+      mockStorageService.extractAndStoreFrontend.mockResolvedValue(Ok(null));
+
+      const mockResult = {
+        id: "new-bot-id",
+        name: "test-bot",
+        version: "1.0.0",
+        config: scheduledNodeConfig,
+        status: "active",
+        filePath: "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+        userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as CustomBot;
+      mockRepository.createNewGlobalVersion.mockResolvedValue(Ok(mockResult));
+      mockRepository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockResult));
 
       const result = await service.createCustomBot(
         userId,
@@ -329,11 +345,8 @@ describe("CustomBotService", () => {
         filePath,
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe(
-        "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
-      );
-      expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(mockStorageService.validateZipStructure).toHaveBeenCalled();
     });
   });
 
@@ -417,24 +430,58 @@ describe("CustomBotService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
+        "Bots must specify a valid runtime (python3.11, nodejs20, rust-stable, dotnet8, gcc13, scala3, ghc96)",
       );
       expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
     });
 
-    it("should fail when scheduled bot uses nodejs20 runtime", async () => {
+    it("should succeed when scheduled bot uses nodejs20 runtime", async () => {
       const userId = "user123";
       const botName = "test-bot";
       const scheduledNodeConfig = {
         ...validConfig,
         name: botName,
+        version: "1.1.0",
         type: "scheduled" as const,
-        runtime: "nodejs20" as const, // Invalid for scheduled bots
+        runtime: "nodejs20" as const, // Valid for scheduled bots
       };
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
 
       mockValidateConfig.mockReturnValue({ valid: true });
+      mockRepository.globalBotExists.mockResolvedValue(Ok(true));
+      mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+      mockRepository.getGlobalLatestVersion.mockResolvedValue(
+        Ok({
+          id: "existing-id",
+          name: "test-bot",
+          version: "1.0.0",
+          config: validConfig,
+          filePath: "gs://old-path.zip",
+          status: "active",
+          userId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      mockRepository.isVersionNewer.mockReturnValue(true);
+      mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
+      mockStorageService.validateZipStructure.mockResolvedValue(Ok(true));
+      mockStorageService.extractAndStoreFrontend.mockResolvedValue(Ok(null));
+
+      const mockResult = {
+        id: "new-bot-id",
+        name: "test-bot",
+        version: "1.1.0",
+        config: scheduledNodeConfig,
+        status: "active",
+        filePath: "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+        userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as CustomBot;
+      mockRepository.createNewGlobalVersion.mockResolvedValue(Ok(mockResult));
+      mockRepository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockResult));
 
       const result = await service.updateCustomBot(
         userId,
@@ -443,11 +490,8 @@ describe("CustomBotService", () => {
         filePath,
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe(
-        "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
-      );
-      expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(mockStorageService.validateZipStructure).toHaveBeenCalled();
     });
 
     it("should fail when bot name in config does not match URL parameter", async () => {
