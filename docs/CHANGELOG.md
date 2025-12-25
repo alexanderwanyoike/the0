@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **C/C++ Quick Start Guide** - Complete guide for building C/C++ trading bots with the0
+  - SDK installation and usage with `the0.h` header-only library
+  - CMake and Makefile project setup examples
+  - Best practices for error handling, memory safety, and logging
 - **C# Quick Start Guide** - Complete guide for building C# trading bots with the0 SDK
   - SDK installation and usage with `The0.Input` class
   - Project structure and .NET 8 configuration examples
