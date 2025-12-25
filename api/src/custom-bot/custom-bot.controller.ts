@@ -8,6 +8,7 @@ import {
   BadRequestException,
   NotFoundException,
   Req,
+  Res,
   HttpStatus,
   HttpCode,
   UseGuards,
@@ -16,7 +17,7 @@ import {
   UploadedFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { Request } from "express";
+import { Request, Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
@@ -255,6 +256,42 @@ export class CustomBotController {
       data: result.data,
       message: "Bot versions retrieved successfully",
     };
+  }
+
+  @Get("by-id/:id/frontend")
+  async getFrontendBundleById(@Param("id") id: string, @Res() res: Response) {
+    // Get custom bot by ID (includes specific version info)
+    const result = await this.customBotService.getById(id);
+
+    if (!result.success || !result.data) {
+      throw new NotFoundException(`Custom bot not found: ${id}`);
+    }
+
+    const customBot = result.data;
+
+    // Check if bot has frontend
+    if (!customBot.config.hasFrontend) {
+      throw new NotFoundException("This bot does not have a custom frontend");
+    }
+
+    // Get frontend bundle from storage as a stream
+    // Frontend is stored separately at: {userId}/{botName}/{version}/frontend.js
+    const frontendPath = this.storageService.getFrontendPath(
+      customBot.userId,
+      customBot.name,
+      customBot.version,
+    );
+    const streamResult =
+      await this.storageService.getBotFrontendStream(frontendPath);
+
+    if (!streamResult.success || !streamResult.data) {
+      throw new NotFoundException("Frontend bundle not found");
+    }
+
+    // Serve the JavaScript bundle as a stream to avoid memory issues with large bundles
+    res.setHeader("Content-Type", "application/javascript");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    streamResult.data.pipe(res);
   }
 
   @Get(":name/:version")

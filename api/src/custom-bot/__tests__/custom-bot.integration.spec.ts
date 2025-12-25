@@ -91,6 +91,8 @@ describe("Custom Bot API Integration Tests", () => {
         deleteBotFile: jest.fn().mockResolvedValue(Ok(null)),
         getFileMetadata: jest.fn().mockResolvedValue(Ok({})),
         validateZipFile: jest.fn().mockResolvedValue(Ok(true)),
+        extractAndStoreFrontend: jest.fn().mockResolvedValue(Ok(null)),
+        getFrontendBundle: jest.fn().mockResolvedValue(Ok(null)),
       })
       .overrideProvider(NatsService)
       .useValue({

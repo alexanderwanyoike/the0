@@ -46,7 +46,6 @@ export interface CustomBotSchemaInput {
   version?: string;
 }
 
-
 // Tool response types
 export interface BotSummary {
   id: string;
@@ -82,7 +81,6 @@ export interface CustomBotSummary {
   author: string;
   createdAt: string;
 }
-
 
 // MCP Tool definition helper type
 export interface McpToolDefinition {

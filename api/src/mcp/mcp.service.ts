@@ -177,7 +177,8 @@ export class McpService {
             },
             limit: {
               type: "number",
-              description: "Maximum number of log entries (default: 100, max: 500)",
+              description:
+                "Maximum number of log entries (default: 100, max: 500)",
             },
           },
           required: ["bot_id"],
@@ -246,7 +247,6 @@ export class McpService {
           required: ["name"],
         },
       },
-
     ];
   }
 
@@ -254,7 +254,10 @@ export class McpService {
     name: string,
     args: Record<string, unknown>,
     userId?: string,
-  ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  ): Promise<{
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  }> {
     try {
       let result: unknown;
 

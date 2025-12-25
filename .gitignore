@@ -2,3 +2,19 @@
 CLAUDE.md
 notes/
 PR_MESSAGE.md
+
+# Example bots
+example-bots/*/node_modules/
+example-bots/*/frontend/node_modules/
+example-bots/*/frontend/dist/
+example-bots/*/frontend/package-lock.json
+example-bots/*/frontend/.npmrc
+example-bots/*/vendor/
+example-bots/*/*.lock
+example-bots/*/package-lock.json
+example-bots/**/main.js
+
+# SDK
+sdk/react/.npmrc
+sdk/react/node_modules/
+sdk/react/dist/

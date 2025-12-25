@@ -68,11 +68,32 @@ export class CustomBotService {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
 
+      // Extract frontend bundle if present (do this before creating bot record)
+      const frontendResult = await this.storageService.extractAndStoreFrontend(
+        filePath,
+        userId,
+        config.name,
+        config.version,
+      );
+
+      // Update config with hasFrontend flag
+      const finalConfig = {
+        ...config,
+        hasFrontend: frontendResult.success && frontendResult.data !== null,
+      };
+
+      if (frontendResult.success && frontendResult.data) {
+        this.logger.info(
+          { botName: config.name, frontendPath: frontendResult.data },
+          "Frontend bundle extracted for bot",
+        );
+      }
+
       // Create the bot
       const botData: Partial<CustomBot> = {
-        name: config.name,
-        version: config.version,
-        config,
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
         filePath: filePath,
         status: "active",
       };
@@ -192,11 +213,32 @@ export class CustomBotService {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
 
+      // Extract frontend bundle if present
+      const frontendResult = await this.storageService.extractAndStoreFrontend(
+        filePath,
+        userId,
+        config.name,
+        config.version,
+      );
+
+      // Update config with hasFrontend flag
+      const finalConfig = {
+        ...config,
+        hasFrontend: frontendResult.success && frontendResult.data !== null,
+      };
+
+      if (frontendResult.success && frontendResult.data) {
+        this.logger.info(
+          { botName: config.name, frontendPath: frontendResult.data },
+          "Frontend bundle extracted for bot update",
+        );
+      }
+
       // Create new version
       const botData: Partial<CustomBot> = {
-        name: config.name,
-        version: config.version,
-        config,
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
         filePath: filePath,
         status: "active",
       };
@@ -272,7 +314,9 @@ export class CustomBotService {
     );
   }
 
-  async getGlobalLatestVersion(name: string): Promise<Result<CustomBot, string>> {
+  async getGlobalLatestVersion(
+    name: string,
+  ): Promise<Result<CustomBot, string>> {
     return await this.customBotRepository.getGlobalLatestVersion(name);
   }
 
@@ -280,5 +324,9 @@ export class CustomBotService {
     Result<CustomBotWithVersions[], string>
   > {
     return await this.customBotRepository.getAllGlobalCustomBots();
+  }
+
+  async getById(id: string): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.findOneById(id);
   }
 }

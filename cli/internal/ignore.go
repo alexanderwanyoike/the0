@@ -97,10 +97,12 @@ func (p *IgnoreParser) AddDefaultPatterns() {
 
 // IsIgnored checks if a file path should be ignored
 func (p *IgnoreParser) IsIgnored(relPath string, isDir bool) bool {
-	// Never ignore vendor or node_modules directories (they are explicitly protected)
-	if relPath == "vendor" || relPath == "node_modules" ||
-		strings.HasPrefix(relPath, "vendor/") || strings.HasPrefix(relPath, "node_modules/") {
-		return false
+	// Never ignore these protected directories (they are needed for deployment)
+	protectedDirs := []string{"vendor", "node_modules", "frontend/dist"}
+	for _, dir := range protectedDirs {
+		if relPath == dir || strings.HasPrefix(relPath, dir+"/") {
+			return false
+		}
 	}
 
 	ignored := false
