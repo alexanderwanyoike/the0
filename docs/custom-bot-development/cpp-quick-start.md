@@ -45,16 +45,31 @@ cd my-cpp-bot
 ## Step 2: Create CMakeLists.txt
 
 ```cmake
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 project(my-cpp-bot)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Fetch nlohmann/json (required for SDK)
+include(FetchContent)
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 add_executable(my-cpp-bot main.cpp)
+target_link_libraries(my-cpp-bot PRIVATE nlohmann_json::nlohmann_json)
 ```
 
-Or use a simple `Makefile`:
+Or use a simple `Makefile` (requires nlohmann-json installed system-wide):
+
+```bash
+# Install nlohmann-json first:
+# Ubuntu/Debian: sudo apt install nlohmann-json3-dev
+# macOS: brew install nlohmann-json
+```
 
 ```makefile
 CXX = g++
@@ -105,7 +120,7 @@ int main() {
 
 ## Step 4: Using the SDK (Recommended)
 
-Copy `the0.h` and `json.hpp` from `sdk/cpp/` for proper JSON handling:
+Copy `the0.h` from `sdk/cpp/` and ensure nlohmann/json is available (via FetchContent or system package):
 
 ```cpp
 #include "the0.h"
@@ -375,19 +390,29 @@ int main() {
 
 ### CMake (Recommended)
 
-CMake is detected first and is the recommended build system:
+CMake is detected first and is the recommended build system. It auto-fetches nlohmann/json:
 
 ```cmake
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 project(my-bot)
 
 set(CMAKE_CXX_STANDARD 17)
+
+# Fetch nlohmann/json
+include(FetchContent)
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 add_executable(my-bot main.cpp)
+target_link_libraries(my-bot PRIVATE nlohmann_json::nlohmann_json)
 ```
 
 ### Makefile
 
-Simple Makefile for smaller projects:
+Simple Makefile for smaller projects (requires nlohmann-json installed):
 
 ```makefile
 CXX = g++

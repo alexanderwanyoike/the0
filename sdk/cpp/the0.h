@@ -2,7 +2,7 @@
  * the0 SDK for C/C++ trading bots
  *
  * This is a header-only library for building trading bots on the0 platform.
- * Requires nlohmann/json (included as json.hpp).
+ * Requires nlohmann/json: https://github.com/nlohmann/json
  *
  * Example:
  *   #include "the0.h"
@@ -24,7 +24,7 @@
 #ifndef THE0_H
 #define THE0_H
 
-#include "json.hpp"
+#include <nlohmann/json.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <string>

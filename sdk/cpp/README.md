@@ -6,9 +6,8 @@ Uses [nlohmann/json](https://github.com/nlohmann/json) for robust JSON handling.
 
 ## Installation
 
-Copy both files to your project:
-- `the0.h` - The SDK header
-- `json.hpp` - nlohmann/json library (MIT licensed)
+1. Copy `the0.h` to your project
+2. Ensure nlohmann/json is available (see below)
 
 ```cpp
 #include "the0.h"
@@ -17,7 +16,32 @@ Copy both files to your project:
 ## Requirements
 
 - C++17 or later
-- nlohmann/json (included as `json.hpp`)
+- [nlohmann/json](https://github.com/nlohmann/json) v3.x
+
+### Installing nlohmann/json
+
+**Option 1: CMake FetchContent (Recommended)**
+```cmake
+include(FetchContent)
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+target_link_libraries(my-bot PRIVATE nlohmann_json::nlohmann_json)
+```
+
+**Option 2: System Package**
+```bash
+# Ubuntu/Debian
+sudo apt install nlohmann-json3-dev
+
+# macOS
+brew install nlohmann-json
+
+# vcpkg
+vcpkg install nlohmann-json
+```
 
 ## Usage
 
@@ -134,23 +158,32 @@ the0::result("success", "Trade executed", {
 
 ## Project Setup
 
-### Using CMake
+### Using CMake (Recommended)
 
 Create a `CMakeLists.txt`:
 
 ```cmake
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 project(my-cpp-bot)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Fetch nlohmann/json
+include(FetchContent)
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 add_executable(my-cpp-bot main.cpp)
+target_link_libraries(my-cpp-bot PRIVATE nlohmann_json::nlohmann_json)
 ```
 
 ### Using Makefile
 
-Create a `Makefile`:
+Requires nlohmann/json installed system-wide:
 
 ```makefile
 CXX = g++
@@ -284,20 +317,6 @@ The SDK includes a comprehensive test suite using [doctest](https://github.com/d
 
 ```bash
 cd tests
-
-# Build tests (using Docker)
-docker run --rm -v "$(pwd)/..:/sdk" -w /sdk/tests gcc:13 bash -c \
-  "apt-get update && apt-get install -y cmake >/dev/null 2>&1 && \
-   mkdir -p build && cd build && cmake .. && make"
-
-# Run tests
-docker run --rm -v "$(pwd)/..:/sdk" -w /sdk/tests gcc:13 ./build/the0_test
-```
-
-Or build locally:
-
-```bash
-cd tests
 mkdir -p build && cd build
 cmake ..
 make
@@ -307,5 +326,4 @@ make
 ## License
 
 - SDK (`the0.h`): Apache 2.0 - See LICENSE file in the root of this repository.
-- JSON library (`json.hpp`): MIT License - Copyright (c) 2013-2022 Niels Lohmann
 - doctest (`tests/doctest.h`): MIT License - Copyright (c) 2016-2023 Viktor Kirilov
