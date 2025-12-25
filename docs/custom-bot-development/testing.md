@@ -328,5 +328,5 @@ class TestBotSchemas(unittest.TestCase):
 
 ## Related Documentation
 
-- [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build your first bot
+- [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot
 - [Overview](/custom-bot-development/overview) - Understanding custom bot development

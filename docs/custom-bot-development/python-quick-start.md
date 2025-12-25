@@ -1,11 +1,42 @@
 ---
-title: "Quick Start Guide"
-description: "Build your first trading bot in 15 minutes"
-tags: ["custom-bots", "tutorial", "dca", "python"]
-order: 1
+title: "Python Quick Start"
+description: "Build your first Python trading bot with the0"
+tags: ["custom-bots", "python", "quick-start"]
+order: 9
 ---
 
-# Quick Start Guide: Build Your First Trading Bot
+# Python Quick Start Guide
+
+Build trading bots in Python with the0's flexible runtime. Python is the most popular choice for algorithmic trading due to its simplicity, extensive libraries, and rapid development cycle.
+
+---
+
+## Why Python for Trading Bots?
+
+Python offers unmatched advantages for algorithmic trading:
+
+- **Rapid Development**: Write and iterate on strategies quickly
+- **Rich Ecosystem**: Libraries for every exchange, broker, and data source
+- **Data Science**: NumPy, Pandas, and scikit-learn for analysis
+- **Community**: Largest trading bot community and resources
+- **Simplicity**: Clean syntax makes complex strategies readable
+
+**When to Choose Python:**
+- Rapid prototyping and strategy development
+- Data-heavy strategies with analysis requirements
+- Integration with machine learning models
+- Teams new to algorithmic trading
+
+**Popular Libraries for Trading:**
+- `alpaca-py` - Official Alpaca SDK for stocks/crypto
+- `ccxt` - Unified API for 100+ cryptocurrency exchanges
+- `pandas` - Data manipulation and analysis
+- `numpy` - Numerical computing
+- `ta-lib` - Technical analysis indicators
+
+---
+
+## Tutorial: Build a DCA Bot
 
 In this guide, we'll create a simple Dollar Cost Averaging (DCA) bot that an asset type using alpaca-py.
 
@@ -445,11 +476,112 @@ This is just the tip of the iceberg! DCA is the `hello world` of trading bots. Y
 
 ---
 
-## Resources
+## SDK API Reference
 
-- [Custom Bot Development Guide](/custom-bot-development/overview)
-- [Bot Configuration Reference](/custom-bot-development/configuration)
-- [Testing and Debugging](/custom-bot-development/testing)
+The `the0` Python SDK provides utilities for parsing configuration and outputting results. Install it with:
+
+```bash
+pip install the0
+```
+
+Or copy the `the0/` directory from `sdk/python/` to your project.
+
+### `parse() -> Tuple[str, Dict]`
+
+Parse bot configuration from environment variables:
+
+```python
+from the0 import parse
+
+bot_id, config = parse()
+# bot_id: Value of BOT_ID env var
+# config: Parsed JSON from BOT_CONFIG env var
+
+symbol = config.get("symbol", "BTC/USDT")
+amount = config.get("amount", 100.0)
+```
+
+### `success(message: str, data: dict = None)`
+
+Output a success result:
+
+```python
+from the0 import success
+
+success("Trade completed")
+success("Trade completed", {"trade_id": "12345", "filled": 0.5})
+```
+
+### `error(message: str, data: dict = None)`
+
+Output an error result and exit with code 1:
+
+```python
+from the0 import error
+
+if amount <= 0:
+    error("Amount must be positive")
+    # Program exits here
+```
+
+### `result(data: dict)`
+
+Output a custom JSON result:
+
+```python
+from the0 import result
+
+result({
+    "status": "success",
+    "trade_id": "abc123",
+    "filled_amount": 0.5,
+    "average_price": 45123.50
+})
+```
+
+### `metric(type: str, data: dict)`
+
+Emit a metric for the platform dashboard:
+
+```python
+from the0 import metric
+
+# Price metric
+metric("price", {"symbol": "BTC/USD", "value": 45000, "change_pct": 2.5})
+
+# Trading signal
+metric("signal", {"symbol": "ETH/USD", "direction": "long", "confidence": 0.85})
+
+# Alert
+metric("alert", {"type": "price_spike", "severity": "high"})
+```
+
+### `log(message: str, data: dict = None)`
+
+Log a message to the bot's logs:
+
+```python
+from the0 import log
+
+log("Starting trade...")
+log("Order placed", {"order_id": "12345", "symbol": "BTC/USD"})
+```
+
+### Logging
+
+Both stdout and stderr go to your bot's logs:
+
+```python
+print("Starting trade...")           # Goes to log
+import sys
+print("DEBUG: Details...", file=sys.stderr)  # Goes to log
+```
+
+---
+
+## Related Documentation
+
+- [Configuration Reference](/custom-bot-development/configuration)
+- [Bot Types](/custom-bot-development/bot-types)
+- [Custom Frontends](/custom-bot-development/custom-frontends)
 - [Deployment Guide](/custom-bot-development/deployment)
-
-Happy coding! 🚀

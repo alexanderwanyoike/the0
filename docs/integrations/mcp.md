@@ -17,8 +17,7 @@ MCP is an open protocol that standardizes how AI assistants connect to external 
 
 - Deploy, update, and delete trading bots
 - View bot logs and execution history
-- Browse the custom bot marketplace
-- Get configuration schemas for bot deployment
+- List available custom bots and get their configuration schemas
 
 ---
 
@@ -127,36 +126,19 @@ claude
 
 the0 MCP server provides 11 tools:
 
-### Authentication
-
-| Tool | Description |
-|------|-------------|
-| `auth_status` | Check if your API key is valid |
-
-### Bot Instance Management
-
-| Tool | Description |
-|------|-------------|
-| `bot_list` | List all your deployed bot instances |
-| `bot_get` | Get details of a specific bot instance |
-| `bot_deploy` | Deploy a new bot instance |
-| `bot_update` | Update an existing bot instance |
-| `bot_delete` | Delete a bot instance |
-
-### Logs
-
-| Tool | Description |
-|------|-------------|
-| `logs_get` | Get execution logs for a bot |
-| `logs_summary` | Get log statistics (error counts, date range) |
-
-### Custom Bot Registry
-
-| Tool | Description |
-|------|-------------|
-| `custom_bot_list` | List available custom bots |
-| `custom_bot_get` | Get custom bot details |
-| `custom_bot_schema` | Get JSON schema for bot configuration |
+| Tool | Category | Description | Required Parameters |
+|------|----------|-------------|---------------------|
+| `auth_status` | Auth | Check if API key is valid and get connection status | None |
+| `bot_list` | Bot Instance | List all deployed bot instances for the authenticated user | None |
+| `bot_get` | Bot Instance | Get details of a specific bot instance | `bot_id` |
+| `bot_deploy` | Bot Instance | Deploy a new bot instance with configuration | `config` (object with name, type, version, bot settings) |
+| `bot_update` | Bot Instance | Update an existing bot instance | `bot_id`, `config` |
+| `bot_delete` | Bot Instance | Delete a bot instance | `bot_id` |
+| `logs_get` | Logs | Get execution logs for a bot | `bot_id`, optional: `date`, `date_range`, `limit` |
+| `logs_summary` | Logs | Get log statistics (error counts, date range, last entry) | `bot_id` |
+| `custom_bot_list` | Custom Bots | List all available custom bots | None |
+| `custom_bot_get` | Custom Bots | Get details of a specific custom bot | `name`, optional: `version` |
+| `custom_bot_schema` | Custom Bots | Get JSON schema for configuring a custom bot | `name`, optional: `version` |
 
 ---
 

@@ -65,9 +65,16 @@
   --vp-custom-block-tip-bg: var(--vp-c-brand-soft);
 }
 
-/* Sidebar */
+/* Sidebar - position below navbar */
 .VPSidebar {
   background-color: var(--vp-c-bg-soft) !important;
+  top: var(--vp-nav-height) !important;
+  height: calc(100vh - var(--vp-nav-height)) !important;
+  padding-top: 0 !important;
+}
+
+.VPSidebar .nav {
+  padding-top: 16px !important;
 }
 
 /* Custom scrollbar */

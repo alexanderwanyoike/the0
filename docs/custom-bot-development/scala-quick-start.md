@@ -7,15 +7,42 @@ order: 14
 
 # Scala Quick Start Guide
 
-Build a trading bot in Scala 3 with the0's scala3 runtime.
+Build trading bots in Scala 3 with the0's JVM-based runtime. Scala combines functional programming elegance with Java ecosystem access, making it excellent for complex trading strategies.
+
+---
+
+## Why Scala for Trading Bots?
+
+Scala offers unique advantages for algorithmic trading:
+
+- **Functional Programming**: Immutable data and pure functions reduce bugs
+- **Type Safety**: Strong typing catches errors at compile time
+- **JVM Ecosystem**: Access to all Java libraries and frameworks
+- **Concurrency**: Built-in support for actors and futures
+- **Pattern Matching**: Elegant handling of market conditions
+- **Expression-Oriented**: Every construct returns a value
+
+**When to Choose Scala:**
+- Complex strategies with many market conditions
+- Teams coming from Java or functional programming
+- Need for concurrent/parallel processing
+- Building on existing JVM infrastructure
+
+**Popular Libraries for Trading:**
+- `sttp` - Modern HTTP client with functional API
+- `circe` - Type-safe JSON encoding/decoding
+- `Akka` - Actor-based concurrency (for realtime bots)
+- `cats` / `cats-effect` - Functional programming utilities
+- `fs2` - Streaming data processing
 
 ---
 
 ## Prerequisites
 
-- Scala 3.x and SBT (for local development)
+- Scala 3.x and SBT installed ([setup guide](https://www.scala-lang.org/download/))
 - the0 CLI installed
 - Valid the0 API key
+- Basic understanding of Scala syntax
 
 ---
 
@@ -31,6 +58,7 @@ my-scala-bot/
 │   └── Main.scala        # Your bot entry point
 ├── bot-config.yaml       # Bot configuration
 ├── bot-schema.json       # Parameter schema
+├── config.json           # Example configuration
 └── README.md             # Documentation
 ```
 
@@ -55,8 +83,20 @@ ThisBuild / version := "1.0.0"
 lazy val root = (project in file("."))
   .settings(
     name := "my-scala-bot",
+
+    // sbt-assembly configuration
     assembly / mainClass := Some("Main"),
-    assembly / assemblyJarName := "my-scala-bot-assembly.jar"
+    assembly / assemblyJarName := "my-scala-bot-assembly.jar",
+
+    // Dependencies
+    libraryDependencies ++= Seq(
+      // JSON parsing
+      "io.circe" %% "circe-core" % "0.14.6",
+      "io.circe" %% "circe-parser" % "0.14.6",
+
+      // HTTP client (optional)
+      "com.softwaremill.sttp.client3" %% "core" % "3.9.3"
+    )
   )
 ```
 
@@ -73,55 +113,78 @@ sbt.version=1.9.9
 Create `project/plugins.sbt`:
 
 ```scala
+// Plugin to create fat JARs with all dependencies
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.1.5")
 ```
 
 ---
 
-## Step 4: Write Your Bot
+## Step 4: Copy the SDK
+
+Copy the `the0` package from `sdk/scala/` to `src/main/scala/`. The SDK provides:
+- Configuration parsing from environment variables
+- Result output functions
+- Type-safe JSON handling
+
+---
+
+## Step 5: Write Your Bot
 
 Create `src/main/scala/Main.scala`:
 
 ```scala
-import java.io.{File, PrintWriter}
-
-object Main extends App {
-  // Get bot configuration from environment
-  val botId = sys.env.getOrElse("BOT_ID", "unknown")
-  val config = sys.env.getOrElse("BOT_CONFIG", "{}")
-  val mountDir = sys.env.getOrElse("CODE_MOUNT_DIR", "bot")
-  val resultPath = s"/$mountDir/result.json"
-
-  println(s"Bot $botId starting...")
-  println(s"Config: $config")
-
-  // Your trading logic here
-  // Example: Parse config, fetch prices, execute trades
-
-  // Write result to file
-  val pw = new PrintWriter(new File(resultPath))
-  pw.write("""{"status":"success","message":"Bot executed successfully"}""")
-  pw.close()
-}
-```
-
----
-
-## Step 5: Using the SDK (Recommended)
-
-Copy the `the0` package from `sdk/scala/` for proper JSON handling:
-
-```scala
 import the0.Input
+import io.circe.parser._
 
+/**
+ * Main entry point for the trading bot.
+ *
+ * The the0 SDK handles:
+ * - Reading BOT_ID and BOT_CONFIG from environment
+ * - Writing results to the correct output file
+ * - Proper exit codes for success/failure
+ */
 object Main extends App {
-  val (botId, config) = Input.parse()
+  // Parse bot configuration from environment
+  val (botId, configJson) = Input.parse()
 
   System.err.println(s"Bot $botId starting...")
 
-  // Your trading logic here
+  // Parse JSON configuration with Circe
+  parse(configJson) match {
+    case Right(json) =>
+      // Extract configuration with defaults
+      val cursor = json.hcursor
+      val symbol = cursor.get[String]("symbol").getOrElse("BTC/USDT")
+      val amount = cursor.get[Double]("amount").getOrElse(100.0)
 
-  Input.success("Bot executed successfully")
+      System.err.println(s"Trading $symbol with amount $amount")
+
+      // ===========================================
+      // YOUR TRADING LOGIC GOES HERE
+      // ===========================================
+
+      // Example: Validate configuration
+      if (amount <= 0) {
+        Input.error("Amount must be positive")
+      }
+
+      // Example: Fetch market data
+      // val price = fetchPrice(symbol)
+
+      // Example: Execute trade
+      // val orderId = placeTrade(symbol, amount)
+
+      // ===========================================
+      // END OF TRADING LOGIC
+      // ===========================================
+
+      // Signal success
+      Input.success(s"Trade executed for $symbol")
+
+    case Left(error) =>
+      Input.error(s"Failed to parse config: ${error.message}")
+  }
 }
 ```
 
@@ -133,12 +196,13 @@ Create `bot-config.yaml`:
 
 ```yaml
 name: my-scala-bot
-description: "A Scala trading bot"
+description: "A functional Scala trading bot"
 version: "1.0.0"
 author: "Your Name"
 type: scheduled
 runtime: scala3
 
+# The entrypoint is the source file
 entrypoints:
   bot: src/main/scala/Main.scala
 
@@ -146,7 +210,14 @@ schema:
   bot: bot-schema.json
 
 readme: README.md
+
+metadata:
+  categories: [trading]
+  instruments: [crypto]
+  tags: [scala, functional, jvm]
 ```
+
+**Note:** The `runtime: scala3` tells the platform to compile with Scala 3. You don't need to compile locally.
 
 ---
 
@@ -158,36 +229,68 @@ Create `bot-schema.json`:
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "title": "Bot Configuration",
+  "title": "Scala Bot Configuration",
   "description": "Configuration for the Scala trading bot",
   "properties": {
     "symbol": {
       "type": "string",
       "title": "Trading Symbol",
-      "description": "The trading pair symbol",
+      "description": "The trading pair (e.g., BTC/USDT)",
       "default": "BTC/USDT"
     },
     "amount": {
       "type": "number",
       "title": "Trade Amount",
-      "description": "Amount to trade per execution",
-      "default": 100
+      "description": "Amount in base currency to trade",
+      "default": 100,
+      "minimum": 0.01
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Your exchange API key"
+    },
+    "api_secret": {
+      "type": "string",
+      "title": "API Secret",
+      "description": "Your exchange API secret"
     }
   },
-  "required": ["symbol"]
+  "required": ["symbol", "api_key", "api_secret"]
 }
 ```
 
 ---
 
-## Step 8: Deploy
+## Step 8: Test Locally
 
 ```bash
-# Deploy your bot
+# Build fat JAR
+sbt assembly
+
+# Set environment variables
+export BOT_ID="test-bot-123"
+export BOT_CONFIG='{"symbol":"BTC/USDT","amount":100}'
+export CODE_MOUNT_DIR="/tmp"
+
+# Run
+java -jar target/scala-3.3.3/my-scala-bot-assembly.jar
+```
+
+---
+
+## Step 9: Deploy
+
+```bash
 the0 custom-bot deploy
 ```
 
-The build happens automatically in Docker - no need to compile locally!
+The platform will:
+1. Compile your Scala code with SBT
+2. Create a fat JAR with all dependencies
+3. Deploy to the JVM runtime
+
+No need to compile locally - it all happens in the cloud!
 
 ---
 
@@ -197,17 +300,17 @@ The `the0.Input` object provides these functions:
 
 ### `Input.parse(): (String, String)`
 
-Parse bot configuration from environment variables.
+Parse bot configuration from environment variables:
 
 ```scala
-val (botId, config) = Input.parse()
+val (botId, configJson) = Input.parse()
 // botId: Value of BOT_ID env var
-// config: JSON string from BOT_CONFIG
+// configJson: JSON string from BOT_CONFIG
 ```
 
 ### `Input.success(message: String): Unit`
 
-Output a success result to stdout.
+Output a success result:
 
 ```scala
 Input.success("Trade completed")
@@ -216,17 +319,18 @@ Input.success("Trade completed")
 
 ### `Input.error(message: String): Nothing`
 
-Output an error result and exit with code 1.
+Output an error result and exit with code 1:
 
 ```scala
-Input.error("Failed to connect")
-// Outputs: {"status":"error","message":"Failed to connect"}
-// Exits with code 1
+if (amount <= 0) {
+  Input.error("Amount must be positive")
+  // Exits here - code below never runs
+}
 ```
 
 ### `Input.result(status: String, message: String): Unit`
 
-Output a custom result with status and message.
+Output a result with custom status:
 
 ```scala
 Input.result("warning", "Rate limit approaching")
@@ -234,69 +338,50 @@ Input.result("warning", "Rate limit approaching")
 
 ### `Input.resultRaw(json: String): Unit`
 
-Output a raw JSON string to stdout.
+Output raw JSON:
 
 ```scala
-Input.resultRaw("""{"status":"success","trade_id":"abc123"}""")
+Input.resultRaw("""{"status":"success","trade_id":"abc123","filled":0.5}""")
 ```
 
 ---
 
-## Example: HTTP Request Bot
+## Example: Price Fetcher with sttp
 
-Using sttp for HTTP requests:
-
-```scala
-import the0.Input
-import sttp.client3._
-
-object Main extends App {
-  val (botId, config) = Input.parse()
-  System.err.println(s"Bot $botId fetching data...")
-
-  val backend = HttpClientSyncBackend()
-
-  val response = basicRequest
-    .get(uri"https://api.example.com/price")
-    .send(backend)
-
-  response.body match {
-    case Right(body) =>
-      System.err.println(s"Response: $body")
-      Input.success("Data fetched successfully")
-    case Left(error) =>
-      Input.error(s"Request failed: $error")
-  }
-}
-```
-
-Add to `build.sbt`:
-
-```scala
-libraryDependencies += "com.softwaremill.sttp.client3" %% "core" % "3.9.3"
-```
-
----
-
-## Example: JSON Parsing with Circe
+Here's a complete example that fetches real price data:
 
 ```scala
 import the0.Input
 import io.circe.parser._
+import sttp.client3._
 
 object Main extends App {
   val (botId, configJson) = Input.parse()
 
   parse(configJson) match {
     case Right(json) =>
-      val symbol = json.hcursor.get[String]("symbol").getOrElse("BTC/USDT")
-      val amount = json.hcursor.get[Double]("amount").getOrElse(100.0)
+      val symbol = json.hcursor.get[String]("symbol").getOrElse("BTCUSDT")
 
-      System.err.println(s"Trading $symbol with amount $amount")
+      System.err.println(s"Bot $botId fetching price for $symbol")
 
-      // Your trading logic here
+      // Fetch price from Binance
+      val backend = HttpClientSyncBackend()
+      val response = basicRequest
+        .get(uri"https://api.binance.com/api/v3/ticker/price?symbol=$symbol")
+        .send(backend)
 
-      Input.success(s"Trade completed for $symbol")
+      response.body match {
+        case Right(body) =>
+          parse(body).flatMap(_.hcursor.get[String]("price")) match {
+            case Right(price) =>
+              System.err.println(s"Current price: $$$price")
+              Input.resultRaw(s"""{"status":"success","symbol":"$symbol","price":$price}""")
+            case Left(e) =>
+              Input.error(s"Failed to parse price: ${e.message}")
+          }
+        case Left(error) =>
+          Input.error(s"Request failed: $error")
+      }
 
     case Left(error) =>
       Input.error(s"Failed to parse config: ${error.message}")
@@ -304,76 +389,110 @@ object Main extends App {
 }
 ```
 
-Add to `build.sbt`:
-
-```scala
-libraryDependencies ++= Seq(
-  "io.circe" %% "circe-core" % "0.14.6",
-  "io.circe" %% "circe-parser" % "0.14.6"
-)
-```
-
 ---
 
 ## Best Practices
 
-### Error Handling
+### 1. Pattern Matching for Error Handling
 
-Use Try for robust error handling:
+Use Scala's pattern matching for clean error handling:
 
 ```scala
 import the0.Input
 import scala.util.{Try, Success, Failure}
 
 object Main extends App {
+  val (botId, config) = Input.parse()
+
   Try {
-    val (botId, config) = Input.parse()
-
-    if (botId.isEmpty) {
-      throw new IllegalArgumentException("Bot ID is required")
-    }
-
-    // Your trading logic here
-
-    Input.success("Bot executed successfully")
+    // Your trading logic
+    executeTrade("BTC/USDT", 100.0)
   } match {
-    case Success(_) => // Already handled
-    case Failure(e) => Input.error(e.getMessage)
+    case Success(tradeId) =>
+      Input.success(s"Trade $tradeId completed")
+    case Failure(e) =>
+      Input.error(s"Trade failed: ${e.getMessage}")
+  }
+
+  def executeTrade(symbol: String, amount: Double): String = {
+    // Trade logic here
+    "trade_123"
   }
 }
 ```
 
-### Logging
+### 2. Functional Configuration Parsing
 
-You can use stdout or stderr for logging - the SDK writes results to a file:
+Use for-comprehensions for clean config extraction:
 
 ```scala
-println("Starting trade...")                      // Logs to stdout
-System.err.println("DEBUG: Details...")           // Logs to stderr
-// Both appear in your bot's logs
+import io.circe.parser._
+import io.circe.Decoder
+
+case class Config(symbol: String, amount: Double, apiKey: String)
+
+object Config {
+  implicit val decoder: Decoder[Config] = Decoder.forProduct3(
+    "symbol", "amount", "api_key"
+  )(Config.apply)
+}
+
+// In main:
+parse(configJson).flatMap(_.as[Config]) match {
+  case Right(config) =>
+    System.err.println(s"Trading ${config.symbol}")
+    // Use strongly-typed config
+  case Left(error) =>
+    Input.error(s"Invalid config: ${error.message}")
+}
 ```
 
-### Async Operations with Futures
+### 3. Logging
+
+Both stdout and stderr go to your bot's logs:
 
 ```scala
-import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-import the0.Input
+println("Starting trade...")                      // Goes to log
+System.err.println("DEBUG: Details...")           // Goes to log
+```
 
-object Main extends App {
-  val (botId, config) = Input.parse()
+### 4. Immutable Data
 
-  val result = Await.result(
-    Future {
-      // Async trading logic
-      "Trade completed"
-    },
-    30.seconds
-  )
+Prefer immutable data structures:
 
-  Input.success(result)
+```scala
+// Good - immutable case class
+case class Trade(symbol: String, amount: Double, price: Double) {
+  def total: Double = amount * price
 }
+
+val trade = Trade("BTC/USDT", 0.5, 45000.0)
+val updatedTrade = trade.copy(price = 45100.0)  // Creates new instance
+```
+
+---
+
+## Adding Dependencies
+
+Add libraries to `build.sbt`:
+
+```scala
+libraryDependencies ++= Seq(
+  // JSON
+  "io.circe" %% "circe-core" % "0.14.6",
+  "io.circe" %% "circe-parser" % "0.14.6",
+  "io.circe" %% "circe-generic" % "0.14.6",  // For automatic derivation
+
+  // HTTP
+  "com.softwaremill.sttp.client3" %% "core" % "3.9.3",
+  "com.softwaremill.sttp.client3" %% "circe" % "3.9.3",  // JSON integration
+
+  // Functional programming
+  "org.typelevel" %% "cats-core" % "2.10.0",
+
+  // Date/time
+  "java.time" % "java-time" % "1.0.0"
+)
 ```
 
 ---
@@ -382,4 +501,5 @@ object Main extends App {
 
 - [Configuration Reference](/custom-bot-development/configuration)
 - [Bot Types](/custom-bot-development/bot-types)
+- [Custom Frontends](/custom-bot-development/custom-frontends)
 - [Deployment Guide](/custom-bot-development/deployment)

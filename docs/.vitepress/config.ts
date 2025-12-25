@@ -64,11 +64,23 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Language Quick Starts',
+        collapsed: false,
+        items: [
+          { text: 'Python', link: '/custom-bot-development/python-quick-start' },
+          { text: 'Node.js/TypeScript', link: '/custom-bot-development/nodejs-quick-start' },
+          { text: 'Rust', link: '/custom-bot-development/rust-quick-start' },
+          { text: 'C/C++', link: '/custom-bot-development/cpp-quick-start' },
+          { text: 'C# (.NET 8)', link: '/custom-bot-development/csharp-quick-start' },
+          { text: 'Scala 3', link: '/custom-bot-development/scala-quick-start' },
+          { text: 'Haskell', link: '/custom-bot-development/haskell-quick-start' },
+        ]
+      },
+      {
         text: 'Custom Bot Development',
         collapsed: false,
         items: [
           { text: 'Overview', link: '/custom-bot-development/' },
-          { text: 'Quick Start Guide', link: '/custom-bot-development/quick-start-guide' },
           { text: 'Development Overview', link: '/custom-bot-development/overview' },
           { text: 'Configuration', link: '/custom-bot-development/configuration' },
           { text: 'Bot Types', link: '/custom-bot-development/bot-types' },
@@ -79,14 +91,11 @@ export default defineConfig({
         ]
       },
       {
-        text: 'Language Quick Starts',
+        text: 'Integrations',
         collapsed: false,
         items: [
-          { text: 'Rust', link: '/custom-bot-development/rust-quick-start' },
-          { text: 'C/C++', link: '/custom-bot-development/cpp-quick-start' },
-          { text: 'C# (.NET 8)', link: '/custom-bot-development/csharp-quick-start' },
-          { text: 'Scala 3', link: '/custom-bot-development/scala-quick-start' },
-          { text: 'Haskell', link: '/custom-bot-development/haskell-quick-start' },
+          { text: 'Overview', link: '/integrations/' },
+          { text: 'MCP Server', link: '/integrations/mcp' },
         ]
       }
     ],

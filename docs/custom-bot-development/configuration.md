@@ -324,6 +324,6 @@ yq eval '.' bot-config.yaml > /dev/null
 
 ## Related Documentation
 
-- [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build your first bot
+- [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot
 - [Testing Guide](/custom-bot-development/testing) - Validation and testing
 - [Deployment Guide](/custom-bot-development/deployment) - Deploying your bot

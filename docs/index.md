@@ -21,7 +21,7 @@ Welcome to the comprehensive documentation for the0 - an open-source algorithmic
 
 ## Custom Bot Development
 
-- [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build your first bot
+- [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot
 - [Overview](/custom-bot-development/overview) - Development concepts
 - [Configuration](/custom-bot-development/configuration) - Bot configuration reference
 - [Bot Types](/custom-bot-development/bot-types) - Scheduled vs realtime bots
