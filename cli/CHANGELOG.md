@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Scala 3 language support** - Build Scala bots locally using Docker before deployment
+  - `ScalaBuilder` implementation of `LanguageBuilder` interface
+  - Detects `build.sbt` projects and builds with `sbt assembly`
+  - Uses `sbtscala/scala-sbt` Docker image for cross-platform builds
+  - Auto-configures sbt-assembly plugin if not present
 - **C/C++ GCC 13 language support** - Build C/C++ bots locally using Docker before deployment
   - `CppBuilder` implementation of `LanguageBuilder` interface
   - Detects `CMakeLists.txt` (priority) or `Makefile` projects

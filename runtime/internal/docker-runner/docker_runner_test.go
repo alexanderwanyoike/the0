@@ -849,3 +849,124 @@ func createCppTestBotZip(t *testing.T, botPath string) []byte {
 
 	return buf.Bytes()
 }
+
+// TestIntegration_RealDocker_ScalaBot tests running a real Scala bot in Docker
+func TestIntegration_RealDocker_ScalaBot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping real Docker integration test in short mode")
+	}
+
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
+
+	logger := &util.DefaultLogger{}
+
+	runner, err := NewDockerRunner(DockerRunnerOptions{
+		Logger: logger,
+	})
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Scala test bot path
+	scalaBotPath := filepath.Join("..", "fixtures", "scala-test-bot")
+	jarPath := filepath.Join(scalaBotPath, "target", "scala-3.3.3", "scala-test-bot-assembly.jar")
+
+	// Check if JAR exists
+	if _, err := os.Stat(jarPath); os.IsNotExist(err) {
+		t.Skip("Scala test bot JAR not found - run 'sbt assembly' in fixtures/scala-test-bot first")
+	}
+
+	// Create ZIP with the JAR
+	scalaZipData := createScalaTestBotZip(t, scalaBotPath)
+
+	executable := model.Executable{
+		ID:         "real-scala-bot-test",
+		Runtime:    "scala3",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "target/scala-3.3.3/scala-test-bot-assembly.jar",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+		FilePath:       "real-scala-bot.zip",
+		IsLongRunning:  false,
+		PersistResults: false,
+	}
+
+	uploadToMinIO(t, minioServer, executable.FilePath, scalaZipData)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	result, err := runner.StartContainer(ctx, executable)
+	require.NoError(t, err, "StartContainer should succeed")
+	assert.NotNil(t, result)
+
+	t.Logf("Scala bot result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
+	if result.Output != "" {
+		t.Logf("Scala bot output: %s", result.Output)
+	}
+
+	require.Equal(t, "success", result.Status, "Scala bot should complete successfully")
+	require.Equal(t, 0, result.ExitCode, "Scala bot should exit with code 0")
+
+	// Verify JSON output
+	lines := strings.Split(result.Output, "\n")
+	var jsonLine string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "{") {
+			jsonLine = line
+			break
+		}
+	}
+	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+
+	var botResult map[string]any
+	err = json.Unmarshal([]byte(jsonLine), &botResult)
+	require.NoError(t, err, "Bot output should be valid JSON")
+	assert.Equal(t, "success", botResult["status"], "Result should have success status")
+	assert.Equal(t, "real-scala-bot-test", botResult["bot_id"], "Result should contain bot_id")
+}
+
+// createScalaTestBotZip creates a ZIP containing the Scala JAR
+func createScalaTestBotZip(t *testing.T, botPath string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// Add the JAR to the ZIP
+	jarPath := filepath.Join(botPath, "target", "scala-3.3.3", "scala-test-bot-assembly.jar")
+	jarData, err := os.ReadFile(jarPath)
+	require.NoError(t, err, "Failed to read Scala JAR")
+
+	// Create directory structure in ZIP
+	header := &zip.FileHeader{
+		Name:   "target/scala-3.3.3/scala-test-bot-assembly.jar",
+		Method: zip.Deflate,
+	}
+	header.SetMode(0644)
+
+	writer, err := zipWriter.CreateHeader(header)
+	require.NoError(t, err)
+
+	_, err = writer.Write(jarData)
+	require.NoError(t, err)
+
+	// Add build.sbt (needed for project detection)
+	buildSbtPath := filepath.Join(botPath, "build.sbt")
+	buildSbtData, err := os.ReadFile(buildSbtPath)
+	require.NoError(t, err)
+
+	sbtWriter, err := zipWriter.Create("build.sbt")
+	require.NoError(t, err)
+	_, err = sbtWriter.Write(buildSbtData)
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	return buf.Bytes()
+}

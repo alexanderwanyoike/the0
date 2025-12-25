@@ -129,6 +129,25 @@ export BOT_CONFIG='{{ .BotConfig }}'
 exec "$BINARY"
 `
 
+// scala3BashEntrypoint executes pre-built Scala assembly JAR (built by CLI)
+const scala3BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Find the pre-built assembly JAR in target/scala-*/
+JAR=$(find target -maxdepth 3 -name "*-assembly*.jar" 2>/dev/null | head -1)
+
+if [ -z "$JAR" ]; then
+    echo '{"status":"error","message":"No pre-built JAR found in target/"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec java -jar "$JAR"
+`
+
 type bashEntrypointFactory struct {
 	EntryPointType string
 	ScriptContent  string
@@ -170,6 +189,8 @@ func (p *bashEntrypointFactory) BuildBashEntrypoint(
 		selectedEntrypoint = dotnet8BashEntrypoint
 	case runtime == "gcc13":
 		selectedEntrypoint = gcc13BashEntrypoint
+	case runtime == "scala3":
+		selectedEntrypoint = scala3BashEntrypoint
 	default:
 		return "", fmt.Errorf("unsupported runtime: %s", runtime)
 	}
