@@ -23,7 +23,7 @@ description: string # Required: Brief description
 version: string # Required: Semantic version (e.g., "1.0.0")
 author: string # Required: Author name or organization
 type: string # Required: scheduled | realtime
-runtime: string # Required: python3.11 | nodejs20
+runtime: string # Required: python3.11 | nodejs20 | rust-stable
 
 entrypoints: # Required: Entry point definitions
   bot: string # Required: Main bot file
@@ -161,6 +161,43 @@ runtime: nodejs20
 - Excellent async/await support
 - Large npm ecosystem
 - Good web3 support for crypto bots
+
+#### Rust (Stable)
+
+```yaml
+runtime: rust-stable
+```
+
+**Benefits:**
+
+- High performance with zero-cost abstractions
+- Memory safety without garbage collection
+- Excellent for high-frequency and low-latency trading
+- Strong type system catches errors at compile time
+- Growing ecosystem for financial applications
+
+**Dependency Management:**
+
+- Use `Cargo.toml` for dependencies
+- Include `Cargo.lock` for reproducible builds
+- Dependencies are compiled at deploy time
+
+**Entry Point:**
+
+```rust
+// src/main.rs
+mod the0;  // Helper module (auto-injected)
+use the0::input;
+
+fn main() {
+    let (id, config) = input::parse();
+
+    // Your trading logic here
+    println!("Bot {} running", id);
+
+    input::success("Bot executed successfully");
+}
+```
 
 ### Metadata Configuration
 

@@ -1,0 +1,12 @@
+[package]
+name = "the0"
+version = "0.1.0"
+edition = "2021"
+description = "the0 trading bot SDK for Rust"
+license = "Apache-2.0"
+repository = "https://github.com/alexanderwanyoike/the0"
+keywords = ["trading", "bot", "the0", "algorithmic-trading"]
+categories = ["development-tools", "api-bindings"]
+
+[dependencies]
+serde_json = "1.0"

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Rust Quick Start Guide** - Complete guide for building Rust trading bots with the0 SDK
+  - SDK installation and usage with `the0::input` module
+  - Project structure and configuration examples
+  - Best practices for error handling, validation, and logging
+
 ### Changed
 
 - **Migrated from Next.js to VitePress** - Simplified documentation framework

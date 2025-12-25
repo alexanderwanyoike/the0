@@ -59,6 +59,25 @@ export ENTRYPOINT_TYPE="{{ .EntryPointType }}"
 exec python3 /tmp/python_entrypoint.py
 `
 
+// rustBashEntrypoint executes pre-built Rust binary (built by CLI)
+const rustBashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Find the pre-built binary in target/release/
+BINARY=$(find target/release -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.so" 2>/dev/null | head -1)
+
+if [ -z "$BINARY" ]; then
+    echo '{"status":"error","message":"No pre-built binary found in target/release/"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec "$BINARY"
+`
+
 type bashEntrypointFactory struct {
 	EntryPointType string
 	ScriptContent  string
@@ -94,6 +113,8 @@ func (p *bashEntrypointFactory) BuildBashEntrypoint(
 		selectedEntrypoint = nodeBashEntrypoint
 	case runtime == "python3.11":
 		selectedEntrypoint = pythonBashEntrypoint
+	case runtime == "rust-stable":
+		selectedEntrypoint = rustBashEntrypoint
 	// Add more cases for other runtimes as needed
 	default:
 		return "", fmt.Errorf("unsupported runtime: %s", runtime)
