@@ -205,7 +205,7 @@ func (r *dockerRunner) getDockerImage(runtime string) string {
 	case "scala3":
 		return "eclipse-temurin:21-jre"
 	case "ghc96":
-		return "haskell:9.6-slim-bookworm"
+		return "haskell:9.6-slim"
 	default:
 		return "python:3.11-slim" // fallback
 	}

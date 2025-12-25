@@ -16,7 +16,7 @@ import (
 	"github.com/fatih/color"
 )
 
-const haskellImage = "haskell:9.6-bookworm"
+const haskellImage = "haskell:9.6"
 
 // HaskellBuilder handles Haskell project detection and building.
 type HaskellBuilder struct{}

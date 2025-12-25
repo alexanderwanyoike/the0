@@ -98,7 +98,13 @@ func (p *IgnoreParser) AddDefaultPatterns() {
 // IsIgnored checks if a file path should be ignored
 func (p *IgnoreParser) IsIgnored(relPath string, isDir bool) bool {
 	// Never ignore these protected directories (they are needed for deployment)
-	protectedDirs := []string{"vendor", "node_modules", "frontend/dist"}
+	// - vendor/node_modules: dependencies
+	// - frontend/dist: built frontend
+	// - build/: compiled language output (C++, etc.)
+	// - target/: Rust compiled output
+	// - bin/: .NET compiled output
+	// - dist-newstyle/: Haskell Cabal output
+	protectedDirs := []string{"vendor", "node_modules", "frontend/dist", "build", "target", "bin", "dist-newstyle"}
 	for _, dir := range protectedDirs {
 		if relPath == dir || strings.HasPrefix(relPath, dir+"/") {
 			return false
