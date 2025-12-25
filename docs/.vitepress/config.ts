@@ -72,8 +72,21 @@ export default defineConfig({
           { text: 'Development Overview', link: '/custom-bot-development/overview' },
           { text: 'Configuration', link: '/custom-bot-development/configuration' },
           { text: 'Bot Types', link: '/custom-bot-development/bot-types' },
+          { text: 'Custom Frontends', link: '/custom-bot-development/custom-frontends' },
+          { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },
           { text: 'Deployment', link: '/custom-bot-development/deployment' },
+        ]
+      },
+      {
+        text: 'Language Quick Starts',
+        collapsed: false,
+        items: [
+          { text: 'Rust', link: '/custom-bot-development/rust-quick-start' },
+          { text: 'C/C++', link: '/custom-bot-development/cpp-quick-start' },
+          { text: 'C# (.NET 8)', link: '/custom-bot-development/csharp-quick-start' },
+          { text: 'Scala 3', link: '/custom-bot-development/scala-quick-start' },
+          { text: 'Haskell', link: '/custom-bot-development/haskell-quick-start' },
         ]
       }
     ],
