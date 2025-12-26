@@ -14,3 +14,6 @@ authors = ["alexanderwanyoike <hello@the0.dev>"]
 
 [dependencies]
 serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3.14"

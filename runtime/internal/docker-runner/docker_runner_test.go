@@ -202,9 +202,9 @@ func TestIntegration_EntrypointScriptGeneration_Rust(t *testing.T) {
 	// Verify the script is a bash script
 	assert.Contains(t, scriptContent, "#!/bin/bash")
 
-	// Verify Rust-specific content (simplified - just executes pre-built binary)
-	assert.Contains(t, scriptContent, "target/release", "Should look for binary in target/release")
-	assert.Contains(t, scriptContent, "find", "Should use find to locate binary")
+	// Verify Rust-specific content (uses ScriptPath directly from bot-config.yaml)
+	assert.Contains(t, scriptContent, "target/release/my-bot", "Should use exact binary path from ScriptPath")
+	assert.Contains(t, scriptContent, "BINARY=", "Should set BINARY variable")
 	assert.Contains(t, scriptContent, "BOT_ID", "Should set BOT_ID environment variable")
 	assert.Contains(t, scriptContent, "BOT_CONFIG", "Should set BOT_CONFIG environment variable")
 
@@ -214,6 +214,7 @@ func TestIntegration_EntrypointScriptGeneration_Rust(t *testing.T) {
 	// Verify the entrypoint executes the binary (no compilation at runtime)
 	assert.Contains(t, scriptContent, "exec", "Should exec the binary")
 	assert.NotContains(t, scriptContent, "cargo build", "Should NOT compile at runtime (CLI does this)")
+	assert.NotContains(t, scriptContent, "find", "Should NOT use find - uses ScriptPath directly")
 }
 
 func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {

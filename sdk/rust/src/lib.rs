@@ -5,7 +5,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use the0::input;
+//! use the0_sdk::input;
 //!
 //! fn main() {
 //!     let (bot_id, config) = input::parse();
@@ -123,23 +123,5 @@ pub mod input {
         let millis = duration.subsec_millis();
         // Convert to ISO format (approximate)
         format!("{}Z", secs * 1000 + millis as u64)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_success_output() {
-        // This test just verifies the function doesn't panic
-        // Actual output testing would require capturing stdout
-        input::success("test message");
-    }
-
-    #[test]
-    fn test_result_output() {
-        let data = serde_json::json!({"key": "value"});
-        input::result(&data);
     }
 }
