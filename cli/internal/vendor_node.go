@@ -211,6 +211,7 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 		},
 		WorkingDir: "/app",
 		User:       v.getUserConfig(),
+		Env:        getNodeBuildEnvVars(),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -382,4 +383,26 @@ func (v *NodeVendor) cleanupNodeModulesBackup(projectPath string) error {
 	}
 
 	return nil
+}
+
+// getNodeBuildEnvVars returns environment variables for Node.js builds.
+func getNodeBuildEnvVars() []string {
+	secrets, err := LoadBuildSecrets()
+	if err != nil || secrets == nil {
+		return nil
+	}
+
+	var envVars []string
+
+	// Pass NPM token for private registries (referenced in .npmrc as ${NPM_TOKEN})
+	if secrets.NpmToken != "" {
+		envVars = append(envVars, fmt.Sprintf("NPM_TOKEN=%s", secrets.NpmToken))
+	}
+
+	// Pass GitHub token for git-based dependencies
+	if secrets.GitHubToken != "" {
+		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
+	}
+
+	return envVars
 }

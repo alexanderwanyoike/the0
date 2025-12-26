@@ -274,11 +274,19 @@ func getRustBuildEnvVars() []string {
 	}
 
 	var envVars []string
+
+	// Pass GitHub token for private git dependencies
 	if secrets.GitHubToken != "" {
-		// Configure cargo to use GitHub token for private git dependencies
+		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
 		envVars = append(envVars, "CARGO_NET_GIT_FETCH_WITH_CLI=true")
 		envVars = append(envVars, "GIT_TERMINAL_PROMPT=0")
 	}
+
+	// Pass Cargo registry token for private registries
+	if secrets.CargoRegistryToken != "" {
+		envVars = append(envVars, fmt.Sprintf("CARGO_REGISTRY_TOKEN=%s", secrets.CargoRegistryToken))
+	}
+
 	return envVars
 }
 

@@ -429,6 +429,161 @@ yq eval '.' bot-config.yaml > /dev/null
 
 ---
 
+## Private Package Configuration
+
+Each runtime supports private packages through standard configuration files. The CLI respects these config files during builds.
+
+### Python
+
+Add private indexes to `requirements.txt`:
+
+```txt
+--extra-index-url https://pypi.example.com/simple/
+requests==2.28.0
+my-private-package==1.0.0
+```
+
+Or configure in `~/.the0/secrets.json`:
+
+```json
+{
+  "pip_index_url": "https://user:token@pypi.example.com/simple/"
+}
+```
+
+### Node.js
+
+Create `.npmrc` in your project:
+
+```ini
+@myorg:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+### Rust
+
+Add git dependencies in `Cargo.toml`:
+
+```toml
+[dependencies]
+my-private-crate = { git = "https://github.com/myorg/private-crate" }
+```
+
+Or configure `.cargo/config.toml` for private registries:
+
+```toml
+[registries.my-registry]
+index = "https://my-registry.example.com/index"
+
+[net]
+git-fetch-with-cli = true
+```
+
+### C# / .NET
+
+Create `nuget.config` in your project root:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <add key="private" value="https://nuget.example.com/v3/index.json" />
+  </packageSources>
+  <packageSourceCredentials>
+    <private>
+      <add key="Username" value="user" />
+      <add key="ClearTextPassword" value="%NUGET_TOKEN%" />
+    </private>
+  </packageSourceCredentials>
+</configuration>
+```
+
+### Scala
+
+Add resolvers in `build.sbt`:
+
+```scala
+resolvers += "Private" at "https://maven.example.com/releases"
+
+credentials += Credentials(
+  "Private Repo",
+  "maven.example.com",
+  sys.env.getOrElse("MAVEN_USER", ""),
+  sys.env.getOrElse("MAVEN_TOKEN", "")
+)
+```
+
+### Haskell
+
+Configure in `cabal.project`:
+
+```cabal
+source-repository-package
+  type: git
+  location: https://github.com/myorg/private-package
+  tag: v1.0.0
+```
+
+### C/C++
+
+Use CMake FetchContent with git:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+  private_lib
+  GIT_REPOSITORY https://github.com/myorg/private-lib.git
+  GIT_TAG v1.0.0
+)
+FetchContent_MakeAvailable(private_lib)
+```
+
+### Global Secrets
+
+Configure secrets via CLI for credentials passed to builds:
+
+```bash
+# Universal (all languages) - for git-based private dependencies
+the0 auth secrets set github-token ghp_xxxxxxxxxxxx
+
+# Python - private PyPI index
+the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/
+
+# Node.js - private npm registry
+the0 auth secrets set npm-token npm_xxxxxxxxxxxx
+
+# C#/.NET - private NuGet feed
+the0 auth secrets set nuget-token oy2xxxxxxxxxxxxx
+
+# Rust - private Cargo registry
+the0 auth secrets set cargo-registry-token xxxxxxxxxxxxx
+
+# Scala - private Maven repository
+the0 auth secrets set maven-user myuser
+the0 auth secrets set maven-token xxxxxxxxxxxxx
+```
+
+View configured secrets:
+
+```bash
+the0 auth secrets show
+```
+
+These secrets are stored in `~/.the0/secrets.json` and passed as environment variables during builds:
+
+| Secret | Environment Variable | Used By |
+|--------|---------------------|---------|
+| `github-token` | `GITHUB_TOKEN` | All (git deps) |
+| `pip-index-url` | `PIP_EXTRA_INDEX_URL` | Python |
+| `npm-token` | `NPM_TOKEN` | Node.js |
+| `nuget-token` | `NUGET_TOKEN` | C#/.NET |
+| `cargo-registry-token` | `CARGO_REGISTRY_TOKEN` | Rust |
+| `maven-user` | `MAVEN_USER` | Scala |
+| `maven-token` | `MAVEN_TOKEN` | Scala |
+
+---
+
 ## Related Documentation
 
 - [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot

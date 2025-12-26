@@ -324,10 +324,20 @@ func getScalaBuildEnvVars() []string {
 	}
 
 	var envVars []string
+
+	// Pass GitHub token for private git dependencies
 	if secrets.GitHubToken != "" {
-		// Configure SBT to use GitHub token for private packages
 		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
 	}
+
+	// Pass Maven credentials for private Maven/Ivy repositories
+	if secrets.MavenUser != "" {
+		envVars = append(envVars, fmt.Sprintf("MAVEN_USER=%s", secrets.MavenUser))
+	}
+	if secrets.MavenToken != "" {
+		envVars = append(envVars, fmt.Sprintf("MAVEN_TOKEN=%s", secrets.MavenToken))
+	}
+
 	return envVars
 }
 

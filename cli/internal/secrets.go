@@ -10,10 +10,28 @@ const SECRETS_FILE = ".the0/secrets.json"
 
 // BuildSecrets represents build-time secrets for vendoring
 type BuildSecrets struct {
-	GitHubToken    string `json:"github_token,omitempty"`
-	GitHubUsername string `json:"github_username,omitempty"`
-	PipIndexURL    string `json:"pip_index_url,omitempty"`
-	NuGetAPIKey    string `json:"nuget_api_key,omitempty"`
+	// Universal
+	GitHubToken    string `json:"github_token,omitempty"`    // GITHUB_TOKEN - for git-based deps (all languages)
+	GitHubUsername string `json:"github_username,omitempty"` // Deprecated
+
+	// Python
+	PipIndexURL string `json:"pip_index_url,omitempty"` // PIP_EXTRA_INDEX_URL
+
+	// Node.js
+	NpmToken string `json:"npm_token,omitempty"` // NPM_TOKEN - for private npm registries
+
+	// C#/.NET
+	NuGetToken string `json:"nuget_token,omitempty"` // NUGET_TOKEN - for private NuGet feeds
+
+	// Rust
+	CargoRegistryToken string `json:"cargo_registry_token,omitempty"` // CARGO_REGISTRY_TOKEN
+
+	// Scala/Java
+	MavenUser  string `json:"maven_user,omitempty"`  // MAVEN_USER
+	MavenToken string `json:"maven_token,omitempty"` // MAVEN_TOKEN
+
+	// Legacy (kept for backwards compatibility)
+	NuGetAPIKey string `json:"nuget_api_key,omitempty"` // Deprecated, use nuget_token
 }
 
 // GetGitHubUsername returns the GitHub username, defaulting to "user" if not set

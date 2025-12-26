@@ -182,12 +182,8 @@ func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command - add GitHub Packages source if token available, then build
-	buildCmd := `
-if [ -n "$GITHUB_TOKEN" ]; then
-  dotnet nuget add source https://nuget.pkg.github.com/alexanderwanyoike/index.json --name github --username "$GITHUB_USERNAME" --password "$GITHUB_TOKEN" --store-password-in-clear-text 2>/dev/null || true
-fi
-dotnet publish -c Release -o /project/bin/Release/net8.0/publish 2>&1`
+	// Build command - restore from nuget.org and publish
+	buildCmd := `dotnet publish -c Release -o /project/bin/Release/net8.0/publish 2>&1`
 
 	config := &container.Config{
 		Image: dotnetSdkImage,
@@ -287,10 +283,16 @@ func getDotnetBuildEnvVars() []string {
 		return envVars
 	}
 
+	// Pass NuGet token for private feeds (referenced in nuget.config as %NUGET_TOKEN%)
+	if secrets.NuGetToken != "" {
+		envVars = append(envVars, fmt.Sprintf("NUGET_TOKEN=%s", secrets.NuGetToken))
+	}
+
+	// Pass GitHub token for git-based dependencies
 	if secrets.GitHubToken != "" {
 		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
-		envVars = append(envVars, fmt.Sprintf("GITHUB_USERNAME=%s", secrets.GetGitHubUsername()))
 	}
+
 	return envVars
 }
 
