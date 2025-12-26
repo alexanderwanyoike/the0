@@ -1,19 +1,28 @@
-# @the0/react
+# @alexanderwanyoike/the0-react
 
 React SDK for building custom bot dashboards on the0 platform.
 
 ## Installation
 
+This package is published to GitHub Packages. First, configure npm to use GitHub Packages for the `@alexanderwanyoike` scope:
+
 ```bash
-npm install @the0/react
+# Create or edit ~/.npmrc
+echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
+```
+
+Then install:
+
+```bash
+npm install @alexanderwanyoike/the0-react
 # or
-yarn add @the0/react
+yarn add @alexanderwanyoike/the0-react
 ```
 
 ## Usage
 
 ```tsx
-import { useThe0Events } from '@the0/react';
+import { useThe0Events } from '@alexanderwanyoike/the0-react';
 
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
@@ -105,6 +114,45 @@ esbuild frontend/index.tsx \
   --external:react \
   --external:react-dom \
   --minify
+```
+
+## Publishing (Maintainers)
+
+This package is published to GitHub Packages.
+
+### Prerequisites
+
+1. Create a GitHub Personal Access Token with `write:packages` scope:
+   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
+
+2. Authenticate with GitHub Packages:
+   ```bash
+   npm login --registry=https://npm.pkg.github.com
+   # Username: your-github-username
+   # Password: your-personal-access-token
+   ```
+
+### Publish
+
+```bash
+# Build the package
+yarn build
+
+# Publish to GitHub Packages
+npm publish
+```
+
+### Version Bump
+
+```bash
+# Patch release (0.2.0 -> 0.2.1)
+npm version patch
+
+# Minor release (0.2.0 -> 0.3.0)
+npm version minor
+
+# Major release (0.2.0 -> 1.0.0)
+npm version major
 ```
 
 ## License

@@ -27,10 +27,26 @@ The SDK provides convenience methods for parsing config and outputting custom re
 
 ### Installation
 
-Add to your `.csproj`:
+This package is published to GitHub Packages (NuGet). First, add the GitHub Packages source:
+
+```bash
+dotnet nuget add source "https://nuget.pkg.github.com/alexanderwanyoike/index.json" \
+  --name github \
+  --username YOUR_GITHUB_USERNAME \
+  --password YOUR_GITHUB_TOKEN \
+  --store-password-in-clear-text
+```
+
+Then add to your `.csproj`:
 
 ```xml
-<PackageReference Include="The0" Version="0.1.0" />
+<PackageReference Include="The0.Sdk" Version="0.1.0" />
+```
+
+Or via CLI:
+
+```bash
+dotnet add package The0.Sdk --version 0.1.0
 ```
 
 ### Usage
@@ -124,6 +140,42 @@ Use `Console.Error` for logs (stdout is reserved for results):
 Console.Error.WriteLine("DEBUG: Processing trade...");  // Logs to stderr
 Console.WriteLine("...");  // Reserved for JSON result output
 ```
+
+## Publishing (Maintainers)
+
+This package is published to GitHub Packages (NuGet).
+
+### Prerequisites
+
+1. Create a GitHub Personal Access Token with `write:packages` scope:
+   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
+
+2. Set the token as an environment variable:
+   ```bash
+   export GITHUB_TOKEN="ghp_your_token_here"
+   ```
+
+### Publish
+
+```bash
+# Build the package
+dotnet pack -c Release
+
+# Push to GitHub Packages
+dotnet nuget push bin/Release/The0.Sdk.*.nupkg \
+  --source "https://nuget.pkg.github.com/alexanderwanyoike/index.json" \
+  --api-key $GITHUB_TOKEN
+```
+
+### Version Bump
+
+Update the version in `The0.csproj`:
+
+```xml
+<Version>0.2.0</Version>
+```
+
+Then rebuild and publish.
 
 ## License
 

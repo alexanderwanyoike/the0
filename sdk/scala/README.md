@@ -1,16 +1,30 @@
-# the0 Scala SDK
+# the0-sdk (Scala)
 
 SDK for building trading bots on the0 platform in Scala 3.
 
 ## Installation
 
-Add the SDK to your project by copying the `the0` package or adding it as a dependency.
+### Option 1: GitHub Packages (Maven)
 
-### Option 1: Copy the Package
+Add the GitHub Packages resolver and dependency to your `build.sbt`:
+
+```sbt
+resolvers += "GitHub Package Registry" at "https://maven.pkg.github.com/alexanderwanyoike/the0"
+credentials += Credentials(
+  "GitHub Package Registry",
+  "maven.pkg.github.com",
+  "YOUR_GITHUB_USERNAME",
+  sys.env.getOrElse("GITHUB_TOKEN", "")
+)
+
+libraryDependencies += "dev.the0" %% "the0-sdk" % "0.1.0"
+```
+
+### Option 2: Copy the Package
 
 Copy `src/main/scala/the0/Input.scala` to your project's source directory.
 
-### Option 2: Local Dependency
+### Option 3: Local Dependency
 
 ```sbt
 lazy val the0Sdk = ProjectRef(file("path/to/sdk/scala"), "root")
@@ -236,6 +250,36 @@ object Main extends App {
   Input.success(result)
 }
 ```
+
+## Publishing (Maintainers)
+
+This package is published to GitHub Packages (Maven).
+
+### Prerequisites
+
+1. Create a GitHub Personal Access Token with `write:packages` scope:
+   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
+
+2. Set the token as an environment variable:
+   ```bash
+   export GITHUB_TOKEN="ghp_your_token_here"
+   ```
+
+### Publish
+
+```bash
+sbt publish
+```
+
+### Version Bump
+
+Update the version in `build.sbt`:
+
+```sbt
+ThisBuild / version := "0.2.0"
+```
+
+Then publish.
 
 ## License
 

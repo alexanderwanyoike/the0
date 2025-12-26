@@ -1,15 +1,23 @@
 cabal-version:      3.0
-name:               the0
+name:               the0-sdk
 version:            0.1.0.0
 synopsis:           the0 trading bot SDK for Haskell
 description:        Utilities for building trading bots on the0 platform.
+                    Provides configuration parsing, result output, and metric emission.
 license:            Apache-2.0
 license-file:       LICENSE
-author:             the0 team
+author:             alexanderwanyoike
 maintainer:         hello@the0.dev
-category:           Development
+copyright:          2024 the0
+category:           Development, Trading, Finance
 build-type:         Simple
 extra-doc-files:    README.md
+bug-reports:        https://github.com/alexanderwanyoike/the0/issues
+homepage:           https://the0.dev
+source-repository head
+    type:     git
+    location: https://github.com/alexanderwanyoike/the0.git
+    subdir:   sdk/haskell
 
 library
     exposed-modules:    The0.Input

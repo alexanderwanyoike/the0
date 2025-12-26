@@ -1,19 +1,28 @@
-# @the0/sdk - Node.js/TypeScript SDK
+# @alexanderwanyoike/the0-node
 
 Official SDK for building trading bots on the0 platform with Node.js and TypeScript.
 
 ## Installation
 
+This package is published to GitHub Packages. First, configure npm to use GitHub Packages for the `@alexanderwanyoike` scope:
+
 ```bash
-npm install @the0/sdk
+# Create or edit ~/.npmrc
+echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
+```
+
+Then install:
+
+```bash
+npm install @alexanderwanyoike/the0-node
 # or
-yarn add @the0/sdk
+yarn add @alexanderwanyoike/the0-node
 ```
 
 ## Quick Start
 
 ```typescript
-import { parse, success, error, metric } from '@the0/sdk';
+import { parse, success, error, metric } from '@alexanderwanyoike/the0-node';
 
 // Parse bot configuration from environment
 const { id, config } = parse<{
@@ -119,7 +128,7 @@ await sleep(5000); // Wait 5 seconds
 Run on a cron schedule, execute once, and exit:
 
 ```typescript
-import { parse, success, error } from '@the0/sdk';
+import { parse, success, error } from '@alexanderwanyoike/the0-node';
 
 const { id, config } = parse();
 
@@ -137,7 +146,7 @@ try {
 Run continuously until stopped:
 
 ```typescript
-import { parse, metric, sleep } from '@the0/sdk';
+import { parse, metric, sleep } from '@alexanderwanyoike/the0-node';
 
 const { id, config } = parse();
 
@@ -152,6 +161,45 @@ while (true) {
 
   await sleep(config.updateInterval || 5000);
 }
+```
+
+## Publishing (Maintainers)
+
+This package is published to GitHub Packages.
+
+### Prerequisites
+
+1. Create a GitHub Personal Access Token with `write:packages` scope:
+   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
+
+2. Authenticate with GitHub Packages:
+   ```bash
+   npm login --registry=https://npm.pkg.github.com
+   # Username: your-github-username
+   # Password: your-personal-access-token
+   ```
+
+### Publish
+
+```bash
+# Build the package
+yarn build
+
+# Publish to GitHub Packages
+npm publish
+```
+
+### Version Bump
+
+```bash
+# Patch release (0.1.0 -> 0.1.1)
+npm version patch
+
+# Minor release (0.1.0 -> 0.2.0)
+npm version minor
+
+# Major release (0.1.0 -> 1.0.0)
+npm version major
 ```
 
 ## License

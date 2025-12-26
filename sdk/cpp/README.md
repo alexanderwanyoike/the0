@@ -1,6 +1,8 @@
-# the0 C/C++ SDK
+# the0-sdk (C/C++)
 
 Header-only SDK for building trading bots on the0 platform in C or C++.
+
+> **Note:** This is a header-only library. No package registry is used - simply copy `the0.h` to your project.
 
 Uses [nlohmann/json](https://github.com/nlohmann/json) for robust JSON handling.
 

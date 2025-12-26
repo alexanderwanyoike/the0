@@ -1,4 +1,4 @@
-# the0 Rust SDK
+# the0-sdk (Rust)
 
 Optional SDK for building trading bots on the0 platform.
 
@@ -35,14 +35,21 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-the0 = { git = "https://github.com/alexanderwanyoike/the0", subdirectory = "sdk/rust" }
+the0-sdk = "0.1"
 serde_json = "1.0"  # Required for config access
+```
+
+Or from git:
+
+```toml
+[dependencies]
+the0-sdk = { git = "https://github.com/alexanderwanyoike/the0", subdirectory = "sdk/rust" }
 ```
 
 ### Usage
 
 ```rust
-use the0::input;
+use the0_sdk::input;
 
 fn main() {
     // Parse bot configuration
@@ -87,3 +94,40 @@ Output custom JSON result.
 ## Example Bot
 
 See the [Rust Quick Start Guide](https://docs.the0.dev/custom-bot-development/rust-quick-start) for a complete example.
+
+## Publishing (Maintainers)
+
+This package is published to crates.io.
+
+### Prerequisites
+
+1. Login to crates.io:
+   ```bash
+   cargo login
+   ```
+
+2. Ensure you have ownership of the crate on crates.io
+
+### Publish
+
+```bash
+# Verify the package
+cargo publish --dry-run
+
+# Publish to crates.io
+cargo publish
+```
+
+### Version Bump
+
+Update the version in `Cargo.toml`:
+
+```toml
+version = "0.2.0"
+```
+
+Then publish.
+
+## License
+
+Apache-2.0

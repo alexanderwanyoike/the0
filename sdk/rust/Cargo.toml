@@ -1,12 +1,16 @@
 [package]
-name = "the0"
+name = "the0-sdk"
 version = "0.1.0"
 edition = "2021"
 description = "the0 trading bot SDK for Rust"
 license = "Apache-2.0"
 repository = "https://github.com/alexanderwanyoike/the0"
-keywords = ["trading", "bot", "the0", "algorithmic-trading"]
+homepage = "https://the0.dev"
+documentation = "https://docs.the0.dev"
+readme = "README.md"
+keywords = ["trading", "bot", "the0", "algorithmic-trading", "sdk"]
 categories = ["development-tools", "api-bindings"]
+authors = ["alexanderwanyoike <hello@the0.dev>"]
 
 [dependencies]
 serde_json = "1.0"
