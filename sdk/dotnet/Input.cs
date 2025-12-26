@@ -101,4 +101,27 @@ public static class Input
     {
         WriteResult(JsonSerializer.Serialize(data));
     }
+
+    /// <summary>
+    /// Emit a metric to stdout with timestamp.
+    /// </summary>
+    /// <param name="metricType">The type of metric (e.g., "price", "signal")</param>
+    /// <param name="data">The metric data object</param>
+    public static void Metric(string metricType, object data)
+    {
+        var jsonObj = JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject();
+        jsonObj["_metric"] = metricType;
+        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString() + "Z";
+        Console.WriteLine(jsonObj.ToJsonString());
+    }
+
+    /// <summary>
+    /// Log a message to stdout.
+    /// </summary>
+    /// <param name="message">The message to log</param>
+    public static void Log(string message)
+    {
+        var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        Console.WriteLine($"{{\"message\":\"{escaped}\"}}");
+    }
 }

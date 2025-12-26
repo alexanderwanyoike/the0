@@ -105,6 +105,33 @@ object Input {
   }
 
   /**
+   * Emit a metric to stdout with timestamp.
+   *
+   * @param metricType The type of metric (e.g., "price", "signal")
+   * @param json The metric data as a JSON string (will be merged with _metric and timestamp)
+   */
+  def metric(metricType: String, json: String): Unit = {
+    val timestamp = System.currentTimeMillis()
+    // Simple JSON merge - assumes json starts with {
+    val merged = if (json.startsWith("{") && json.length > 1) {
+      s"""{"_metric":"$metricType","timestamp":"${timestamp}Z",${json.substring(1)}"""
+    } else {
+      s"""{"_metric":"$metricType","timestamp":"${timestamp}Z"}"""
+    }
+    println(merged)
+  }
+
+  /**
+   * Log a message to stdout.
+   *
+   * @param message The message to log
+   */
+  def log(message: String): Unit = {
+    val escaped = escapeJson(message)
+    println(s"""{"message":"$escaped"}""")
+  }
+
+  /**
    * Escape a string for use in JSON.
    */
   private def escapeJson(s: String): String = {

@@ -7,7 +7,7 @@
 
     <!-- Package metadata -->
     <PackageId>The0.Sdk</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>alexanderwanyoike</Authors>
     <Company>the0</Company>
     <Description>the0 SDK for C#/.NET trading bots - configuration parsing, metric emission, and structured logging</Description>
