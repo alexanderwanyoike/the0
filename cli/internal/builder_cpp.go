@@ -15,7 +15,7 @@ import (
 	"github.com/fatih/color"
 )
 
-const cppImage = "gcc:13"
+const cppImage = "silkeh/clang:17"  // Has cmake preinstalled
 
 // CppBuilder handles C/C++ project detection and building.
 type CppBuilder struct{}
@@ -224,19 +224,11 @@ func (b *CppBuilder) runBuildContainer(vm *VendorManager, isCMake bool) (string,
 
 	var buildCmd string
 	if isCMake {
-		// CMake build: install cmake, create build dir, configure, and build
-		buildCmd = fmt.Sprintf(
-			`apt-get update && apt-get install -y --no-install-recommends cmake >/dev/null 2>&1 && \
-			mkdir -p build && cd build && cmake .. && make 2>&1; \
-			STATUS=$?; chown -R %s:%s /project/build 2>/dev/null || true; exit $STATUS`,
-			uid, gid,
-		)
+		// CMake build: create build dir, configure, and build
+		buildCmd = `mkdir -p build && cd build && cmake .. && make 2>&1`
 	} else {
 		// Makefile build
-		buildCmd = fmt.Sprintf(
-			`make 2>&1; STATUS=$?; chown -R %s:%s /project 2>/dev/null || true; exit $STATUS`,
-			uid, gid,
-		)
+		buildCmd = `make 2>&1`
 	}
 
 	config := &container.Config{
@@ -247,6 +239,7 @@ func (b *CppBuilder) runBuildContainer(vm *VendorManager, isCMake bool) (string,
 		},
 		WorkingDir: "/project",
 		Env:        getCppBuildEnvVars(),
+		User:       fmt.Sprintf("%s:%s", uid, gid),
 	}
 
 	hostConfig := &container.HostConfig{

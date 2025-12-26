@@ -178,11 +178,8 @@ func (b *RustBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command: cargo build, then fix ownership
-	buildCmd := fmt.Sprintf(
-		"cargo build --release 2>&1; STATUS=$?; chown -R %s:%s /project/target 2>/dev/null || true; exit $STATUS",
-		uid, gid,
-	)
+	// Build command
+	buildCmd := "cargo build --release 2>&1"
 
 	config := &container.Config{
 		Image: rustImage,
@@ -192,6 +189,7 @@ func (b *RustBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		},
 		WorkingDir: "/project",
 		Env:        getRustBuildEnvVars(),
+		User:       fmt.Sprintf("%s:%s", uid, gid),
 	}
 
 	hostConfig := &container.HostConfig{

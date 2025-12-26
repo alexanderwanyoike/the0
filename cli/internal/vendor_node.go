@@ -210,6 +210,7 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 			installCmd,
 		},
 		WorkingDir: "/app",
+		User:       v.getUserConfig(),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -293,29 +294,23 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 	return resp.ID, nil
 }
 
-// getInstallCommand returns the npm install command with proper ownership
+// getInstallCommand returns the npm install command
 func (v *NodeVendor) getInstallCommand(hasTypeScript bool) string {
-	// Get current user info for ownership
-	currentUser, err := user.Current()
-	var uid, gid string
-	if err == nil {
-		uid = currentUser.Uid
-		gid = currentUser.Gid
-	} else {
-		// Fallback to common non-root user
-		uid = "1000"
-		gid = "1000"
-	}
-
-	cmd := "npm install --production"
 	if hasTypeScript {
 		// Install all dependencies (including devDependencies for TypeScript compilation)
 		// Then run the build script - this MUST succeed for TypeScript projects
-		cmd = "npm install && npm run build"
+		return "npm install && npm run build"
 	}
+	return "npm install --production"
+}
 
-	// Always fix ownership even on failure, then exit with original status
-	return fmt.Sprintf("%s; STATUS=$?; chown -R %s:%s /app/node_modules 2>/dev/null || true; exit $STATUS", cmd, uid, gid)
+// getUserConfig returns uid:gid string for container User config
+func (v *NodeVendor) getUserConfig() string {
+	currentUser, err := user.Current()
+	if err == nil {
+		return fmt.Sprintf("%s:%s", currentUser.Uid, currentUser.Gid)
+	}
+	return "1000:1000"
 }
 
 // backupExistingNodeModules creates a backup of existing node_modules directory

@@ -10,8 +10,18 @@ const SECRETS_FILE = ".the0/secrets.json"
 
 // BuildSecrets represents build-time secrets for vendoring
 type BuildSecrets struct {
-	GitHubToken string `json:"github_token,omitempty"`
-	PipIndexURL string `json:"pip_index_url,omitempty"`
+	GitHubToken    string `json:"github_token,omitempty"`
+	GitHubUsername string `json:"github_username,omitempty"`
+	PipIndexURL    string `json:"pip_index_url,omitempty"`
+	NuGetAPIKey    string `json:"nuget_api_key,omitempty"`
+}
+
+// GetGitHubUsername returns the GitHub username, defaulting to "user" if not set
+func (s *BuildSecrets) GetGitHubUsername() string {
+	if s.GitHubUsername != "" {
+		return s.GitHubUsername
+	}
+	return "user"
 }
 
 // LoadBuildSecrets loads build secrets from file
