@@ -52,12 +52,13 @@ C++ remains the language of choice for professional trading systems:
 my-cpp-bot/
 ├── CMakeLists.txt        # CMake project file (recommended)
 ├── main.cpp              # Your bot entry point
-├── the0.h                # SDK header (copy from sdk/cpp/)
 ├── bot-config.yaml       # Bot configuration
 ├── bot-schema.json       # Parameter schema
 ├── config.json           # Example configuration
 └── README.md             # Documentation
 ```
+
+> **Note:** The SDK header (`the0.h`) is fetched automatically via CMake FetchContent.
 
 ---
 
@@ -82,8 +83,17 @@ project(my-cpp-bot)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Fetch nlohmann/json automatically (used by the0 SDK)
 include(FetchContent)
+
+# Fetch the0 SDK header
+FetchContent_Declare(the0_sdk
+    GIT_REPOSITORY https://github.com/alexanderwanyoike/the0.git
+    GIT_TAG v1.1.0
+    SOURCE_SUBDIR sdk/cpp
+)
+FetchContent_MakeAvailable(the0_sdk)
+
+# Fetch nlohmann/json (required by the0 SDK)
 FetchContent_Declare(json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG v3.11.3
@@ -92,6 +102,7 @@ FetchContent_MakeAvailable(json)
 
 # Create executable
 add_executable(my-cpp-bot main.cpp)
+target_include_directories(my-cpp-bot PRIVATE ${the0_sdk_SOURCE_DIR})
 target_link_libraries(my-cpp-bot PRIVATE nlohmann_json::nlohmann_json)
 
 # Optional: Link libcurl for HTTP requests
@@ -122,16 +133,7 @@ clean:
 
 ---
 
-## Step 3: Copy the SDK Header
-
-Copy `the0.h` from `sdk/cpp/` to your project directory. This header provides:
-- Configuration parsing from environment variables
-- Type-safe JSON access via nlohmann/json
-- Result output functions
-
----
-
-## Step 4: Write Your Bot
+## Step 3: Write Your Bot
 
 Create `main.cpp`:
 
@@ -199,7 +201,7 @@ int main() {
 
 ---
 
-## Step 5: Create Bot Configuration
+## Step 4: Create Bot Configuration
 
 Create `bot-config.yaml`:
 
@@ -230,7 +232,7 @@ metadata:
 
 ---
 
-## Step 6: Define Parameter Schema
+## Step 5: Define Parameter Schema
 
 Create `bot-schema.json`:
 
@@ -271,7 +273,7 @@ Create `bot-schema.json`:
 
 ---
 
-## Step 7: Test Locally
+## Step 6: Test Locally
 
 ```bash
 # Build with CMake
@@ -290,7 +292,7 @@ export CODE_MOUNT_DIR="/tmp"
 
 ---
 
-## Step 8: Deploy
+## Step 7: Deploy
 
 ```bash
 the0 custom-bot deploy

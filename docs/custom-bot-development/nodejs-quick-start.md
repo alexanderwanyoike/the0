@@ -68,7 +68,11 @@ npm init -y
 The the0 SDK provides utilities for parsing configuration and emitting results:
 
 ```bash
-npm install @the0/sdk
+# Configure npm to use GitHub Packages for @alexanderwanyoike scope
+echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
+
+# Install the SDK
+npm install @alexanderwanyoike/the0-node
 ```
 
 Or copy it directly from `sdk/nodejs` in the repository.
@@ -82,7 +86,7 @@ Or copy it directly from `sdk/nodejs` in the repository.
 Create `main.ts`:
 
 ```typescript
-import { parse, success, error, metric, log } from '@the0/sdk';
+import { parse, success, error, metric, log } from '@alexanderwanyoike/the0-node';
 
 /**
  * Configuration interface for type safety
@@ -165,7 +169,7 @@ main();
 Create `main.js`:
 
 ```javascript
-const { parse, success, error, metric, log } = require('@the0/sdk');
+const { parse, success, error, metric, log } = require('@alexanderwanyoike/the0-node');
 
 async function main() {
   const { id, config } = parse();
@@ -276,7 +280,7 @@ Update `package.json`:
     "test": "node --test"
   },
   "dependencies": {
-    "@the0/sdk": "^1.0.0"
+    "@alexanderwanyoike/the0-node": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
@@ -322,7 +326,7 @@ The CLI will:
 
 ## SDK API Reference
 
-The `@the0/sdk` package provides these functions:
+The `@alexanderwanyoike/the0-node` package provides these functions:
 
 ### `parse<T>(): { id: string, config: T }`
 
@@ -398,7 +402,7 @@ await sleep(5000); // Wait 5 seconds
 Here's a more complete example using the `ccxt` library:
 
 ```typescript
-import { parse, success, error, metric, log, sleep } from '@the0/sdk';
+import { parse, success, error, metric, log, sleep } from '@alexanderwanyoike/the0-node';
 import ccxt from 'ccxt';
 
 interface Config {

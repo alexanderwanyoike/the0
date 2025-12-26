@@ -87,7 +87,7 @@ executable my-haskell-bot
     main-is:          Main.hs
     hs-source-dirs:   app
     build-depends:    base ^>=4.18,
-                      the0,
+                      the0-sdk,
                       aeson ^>=2.2,
                       text ^>=2.0
     default-language: Haskell2010
@@ -101,9 +101,12 @@ packages: .
 
 source-repository-package
     type: git
-    location: https://github.com/alexanderwanyoike/the0
+    location: https://github.com/alexanderwanyoike/the0.git
+    tag: v1.1.0
     subdir: sdk/haskell
 ```
+
+> **Note:** Replace `v1.1.0` with the latest release tag. Alternatively, copy `src/The0/Input.hs` from the SDK to your project.
 
 ---
 

@@ -478,10 +478,10 @@ This is just the tip of the iceberg! DCA is the `hello world` of trading bots. Y
 
 ## SDK API Reference
 
-The `the0` Python SDK provides utilities for parsing configuration and outputting results. Install it with:
+The `the0-sdk` Python SDK provides utilities for parsing configuration and outputting results. Install it with:
 
 ```bash
-pip install the0
+pip install the0-sdk
 ```
 
 Or copy the `the0/` directory from `sdk/python/` to your project.

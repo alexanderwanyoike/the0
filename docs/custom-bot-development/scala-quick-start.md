@@ -80,7 +80,11 @@ mkdir -p src/main/scala project
 ThisBuild / scalaVersion := "3.3.3"
 ThisBuild / version := "1.0.0"
 
+// the0 SDK - add via git dependency
+lazy val the0Sdk = RootProject(uri("https://github.com/alexanderwanyoike/the0.git#v1.1.0") / "sdk" / "scala")
+
 lazy val root = (project in file("."))
+  .dependsOn(the0Sdk)
   .settings(
     name := "my-scala-bot",
 
@@ -99,6 +103,8 @@ lazy val root = (project in file("."))
     )
   )
 ```
+
+> **Note:** Replace `v1.1.0` with the latest release tag. Alternatively, copy `src/main/scala/the0/Input.scala` from the SDK to your project.
 
 ---
 

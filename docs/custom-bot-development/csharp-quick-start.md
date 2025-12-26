@@ -74,7 +74,24 @@ This creates a minimal project with `Program.cs` and `.csproj` files.
 
 ## Step 2: Add the SDK
 
-Add the the0 SDK to your project:
+Add the the0 SDK to your project. First, configure NuGet to use GitHub Packages:
+
+```bash
+# Add GitHub Packages as a NuGet source
+dotnet nuget add source "https://nuget.pkg.github.com/alexanderwanyoike/index.json" \
+  --name github \
+  --username YOUR_GITHUB_USERNAME \
+  --password YOUR_GITHUB_TOKEN \
+  --store-password-in-clear-text
+```
+
+Then add the package:
+
+```bash
+dotnet add package The0.Sdk --version 0.1.0
+```
+
+Or add it directly to your `.csproj`:
 
 ```xml
 <!-- MyCsharpBot.csproj -->
@@ -88,14 +105,13 @@ Add the the0 SDK to your project:
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Copy Input.cs from sdk/dotnet/ and include it -->
-    <Compile Include="Input.cs" />
+    <PackageReference Include="The0.Sdk" Version="0.1.0" />
   </ItemGroup>
 
 </Project>
 ```
 
-Or reference the SDK source file directly:
+**Alternative:** Copy `Input.cs` from `sdk/dotnet/` to your project:
 
 ```xml
 <ItemGroup>
