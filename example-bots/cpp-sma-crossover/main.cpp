@@ -16,18 +16,17 @@
  * - signal: BUY/SELL signals when crossover detected
  */
 
+#include "the0.h"
 #include <iostream>
 #include <string>
 #include <vector>
-#include <cstdlib>
 #include <chrono>
 #include <thread>
 #include <optional>
 #include <cmath>
 #include <curl/curl.h>
-#include <nlohmann/json.hpp>
 
-using json = nlohmann::json;
+using json = the0::json;
 
 // Bot state
 struct BotState {
@@ -45,28 +44,6 @@ static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::stri
 double roundTo(double value, int decimals) {
     double multiplier = std::pow(10.0, decimals);
     return std::round(value * multiplier) / multiplier;
-}
-
-// Get current timestamp as ISO string
-std::string getCurrentTimestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto epoch = now.time_since_epoch();
-    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(epoch).count();
-    auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count() % 1000;
-    return std::to_string(seconds) + "." + std::to_string(millis) + "Z";
-}
-
-// Emit a metric to stdout
-void emitMetric(const std::string& metricType, json data) {
-    data["_metric"] = metricType;
-    std::cout << data.dump() << std::endl;
-}
-
-// Emit a log message to stdout
-void emitLog(const std::string& event, json data) {
-    data["event"] = event;
-    data["timestamp"] = getCurrentTimestamp();
-    std::cout << data.dump() << std::endl;
 }
 
 // Fetch data from Yahoo Finance
@@ -136,16 +113,8 @@ std::optional<std::string> checkCrossover(double prevShort, double prevLong,
 }
 
 int main() {
-    // Get configuration from environment
-    std::string botId = std::getenv("BOT_ID") ? std::getenv("BOT_ID") : "test-bot";
-    std::string configJson = std::getenv("BOT_CONFIG") ? std::getenv("BOT_CONFIG") : "{}";
-
-    json config;
-    try {
-        config = json::parse(configJson);
-    } catch (...) {
-        config = json::object();
-    }
+    // Get configuration using the0 SDK
+    auto [botId, config] = the0::parse();
 
     // Extract configuration with defaults
     std::string symbol = config.value("symbol", "AAPL");
@@ -153,19 +122,13 @@ int main() {
     int longPeriod = config.value("long_period", 20);
     int updateIntervalMs = config.value("update_interval_ms", 60000);
 
-    emitLog("bot_started", {
-        {"botId", botId},
-        {"symbol", symbol},
-        {"shortPeriod", shortPeriod},
-        {"longPeriod", longPeriod}
-    });
+    the0::log("Bot " + botId + " started - " + symbol + " SMA(" + std::to_string(shortPeriod) + "/" + std::to_string(longPeriod) + ")");
 
     // Initialize CURL
     curl_global_init(CURL_GLOBAL_DEFAULT);
     CURL* curl = curl_easy_init();
     if (!curl) {
-        emitLog("error", {{"message", "Failed to initialize CURL"}});
-        return 1;
+        the0::error("Failed to initialize CURL");
     }
 
     BotState state;
@@ -177,11 +140,7 @@ int main() {
             std::vector<double> prices = fetchYahooFinance(curl, symbol);
 
             if (prices.size() < static_cast<size_t>(longPeriod)) {
-                emitLog("insufficient_data", {
-                    {"symbol", symbol},
-                    {"required", longPeriod},
-                    {"available", prices.size()}
-                });
+                the0::log("Insufficient data for " + symbol + ": need " + std::to_string(longPeriod) + " prices, have " + std::to_string(prices.size()));
                 std::this_thread::sleep_for(std::chrono::milliseconds(updateIntervalMs));
                 continue;
             }
@@ -193,11 +152,10 @@ int main() {
                 ((currentPrice - previousPrice) / previousPrice) * 100.0 : 0.0;
 
             // Emit price metric
-            emitMetric("price", {
+            the0::metric("price", {
                 {"symbol", symbol},
                 {"value", roundTo(currentPrice, 2)},
-                {"change_pct", roundTo(changePct, 3)},
-                {"timestamp", getCurrentTimestamp()}
+                {"change_pct", roundTo(changePct, 3)}
             });
 
             // Calculate SMAs
@@ -205,7 +163,7 @@ int main() {
             double longSma = calculateSMA(prices, longPeriod);
 
             // Emit SMA metric
-            emitMetric("sma", {
+            the0::metric("sma", {
                 {"symbol", symbol},
                 {"short_sma", roundTo(shortSma, 2)},
                 {"long_sma", roundTo(longSma, 2)},
@@ -226,7 +184,7 @@ int main() {
                     double confidence = std::min(std::abs(shortSma - longSma) / longSma * 100.0, 0.95);
                     std::string direction = signal.value() == "BUY" ? "above" : "below";
 
-                    emitMetric("signal", {
+                    the0::metric("signal", {
                         {"type", signal.value()},
                         {"symbol", symbol},
                         {"price", roundTo(currentPrice, 2)},
@@ -241,7 +199,7 @@ int main() {
             state.prevLongSma = longSma;
 
         } catch (const std::exception& e) {
-            emitLog("error", {{"message", e.what()}});
+            the0::log(std::string("Error: ") + e.what());
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(updateIntervalMs));

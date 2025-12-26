@@ -5,6 +5,10 @@ edition = "2021"
 description = "SMA Crossover trading bot using Rust"
 
 [dependencies]
+# the0 SDK for bot development
+the0-sdk = "0.1.1"
+
+# HTTP client and JSON
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
