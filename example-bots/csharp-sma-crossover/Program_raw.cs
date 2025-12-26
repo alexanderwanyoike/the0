@@ -16,8 +16,8 @@
  * - signal: BUY/SELL signals when crossover detected
  */
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
-using The0;
 
 class SmaBot
 {
@@ -27,16 +27,18 @@ class SmaBot
 
     static async Task Main(string[] args)
     {
-        // Get configuration using the0 SDK
-        var (botId, config) = Input.Parse();
+        // Get configuration from environment
+        var botId = Environment.GetEnvironmentVariable("BOT_ID") ?? "test-bot";
+        var configJson = Environment.GetEnvironmentVariable("BOT_CONFIG") ?? "{}";
+        var config = JsonSerializer.Deserialize<JsonNode>(configJson) ?? JsonNode.Parse("{}")!;
 
         // Extract configuration with defaults
-        var symbol = config?["symbol"]?.GetValue<string>() ?? "AAPL";
-        var shortPeriod = config?["short_period"]?.GetValue<int>() ?? 5;
-        var longPeriod = config?["long_period"]?.GetValue<int>() ?? 20;
-        var updateIntervalMs = config?["update_interval_ms"]?.GetValue<int>() ?? 60000;
+        var symbol = config["symbol"]?.GetValue<string>() ?? "AAPL";
+        var shortPeriod = config["short_period"]?.GetValue<int>() ?? 5;
+        var longPeriod = config["long_period"]?.GetValue<int>() ?? 20;
+        var updateIntervalMs = config["update_interval_ms"]?.GetValue<int>() ?? 60000;
 
-        Input.Log($"Bot {botId} started - {symbol} SMA({shortPeriod}/{longPeriod})");
+        EmitLog("bot_started", new { botId, symbol, shortPeriod, longPeriod });
 
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Add("User-Agent", "the0-sma-bot/1.0");
@@ -51,7 +53,7 @@ class SmaBot
 
                 if (prices.Count < longPeriod)
                 {
-                    Input.Log($"Insufficient data: {prices.Count}/{longPeriod} required for {symbol}");
+                    EmitLog("insufficient_data", new { symbol, required = longPeriod, available = prices.Count });
                     await Task.Delay(updateIntervalMs);
                     continue;
                 }
@@ -61,20 +63,21 @@ class SmaBot
                 var previousPrice = prices.Count > 1 ? prices[^2] : currentPrice;
                 var changePct = previousPrice != 0 ? ((currentPrice - previousPrice) / previousPrice) * 100 : 0;
 
-                // Emit price metric using SDK
-                Input.Metric("price", new
+                // Emit price metric
+                EmitMetric("price", new
                 {
                     symbol,
                     value = Math.Round(currentPrice, 2),
-                    change_pct = Math.Round(changePct, 3)
+                    change_pct = Math.Round(changePct, 3),
+                    timestamp = DateTime.UtcNow.ToString("o")
                 });
 
                 // Calculate SMAs
                 var shortSma = CalculateSMA(prices, shortPeriod);
                 var longSma = CalculateSMA(prices, longPeriod);
 
-                // Emit SMA metric using SDK
-                Input.Metric("sma", new
+                // Emit SMA metric
+                EmitMetric("sma", new
                 {
                     symbol,
                     short_sma = Math.Round(shortSma, 2),
@@ -90,7 +93,7 @@ class SmaBot
                     if (signal != null)
                     {
                         var confidence = Math.Min(Math.Abs(shortSma - longSma) / longSma * 100, 0.95);
-                        Input.Metric("signal", new
+                        EmitMetric("signal", new
                         {
                             type = signal,
                             symbol,
@@ -107,7 +110,7 @@ class SmaBot
             }
             catch (Exception ex)
             {
-                Input.Log($"Error: {ex.Message}");
+                EmitLog("error", new { message = ex.Message });
             }
 
             await Task.Delay(updateIntervalMs);
@@ -157,5 +160,36 @@ class SmaBot
             return "SELL";
         }
         return null;
+    }
+
+    static void EmitMetric(string metricType, object data)
+    {
+        var metric = new Dictionary<string, object>
+        {
+            ["_metric"] = metricType
+        };
+
+        foreach (var prop in data.GetType().GetProperties())
+        {
+            metric[prop.Name] = prop.GetValue(data)!;
+        }
+
+        Console.WriteLine(JsonSerializer.Serialize(metric));
+    }
+
+    static void EmitLog(string eventName, object data)
+    {
+        var log = new Dictionary<string, object>
+        {
+            ["event"] = eventName,
+            ["timestamp"] = DateTime.UtcNow.ToString("o")
+        };
+
+        foreach (var prop in data.GetType().GetProperties())
+        {
+            log[prop.Name] = prop.GetValue(data)!;
+        }
+
+        Console.WriteLine(JsonSerializer.Serialize(log));
     }
 }

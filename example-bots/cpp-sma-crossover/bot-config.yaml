@@ -3,7 +3,7 @@
 
 name: cpp-sma-crossover
 description: "SMA crossover strategy bot using C++ with Yahoo Finance data"
-version: 1.0.2
+version: 1.0.3
 author: "the0"
 type: realtime
 runtime: gcc13

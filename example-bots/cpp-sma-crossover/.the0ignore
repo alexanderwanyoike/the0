@@ -1,0 +1,9 @@
+# Build artifacts (except final binary which is needed)
+build/CMakeCache.txt
+build/CMakeFiles/
+build/cmake_install.cmake
+build/Makefile
+
+# IDE
+.vscode/
+.idea/

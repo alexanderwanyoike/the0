@@ -18,11 +18,12 @@ from datetime import datetime, timezone
 from the0 import parse, success, error, metric, log
 
 
-def main():
+def main(bot_id: str = None, config: dict = None):
     """Bot entry point using the0 SDK."""
 
-    # Parse configuration from environment (set by the platform)
-    bot_id, config = parse()
+    # If not passed by runtime, parse from environment
+    if bot_id is None or config is None:
+        bot_id, config = parse()
 
     # Extract configuration with defaults
     initial_value = config.get("initial_value", 10000)

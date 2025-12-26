@@ -3,7 +3,7 @@
 
 name: portfolio-tracker
 description: "Simulates portfolio tracking with value history and trade execution"
-version: 1.0.11
+version: 1.0.13
 author: "the0"
 type: scheduled
 runtime: python3.11

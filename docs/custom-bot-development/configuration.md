@@ -23,7 +23,7 @@ description: string # Required: Brief description
 version: string # Required: Semantic version (e.g., "1.0.0")
 author: string # Required: Author name or organization
 type: string # Required: scheduled | realtime
-runtime: string # Required: python3.11 | nodejs20 | rust-stable
+runtime: string # Required: python3.11 | nodejs20 | rust-stable | dotnet8 | gcc13 | scala3 | ghc96
 
 entrypoints: # Required: Entry point definitions
   bot: string # Required: Main bot file
@@ -78,6 +78,51 @@ entrypoints:
 - **webhook**: Webhook event handler (for event-driven bots)
 - **analysis**: Custom analysis functions
 - **custom**: Any additional entry points
+
+#### Entrypoint Paths by Runtime
+
+The `entrypoints.bot` field specifies the exact path to your bot's executable or script. The runtime uses this path directly to start your bot.
+
+| Runtime | Entrypoint Example | Description |
+|---------|-------------------|-------------|
+| **Python** | `main.py` | Python script file |
+| **Node.js** | `main.js` | JavaScript entry file |
+| **Rust** | `target/release/my-bot` | Compiled binary path |
+| **C#/.NET** | `bin/Release/net8.0/publish/MyBot.dll` | Published DLL path |
+| **C/C++** | `build/my-bot` | Compiled binary path |
+| **Scala** | `target/scala-3.3.4/my-bot-assembly-1.0.0.jar` | Assembly JAR path |
+| **Haskell** | `dist-newstyle/build/.../my-bot` | Cabal build output path |
+
+**Important:** For compiled languages, the entrypoint path must match exactly where your build system outputs the executable. The runtime will not search for binaries - it uses the specified path directly.
+
+**Example configurations:**
+
+```yaml
+# Rust bot
+runtime: rust-stable
+entrypoints:
+  bot: target/release/sma-bot
+
+# C# bot
+runtime: dotnet8
+entrypoints:
+  bot: bin/Release/net8.0/publish/SmaBot.dll
+
+# C++ bot (CMake)
+runtime: gcc13
+entrypoints:
+  bot: build/sma_bot
+
+# Scala bot
+runtime: scala3
+entrypoints:
+  bot: target/scala-3.3.4/sma-bot-assembly-1.0.0.jar
+
+# Haskell bot
+runtime: ghc96
+entrypoints:
+  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.6/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
+```
 
 #### Schema Definitions
 
@@ -182,22 +227,84 @@ runtime: rust-stable
 - Include `Cargo.lock` for reproducible builds
 - Dependencies are compiled at deploy time
 
-**Entry Point:**
+#### C# / .NET 8
 
-```rust
-// src/main.rs
-mod the0;  // Helper module (auto-injected)
-use the0::input;
-
-fn main() {
-    let (id, config) = input::parse();
-
-    // Your trading logic here
-    println!("Bot {} running", id);
-
-    input::success("Bot executed successfully");
-}
+```yaml
+runtime: dotnet8
 ```
+
+**Benefits:**
+
+- Mature ecosystem with excellent tooling
+- Strong async/await patterns for concurrent operations
+- Cross-platform support with .NET 8
+- Rich standard library for financial calculations
+- NuGet package ecosystem
+
+**Dependency Management:**
+
+- Use `.csproj` for project configuration
+- NuGet packages for dependencies
+- Compiled and published at deploy time
+
+#### C/C++ (GCC 13)
+
+```yaml
+runtime: gcc13
+```
+
+**Benefits:**
+
+- Maximum performance for compute-intensive strategies
+- Direct hardware access and memory control
+- Extensive libraries for numerical computing
+- Ideal for ultra-low-latency trading
+
+**Dependency Management:**
+
+- Use `CMakeLists.txt` or `Makefile` for builds
+- System libraries and header-only libraries
+- Compiled at deploy time
+
+#### Scala 3
+
+```yaml
+runtime: scala3
+```
+
+**Benefits:**
+
+- Functional programming paradigm
+- JVM ecosystem and Java interoperability
+- Excellent for complex data transformations
+- Strong type system with type inference
+- Reactive streaming patterns
+
+**Dependency Management:**
+
+- Use `build.sbt` for SBT projects
+- Maven/Ivy dependencies via SBT
+- Compiled to fat JAR at deploy time
+
+#### Haskell (GHC 9.6)
+
+```yaml
+runtime: ghc96
+```
+
+**Benefits:**
+
+- Pure functional programming
+- Strong static typing with type inference
+- Excellent for algorithmic correctness
+- Lazy evaluation for efficient data processing
+- Mathematical approach to trading logic
+
+**Dependency Management:**
+
+- Use `.cabal` or `package.yaml` for Cabal projects
+- Hackage package ecosystem
+- Compiled at deploy time
 
 ### Metadata Configuration
 

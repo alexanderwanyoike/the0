@@ -26,6 +26,7 @@ module Main where
 
 import Network.HTTP.Simple
 import Data.Aeson
+import Data.Aeson.Types (Parser)
 import Data.Aeson.Key (fromText)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
@@ -33,10 +34,10 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import Data.Maybe (fromMaybe, catMaybes)
+import System.Environment (lookupEnv)
 import GHC.Generics
+import Data.Time.Clock.POSIX (getPOSIXTime)
 import Text.Printf (printf)
-
-import qualified The0.Input as Input
 
 -- Configuration
 data Config = Config
@@ -85,28 +86,30 @@ instance FromJSON Quote
 -- | Main entry point
 main :: IO ()
 main = do
-  -- Get configuration using the0 SDK
-  (botId, configVal) <- Input.parse
+  -- Get configuration from environment
+  botId <- fromMaybe "test-bot" <$> lookupEnv "BOT_ID"
+  configJson <- fromMaybe "{}" <$> lookupEnv "BOT_CONFIG"
 
   let config = fromMaybe (Config "AAPL" 5 20) $
-        case configVal of
-          Object _ -> decode (encode configVal)
-          _ -> Nothing
+        decode (BL.fromStrict $ TE.encodeUtf8 $ T.pack configJson)
 
-  Input.log $ "Bot " ++ botId ++ " started - " ++ cfgSymbol config ++
-              " SMA(" ++ show (cfgShortPeriod config) ++ "/" ++
-              show (cfgLongPeriod config) ++ ")"
+  emitLog "bot_started"
+    [ ("botId", String $ T.pack botId)
+    , ("symbol", String $ T.pack $ cfgSymbol config)
+    , ("shortPeriod", Number $ fromIntegral $ cfgShortPeriod config)
+    , ("longPeriod", Number $ fromIntegral $ cfgLongPeriod config)
+    ]
 
   -- Fetch and process data
   processResult <- processData config
 
   case processResult of
     Left err -> do
-      Input.log $ "Error: " ++ err
-      Input.error err
+      emitLog "error" [("message", String $ T.pack err)]
+      emitResult "error" err
     Right msg -> do
-      Input.log $ "Completed: " ++ msg
-      Input.success msg
+      emitLog "bot_completed" [("message", String $ T.pack msg)]
+      emitResult "success" msg
 
 -- | Process market data and generate signals
 processData :: Config -> IO (Either String String)
@@ -122,8 +125,11 @@ processData config = do
 
       if length prices < longPeriod
         then do
-          Input.log $ "Insufficient data: " ++ show (length prices) ++
-                      "/" ++ show longPeriod ++ " required for " ++ symbol
+          emitLog "insufficient_data"
+            [ ("symbol", String $ T.pack symbol)
+            , ("required", Number $ fromIntegral longPeriod)
+            , ("available", Number $ fromIntegral $ length prices)
+            ]
           return $ Left "Insufficient data for analysis"
         else do
           -- Get current price
@@ -133,24 +139,27 @@ processData config = do
                           then ((currentPrice - previousPrice) / previousPrice) * 100
                           else 0
 
-          -- Emit price metric using SDK
-          Input.metric "price" $ object
-            [ fromText "symbol" .= symbol
-            , fromText "value" .= roundTo 2 currentPrice
-            , fromText "change_pct" .= roundTo 3 changePct
+          ts <- getCurrentTimestamp
+
+          -- Emit price metric
+          emitMetric "price"
+            [ ("symbol", String $ T.pack symbol)
+            , ("value", Number $ realToFrac $ roundTo 2 currentPrice)
+            , ("change_pct", Number $ realToFrac $ roundTo 3 changePct)
+            , ("timestamp", String $ T.pack ts)
             ]
 
           -- Calculate SMAs
           let shortSma = calculateSMA prices shortPeriod
               longSma = calculateSMA prices longPeriod
 
-          -- Emit SMA metric using SDK
-          Input.metric "sma" $ object
-            [ fromText "symbol" .= symbol
-            , fromText "short_sma" .= roundTo 2 shortSma
-            , fromText "long_sma" .= roundTo 2 longSma
-            , fromText "short_period" .= shortPeriod
-            , fromText "long_period" .= longPeriod
+          -- Emit SMA metric
+          emitMetric "sma"
+            [ ("symbol", String $ T.pack symbol)
+            , ("short_sma", Number $ realToFrac $ roundTo 2 shortSma)
+            , ("long_sma", Number $ realToFrac $ roundTo 2 longSma)
+            , ("short_period", Number $ fromIntegral shortPeriod)
+            , ("long_period", Number $ fromIntegral longPeriod)
             ]
 
           -- Determine trend
@@ -158,14 +167,14 @@ processData config = do
               confidence = min (abs (shortSma - longSma) / longSma * 100) 0.95
               signalType = if shortSma > longSma then "BUY" else "SELL"
 
-          -- Emit signal metric using SDK
-          Input.metric "signal" $ object
-            [ fromText "type" .= signalType
-            , fromText "symbol" .= symbol
-            , fromText "price" .= roundTo 2 currentPrice
-            , fromText "confidence" .= roundTo 2 confidence
-            , fromText "reason" .=
-                ("SMA" ++ show shortPeriod ++ " is " ++
+          -- Emit signal metric
+          emitMetric "signal"
+            [ ("type", String $ T.pack signalType)
+            , ("symbol", String $ T.pack symbol)
+            , ("price", Number $ realToFrac $ roundTo 2 currentPrice)
+            , ("confidence", Number $ realToFrac $ roundTo 2 confidence)
+            , ("reason", String $ T.pack $
+                "SMA" ++ show shortPeriod ++ " is " ++
                 (if shortSma > longSma then "above" else "below") ++
                 " SMA" ++ show longPeriod ++ " (" ++ trend ++ " trend)")
             ]
@@ -203,6 +212,40 @@ calculateSMA prices period
   | otherwise = sum (takeLast period prices) / fromIntegral period
   where
     takeLast n xs = drop (length xs - n) xs
+
+-- | Emit a metric to stdout
+emitMetric :: String -> [(T.Text, Value)] -> IO ()
+emitMetric metricType fields = do
+  let keyFields = map (\(k, v) -> (fromText k, v)) fields
+  let output = object $ (fromText "_metric", String $ T.pack metricType) : keyFields
+  BLC.putStrLn $ encode output
+
+-- | Emit a log message to stdout
+emitLog :: String -> [(T.Text, Value)] -> IO ()
+emitLog event fields = do
+  ts <- getCurrentTimestamp
+  let keyFields = map (\(k, v) -> (fromText k, v)) fields
+  let output = object $
+        (fromText "event", String $ T.pack event) :
+        (fromText "timestamp", String $ T.pack ts) : keyFields
+  BLC.putStrLn $ encode output
+
+-- | Emit final result
+emitResult :: String -> String -> IO ()
+emitResult status message = do
+  let output = object
+        [ (fromText "_result", String $ T.pack status)
+        , (fromText "message", String $ T.pack message)
+        ]
+  BLC.putStrLn $ encode output
+
+-- | Get current timestamp as string
+getCurrentTimestamp :: IO String
+getCurrentTimestamp = do
+  t <- getPOSIXTime
+  let secs = floor t :: Int
+      millis = floor ((t - fromIntegral secs) * 1000) :: Int
+  return $ show secs ++ "." ++ printf "%03d" millis ++ "Z"
 
 -- | Round to specified decimal places
 roundTo :: Int -> Double -> Double
