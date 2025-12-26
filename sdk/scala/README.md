@@ -4,34 +4,23 @@ SDK for building trading bots on the0 platform in Scala 3.
 
 ## Installation
 
-### Option 1: GitHub Packages (Maven)
+### Option 1: Git Dependency (Recommended)
 
-Add the GitHub Packages resolver and dependency to your `build.sbt`:
-
-```sbt
-resolvers += "GitHub Package Registry" at "https://maven.pkg.github.com/alexanderwanyoike/the0"
-credentials += Credentials(
-  "GitHub Package Registry",
-  "maven.pkg.github.com",
-  "YOUR_GITHUB_USERNAME",
-  sys.env.getOrElse("GITHUB_TOKEN", "")
-)
-
-libraryDependencies += "dev.the0" %% "the0-sdk" % "0.1.0"
-```
-
-### Option 2: Copy the Package
-
-Copy `src/main/scala/the0/Input.scala` to your project's source directory.
-
-### Option 3: Local Dependency
+Add to your `build.sbt`:
 
 ```sbt
-lazy val the0Sdk = ProjectRef(file("path/to/sdk/scala"), "root")
+// Use a specific release tag
+lazy val the0Sdk = RootProject(uri("https://github.com/alexanderwanyoike/the0.git#v1.1.0") / "sdk" / "scala")
 
 lazy val root = (project in file("."))
   .dependsOn(the0Sdk)
 ```
+
+> **Note:** Replace `v1.1.0` with the latest release tag.
+
+### Option 2: Copy the Package
+
+Copy `src/main/scala/the0/Input.scala` to your project's source directory.
 
 ## Requirements
 
@@ -250,36 +239,6 @@ object Main extends App {
   Input.success(result)
 }
 ```
-
-## Publishing (Maintainers)
-
-This package is published to GitHub Packages (Maven).
-
-### Prerequisites
-
-1. Create a GitHub Personal Access Token with `write:packages` scope:
-   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
-
-2. Set the token as an environment variable:
-   ```bash
-   export GITHUB_TOKEN="ghp_your_token_here"
-   ```
-
-### Publish
-
-```bash
-sbt publish
-```
-
-### Version Bump
-
-Update the version in `build.sbt`:
-
-```sbt
-ThisBuild / version := "0.2.0"
-```
-
-Then publish.
 
 ## License
 

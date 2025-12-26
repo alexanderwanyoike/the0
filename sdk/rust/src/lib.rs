@@ -94,6 +94,36 @@ pub mod input {
     pub fn result(data: &Value) {
         write_result(&serde_json::to_string(data).expect("Failed to serialize result"));
     }
+
+    /// Emit a metric to stdout.
+    ///
+    /// Outputs a JSON object with `_metric` field and timestamp.
+    pub fn metric(metric_type: &str, data: &Value) {
+        let timestamp = chrono_now();
+        let mut output = data.as_object().cloned().unwrap_or_default();
+        output.insert("_metric".to_string(), Value::String(metric_type.to_string()));
+        output.insert("timestamp".to_string(), Value::String(timestamp));
+        println!("{}", serde_json::to_string(&output).expect("Failed to serialize metric"));
+    }
+
+    /// Log a message to stdout.
+    ///
+    /// Outputs a JSON object with `message` field.
+    pub fn log(message: &str) {
+        println!(r#"{{"message":"{}"}}"#, message.replace('\\', "\\\\").replace('"', "\\\""));
+    }
+
+    /// Get current timestamp in ISO 8601 format.
+    fn chrono_now() -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let duration = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap();
+        let secs = duration.as_secs();
+        let millis = duration.subsec_millis();
+        // Convert to ISO format (approximate)
+        format!("{}Z", secs * 1000 + millis as u64)
+    }
 }
 
 #[cfg(test)]

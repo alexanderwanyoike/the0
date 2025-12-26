@@ -4,15 +4,7 @@ This SDK provides utilities for building trading bots on the0 platform using Has
 
 ## Installation
 
-### From Hackage
-
-Add `the0-sdk` to your `.cabal` file dependencies:
-
-```cabal
-build-depends: the0-sdk
-```
-
-### From Source
+### Option 1: Git Dependency (Recommended)
 
 Add to your `cabal.project`:
 
@@ -22,6 +14,7 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
+    tag: v1.1.0
     subdir: sdk/haskell
 ```
 
@@ -30,6 +23,12 @@ Then add to your `.cabal` file:
 ```cabal
 build-depends: the0-sdk
 ```
+
+> **Note:** Replace `v1.1.0` with the latest release tag.
+
+### Option 2: Copy the Package
+
+Copy `src/The0/Input.hs` to your project's source directory.
 
 ## Usage
 
@@ -130,39 +129,6 @@ cabal build --enable-optimization=2
 
 # The binary will be in dist-newstyle/build/...
 ```
-
-## Publishing (Maintainers)
-
-This package is published to Hackage.
-
-### Prerequisites
-
-1. Create a Hackage account at https://hackage.haskell.org/users/register
-
-2. Ensure you have upload rights for the package
-
-### Publish
-
-```bash
-# Build the package
-cabal sdist
-
-# Upload to Hackage (candidate first)
-cabal upload dist-newstyle/sdist/the0-sdk-*.tar.gz
-
-# After testing, publish officially
-cabal upload --publish dist-newstyle/sdist/the0-sdk-*.tar.gz
-```
-
-### Version Bump
-
-Update the version in `the0.cabal`:
-
-```cabal
-version: 0.1.1.0
-```
-
-Then rebuild and publish.
 
 ## License
 

@@ -25,6 +25,7 @@
 #define THE0_H
 
 #include <nlohmann/json.hpp>
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -159,6 +160,39 @@ inline void result(const std::string& status, const std::string& message, const 
         output[key] = value;
     }
     write_result(output.dump());
+}
+
+/**
+ * Get current timestamp as milliseconds since epoch.
+ */
+inline std::string current_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    return std::to_string(ms) + "Z";
+}
+
+/**
+ * Emit a metric to stdout.
+ *
+ * Outputs a JSON object with the _metric field and timestamp.
+ *
+ * @param metric_type The type of metric (e.g., "price", "signal")
+ * @param data The metric data
+ */
+inline void metric(const std::string& metric_type, json data) {
+    data["_metric"] = metric_type;
+    data["timestamp"] = current_timestamp();
+    std::cout << data.dump() << std::endl;
+}
+
+/**
+ * Log a message to stdout.
+ *
+ * @param message The message to log
+ */
+inline void log(const std::string& message) {
+    json output = {{"message", message}};
+    std::cout << output.dump() << std::endl;
 }
 
 } // namespace the0
