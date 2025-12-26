@@ -26,9 +26,13 @@ module The0.Input
     , success
     , The0.Input.error
     , result
+    , metric
+    , The0.Input.log
     ) where
 
-import Data.Aeson (Value, decode, encode, object, (.=))
+import Data.Aeson (Value(..), decode, encode, object, (.=), Object, toJSON)
+import Data.Aeson.Key (fromString)
+import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
@@ -37,6 +41,7 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import Control.Exception (catch, SomeException)
+import Data.Time.Clock.POSIX (getPOSIXTime)
 
 -- | Parse bot configuration from environment variables.
 --
@@ -123,3 +128,30 @@ escapeJson = concatMap escapeChar
     escapeChar '\r' = "\\r"
     escapeChar '\t' = "\\t"
     escapeChar c    = [c]
+
+-- | Emit a metric to stdout with timestamp.
+--
+-- The metric type and data are combined into a JSON object with
+-- @_metric@ and @timestamp@ fields added.
+metric :: String -> Value -> IO ()
+metric metricType val = do
+    ts <- getTimestamp
+    let baseObj = case val of
+            Object o -> o
+            _ -> mempty
+        withMeta = insert (fromString "_metric") (String $ T.pack metricType) $
+                   insert (fromString "timestamp") (String $ T.pack ts) baseObj
+    BL.putStrLn $ encode (Object withMeta)
+
+-- | Log a message to stdout.
+log :: String -> IO ()
+log msg = do
+    let escaped = escapeJson msg
+    putStrLn $ "{\"message\":\"" ++ escaped ++ "\"}"
+
+-- | Get current timestamp as milliseconds string with Z suffix.
+getTimestamp :: IO String
+getTimestamp = do
+    t <- getPOSIXTime
+    let millis = floor (t * 1000) :: Integer
+    return $ show millis ++ "Z"

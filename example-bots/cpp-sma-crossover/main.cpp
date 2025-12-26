@@ -16,7 +16,7 @@
  * - signal: BUY/SELL signals when crossover detected
  */
 
-#include "the0.h"
+#include <the0.h>
 #include <iostream>
 #include <string>
 #include <vector>
