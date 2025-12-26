@@ -14,7 +14,7 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
-    tag: v1.1.0
+    tag: v0.1.2
     subdir: sdk/haskell
 ```
 
@@ -24,7 +24,7 @@ Then add to your `.cabal` file:
 build-depends: the0-sdk
 ```
 
-> **Note:** Replace `v1.1.0` with the latest release tag.
+> **Note:** Check [releases](https://github.com/alexanderwanyoike/the0/releases) for the latest version tag.
 
 ### Option 2: Copy the Package
 
@@ -88,6 +88,44 @@ Prints a JSON object: `{"status":"error","message":"<your message>"}`
 Output a custom JSON result to stdout.
 
 Serializes the provided `Value` as JSON and prints it.
+
+### `metric :: String -> Value -> IO ()`
+
+Emit a metric for the platform to collect.
+
+```haskell
+metric "price" (object ["symbol" .= "BTC/USD", "value" .= (45000 :: Double)])
+```
+
+Outputs JSON to stdout with `_metric` and `timestamp` fields added.
+
+### `log :: String -> Maybe Value -> Maybe LogLevel -> IO ()`
+
+Log a structured message to stderr.
+
+```haskell
+-- Simple log (defaults to info level)
+log "Starting bot" Nothing Nothing
+
+-- Log with level
+log "Connection lost" Nothing (Just Warn)
+
+-- Log with structured data
+log "Order placed" (Just $ object ["order_id" .= "123"]) Nothing
+
+-- Log with data and level
+log "Order failed" (Just $ object ["order_id" .= "123"]) (Just Error)
+```
+
+### `logInfo`, `logWarn`, `logError :: String -> Maybe Value -> IO ()`
+
+Convenience functions for logging at specific levels.
+
+```haskell
+logInfo "Bot started" Nothing
+logWarn "Rate limit approaching" (Just $ object ["remaining" .= (10 :: Int)])
+logError "Connection failed" (Just $ object ["error" .= "timeout"])
+```
 
 ## Example Bot
 

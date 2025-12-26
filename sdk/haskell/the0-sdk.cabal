@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               the0-sdk
-version:            0.1.1.0
+version:            0.1.2.0
 synopsis:           the0 trading bot SDK for Haskell
 description:        Utilities for building trading bots on the0 platform.
                     Provides configuration parsing, result output, and metric emission.

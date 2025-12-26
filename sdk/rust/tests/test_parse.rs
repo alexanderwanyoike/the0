@@ -5,6 +5,7 @@ mod common;
 use common::EnvGuard;
 use serde_json::json;
 use the0_sdk::input;
+use the0_sdk::ParseError;
 
 #[test]
 fn parse_returns_bot_id_and_config() {
@@ -12,7 +13,7 @@ fn parse_returns_bot_id_and_config() {
     env.set("BOT_ID", "test-bot-123");
     env.set("BOT_CONFIG", r#"{"symbol":"BTC/USDT","amount":100}"#);
 
-    let (bot_id, config) = input::parse();
+    let (bot_id, config) = input::parse().unwrap();
 
     assert_eq!(bot_id, "test-bot-123");
     assert_eq!(config["symbol"], "BTC/USDT");
@@ -28,7 +29,7 @@ fn parse_handles_nested_config() {
         r#"{"exchange":{"name":"binance","testnet":true},"symbols":["BTC","ETH"]}"#,
     );
 
-    let (bot_id, config) = input::parse();
+    let (bot_id, config) = input::parse().unwrap();
 
     assert_eq!(bot_id, "nested-bot");
     assert_eq!(config["exchange"]["name"], "binance");
@@ -56,7 +57,7 @@ fn parse_handles_all_json_types() {
         }"#,
     );
 
-    let (_, config) = input::parse();
+    let (_, config) = input::parse().unwrap();
 
     assert_eq!(config["string"], "hello");
     assert_eq!(config["integer"], 42);
@@ -74,7 +75,7 @@ fn parse_handles_empty_object_config() {
     env.set("BOT_ID", "empty-config-bot");
     env.set("BOT_CONFIG", "{}");
 
-    let (bot_id, config) = input::parse();
+    let (bot_id, config) = input::parse().unwrap();
 
     assert_eq!(bot_id, "empty-config-bot");
     assert!(config.is_object());
@@ -87,42 +88,42 @@ fn parse_handles_unicode_in_config() {
     env.set("BOT_ID", "unicode-bot");
     env.set("BOT_CONFIG", r#"{"message":"Hello World! 🚀"}"#);
 
-    let (_, config) = input::parse();
+    let (_, config) = input::parse().unwrap();
 
     assert_eq!(config["message"], "Hello World! 🚀");
 }
 
 #[test]
-#[should_panic(expected = "BOT_ID environment variable not set")]
-fn parse_panics_when_bot_id_not_set() {
-    // Use unlocked guard to avoid poisoning mutex on panic
-    let mut env = EnvGuard::new_unlocked();
+fn parse_returns_error_when_bot_id_missing() {
+    let mut env = EnvGuard::new();
     env.remove("BOT_ID");
     env.set("BOT_CONFIG", "{}");
 
-    let _ = input::parse();
+    let result = input::parse();
+
+    assert!(matches!(result, Err(ParseError::MissingBotId)));
 }
 
 #[test]
-#[should_panic(expected = "BOT_CONFIG environment variable not set")]
-fn parse_panics_when_bot_config_not_set() {
-    // Use unlocked guard to avoid poisoning mutex on panic
-    let mut env = EnvGuard::new_unlocked();
+fn parse_returns_error_when_bot_config_missing() {
+    let mut env = EnvGuard::new();
     env.set("BOT_ID", "test-bot");
     env.remove("BOT_CONFIG");
 
-    let _ = input::parse();
+    let result = input::parse();
+
+    assert!(matches!(result, Err(ParseError::MissingBotConfig)));
 }
 
 #[test]
-#[should_panic(expected = "Failed to parse BOT_CONFIG as JSON")]
-fn parse_panics_on_invalid_json() {
-    // Use unlocked guard to avoid poisoning mutex on panic
-    let mut env = EnvGuard::new_unlocked();
+fn parse_returns_error_on_invalid_json() {
+    let mut env = EnvGuard::new();
     env.set("BOT_ID", "test-bot");
-    env.set("BOT_CONFIG", "not valid json {{{");
+    env.set("BOT_CONFIG", "not valid json");
 
-    let _ = input::parse();
+    let result = input::parse();
+
+    assert!(matches!(result, Err(ParseError::InvalidJson(_))));
 }
 
 // Tests for parse_as_map
@@ -133,7 +134,7 @@ fn parse_as_map_returns_hashmap() {
     env.set("BOT_ID", "map-bot");
     env.set("BOT_CONFIG", r#"{"key1":"value1","key2":42}"#);
 
-    let (bot_id, config) = input::parse_as_map();
+    let (bot_id, config) = input::parse_as_map().unwrap();
 
     assert_eq!(bot_id, "map-bot");
     assert_eq!(config.get("key1").unwrap(), &json!("value1"));
@@ -146,7 +147,7 @@ fn parse_as_map_returns_empty_hashmap_for_empty_object() {
     env.set("BOT_ID", "empty-map-bot");
     env.set("BOT_CONFIG", "{}");
 
-    let (_, config) = input::parse_as_map();
+    let (_, config) = input::parse_as_map().unwrap();
 
     assert!(config.is_empty());
 }
@@ -160,7 +161,7 @@ fn parse_as_map_handles_complex_values() {
         r#"{"settings":{"enabled":true},"items":[1,2,3]}"#,
     );
 
-    let (_, config) = input::parse_as_map();
+    let (_, config) = input::parse_as_map().unwrap();
 
     let settings = config.get("settings").unwrap();
     assert_eq!(settings["enabled"], true);

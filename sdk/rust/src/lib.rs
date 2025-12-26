@@ -8,7 +8,7 @@
 //! use the0_sdk::input;
 //!
 //! fn main() {
-//!     let (bot_id, config) = input::parse();
+//!     let (bot_id, config) = input::parse().expect("Failed to parse bot config");
 //!     println!("Bot {} starting with config: {:?}", bot_id, config);
 //!
 //!     // Your trading logic here
@@ -21,10 +21,44 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::fmt;
+
+/// Errors that can occur when parsing bot configuration
+#[derive(Debug)]
+pub enum ParseError {
+    /// BOT_ID environment variable is not set
+    MissingBotId,
+    /// BOT_CONFIG environment variable is not set
+    MissingBotConfig,
+    /// BOT_CONFIG contains invalid JSON
+    InvalidJson(serde_json::Error),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::MissingBotId => write!(f, "BOT_ID environment variable not set"),
+            ParseError::MissingBotConfig => write!(f, "BOT_CONFIG environment variable not set"),
+            ParseError::InvalidJson(e) => write!(f, "Failed to parse BOT_CONFIG as JSON: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ParseError::InvalidJson(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 /// Input parsing and output formatting utilities
 pub mod input {
     use super::*;
+
+    // Re-export ParseError for convenience
+    pub use crate::ParseError;
 
     /// Get the path to the result file
     fn result_file_path() -> String {
@@ -44,30 +78,29 @@ pub mod input {
     ///
     /// Returns a tuple of (bot_id, config) where config is a serde_json::Value.
     ///
-    /// # Panics
-    /// Panics if BOT_ID or BOT_CONFIG environment variables are not set,
+    /// # Errors
+    /// Returns an error if BOT_ID or BOT_CONFIG environment variables are not set,
     /// or if BOT_CONFIG is not valid JSON.
-    pub fn parse() -> (String, Value) {
-        let id = env::var("BOT_ID").expect("BOT_ID environment variable not set");
-        let config_str = env::var("BOT_CONFIG").expect("BOT_CONFIG environment variable not set");
-        let config: Value =
-            serde_json::from_str(&config_str).expect("Failed to parse BOT_CONFIG as JSON");
-        (id, config)
+    pub fn parse() -> Result<(String, Value), ParseError> {
+        let id = env::var("BOT_ID").map_err(|_| ParseError::MissingBotId)?;
+        let config_str = env::var("BOT_CONFIG").map_err(|_| ParseError::MissingBotConfig)?;
+        let config: Value = serde_json::from_str(&config_str).map_err(ParseError::InvalidJson)?;
+        Ok((id, config))
     }
 
     /// Parse bot configuration with typed config as HashMap.
     ///
     /// Returns a tuple of (bot_id, config) where config is a HashMap<String, Value>.
     ///
-    /// # Panics
-    /// Panics if BOT_ID or BOT_CONFIG environment variables are not set,
+    /// # Errors
+    /// Returns an error if BOT_ID or BOT_CONFIG environment variables are not set,
     /// or if BOT_CONFIG is not valid JSON.
-    pub fn parse_as_map() -> (String, HashMap<String, Value>) {
-        let id = env::var("BOT_ID").expect("BOT_ID environment variable not set");
-        let config_str = env::var("BOT_CONFIG").expect("BOT_CONFIG environment variable not set");
+    pub fn parse_as_map() -> Result<(String, HashMap<String, Value>), ParseError> {
+        let id = env::var("BOT_ID").map_err(|_| ParseError::MissingBotId)?;
+        let config_str = env::var("BOT_CONFIG").map_err(|_| ParseError::MissingBotConfig)?;
         let config: HashMap<String, Value> =
-            serde_json::from_str(&config_str).expect("Failed to parse BOT_CONFIG as JSON");
-        (id, config)
+            serde_json::from_str(&config_str).map_err(ParseError::InvalidJson)?;
+        Ok((id, config))
     }
 
     /// Output a success result to the result file.
