@@ -232,31 +232,111 @@ describe('metric', () => {
 });
 
 describe('log', () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    consoleSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 
-  it('should log simple message', () => {
-    log('Starting trade execution');
+  it('should output JSON with message field to stderr', () => {
+    log('Starting bot execution');
 
-    expect(consoleSpy).toHaveBeenCalledWith('Starting trade execution');
+    expect(stderrSpy).toHaveBeenCalled();
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.message).toBe('Starting bot execution');
   });
 
-  it('should log message with structured data', () => {
-    log('Order placed', { order_id: '123', symbol: 'BTC' });
+  it('should default to info level', () => {
+    log('Test message');
 
-    const output = consoleSpy.mock.calls[0][0];
-    const data = JSON.parse(output);
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
 
-    expect(data.message).toBe('Order placed');
-    expect(data.order_id).toBe('123');
-    expect(data.symbol).toBe('BTC');
+    expect(output.level).toBe('info');
+  });
+
+  it('should include timestamp', () => {
+    log('Test message');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.timestamp).toBeDefined();
+    expect(new Date(output.timestamp).toISOString()).toBe(output.timestamp);
+  });
+
+  it('should support warn level as second argument', () => {
+    log('Warning message', 'warn');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.level).toBe('warn');
+    expect(output.message).toBe('Warning message');
+  });
+
+  it('should support error level as second argument', () => {
+    log('Error message', 'error');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.level).toBe('error');
+  });
+
+  it('should merge data fields (pino-style)', () => {
+    log('Order placed', { orderId: '12345', symbol: 'BTC' });
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.message).toBe('Order placed');
+    expect(output.orderId).toBe('12345');
+    expect(output.symbol).toBe('BTC');
+    expect(output.level).toBe('info');
+  });
+
+  it('should support data and level together', () => {
+    log('Order failed', { orderId: '12345' }, 'error');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.level).toBe('error');
+    expect(output.message).toBe('Order failed');
+    expect(output.orderId).toBe('12345');
+  });
+
+  it('should handle empty message', () => {
+    log('');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.message).toBe('');
+  });
+
+  it('should handle special characters in message', () => {
+    log('Error: "file not found" at C:\\path');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.message).toBe('Error: "file not found" at C:\\path');
+  });
+
+  it('should handle newlines in message', () => {
+    log('Line 1\nLine 2\nLine 3');
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.message).toBe('Line 1\nLine 2\nLine 3');
+  });
+
+  it('should handle long message', () => {
+    const longMessage = 'x'.repeat(10000);
+    log(longMessage);
+
+    const output = JSON.parse(stderrSpy.mock.calls[0][0]);
+
+    expect(output.message).toBe(longMessage);
   });
 });
 

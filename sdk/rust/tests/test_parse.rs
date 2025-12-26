@@ -95,7 +95,8 @@ fn parse_handles_unicode_in_config() {
 #[test]
 #[should_panic(expected = "BOT_ID environment variable not set")]
 fn parse_panics_when_bot_id_not_set() {
-    let mut env = EnvGuard::new();
+    // Use unlocked guard to avoid poisoning mutex on panic
+    let mut env = EnvGuard::new_unlocked();
     env.remove("BOT_ID");
     env.set("BOT_CONFIG", "{}");
 
@@ -105,7 +106,8 @@ fn parse_panics_when_bot_id_not_set() {
 #[test]
 #[should_panic(expected = "BOT_CONFIG environment variable not set")]
 fn parse_panics_when_bot_config_not_set() {
-    let mut env = EnvGuard::new();
+    // Use unlocked guard to avoid poisoning mutex on panic
+    let mut env = EnvGuard::new_unlocked();
     env.set("BOT_ID", "test-bot");
     env.remove("BOT_CONFIG");
 
@@ -115,7 +117,8 @@ fn parse_panics_when_bot_config_not_set() {
 #[test]
 #[should_panic(expected = "Failed to parse BOT_CONFIG as JSON")]
 fn parse_panics_on_invalid_json() {
-    let mut env = EnvGuard::new();
+    // Use unlocked guard to avoid poisoning mutex on panic
+    let mut env = EnvGuard::new_unlocked();
     env.set("BOT_ID", "test-bot");
     env.set("BOT_CONFIG", "not valid json {{{");
 

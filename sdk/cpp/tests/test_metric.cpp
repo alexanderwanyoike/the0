@@ -90,8 +90,8 @@ TEST_SUITE("the0::metric") {
 }
 
 TEST_SUITE("the0::log") {
-    TEST_CASE("outputs JSON with message field to stdout") {
-        CaptureStdout capture;
+    TEST_CASE("outputs JSON with message field to stderr") {
+        CaptureStderr capture;
         the0::log("Starting bot execution");
 
         std::string output = capture.get();
@@ -101,8 +101,76 @@ TEST_SUITE("the0::log") {
         CHECK(json["message"] == "Starting bot execution");
     }
 
+    TEST_CASE("defaults to info level") {
+        CaptureStderr capture;
+        the0::log("Test message");
+
+        std::string output = capture.get();
+        auto json = the0::json::parse(output);
+
+        CHECK(json["level"] == "info");
+    }
+
+    TEST_CASE("includes timestamp") {
+        CaptureStderr capture;
+        the0::log("Test message");
+
+        std::string output = capture.get();
+        auto json = the0::json::parse(output);
+
+        CHECK(json.contains("timestamp"));
+        std::string ts = json["timestamp"].get<std::string>();
+        CHECK(ts.back() == 'Z');
+    }
+
+    TEST_CASE("supports warn level") {
+        CaptureStderr capture;
+        the0::log("Warning message", {}, the0::LogLevel::Warn);
+
+        std::string output = capture.get();
+        auto json = the0::json::parse(output);
+
+        CHECK(json["level"] == "warn");
+        CHECK(json["message"] == "Warning message");
+    }
+
+    TEST_CASE("supports error level") {
+        CaptureStderr capture;
+        the0::log("Error message", {}, the0::LogLevel::Error);
+
+        std::string output = capture.get();
+        auto json = the0::json::parse(output);
+
+        CHECK(json["level"] == "error");
+        CHECK(json["message"] == "Error message");
+    }
+
+    TEST_CASE("merges data fields") {
+        CaptureStderr capture;
+        the0::log("Order placed", {{"order_id", "12345"}, {"symbol", "BTC"}});
+
+        std::string output = capture.get();
+        auto json = the0::json::parse(output);
+
+        CHECK(json["message"] == "Order placed");
+        CHECK(json["order_id"] == "12345");
+        CHECK(json["symbol"] == "BTC");
+    }
+
+    TEST_CASE("supports data and level together") {
+        CaptureStderr capture;
+        the0::log("Order failed", {{"order_id", "12345"}}, the0::LogLevel::Error);
+
+        std::string output = capture.get();
+        auto json = the0::json::parse(output);
+
+        CHECK(json["level"] == "error");
+        CHECK(json["message"] == "Order failed");
+        CHECK(json["order_id"] == "12345");
+    }
+
     TEST_CASE("properly escapes special characters in message") {
-        CaptureStdout capture;
+        CaptureStderr capture;
         the0::log("Error: \"file not found\"");
 
         std::string output = capture.get();
@@ -112,7 +180,7 @@ TEST_SUITE("the0::log") {
     }
 
     TEST_CASE("handles empty message") {
-        CaptureStdout capture;
+        CaptureStderr capture;
         the0::log("");
 
         std::string output = capture.get();
@@ -122,7 +190,7 @@ TEST_SUITE("the0::log") {
     }
 
     TEST_CASE("handles newlines in message") {
-        CaptureStdout capture;
+        CaptureStderr capture;
         the0::log("Line 1\nLine 2");
 
         std::string output = capture.get();
@@ -132,7 +200,7 @@ TEST_SUITE("the0::log") {
     }
 
     TEST_CASE("outputs newline at end") {
-        CaptureStdout capture;
+        CaptureStderr capture;
         the0::log("test");
 
         std::string output = capture.get();

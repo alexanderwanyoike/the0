@@ -3,7 +3,7 @@
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use tempfile::TempDir;
 
 /// Global mutex to prevent env var races between tests
@@ -13,6 +13,8 @@ static ENV_MUTEX: Mutex<()> = Mutex::new(());
 /// RAII guard that sets environment variables and restores on drop
 pub struct EnvGuard {
     vars: Vec<(String, Option<String>)>,
+    #[allow(dead_code)]
+    lock: Option<MutexGuard<'static, ()>>,
 }
 
 impl EnvGuard {
@@ -20,14 +22,22 @@ impl EnvGuard {
     /// Handles poisoned mutex from previous panics (expected in should_panic tests)
     pub fn new() -> Self {
         // Acquire lock, recovering from poison if needed
-        let _lock = match ENV_MUTEX.lock() {
+        let lock = match ENV_MUTEX.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        // Note: we don't store the lock because should_panic tests would poison it
-        // Instead, we rely on the mutex to serialize test execution
         Self {
             vars: Vec::new(),
+            lock: Some(lock),
+        }
+    }
+
+    /// Create a new EnvGuard without holding the mutex lock
+    /// Use this for should_panic tests to avoid poisoning the mutex
+    pub fn new_unlocked() -> Self {
+        Self {
+            vars: Vec::new(),
+            lock: None,
         }
     }
 

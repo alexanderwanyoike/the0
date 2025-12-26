@@ -1,0 +1,33 @@
+name: Rust SDK
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/rust/**'
+      - '.github/workflows/sdk-rust.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdk/rust/**'
+      - '.github/workflows/sdk-rust.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-action@stable
+
+    - name: Run tests
+      working-directory: ./sdk/rust
+      run: cargo test -- --test-threads=1
+
+    - name: Build
+      working-directory: ./sdk/rust
+      run: cargo build --release

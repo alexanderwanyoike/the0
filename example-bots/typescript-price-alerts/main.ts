@@ -9,11 +9,17 @@
  * Differences from main.ts:
  * - Uses `parse()` instead of function signature for config
  * - Uses `metric()` instead of pino with _metric field
- * - Uses `log()` for structured logging
+ * - Uses pino for structured logging
  * - Uses `sleep()` from SDK instead of custom implementation
  */
 
-import { parse, metric, log, sleep, success } from "@alexanderwanyoike/the0-node";
+import { parse, metric, sleep, success } from "@alexanderwanyoike/the0-node";
+import pino from "pino";
+
+// Configure pino logger for structured JSON output
+const logger = pino({
+  level: "info",
+});
 
 // Bot state (persists across iterations)
 interface BotState {
@@ -43,7 +49,7 @@ async function main(): Promise<void> {
   const alertThreshold = config.alert_threshold || 1.0;
   const updateInterval = config.update_interval_ms || 5000;
 
-  log("Bot started", { botId: id, symbol, alertThreshold });
+  logger.info({ botId: id, symbol, alertThreshold }, "Bot started");
 
   // Initialize bot state
   const state: BotState = {
@@ -107,7 +113,7 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     if ((err as Error).message === "SIGTERM") {
-      log("Bot stopped", { botId: id });
+      logger.info({ botId: id }, "Bot stopped");
       success("Bot stopped gracefully");
       return;
     }

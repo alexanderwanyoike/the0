@@ -106,11 +106,75 @@ pub mod input {
         println!("{}", serde_json::to_string(&output).expect("Failed to serialize metric"));
     }
 
-    /// Log a message to stdout.
+    /// Log levels supported by the platform
+    #[derive(Debug, Clone, Copy)]
+    pub enum LogLevel {
+        Info,
+        Warn,
+        Error,
+    }
+
+    impl LogLevel {
+        fn as_str(&self) -> &'static str {
+            match self {
+                LogLevel::Info => "info",
+                LogLevel::Warn => "warn",
+                LogLevel::Error => "error",
+            }
+        }
+    }
+
+    /// Log a structured message to stderr.
     ///
-    /// Outputs a JSON object with `message` field.
-    pub fn log(message: &str) {
-        println!(r#"{{"message":"{}"}}"#, message.replace('\\', "\\\\").replace('"', "\\\""));
+    /// Outputs a JSON object with `level`, `message`, `timestamp`, and any additional fields.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use the0_sdk::input::{log, LogLevel};
+    /// use serde_json::json;
+    ///
+    /// // Simple log (defaults to info level)
+    /// log("Starting trade execution", None, None);
+    ///
+    /// // Log with level
+    /// log("Connection lost", None, Some(LogLevel::Warn));
+    ///
+    /// // Log with structured data
+    /// log("Order placed", Some(&json!({"order_id": "12345", "symbol": "BTC/USD"})), None);
+    ///
+    /// // Log with data and level
+    /// log("Order failed", Some(&json!({"order_id": "12345"})), Some(LogLevel::Error));
+    /// ```
+    pub fn log(message: &str, data: Option<&Value>, level: Option<LogLevel>) {
+        let log_level = level.unwrap_or(LogLevel::Info);
+        let timestamp = chrono_now();
+
+        let mut output = match data {
+            Some(v) => v.as_object().cloned().unwrap_or_default(),
+            None => serde_json::Map::new(),
+        };
+
+        output.insert("level".to_string(), Value::String(log_level.as_str().to_string()));
+        output.insert("message".to_string(), Value::String(message.to_string()));
+        output.insert("timestamp".to_string(), Value::String(timestamp));
+
+        eprintln!("{}", serde_json::to_string(&output).expect("Failed to serialize log"));
+    }
+
+    /// Convenience function: log an info message
+    pub fn log_info(message: &str, data: Option<&Value>) {
+        log(message, data, Some(LogLevel::Info));
+    }
+
+    /// Convenience function: log a warning message
+    pub fn log_warn(message: &str, data: Option<&Value>) {
+        log(message, data, Some(LogLevel::Warn));
+    }
+
+    /// Convenience function: log an error message
+    pub fn log_error(message: &str, data: Option<&Value>) {
+        log(message, data, Some(LogLevel::Error));
     }
 
     /// Get current timestamp in ISO 8601 format.

@@ -35,7 +35,7 @@ private:
 };
 
 /**
- * RAII helper to capture stdout for metric/log tests
+ * RAII helper to capture stdout for metric tests
  */
 class CaptureStdout {
 public:
@@ -47,6 +47,25 @@ public:
     // Non-copyable
     CaptureStdout(const CaptureStdout&) = delete;
     CaptureStdout& operator=(const CaptureStdout&) = delete;
+
+private:
+    std::stringstream buffer_;
+    std::streambuf* old_buf_;
+};
+
+/**
+ * RAII helper to capture stderr for log tests
+ */
+class CaptureStderr {
+public:
+    CaptureStderr() : old_buf_(std::cerr.rdbuf(buffer_.rdbuf())) {}
+    ~CaptureStderr() { std::cerr.rdbuf(old_buf_); }
+
+    std::string get() const { return buffer_.str(); }
+
+    // Non-copyable
+    CaptureStderr(const CaptureStderr&) = delete;
+    CaptureStderr& operator=(const CaptureStderr&) = delete;
 
 private:
     std::stringstream buffer_;

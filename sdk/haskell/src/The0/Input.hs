@@ -28,6 +28,10 @@ module The0.Input
     , result
     , metric
     , The0.Input.log
+    , logInfo
+    , logWarn
+    , logError
+    , LogLevel(..)
     ) where
 
 import Data.Aeson (Value(..), decode, encode, object, (.=), Object, toJSON)
@@ -143,11 +147,57 @@ metric metricType val = do
                    insert (fromString "timestamp") (String $ T.pack ts) baseObj
     BL.putStrLn $ encode (Object withMeta)
 
--- | Log a message to stdout.
-log :: String -> IO ()
-log msg = do
-    let escaped = escapeJson msg
-    putStrLn $ "{\"message\":\"" ++ escaped ++ "\"}"
+-- | Log levels supported by the platform.
+data LogLevel = Info | Warn | Error
+    deriving (Show, Eq)
+
+logLevelString :: LogLevel -> String
+logLevelString Info = "info"
+logLevelString Warn = "warn"
+logLevelString Error = "error"
+
+-- | Log a structured message to stderr.
+--
+-- Outputs a JSON object with level, message, timestamp, and any additional fields.
+--
+-- = Examples
+--
+-- @
+-- -- Simple log (defaults to info level)
+-- log "Starting trade execution" Nothing Nothing
+--
+-- -- Log with level
+-- log "Connection lost" Nothing (Just Warn)
+--
+-- -- Log with structured data
+-- log "Order placed" (Just $ object ["order_id" .= "12345", "symbol" .= "BTC/USD"]) Nothing
+--
+-- -- Log with data and level
+-- log "Order failed" (Just $ object ["order_id" .= "12345"]) (Just Error)
+-- @
+log :: String -> Maybe Value -> Maybe LogLevel -> IO ()
+log msg mData mLevel = do
+    ts <- getTimestamp
+    let level = maybe Info id mLevel
+        baseObj = case mData of
+            Just (Object o) -> o
+            _ -> mempty
+        withFields = insert (fromString "level") (String $ T.pack $ logLevelString level) $
+                     insert (fromString "message") (String $ T.pack msg) $
+                     insert (fromString "timestamp") (String $ T.pack ts) baseObj
+    BL.hPutStrLn stderr $ encode (Object withFields)
+
+-- | Convenience function: log an info message
+logInfo :: String -> Maybe Value -> IO ()
+logInfo msg mData = The0.Input.log msg mData (Just Info)
+
+-- | Convenience function: log a warning message
+logWarn :: String -> Maybe Value -> IO ()
+logWarn msg mData = The0.Input.log msg mData (Just Warn)
+
+-- | Convenience function: log an error message
+logError :: String -> Maybe Value -> IO ()
+logError msg mData = The0.Input.log msg mData (Just Error)
 
 -- | Get current timestamp as milliseconds string with Z suffix.
 getTimestamp :: IO String

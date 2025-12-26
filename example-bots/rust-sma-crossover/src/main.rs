@@ -21,6 +21,8 @@ use serde::Deserialize;
 use serde_json::json;
 use std::thread;
 use std::time::Duration;
+use tracing::{info, error, Level};
+use tracing_subscriber;
 
 // Yahoo Finance API response structures
 #[derive(Deserialize)]
@@ -55,6 +57,12 @@ struct BotState {
 }
 
 fn main() {
+    // Initialize tracing for structured logging
+    tracing_subscriber::fmt()
+        .json()
+        .with_max_level(Level::INFO)
+        .init();
+
     // Get configuration using the0 SDK
     let (bot_id, config) = input::parse();
 
@@ -64,7 +72,7 @@ fn main() {
     let long_period = config["long_period"].as_i64().unwrap_or(20) as usize;
     let update_interval_ms = config["update_interval_ms"].as_i64().unwrap_or(60000) as u64;
 
-    input::log(&format!("Bot {} started - {} SMA({}/{})", bot_id, symbol, short_period, long_period));
+    info!(bot_id = %bot_id, symbol = %symbol, short_period, long_period, "Bot started");
 
     let client = reqwest::blocking::Client::builder()
         .user_agent("the0-sma-bot/1.0")
@@ -80,7 +88,7 @@ fn main() {
     loop {
         match fetch_and_process(&client, symbol, short_period, long_period, &mut state) {
             Ok(_) => {}
-            Err(e) => input::log(&format!("Error: {}", e)),
+            Err(e) => error!(error = %e, "Processing error"),
         }
 
         thread::sleep(Duration::from_millis(update_interval_ms));
@@ -98,7 +106,7 @@ fn fetch_and_process(
     let prices = fetch_yahoo_finance(client, symbol)?;
 
     if prices.len() < long_period {
-        input::log(&format!("Insufficient data for {}: need {} prices, have {}", symbol, long_period, prices.len()));
+        info!(symbol = %symbol, required = long_period, have = prices.len(), "Insufficient data");
         return Ok(());
     }
 

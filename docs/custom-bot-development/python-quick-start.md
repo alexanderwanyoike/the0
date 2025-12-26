@@ -556,17 +556,6 @@ metric("signal", {"symbol": "ETH/USD", "direction": "long", "confidence": 0.85})
 metric("alert", {"type": "price_spike", "severity": "high"})
 ```
 
-### `log(message: str, data: dict = None)`
-
-Log a message to the bot's logs:
-
-```python
-from the0 import log
-
-log("Starting trade...")
-log("Order placed", {"order_id": "12345", "symbol": "BTC/USD"})
-```
-
 ### Logging
 
 Both stdout and stderr go to your bot's logs:

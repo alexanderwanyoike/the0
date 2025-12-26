@@ -186,13 +186,53 @@ inline void metric(const std::string& metric_type, json data) {
 }
 
 /**
- * Log a message to stdout.
+ * Log levels supported by the platform.
+ */
+enum class LogLevel {
+    Info,
+    Warn,
+    Error
+};
+
+/**
+ * Convert log level to string.
+ */
+inline std::string log_level_str(LogLevel level) {
+    switch (level) {
+        case LogLevel::Warn: return "warn";
+        case LogLevel::Error: return "error";
+        default: return "info";
+    }
+}
+
+/**
+ * Log a structured message to stderr.
+ *
+ * Outputs a JSON object with level, message, timestamp, and any additional fields.
+ *
+ * Examples:
+ *   // Simple log (defaults to info level)
+ *   the0::log("Starting trade execution");
+ *
+ *   // Log with level
+ *   the0::log("Connection lost", {}, LogLevel::Warn);
+ *
+ *   // Log with structured data
+ *   the0::log("Order placed", {{"order_id", "12345"}, {"symbol", "BTC/USD"}});
+ *
+ *   // Log with data and level
+ *   the0::log("Order failed", {{"order_id", "12345"}}, LogLevel::Error);
  *
  * @param message The message to log
+ * @param data Optional JSON object with additional fields
+ * @param level Optional log level (defaults to Info)
  */
-inline void log(const std::string& message) {
-    json output = {{"message", message}};
-    std::cout << output.dump() << std::endl;
+inline void log(const std::string& message, const json& data = json::object(), LogLevel level = LogLevel::Info) {
+    json output = data;
+    output["level"] = log_level_str(level);
+    output["message"] = message;
+    output["timestamp"] = current_timestamp();
+    std::cerr << output.dump() << std::endl;
 }
 
 } // namespace the0

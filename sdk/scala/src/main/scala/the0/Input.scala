@@ -122,13 +122,54 @@ object Input {
   }
 
   /**
-   * Log a message to stdout.
+   * Log levels supported by the platform.
+   */
+  sealed trait LogLevel {
+    def value: String
+  }
+  object LogLevel {
+    case object Info extends LogLevel { val value = "info" }
+    case object Warn extends LogLevel { val value = "warn" }
+    case object Error extends LogLevel { val value = "error" }
+  }
+
+  /**
+   * Log a structured message to stderr.
+   *
+   * Outputs a JSON object with level, message, timestamp, and any additional fields.
+   *
+   * Examples:
+   * {{{
+   * // Simple log (defaults to info level)
+   * Input.log("Starting trade execution")
+   *
+   * // Log with level
+   * Input.log("Connection lost", level = LogLevel.Warn)
+   *
+   * // Log with structured data (pass as JSON string)
+   * Input.log("Order placed", data = """{"order_id":"12345","symbol":"BTC/USD"}""")
+   *
+   * // Log with data and level
+   * Input.log("Order failed", """{"order_id":"12345"}""", LogLevel.Error)
+   * }}}
    *
    * @param message The message to log
+   * @param data Optional JSON string with additional fields (must start with '{')
+   * @param level Log level (defaults to Info)
    */
-  def log(message: String): Unit = {
+  def log(message: String, data: String = "{}", level: LogLevel = LogLevel.Info): Unit = {
     val escaped = escapeJson(message)
-    println(s"""{"message":"$escaped"}""")
+    val timestamp = System.currentTimeMillis()
+
+    // Build output JSON, merging data fields
+    val output = if (data.startsWith("{") && data.length > 2) {
+      // Merge data fields with our fields
+      s"""{"level":"${level.value}","message":"$escaped","timestamp":"${timestamp}Z",${data.substring(1)}"""
+    } else {
+      s"""{"level":"${level.value}","message":"$escaped","timestamp":"${timestamp}Z"}"""
+    }
+
+    System.err.println(output)
   }
 
   /**

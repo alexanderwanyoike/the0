@@ -116,12 +116,45 @@ public static class Input
     }
 
     /// <summary>
-    /// Log a message to stdout.
+    /// Log levels supported by the platform.
+    /// </summary>
+    public enum LogLevel
+    {
+        Info,
+        Warn,
+        Error
+    }
+
+    /// <summary>
+    /// Log a structured message to stderr.
+    /// Outputs a JSON object with level, message, timestamp, and any additional fields.
     /// </summary>
     /// <param name="message">The message to log</param>
-    public static void Log(string message)
+    /// <param name="data">Optional object with additional fields (null for none)</param>
+    /// <param name="level">Optional log level (defaults to Info)</param>
+    /// <example>
+    /// // Simple log (defaults to info level)
+    /// Input.Log("Starting trade execution");
+    ///
+    /// // Log with level
+    /// Input.Log("Connection lost", level: LogLevel.Warn);
+    ///
+    /// // Log with structured data
+    /// Input.Log("Order placed", new { order_id = "12345", symbol = "BTC/USD" });
+    ///
+    /// // Log with data and level
+    /// Input.Log("Order failed", new { order_id = "12345" }, LogLevel.Error);
+    /// </example>
+    public static void Log(string message, object? data = null, LogLevel level = LogLevel.Info)
     {
-        var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        Console.WriteLine($"{{\"message\":\"{escaped}\"}}");
+        var jsonObj = data != null
+            ? JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject()
+            : new JsonObject();
+
+        jsonObj["level"] = level.ToString().ToLower();
+        jsonObj["message"] = message;
+        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+
+        Console.Error.WriteLine(jsonObj.ToJsonString());
     }
 }

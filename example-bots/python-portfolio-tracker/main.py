@@ -9,13 +9,21 @@ simplifies configuration parsing and metric emission.
 Differences from main.py:
 - Uses `the0.parse()` instead of function signature for config
 - Uses `the0.metric()` instead of structlog with _metric field
-- Uses `the0.log()` for structured logging
+- Uses Python's logging module for structured logging
 - Uses `the0.success()` for result output
 """
 
 import random
+import logging
 from datetime import datetime, timezone
-from the0 import parse, success, error, metric, log
+from the0 import parse, success, error, metric
+
+# Configure logging - JSON format for structured logs
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"level":"%(levelname)s","message":"%(message)s","timestamp":"%(asctime)s"}'
+)
+logger = logging.getLogger(__name__)
 
 
 def main(bot_id: str = None, config: dict = None):
@@ -30,7 +38,7 @@ def main(bot_id: str = None, config: dict = None):
     volatility = config.get("volatility", 0.02)
     symbols = config.get("symbols", ["BTC", "ETH", "SOL"])
 
-    log("Bot started", {"bot_id": bot_id, "symbols": symbols})
+    logger.info(f"Bot {bot_id} started with symbols: {symbols}")
 
     # Simulate portfolio state
     portfolio = simulate_portfolio(initial_value, volatility, symbols)
@@ -61,7 +69,7 @@ def main(bot_id: str = None, config: dict = None):
             "total": trade["total"],
         })
 
-    log("Bot completed", {"bot_id": bot_id})
+    logger.info(f"Bot {bot_id} completed")
 
     # Signal success with result data
     success(f"Portfolio tracked: ${portfolio['total_value']:.2f}", {

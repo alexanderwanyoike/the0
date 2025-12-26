@@ -1,0 +1,37 @@
+name: Scala SDK
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/scala/**'
+      - '.github/workflows/sdk-scala.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdk/scala/**'
+      - '.github/workflows/sdk-scala.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        cache: 'sbt'
+
+    - name: Run tests
+      working-directory: ./sdk/scala
+      run: sbt test
+
+    - name: Build
+      working-directory: ./sdk/scala
+      run: sbt compile

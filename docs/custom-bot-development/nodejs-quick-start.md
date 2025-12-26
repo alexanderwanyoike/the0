@@ -86,7 +86,11 @@ Or copy it directly from `sdk/nodejs` in the repository.
 Create `main.ts`:
 
 ```typescript
-import { parse, success, error, metric, log } from '@alexanderwanyoike/the0-node';
+import { parse, success, error, metric } from '@alexanderwanyoike/the0-node';
+import pino from 'pino';
+
+// Configure pino for structured JSON logging
+const logger = pino({ level: 'info' });
 
 /**
  * Configuration interface for type safety
@@ -109,8 +113,8 @@ async function main(): Promise<void> {
   // The platform sets BOT_ID and BOT_CONFIG automatically
   const { id, config } = parse<BotConfig>();
 
-  log(`Bot ${id} starting...`);
-  log('Configuration loaded', { symbol: config.symbol, amount: config.amount });
+  logger.info({ botId: id }, 'Bot starting...');
+  logger.info({ symbol: config.symbol, amount: config.amount }, 'Configuration loaded');
 
   try {
     // ===========================================
@@ -119,7 +123,7 @@ async function main(): Promise<void> {
 
     // Example: Fetch current price
     const price = await fetchPrice(config.symbol);
-    log(`Current price of ${config.symbol}: $${price}`);
+    logger.info({ symbol: config.symbol, price }, 'Current price fetched');
 
     // Emit a price metric for the dashboard
     metric('price', {
@@ -130,7 +134,7 @@ async function main(): Promise<void> {
 
     // Example: Execute a trade (implement your logic)
     if (config.amount > 0) {
-      log('Executing trade...', { symbol: config.symbol, amount: config.amount });
+      logger.info({ symbol: config.symbol, amount: config.amount }, 'Executing trade...');
       // const order = await executeTrade(config);
     }
 
@@ -378,15 +382,6 @@ metric('signal', { symbol: 'ETH/USD', direction: 'long', confidence: 0.85 });
 metric('alert', { type: 'price_spike', severity: 'high', message: '+5% in 1 min' });
 ```
 
-### `log(message: string, data?: object)`
-
-Log a message (appears in bot logs).
-
-```typescript
-log('Starting trade execution');
-log('Order placed', { orderId: '12345', symbol: 'BTC/USD' });
-```
-
 ### `sleep(ms: number): Promise<void>`
 
 Async sleep utility.
@@ -402,7 +397,11 @@ await sleep(5000); // Wait 5 seconds
 Here's a more complete example using the `ccxt` library:
 
 ```typescript
-import { parse, success, error, metric, log, sleep } from '@alexanderwanyoike/the0-node';
+import { parse, success, error, metric, sleep } from '@alexanderwanyoike/the0-node';
+import pino from 'pino';
+
+// Use pino for structured logging
+const logger = pino({ level: 'info' });
 import ccxt from 'ccxt';
 
 interface Config {
@@ -415,7 +414,7 @@ interface Config {
 async function main(): Promise<void> {
   const { id, config } = parse<Config>();
 
-  log(`Price Alert Bot ${id} starting...`);
+  logger.info({ botId: id }, 'Price Alert Bot starting...');
 
   // Initialize exchange (read-only, no API keys needed for public data)
   const exchangeClass = ccxt[config.exchange as keyof typeof ccxt];
@@ -552,16 +551,19 @@ try {
 
 ### 3. Logging for Debugging
 
-Use structured logging for easier debugging:
+Use a structured logging library like pino for easier debugging. All stdout/stderr output is captured by the platform:
 
 ```typescript
-log('Order submitted', {
+import pino from 'pino';
+
+const logger = pino({ level: 'info' });
+
+logger.info({
   orderId: order.id,
   symbol: order.symbol,
   side: order.side,
   quantity: order.quantity,
-  timestamp: new Date().toISOString(),
-});
+}, 'Order submitted');
 ```
 
 ### 4. Respect Rate Limits
