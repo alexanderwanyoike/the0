@@ -107,13 +107,21 @@ export function useBotEvents({
   });
 
   // Parse raw logs into events
+  // Ensure timestamps are always Date objects for SDK compatibility
   const events = useMemo(() => {
     // Convert raw logs to the format expected by parseEvents
     const logEntries = rawLogs.map((log) => ({
       date: log.date,
       content: log.content,
     }));
-    return parseEvents(logEntries);
+    const parsedEvents = parseEvents(logEntries);
+
+    // Ensure all events have a valid timestamp (SDK expects Date, not null)
+    // Use current time as fallback for events without timestamps
+    return parsedEvents.map((event) => ({
+      ...event,
+      timestamp: event.timestamp ?? new Date(),
+    }));
   }, [rawLogs]);
 
   // Create bound utilities

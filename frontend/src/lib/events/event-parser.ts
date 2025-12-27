@@ -20,7 +20,7 @@ export interface BotEvent {
 }
 
 /**
- * Structured log format (pino, winston, etc.)
+ * Structured log format (pino, winston, Rust tracing, etc.)
  */
 interface StructuredLog {
   level?: string;
@@ -29,6 +29,8 @@ interface StructuredLog {
   time?: number | string; // pino uses Unix ms or ISO string
   timestamp?: string;
   ts?: number; // Unix timestamp
+  fields?: { message?: string; [key: string]: unknown }; // Rust tracing uses fields.message
+  target?: string; // Rust tracing target
   [key: string]: unknown;
 }
 
@@ -95,7 +97,7 @@ function tryParseMetric(content: string): MetricPayload | null {
 }
 
 /**
- * Try to parse content as structured JSON log (pino, winston, etc.)
+ * Try to parse content as structured JSON log (pino, winston, Rust tracing, etc.)
  * Returns null if not a structured log or if it's a metric.
  */
 function tryParseStructuredLog(content: string): StructuredLog | null {
@@ -108,12 +110,17 @@ function tryParseStructuredLog(content: string): StructuredLog | null {
 
   try {
     const parsed = JSON.parse(jsonMatch[1]);
-    // Check if it's a structured log (has level, message, or msg) but NOT a metric
+    // Check if it's a structured log but NOT a metric
     if (
       parsed &&
       typeof parsed === "object" &&
       !("_metric" in parsed) &&
-      ("level" in parsed || "message" in parsed || "msg" in parsed)
+      (
+        "level" in parsed ||
+        "message" in parsed ||
+        "msg" in parsed ||
+        ("fields" in parsed && parsed.fields?.message) // Rust tracing format
+      )
     ) {
       return parsed as StructuredLog;
     }
@@ -174,11 +181,23 @@ function extractTimestampFromStructuredLog(log: StructuredLog): Date | null {
 
 /**
  * Map structured log level to our level type.
+ * Handles both string levels (e.g., "info") and numeric levels (e.g., 30 from pino).
  */
 function mapStructuredLogLevel(
-  level: string | undefined,
+  level: string | number | undefined,
 ): "DEBUG" | "INFO" | "WARN" | "ERROR" | undefined {
-  if (!level) return undefined;
+  if (level === undefined || level === null) return undefined;
+
+  // Handle numeric levels (pino style)
+  if (typeof level === "number") {
+    if (level <= 20) return "DEBUG";
+    if (level <= 30) return "INFO";
+    if (level <= 40) return "WARN";
+    return "ERROR";
+  }
+
+  // Handle string levels
+  if (typeof level !== "string") return undefined;
   const upper = level.toUpperCase();
   switch (upper) {
     case "TRACE":
@@ -224,15 +243,18 @@ export function parseLogLine(content: string): BotEvent {
     };
   }
 
-  // 2. Try to parse as structured JSON log (pino, winston, etc.)
+  // 2. Try to parse as structured JSON log (pino, winston, Rust tracing, etc.)
   const structuredLog = tryParseStructuredLog(stripped);
   if (structuredLog) {
     const structuredTimestamp =
       extractTimestampFromStructuredLog(structuredLog) || timestamp;
     const structuredLevel = mapStructuredLogLevel(structuredLog.level);
+
+    // Extract message - check fields.message for Rust tracing format
     const message =
       structuredLog.message ||
       structuredLog.msg ||
+      structuredLog.fields?.message ||
       JSON.stringify(structuredLog);
 
     return {
