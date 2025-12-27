@@ -14,15 +14,15 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-green-400 font-mono">Connecting to bot...</div>
+        <div className="text-green-600 dark:text-green-400 font-mono">Connecting to bot...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-950/30 border border-red-800 rounded">
-        <p className="text-red-400">Error loading events: {error}</p>
+      <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 rounded">
+        <p className="text-red-600 dark:text-red-400">Error loading events: {error}</p>
       </div>
     );
   }
@@ -33,15 +33,13 @@ export default function Dashboard() {
   const latestPrice = utils.latest("price");
   const latestSma = utils.latest("sma");
   const latestSignal = utils.latest("signal");
-
-  // Group events by run for scheduled bot
   const runs = utils.groupByRun();
 
   return (
     <div className="p-4 space-y-6 font-mono">
-      <div className="border-b border-green-900/50 pb-4">
-        <h1 className="text-xl font-bold text-green-400">SMA Crossover Strategy (Haskell)</h1>
-        <p className="text-gray-500 text-sm">
+      <div className="border-b border-gray-200 dark:border-gray-800 pb-4">
+        <h1 className="text-xl font-bold text-green-600 dark:text-green-400">SMA Crossover Strategy (Haskell)</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">
           Scheduled Bot - {runs.length} runs, {signals.length} signals generated
         </p>
       </div>
@@ -60,7 +58,7 @@ export default function Dashboard() {
 function PriceCard({ price }: { price: BotEvent | null }) {
   if (!price) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for price data...</p>
       </div>
     );
@@ -70,13 +68,13 @@ function PriceCard({ price }: { price: BotEvent | null }) {
   const isPositive = data.change_pct >= 0;
 
   return (
-    <div className="bg-gray-900 border border-green-900/50 rounded p-6">
-      <div className="text-sm text-gray-500 mb-2">Latest Price</div>
-      <div className="text-3xl font-bold text-green-400">${data.value.toLocaleString()}</div>
-      <div className={`text-sm ${isPositive ? "text-green-500" : "text-red-500"}`}>
+    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Latest Price</div>
+      <div className="text-3xl font-bold text-green-600 dark:text-green-400">${data.value.toLocaleString()}</div>
+      <div className={`text-sm ${isPositive ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}>
         {isPositive ? "+" : ""}{data.change_pct.toFixed(3)}%
       </div>
-      <div className="text-xs text-gray-600 mt-2">{data.symbol}</div>
+      <div className="text-xs text-gray-500 mt-2">{data.symbol}</div>
     </div>
   );
 }
@@ -84,7 +82,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
 function SMACard({ sma }: { sma: BotEvent | null }) {
   if (!sma) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for SMA data...</p>
       </div>
     );
@@ -97,19 +95,19 @@ function SMACard({ sma }: { sma: BotEvent | null }) {
   const isBullish = data.short_sma > data.long_sma;
 
   return (
-    <div className="bg-gray-900 border border-blue-900/50 rounded p-6">
-      <div className="text-sm text-gray-500 mb-2">Moving Averages</div>
+    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Moving Averages</div>
       <div className="space-y-2">
         <div className="flex justify-between">
-          <span className="text-gray-400 text-sm">SMA {data.short_period}</span>
-          <span className="text-yellow-400">${data.short_sma.toLocaleString()}</span>
+          <span className="text-gray-600 dark:text-gray-400 text-sm">SMA {data.short_period}</span>
+          <span className="text-yellow-600 dark:text-yellow-400">${data.short_sma.toLocaleString()}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-400 text-sm">SMA {data.long_period}</span>
-          <span className="text-blue-400">${data.long_sma.toLocaleString()}</span>
+          <span className="text-gray-600 dark:text-gray-400 text-sm">SMA {data.long_period}</span>
+          <span className="text-blue-600 dark:text-blue-400">${data.long_sma.toLocaleString()}</span>
         </div>
       </div>
-      <div className={`mt-3 text-center text-sm ${isBullish ? "text-green-400" : "text-red-400"}`}>
+      <div className={`mt-3 text-center text-sm font-medium ${isBullish ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
         {isBullish ? "Bullish" : "Bearish"}
       </div>
     </div>
@@ -119,7 +117,7 @@ function SMACard({ sma }: { sma: BotEvent | null }) {
 function SignalCard({ signal }: { signal: BotEvent | null }) {
   if (!signal) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for signal...</p>
       </div>
     );
@@ -131,15 +129,15 @@ function SignalCard({ signal }: { signal: BotEvent | null }) {
   const isBuy = data.type === "BUY";
 
   return (
-    <div className={`bg-gray-900 border rounded p-6 ${isBuy ? "border-green-500" : "border-red-500"}`}>
-      <div className="text-sm text-gray-500 mb-2">Current Signal</div>
-      <div className={`text-3xl font-bold ${isBuy ? "text-green-400" : "text-red-400"}`}>
+    <div className={`bg-gray-50 dark:bg-gray-900 border rounded p-6 ${isBuy ? "border-green-400 dark:border-green-500" : "border-red-400 dark:border-red-500"}`}>
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Current Signal</div>
+      <div className={`text-3xl font-bold ${isBuy ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
         {data.type}
       </div>
-      <div className="text-gray-400 text-sm mt-1">@ ${data.price.toLocaleString()}</div>
+      <div className="text-gray-600 dark:text-gray-400 text-sm mt-1">@ ${data.price.toLocaleString()}</div>
       <div className="mt-2">
         <span className="text-xs text-gray-500">Confidence: </span>
-        <span className="text-xs text-gray-400">{(data.confidence * 100).toFixed(0)}%</span>
+        <span className="text-xs text-gray-600 dark:text-gray-400">{(data.confidence * 100).toFixed(0)}%</span>
       </div>
     </div>
   );
@@ -148,16 +146,16 @@ function SignalCard({ signal }: { signal: BotEvent | null }) {
 function RunHistory({ runs }: { runs: BotEvent[][] }) {
   if (runs.length === 0) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-4">
-        <h2 className="text-sm font-semibold text-gray-400 mb-3">Run History</h2>
+      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-4">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Run History</h2>
         <p className="text-gray-500 text-sm">No runs yet</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded p-4">
-      <h2 className="text-sm font-semibold text-gray-400 mb-3">
+    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
         Run History (Last {Math.min(runs.length, 10)})
       </h2>
       <div className="space-y-3">
@@ -169,17 +167,17 @@ function RunHistory({ runs }: { runs: BotEvent[][] }) {
           const signalData = signalEvent?.data as { type?: string; confidence?: number } | undefined;
 
           return (
-            <div key={i} className="flex items-center justify-between p-2 bg-gray-800/50 rounded">
+            <div key={i} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-800/50 rounded">
               <div className="flex items-center gap-4">
                 <span className="text-xs text-gray-500">
                   {runEvents[0]?.timestamp.toLocaleString()}
                 </span>
-                <span className="text-green-400">
+                <span className="text-green-600 dark:text-green-400">
                   {priceData?.symbol}: ${priceData?.value?.toLocaleString() ?? "-"}
                 </span>
               </div>
               {signalData && (
-                <span className={`text-sm font-bold ${signalData.type === "BUY" ? "text-green-400" : "text-red-400"}`}>
+                <span className={`text-sm font-bold ${signalData.type === "BUY" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
                   {signalData.type} ({((signalData.confidence ?? 0) * 100).toFixed(0)}%)
                 </span>
               )}
