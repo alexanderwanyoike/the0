@@ -104,11 +104,12 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      // Timestamp should be formatted as MM-DD HH:MM:SS
-      expect(screen.getByText("12-27 14:30:45")).toBeInTheDocument();
+      // Timestamp is split into date and time in separate spans
+      expect(screen.getByText("12-27")).toBeInTheDocument();
+      expect(screen.getByText("14:30:45")).toBeInTheDocument();
     });
 
-    it("shows empty timestamp for logs without timestamp", () => {
+    it("shows message for logs without timestamp", () => {
       const logs: LogEntry[] = [
         { date: "20251227", content: "No timestamp here" },
       ];
@@ -117,9 +118,6 @@ describe("ConsoleInterface", () => {
 
       // Message should be visible
       expect(screen.getByText("No timestamp here")).toBeInTheDocument();
-      // Timestamp span should be empty (120px width span)
-      const timestampSpan = document.querySelector(".w-\\[120px\\]");
-      expect(timestampSpan?.textContent).toBe("");
     });
   });
 
@@ -131,8 +129,9 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const indicator = screen.getByText("●");
-      expect(indicator.className).toContain("text-red");
+      // ERROR level uses XCircle icon with red styling in the badge
+      const errorBadge = document.querySelector(".bg-red-500\\/20");
+      expect(errorBadge).toBeInTheDocument();
     });
 
     it("shows correct indicator color for WARN level", () => {
@@ -142,8 +141,9 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const indicator = screen.getByText("●");
-      expect(indicator.className).toContain("text-yellow");
+      // WARN level uses AlertTriangle icon with yellow styling in the badge
+      const warnBadge = document.querySelector(".bg-yellow-500\\/20");
+      expect(warnBadge).toBeInTheDocument();
     });
 
     it("shows correct indicator color for INFO level", () => {
@@ -153,8 +153,9 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const indicator = screen.getByText("●");
-      expect(indicator.className).toContain("text-green");
+      // INFO level uses Info icon with green styling in the badge
+      const infoBadge = document.querySelector(".bg-green-500\\/20");
+      expect(infoBadge).toBeInTheDocument();
     });
 
     it("shows correct indicator color for DEBUG level", () => {
@@ -164,8 +165,9 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const indicator = screen.getByText("●");
-      expect(indicator.className).toContain("text-gray");
+      // DEBUG level uses Bug icon with gray styling in the badge
+      const debugBadge = document.querySelector(".bg-gray-500\\/20");
+      expect(debugBadge).toBeInTheDocument();
     });
   });
 
@@ -179,9 +181,7 @@ describe("ConsoleInterface", () => {
       expect(logEntry).toBeInTheDocument();
 
       // Copy button should exist but be invisible initially
-      const copyButton = logEntry?.querySelector(
-        'button[title="Copy message"]',
-      );
+      const copyButton = logEntry?.querySelector('button[title="Copy"]');
       expect(copyButton).toBeInTheDocument();
       expect(copyButton?.className).toContain("opacity-0");
     });
@@ -199,7 +199,7 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const copyButton = screen.getByTitle("Copy message");
+      const copyButton = screen.getByTitle("Copy");
       fireEvent.click(copyButton);
 
       await waitFor(() => {
@@ -223,11 +223,13 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const copyButton = screen.getByTitle("Copy metric data");
+      // Metric copy button also has title="Copy"
+      const copyButton = screen.getByTitle("Copy");
       fireEvent.click(copyButton);
 
       await waitFor(() => {
-        expect(writeText).toHaveBeenCalledWith("symbol: ETH/USD | amount: 10");
+        // Metric data is copied as key: value lines
+        expect(writeText).toHaveBeenCalledWith("symbol: ETH/USD\namount: 10");
       });
     });
 
@@ -241,7 +243,7 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const copyButton = screen.getByTitle("Copy message");
+      const copyButton = screen.getByTitle("Copy");
       fireEvent.click(copyButton);
 
       // Check icon should appear
@@ -422,7 +424,7 @@ describe("ConsoleInterface", () => {
   });
 
   describe("hover interactions", () => {
-    it("makes message scrollable on hover", async () => {
+    it("message is initially truncated", () => {
       const longMessage = "A".repeat(200);
       const logs: LogEntry[] = [{ date: "20251227", content: longMessage }];
 
@@ -430,42 +432,26 @@ describe("ConsoleInterface", () => {
 
       const messageSpan = screen.getByText(longMessage);
 
-      // Initially truncated
+      // Message should be truncated
       expect(messageSpan.className).toContain("truncate");
-
-      // Simulate hover on parent
-      const logEntry = messageSpan.closest(".group");
-      if (logEntry) {
-        fireEvent.mouseEnter(logEntry);
-      }
-
-      // After hover, should be scrollable (overflow-x-auto, not truncate)
-      await waitFor(() => {
-        expect(messageSpan.className).toContain("overflow-x-auto");
-        expect(messageSpan.className).not.toContain("truncate");
-      });
     });
 
-    it("reverts to truncated on mouse leave", async () => {
-      const longMessage = "B".repeat(200);
-      const logs: LogEntry[] = [{ date: "20251227", content: longMessage }];
+    it("expands message on click", async () => {
+      const logs: LogEntry[] = [{ date: "20251227", content: "Click to expand me" }];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const messageSpan = screen.getByText(longMessage);
+      const messageSpan = screen.getByText("Click to expand me");
       const logEntry = messageSpan.closest(".group");
 
       if (logEntry) {
-        // Hover
-        fireEvent.mouseEnter(logEntry);
-        await waitFor(() => {
-          expect(messageSpan.className).toContain("overflow-x-auto");
-        });
+        // Click to expand
+        fireEvent.click(logEntry);
 
-        // Leave
-        fireEvent.mouseLeave(logEntry);
+        // After click, should show expanded content in a pre element
         await waitFor(() => {
-          expect(messageSpan.className).toContain("truncate");
+          const expandedContent = document.querySelector("pre");
+          expect(expandedContent).toBeInTheDocument();
         });
       }
     });
@@ -479,7 +465,8 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const timestampSpan = document.querySelector(".w-\\[120px\\]");
+      // Find timestamp span by its text content and check class
+      const timestampSpan = screen.getByText("10:00:00").parentElement;
       expect(timestampSpan?.className).toContain("select-none");
     });
 
@@ -488,8 +475,9 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      const indicator = screen.getByText("●");
-      expect(indicator.className).toContain("select-none");
+      // The level badge (INFO) should have select-none class
+      const levelBadge = screen.getByText("INFO");
+      expect(levelBadge.className).toContain("select-none");
     });
   });
 
@@ -547,8 +535,8 @@ describe("ConsoleInterface", () => {
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
-      // Find the metric entry container
-      const metricEntry = document.querySelector(".border-blue-500");
+      // Find the metric entry container (uses border-l-blue-500 for left border)
+      const metricEntry = document.querySelector(".border-l-blue-500");
       expect(metricEntry).toBeInTheDocument();
     });
   });
