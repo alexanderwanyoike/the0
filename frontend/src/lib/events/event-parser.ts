@@ -9,12 +9,25 @@ export interface RawLogEntry {
 }
 
 export interface BotEvent {
-  timestamp: Date;
+  timestamp: Date | null;
   type: "log" | "metric";
   data: string | Record<string, unknown>;
   metricType?: string;
   level?: "DEBUG" | "INFO" | "WARN" | "ERROR";
   raw: string;
+}
+
+/**
+ * Structured log format (pino, winston, etc.)
+ */
+interface StructuredLog {
+  level?: string;
+  message?: string;
+  msg?: string; // pino uses 'msg'
+  time?: number | string; // pino uses Unix ms or ISO string
+  timestamp?: string;
+  ts?: number; // Unix timestamp
+  [key: string]: unknown;
 }
 
 export interface MetricPayload {
@@ -25,13 +38,14 @@ export interface MetricPayload {
 /**
  * Extract timestamp from log line.
  * Expected format: [2006-01-02 15:04:05] content
+ * Returns null if no timestamp found.
  */
-function extractTimestamp(content: string): Date {
+function extractTimestamp(content: string): Date | null {
   const match = content.match(/^\[(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\]/);
   if (match) {
     return new Date(match[1].replace(" ", "T"));
   }
-  return new Date();
+  return null;
 }
 
 /**
@@ -79,6 +93,96 @@ function tryParseMetric(content: string): MetricPayload | null {
 }
 
 /**
+ * Try to parse content as structured JSON log (pino, winston, etc.)
+ * Returns null if not a structured log or if it's a metric.
+ */
+function tryParseStructuredLog(content: string): StructuredLog | null {
+  // Remove log level prefix if present
+  const cleaned = content.replace(/^(DEBUG|INFO|WARN(?:ING)?|ERROR):\s*/i, "");
+
+  // Try to find JSON in the content
+  const jsonMatch = cleaned.match(/^(\{.*\})$/);
+  if (!jsonMatch) return null;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[1]);
+    // Check if it's a structured log (has level, message, or msg) but NOT a metric
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !("_metric" in parsed) &&
+      ("level" in parsed || "message" in parsed || "msg" in parsed)
+    ) {
+      return parsed as StructuredLog;
+    }
+  } catch {
+    // Not valid JSON
+  }
+  return null;
+}
+
+/**
+ * Extract timestamp from structured log.
+ */
+function extractTimestampFromStructuredLog(log: StructuredLog): Date | null {
+  // Try 'time' field (pino uses Unix ms or ISO string)
+  if (log.time !== undefined) {
+    if (typeof log.time === "number") {
+      return new Date(log.time);
+    }
+    const parsed = new Date(log.time);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  // Try 'timestamp' field
+  if (log.timestamp) {
+    const parsed = new Date(log.timestamp);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  // Try 'ts' field (Unix timestamp in seconds or ms)
+  if (log.ts !== undefined) {
+    // If ts < 10 billion, assume seconds; otherwise ms
+    const ts = log.ts < 10000000000 ? log.ts * 1000 : log.ts;
+    return new Date(ts);
+  }
+  return null;
+}
+
+/**
+ * Map structured log level to our level type.
+ */
+function mapStructuredLogLevel(
+  level: string | undefined,
+): "DEBUG" | "INFO" | "WARN" | "ERROR" | undefined {
+  if (!level) return undefined;
+  const upper = level.toUpperCase();
+  switch (upper) {
+    case "TRACE":
+    case "DEBUG":
+    case "10":
+    case "20":
+      return "DEBUG";
+    case "INFO":
+    case "30":
+      return "INFO";
+    case "WARN":
+    case "WARNING":
+    case "40":
+      return "WARN";
+    case "ERROR":
+    case "FATAL":
+    case "50":
+    case "60":
+      return "ERROR";
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Parse a single log line into a BotEvent.
  */
 export function parseLogLine(content: string): BotEvent {
@@ -86,7 +190,7 @@ export function parseLogLine(content: string): BotEvent {
   const stripped = stripTimestamp(content);
   const level = extractLevel(stripped);
 
-  // Try to parse as metric
+  // 1. Try to parse as metric (existing behavior - highest priority)
   const metric = tryParseMetric(stripped);
   if (metric) {
     return {
@@ -99,7 +203,25 @@ export function parseLogLine(content: string): BotEvent {
     };
   }
 
-  // Regular log entry
+  // 2. Try to parse as structured JSON log (pino, winston, etc.)
+  const structuredLog = tryParseStructuredLog(stripped);
+  if (structuredLog) {
+    const structuredTimestamp =
+      extractTimestampFromStructuredLog(structuredLog) || timestamp;
+    const structuredLevel = mapStructuredLogLevel(structuredLog.level);
+    const message =
+      structuredLog.message || structuredLog.msg || JSON.stringify(structuredLog);
+
+    return {
+      timestamp: structuredTimestamp,
+      type: "log",
+      data: message,
+      level: structuredLevel || level || "INFO",
+      raw: content,
+    };
+  }
+
+  // 3. Regular log entry (fallback)
   return {
     timestamp,
     type: "log",

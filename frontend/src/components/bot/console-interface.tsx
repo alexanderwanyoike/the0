@@ -15,6 +15,8 @@ import {
   Filter,
   X,
   BarChart3,
+  Copy,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
@@ -44,78 +46,47 @@ const LOG_LEVEL_COLORS = {
   DEBUG: "text-gray-400 bg-gray-950/50 border-gray-800",
 };
 
+/**
+ * Format a Date to MM-DD HH:MM:SS display format.
+ */
+function formatTimestamp(date: Date | null): string {
+  if (!date) return "";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
   log,
-  index,
 }) => {
-  const parseLogContent = (content: string) => {
-    // Extract timestamp in various formats
-    const timestampMatch = content.match(
-      /\[?(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2})/,
-    );
-    const levelMatch = content.match(/\b(ERROR|WARN|WARNING|INFO|DEBUG)\b/);
+  const [copied, setCopied] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
-    let timestamp = "";
-    if (timestampMatch) {
-      // Convert to date and time format (MM-DD HH:MM:SS)
-      const fullTimestamp = timestampMatch[1];
-      const date = new Date(fullTimestamp);
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      const seconds = String(date.getSeconds()).padStart(2, "0");
-      timestamp = `${month}-${day} ${hours}:${minutes}:${seconds}`;
-    } else {
-      const now = new Date();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const day = String(now.getDate()).padStart(2, "0");
-      const hours = String(now.getHours()).padStart(2, "0");
-      const minutes = String(now.getMinutes()).padStart(2, "0");
-      const seconds = String(now.getSeconds()).padStart(2, "0");
-      timestamp = `${month}-${day} ${hours}:${minutes}:${seconds}`;
-    }
+  // Use the event parser to get structured data
+  const event = parseLogLine(log.content);
+  const message = typeof event.data === "string" ? event.data : log.content;
+  const level = event.level || "INFO";
+  const timestamp = formatTimestamp(event.timestamp);
 
-    const level = levelMatch ? levelMatch[1] : "INFO";
-
-    // Clean message by removing timestamp and level prefixes
-    let message = content
-      .replace(/^\[.*?\]\s*/, "")
-      .replace(/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\s]*\s*/, "")
-      .replace(/^(ERROR|WARN|WARNING|INFO|DEBUG):?\s*/, "")
-      .trim();
-
-    if (!message) {
-      message = content; // Fallback to original content if parsing fails
-    }
-
-    return { timestamp, level, message };
-  };
-
-  const parsed = parseLogContent(log.content);
-
-  const getStatusIndicator = (level: string) => {
-    switch (level) {
-      case "ERROR":
-        return "●"; // Red dot
-      case "WARN":
-      case "WARNING":
-        return "●"; // Yellow dot
-      case "INFO":
-        return "●"; // Green dot
-      case "DEBUG":
-        return "●"; // Gray dot
-      default:
-        return "●"; // Default green dot
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in some contexts
     }
   };
 
-  const getStatusColor = (level: string) => {
-    switch (level) {
+  const getStatusColor = (lvl: string) => {
+    switch (lvl) {
       case "ERROR":
         return "text-red-500 dark:text-red-400";
       case "WARN":
-      case "WARNING":
         return "text-yellow-500 dark:text-yellow-400";
       case "INFO":
         return "text-green-500 dark:text-green-400";
@@ -129,17 +100,34 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
   return (
     <div
       className="group flex items-center gap-3 py-1 px-3 hover:bg-gray-200 dark:hover:bg-green-950/30 font-mono text-sm cursor-default"
-      title={log.content}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <span className="text-gray-500 dark:text-green-600 flex-shrink-0 text-xs">
-        {parsed.timestamp}
+      <span className="text-gray-500 dark:text-green-600 flex-shrink-0 text-xs select-none w-[120px]">
+        {timestamp}
       </span>
-      <span className={`flex-shrink-0 ${getStatusColor(parsed.level)}`}>
-        {getStatusIndicator(parsed.level)}
+      <span className={`flex-shrink-0 select-none ${getStatusColor(level)}`}>
+        ●
       </span>
-      <span className="text-gray-700 dark:text-green-300 truncate flex-1">
-        {parsed.message}
+      <span
+        className={cn(
+          "text-gray-700 dark:text-green-300 flex-1 min-w-0",
+          isHovered ? "overflow-x-auto whitespace-nowrap" : "truncate",
+        )}
+      >
+        {message}
       </span>
+      <button
+        onClick={handleCopy}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-300 dark:hover:bg-green-900 rounded flex-shrink-0"
+        title="Copy message"
+      >
+        {copied ? (
+          <Check className="h-3 w-3 text-green-500" />
+        ) : (
+          <Copy className="h-3 w-3 text-gray-500 dark:text-green-400" />
+        )}
+      </button>
     </div>
   );
 };
@@ -150,6 +138,9 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
 const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
   log,
 }) => {
+  const [copied, setCopied] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
   const event = parseLogLine(log.content);
 
   if (!isMetricEvent(event)) {
@@ -158,15 +149,7 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
 
   const metricData = event.data as Record<string, unknown>;
   const metricType = event.metricType || "metric";
-
-  // Format timestamp
-  const timestamp = event.timestamp;
-  const month = String(timestamp.getMonth() + 1).padStart(2, "0");
-  const day = String(timestamp.getDate()).padStart(2, "0");
-  const hours = String(timestamp.getHours()).padStart(2, "0");
-  const minutes = String(timestamp.getMinutes()).padStart(2, "0");
-  const seconds = String(timestamp.getSeconds()).padStart(2, "0");
-  const formattedTime = `${month}-${day} ${hours}:${minutes}:${seconds}`;
+  const formattedTime = formatTimestamp(event.timestamp);
 
   // Get display values (exclude _metric key)
   const displayData = Object.entries(metricData)
@@ -180,24 +163,52 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
     .map(({ key, value }) => `${key}: ${value}`)
     .join(" | ");
 
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(fullContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in some contexts
+    }
+  };
+
   return (
     <div
       className="group flex items-center gap-3 py-1 px-3 bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/40 border-l-2 border-blue-500 font-mono text-sm cursor-default"
-      title={`[${metricType}] ${fullContent}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <span className="text-blue-600 dark:text-blue-400 flex-shrink-0 text-xs">
+      <span className="text-blue-600 dark:text-blue-400 flex-shrink-0 text-xs select-none w-[120px]">
         {formattedTime}
       </span>
-      <BarChart3 className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+      <BarChart3 className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0 select-none" />
       <Badge
         variant="outline"
-        className="text-[10px] py-0 px-1.5 bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-300"
+        className="text-[10px] py-0 px-1.5 bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-300 select-none"
       >
         {metricType}
       </Badge>
-      <span className="text-blue-700 dark:text-blue-200 truncate flex-1">
+      <span
+        className={cn(
+          "text-blue-700 dark:text-blue-200 flex-1 min-w-0",
+          isHovered ? "overflow-x-auto whitespace-nowrap" : "truncate",
+        )}
+      >
         {fullContent}
       </span>
+      <button
+        onClick={handleCopy}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-200 dark:hover:bg-blue-900 rounded flex-shrink-0"
+        title="Copy metric data"
+      >
+        {copied ? (
+          <Check className="h-3 w-3 text-green-500" />
+        ) : (
+          <Copy className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+        )}
+      </button>
     </div>
   );
 };

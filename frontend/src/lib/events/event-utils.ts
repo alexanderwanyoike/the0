@@ -32,23 +32,27 @@ function parseDuration(duration: string): number {
 
 /**
  * Filter events from the last N duration.
+ * Events without timestamps are excluded.
  * @example since(events, '1h') // Events from last hour
  */
 export function since(events: BotEvent[], duration: string): BotEvent[] {
   const ms = parseDuration(duration);
   const cutoff = new Date(Date.now() - ms);
-  return events.filter((e) => e.timestamp >= cutoff);
+  return events.filter((e) => e.timestamp && e.timestamp >= cutoff);
 }
 
 /**
  * Filter events between two dates.
+ * Events without timestamps are excluded.
  */
 export function between(
   events: BotEvent[],
   start: Date,
   end: Date,
 ): BotEvent[] {
-  return events.filter((e) => e.timestamp >= start && e.timestamp <= end);
+  return events.filter(
+    (e) => e.timestamp && e.timestamp >= start && e.timestamp <= end,
+  );
 }
 
 /**
@@ -128,12 +132,15 @@ type TimeWindow = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 /**
  * Group events by time window.
  * Returns array of event arrays, one per window.
+ * Events without timestamps are excluded.
  */
 export function groupByTimeWindow(
   events: BotEvent[],
   window: TimeWindow,
 ): BotEvent[][] {
-  if (events.length === 0) return [];
+  // Filter out events without timestamps
+  const validEvents = events.filter((e) => e.timestamp !== null);
+  if (validEvents.length === 0) return [];
 
   const windowMs: Record<TimeWindow, number> = {
     "1m": 60 * 1000,
@@ -147,8 +154,8 @@ export function groupByTimeWindow(
   const ms = windowMs[window];
   const groups: Map<number, BotEvent[]> = new Map();
 
-  for (const event of events) {
-    const windowStart = Math.floor(event.timestamp.getTime() / ms) * ms;
+  for (const event of validEvents) {
+    const windowStart = Math.floor(event.timestamp!.getTime() / ms) * ms;
     if (!groups.has(windowStart)) {
       groups.set(windowStart, []);
     }
@@ -163,17 +170,20 @@ export function groupByTimeWindow(
 /**
  * Group events by execution run (for scheduled bots).
  * Uses time gaps to detect run boundaries.
+ * Events without timestamps are excluded.
  * @param gapThreshold - Minimum gap in ms to consider a new run (default: 5 minutes)
  */
 export function groupByRun(
   events: BotEvent[],
   gapThreshold: number = 5 * 60 * 1000,
 ): BotEvent[][] {
-  if (events.length === 0) return [];
+  // Filter out events without timestamps
+  const validEvents = events.filter((e) => e.timestamp !== null);
+  if (validEvents.length === 0) return [];
 
   // Sort by timestamp
-  const sorted = [...events].sort(
-    (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+  const sorted = [...validEvents].sort(
+    (a, b) => a.timestamp!.getTime() - b.timestamp!.getTime(),
   );
 
   const runs: BotEvent[][] = [];
@@ -181,7 +191,7 @@ export function groupByRun(
 
   for (let i = 1; i < sorted.length; i++) {
     const gap =
-      sorted[i].timestamp.getTime() - sorted[i - 1].timestamp.getTime();
+      sorted[i].timestamp!.getTime() - sorted[i - 1].timestamp!.getTime();
 
     if (gap > gapThreshold) {
       // New run detected
@@ -234,6 +244,7 @@ export function countByType(events: BotEvent[]): Record<string, number> {
 /**
  * Extract numeric values from metric events.
  * Useful for charting time series data.
+ * Events without timestamps are excluded.
  */
 export function extractTimeSeries(
   events: BotEvent[],
@@ -243,12 +254,12 @@ export function extractTimeSeries(
   return filterByType(events, metricType)
     .filter((e) => {
       const data = e.data as Record<string, unknown>;
-      return typeof data[valueKey] === "number";
+      return e.timestamp !== null && typeof data[valueKey] === "number";
     })
     .map((e) => {
       const data = e.data as Record<string, unknown>;
       return {
-        timestamp: e.timestamp,
+        timestamp: e.timestamp!,
         value: data[valueKey] as number,
       };
     });
