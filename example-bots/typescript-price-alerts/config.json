@@ -1,7 +1,7 @@
 {
   "name": "my-price-alerts",
   "type": "realtime/price-alerts",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "symbol": "BTC/USD",
   "base_price": 45000,
   "alert_threshold": 1,
