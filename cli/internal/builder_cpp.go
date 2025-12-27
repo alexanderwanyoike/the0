@@ -15,7 +15,7 @@ import (
 	"github.com/fatih/color"
 )
 
-const cppImage = "silkeh/clang:17"  // Has cmake preinstalled
+const cppImage = "mcr.microsoft.com/devcontainers/cpp:1-debian-12"  // Microsoft's official C++ devcontainer with gcc, cmake, git
 
 // CppBuilder handles C/C++ project detection and building.
 type CppBuilder struct{}

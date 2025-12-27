@@ -1,7 +1,7 @@
 {
   "name": "test-cpp-sma",
   "type": "realtime/cpp-sma-crossover",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "symbol": "GOOGL",
   "short_period": 5,
   "long_period": 20,

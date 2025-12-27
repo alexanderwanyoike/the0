@@ -251,5 +251,5 @@ function generateSignal(
   return null;
 }
 
-// Run the bot
-main().catch(console.error);
+// Export main for the runtime
+export { main };
