@@ -13,15 +13,15 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-green-600 dark:text-green-400 font-mono">Connecting to bot...</div>
+        <div className="text-primary font-mono">Connecting to bot...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 rounded">
-        <p className="text-red-600 dark:text-red-400">Error loading events: {error}</p>
+      <div className="p-4 bg-destructive/10 border border-destructive/30 rounded">
+        <p className="text-destructive">Error loading events: {error}</p>
       </div>
     );
   }
@@ -36,9 +36,9 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 space-y-6 font-mono">
-      <div className="border-b border-gray-200 dark:border-gray-800 pb-4">
-        <h1 className="text-xl font-bold text-green-600 dark:text-green-400">Price Alerts</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
+      <div className="border-b border-border pb-4">
+        <h1 className="text-xl font-bold text-primary">Price Alerts</h1>
+        <p className="text-muted-foreground text-sm">
           {prices.length} price updates, {alerts.length} alerts, {signals.length} signals
         </p>
       </div>
@@ -58,8 +58,8 @@ export default function Dashboard() {
 function PriceCard({ price }: { price: BotEvent | null }) {
   if (!price) {
     return (
-      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
-        <p className="text-gray-500">Waiting for price data...</p>
+      <div className="bg-muted/50 border border-border rounded p-6">
+        <p className="text-muted-foreground">Waiting for price data...</p>
       </div>
     );
   }
@@ -70,34 +70,34 @@ function PriceCard({ price }: { price: BotEvent | null }) {
   const isPositive = data.change_pct >= 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-muted/50 border border-border rounded p-6">
       <div className="flex items-center justify-between mb-4">
-        <div className="text-sm text-gray-600 dark:text-gray-400">{data.symbol}</div>
+        <div className="text-sm text-muted-foreground">{data.symbol}</div>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs text-gray-500">Live</span>
+          <span className="text-xs text-muted-foreground">Live</span>
         </div>
       </div>
 
       <div className="flex items-baseline gap-4 mb-4">
-        <span className="text-4xl font-bold text-green-600 dark:text-green-400">${data.value.toLocaleString()}</span>
-        <span className={`text-lg ${isPositive ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}>
+        <span className="text-4xl font-bold text-primary">${data.value.toLocaleString()}</span>
+        <span className={`text-lg ${isPositive ? "text-green-600" : "text-red-600"}`}>
           {isPositive ? "+" : ""}{data.change_pct.toFixed(3)}%
         </span>
       </div>
 
       <div className="flex gap-8 text-sm">
         <div>
-          <span className="text-gray-500">24h High: </span>
-          <span className="text-green-600 dark:text-green-400">${data.high_24h?.toLocaleString()}</span>
+          <span className="text-muted-foreground">24h High: </span>
+          <span className="text-green-600">${data.high_24h?.toLocaleString()}</span>
         </div>
         <div>
-          <span className="text-gray-500">24h Low: </span>
-          <span className="text-red-600 dark:text-red-400">${data.low_24h?.toLocaleString()}</span>
+          <span className="text-muted-foreground">24h Low: </span>
+          <span className="text-red-600">${data.low_24h?.toLocaleString()}</span>
         </div>
       </div>
 
-      <div className="text-xs text-gray-500 mt-4">
+      <div className="text-xs text-muted-foreground mt-4">
         Updated: {price.timestamp.toLocaleTimeString()}
       </div>
     </div>
@@ -106,11 +106,11 @@ function PriceCard({ price }: { price: BotEvent | null }) {
 
 function AlertsList({ alerts }: { alerts: BotEvent[] }) {
   return (
-    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
-      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Recent Alerts ({alerts.length})</h2>
+    <div className="bg-muted/50 border border-border rounded p-4">
+      <h2 className="text-sm font-semibold text-foreground mb-3">Recent Alerts ({alerts.length})</h2>
 
       {alerts.length === 0 ? (
-        <p className="text-gray-500 text-sm">No recent alerts</p>
+        <p className="text-muted-foreground text-sm">No recent alerts</p>
       ) : (
         <div className="space-y-3">
           {alerts.slice(-5).reverse().map((alert, i) => {
@@ -119,24 +119,24 @@ function AlertsList({ alerts }: { alerts: BotEvent[] }) {
             };
 
             const severityColors: Record<string, string> = {
-              high: "border-red-500 bg-red-50 dark:bg-red-950/30",
-              medium: "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30",
-              low: "border-blue-500 bg-blue-50 dark:bg-blue-950/30",
+              high: "border-red-500 bg-red-500/10",
+              medium: "border-yellow-500 bg-yellow-500/10",
+              low: "border-blue-500 bg-blue-500/10",
             };
 
-            const bgColor = severityColors[data.severity] || "border-gray-400 dark:border-gray-700 bg-gray-100 dark:bg-gray-800/30";
+            const bgColor = severityColors[data.severity] || "border-muted bg-muted/30";
             const isSpike = data.type?.includes("spike");
 
             return (
               <div key={i} className={`border-l-4 ${bgColor} p-3 rounded-r`}>
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className={`text-sm font-medium ${isSpike ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                    <span className={`text-sm font-medium ${isSpike ? "text-green-600" : "text-red-600"}`}>
                       {data.type?.replace("_", " ").toUpperCase()}
                     </span>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{data.message}</p>
+                    <p className="text-muted-foreground text-sm mt-1">{data.message}</p>
                   </div>
-                  <span className="text-xs text-gray-500">{alert.timestamp.toLocaleTimeString()}</span>
+                  <span className="text-xs text-muted-foreground">{alert.timestamp.toLocaleTimeString()}</span>
                 </div>
               </div>
             );
@@ -149,11 +149,11 @@ function AlertsList({ alerts }: { alerts: BotEvent[] }) {
 
 function SignalsList({ signals }: { signals: BotEvent[] }) {
   return (
-    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
-      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Trading Signals ({signals.length})</h2>
+    <div className="bg-muted/50 border border-border rounded p-4">
+      <h2 className="text-sm font-semibold text-foreground mb-3">Trading Signals ({signals.length})</h2>
 
       {signals.length === 0 ? (
-        <p className="text-gray-500 text-sm">No signals yet</p>
+        <p className="text-muted-foreground text-sm">No signals yet</p>
       ) : (
         <div className="space-y-3">
           {signals.slice(-5).reverse().map((signal, i) => {
@@ -163,22 +163,22 @@ function SignalsList({ signals }: { signals: BotEvent[] }) {
             const isLong = data.direction === "long";
 
             return (
-              <div key={i} className={`border-l-4 ${isLong ? "border-green-500 bg-green-50 dark:bg-green-950/20" : "border-red-500 bg-red-50 dark:bg-red-950/20"} p-3 rounded-r`}>
+              <div key={i} className={`border-l-4 ${isLong ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10"} p-3 rounded-r`}>
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className={`text-sm font-medium ${isLong ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                    <span className={`text-sm font-medium ${isLong ? "text-green-600" : "text-red-600"}`}>
                       {data.direction.toUpperCase()} {data.symbol}
                     </span>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{data.reason}</p>
+                    <p className="text-muted-foreground text-sm mt-1">{data.reason}</p>
                     <div className="mt-2">
-                      <span className="text-xs text-gray-500">Confidence: </span>
-                      <span className="text-xs text-gray-600 dark:text-gray-400">{(data.confidence * 100).toFixed(0)}%</span>
-                      <div className="w-24 h-1 bg-gray-300 dark:bg-gray-700 rounded mt-1">
+                      <span className="text-xs text-muted-foreground">Confidence: </span>
+                      <span className="text-xs text-foreground">{(data.confidence * 100).toFixed(0)}%</span>
+                      <div className="w-24 h-1 bg-muted rounded mt-1">
                         <div className={`h-1 rounded ${isLong ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${data.confidence * 100}%` }} />
                       </div>
                     </div>
                   </div>
-                  <span className="text-xs text-gray-500">{signal.timestamp.toLocaleTimeString()}</span>
+                  <span className="text-xs text-muted-foreground">{signal.timestamp.toLocaleTimeString()}</span>
                 </div>
               </div>
             );
@@ -192,20 +192,20 @@ function SignalsList({ signals }: { signals: BotEvent[] }) {
 function PriceHistory({ prices }: { prices: BotEvent[] }) {
   if (prices.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Price History</h2>
-        <p className="text-gray-500 text-sm">No price history yet</p>
+      <div className="bg-muted/50 border border-border rounded p-4">
+        <h2 className="text-sm font-semibold text-foreground mb-3">Price History</h2>
+        <p className="text-muted-foreground text-sm">No price history yet</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
-      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Price History (Last {prices.length})</h2>
+    <div className="bg-muted/50 border border-border rounded p-4">
+      <h2 className="text-sm font-semibold text-foreground mb-3">Price History (Last {prices.length})</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-500 border-b border-gray-200 dark:border-gray-800">
+            <tr className="text-left text-muted-foreground border-b border-border">
               <th className="pb-2">Time</th>
               <th className="pb-2 text-right">Price</th>
               <th className="pb-2 text-right">Change</th>
@@ -218,14 +218,14 @@ function PriceHistory({ prices }: { prices: BotEvent[] }) {
               const data = event.data as { value: number; change_pct: number; high_24h: number; low_24h: number };
               const isPositive = data.change_pct >= 0;
               return (
-                <tr key={i} className="border-b border-gray-100 dark:border-gray-800/50">
-                  <td className="py-2 text-gray-500">{event.timestamp.toLocaleTimeString()}</td>
-                  <td className="py-2 text-right text-green-600 dark:text-green-400">${data.value.toLocaleString()}</td>
-                  <td className={`py-2 text-right ${isPositive ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}>
+                <tr key={i} className="border-b border-border/50">
+                  <td className="py-2 text-muted-foreground">{event.timestamp.toLocaleTimeString()}</td>
+                  <td className="py-2 text-right text-primary">${data.value.toLocaleString()}</td>
+                  <td className={`py-2 text-right ${isPositive ? "text-green-600" : "text-red-600"}`}>
                     {isPositive ? "+" : ""}{data.change_pct.toFixed(3)}%
                   </td>
-                  <td className="py-2 text-right text-gray-600 dark:text-gray-400">${data.high_24h?.toLocaleString()}</td>
-                  <td className="py-2 text-right text-gray-600 dark:text-gray-400">${data.low_24h?.toLocaleString()}</td>
+                  <td className="py-2 text-right text-muted-foreground">${data.high_24h?.toLocaleString()}</td>
+                  <td className="py-2 text-right text-muted-foreground">${data.low_24h?.toLocaleString()}</td>
                 </tr>
               );
             })}

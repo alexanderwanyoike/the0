@@ -3,7 +3,7 @@
 
 name: price-alerts
 description: "Monitors simulated prices and emits alerts when thresholds are crossed"
-version: 1.0.14
+version: 1.0.15
 author: "the0"
 type: realtime
 runtime: nodejs20
