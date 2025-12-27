@@ -55,7 +55,7 @@ export default function Dashboard() {
 function PriceCard({ price }: { price: BotEvent | null }) {
   if (!price) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for price data...</p>
       </div>
     );
@@ -65,7 +65,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
   const isPositive = data.change_pct >= 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm text-gray-600 dark:text-gray-400">{data.symbol}</div>
         <div className="flex items-center gap-2">
@@ -89,7 +89,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
 function SMACard({ sma }: { sma: BotEvent | null }) {
   if (!sma) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for SMA data...</p>
       </div>
     );
@@ -102,7 +102,7 @@ function SMACard({ sma }: { sma: BotEvent | null }) {
   const isBullish = data.short_sma > data.long_sma;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">Moving Averages</div>
       <div className="space-y-4">
         <div className="flex justify-between items-center">
@@ -125,7 +125,7 @@ function SMACard({ sma }: { sma: BotEvent | null }) {
 
 function SignalsList({ signals }: { signals: BotEvent[] }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Trading Signals ({signals.length})</h2>
       {signals.length === 0 ? (
         <p className="text-gray-500 text-sm">No signals yet - waiting for SMA crossover</p>
@@ -167,7 +167,7 @@ function SignalsList({ signals }: { signals: BotEvent[] }) {
 function PriceHistory({ prices, smas }: { prices: BotEvent[]; smas: BotEvent[] }) {
   if (prices.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Price History</h2>
         <p className="text-gray-500 text-sm">No price history yet</p>
       </div>
@@ -175,7 +175,7 @@ function PriceHistory({ prices, smas }: { prices: BotEvent[]; smas: BotEvent[] }
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Price & SMA History (Last {Math.min(prices.length, 20)})</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
