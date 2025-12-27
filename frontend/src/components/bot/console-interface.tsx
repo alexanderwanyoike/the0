@@ -123,12 +123,12 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       <div className="flex items-center gap-1.5 py-0.5 px-2">
         <ChevronRight
           className={cn(
-            "h-3 w-3 text-gray-400 dark:text-gray-600 flex-shrink-0 transition-transform duration-100",
+            "h-3 w-3 text-gray-500 dark:text-gray-600 flex-shrink-0 transition-transform duration-100",
             expanded && "rotate-90 text-green-600 dark:text-green-400",
           )}
         />
         {ts && (
-          <span className="text-gray-500 dark:text-gray-600 flex-shrink-0 select-none tabular-nums">
+          <span className="text-gray-600 dark:text-gray-500 flex-shrink-0 select-none tabular-nums">
             <span className="text-[9px]">{ts.date}</span>
             {" "}
             <span>{ts.time}</span>
@@ -138,7 +138,7 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
           <LevelIcon lvl={level} />
           {level}
         </span>
-        <span className="text-gray-700 dark:text-gray-300 flex-1 min-w-0 truncate">{message}</span>
+        <span className="text-gray-900 dark:text-gray-300 flex-1 min-w-0 truncate">{message}</span>
         <button
           onClick={handleCopy}
           className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300 dark:hover:bg-gray-700 rounded flex-shrink-0"
@@ -152,8 +152,8 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
         </button>
       </div>
       {expanded && (
-        <div className="ml-6 mr-2 my-1 px-2 py-1.5 bg-gray-100 dark:bg-gray-900 rounded border border-gray-300 dark:border-gray-700 text-[11px]">
-          <pre className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">{message}</pre>
+        <div className="ml-6 mr-2 my-1 px-2 py-1.5 bg-gray-50 dark:bg-gray-900 rounded border border-gray-300 dark:border-gray-700 text-[11px]">
+          <pre className="text-gray-900 dark:text-gray-300 whitespace-pre-wrap break-words">{message}</pre>
         </div>
       )}
     </div>
@@ -236,17 +236,17 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
           )}
         />
         {ts && (
-          <span className="text-blue-500 dark:text-blue-600 flex-shrink-0 select-none tabular-nums">
+          <span className="text-blue-700 dark:text-blue-500 flex-shrink-0 select-none tabular-nums">
             <span className="text-[9px]">{ts.date}</span>
             {" "}
             <span>{ts.time}</span>
           </span>
         )}
-        <BarChart3 className="h-2.5 w-2.5 text-blue-500 dark:text-blue-400 flex-shrink-0" />
-        <span className="flex-shrink-0 select-none text-[9px] font-medium px-1 rounded bg-blue-500/20 dark:bg-blue-500/30 text-blue-600 dark:text-blue-300">
+        <BarChart3 className="h-2.5 w-2.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+        <span className="flex-shrink-0 select-none text-[9px] font-medium px-1 rounded bg-blue-100 dark:bg-blue-500/30 text-blue-700 dark:text-blue-300">
           {metricType}
         </span>
-        <span className="text-blue-700 dark:text-blue-200 flex-1 min-w-0 truncate">{summaryContent}</span>
+        <span className="text-blue-800 dark:text-blue-200 flex-1 min-w-0 truncate">{summaryContent}</span>
         <button
           onClick={handleCopy}
           className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded flex-shrink-0"
