@@ -57,7 +57,7 @@ export default function Dashboard() {
 function PortfolioValueCard({ portfolio }: { portfolio: BotEvent | null }) {
   if (!portfolio) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">No portfolio data yet</p>
       </div>
     );
@@ -67,7 +67,7 @@ function PortfolioValueCard({ portfolio }: { portfolio: BotEvent | null }) {
   const isPositive = data.change_pct >= 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Portfolio Value</div>
       <div className="flex items-baseline gap-4">
         <span className="text-3xl font-bold text-green-600 dark:text-green-400">
@@ -87,7 +87,7 @@ function PortfolioValueCard({ portfolio }: { portfolio: BotEvent | null }) {
 function ValueHistory({ values }: { values: BotEvent[] }) {
   if (values.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Value History</h2>
         <p className="text-gray-500 text-sm">No history yet</p>
       </div>
@@ -95,7 +95,7 @@ function ValueHistory({ values }: { values: BotEvent[] }) {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
         Value History (Last {values.length})
       </h2>
@@ -129,7 +129,7 @@ function PositionsTable({ positions }: { positions: BotEvent[] }) {
 
   if (positionList.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Positions</h2>
         <p className="text-gray-500 text-sm">No positions</p>
       </div>
@@ -137,7 +137,7 @@ function PositionsTable({ positions }: { positions: BotEvent[] }) {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Current Positions</h2>
       <table className="w-full text-sm">
         <thead>
@@ -169,7 +169,7 @@ function PositionsTable({ positions }: { positions: BotEvent[] }) {
 function TradesTable({ trades }: { trades: BotEvent[] }) {
   if (trades.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Recent Trades</h2>
         <p className="text-gray-500 text-sm">No trades yet</p>
       </div>
@@ -177,7 +177,7 @@ function TradesTable({ trades }: { trades: BotEvent[] }) {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Recent Trades ({trades.length})</h2>
       <table className="w-full text-sm">
         <thead>
@@ -219,7 +219,7 @@ function RunSummary({ runs }: { runs: BotEvent[][] }) {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Execution Runs ({runs.length})</h2>
       <div className="text-sm text-gray-500">
         {runs.length} scheduled runs detected. Each run contains {runs[0]?.length || 0} to {runs[runs.length - 1]?.length || 0} events.

@@ -58,7 +58,7 @@ export default function Dashboard() {
 function PriceCard({ price }: { price: BotEvent | null }) {
   if (!price) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for price data...</p>
       </div>
     );
@@ -68,7 +68,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
   const isPositive = data.change_pct >= 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Latest Price</div>
       <div className="text-3xl font-bold text-green-600 dark:text-green-400">${data.value.toLocaleString()}</div>
       <div className={`text-sm ${isPositive ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"}`}>
@@ -82,7 +82,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
 function SMACard({ sma }: { sma: BotEvent | null }) {
   if (!sma) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for SMA data...</p>
       </div>
     );
@@ -95,7 +95,7 @@ function SMACard({ sma }: { sma: BotEvent | null }) {
   const isBullish = data.short_sma > data.long_sma;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Moving Averages</div>
       <div className="space-y-2">
         <div className="flex justify-between">
@@ -117,7 +117,7 @@ function SMACard({ sma }: { sma: BotEvent | null }) {
 function SignalCard({ signal }: { signal: BotEvent | null }) {
   if (!signal) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for signal...</p>
       </div>
     );
@@ -129,7 +129,7 @@ function SignalCard({ signal }: { signal: BotEvent | null }) {
   const isBuy = data.type === "BUY";
 
   return (
-    <div className={`bg-gray-50 dark:bg-gray-800/30 border rounded p-6 ${isBuy ? "border-green-400 dark:border-green-500" : "border-red-400 dark:border-red-500"}`}>
+    <div className={`bg-gray-50 dark:bg-green-950 border rounded p-6 ${isBuy ? "border-green-400 dark:border-green-500" : "border-red-400 dark:border-red-500"}`}>
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Current Signal</div>
       <div className={`text-3xl font-bold ${isBuy ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
         {data.type}
@@ -146,7 +146,7 @@ function SignalCard({ signal }: { signal: BotEvent | null }) {
 function RunHistory({ runs }: { runs: BotEvent[][] }) {
   if (runs.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Run History</h2>
         <p className="text-gray-500 text-sm">No runs yet</p>
       </div>
@@ -154,7 +154,7 @@ function RunHistory({ runs }: { runs: BotEvent[][] }) {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
         Run History (Last {Math.min(runs.length, 10)})
       </h2>

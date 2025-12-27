@@ -1,7 +1,7 @@
 {
   "name": "test-haskell-sma",
   "type": "scheduled/haskell-sma-crossover",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "schedule": "* * * * *",
   "symbol": "NVDA",
   "short_period": 5,

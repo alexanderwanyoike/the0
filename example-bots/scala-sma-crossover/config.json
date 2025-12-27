@@ -1,7 +1,7 @@
 {
   "name": "test-scala-sma",
   "type": "realtime/scala-sma-crossover",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "symbol": "AMZN",
   "short_period": 5,
   "long_period": 20,

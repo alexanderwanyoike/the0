@@ -58,7 +58,7 @@ export default function Dashboard() {
 function PriceCard({ price }: { price: BotEvent | null }) {
   if (!price) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
         <p className="text-gray-500">Waiting for price data...</p>
       </div>
     );
@@ -70,7 +70,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
   const isPositive = data.change_pct >= 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-6">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm text-gray-600 dark:text-gray-400">{data.symbol}</div>
         <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
 
 function AlertsList({ alerts }: { alerts: BotEvent[] }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Recent Alerts ({alerts.length})</h2>
 
       {alerts.length === 0 ? (
@@ -149,7 +149,7 @@ function AlertsList({ alerts }: { alerts: BotEvent[] }) {
 
 function SignalsList({ signals }: { signals: BotEvent[] }) {
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Trading Signals ({signals.length})</h2>
 
       {signals.length === 0 ? (
@@ -192,7 +192,7 @@ function SignalsList({ signals }: { signals: BotEvent[] }) {
 function PriceHistory({ prices }: { prices: BotEvent[] }) {
   if (prices.length === 0) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+      <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Price History</h2>
         <p className="text-gray-500 text-sm">No price history yet</p>
       </div>
@@ -200,7 +200,7 @@ function PriceHistory({ prices }: { prices: BotEvent[] }) {
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-800 rounded p-4">
+    <div className="bg-gray-50 dark:bg-green-950 border border-gray-200 dark:border-gray-800 rounded p-4">
       <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Price History (Last {prices.length})</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
