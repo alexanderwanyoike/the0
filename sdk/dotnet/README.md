@@ -27,26 +27,16 @@ The SDK provides convenience methods for parsing config and outputting custom re
 
 ### Installation
 
-This package is published to GitHub Packages (NuGet). First, add the GitHub Packages source:
+Install from NuGet:
 
 ```bash
-dotnet nuget add source "https://nuget.pkg.github.com/alexanderwanyoike/index.json" \
-  --name github \
-  --username YOUR_GITHUB_USERNAME \
-  --password YOUR_GITHUB_TOKEN \
-  --store-password-in-clear-text
+dotnet add package The0.Sdk
 ```
 
-Then add to your `.csproj`:
+Or add to your `.csproj`:
 
 ```xml
-<PackageReference Include="The0.Sdk" Version="0.1.0" />
-```
-
-Or via CLI:
-
-```bash
-dotnet add package The0.Sdk --version 0.1.0
+<PackageReference Include="The0.Sdk" Version="0.1.2" />
 ```
 
 ### Usage
@@ -125,6 +115,33 @@ Input.Result(new {
 });
 ```
 
+### `Input.Metric(type, data)`
+
+Emit a metric for the platform to collect.
+
+```csharp
+Input.Metric("price", new { symbol = "BTC/USD", value = 45000.0 });
+// Output to stdout: {"_metric":"price","symbol":"BTC/USD","value":45000,"timestamp":"..."}
+```
+
+### `Input.Log(message, data?, level?)`
+
+Log a structured message to stderr.
+
+```csharp
+// Simple log (defaults to info level)
+Input.Log("Starting bot");
+
+// Log with level
+Input.Log("Connection lost", null, LogLevel.Warn);
+
+// Log with structured data
+Input.Log("Order placed", new { orderId = "12345", symbol = "BTC" });
+
+// Log with data and level
+Input.Log("Order failed", new { orderId = "12345" }, LogLevel.Error);
+```
+
 ## Environment Variables
 
 The SDK reads from these environment variables (set automatically by the0 runtime):
@@ -143,39 +160,14 @@ Console.WriteLine("...");  // Reserved for JSON result output
 
 ## Publishing (Maintainers)
 
-This package is published to GitHub Packages (NuGet).
-
-### Prerequisites
-
-1. Create a GitHub Personal Access Token with `write:packages` scope:
-   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
-
-2. Set the token as an environment variable:
-   ```bash
-   export GITHUB_TOKEN="ghp_your_token_here"
-   ```
-
-### Publish
+This package is published to NuGet.org.
 
 ```bash
-# Build the package
-dotnet pack -c Release
-
-# Push to GitHub Packages
-dotnet nuget push bin/Release/The0.Sdk.*.nupkg \
-  --source "https://nuget.pkg.github.com/alexanderwanyoike/index.json" \
-  --api-key $GITHUB_TOKEN
+export NUGET_API_KEY="your_key_here"
+make publish
 ```
 
-### Version Bump
-
-Update the version in `The0.csproj`:
-
-```xml
-<Version>0.2.0</Version>
-```
-
-Then rebuild and publish.
+Get your API key from: https://www.nuget.org/account/apikeys
 
 ## License
 

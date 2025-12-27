@@ -64,7 +64,7 @@ fn main() {
         .init();
 
     // Get configuration using the0 SDK
-    let (bot_id, config) = input::parse();
+    let (bot_id, config) = input::parse().expect("Failed to parse bot configuration");
 
     // Extract configuration with defaults
     let symbol = config["symbol"].as_str().unwrap_or("AAPL");

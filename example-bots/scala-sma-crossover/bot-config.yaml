@@ -3,13 +3,13 @@
 
 name: scala-sma-crossover
 description: "SMA crossover strategy bot using Scala 3 with Yahoo Finance data"
-version: 1.0.2
+version: 1.0.3
 author: "the0"
 type: realtime
 runtime: scala3
 
 entrypoints:
-  bot: target/scala-3.3.1/sma-bot-assembly-1.0.2.jar
+  bot: target/scala-3.3.1/sma-bot-assembly-1.0.3.jar
 
 schema:
   bot: bot-schema.json

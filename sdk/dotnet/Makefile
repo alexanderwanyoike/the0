@@ -1,7 +1,5 @@
-.PHONY: build test publish clean
+.PHONY: build test pack publish clean
 
-GITHUB_SOURCE := https://nuget.pkg.github.com/alexanderwanyoike/index.json
-PACKAGE_NAME := The0.Sdk
 VERSION := $(shell grep -oP '(?<=<Version>)[^<]+' The0.csproj)
 
 build:
@@ -14,10 +12,10 @@ pack: build
 	dotnet pack -c Release
 
 publish: pack test
-	@if [ -z "$$GITHUB_TOKEN" ]; then echo "Error: GITHUB_TOKEN not set"; exit 1; fi
-	dotnet nuget push bin/Release/$(PACKAGE_NAME).$(VERSION).nupkg \
-		--source "$(GITHUB_SOURCE)" \
-		--api-key $$GITHUB_TOKEN
+	@if [ -z "$$NUGET_API_KEY" ]; then echo "Error: NUGET_API_KEY not set"; exit 1; fi
+	dotnet nuget push bin/Release/The0.Sdk.$(VERSION).nupkg \
+		--api-key $$NUGET_API_KEY \
+		--source https://api.nuget.org/v3/index.json
 
 clean:
 	rm -rf bin obj

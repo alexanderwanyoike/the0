@@ -74,21 +74,10 @@ This creates a minimal project with `Program.cs` and `.csproj` files.
 
 ## Step 2: Add the SDK
 
-Add the the0 SDK to your project. First, configure NuGet to use GitHub Packages:
+Install the the0 SDK from NuGet:
 
 ```bash
-# Add GitHub Packages as a NuGet source
-dotnet nuget add source "https://nuget.pkg.github.com/alexanderwanyoike/index.json" \
-  --name github \
-  --username YOUR_GITHUB_USERNAME \
-  --password YOUR_GITHUB_TOKEN \
-  --store-password-in-clear-text
-```
-
-Then add the package:
-
-```bash
-dotnet add package The0.Sdk --version 0.1.0
+dotnet add package The0.Sdk
 ```
 
 Or add it directly to your `.csproj`:
@@ -105,18 +94,10 @@ Or add it directly to your `.csproj`:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="The0.Sdk" Version="0.1.0" />
+    <PackageReference Include="The0.Sdk" Version="0.1.2" />
   </ItemGroup>
 
 </Project>
-```
-
-**Alternative:** Copy `Input.cs` from `sdk/dotnet/` to your project:
-
-```xml
-<ItemGroup>
-  <Compile Include="path/to/sdk/dotnet/Input.cs" />
-</ItemGroup>
 ```
 
 ---
@@ -376,6 +357,39 @@ Input.Result(new
 });
 ```
 
+### `Input.Metric(string type, object data)`
+
+Emit a metric for the platform to collect (written to stdout):
+
+```csharp
+// Emit a price metric
+Input.Metric("price", new { symbol = "BTC/USD", value = 45000.0 });
+// Output: {"_metric":"price","symbol":"BTC/USD","value":45000,"timestamp":"..."}
+
+// Emit a trade metric
+Input.Metric("trade", new { symbol = "AAPL", quantity = 10, price = 150.50 });
+```
+
+### `Input.Log(string message, object? data = null, LogLevel? level = null)`
+
+Log a structured message to stderr:
+
+```csharp
+// Simple log (defaults to info level)
+Input.Log("Starting bot");
+
+// Log with level
+Input.Log("Connection lost", null, LogLevel.Warn);
+
+// Log with structured data
+Input.Log("Order placed", new { orderId = "12345", symbol = "BTC" });
+
+// Log with data and level
+Input.Log("Order failed", new { orderId = "12345" }, LogLevel.Error);
+```
+
+Available log levels: `LogLevel.Info`, `LogLevel.Warn`, `LogLevel.Error`
+
 ---
 
 ## Example: Alpaca Trading Bot
@@ -576,11 +590,16 @@ Console.Error.WriteLine($"Configuration validated: amount={amount}");
 
 ### 4. Logging
 
-Both stdout and stderr go to your bot's logs:
+Use `Input.Log` for structured logging or `Console.Error` for simple messages:
 
 ```csharp
-Console.WriteLine("Starting trade...");               // Goes to log
-Console.Error.WriteLine($"DEBUG: price = {price}");   // Goes to log
+// Structured logging (recommended)
+Input.Log("Starting trade", new { symbol, amount });
+Input.Log("Price fetched", new { price = 45000.0 }, LogLevel.Info);
+Input.Log("API rate limited", null, LogLevel.Warn);
+
+// Simple logging
+Console.Error.WriteLine($"DEBUG: price = {price}");
 ```
 
 ### 5. Decimal for Money
