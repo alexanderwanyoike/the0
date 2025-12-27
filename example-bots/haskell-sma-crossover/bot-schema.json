@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "SMA Crossover Configuration",
+  "description": "Configuration for the SMA crossover trading strategy bot",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Stock symbol to monitor (e.g., AAPL, MSFT, GOOGL)",
+      "default": "AAPL"
+    },
+    "short_period": {
+      "type": "integer",
+      "description": "Number of periods for short SMA (fast moving average)",
+      "default": 5,
+      "minimum": 2,
+      "maximum": 50
+    },
+    "long_period": {
+      "type": "integer",
+      "description": "Number of periods for long SMA (slow moving average)",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 200
+    }
+  },
+  "additionalProperties": false
+}

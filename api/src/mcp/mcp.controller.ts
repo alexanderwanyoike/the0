@@ -144,7 +144,10 @@ export class McpController {
           );
       }
     } catch (error) {
-      this.logger.error({ error, method: request.method }, "MCP request failed");
+      this.logger.error(
+        { error, method: request.method },
+        "MCP request failed",
+      );
       return this.createErrorResponse(
         request.id,
         -32603,
@@ -367,7 +370,6 @@ export class McpController {
           required: ["name"],
         },
       },
-
     ];
   }
 }

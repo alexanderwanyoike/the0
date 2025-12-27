@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Portfolio Tracker Configuration",
+  "description": "Configuration for the portfolio tracker bot",
+  "properties": {
+    "initial_value": {
+      "type": "number",
+      "description": "Initial portfolio value in USD",
+      "default": 10000,
+      "minimum": 100
+    },
+    "volatility": {
+      "type": "number",
+      "description": "Price volatility factor (0.01 = 1%)",
+      "default": 0.02,
+      "minimum": 0.001,
+      "maximum": 0.1
+    },
+    "symbols": {
+      "type": "array",
+      "description": "Symbols to track in the portfolio",
+      "items": {
+        "type": "string"
+      },
+      "default": ["BTC", "ETH", "SOL"]
+    }
+  },
+  "additionalProperties": false
+}

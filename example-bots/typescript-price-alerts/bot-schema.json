@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Price Alerts Configuration",
+  "description": "Configuration for the price alerts bot",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Symbol to monitor",
+      "default": "BTC/USD"
+    },
+    "base_price": {
+      "type": "number",
+      "description": "Base price for simulation",
+      "default": 45000
+    },
+    "alert_threshold": {
+      "type": "number",
+      "description": "Price change percentage to trigger alert",
+      "default": 1.0,
+      "minimum": 0.1,
+      "maximum": 10
+    },
+    "update_interval_ms": {
+      "type": "number",
+      "description": "Milliseconds between price updates",
+      "default": 5000,
+      "minimum": 1000,
+      "maximum": 60000
+    }
+  },
+  "additionalProperties": false
+}

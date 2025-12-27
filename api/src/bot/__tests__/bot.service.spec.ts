@@ -170,6 +170,10 @@ describe("BotService - Enhanced Tests", () => {
       // FeatureGateService removed for OSS version
       expect(repository.create).toHaveBeenCalledWith({
         ...validBotData,
+        config: {
+          ...validBotData.config,
+          hasFrontend: false, // Added by bot.service from custom bot config
+        },
         topic: "the0-scheduled-custom-bot",
         userId: uid,
         customBotId: mockCustomBot.id,

@@ -42,9 +42,6 @@ if ! ls -la /{{ .EntryPointType }} >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "PWD: $(pwd)" >&2
-pwd >&2
-
 # Copy the Python entrypoint script to the container
 cat > /tmp/python_entrypoint.py << 'PYTHON_SCRIPT'
 {{ .ScriptContent }}
@@ -59,6 +56,115 @@ export ENTRYPOINT_TYPE="{{ .EntryPointType }}"
 exec python3 /tmp/python_entrypoint.py
 `
 
+// rustBashEntrypoint executes pre-built Rust binary (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
+const rustBashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Use the binary path specified in bot-config.yaml entrypoints.bot
+BINARY="{{ .ScriptPath }}"
+
+if [ ! -f "$BINARY" ]; then
+    echo '{"status":"error","message":"Binary not found: '"$BINARY"'"}'
+    exit 1
+fi
+
+# Ensure the binary is executable (ZIP extraction may not preserve permissions)
+chmod +x "$BINARY"
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec "$BINARY"
+`
+
+// dotnet8BashEntrypoint executes pre-built .NET DLL (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
+const dotnet8BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Use the DLL path specified in bot-config.yaml entrypoints.bot
+DLL="{{ .ScriptPath }}"
+
+if [ ! -f "$DLL" ]; then
+    echo '{"status":"error","message":"DLL not found: '"$DLL"'"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec dotnet "$DLL"
+`
+
+// gcc13BashEntrypoint executes pre-built C/C++ binary (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
+const gcc13BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Use the binary path specified in bot-config.yaml entrypoints.bot
+BINARY="{{ .ScriptPath }}"
+
+if [ ! -f "$BINARY" ]; then
+    echo '{"status":"error","message":"Binary not found: '"$BINARY"'"}'
+    exit 1
+fi
+
+# Ensure the binary is executable (ZIP extraction may not preserve permissions)
+chmod +x "$BINARY"
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec "$BINARY"
+`
+
+// scala3BashEntrypoint executes pre-built Scala assembly JAR (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
+const scala3BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Use the JAR path specified in bot-config.yaml entrypoints.bot
+JAR="{{ .ScriptPath }}"
+
+if [ ! -f "$JAR" ]; then
+    echo '{"status":"error","message":"JAR not found: '"$JAR"'"}'
+    exit 1
+fi
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec java -jar "$JAR"
+`
+
+// ghc96BashEntrypoint executes pre-built Haskell binary (built by CLI with Cabal)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
+const ghc96BashEntrypoint = `#!/bin/bash
+set -e
+
+cd "/{{ .EntryPointType }}"
+
+# Use the binary path specified in bot-config.yaml entrypoints.bot
+BINARY="{{ .ScriptPath }}"
+
+if [ ! -f "$BINARY" ]; then
+    echo '{"status":"error","message":"Binary not found: '"$BINARY"'"}'
+    exit 1
+fi
+
+# Ensure the binary is executable (ZIP extraction may not preserve permissions)
+chmod +x "$BINARY"
+
+export BOT_ID="{{ .BotId }}"
+export BOT_CONFIG='{{ .BotConfig }}'
+exec "$BINARY"
+`
+
 type bashEntrypointFactory struct {
 	EntryPointType string
 	ScriptContent  string
@@ -70,12 +176,6 @@ type bashEntrypointFactory struct {
 func NewBashEntrypointFactory(
 	entryPointType, scriptContent, botId, botConfig, scriptPath string,
 ) *bashEntrypointFactory {
-	// Add logging for debugging
-	fmt.Printf("ENTRYPOINT_FACTORY: Creating bash entrypoint factory\n")
-	fmt.Printf("ENTRYPOINT_FACTORY: EntryPointType=%s\n", entryPointType)
-	fmt.Printf("ENTRYPOINT_FACTORY: BotId=%s\n", botId)
-	fmt.Printf("ENTRYPOINT_FACTORY: ScriptPath=%s\n", scriptPath)
-
 	return &bashEntrypointFactory{
 		EntryPointType: entryPointType,
 		ScriptContent:  scriptContent,
@@ -94,7 +194,16 @@ func (p *bashEntrypointFactory) BuildBashEntrypoint(
 		selectedEntrypoint = nodeBashEntrypoint
 	case runtime == "python3.11":
 		selectedEntrypoint = pythonBashEntrypoint
-	// Add more cases for other runtimes as needed
+	case runtime == "rust-stable":
+		selectedEntrypoint = rustBashEntrypoint
+	case runtime == "dotnet8":
+		selectedEntrypoint = dotnet8BashEntrypoint
+	case runtime == "gcc13":
+		selectedEntrypoint = gcc13BashEntrypoint
+	case runtime == "scala3":
+		selectedEntrypoint = scala3BashEntrypoint
+	case runtime == "ghc96":
+		selectedEntrypoint = ghc96BashEntrypoint
 	default:
 		return "", fmt.Errorf("unsupported runtime: %s", runtime)
 	}

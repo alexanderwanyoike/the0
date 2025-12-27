@@ -58,8 +58,13 @@ export class BotService {
       return Failure<Bot, string>(deploymentAuthResult.error);
     }
 
+    // Get hasFrontend flag from the validated custom bot
+    const hasCustomFrontend =
+      validationResult.data.config?.hasFrontend ?? false;
+
     const result = await this.botRepository.create({
       ...createBotDto,
+      config: { ...createBotDto.config, hasFrontend: hasCustomFrontend },
       userId: uid,
       topic: "the0-scheduled-custom-bot",
       customBotId: validationResult.data.id,
@@ -69,45 +74,37 @@ export class BotService {
       return Failure<Bot, string>(result.error);
     }
 
-    // Fetch custom bot data and publish bot creation event (replaces event-handler service)
-    const customBotResult = await this.customBotService.getUserSpecificVersion(
-      uid,
-      validationResult.data.name,
-      validationResult.data.version,
-    );
+    // validationResult.data is the CustomBot from validateBotTypeAndConfig
+    const customBot = validationResult.data;
+    const topics = this.getTopicsForBotType(customBot);
 
-    if (customBotResult.success) {
-      const customBot = customBotResult.data;
-      const topics = this.getTopicsForBotType(customBot);
+    if (topics) {
+      // Format event data for runtime subscriber (bot-scheduler expects flat structure)
+      const eventPayload = {
+        id: result.data.id,
+        config: {
+          ...createBotDto.config,
+          customBotId: validationResult.data.id,
+        },
+        custom: {
+          config: customBot.config,
+          createdAt: customBot.createdAt,
+          updatedAt: customBot.updatedAt,
+          filePath: customBot.filePath || "",
+          version: customBot.version,
+        },
+      };
 
-      if (topics) {
-        // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-        const eventPayload = {
-          id: result.data.id,
-          config: {
-            ...createBotDto.config,
-            customBotId: validationResult.data.id,
-          },
-          custom: {
-            config: customBot.config,
-            createdAt: customBot.createdAt,
-            updatedAt: customBot.updatedAt,
-            filePath: customBot.filePath || "",
-            version: customBot.version,
-          },
-        };
-
-        // Publish bot creation event to appropriate runtime service
-        const publishResult = await this.natsService.publish(
-          topics.CREATED,
-          eventPayload,
+      // Publish bot creation event to appropriate runtime service
+      const publishResult = await this.natsService.publish(
+        topics.CREATED,
+        eventPayload,
+      );
+      if (!publishResult.success) {
+        this.logger.error(
+          { error: publishResult.error, botId: result.data.id },
+          "Failed to publish bot creation event",
         );
-        if (!publishResult.success) {
-          this.logger.error(
-            { error: publishResult.error, botId: result.data.id },
-            "Failed to publish bot creation event",
-          );
-        }
       }
     }
 

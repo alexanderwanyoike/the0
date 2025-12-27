@@ -10,7 +10,7 @@ Learn how to create, test, and deploy custom trading bots on the the0 platform. 
 
 ## Getting Started
 
-- **[Quick Start Guide](./quick-start-guide)** - Build your first custom bot
+- **[Quick Start Guide](./python-quick-start)** - Build your first custom bot
 - **[Overview](./overview)** - Understanding custom bot development
 - **[Configuration](./configuration)** - Configure your bot settings
 
@@ -19,3 +19,8 @@ Learn how to create, test, and deploy custom trading bots on the the0 platform. 
 - **[Bot Types](./bot-types)** - Scheduled vs real-time execution
 - **[Testing](./testing)** - Test your bots locally
 - **[Deployment](./deployment)** - Deploy your bots to the platform
+
+## Visualization & Monitoring
+
+- **[Metrics & Logging](./metrics)** - Emit structured metrics from your bots
+- **[Custom Frontends](./custom-frontends)** - Build rich visual dashboards

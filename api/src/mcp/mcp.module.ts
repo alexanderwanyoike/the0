@@ -8,13 +8,7 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
 import { LoggerModule } from "@/logger/logger.module";
 
 @Module({
-  imports: [
-    BotModule,
-    CustomBotModule,
-    LogsModule,
-    ApiKeyModule,
-    LoggerModule,
-  ],
+  imports: [BotModule, CustomBotModule, LogsModule, ApiKeyModule, LoggerModule],
   controllers: [McpController],
   providers: [McpService],
   exports: [McpService],

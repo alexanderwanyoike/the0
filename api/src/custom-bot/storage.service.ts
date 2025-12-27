@@ -210,4 +210,112 @@ export class StorageService {
       return Failure(`Error listing objects: ${error.message}`);
     }
   }
+
+  /**
+   * Get bot frontend bundle from storage as a stream.
+   * Uses streaming to avoid loading large bundles into memory.
+   */
+  async getBotFrontendStream(
+    frontendPath: string,
+  ): Promise<Result<NodeJS.ReadableStream, string>> {
+    try {
+      const stream = await this.minioClient.getObject(
+        this.bucketName,
+        frontendPath,
+      );
+      return Ok(stream);
+    } catch (error) {
+      if (
+        error.code === "NoSuchKey" ||
+        error.message?.includes("does not exist")
+      ) {
+        return Failure("Frontend bundle not found");
+      }
+      return Failure(`Error retrieving frontend bundle: ${error.message}`);
+    }
+  }
+
+  /**
+   * Extract frontend bundle from bot ZIP and store separately.
+   * Looks for frontend/dist/bundle.js or frontend.js in the ZIP.
+   * Returns the path where frontend was stored, or null if no frontend found.
+   */
+  async extractAndStoreFrontend(
+    zipFilePath: string,
+    userId: string,
+    botName: string,
+    version: string,
+  ): Promise<Result<string | null, string>> {
+    try {
+      // Download the ZIP file
+      const stream = await this.minioClient.getObject(
+        this.bucketName,
+        zipFilePath,
+      );
+      const chunks: Buffer[] = [];
+
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+
+      // Parse ZIP and look for frontend bundle
+      const zip = new AdmZip(buffer);
+      const entries = zip.getEntries();
+
+      // Look for frontend bundle in common locations
+      const frontendPaths = [
+        "frontend/dist/bundle.js",
+        "frontend/dist/index.js",
+        "frontend/bundle.js",
+        "frontend.js",
+        "dist/frontend.js",
+      ];
+
+      let frontendEntry = null;
+      for (const path of frontendPaths) {
+        frontendEntry = entries.find((entry) => entry.entryName === path);
+        if (frontendEntry) break;
+      }
+
+      if (!frontendEntry) {
+        // No frontend found - this is not an error
+        return Ok(null);
+      }
+
+      // Extract the frontend bundle content
+      const frontendContent = frontendEntry.getData();
+
+      // Store separately at a predictable path
+      const frontendStoragePath = `${userId}/${botName}/${version}/frontend.js`;
+
+      await this.minioClient.putObject(
+        this.bucketName,
+        frontendStoragePath,
+        frontendContent,
+        frontendContent.length,
+        {
+          "Content-Type": "application/javascript",
+          "X-Extracted-From": zipFilePath,
+          "X-Extract-Time": new Date().toISOString(),
+        },
+      );
+
+      this.logger.info(
+        { frontendStoragePath, sourceZip: zipFilePath },
+        "Extracted and stored frontend bundle",
+      );
+
+      return Ok(frontendStoragePath);
+    } catch (error) {
+      return Failure(`Error extracting frontend bundle: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get the frontend storage path for a bot version.
+   */
+  getFrontendPath(userId: string, botName: string, version: string): string {
+    return `${userId}/${botName}/${version}/frontend.js`;
+  }
 }

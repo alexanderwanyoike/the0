@@ -346,6 +346,6 @@ function main(id, config) {
 
 ## Related Documentation
 
-- [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build your first bot
+- [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot
 - [Testing Guide](/custom-bot-development/testing) - Validation and testing
 - [Deployment](/custom-bot-development/deployment) - Deploy your bots

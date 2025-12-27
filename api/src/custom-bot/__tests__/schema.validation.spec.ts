@@ -239,7 +239,8 @@ describe("Custom Bot Schema Validation", () => {
       expect(result.valid).toBe(true);
     });
 
-    it("should fail scheduled bot with nodejs20 runtime", () => {
+    it("should succeed scheduled bot with nodejs20 runtime", () => {
+      // All runtimes are now valid for scheduled bots
       const scheduledConfig = {
         ...validConfig,
         type: "scheduled" as const,
@@ -247,12 +248,7 @@ describe("Custom Bot Schema Validation", () => {
       };
 
       const result = validateCustomBotConfigPayload(scheduledConfig);
-      expect(result.valid).toBe(false);
-      expect(
-        result.errors?.some((err) =>
-          err.includes("must be equal to one of the allowed values"),
-        ),
-      ).toBe(true);
+      expect(result.valid).toBe(true);
     });
 
     it("should validate realtime bot with python3.11 runtime", () => {
@@ -324,19 +320,17 @@ describe("Custom Bot Schema Validation", () => {
       ).toBe(true);
     });
 
-    it("should fail with invalid entrypoint file extension", () => {
-      const invalidConfig = {
+    it("should accept any entrypoint file extension", () => {
+      // Schema no longer enforces specific file extensions to support compiled languages
+      const configWithAnyExtension = {
         ...validConfig,
         entrypoints: {
-          bot: "main.txt", // Invalid extension
+          bot: "main.txt", // Any extension is now valid
         },
       };
 
-      const result = validateCustomBotConfigPayload(invalidConfig);
-      expect(result.valid).toBe(false);
-      expect(
-        result.errors?.some((err) => err.includes("must match pattern")),
-      ).toBe(true);
+      const result = validateCustomBotConfigPayload(configWithAnyExtension);
+      expect(result.valid).toBe(true);
     });
 
     it("should fail with invalid bot type", () => {

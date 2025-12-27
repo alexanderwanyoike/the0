@@ -740,9 +740,10 @@ config_*
 		"src/bot.py",
 		"src/utils/helper.py",
 		"src/models/model.py",
-		"config_prod.yaml", // Negation pattern
-		"test_runner.py",   // Should not match tests/ pattern
-		"vendor/lib.py",    // Vendor is always included
+		"config_prod.yaml",       // Negation pattern
+		"test_runner.py",         // Should not match tests/ pattern
+		"vendor/lib.py",          // Vendor is always included
+		"build/output/bot.exe",   // build/ is protected for compiled languages
 	}
 
 	for _, expectedFile := range expectedFiles {
@@ -762,8 +763,8 @@ config_*
 		"docs/README.md",           // docs/**/*.md
 		"docs/api/api.md",          // docs/**/*.md
 		"cache/temp.dat",           // cache/
-		"build/output/bot.exe",     // build/
 		"config_dev.yaml",          // config_*
+		// Note: build/output/bot.exe is now INCLUDED (build/ is protected for compiled languages)
 	}
 
 	for _, excludedFile := range excludedFiles {

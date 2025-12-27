@@ -4,7 +4,7 @@ export const BOT_TYPES: BotType[] = ["scheduled", "realtime", "event"];
 
 export type CustomBotStatus = "active";
 
-export type Runtime = "python3.11" | "nodejs20";
+export type Runtime = "python3.11" | "nodejs20" | "rust-stable" | "dotnet8" | "gcc13" | "scala3" | "ghc96";
 
 export interface CustomBotConfig {
   name: string;
@@ -20,6 +20,8 @@ export interface CustomBotConfig {
     bot: Record<string, any>;
   };
   readme: string;
+  /** Whether this bot has a custom frontend dashboard */
+  hasFrontend?: boolean;
   metadata?: {
     categories?: string[];
     instruments?: string[];

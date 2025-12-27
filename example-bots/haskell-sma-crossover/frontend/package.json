@@ -1,0 +1,17 @@
+{
+  "name": "haskell-sma-crossover-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Custom dashboard for Haskell SMA crossover bot",
+  "main": "index.tsx",
+  "scripts": {
+    "build": "the0-build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@alexanderwanyoike/the0-react": "^0.2.0",
+    "@types/react": "^19.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,36 @@
+# Scala/SBT
+target/
+.target/
+dist/
+build/
+.cache
+.history
+.lib/
+dist/*
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+.scala_dependencies
+.worksheet
+
+# IDE
+.idea/
+.idea_modules/
+*.iml
+.vscode/
+.metals/
+.bloop/
+.bsp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.swp
+*.swo
+*~
+.env
+.env.local

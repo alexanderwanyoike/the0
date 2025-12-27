@@ -1,0 +1,5 @@
+# the0 SDK for bot development
+the0-sdk>=0.1.1
+
+# Structured logging for metric emission
+structlog>=24.0.0

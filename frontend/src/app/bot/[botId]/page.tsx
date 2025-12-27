@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/auth-context";
 import DashboardLayout from "@/components/layouts/dashboard-layout";
 import { useRouter } from "next/navigation";
 import moment from "moment";
-import TradingViewWidget from "@/components/trading-view/TradingViewChart";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { withAuth } from "@/components/auth/with-auth";
+import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
 import { ConsoleInterface } from "@/components/bot/console-interface";
 import {
   Dialog,
@@ -32,6 +32,7 @@ import { Label } from "@/components/ui/label";
 import { useBotLogs } from "@/hooks/use-bot-logs";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
+import { cn } from "@/lib/utils";
 
 import {
   AlertDialog,
@@ -51,6 +52,7 @@ interface Bot extends ApiBotType {
   user_id?: string;
   name?: string;
   version?: string;
+  customBotId?: string;
 }
 
 interface BotDetailProps {
@@ -333,6 +335,9 @@ const BotDetail = ({ params }: BotDetailProps) => {
 
   const maskedConfig = getMaskedConfig(bot.config);
 
+  // Get customBotId from bot instance (this is the unique ID for the specific custom bot version)
+  const customBotId = bot.customBotId;
+
   return (
     <DashboardLayout>
       <div className="min-h-full flex flex-col gap-4">
@@ -505,32 +510,40 @@ const BotDetail = ({ params }: BotDetailProps) => {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 p-4">
-          {bot.config.symbol ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Trading View */}
-              <div className="h-[400px] md:h-[600px] bg-muted/30">
-                <TradingViewWidget symbol={bot.config.symbol} />
+        {/* Main Content - Dashboard and Console side by side */}
+        <div className="flex flex-row p-4 gap-4 max-h-[90vh]">
+          {/* Dashboard Area - 60% */}
+          <div className="w-[60%] rounded-lg border overflow-auto">
+            {bot.config.hasFrontend && customBotId ? (
+              <BotDashboardLoader
+                botId={botId}
+                customBotId={customBotId}
+                className=""
+              />
+            ) : (
+              <div className="min-h-[400px] flex items-center justify-center text-muted-foreground bg-muted/20">
+                <p>No dashboard configured for this bot</p>
               </div>
+            )}
+          </div>
 
-              {/* Console */}
-              <div className="h-[600px] md:h-[600px] bg-muted/30">
-                <ConsoleInterface
-                  botId={botId}
-                  logs={logs}
-                  loading={logsLoading}
-                  onRefresh={refreshLogs}
-                  onDateChange={setDateFilter}
-                  onDateRangeChange={setDateRangeFilter}
-                  onExport={exportLogs}
-                  className="h-full"
-                />
+          {/* Console Panel - 40% */}
+          <div className="w-[40%] flex flex-col border rounded-lg bg-background overflow-hidden">
+            {/* Console Header */}
+            <div className="h-10 px-4 flex items-center justify-between text-sm font-medium border-b bg-muted/30 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4 w-4" />
+                <span>Console</span>
+                {logs.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    ({logs.length})
+                  </span>
+                )}
               </div>
             </div>
-          ) : (
-            /* Console takes full width when no symbol */
-            <div className="h-[600px] md:h-[600px] bg-muted/30">
+
+            {/* Console Content - scrolls internally */}
+            <div className="flex-1 min-h-0 overflow-auto">
               <ConsoleInterface
                 botId={botId}
                 logs={logs}
@@ -540,9 +553,10 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 onDateRangeChange={setDateRangeFilter}
                 onExport={exportLogs}
                 className="h-full"
+                compact
               />
             </div>
-          )}
+          </div>
         </div>
 
         {/* Bot Details */}

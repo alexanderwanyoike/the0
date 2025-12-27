@@ -190,6 +190,10 @@ describe("BotController - Enhanced Tests", () => {
       });
       expect(repository.create).toHaveBeenCalledWith({
         ...validBot,
+        config: {
+          ...validBot.config,
+          hasFrontend: false, // Added by bot.service from custom bot config
+        },
         userId: uid,
         topic: "the0-scheduled-custom-bot",
         customBotId: mockCustomBot.id,

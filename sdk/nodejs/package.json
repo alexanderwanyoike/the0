@@ -1,0 +1,54 @@
+{
+  "name": "@alexanderwanyoike/the0-node",
+  "version": "0.1.1",
+  "description": "the0 SDK for Node.js/TypeScript trading bots",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexanderwanyoike/the0.git",
+    "directory": "sdk/nodejs"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "yarn build"
+  },
+  "keywords": [
+    "the0",
+    "trading",
+    "bot",
+    "algorithmic-trading",
+    "sdk",
+    "nodejs",
+    "typescript"
+  ],
+  "author": "alexanderwanyoike",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,51 @@
+name: Haskell SDK
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/haskell/**'
+      - '.github/workflows/sdk-haskell.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdk/haskell/**'
+      - '.github/workflows/sdk-haskell.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: '9.6.3'
+        cabal-version: '3.10'
+
+    - name: Cache Cabal
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cabal/packages
+          ~/.cabal/store
+          sdk/haskell/dist-newstyle
+        key: ${{ runner.os }}-cabal-${{ hashFiles('sdk/haskell/the0-sdk.cabal') }}
+        restore-keys: |
+          ${{ runner.os }}-cabal-
+
+    - name: Update Cabal
+      working-directory: ./sdk/haskell
+      run: cabal update
+
+    - name: Build
+      working-directory: ./sdk/haskell
+      run: cabal build
+
+    - name: Run tests
+      working-directory: ./sdk/haskell
+      run: cabal test --enable-tests

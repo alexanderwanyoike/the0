@@ -271,6 +271,6 @@ More information on bot types can be found in [Bot Types](./bot-types).
 
 Ready to build your first custom bot? Check out these resources:
 
-1. [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build a DCA bot in 15 minutes
+1. [Quick Start Guide](/custom-bot-development/python-quick-start) - Build a DCA bot in 15 minutes
 2. [Configuration Reference](/custom-bot-development/configuration) - Detailed configuration options
 3. [Testing Guide](/custom-bot-development/testing) - Testing strategies and tools
