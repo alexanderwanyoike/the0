@@ -1,5 +1,5 @@
 ThisBuild / scalaVersion := "3.3.3"
-ThisBuild / version := "0.1.2"
+ThisBuild / version := "0.1.3"
 ThisBuild / organization := "dev.the0"
 ThisBuild / organizationName := "the0"
 ThisBuild / organizationHomepage := Some(url("https://the0.dev"))
