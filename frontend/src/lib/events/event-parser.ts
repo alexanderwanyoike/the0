@@ -210,7 +210,9 @@ export function parseLogLine(content: string): BotEvent {
       extractTimestampFromStructuredLog(structuredLog) || timestamp;
     const structuredLevel = mapStructuredLogLevel(structuredLog.level);
     const message =
-      structuredLog.message || structuredLog.msg || JSON.stringify(structuredLog);
+      structuredLog.message ||
+      structuredLog.msg ||
+      JSON.stringify(structuredLog);
 
     return {
       timestamp: structuredTimestamp,

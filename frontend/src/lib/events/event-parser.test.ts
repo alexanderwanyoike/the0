@@ -72,7 +72,9 @@ describe("event-parser", () => {
       });
 
       it("combines timestamp and level extraction", () => {
-        const result = parseLogLine("[2025-12-27 10:00:00] ERROR: Critical failure");
+        const result = parseLogLine(
+          "[2025-12-27 10:00:00] ERROR: Critical failure",
+        );
 
         expect(result.timestamp).toEqual(new Date("2025-12-27T10:00:00"));
         expect(result.level).toBe("ERROR");
@@ -82,7 +84,8 @@ describe("event-parser", () => {
 
     describe("metric payloads", () => {
       it("parses a metric payload with _metric field", () => {
-        const content = '{"_metric": "trade", "symbol": "BTC/USD", "price": 50000}';
+        const content =
+          '{"_metric": "trade", "symbol": "BTC/USD", "price": 50000}';
         const result = parseLogLine(content);
 
         expect(result.type).toBe("metric");
@@ -123,7 +126,8 @@ describe("event-parser", () => {
 
     describe("structured JSON logs (pino/winston format)", () => {
       it("parses pino-style log with msg field", () => {
-        const content = '{"level": "info", "msg": "Bot started successfully", "time": 1735312800000}';
+        const content =
+          '{"level": "info", "msg": "Bot started successfully", "time": 1735312800000}';
         const result = parseLogLine(content);
 
         expect(result.type).toBe("log");
@@ -133,7 +137,8 @@ describe("event-parser", () => {
       });
 
       it("parses winston-style log with message field", () => {
-        const content = '{"level": "error", "message": "Connection failed", "timestamp": "2025-12-27T10:30:00.000Z"}';
+        const content =
+          '{"level": "error", "message": "Connection failed", "timestamp": "2025-12-27T10:30:00.000Z"}';
         const result = parseLogLine(content);
 
         expect(result.type).toBe("log");
@@ -168,7 +173,8 @@ describe("event-parser", () => {
       });
 
       it("extracts timestamp from time field as ISO string", () => {
-        const content = '{"level": "info", "msg": "Test", "time": "2025-12-27T14:00:00.000Z"}';
+        const content =
+          '{"level": "info", "msg": "Test", "time": "2025-12-27T14:00:00.000Z"}';
         const result = parseLogLine(content);
 
         expect(result.timestamp).toEqual(new Date("2025-12-27T14:00:00.000Z"));
@@ -191,7 +197,8 @@ describe("event-parser", () => {
       });
 
       it("prefers structured log timestamp over prefix timestamp", () => {
-        const content = '[2020-01-01 00:00:00] {"level": "info", "msg": "Test", "time": 1735312800000}';
+        const content =
+          '[2020-01-01 00:00:00] {"level": "info", "msg": "Test", "time": 1735312800000}';
         const result = parseLogLine(content);
 
         // Should use the structured log timestamp, not the prefix
@@ -199,7 +206,8 @@ describe("event-parser", () => {
       });
 
       it("falls back to prefix timestamp when structured log has no timestamp", () => {
-        const content = '[2025-12-27 14:00:00] {"level": "info", "msg": "Test"}';
+        const content =
+          '[2025-12-27 14:00:00] {"level": "info", "msg": "Test"}';
         const result = parseLogLine(content);
 
         expect(result.timestamp).toEqual(new Date("2025-12-27T14:00:00"));
@@ -284,7 +292,7 @@ describe("event-parser", () => {
       });
 
       it("handles JSON array", () => {
-        const result = parseLogLine('[1, 2, 3]');
+        const result = parseLogLine("[1, 2, 3]");
 
         expect(result.type).toBe("log");
       });
@@ -330,7 +338,9 @@ describe("event-parser", () => {
     });
 
     it("handles entry with only whitespace content", () => {
-      const logs: RawLogEntry[] = [{ date: "20251227", content: "   \n  \n  " }];
+      const logs: RawLogEntry[] = [
+        { date: "20251227", content: "   \n  \n  " },
+      ];
 
       const events = parseEvents(logs);
 
@@ -341,7 +351,8 @@ describe("event-parser", () => {
       const logs: RawLogEntry[] = [
         {
           date: "20251227",
-          content: 'Regular log\n{"_metric": "trade", "price": 100}\nAnother log',
+          content:
+            'Regular log\n{"_metric": "trade", "price": 100}\nAnother log',
         },
       ];
 

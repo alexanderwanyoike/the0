@@ -72,7 +72,9 @@ describe("ConsoleInterface", () => {
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
       // Should show the message, not the raw JSON
-      expect(screen.getByText("Bot initialized successfully")).toBeInTheDocument();
+      expect(
+        screen.getByText("Bot initialized successfully"),
+      ).toBeInTheDocument();
     });
 
     it("shows entry count in header", () => {
@@ -177,7 +179,9 @@ describe("ConsoleInterface", () => {
       expect(logEntry).toBeInTheDocument();
 
       // Copy button should exist but be invisible initially
-      const copyButton = logEntry?.querySelector('button[title="Copy message"]');
+      const copyButton = logEntry?.querySelector(
+        'button[title="Copy message"]',
+      );
       expect(copyButton).toBeInTheDocument();
       expect(copyButton?.className).toContain("opacity-0");
     });
@@ -189,7 +193,9 @@ describe("ConsoleInterface", () => {
         clipboard: { writeText },
       });
 
-      const logs: LogEntry[] = [{ date: "20251227", content: "Copy this message" }];
+      const logs: LogEntry[] = [
+        { date: "20251227", content: "Copy this message" },
+      ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -251,7 +257,7 @@ describe("ConsoleInterface", () => {
     const findFilterButton = () => {
       const buttons = screen.getAllByRole("button");
       return buttons.find((btn) =>
-        btn.querySelector(".lucide-funnel, .lucide-filter")
+        btn.querySelector(".lucide-funnel, .lucide-filter"),
       );
     };
 
@@ -523,7 +529,8 @@ describe("ConsoleInterface", () => {
       const logs: LogEntry[] = [
         {
           date: "20251227",
-          content: '{"_metric": "order", "details": {"id": 123, "status": "filled"}}',
+          content:
+            '{"_metric": "order", "details": {"id": 123, "status": "filled"}}',
         },
       ];
 
