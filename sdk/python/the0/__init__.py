@@ -21,7 +21,7 @@ import os
 import sys
 import json
 import time
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Tuple, Optional, Union, Literal
 from datetime import datetime, timezone
 
 __version__ = "1.0.0"
@@ -199,25 +199,56 @@ def metric(metric_type: str, data: Dict[str, Any]) -> None:
     print(json.dumps(output))
 
 
-def log(message: str, data: Optional[Dict[str, Any]] = None) -> None:
+LogLevel = Literal["info", "warn", "error"]
+
+
+def log(
+    message: str,
+    data_or_level: Optional[Union[Dict[str, Any], LogLevel]] = None,
+    level: Optional[LogLevel] = None,
+) -> None:
     """
-    Log a message to the bot's log output.
+    Log a structured message to the bot's log output.
 
     Use this for debugging and monitoring. Messages appear in
-    the bot's log viewer in the platform.
+    the bot's log viewer in the platform as structured JSON.
 
     Args:
         message: Message to log
-        data: Optional structured data to include
+        data_or_level: Optional structured data dict or log level string
+        level: Optional log level (defaults to 'info')
 
     Example:
+        # Simple log (defaults to info level)
         log("Starting trade execution")
+
+        # Log with level
+        log("Connection lost", "warn")
+        log("Trade failed", "error")
+
+        # Log with structured data (pino-style)
         log("Order placed", {"order_id": "12345", "symbol": "BTC/USD"})
+
+        # Log with data and level
+        log("Order failed", {"order_id": "12345", "reason": "insufficient funds"}, "error")
     """
-    if data:
-        print(json.dumps({"message": message, **data}))
-    else:
-        print(message)
+    data: Optional[Dict[str, Any]] = None
+    log_level: LogLevel = "info"
+
+    if isinstance(data_or_level, str):
+        log_level = data_or_level
+    elif data_or_level is not None:
+        data = data_or_level
+        log_level = level or "info"
+
+    entry = {
+        "level": log_level,
+        "message": message,
+        **(data or {}),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+    print(json.dumps(entry), file=sys.stderr)
 
 
 def sleep(seconds: float) -> None:

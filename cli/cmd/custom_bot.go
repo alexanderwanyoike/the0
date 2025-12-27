@@ -83,6 +83,15 @@ func deployBot(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Step 2.8: Validate that all build outputs exist
+	logger.UpdateSpinner("Validating build outputs")
+	if err := internal.ValidateBotFiles(config); err != nil {
+		logger.StopSpinnerWithError("Build validation failed")
+		logger.Error("%v", err)
+		internal.CleanupVendoring(".")
+		os.Exit(1)
+	}
+
 	logger.UpdateSpinner("Authenticating")
 
 	// Step 3: Get auth token (with retry on failure)

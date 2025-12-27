@@ -211,26 +211,69 @@ class TestLog(unittest.TestCase):
     """Tests for the log() function"""
 
     def test_log_simple_message(self):
-        """Test simple log message"""
+        """Test simple log message defaults to info level"""
         captured_output = StringIO()
-        with patch('sys.stdout', captured_output):
+        with patch('sys.stderr', captured_output):
             log("Starting trade execution")
 
         output = captured_output.getvalue().strip()
-        self.assertEqual(output, "Starting trade execution")
+        data = json.loads(output)
+
+        self.assertEqual(data['level'], 'info')
+        self.assertEqual(data['message'], 'Starting trade execution')
+        self.assertIn('timestamp', data)
+
+    def test_log_with_level(self):
+        """Test log with explicit level"""
+        captured_output = StringIO()
+        with patch('sys.stderr', captured_output):
+            log("Connection lost", "warn")
+
+        output = captured_output.getvalue().strip()
+        data = json.loads(output)
+
+        self.assertEqual(data['level'], 'warn')
+        self.assertEqual(data['message'], 'Connection lost')
 
     def test_log_with_data(self):
         """Test log with structured data"""
         captured_output = StringIO()
-        with patch('sys.stdout', captured_output):
+        with patch('sys.stderr', captured_output):
             log("Order placed", {"order_id": "123", "symbol": "BTC"})
 
         output = captured_output.getvalue().strip()
         data = json.loads(output)
 
+        self.assertEqual(data['level'], 'info')
         self.assertEqual(data['message'], 'Order placed')
         self.assertEqual(data['order_id'], '123')
         self.assertEqual(data['symbol'], 'BTC')
+
+    def test_log_with_data_and_level(self):
+        """Test log with data and explicit level"""
+        captured_output = StringIO()
+        with patch('sys.stderr', captured_output):
+            log("Order failed", {"order_id": "123", "reason": "insufficient funds"}, "error")
+
+        output = captured_output.getvalue().strip()
+        data = json.loads(output)
+
+        self.assertEqual(data['level'], 'error')
+        self.assertEqual(data['message'], 'Order failed')
+        self.assertEqual(data['order_id'], '123')
+        self.assertEqual(data['reason'], 'insufficient funds')
+
+    def test_log_timestamp_format(self):
+        """Test log includes ISO timestamp"""
+        captured_output = StringIO()
+        with patch('sys.stderr', captured_output):
+            log("Test message")
+
+        output = captured_output.getvalue().strip()
+        data = json.loads(output)
+
+        # Timestamp should end with Z (UTC)
+        self.assertTrue(data['timestamp'].endswith('Z'))
 
 
 class TestSleep(unittest.TestCase):

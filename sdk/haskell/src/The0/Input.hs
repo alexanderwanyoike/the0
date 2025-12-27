@@ -26,9 +26,17 @@ module The0.Input
     , success
     , The0.Input.error
     , result
+    , metric
+    , The0.Input.log
+    , logInfo
+    , logWarn
+    , logError
+    , LogLevel(..)
     ) where
 
-import Data.Aeson (Value, decode, encode, object, (.=))
+import Data.Aeson (Value(..), decode, encode, object, (.=), Object, toJSON)
+import Data.Aeson.Key (fromString)
+import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
@@ -37,6 +45,7 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import Control.Exception (catch, SomeException)
+import Data.Time.Clock.POSIX (getPOSIXTime)
 
 -- | Parse bot configuration from environment variables.
 --
@@ -123,3 +132,76 @@ escapeJson = concatMap escapeChar
     escapeChar '\r' = "\\r"
     escapeChar '\t' = "\\t"
     escapeChar c    = [c]
+
+-- | Emit a metric to stdout with timestamp.
+--
+-- The metric type and data are combined into a JSON object with
+-- @_metric@ and @timestamp@ fields added.
+metric :: String -> Value -> IO ()
+metric metricType val = do
+    ts <- getTimestamp
+    let baseObj = case val of
+            Object o -> o
+            _ -> mempty
+        withMeta = insert (fromString "_metric") (String $ T.pack metricType) $
+                   insert (fromString "timestamp") (String $ T.pack ts) baseObj
+    BL.putStrLn $ encode (Object withMeta)
+
+-- | Log levels supported by the platform.
+data LogLevel = Info | Warn | Error
+    deriving (Show, Eq)
+
+logLevelString :: LogLevel -> String
+logLevelString Info = "info"
+logLevelString Warn = "warn"
+logLevelString Error = "error"
+
+-- | Log a structured message to stderr.
+--
+-- Outputs a JSON object with level, message, timestamp, and any additional fields.
+--
+-- = Examples
+--
+-- @
+-- -- Simple log (defaults to info level)
+-- log "Starting trade execution" Nothing Nothing
+--
+-- -- Log with level
+-- log "Connection lost" Nothing (Just Warn)
+--
+-- -- Log with structured data
+-- log "Order placed" (Just $ object ["order_id" .= "12345", "symbol" .= "BTC/USD"]) Nothing
+--
+-- -- Log with data and level
+-- log "Order failed" (Just $ object ["order_id" .= "12345"]) (Just Error)
+-- @
+log :: String -> Maybe Value -> Maybe LogLevel -> IO ()
+log msg mData mLevel = do
+    ts <- getTimestamp
+    let level = maybe Info id mLevel
+        baseObj = case mData of
+            Just (Object o) -> o
+            _ -> mempty
+        withFields = insert (fromString "level") (String $ T.pack $ logLevelString level) $
+                     insert (fromString "message") (String $ T.pack msg) $
+                     insert (fromString "timestamp") (String $ T.pack ts) baseObj
+    BL.hPutStrLn stderr $ encode (Object withFields)
+
+-- | Convenience function: log an info message
+logInfo :: String -> Maybe Value -> IO ()
+logInfo msg mData = The0.Input.log msg mData (Just Info)
+
+-- | Convenience function: log a warning message
+logWarn :: String -> Maybe Value -> IO ()
+logWarn msg mData = The0.Input.log msg mData (Just Warn)
+
+-- | Convenience function: log an error message
+logError :: String -> Maybe Value -> IO ()
+logError msg mData = The0.Input.log msg mData (Just Error)
+
+-- | Get current timestamp as milliseconds string with Z suffix.
+getTimestamp :: IO String
+getTimestamp = do
+    t <- getPOSIXTime
+    let millis = floor (t * 1000) :: Integer
+    return $ show millis ++ "Z"

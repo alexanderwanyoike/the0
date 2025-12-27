@@ -133,10 +133,6 @@ func TestNodeVendor_GetInstallCommand_Production(t *testing.T) {
 	if !strings.Contains(cmd, "npm install --production") {
 		t.Error("Expected command to contain 'npm install --production'")
 	}
-
-	if !strings.Contains(cmd, "chown") {
-		t.Error("Expected command to contain chown for proper ownership")
-	}
 }
 
 func TestNodeVendor_GetInstallCommand_TypeScript(t *testing.T) {

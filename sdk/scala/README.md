@@ -1,23 +1,26 @@
-# the0 Scala SDK
+# the0-sdk (Scala)
 
 SDK for building trading bots on the0 platform in Scala 3.
 
 ## Installation
 
-Add the SDK to your project by copying the `the0` package or adding it as a dependency.
+### Option 1: Git Dependency (Recommended)
 
-### Option 1: Copy the Package
-
-Copy `src/main/scala/the0/Input.scala` to your project's source directory.
-
-### Option 2: Local Dependency
+Add to your `build.sbt`:
 
 ```sbt
-lazy val the0Sdk = ProjectRef(file("path/to/sdk/scala"), "root")
+// Use a specific release tag
+lazy val the0Sdk = RootProject(uri("https://github.com/alexanderwanyoike/the0.git#v1.1.0") / "sdk" / "scala")
 
 lazy val root = (project in file("."))
   .dependsOn(the0Sdk)
 ```
+
+> **Note:** Replace `v1.1.0` with the latest release tag.
+
+### Option 2: Copy the Package
+
+Copy `src/main/scala/the0/Input.scala` to your project's source directory.
 
 ## Requirements
 

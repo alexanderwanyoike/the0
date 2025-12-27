@@ -19,7 +19,7 @@
 import sttp.client3._
 import io.circe._
 import io.circe.parser._
-import scala.util.{Try, Success, Failure}
+import the0.Input
 
 case class BotState(
   prevShortSma: Option[Double] = None,
@@ -28,9 +28,8 @@ case class BotState(
 
 object Main:
   def main(args: Array[String]): Unit =
-    // Get configuration from environment
-    val botId = sys.env.getOrElse("BOT_ID", "test-bot")
-    val configJson = sys.env.getOrElse("BOT_CONFIG", "{}")
+    // Get configuration using the0 SDK
+    val (botId, configJson) = Input.parse()
 
     val config = parse(configJson).getOrElse(Json.obj())
 
@@ -40,12 +39,7 @@ object Main:
     val longPeriod = config.hcursor.get[Int]("long_period").getOrElse(20)
     val updateIntervalMs = config.hcursor.get[Int]("update_interval_ms").getOrElse(60000)
 
-    emitLog("bot_started", Json.obj(
-      "botId" -> Json.fromString(botId),
-      "symbol" -> Json.fromString(symbol),
-      "shortPeriod" -> Json.fromInt(shortPeriod),
-      "longPeriod" -> Json.fromInt(longPeriod)
-    ))
+    Input.log(s"Bot $botId started - $symbol SMA($shortPeriod/$longPeriod)")
 
     val backend = HttpClientSyncBackend()
     var state = BotState()
@@ -56,7 +50,7 @@ object Main:
         state = processUpdate(backend, symbol, shortPeriod, longPeriod, state)
       catch
         case e: Exception =>
-          emitLog("error", Json.obj("message" -> Json.fromString(e.getMessage)))
+          Input.log(s"Error: ${e.getMessage}")
 
       Thread.sleep(updateIntervalMs)
 
@@ -71,11 +65,7 @@ object Main:
     val prices = fetchYahooFinance(backend, symbol)
 
     if prices.length < longPeriod then
-      emitLog("insufficient_data", Json.obj(
-        "symbol" -> Json.fromString(symbol),
-        "required" -> Json.fromInt(longPeriod),
-        "available" -> Json.fromInt(prices.length)
-      ))
+      Input.log(s"Insufficient data: ${prices.length}/$longPeriod required for $symbol")
       return state
 
     // Get current price
@@ -83,26 +73,25 @@ object Main:
     val previousPrice = if prices.length > 1 then prices(prices.length - 2) else currentPrice
     val changePct = if previousPrice != 0 then ((currentPrice - previousPrice) / previousPrice) * 100 else 0.0
 
-    // Emit price metric
-    emitMetric("price", Json.obj(
+    // Emit price metric using SDK
+    Input.metric("price", Json.obj(
       "symbol" -> Json.fromString(symbol),
       "value" -> Json.fromDoubleOrNull(roundTo(currentPrice, 2)),
-      "change_pct" -> Json.fromDoubleOrNull(roundTo(changePct, 3)),
-      "timestamp" -> Json.fromString(getCurrentTimestamp)
-    ))
+      "change_pct" -> Json.fromDoubleOrNull(roundTo(changePct, 3))
+    ).noSpaces)
 
     // Calculate SMAs
     val shortSma = calculateSMA(prices, shortPeriod)
     val longSma = calculateSMA(prices, longPeriod)
 
-    // Emit SMA metric
-    emitMetric("sma", Json.obj(
+    // Emit SMA metric using SDK
+    Input.metric("sma", Json.obj(
       "symbol" -> Json.fromString(symbol),
       "short_sma" -> Json.fromDoubleOrNull(roundTo(shortSma, 2)),
       "long_sma" -> Json.fromDoubleOrNull(roundTo(longSma, 2)),
       "short_period" -> Json.fromInt(shortPeriod),
       "long_period" -> Json.fromInt(longPeriod)
-    ))
+    ).noSpaces)
 
     // Check for crossover signal
     (state.prevShortSma, state.prevLongSma) match
@@ -111,13 +100,13 @@ object Main:
           val confidence = math.min(math.abs(shortSma - longSma) / longSma * 100, 0.95)
           val direction = if signal == "BUY" then "above" else "below"
 
-          emitMetric("signal", Json.obj(
+          Input.metric("signal", Json.obj(
             "type" -> Json.fromString(signal),
             "symbol" -> Json.fromString(symbol),
             "price" -> Json.fromDoubleOrNull(roundTo(currentPrice, 2)),
             "confidence" -> Json.fromDoubleOrNull(roundTo(confidence, 2)),
             "reason" -> Json.fromString(s"SMA$shortPeriod crossed $direction SMA$longPeriod")
-          ))
+          ).noSpaces)
         }
       case _ => ()
 
@@ -171,21 +160,6 @@ object Main:
     else if prevShort >= prevLong && currShort < currLong then Some("SELL")
     else None
 
-  def emitMetric(metricType: String, data: Json): Unit =
-    val output = data.deepMerge(Json.obj("_metric" -> Json.fromString(metricType)))
-    println(output.noSpaces)
-
-  def emitLog(event: String, data: Json): Unit =
-    val output = data.deepMerge(Json.obj(
-      "event" -> Json.fromString(event),
-      "timestamp" -> Json.fromString(getCurrentTimestamp)
-    ))
-    println(output.noSpaces)
-
   def roundTo(value: Double, decimals: Int): Double =
     val multiplier = math.pow(10, decimals)
     math.round(value * multiplier) / multiplier
-
-  def getCurrentTimestamp: String =
-    val now = System.currentTimeMillis()
-    s"${now / 1000}.${now % 1000}Z"

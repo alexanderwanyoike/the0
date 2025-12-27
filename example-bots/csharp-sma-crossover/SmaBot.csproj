@@ -7,4 +7,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="The0.Sdk" Version="0.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Program_raw.cs" />
+    <None Include="Program_raw.cs" />
+  </ItemGroup>
+
 </Project>

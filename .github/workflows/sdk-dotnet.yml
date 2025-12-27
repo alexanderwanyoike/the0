@@ -1,0 +1,39 @@
+name: .NET SDK
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/dotnet/**'
+      - '.github/workflows/sdk-dotnet.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdk/dotnet/**'
+      - '.github/workflows/sdk-dotnet.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      working-directory: ./sdk/dotnet
+      run: dotnet restore
+
+    - name: Build
+      working-directory: ./sdk/dotnet
+      run: dotnet build --no-restore
+
+    - name: Run tests
+      working-directory: ./sdk/dotnet
+      run: dotnet test --no-build --verbosity normal

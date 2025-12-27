@@ -1,11 +1,11 @@
-# the0 Python SDK
+# the0-sdk (Python)
 
 SDK for building trading bots on the0 platform.
 
 ## Installation
 
 ```bash
-pip install the0
+pip install the0-sdk
 ```
 
 Or copy the `the0/` directory to your project.
@@ -120,6 +120,39 @@ Sleep utility.
 ```python
 sleep(5)  # Wait 5 seconds
 ```
+
+## Publishing (Maintainers)
+
+This package is published to PyPI.
+
+### Prerequisites
+
+1. Install build tools:
+   ```bash
+   pip install build twine
+   ```
+
+2. Create a PyPI API token at https://pypi.org/manage/account/token/
+
+### Publish
+
+```bash
+# Build the package
+python -m build
+
+# Upload to PyPI
+twine upload dist/*
+```
+
+### Version Bump
+
+Update the version in `pyproject.toml`:
+
+```toml
+version = "0.2.0"
+```
+
+Then rebuild and publish.
 
 ## License
 

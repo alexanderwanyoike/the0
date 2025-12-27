@@ -25,6 +25,7 @@
 #define THE0_H
 
 #include <nlohmann/json.hpp>
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -159,6 +160,79 @@ inline void result(const std::string& status, const std::string& message, const 
         output[key] = value;
     }
     write_result(output.dump());
+}
+
+/**
+ * Get current timestamp as milliseconds since epoch.
+ */
+inline std::string current_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    return std::to_string(ms) + "Z";
+}
+
+/**
+ * Emit a metric to stdout.
+ *
+ * Outputs a JSON object with the _metric field and timestamp.
+ *
+ * @param metric_type The type of metric (e.g., "price", "signal")
+ * @param data The metric data
+ */
+inline void metric(const std::string& metric_type, json data) {
+    data["_metric"] = metric_type;
+    data["timestamp"] = current_timestamp();
+    std::cout << data.dump() << std::endl;
+}
+
+/**
+ * Log levels supported by the platform.
+ */
+enum class LogLevel {
+    Info,
+    Warn,
+    Error
+};
+
+/**
+ * Convert log level to string.
+ */
+inline std::string log_level_str(LogLevel level) {
+    switch (level) {
+        case LogLevel::Warn: return "warn";
+        case LogLevel::Error: return "error";
+        default: return "info";
+    }
+}
+
+/**
+ * Log a structured message to stderr.
+ *
+ * Outputs a JSON object with level, message, timestamp, and any additional fields.
+ *
+ * Examples:
+ *   // Simple log (defaults to info level)
+ *   the0::log("Starting trade execution");
+ *
+ *   // Log with level
+ *   the0::log("Connection lost", {}, LogLevel::Warn);
+ *
+ *   // Log with structured data
+ *   the0::log("Order placed", {{"order_id", "12345"}, {"symbol", "BTC/USD"}});
+ *
+ *   // Log with data and level
+ *   the0::log("Order failed", {{"order_id", "12345"}}, LogLevel::Error);
+ *
+ * @param message The message to log
+ * @param data Optional JSON object with additional fields
+ * @param level Optional log level (defaults to Info)
+ */
+inline void log(const std::string& message, const json& data = json::object(), LogLevel level = LogLevel::Info) {
+    json output = data;
+    output["level"] = log_level_str(level);
+    output["message"] = message;
+    output["timestamp"] = current_timestamp();
+    std::cerr << output.dump() << std::endl;
 }
 
 } // namespace the0

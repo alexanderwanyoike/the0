@@ -178,11 +178,8 @@ func (b *RustBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command: cargo build, then fix ownership
-	buildCmd := fmt.Sprintf(
-		"cargo build --release 2>&1; STATUS=$?; chown -R %s:%s /project/target 2>/dev/null || true; exit $STATUS",
-		uid, gid,
-	)
+	// Build command
+	buildCmd := "cargo build --release 2>&1"
 
 	config := &container.Config{
 		Image: rustImage,
@@ -192,6 +189,7 @@ func (b *RustBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		},
 		WorkingDir: "/project",
 		Env:        getRustBuildEnvVars(),
+		User:       fmt.Sprintf("%s:%s", uid, gid),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -276,11 +274,19 @@ func getRustBuildEnvVars() []string {
 	}
 
 	var envVars []string
+
+	// Pass GitHub token for private git dependencies
 	if secrets.GitHubToken != "" {
-		// Configure cargo to use GitHub token for private git dependencies
+		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
 		envVars = append(envVars, "CARGO_NET_GIT_FETCH_WITH_CLI=true")
 		envVars = append(envVars, "GIT_TERMINAL_PROMPT=0")
 	}
+
+	// Pass Cargo registry token for private registries
+	if secrets.CargoRegistryToken != "" {
+		envVars = append(envVars, fmt.Sprintf("CARGO_REGISTRY_TOKEN=%s", secrets.CargoRegistryToken))
+	}
+
 	return envVars
 }
 

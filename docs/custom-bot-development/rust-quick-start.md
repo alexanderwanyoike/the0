@@ -88,7 +88,11 @@ path = "src/main.rs"
 
 [dependencies]
 # the0 SDK - handles configuration parsing and result output
-the0 = { git = "https://github.com/alexanderwanyoike/the0", subdirectory = "sdk/rust" }
+# From crates.io:
+the0-sdk = "0.1"
+
+# Or from git (use a specific release tag):
+# the0-sdk = { git = "https://github.com/alexanderwanyoike/the0", tag = "v1.1.0", subdirectory = "sdk/rust" }
 
 # JSON handling (required by the0 SDK)
 serde_json = "1.0"

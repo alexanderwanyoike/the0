@@ -5,10 +5,12 @@
   "description": "Realtime price monitoring bot with alerts",
   "main": "main.js",
   "scripts": {
-    "build": "esbuild main.ts --bundle --platform=node --target=node20 --outfile=main.js --external:pino"
+    "build": "esbuild main.ts --bundle --platform=node --target=node20 --outfile=main.js",
+    "build:raw": "esbuild main_raw.ts --bundle --platform=node --target=node20 --outfile=main_raw.js --external:pino"
   },
   "dependencies": {
-    "pino": "^9.0.0"
+    "pino": "^9.0.0",
+    "@alexanderwanyoike/the0-node": "^0.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -23,7 +23,7 @@ description: string # Required: Brief description
 version: string # Required: Semantic version (e.g., "1.0.0")
 author: string # Required: Author name or organization
 type: string # Required: scheduled | realtime
-runtime: string # Required: python3.11 | nodejs20 | rust-stable
+runtime: string # Required: python3.11 | nodejs20 | rust-stable | dotnet8 | gcc13 | scala3 | ghc96
 
 entrypoints: # Required: Entry point definitions
   bot: string # Required: Main bot file
@@ -78,6 +78,51 @@ entrypoints:
 - **webhook**: Webhook event handler (for event-driven bots)
 - **analysis**: Custom analysis functions
 - **custom**: Any additional entry points
+
+#### Entrypoint Paths by Runtime
+
+The `entrypoints.bot` field specifies the exact path to your bot's executable or script. The runtime uses this path directly to start your bot.
+
+| Runtime | Entrypoint Example | Description |
+|---------|-------------------|-------------|
+| **Python** | `main.py` | Python script file |
+| **Node.js** | `main.js` | JavaScript entry file |
+| **Rust** | `target/release/my-bot` | Compiled binary path |
+| **C#/.NET** | `bin/Release/net8.0/publish/MyBot.dll` | Published DLL path |
+| **C/C++** | `build/my-bot` | Compiled binary path |
+| **Scala** | `target/scala-3.3.4/my-bot-assembly-1.0.0.jar` | Assembly JAR path |
+| **Haskell** | `dist-newstyle/build/.../my-bot` | Cabal build output path |
+
+**Important:** For compiled languages, the entrypoint path must match exactly where your build system outputs the executable. The runtime will not search for binaries - it uses the specified path directly.
+
+**Example configurations:**
+
+```yaml
+# Rust bot
+runtime: rust-stable
+entrypoints:
+  bot: target/release/sma-bot
+
+# C# bot
+runtime: dotnet8
+entrypoints:
+  bot: bin/Release/net8.0/publish/SmaBot.dll
+
+# C++ bot (CMake)
+runtime: gcc13
+entrypoints:
+  bot: build/sma_bot
+
+# Scala bot
+runtime: scala3
+entrypoints:
+  bot: target/scala-3.3.4/sma-bot-assembly-1.0.0.jar
+
+# Haskell bot
+runtime: ghc96
+entrypoints:
+  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.6/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
+```
 
 #### Schema Definitions
 
@@ -182,22 +227,84 @@ runtime: rust-stable
 - Include `Cargo.lock` for reproducible builds
 - Dependencies are compiled at deploy time
 
-**Entry Point:**
+#### C# / .NET 8
 
-```rust
-// src/main.rs
-mod the0;  // Helper module (auto-injected)
-use the0::input;
-
-fn main() {
-    let (id, config) = input::parse();
-
-    // Your trading logic here
-    println!("Bot {} running", id);
-
-    input::success("Bot executed successfully");
-}
+```yaml
+runtime: dotnet8
 ```
+
+**Benefits:**
+
+- Mature ecosystem with excellent tooling
+- Strong async/await patterns for concurrent operations
+- Cross-platform support with .NET 8
+- Rich standard library for financial calculations
+- NuGet package ecosystem
+
+**Dependency Management:**
+
+- Use `.csproj` for project configuration
+- NuGet packages for dependencies
+- Compiled and published at deploy time
+
+#### C/C++ (GCC 13)
+
+```yaml
+runtime: gcc13
+```
+
+**Benefits:**
+
+- Maximum performance for compute-intensive strategies
+- Direct hardware access and memory control
+- Extensive libraries for numerical computing
+- Ideal for ultra-low-latency trading
+
+**Dependency Management:**
+
+- Use `CMakeLists.txt` or `Makefile` for builds
+- System libraries and header-only libraries
+- Compiled at deploy time
+
+#### Scala 3
+
+```yaml
+runtime: scala3
+```
+
+**Benefits:**
+
+- Functional programming paradigm
+- JVM ecosystem and Java interoperability
+- Excellent for complex data transformations
+- Strong type system with type inference
+- Reactive streaming patterns
+
+**Dependency Management:**
+
+- Use `build.sbt` for SBT projects
+- Maven/Ivy dependencies via SBT
+- Compiled to fat JAR at deploy time
+
+#### Haskell (GHC 9.6)
+
+```yaml
+runtime: ghc96
+```
+
+**Benefits:**
+
+- Pure functional programming
+- Strong static typing with type inference
+- Excellent for algorithmic correctness
+- Lazy evaluation for efficient data processing
+- Mathematical approach to trading logic
+
+**Dependency Management:**
+
+- Use `.cabal` or `package.yaml` for Cabal projects
+- Hackage package ecosystem
+- Compiled at deploy time
 
 ### Metadata Configuration
 
@@ -319,6 +426,161 @@ yq eval '.' bot-config.yaml > /dev/null
 3. **Check Examples**: Compare with working examples
 4. **Read Error Messages**: Pay attention to specific validation errors
 5. **Use the CLI**: Leverage CLI validation commands
+
+---
+
+## Private Package Configuration
+
+Each runtime supports private packages through standard configuration files. The CLI respects these config files during builds.
+
+### Python
+
+Add private indexes to `requirements.txt`:
+
+```txt
+--extra-index-url https://pypi.example.com/simple/
+requests==2.28.0
+my-private-package==1.0.0
+```
+
+Or configure in `~/.the0/secrets.json`:
+
+```json
+{
+  "pip_index_url": "https://user:token@pypi.example.com/simple/"
+}
+```
+
+### Node.js
+
+Create `.npmrc` in your project:
+
+```ini
+@myorg:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+### Rust
+
+Add git dependencies in `Cargo.toml`:
+
+```toml
+[dependencies]
+my-private-crate = { git = "https://github.com/myorg/private-crate" }
+```
+
+Or configure `.cargo/config.toml` for private registries:
+
+```toml
+[registries.my-registry]
+index = "https://my-registry.example.com/index"
+
+[net]
+git-fetch-with-cli = true
+```
+
+### C# / .NET
+
+Create `nuget.config` in your project root:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <add key="private" value="https://nuget.example.com/v3/index.json" />
+  </packageSources>
+  <packageSourceCredentials>
+    <private>
+      <add key="Username" value="user" />
+      <add key="ClearTextPassword" value="%NUGET_TOKEN%" />
+    </private>
+  </packageSourceCredentials>
+</configuration>
+```
+
+### Scala
+
+Add resolvers in `build.sbt`:
+
+```scala
+resolvers += "Private" at "https://maven.example.com/releases"
+
+credentials += Credentials(
+  "Private Repo",
+  "maven.example.com",
+  sys.env.getOrElse("MAVEN_USER", ""),
+  sys.env.getOrElse("MAVEN_TOKEN", "")
+)
+```
+
+### Haskell
+
+Configure in `cabal.project`:
+
+```cabal
+source-repository-package
+  type: git
+  location: https://github.com/myorg/private-package
+  tag: v1.0.0
+```
+
+### C/C++
+
+Use CMake FetchContent with git:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+  private_lib
+  GIT_REPOSITORY https://github.com/myorg/private-lib.git
+  GIT_TAG v1.0.0
+)
+FetchContent_MakeAvailable(private_lib)
+```
+
+### Global Secrets
+
+Configure secrets via CLI for credentials passed to builds:
+
+```bash
+# Universal (all languages) - for git-based private dependencies
+the0 auth secrets set github-token ghp_xxxxxxxxxxxx
+
+# Python - private PyPI index
+the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/
+
+# Node.js - private npm registry
+the0 auth secrets set npm-token npm_xxxxxxxxxxxx
+
+# C#/.NET - private NuGet feed
+the0 auth secrets set nuget-token oy2xxxxxxxxxxxxx
+
+# Rust - private Cargo registry
+the0 auth secrets set cargo-registry-token xxxxxxxxxxxxx
+
+# Scala - private Maven repository
+the0 auth secrets set maven-user myuser
+the0 auth secrets set maven-token xxxxxxxxxxxxx
+```
+
+View configured secrets:
+
+```bash
+the0 auth secrets show
+```
+
+These secrets are stored in `~/.the0/secrets.json` and passed as environment variables during builds:
+
+| Secret | Environment Variable | Used By |
+|--------|---------------------|---------|
+| `github-token` | `GITHUB_TOKEN` | All (git deps) |
+| `pip-index-url` | `PIP_EXTRA_INDEX_URL` | Python |
+| `npm-token` | `NPM_TOKEN` | Node.js |
+| `nuget-token` | `NUGET_TOKEN` | C#/.NET |
+| `cargo-registry-token` | `CARGO_REGISTRY_TOKEN` | Rust |
+| `maven-user` | `MAVEN_USER` | Scala |
+| `maven-token` | `MAVEN_TOKEN` | Scala |
 
 ---
 

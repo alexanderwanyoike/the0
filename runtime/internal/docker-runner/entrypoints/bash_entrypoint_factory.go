@@ -60,17 +60,17 @@ exec python3 /tmp/python_entrypoint.py
 `
 
 // rustBashEntrypoint executes pre-built Rust binary (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
 const rustBashEntrypoint = `#!/bin/bash
 set -e
 
 cd "/{{ .EntryPointType }}"
 
-# Find the pre-built binary in target/release/
-# Note: ZIP extraction may not preserve executable bits, so we look for regular files
-BINARY=$(find target/release -maxdepth 1 -type f ! -name "*.d" ! -name "*.so" ! -name "*.rlib" ! -name ".cargo-lock" 2>/dev/null | head -1)
+# Use the binary path specified in bot-config.yaml entrypoints.bot
+BINARY="{{ .ScriptPath }}"
 
-if [ -z "$BINARY" ]; then
-    echo '{"status":"error","message":"No pre-built binary found in target/release/"}'
+if [ ! -f "$BINARY" ]; then
+    echo '{"status":"error","message":"Binary not found: '"$BINARY"'"}'
     exit 1
 fi
 
@@ -83,16 +83,17 @@ exec "$BINARY"
 `
 
 // dotnet8BashEntrypoint executes pre-built .NET DLL (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
 const dotnet8BashEntrypoint = `#!/bin/bash
 set -e
 
 cd "/{{ .EntryPointType }}"
 
-# Find the pre-built DLL in bin/Release/net8.0/publish/
-DLL=$(find bin/Release/net8.0/publish -maxdepth 1 -name "*.dll" ! -name "*.deps.json" ! -name "*.runtimeconfig.json" 2>/dev/null | head -1)
+# Use the DLL path specified in bot-config.yaml entrypoints.bot
+DLL="{{ .ScriptPath }}"
 
-if [ -z "$DLL" ]; then
-    echo '{"status":"error","message":"No pre-built DLL found in bin/Release/net8.0/publish/"}'
+if [ ! -f "$DLL" ]; then
+    echo '{"status":"error","message":"DLL not found: '"$DLL"'"}'
     exit 1
 fi
 
@@ -102,26 +103,17 @@ exec dotnet "$DLL"
 `
 
 // gcc13BashEntrypoint executes pre-built C/C++ binary (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
 const gcc13BashEntrypoint = `#!/bin/bash
 set -e
 
 cd "/{{ .EntryPointType }}"
 
-# Find the pre-built binary in build/ (CMake) or project root (Makefile)
-# Note: ZIP extraction may not preserve executable bits, so we look for regular files
-# and exclude known non-executable extensions
-BINARY=""
-if [ -d "build" ]; then
-    BINARY=$(find build -maxdepth 1 -type f ! -name "*.o" ! -name "*.a" ! -name "*.cmake" ! -name "Makefile" ! -name "CMakeCache.txt" 2>/dev/null | head -1)
-fi
+# Use the binary path specified in bot-config.yaml entrypoints.bot
+BINARY="{{ .ScriptPath }}"
 
-if [ -z "$BINARY" ]; then
-    # Try project root for Makefile builds
-    BINARY=$(find . -maxdepth 1 -type f ! -name "*.o" ! -name "*.a" ! -name "*.c" ! -name "*.cpp" ! -name "*.h" ! -name "*.hpp" ! -name "Makefile" ! -name "CMakeLists.txt" ! -name "*.txt" ! -name "*.md" ! -name "*.json" ! -name "*.yaml" ! -name "*.yml" 2>/dev/null | head -1)
-fi
-
-if [ -z "$BINARY" ]; then
-    echo '{"status":"error","message":"No pre-built binary found"}'
+if [ ! -f "$BINARY" ]; then
+    echo '{"status":"error","message":"Binary not found: '"$BINARY"'"}'
     exit 1
 fi
 
@@ -134,16 +126,17 @@ exec "$BINARY"
 `
 
 // scala3BashEntrypoint executes pre-built Scala assembly JAR (built by CLI)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
 const scala3BashEntrypoint = `#!/bin/bash
 set -e
 
 cd "/{{ .EntryPointType }}"
 
-# Find the pre-built assembly JAR in target/scala-*/
-JAR=$(find target -maxdepth 3 -name "*-assembly*.jar" 2>/dev/null | head -1)
+# Use the JAR path specified in bot-config.yaml entrypoints.bot
+JAR="{{ .ScriptPath }}"
 
-if [ -z "$JAR" ]; then
-    echo '{"status":"error","message":"No pre-built JAR found in target/"}'
+if [ ! -f "$JAR" ]; then
+    echo '{"status":"error","message":"JAR not found: '"$JAR"'"}'
     exit 1
 fi
 
@@ -153,18 +146,17 @@ exec java -jar "$JAR"
 `
 
 // ghc96BashEntrypoint executes pre-built Haskell binary (built by CLI with Cabal)
+// Uses ScriptPath directly from bot-config.yaml entrypoint specification
 const ghc96BashEntrypoint = `#!/bin/bash
 set -e
 
 cd "/{{ .EntryPointType }}"
 
-# Find the pre-built Haskell binary in dist-newstyle/
-# Cabal builds to: dist-newstyle/build/[arch]/ghc-[version]/[pkg]-[version]/x/[exe]/opt/build/[exe]/[exe]
-# Note: ZIP extraction may not preserve executable bits, so we look for regular files
-BINARY=$(find dist-newstyle -type f ! -name "*.hi" ! -name "*.o" ! -name "*.dyn_hi" ! -name "*.dyn_o" ! -name "*.a" ! -name "*.so" ! -name "*.hs" ! -name "*.h" ! -name "*.conf*" ! -name "*.lock" ! -name "*.cache" 2>/dev/null | grep -E '/x/[^/]+/.*/build/[^/]+/[^/]+$' | head -1)
+# Use the binary path specified in bot-config.yaml entrypoints.bot
+BINARY="{{ .ScriptPath }}"
 
-if [ -z "$BINARY" ]; then
-    echo '{"status":"error","message":"No pre-built Haskell binary found in dist-newstyle/"}'
+if [ ! -f "$BINARY" ]; then
+    echo '{"status":"error","message":"Binary not found: '"$BINARY"'"}'
     exit 1
 fi
 

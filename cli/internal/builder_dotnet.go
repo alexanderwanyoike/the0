@@ -182,11 +182,8 @@ func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command: dotnet publish for self-contained output, then fix ownership
-	buildCmd := fmt.Sprintf(
-		"dotnet publish -c Release -o /project/bin/Release/net8.0/publish 2>&1; STATUS=$?; chown -R %s:%s /project/bin /project/obj 2>/dev/null || true; exit $STATUS",
-		uid, gid,
-	)
+	// Build command - restore from nuget.org and publish
+	buildCmd := `dotnet publish -c Release -o /project/bin/Release/net8.0/publish 2>&1`
 
 	config := &container.Config{
 		Image: dotnetSdkImage,
@@ -196,6 +193,7 @@ func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		},
 		WorkingDir: "/project",
 		Env:        getDotnetBuildEnvVars(),
+		User:       fmt.Sprintf("%s:%s", uid, gid),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -274,16 +272,27 @@ func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 
 // getDotnetBuildEnvVars returns environment variables for .NET build.
 func getDotnetBuildEnvVars() []string {
-	secrets, err := LoadBuildSecrets()
-	if err != nil || secrets == nil {
-		return nil
+	envVars := []string{
+		"DOTNET_CLI_HOME=/tmp",
+		"DOTNET_NOLOGO=1",
+		"DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1",
 	}
 
-	var envVars []string
+	secrets, err := LoadBuildSecrets()
+	if err != nil || secrets == nil {
+		return envVars
+	}
+
+	// Pass NuGet token for private feeds (referenced in nuget.config as %NUGET_TOKEN%)
+	if secrets.NuGetToken != "" {
+		envVars = append(envVars, fmt.Sprintf("NUGET_TOKEN=%s", secrets.NuGetToken))
+	}
+
+	// Pass GitHub token for git-based dependencies
 	if secrets.GitHubToken != "" {
-		// Configure NuGet to use GitHub token for private packages
 		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
 	}
+
 	return envVars
 }
 

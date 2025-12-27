@@ -1,0 +1,39 @@
+name: C++ SDK
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'sdk/cpp/**'
+      - '.github/workflows/sdk-cpp.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdk/cpp/**'
+      - '.github/workflows/sdk-cpp.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+
+    - name: Configure and build tests
+      working-directory: ./sdk/cpp/tests
+      run: |
+        mkdir -p build
+        cd build
+        cmake ..
+        make
+
+    - name: Run tests
+      working-directory: ./sdk/cpp/tests/build
+      run: ctest --output-on-failure

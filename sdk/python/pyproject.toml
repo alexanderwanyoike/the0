@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "the0"
-version = "1.0.0"
+name = "the0-sdk"
+version = "0.1.1"
 description = "SDK for building trading bots on the0 platform"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.9"
 authors = [
-    {name = "the0", email = "hello@the0.dev"}
+    {name = "alexanderwanyoike", email = "hello@the0.dev"}
 ]
-keywords = ["trading", "bots", "algorithmic-trading", "the0"]
+keywords = ["trading", "bots", "algorithmic-trading", "the0", "sdk"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 
@@ -29,6 +30,7 @@ classifiers = [
 Homepage = "https://the0.dev"
 Documentation = "https://docs.the0.dev"
 Repository = "https://github.com/alexanderwanyoike/the0"
+"Source Code" = "https://github.com/alexanderwanyoike/the0/tree/main/sdk/python"
 
 [tool.setuptools.packages.find]
 where = ["."]

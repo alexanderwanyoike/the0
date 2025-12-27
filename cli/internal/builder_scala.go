@@ -228,11 +228,8 @@ func (b *ScalaBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command: sbt assembly, then fix ownership
-	buildCmd := fmt.Sprintf(
-		"sbt assembly 2>&1; STATUS=$?; chown -R %s:%s /project/target /project/project/target 2>/dev/null || true; exit $STATUS",
-		uid, gid,
-	)
+	// Build command
+	buildCmd := "sbt assembly 2>&1"
 
 	config := &container.Config{
 		Image: scala3Image,
@@ -242,6 +239,7 @@ func (b *ScalaBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		},
 		WorkingDir: "/project",
 		Env:        getScalaBuildEnvVars(),
+		User:       fmt.Sprintf("%s:%s", uid, gid),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -326,10 +324,20 @@ func getScalaBuildEnvVars() []string {
 	}
 
 	var envVars []string
+
+	// Pass GitHub token for private git dependencies
 	if secrets.GitHubToken != "" {
-		// Configure SBT to use GitHub token for private packages
 		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))
 	}
+
+	// Pass Maven credentials for private Maven/Ivy repositories
+	if secrets.MavenUser != "" {
+		envVars = append(envVars, fmt.Sprintf("MAVEN_USER=%s", secrets.MavenUser))
+	}
+	if secrets.MavenToken != "" {
+		envVars = append(envVars, fmt.Sprintf("MAVEN_TOKEN=%s", secrets.MavenToken))
+	}
+
 	return envVars
 }
 

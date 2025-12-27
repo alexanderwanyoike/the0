@@ -16,11 +16,13 @@
  * - signal: BUY/SELL signals when crossover detected
  */
 
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::env;
+use the0_sdk::input;
+use serde::Deserialize;
+use serde_json::json;
 use std::thread;
 use std::time::Duration;
+use tracing::{info, error, Level};
+use tracing_subscriber;
 
 // Yahoo Finance API response structures
 #[derive(Deserialize)]
@@ -55,10 +57,14 @@ struct BotState {
 }
 
 fn main() {
-    // Get configuration from environment
-    let bot_id = env::var("BOT_ID").unwrap_or_else(|_| "test-bot".to_string());
-    let config_json = env::var("BOT_CONFIG").unwrap_or_else(|_| "{}".to_string());
-    let config: Value = serde_json::from_str(&config_json).unwrap_or(json!({}));
+    // Initialize tracing for structured logging
+    tracing_subscriber::fmt()
+        .json()
+        .with_max_level(Level::INFO)
+        .init();
+
+    // Get configuration using the0 SDK
+    let (bot_id, config) = input::parse().expect("Failed to parse bot configuration");
 
     // Extract configuration with defaults
     let symbol = config["symbol"].as_str().unwrap_or("AAPL");
@@ -66,12 +72,7 @@ fn main() {
     let long_period = config["long_period"].as_i64().unwrap_or(20) as usize;
     let update_interval_ms = config["update_interval_ms"].as_i64().unwrap_or(60000) as u64;
 
-    emit_log("bot_started", json!({
-        "botId": bot_id,
-        "symbol": symbol,
-        "shortPeriod": short_period,
-        "longPeriod": long_period
-    }));
+    info!(bot_id = %bot_id, symbol = %symbol, short_period, long_period, "Bot started");
 
     let client = reqwest::blocking::Client::builder()
         .user_agent("the0-sma-bot/1.0")
@@ -87,7 +88,7 @@ fn main() {
     loop {
         match fetch_and_process(&client, symbol, short_period, long_period, &mut state) {
             Ok(_) => {}
-            Err(e) => emit_log("error", json!({ "message": e.to_string() })),
+            Err(e) => error!(error = %e, "Processing error"),
         }
 
         thread::sleep(Duration::from_millis(update_interval_ms));
@@ -105,11 +106,7 @@ fn fetch_and_process(
     let prices = fetch_yahoo_finance(client, symbol)?;
 
     if prices.len() < long_period {
-        emit_log("insufficient_data", json!({
-            "symbol": symbol,
-            "required": long_period,
-            "available": prices.len()
-        }));
+        info!(symbol = %symbol, required = long_period, have = prices.len(), "Insufficient data");
         return Ok(());
     }
 
@@ -127,11 +124,10 @@ fn fetch_and_process(
     };
 
     // Emit price metric
-    emit_metric("price", json!({
+    input::metric("price", &json!({
         "symbol": symbol,
         "value": round(current_price, 2),
-        "change_pct": round(change_pct, 3),
-        "timestamp": chrono_now()
+        "change_pct": round(change_pct, 3)
     }));
 
     // Calculate SMAs
@@ -139,7 +135,7 @@ fn fetch_and_process(
     let long_sma = calculate_sma(&prices, long_period);
 
     // Emit SMA metric
-    emit_metric("sma", json!({
+    input::metric("sma", &json!({
         "symbol": symbol,
         "short_sma": round(short_sma, 2),
         "long_sma": round(long_sma, 2),
@@ -153,7 +149,7 @@ fn fetch_and_process(
             let confidence = (short_sma - long_sma).abs() / long_sma * 100.0;
             let confidence = confidence.min(0.95);
 
-            emit_metric("signal", json!({
+            input::metric("signal", &json!({
                 "type": signal,
                 "symbol": symbol,
                 "price": round(current_price, 2),
@@ -228,28 +224,7 @@ fn check_crossover(
     None
 }
 
-fn emit_metric(metric_type: &str, data: Value) {
-    let mut output = data.as_object().unwrap().clone();
-    output.insert("_metric".to_string(), json!(metric_type));
-    println!("{}", serde_json::to_string(&output).unwrap());
-}
-
-fn emit_log(event: &str, data: Value) {
-    let mut output = data.as_object().unwrap().clone();
-    output.insert("event".to_string(), json!(event));
-    output.insert("timestamp".to_string(), json!(chrono_now()));
-    println!("{}", serde_json::to_string(&output).unwrap());
-}
-
 fn round(value: f64, decimals: i32) -> f64 {
     let multiplier = 10f64.powi(decimals);
     (value * multiplier).round() / multiplier
-}
-
-fn chrono_now() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap();
-    format!("{}.{:03}Z", duration.as_secs(), duration.subsec_millis())
 }

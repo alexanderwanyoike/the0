@@ -208,11 +208,8 @@ func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command: cabal update, build with optimizations, then fix ownership
-	buildCmd := fmt.Sprintf(
-		"cabal update && cabal build --enable-optimization=2 2>&1; STATUS=$?; chown -R %s:%s /project/dist-newstyle 2>/dev/null || true; exit $STATUS",
-		uid, gid,
-	)
+	// Build command
+	buildCmd := "cabal update && cabal build --enable-optimization=2 2>&1"
 
 	config := &container.Config{
 		Image: haskellImage,
@@ -222,6 +219,7 @@ func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		},
 		WorkingDir: "/project",
 		Env:        getHaskellBuildEnvVars(),
+		User:       fmt.Sprintf("%s:%s", uid, gid),
 	}
 
 	hostConfig := &container.HostConfig{
@@ -300,12 +298,16 @@ func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 
 // getHaskellBuildEnvVars returns environment variables for Haskell build.
 func getHaskellBuildEnvVars() []string {
-	secrets, err := LoadBuildSecrets()
-	if err != nil || secrets == nil {
-		return nil
+	envVars := []string{
+		"HOME=/tmp",
+		"CABAL_DIR=/tmp/.cabal",
 	}
 
-	var envVars []string
+	secrets, err := LoadBuildSecrets()
+	if err != nil || secrets == nil {
+		return envVars
+	}
+
 	if secrets.GitHubToken != "" {
 		// Configure git to use GitHub token for private dependencies
 		envVars = append(envVars, fmt.Sprintf("GITHUB_TOKEN=%s", secrets.GitHubToken))

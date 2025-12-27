@@ -478,10 +478,10 @@ This is just the tip of the iceberg! DCA is the `hello world` of trading bots. Y
 
 ## SDK API Reference
 
-The `the0` Python SDK provides utilities for parsing configuration and outputting results. Install it with:
+The `the0-sdk` Python SDK provides utilities for parsing configuration and outputting results. Install it with:
 
 ```bash
-pip install the0
+pip install the0-sdk
 ```
 
 Or copy the `the0/` directory from `sdk/python/` to your project.
@@ -554,17 +554,6 @@ metric("signal", {"symbol": "ETH/USD", "direction": "long", "confidence": 0.85})
 
 # Alert
 metric("alert", {"type": "price_spike", "severity": "high"})
-```
-
-### `log(message: str, data: dict = None)`
-
-Log a message to the bot's logs:
-
-```python
-from the0 import log
-
-log("Starting trade...")
-log("Order placed", {"order_id": "12345", "symbol": "BTC/USD"})
 ```
 
 ### Logging
