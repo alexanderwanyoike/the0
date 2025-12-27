@@ -3,7 +3,7 @@
 
 name: csharp-sma-crossover
 description: "SMA crossover strategy bot using C# .NET 8 with Yahoo Finance data"
-version: 1.0.3
+version: 1.0.4
 author: "the0"
 type: realtime
 runtime: dotnet8
