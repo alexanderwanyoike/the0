@@ -186,18 +186,10 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 	// Generate unique container name
 	containerName := fmt.Sprintf("%snode-%d", vendorContainerName, time.Now().Unix())
 
-	// Prepare absolute paths for volume mounting
-	nodeModulesPath := filepath.Join(vm.projectPath, nodeModulesDir)
-	packageJsonPath := filepath.Join(vm.projectPath, "package.json")
-
-	absNodeModulesPath, err := filepath.Abs(nodeModulesPath)
+	// Get absolute project path for mounting
+	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute node_modules path: %v", err)
-	}
-
-	absPackageJsonPath, err := filepath.Abs(packageJsonPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to get absolute package.json path: %v", err)
+		return "", fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
 	// Build install command
@@ -214,10 +206,10 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 		Env:        getNodeBuildEnvVars(),
 	}
 
+	// Mount entire project directory so builds have access to source files
 	hostConfig := &container.HostConfig{
 		Binds: []string{
-			fmt.Sprintf("%s:/app/node_modules", absNodeModulesPath),
-			fmt.Sprintf("%s:/app/package.json:ro", absPackageJsonPath),
+			fmt.Sprintf("%s:/app", absProjectPath),
 		},
 		AutoRemove: false, // We'll remove manually after copying files
 	}
