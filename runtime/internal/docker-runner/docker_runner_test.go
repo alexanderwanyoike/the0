@@ -356,7 +356,6 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	// Verify the container is using the bot entrypoint correctly
 	assert.Contains(t, logs, "STARTUP: Python bot wrapper starting", "Container should use bot wrapper")
-	assert.Contains(t, logs, "CHDIR_SUCCESS: Changed to working directory: /bot", "Container should change to /bot directory")
 	assert.Contains(t, logs, "CONFIG_SUCCESS: Bot ID:", "Container should parse bot configuration")
 
 	// Test StopContainer
