@@ -35,8 +35,6 @@ function handleSignal(signal) {
 process.on('SIGTERM', () => handleSignal('SIGTERM'));
 process.on('SIGINT', () => handleSignal('SIGINT'));
 
-console.error('STARTUP: Node.js bot wrapper starting');
-
 function setupEnvironment() {
     // Get entrypoint type from environment
     const entrypointType = process.env.ENTRYPOINT_TYPE || 'bot';
@@ -77,7 +75,6 @@ function parseConfig() {
     const botId = process.env.BOT_ID || '';
     const scriptPath = process.env.SCRIPT_PATH || 'main';
     const config = JSON.parse(process.env.BOT_CONFIG || '{}');
-    console.error('CONFIG_SUCCESS: Bot ID: ' + botId);
     return { botId, config, scriptPath };
 }
 

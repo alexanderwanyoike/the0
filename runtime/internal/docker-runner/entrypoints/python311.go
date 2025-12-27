@@ -73,8 +73,6 @@ def setup_environment():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    print("STARTUP: Python bot wrapper starting", file=sys.stderr)
-
     # Get code mount directory from environment (where the code is actually mounted)
     code_mount_dir = os.environ.get('CODE_MOUNT_DIR', 'bot')
     work_dir = f"/{code_mount_dir}"
@@ -131,7 +129,6 @@ def parse_config():
         config = json.loads(os.environ.get('BOT_CONFIG', '{}'))
         bot_id = os.environ.get('BOT_ID', '')
         script_path = os.environ.get('SCRIPT_PATH', 'main.py')
-        print(f"CONFIG_SUCCESS: Bot ID: {bot_id}", file=sys.stderr)
         return bot_id, config, script_path
     except Exception as e:
         print(f"CONFIG_ERROR: Failed to parse configuration: {e}", file=sys.stderr)

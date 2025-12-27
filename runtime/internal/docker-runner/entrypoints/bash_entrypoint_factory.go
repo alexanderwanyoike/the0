@@ -42,9 +42,6 @@ if ! ls -la /{{ .EntryPointType }} >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "PWD: $(pwd)" >&2
-pwd >&2
-
 # Copy the Python entrypoint script to the container
 cat > /tmp/python_entrypoint.py << 'PYTHON_SCRIPT'
 {{ .ScriptContent }}
@@ -179,12 +176,6 @@ type bashEntrypointFactory struct {
 func NewBashEntrypointFactory(
 	entryPointType, scriptContent, botId, botConfig, scriptPath string,
 ) *bashEntrypointFactory {
-	// Add logging for debugging
-	fmt.Printf("ENTRYPOINT_FACTORY: Creating bash entrypoint factory\n")
-	fmt.Printf("ENTRYPOINT_FACTORY: EntryPointType=%s\n", entryPointType)
-	fmt.Printf("ENTRYPOINT_FACTORY: BotId=%s\n", botId)
-	fmt.Printf("ENTRYPOINT_FACTORY: ScriptPath=%s\n", scriptPath)
-
 	return &bashEntrypointFactory{
 		EntryPointType: entryPointType,
 		ScriptContent:  scriptContent,
