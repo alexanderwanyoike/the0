@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
@@ -52,19 +55,38 @@ func TestMain(m *testing.M) {
 // cleanupSegmentContainers removes any leftover containers from previous test runs
 // This prevents test interference when ListManagedContainers queries Docker by labels
 func cleanupSegmentContainers(t *testing.T, segment int32) {
-	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger: &util.DefaultLogger{},
-	})
+	ctx := context.Background()
+
+	// Use Docker client directly to forcibly remove containers
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		t.Logf("Warning: Failed to create runner for cleanup: %v", err)
+		t.Logf("Warning: Failed to create Docker client for cleanup: %v", err)
 		return
 	}
-	defer runner.Close()
+	defer dockerClient.Close()
 
-	ctx := context.Background()
-	containers, _ := runner.ListManagedContainers(ctx, segment)
-	for _, container := range containers {
-		runner.StopContainer(ctx, container.ContainerID, model.Executable{Segment: segment})
+	// List all containers (including stopped) with the segment label
+	filter := filters.NewArgs()
+	filter.Add("label", "runtime.managed=true")
+	filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
+
+	containers, err := dockerClient.ContainerList(ctx, container.ListOptions{
+		All:     true, // Include stopped containers
+		Filters: filter,
+	})
+	if err != nil {
+		t.Logf("Warning: Failed to list containers for cleanup: %v", err)
+		return
+	}
+
+	for _, cont := range containers {
+		// Force remove the container (stops if running, then removes)
+		err := dockerClient.ContainerRemove(ctx, cont.ID, container.RemoveOptions{
+			Force: true,
+		})
+		if err != nil {
+			t.Logf("Warning: Failed to remove container %s: %v", cont.ID[:12], err)
+		}
 	}
 }
 
@@ -288,8 +310,11 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	logger := &util.DefaultLogger{}
 
+	// Use a unique test segment to avoid conflicts with real running bots
+	const testSegment int32 = 99999
+
 	// Clean up any leftover containers from previous tests with same segment
-	cleanupSegmentContainers(t, 1)
+	cleanupSegmentContainers(t, testSegment)
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
@@ -313,7 +338,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 		FilePath:       "real-test-bot.zip",
 		IsLongRunning:  true,  // Test long-running container
 		PersistResults: false, // Bots don't produce result files
-		Segment:        1,     // Test segment
+		Segment:        testSegment,
 	}
 
 	// Create a real ZIP file with bot code and upload to MinIO
@@ -339,7 +364,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	assert.Equal(t, "running", status.Status)
 
 	// Test ListManagedContainers
-	containers, err := runner.ListManagedContainers(ctx, 1)
+	containers, err := runner.ListManagedContainers(ctx, testSegment)
 	require.NoError(t, err)
 	if len(containers) == 0 {
 		t.Logf("Warning: No managed containers found, this might be expected for long-running containers")
@@ -361,7 +386,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	// Verify container is stopped
 	time.Sleep(1 * time.Second)
-	finalContainers, err := runner.ListManagedContainers(ctx, 1)
+	finalContainers, err := runner.ListManagedContainers(ctx, testSegment)
 	require.NoError(t, err)
 	assert.Empty(t, finalContainers, "Container should be removed from managed list")
 }
@@ -539,12 +564,13 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "running", status.Status)
 
-	// Test GetContainerLogs
+	// Test GetContainerLogs - just verify the API works, don't assert on content
+	// (debug logs were removed from entrypoint for cleaner output)
 	logs, err := runner.GetContainerLogs(ctx, containerID, 100)
 	require.NoError(t, err)
-	assert.NotEmpty(t, logs)
-
-	t.Logf("Python bot logs: %s", logs)
+	if logs != "" {
+		t.Logf("Python bot logs: %s", logs)
+	}
 
 	// Test StopContainer
 	err = runner.StopContainer(ctx, containerID, executable)
