@@ -32,10 +32,10 @@ TEST_SUITE("the0::metric") {
         auto json = the0::json::parse(output);
 
         CHECK(json.contains("timestamp"));
-        CHECK(json["timestamp"].is_string());
-        // Timestamp should end with 'Z'
-        std::string ts = json["timestamp"].get<std::string>();
-        CHECK(ts.back() == 'Z');
+        CHECK(json["timestamp"].is_number());
+        // Timestamp should be a reasonable Unix milliseconds value
+        long long ts = json["timestamp"].get<long long>();
+        CHECK(ts > 1700000000000);  // After Nov 2023
     }
 
     TEST_CASE("handles empty data") {
@@ -119,8 +119,10 @@ TEST_SUITE("the0::log") {
         auto json = the0::json::parse(output);
 
         CHECK(json.contains("timestamp"));
-        std::string ts = json["timestamp"].get<std::string>();
-        CHECK(ts.back() == 'Z');
+        CHECK(json["timestamp"].is_number());
+        // Timestamp should be a reasonable Unix milliseconds value
+        long long ts = json["timestamp"].get<long long>();
+        CHECK(ts > 1700000000000);  // After Nov 2023
     }
 
     TEST_CASE("supports warn level") {
