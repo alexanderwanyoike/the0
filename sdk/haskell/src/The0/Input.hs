@@ -144,7 +144,7 @@ metric metricType val = do
             Object o -> o
             _ -> mempty
         withMeta = insert (fromString "_metric") (String $ T.pack metricType) $
-                   insert (fromString "timestamp") (String $ T.pack ts) baseObj
+                   insert (fromString "timestamp") (toJSON ts) baseObj
     BL.putStrLn $ encode (Object withMeta)
 
 -- | Log levels supported by the platform.
@@ -184,7 +184,7 @@ log msg mData mLevel = do
             _ -> mempty
         withFields = insert (fromString "level") (String $ T.pack $ logLevelString level) $
                      insert (fromString "message") (String $ T.pack msg) $
-                     insert (fromString "timestamp") (String $ T.pack ts) baseObj
+                     insert (fromString "timestamp") (toJSON ts) baseObj
     BL.hPutStrLn stderr $ encode (Object withFields)
 
 -- | Convenience function: log an info message
@@ -199,9 +199,8 @@ logWarn msg mData = The0.Input.log msg mData (Just Warn)
 logError :: String -> Maybe Value -> IO ()
 logError msg mData = The0.Input.log msg mData (Just Error)
 
--- | Get current timestamp as milliseconds string with Z suffix.
-getTimestamp :: IO String
+-- | Get current timestamp as milliseconds since Unix epoch.
+getTimestamp :: IO Integer
 getTimestamp = do
     t <- getPOSIXTime
-    let millis = floor (t * 1000) :: Integer
-    return $ show millis ++ "Z"
+    return $ floor (t * 1000)

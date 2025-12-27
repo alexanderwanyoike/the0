@@ -111,7 +111,7 @@ public static class Input
     {
         var jsonObj = JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject();
         jsonObj["_metric"] = metricType;
-        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString() + "Z";
+        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         Console.WriteLine(jsonObj.ToJsonString());
     }
 
@@ -153,7 +153,7 @@ public static class Input
 
         jsonObj["level"] = level.ToString().ToLower();
         jsonObj["message"] = message;
-        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         Console.Error.WriteLine(jsonObj.ToJsonString());
     }

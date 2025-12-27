@@ -196,6 +196,22 @@ describe("event-parser", () => {
         expect(result.timestamp).toEqual(new Date(unixMs));
       });
 
+      it("extracts timestamp from C++ SDK format (Unix ms + Z suffix)", () => {
+        const unixMs = 1735312800000;
+        const content = `{"level": "info", "message": "Test", "timestamp": "${unixMs}Z"}`;
+        const result = parseLogLine(content);
+
+        expect(result.timestamp).toEqual(new Date(unixMs));
+      });
+
+      it("extracts timestamp from numeric string without Z suffix", () => {
+        const unixMs = 1735312800000;
+        const content = `{"level": "info", "message": "Test", "timestamp": "${unixMs}"}`;
+        const result = parseLogLine(content);
+
+        expect(result.timestamp).toEqual(new Date(unixMs));
+      });
+
       it("prefers structured log timestamp over prefix timestamp", () => {
         const content =
           '[2020-01-01 00:00:00] {"level": "info", "msg": "Test", "time": 1735312800000}';

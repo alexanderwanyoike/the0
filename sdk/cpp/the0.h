@@ -26,6 +26,7 @@
 
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -165,10 +166,9 @@ inline void result(const std::string& status, const std::string& message, const 
 /**
  * Get current timestamp as milliseconds since epoch.
  */
-inline std::string current_timestamp() {
+inline int64_t current_timestamp() {
     auto now = std::chrono::system_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-    return std::to_string(ms) + "Z";
+    return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 }
 
 /**

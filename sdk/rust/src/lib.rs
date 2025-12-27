@@ -132,10 +132,10 @@ pub mod input {
     ///
     /// Outputs a JSON object with `_metric` field and timestamp.
     pub fn metric(metric_type: &str, data: &Value) {
-        let timestamp = chrono_now();
+        let timestamp = current_timestamp();
         let mut output = data.as_object().cloned().unwrap_or_default();
         output.insert("_metric".to_string(), Value::String(metric_type.to_string()));
-        output.insert("timestamp".to_string(), Value::String(timestamp));
+        output.insert("timestamp".to_string(), Value::Number(serde_json::Number::from(timestamp)));
         println!("{}", serde_json::to_string(&output).expect("Failed to serialize metric"));
     }
 
@@ -181,7 +181,7 @@ pub mod input {
     /// ```
     pub fn log(message: &str, data: Option<&Value>, level: Option<LogLevel>) {
         let log_level = level.unwrap_or(LogLevel::Info);
-        let timestamp = chrono_now();
+        let timestamp = current_timestamp();
 
         let mut output = match data {
             Some(v) => v.as_object().cloned().unwrap_or_default(),
@@ -190,7 +190,7 @@ pub mod input {
 
         output.insert("level".to_string(), Value::String(log_level.as_str().to_string()));
         output.insert("message".to_string(), Value::String(message.to_string()));
-        output.insert("timestamp".to_string(), Value::String(timestamp));
+        output.insert("timestamp".to_string(), Value::Number(serde_json::Number::from(timestamp)));
 
         eprintln!("{}", serde_json::to_string(&output).expect("Failed to serialize log"));
     }
@@ -210,15 +210,12 @@ pub mod input {
         log(message, data, Some(LogLevel::Error));
     }
 
-    /// Get current timestamp in ISO 8601 format.
-    fn chrono_now() -> String {
+    /// Get current timestamp as milliseconds since Unix epoch.
+    fn current_timestamp() -> u64 {
         use std::time::{SystemTime, UNIX_EPOCH};
         let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap();
-        let secs = duration.as_secs();
-        let millis = duration.subsec_millis();
-        // Convert to ISO format (approximate)
-        format!("{}Z", secs * 1000 + millis as u64)
+        duration.as_secs() * 1000 + duration.subsec_millis() as u64
     }
 }

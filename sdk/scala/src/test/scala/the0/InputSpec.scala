@@ -119,7 +119,8 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
       Input.log("Test message")
     }
     assert(output.contains(""""timestamp":"""), s"Should have timestamp: $output")
-    assert(output.contains("Z"), "Timestamp should end with Z")
+    // Timestamp should be numeric (Unix ms), not a quoted string
+    assert(!output.contains(""""timestamp":""""), s"Timestamp should be numeric, not quoted: $output")
   }
 
   test("log supports warn level") {
@@ -191,7 +192,8 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
       Input.metric("heartbeat", "{}")
     }
     assert(output.contains(""""timestamp":"""), s"Should contain timestamp: $output")
-    assert(output.contains("Z"), "Timestamp should end with Z")
+    // Timestamp should be numeric (Unix ms), not a quoted string
+    assert(!output.contains(""""timestamp":""""), s"Timestamp should be numeric, not quoted: $output")
   }
 
   test("metric merges data correctly") {

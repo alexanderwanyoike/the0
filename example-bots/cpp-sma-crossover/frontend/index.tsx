@@ -80,7 +80,7 @@ function PriceCard({ price }: { price: BotEvent | null }) {
         </span>
       </div>
       <div className="text-xs text-gray-600 mt-4">
-        Updated: {price.timestamp.toLocaleTimeString()}
+        Updated: {price.timestamp?.toLocaleTimeString() ?? "—"}
       </div>
     </div>
   );
@@ -153,7 +153,7 @@ function SignalsList({ signals }: { signals: BotEvent[] }) {
                       </div>
                     </div>
                   </div>
-                  <span className="text-xs text-gray-500">{signal.timestamp.toLocaleTimeString()}</span>
+                  <span className="text-xs text-gray-500">{signal.timestamp?.toLocaleTimeString() ?? "—"}</span>
                 </div>
               </div>
             );
@@ -195,7 +195,7 @@ function PriceHistory({ prices, smas }: { prices: BotEvent[]; smas: BotEvent[] }
               const smaData = smas[smas.length - 1 - i]?.data as { short_sma?: number; long_sma?: number } | undefined;
               return (
                 <tr key={i} className="border-b border-gray-800/50">
-                  <td className="py-2 text-gray-500">{event.timestamp.toLocaleTimeString()}</td>
+                  <td className="py-2 text-gray-500">{event.timestamp?.toLocaleTimeString() ?? "—"}</td>
                   <td className="py-2 text-right text-green-400">${data.value.toLocaleString()}</td>
                   <td className={`py-2 text-right ${isPositive ? "text-green-500" : "text-red-500"}`}>
                     {isPositive ? "+" : ""}{data.change_pct.toFixed(3)}%

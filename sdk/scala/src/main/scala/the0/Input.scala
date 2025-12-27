@@ -114,9 +114,9 @@ object Input {
     val timestamp = System.currentTimeMillis()
     // Simple JSON merge - assumes json starts with {
     val merged = if (json.startsWith("{") && json.length > 1) {
-      s"""{"_metric":"$metricType","timestamp":"${timestamp}Z",${json.substring(1)}"""
+      s"""{"_metric":"$metricType","timestamp":$timestamp,${json.substring(1)}"""
     } else {
-      s"""{"_metric":"$metricType","timestamp":"${timestamp}Z"}"""
+      s"""{"_metric":"$metricType","timestamp":$timestamp}"""
     }
     println(merged)
   }
@@ -164,9 +164,9 @@ object Input {
     // Build output JSON, merging data fields
     val output = if (data.startsWith("{") && data.length > 2) {
       // Merge data fields with our fields
-      s"""{"level":"${level.value}","message":"$escaped","timestamp":"${timestamp}Z",${data.substring(1)}"""
+      s"""{"level":"${level.value}","message":"$escaped","timestamp":$timestamp,${data.substring(1)}"""
     } else {
-      s"""{"level":"${level.value}","message":"$escaped","timestamp":"${timestamp}Z"}"""
+      s"""{"level":"${level.value}","message":"$escaped","timestamp":$timestamp}"""
     }
 
     System.err.println(output)

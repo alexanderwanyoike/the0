@@ -29,7 +29,8 @@ spec = do
         it "includes timestamp" $ do
             output <- captureStderr $ The0.Input.log "Test message" Nothing Nothing
             output `shouldContain` "\"timestamp\":"
-            output `shouldContain` "Z"
+            -- Timestamp should be numeric (not a quoted string)
+            output `shouldNotContain` "\"timestamp\":\""
 
         it "supports warn level" $ do
             output <- captureStderr $ The0.Input.log "Warning message" Nothing (Just Warn)
@@ -103,7 +104,8 @@ spec = do
         it "includes timestamp" $ do
             output <- capture_ $ metric "heartbeat" (object [])
             output `shouldContain` "\"timestamp\":"
-            output `shouldContain` "Z"
+            -- Timestamp should be numeric (not a quoted string)
+            output `shouldNotContain` "\"timestamp\":\""
 
         it "merges data correctly" $ do
             output <- capture_ $ metric "trade" (object ["symbol" .= ("ETH" :: String), "amount" .= (1.5 :: Double)])

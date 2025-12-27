@@ -109,8 +109,8 @@ describe("event-parser", () => {
 
       expect(event.type).toBe("log");
       expect(event.level).toBe("INFO");
-      // Should use current date when no timestamp found
-      expect(event.timestamp).toBeInstanceOf(Date);
+      // Returns null when no timestamp found (display should show blank)
+      expect(event.timestamp).toBeNull();
     });
 
     it("should preserve the raw log line", () => {

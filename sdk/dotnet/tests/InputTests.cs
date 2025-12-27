@@ -88,7 +88,8 @@ public class InputTests : IDisposable
         var output = GetCapturedStderr();
 
         Assert.Contains("\"timestamp\":", output);
-        Assert.Contains("Z", output);
+        // Timestamp should be numeric (Unix ms)
+        Assert.Matches(@"""timestamp"":\d+", output);
     }
 
     [Fact]
@@ -207,7 +208,8 @@ public class InputTests : IDisposable
         var output = GetCapturedStdout();
 
         Assert.Contains("\"timestamp\":", output);
-        Assert.Contains("Z", output);
+        // Timestamp should be numeric (Unix ms)
+        Assert.Matches(@"""timestamp"":\d+", output);
     }
 
     [Fact]

@@ -3,6 +3,8 @@
  * Parses log lines into typed events (log or metric).
  */
 
+import { parseISO, isValid } from "date-fns";
+
 export interface RawLogEntry {
   date: string;
   content: string;
@@ -122,33 +124,52 @@ function tryParseStructuredLog(content: string): StructuredLog | null {
 }
 
 /**
+ * Parse a timestamp value that could be:
+ * - Unix ms (number)
+ * - Unix seconds (number < 10 billion)
+ * - ISO string
+ * - Unix ms as string (e.g., "1735312800000" or "1735312800000Z")
+ */
+function parseTimestampValue(value: unknown): Date | null {
+  if (value === undefined || value === null) return null;
+
+  // Handle numbers (Unix timestamp)
+  if (typeof value === "number") {
+    // If < 10 billion, assume seconds; otherwise ms
+    const ms = value < 10_000_000_000 ? value * 1000 : value;
+    return new Date(ms);
+  }
+
+  // Handle strings
+  if (typeof value === "string") {
+    // Try numeric string (with optional Z suffix for legacy C++ SDK)
+    const numMatch = value.match(/^(\d+)Z?$/);
+    if (numMatch) {
+      const ms = parseInt(numMatch[1], 10);
+      return new Date(ms < 10_000_000_000 ? ms * 1000 : ms);
+    }
+
+    // Try ISO format with date-fns
+    const parsed = parseISO(value);
+    if (isValid(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Extract timestamp from structured log.
+ * Checks common timestamp fields: time, timestamp, ts
  */
 function extractTimestampFromStructuredLog(log: StructuredLog): Date | null {
-  // Try 'time' field (pino uses Unix ms or ISO string)
-  if (log.time !== undefined) {
-    if (typeof log.time === "number") {
-      return new Date(log.time);
-    }
-    const parsed = new Date(log.time);
-    if (!isNaN(parsed.getTime())) {
-      return parsed;
-    }
-  }
-  // Try 'timestamp' field
-  if (log.timestamp) {
-    const parsed = new Date(log.timestamp);
-    if (!isNaN(parsed.getTime())) {
-      return parsed;
-    }
-  }
-  // Try 'ts' field (Unix timestamp in seconds or ms)
-  if (log.ts !== undefined) {
-    // If ts < 10 billion, assume seconds; otherwise ms
-    const ts = log.ts < 10000000000 ? log.ts * 1000 : log.ts;
-    return new Date(ts);
-  }
-  return null;
+  // Try fields in order of preference
+  return (
+    parseTimestampValue(log.time) ??
+    parseTimestampValue(log.timestamp) ??
+    parseTimestampValue(log.ts)
+  );
 }
 
 /**
