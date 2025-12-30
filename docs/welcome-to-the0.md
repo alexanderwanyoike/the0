@@ -1,36 +1,70 @@
 ---
 title: "Welcome to the0"
-description: "Your comprehensive algorithmic trading platform"
+description: "An open-source platform for building, deploying, and managing algorithmic trading bots"
 order: 1
 ---
 
 # Welcome to the0
 
-The0 is an automated trading platform that allows users to **create**, **deploy**, and **manage** trading bots of all shapes and sizes. It allows developers to create custom bots in either Python or JavaScript, and provides a marketplace for developers to share and discover bots to traders. The platform includes features for **monitoring** and **deploying** bots in a secure and compliant manner.
+the0 is an open-source algorithmic trading platform that provides the infrastructure for building, deploying, and managing trading bots. The platform handles execution scheduling, log aggregation, metrics collection, and dashboard visualization so developers can focus on trading logic rather than operational concerns.
 
-## What is Algorithmic Trading?
+## Core Concepts
 
-Algorithmic trading is the use of computer algorithms to automate trading decisions and execute trades in financial markets. It allows traders to leverage technology to analyze market data, identify trading opportunities, and execute trades.
+the0 is built around three fundamental concepts: custom bots, bot instances, and execution models.
 
-Algos do not sleep, eat, or take breaks, making them ideal for 24/7 trading environments. They can be used for a variety of strategies, including market making, arbitrage, and trend following.
+A **custom bot** is a reusable bot definition that contains your trading logic, configuration schema, and metadata. Custom bots are language-agnostic and can be written in Python, TypeScript, Rust, C#, Scala, C++, or Haskell. Each custom bot defines what configuration parameters it accepts through a JSON Schema, making it possible to create multiple instances with different settings.
 
-## What the0 Does
+A **bot instance** is a running deployment of a custom bot with specific configuration values. For example, a single "SMA Crossover" custom bot can have multiple instances: one monitoring AAPL with a 5/20 period crossover, another monitoring MSFT with a 10/50 period crossover.
 
-The0 provides a comprehensive platform for algorithmic trading, allowing users to create and deploy trading bots with ease. It offers a user-friendly interface for bot creation, a marketplace for sharing and discovering bots.
+**Execution models** determine how your bot runs. the0 supports two models: scheduled bots that run on a cron schedule (daily, hourly, every minute) and realtime bots that run continuously until stopped.
 
-- **Open Standards**: The0 provides uses open standards such as `YAML` and `jsonschema` for bot creation, allowing developers to define their bots in a _structured_ and _standardized_ way. This makes it easy to create, share, and deploy bots across different environments.
+## Platform Architecture
 
-- **Framework Agnostic**: The0 does not constrain developers to a library or framework, allowing them to use any library or framework they prefer for their bot development (within reason sorry not pytorch). As long as the bot defines a an entrypoint `main` function, bot configuration in `bot-config.yaml`, and provides input configuration schemas, it can be deployed on the platform.
+the0 uses a microservices architecture with the following components:
 
-- **Execution Models**: We only provide **bot types** eg. `scheduled` and `realtime` that users can use to define their bots. Think of them as _execution models_ rather than algos. This gives bot developers the flexibility to implement their own trading logic and algos.
+The **CLI** (`the0`) is the primary interface for deploying custom bots and managing bot instances. It handles dependency vendoring, compilation for compiled languages, and deployment to the platform.
 
-## What the0 Does Not Do
+The **API** orchestrates bot lifecycle operations including deployment, scheduling, and log retrieval.
 
-- **Not a Specific Library/Framework**: The0 does not provide a specific library or framework for bot development, allowing users to use any technology stack they prefer.
+The **Runtime Services** use a master-worker architecture. The master handles workload allocation and distributes jobs to workers. Workers instantiate and manage bot containers through reconciliation loops, ensuring bots reach and maintain their desired state. The bot runner handles realtime execution while the scheduler manages cron-based scheduled execution.
 
-- **Not Strategy-Specific**: The0 does not provide a specific trading strategy or algorithm, allowing users to create their own strategies and algorithms.
+The **Dashboard** provides a web interface for monitoring bot status, viewing logs, and visualizing metrics emitted by your bots.
 
-- **Not HFT Platform**: The0 is not a HFT (High Frequency Trading) platform, it is designed for retail traders and developers who want to create and deploy trading bots without the complexity of HFT systems. It is not designed for ultra-low latency trading or high-frequency strategies that require specialized infrastructure and hardware to tuned to microsecond or nanosecond execution speeds (e.g FPGAs) for specific sets of strategies which would is not scalable for a platform like this.
+## Supported Languages
 
-> **💸 HFT Reality Check**  
-> If you want to know more about HFT watch [this](https://www.youtube.com/watch?v=iwRaNYa8yTw) youtube video and understand that you will need millions of dollars in infrastructure to even get started (sorry to kill your dreams). Honestly you dont need low latency trading to make money in the markets, you can make a lot of money with simple strategies that are not HFT.
+the0 provides official SDKs for seven languages, each offering consistent APIs for configuration parsing, result reporting, and metrics emission:
+
+| Language | Runtime | SDK Source |
+|----------|---------|------------|
+| Python | python3.11 | `the0-sdk` (PyPI) |
+| TypeScript/Node.js | nodejs20 | `@alexanderwanyoike/the0-node` (GitHub Packages) |
+| Rust | rust-stable | `the0-sdk` (crates.io) |
+| C# | dotnet8 | `The0.Sdk` (NuGet) |
+| Scala | scala3 | `the0-sdk` (GitHub Repository) |
+| C++ | gcc13 | `the0-sdk` (GitHub Repository) |
+| Haskell | ghc96 | `the0-sdk` (GitHub Repository) |
+
+All SDKs provide the same core functions: `parse()` for reading configuration, `success()` and `error()` for reporting results, `metric()` for emitting dashboard metrics, and `log()` for structured logging.
+
+## Design Principles
+
+the0 is intentionally unopinionated about trading strategies. The platform provides execution infrastructure, not trading algorithms. You bring your own strategy, data sources, and broker integrations.
+
+Configuration uses open standards. Bot definitions are specified in YAML (`bot-config.yaml`) and parameter schemas use JSON Schema draft-07. This makes bots portable and tooling-friendly.
+
+The platform is framework-agnostic. Your bot code can use any libraries available for your chosen language. The only requirement is implementing a main entry point that the runtime can invoke.
+
+## Scope and Limitations
+
+the0 is designed for retail algorithmic trading with execution latencies in the seconds-to-minutes range. It is not suitable for high-frequency trading (HFT) strategies that require microsecond or nanosecond execution speeds.
+
+The platform does not provide market data feeds or broker integrations directly. Bots are responsible for connecting to their own data sources and executing trades through their chosen brokers.
+
+## Next Steps
+
+To get started with the0:
+
+1. [Install the CLI](/the0-cli/installation) and configure authentication
+2. Review the [terminology](/terminology/) to understand key concepts
+3. Follow a [language quick start guide](/custom-bot-development/python-quick-start) to build your first bot
+4. Learn about [bot configuration](/custom-bot-development/configuration) for advanced customization

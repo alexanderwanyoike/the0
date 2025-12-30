@@ -7,62 +7,96 @@ order: 2
 
 # Custom Bots
 
-Are can be though of as the blueprints for [Bots](./bots). They are the blueprints that define the actual trading algorithm that will be executed by the [Bots](./bots). Custom Bots are created using the The0 CLI and can be shared with other users through the Custom Bot Marketplace. They are defined in a structured way using YAML and JSON Schema, allowing for easy customization and deployment.
+A custom bot is a reusable bot definition that contains trading logic, configuration schema, and metadata. Custom bots serve as templates from which multiple [bot instances](/terminology/bots) can be deployed, each with different configuration values.
 
----
+## Structure
 
-## Understanding Custom Bots
+Every custom bot consists of the following components:
 
-### Blueprint Architecture
+**bot-config.yaml** defines the bot's metadata, runtime, entry points, and schema references:
 
-Custom Bots serve as reusable programs that:
+```yaml
+name: sma-crossover
+description: "SMA crossover strategy with Yahoo Finance data"
+version: 1.0.0
+author: "the0"
+type: realtime
+runtime: python3.11
 
-- Define the trading algorithm and logic
-- Specify configuration parameters through JSON Schema
-- Include all necessary dependencies and requirements
-- Can be instantiated multiple times as different Bots
+entrypoints:
+  bot: main.py
 
-### Key Components
+schema:
+  bot: bot-schema.json
 
-1. **bot-config.yaml**: The main configuration file defining the bot's metadata and structure
-2. **Entry Points**: The main execution functions for bot logic
-3. **Schemas**: JSON Schema definitions for bot configuration
-4. **Dependencies**: Language-specific dependency files (requirements.txt, package.json)
+readme: README.md
+```
 
-### Development Process
+**Entry point** is the file containing your trading logic. The runtime invokes this file when the bot executes. For Python bots, this is typically `main.py`; for TypeScript, `main.ts` or `main.js`.
 
-Custom Bots are:
+**bot-schema.json** defines the configuration parameters your bot accepts using JSON Schema:
 
-- Created using either Python, JavaScript (more languages coming soon!)
-- Developed locally with your preferred tools and frameworks
-- Tested thoroughly before deployment
-- Deployed to the platform using `the0 custom-bot deploy`
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Stock symbol to monitor",
+      "default": "AAPL"
+    },
+    "short_period": {
+      "type": "integer",
+      "description": "Short SMA period",
+      "default": 5
+    }
+  }
+}
+```
 
-### Sharing and Monetization
+**Dependencies** are specified in language-specific files: `requirements.txt` for Python, `package.json` for Node.js, `Cargo.toml` for Rust, and so on.
 
-Once created, Custom Bots can be:
+## Supported Languages
 
-- Kept private for personal use
-- Published to the marketplace for free
-- Monetized by setting a price in the marketplace
+Custom bots can be written in seven languages:
 
----
+- Python (runtime: `python3.11`)
+- TypeScript/Node.js (runtime: `nodejs20`)
+- Rust (runtime: `rust-stable`)
+- C# (runtime: `dotnet8`)
+- Scala (runtime: `scala3`)
+- C++ (runtime: `gcc13`)
+- Haskell (runtime: `ghc96`)
 
-## Benefits
+Each language has an official SDK that provides consistent APIs for configuration parsing, result reporting, and metrics emission.
 
-- **Reusability**: Deploy the same Custom Bot multiple times with different configurations
-- **Version Control**: Manage different versions of your trading strategies
-- **Collaboration**: Share and sell your strategies to other traders
-- **Flexibility**: Want to build ML bots with Python (with scikit-learn) or web3 powered bots with JavaScript? The0 supports them both!\*\*
+## Execution Types
 
-> _Note: Support for more languages coming soon! Watch this space 🎉_
+The `type` field in bot-config.yaml determines how the bot executes:
 
-> _Note: There are some limitations on the libraries you can use your maximum code size is 1GB, so no pyTorch or TensorFlow yet! But you can use scikit-learn, pandas, and other lightweight libraries for classical machine learning. If you want to use heavy weight modules delegate that model to an infrence endpoint and make the bot query that_
+**scheduled** - The bot runs on a cron schedule. Each execution is a discrete run: start, execute logic, report results, exit. Use this for periodic tasks like daily portfolio rebalancing or hourly price checks.
 
----
+**realtime** - The bot runs continuously until stopped. Use this for strategies that need to monitor prices continuously and react to market conditions in real-time.
 
-## Related Terms
+## Deployment
 
-- [Bots](/terminology/bots) - The running instances of Custom Bots
-- [Marketplace](/terminology/marketplace) - Where Custom Bots are shared and sold
-- [Bot Deployment](/terminology/bot-deployment) - Creating Bot instances from Custom Bots
+Custom bots are deployed to the platform using the CLI:
+
+```bash
+the0 custom-bot deploy
+```
+
+The CLI reads `bot-config.yaml` from the current directory, vendors dependencies, compiles code if necessary (for compiled languages), and uploads the packaged bot to the platform.
+
+Once deployed, you can create bot instances from the custom bot using `the0 bot deploy`.
+
+## Versioning
+
+Custom bots use semantic versioning. When you deploy an updated version, the platform stores it alongside previous versions. Bot instances can specify which version to use, allowing you to test new versions while keeping production instances on stable releases.
+
+## Related Topics
+
+- [Bots](/terminology/bots) - Running instances of custom bots
+- [Bot Deployment](/terminology/bot-deployment) - The deployment process
+- [Configuration Reference](/custom-bot-development/configuration) - Complete bot-config.yaml documentation

@@ -7,42 +7,71 @@ order: 1
 
 # Bots
 
-These are the actual trading bots instances that you create and run in the platform. They can either be created on the platform or using the CLI and viewed on the [dashboard](/dashboard). Bots are instances of [Custom Bots](./custom-bots) that are deployed to the platform. They run independently and can be monitored and managed through the platform.
+A bot (or bot instance) is a running deployment of a custom bot with specific configuration values. While a custom bot defines the trading logic and configuration schema, a bot instance is the actual execution of that logic with concrete parameters.
 
----
+## Relationship to Custom Bots
 
-## Key Concepts
+Custom bots and bot instances have a one-to-many relationship. A single custom bot can have multiple bot instances, each configured differently.
 
-### Bot Instances
+For example, consider a custom bot called `sma-crossover` that implements a simple moving average crossover strategy. You might deploy several bot instances from this template:
 
-A Bot is a running instance of a Custom Bot template. Think of it this way:
+- One instance monitoring AAPL with a 5/20 period crossover
+- Another instance monitoring MSFT with a 10/50 period crossover
+- A third instance monitoring GOOGL with different parameters
 
-- **Custom Bot**: The **blueprint** defines the trading logic
-- **Bot**: The actual running instance executing trades
+Each instance runs independently with its own configuration, logs, and metrics.
 
-### Creating Bots
+## Creating Bot Instances
 
-Bots can be created in two ways:
+Bot instances are created using the CLI with a JSON configuration file:
 
-1. **Through the Platform UI**: Navigate to your [Custom Bots](/custom-bots) and select a bot or [My Bots](/user-bots) section and click "Deploy"
-2. **Using the CLI**: Use the `the0 bot deploy` command with your configuration (see [Bot Commands](/the0-cli/bot-commands) for details)
+```bash
+the0 bot deploy config.json
+```
 
-### Bot Lifecycle
+The configuration file specifies which custom bot to use and provides values for its configuration parameters:
 
-Once deployed, a Bot:
+```json
+{
+  "name": "my-aapl-sma",
+  "type": "realtime/sma-crossover",
+  "version": "1.0.0",
+  "symbol": "AAPL",
+  "short_period": 5,
+  "long_period": 20
+}
+```
 
-- Runs independently based on its type (`scheduled` or `realtime`)
-- Executes the trading logic defined in its Custom Bot template
-- Can be started, stopped
+The `type` field follows the format `{execution-model}/{custom-bot-name}`, where execution model is either `scheduled` or `realtime`.
 
-### Management Features
+## Managing Bot Instances
 
-- **Logs**: Access to execution logs and debugging information
-- **Configuration**: Ability to update parameters without redeploying
+The CLI provides commands for managing bot instances throughout their lifecycle:
 
----
+```bash
+# List all bot instances
+the0 bot list
 
-## Related Terms
+# Update an instance's configuration
+the0 bot update <bot_id> config.json
 
-- [Custom Bots](/terminology/custom-bots) - The templates that Bots are created from
-- [Bot Deployment](/terminology/bot-deployment) - The process of creating Bot instances
+# View logs for an instance
+the0 bot logs <bot_id>
+
+# Delete an instance
+the0 bot delete <bot_id>
+```
+
+## Execution Behavior
+
+How a bot instance executes depends on its type:
+
+**Scheduled bots** run on a cron schedule. Each execution is independent—the bot starts, executes its logic, reports results, and exits. The scheduler triggers the next run according to the configured schedule.
+
+**Realtime bots** run continuously until stopped. They typically contain an event loop that monitors prices, emits metrics, and executes trades based on conditions.
+
+## Related Topics
+
+- [Custom Bots](/terminology/custom-bots) - The templates that bot instances are created from
+- [Bot Deployment](/terminology/bot-deployment) - The deployment process in detail
+- [Bot Commands](/the0-cli/bot-commands) - CLI reference for bot management

@@ -7,50 +7,45 @@ order: 4
 
 # Custom Bot Commands
 
-The `custom-bot` commands allow you to deploy and manage your own trading algorithms on the the0 platform.
+The `custom-bot` commands deploy and manage custom bot definitions on the0 platform.
 
-## Overview
+## Deploy
 
-Custom bots are trading algorithms you develop and deploy to the platform. These commands help you:
-
-- Deploy custom bots to the marketplace
-- List your deployed custom bots
-- Manage bot versions
-- Retrieve bot schemas
-
-## Commands Reference
-
-### Deploy Custom Bot
-
-Package and deploy your custom bot from the current directory:
+Deploy a custom bot from the current directory:
 
 ```bash
 the0 custom-bot deploy
 ```
 
-#### Required Files
+The CLI reads `bot-config.yaml` and performs the following steps:
 
-Your bot directory must contain:
+1. Validates configuration and semantic version
+2. Vendors dependencies (Python: pip install to `vendor/`, Node.js: npm install)
+3. Compiles code for compiled languages (Rust, C#, Scala, C++, Haskell)
+4. Builds frontend if `hasFrontend: true` is set
+5. Packages files into a deployable archive (respecting `.the0ignore`)
+6. Uploads to the platform
 
-```bash
+**Required project structure:**
+
+```
 my-bot/
-├── bot-config.yaml      # Bot configuration and metadata
-├── main.py             # Main bot entry point
-├── bot-schema.json     # Bot parameter schema
-├── requirements.txt    # Python dependencies (optional)
-├── vendor/             # Vendored dependencies (auto-generated during deployment)
-└── README.md           # Bot documentation
+├── bot-config.yaml      # Bot metadata and configuration
+├── main.py              # Entry point (or main.ts, main.rs, etc.)
+├── bot-schema.json      # Configuration parameter schema
+├── requirements.txt     # Dependencies (Python)
+└── README.md            # Documentation
 ```
 
-#### Bot Configuration (bot-config.yaml)
+**Example bot-config.yaml:**
 
 ```yaml
-name: my-awesome-bot
-description: "A trading bot that makes money while you sleep"
+name: sma-crossover
+description: "SMA crossover strategy bot"
 version: 1.0.0
-author: your-name
-type: scheduled # or 'realtime'
-runtime: python3.11 # or 'nodejs20'
+author: "your-name"
+type: realtime
+runtime: python3.11
 
 entrypoints:
   bot: main.py
@@ -61,161 +56,85 @@ schema:
 readme: README.md
 
 metadata:
-  tags: ["arbitrage", "crypto", "defi"]
-  categories:
-    - trading
-  instruments:
-    - crypto
-  exchanges:
-    - binance
-    - coinbase
+  categories: [trading, technical-analysis]
+  tags: [sma, crossover]
 ```
 
-#### Deployment Example
+Each deployment requires a unique version. Increment the `version` field before deploying updates.
 
-```bash
-# Navigate to your bot directory
-cd my-awesome-bot/
+## List
 
-# Deploy the bot
-the0 custom-bot deploy
-* Starting deployment...
-* Installing dependencies...
-* Authenticating...
-* Uploading bot package...
-* Configuring deployment...
-v 'my-awesome-bot' v1.0.0 deployed successfully
-```
-
-> **Note**: Docker is required for deploying custom bots with dependencies.
-
-> **Note**: Every deployment needs a new version number. Update the `version` field in `bot-config.yaml` before deploying. We follow [semantic versioning](https://semver.org/) (MAJOR.MINOR.PATCH).
-
-> **Note**: For private GitHub or PyPI dependencies, see [Secrets & Private Dependencies](./secrets).
-
-### List Custom Bot Versions
-
-List all available versions for a specific custom bot:
-
-```bash
-the0 custom-bot versions <type|name>
-```
-
-#### Examples
-
-```bash
-# List versions by bot name
-the0 custom-bot versions awesome-scheduled-bot
-* Fetching versions for awesome-scheduled-bot...
-v Found 2 version(s)
-
-VERSION  CREATED AT        TYPE
-1.3.0    2025-07-08 00:15  scheduled/awesome-scheduled-bot
-1.2.0    2025-07-07 21:51  scheduled/awesome-scheduled-bot
-```
-
-### List Custom Bots
-
-Display all custom bots you've deployed:
+Display all your deployed custom bots:
 
 ```bash
 the0 custom-bot list
-* Fetching custom bots...
-v Found 5 custom bot(s)
-
-CUSTOM BOT NAME          LATEST VERSION  CREATED AT        TYPE
-dca-accumulator          1.3.0           2025-07-07 21:51  scheduled/dca-accumulator
-arbitrage-scanner        1.12.0          2025-06-29 13:15  realtime/arbitrage-scanner
-momentum-trader          2.11.0          2025-06-30 15:31  scheduled/momentum-trader
-grid-trading-bot         2.22.0          2025-06-22 18:27  realtime/grid-trading-bot
-news-sentiment-trader    1.2.0           2025-06-25 23:16  scheduled/news-sentiment-trader
 ```
 
-### Get Custom Bot Schema
+Output shows bot name, latest version, creation date, and type.
 
-Retrieve the JSON schema for bot configuration:
+## Versions
+
+List all versions of a specific custom bot:
 
 ```bash
-the0 custom-bot schema bot 1.0.0 another-example-bot
-* Fetching schema for another-example-bot...
-v Schema for 'another-example-bot' v1.0.0:
-
-{
-  "properties": {
-    "description": {
-      "description": "A brief description of the SMA bot's functionality.",
-      "type": "string"
-    },
-    "name": {
-      "description": "The name of the SMA bot.",
-      "type": "string"
-    },
-    "strategy": {
-      "properties": {
-        "period": {
-          "description": "The period for the simple moving average.",
-          "minimum": 1,
-          "type": "integer"
-        },
-        "symbol": {
-          "description": "The trading symbol (e.g., BTCUSD).",
-          "type": "string"
-        },
-        "type": {
-          "description": "The type of strategy, fixed as 'SMA'.",
-          "enum": [
-            "SMA"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "type",
-        "period",
-        "symbol"
-      ],
-      "type": "object"
-    }
-  },
-  "required": [
-    "name",
-    "strategy"
-  ],
-  "type": "object"
-}
+the0 custom-bot versions <name>
 ```
 
-### Bot Types
+**Example:**
 
-#### Scheduled Bot `scheduled`
+```bash
+the0 custom-bot versions sma-crossover
+```
 
-- Runs on a fixed schedule (cron expression)
-- Ideal for DCA strategies, periodic rebalancing
-- Example: Daily portfolio rebalancing bot
+## Schema
 
-#### Realtime Bot `realtime`
+Retrieve the JSON Schema for a custom bot's configuration parameters:
 
-- Runs continuously, processing market data in real-time
-- Suitable for market making, arbitrage
-- Example: Grid trading bot
+```bash
+the0 custom-bot schema <version> <name>
+```
 
-### The `.the0ignore` File
+Use this to understand what parameters are required when deploying bot instances.
 
-To exclude files from being uploaded during deployment, create a `.the0ignore` file in your bot directory. This works similarly to `.gitignore`.
+**Example:**
 
-```plaintext
-# Ignore Python bytecode files
-*.pyc
-# Ignore local configuration files
-config.local.yaml
-# Ignore test files
+```bash
+the0 custom-bot schema 1.0.0 sma-crossover
+```
+
+## The .the0ignore File
+
+Exclude files from deployment by creating a `.the0ignore` file. The syntax is similar to `.gitignore`:
+
+```
+# Exclude test files
 tests/
-# Ignore documentation files
-docs/
+*_test.py
+
+# Exclude local configuration
+*.local.yaml
+.env
+
+# Exclude build artifacts
+__pycache__/
+*.pyc
 ```
 
-## Related Commands
+The following directories are always included regardless of ignore patterns:
 
-- [Bot Commands](./bot-commands) - Deploy bot instances
-- [Authentication](./authentication) - Set up API access
-- [Secrets & Private Dependencies](./secrets) - Configure private repo access
+- `vendor/` - Python dependencies
+- `node_modules/` - Node.js dependencies
+
+Default exclusions when no `.the0ignore` exists:
+
+- `*.log`, `*.tmp`, `*.temp`
+- `test/`, `tests/`, `__tests__/`
+- `.git/`, `build/`, `dist/`
+- `__pycache__/`, `*.pyc`, `*.pyo`
+- `.DS_Store`, `Thumbs.db`
+
+## Related
+
+- [Bot Commands](./bot-commands) - Deploy bot instances from custom bots
+- [Secrets](./secrets) - Configure private dependency access
+- [Custom Bots](/terminology/custom-bots) - Understanding custom bot concepts

@@ -61,6 +61,7 @@ export default defineConfig({
           { text: 'Authentication', link: '/the0-cli/authentication' },
           { text: 'Bot Commands', link: '/the0-cli/bot-commands' },
           { text: 'Custom Bot Commands', link: '/the0-cli/custom-bot-commands' },
+          { text: 'Secrets', link: '/the0-cli/secrets' },
         ]
       },
       {
@@ -96,6 +97,15 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/integrations/' },
           { text: 'MCP Server', link: '/integrations/mcp' },
+        ]
+      },
+      {
+        text: 'Platform Deployment',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/deployment/' },
+          { text: 'Docker Compose', link: '/deployment/docker-compose' },
+          { text: 'Kubernetes (Experimental)', link: '/deployment/kubernetes' },
         ]
       }
     ],

@@ -1,85 +1,133 @@
 ---
-title: "C/C++ Quick Start"
-description: "Build your first C/C++ trading bot with the0"
+title: "C++ Quick Start"
+description: "Build your first C++ trading bot with the0"
 tags: ["custom-bots", "cpp", "c", "gcc", "quick-start"]
 order: 13
 ---
 
-# C/C++ Quick Start Guide
+# C++ Quick Start
 
-Build high-performance trading bots in C or C++ with the0's GCC 13 runtime. C++ is ideal for ultra-low-latency strategies where you need direct memory control and maximum performance.
+C++ delivers deterministic performance with direct memory control, making it the language of choice for latency-sensitive trading systems. There's no garbage collection, no runtime overhead—just compiled machine code executing your strategy. This guide walks through building an SMA crossover bot that monitors stock prices and emits trading signals.
 
----
-
-## Why C++ for Trading Bots?
-
-C++ remains the language of choice for professional trading systems:
-
-- **Minimal Latency**: Direct hardware access with no runtime overhead
-- **Deterministic Performance**: No garbage collection or JIT compilation pauses
-- **Fine-grained Control**: Manual memory management for critical paths
-- **Mature Ecosystem**: Decades of battle-tested libraries for finance
-- **Cross-platform**: Same code runs on Linux servers and Windows desktops
-
-**When to Choose C++:**
-- High-frequency trading (HFT) strategies
-- Co-located execution systems
-- Processing tick-by-tick market data
-- When microseconds matter
-
-**Popular Libraries for Trading:**
-- `libcurl` - HTTP/HTTPS client for REST APIs
-- `nlohmann/json` - Modern JSON parsing (used by the0 SDK)
-- `Boost.Beast` - WebSocket client for streaming data
-- `Decimal` - Fixed-point arithmetic for prices
-- `OpenSSL` - Secure communications
-
----
+By the end of this guide, you'll have a working realtime bot that calculates Simple Moving Averages and detects crossover signals using live market data.
 
 ## Prerequisites
 
-- GCC or Clang compiler (for local development)
-- CMake 3.14+ (recommended) or Make
-- the0 CLI installed
-- Valid the0 API key
-- Basic understanding of C++ pointers and memory
+Before starting, ensure you have the CLI installed and authenticated:
 
----
+```bash
+# Clone the repository and build the CLI
+git clone https://github.com/alexanderwanyoike/the0.git
+cd the0/cli
+make install
+
+# Authenticate
+the0 auth login
+```
+
+You'll also need GCC or Clang installed locally for building, along with CMake 3.14+ and libcurl development headers.
 
 ## Project Structure
 
-```
-my-cpp-bot/
-├── CMakeLists.txt        # CMake project file (recommended)
-├── main.cpp              # Your bot entry point
-├── bot-config.yaml       # Bot configuration
-├── bot-schema.json       # Parameter schema
-├── config.json           # Example configuration
-└── README.md             # Documentation
-```
-
-> **Note:** The SDK header (`the0.h`) is fetched automatically via CMake FetchContent.
-
----
-
-## Step 1: Create Your Project
+Create a new directory for your bot:
 
 ```bash
-mkdir my-cpp-bot
-cd my-cpp-bot
+mkdir sma-crossover
+cd sma-crossover
 ```
 
----
+A C++ bot requires these files:
 
-## Step 2: Create CMakeLists.txt
+```
+sma-crossover/
+├── CMakeLists.txt       # Build configuration
+├── main.cpp             # Bot entry point
+├── bot-config.yaml      # Bot metadata and runtime settings
+├── bot-schema.json      # Configuration schema for users
+└── build/
+    └── sma_bot          # Compiled binary (after cmake build)
+```
 
-CMake handles dependency management and cross-platform builds:
+The entry point in `bot-config.yaml` must point to the compiled binary, not the source file. You compile locally before deploying.
+
+## Defining Bot Metadata
+
+Create `bot-config.yaml`:
+
+```yaml
+name: sma-crossover
+description: "SMA crossover strategy bot with Yahoo Finance data"
+version: 1.0.0
+author: "your-name"
+type: realtime
+runtime: gcc13
+
+entrypoints:
+  bot: build/sma_bot
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [sma, crossover, cpp]
+  complexity: beginner
+```
+
+The `entrypoints.bot` field points to the compiled binary. The binary name comes from your CMakeLists.txt configuration.
+
+## Defining Configuration Schema
+
+Create `bot-schema.json`:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "SMA Crossover Configuration",
+  "description": "Configuration for the SMA crossover trading strategy bot",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Stock symbol to monitor (e.g., AAPL, MSFT, GOOGL)",
+      "default": "AAPL"
+    },
+    "short_period": {
+      "type": "integer",
+      "description": "Number of periods for short SMA (fast moving average)",
+      "default": 5,
+      "minimum": 2,
+      "maximum": 50
+    },
+    "long_period": {
+      "type": "integer",
+      "description": "Number of periods for long SMA (slow moving average)",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 200
+    },
+    "update_interval_ms": {
+      "type": "integer",
+      "description": "Milliseconds between price updates",
+      "default": 60000,
+      "minimum": 30000,
+      "maximum": 3600000
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## Configuring CMakeLists.txt
+
+Create `CMakeLists.txt`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.14)
-project(my-cpp-bot)
+project(sma_bot)
 
-# Use C++17 for modern features
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -88,7 +136,7 @@ include(FetchContent)
 # Fetch the0 SDK header
 FetchContent_Declare(the0_sdk
     GIT_REPOSITORY https://github.com/alexanderwanyoike/the0.git
-    GIT_TAG v1.1.0
+    GIT_TAG main
     SOURCE_SUBDIR sdk/cpp
 )
 FetchContent_MakeAvailable(the0_sdk)
@@ -100,498 +148,376 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(json)
 
+# Find libcurl for HTTP requests
+find_package(CURL REQUIRED)
+
 # Create executable
-add_executable(my-cpp-bot main.cpp)
-target_include_directories(my-cpp-bot PRIVATE ${the0_sdk_SOURCE_DIR})
-target_link_libraries(my-cpp-bot PRIVATE nlohmann_json::nlohmann_json)
-
-# Optional: Link libcurl for HTTP requests
-# find_package(CURL REQUIRED)
-# target_link_libraries(my-cpp-bot PRIVATE CURL::libcurl)
+add_executable(sma_bot main.cpp)
+target_include_directories(sma_bot PRIVATE ${the0_sdk_SOURCE_DIR})
+target_link_libraries(sma_bot PRIVATE nlohmann_json::nlohmann_json CURL::libcurl)
 ```
 
-**Alternative: Simple Makefile** (requires nlohmann-json installed):
+The SDK is header-only. CMake FetchContent downloads it automatically along with nlohmann/json for JSON parsing.
 
-```bash
-# Install nlohmann-json first:
-# Ubuntu/Debian: sudo apt install nlohmann-json3-dev
-# macOS: brew install nlohmann-json
-```
-
-```makefile
-CXX = g++
-CXXFLAGS = -std=c++17 -O2 -Wall
-
-all: my-cpp-bot
-
-my-cpp-bot: main.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $<
-
-clean:
-	rm -f my-cpp-bot
-```
-
----
-
-## Step 3: Write Your Bot
+## Writing the Bot Logic
 
 Create `main.cpp`:
 
 ```cpp
-#include "the0.h"
+#include <the0.h>
 #include <iostream>
-
-/**
- * Main entry point for the trading bot.
- *
- * The the0 SDK handles:
- * - Reading BOT_ID and BOT_CONFIG from environment
- * - JSON parsing with nlohmann/json
- * - Writing results to the correct output file
- */
-int main() {
-    // Parse bot configuration from environment
-    // Returns (bot_id, config) where config is nlohmann::json
-    auto [bot_id, config] = the0::parse();
-
-    // Log to stderr (stdout is reserved for certain outputs)
-    std::cerr << "Bot " << bot_id << " starting..." << std::endl;
-
-    // Access configuration with type-safe methods
-    // .value() provides a default if key is missing
-    std::string symbol = config.value("symbol", "BTC/USDT");
-    double amount = config.value("amount", 100.0);
-
-    std::cerr << "Trading " << symbol << " with amount " << amount << std::endl;
-
-    // ===========================================
-    // YOUR TRADING LOGIC GOES HERE
-    // ===========================================
-
-    // Example: Validate configuration
-    if (amount <= 0) {
-        the0::error("Amount must be positive");
-        // Note: error() exits the program
-    }
-
-    // Example: Fetch market data (implement with libcurl)
-    // double price = fetch_price(symbol);
-
-    // Example: Execute trade
-    // auto order = place_order(symbol, amount);
-
-    // ===========================================
-    // END OF TRADING LOGIC
-    // ===========================================
-
-    // Output result with additional data
-    the0::result({
-        {"status", "success"},
-        {"message", "Trade executed"},
-        {"data", {
-            {"symbol", symbol},
-            {"amount", amount},
-            {"timestamp", "2024-01-01T00:00:00Z"}
-        }}
-    });
-
-    return 0;
-}
-```
-
----
-
-## Step 4: Create Bot Configuration
-
-Create `bot-config.yaml`:
-
-```yaml
-name: my-cpp-bot
-description: "A high-performance C++ trading bot"
-version: "1.0.0"
-author: "Your Name"
-type: scheduled
-runtime: gcc13
-
-# The entrypoint is the source file - gets compiled automatically
-entrypoints:
-  bot: main.cpp
-
-schema:
-  bot: bot-schema.json
-
-readme: README.md
-
-metadata:
-  categories: [trading]
-  instruments: [crypto]
-  tags: [cpp, high-performance, low-latency]
-```
-
-**Note:** The `runtime: gcc13` tells the platform to compile your bot with GCC 13. You don't need to compile locally.
-
----
-
-## Step 5: Define Parameter Schema
-
-Create `bot-schema.json`:
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "title": "C++ Bot Configuration",
-  "description": "Configuration for the C++ trading bot",
-  "properties": {
-    "symbol": {
-      "type": "string",
-      "title": "Trading Symbol",
-      "description": "The trading pair (e.g., BTC/USDT)",
-      "default": "BTC/USDT"
-    },
-    "amount": {
-      "type": "number",
-      "title": "Trade Amount",
-      "description": "Amount in base currency to trade",
-      "default": 100,
-      "minimum": 0.01
-    },
-    "api_key": {
-      "type": "string",
-      "title": "API Key",
-      "description": "Your exchange API key"
-    },
-    "api_secret": {
-      "type": "string",
-      "title": "API Secret",
-      "description": "Your exchange API secret"
-    }
-  },
-  "required": ["symbol", "api_key", "api_secret"]
-}
-```
-
----
-
-## Step 6: Test Locally
-
-```bash
-# Build with CMake
-mkdir build && cd build
-cmake ..
-make
-
-# Set environment variables for testing
-export BOT_ID="test-bot-123"
-export BOT_CONFIG='{"symbol":"BTC/USDT","amount":100}'
-export CODE_MOUNT_DIR="/tmp"
-
-# Run
-./my-cpp-bot
-```
-
----
-
-## Step 7: Deploy
-
-```bash
-the0 custom-bot deploy
-```
-
-The platform will:
-1. Compile your C++ code with `g++ -std=c++17 -O2`
-2. Link required libraries
-3. Package and deploy the binary
-
-No need to compile locally - it all happens in the cloud!
-
----
-
-## SDK API Reference
-
-The `the0.h` header provides these functions in the `the0` namespace. Uses `nlohmann::json` (aliased as `the0::json`) for type-safe JSON handling.
-
-### `the0::parse() -> std::pair<std::string, the0::json>`
-
-Parse bot configuration from environment variables:
-
-```cpp
-auto [bot_id, config] = the0::parse();
-
-// Access values with type safety and defaults
-std::string symbol = config.value("symbol", "BTC/USDT");
-double amount = config.value("amount", 100.0);
-int retries = config.value("retries", 3);
-
-// Check if key exists
-if (config.contains("api_key")) {
-    std::string key = config["api_key"];
-}
-```
-
-### `the0::parse_raw() -> std::pair<std::string, std::string>`
-
-Parse configuration returning raw JSON string (for custom parsing):
-
-```cpp
-auto [bot_id, config_str] = the0::parse_raw();
-// Parse with your preferred JSON library
-```
-
-### `the0::success(const std::string& message)`
-
-Output a success result:
-
-```cpp
-the0::success("Trade completed");
-// Outputs: {"status":"success","message":"Trade completed"}
-```
-
-### `the0::error(const std::string& message)`
-
-Output an error result and exit with code 1:
-
-```cpp
-if (amount <= 0) {
-    the0::error("Amount must be positive");
-    // Program exits here
-}
-// This line never reached if amount <= 0
-```
-
-### `the0::result(const the0::json& data)`
-
-Output a custom JSON result:
-
-```cpp
-the0::result({
-    {"status", "success"},
-    {"trade_id", "abc123"},
-    {"filled_amount", 0.5},
-    {"average_price", 45123.50}
-});
-```
-
-### `the0::result(status, message, data)`
-
-Output a result with status, message, and additional data:
-
-```cpp
-the0::result("success", "Trade executed", {
-    {"trade_id", "abc123"},
-    {"price", 45000.50}
-});
-```
-
----
-
-## Example: Price Fetcher with libcurl
-
-Here's a complete example that fetches real price data:
-
-```cpp
-#include "the0.h"
+#include <string>
+#include <vector>
+#include <chrono>
+#include <thread>
+#include <optional>
+#include <cmath>
 #include <curl/curl.h>
-#include <iostream>
-#include <sstream>
 
-// Callback for curl to write response data
+using json = the0::json;
+
+// Bot state persists across iterations
+struct BotState {
+    std::optional<double> prevShortSma;
+    std::optional<double> prevLongSma;
+};
+
+// Callback for CURL response
 static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
     userp->append((char*)contents, size * nmemb);
     return size * nmemb;
 }
 
-// Fetch price from Binance API
-double fetch_binance_price(const std::string& symbol) {
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        throw std::runtime_error("Failed to initialize curl");
-    }
+double roundTo(double value, int decimals) {
+    double multiplier = std::pow(10.0, decimals);
+    return std::round(value * multiplier) / multiplier;
+}
 
-    std::string url = "https://api.binance.com/api/v3/ticker/price?symbol=" + symbol;
+// Fetch data from Yahoo Finance
+std::vector<double> fetchYahooFinance(CURL* curl, const std::string& symbol) {
+    std::vector<double> prices;
+    std::string url = "https://query1.finance.yahoo.com/v8/finance/chart/" + symbol + "?interval=1d&range=1mo";
     std::string response;
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "the0-sma-bot/1.0");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
 
     CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
     if (res != CURLE_OK) {
-        throw std::runtime_error(std::string("Request failed: ") + curl_easy_strerror(res));
+        throw std::runtime_error(std::string("CURL error: ") + curl_easy_strerror(res));
     }
 
-    // Parse JSON response
-    auto json = the0::json::parse(response);
-    return std::stod(json["price"].get<std::string>());
+    json data = json::parse(response);
+
+    if (data.contains("chart") &&
+        data["chart"].contains("result") &&
+        !data["chart"]["result"].empty()) {
+
+        auto& result = data["chart"]["result"][0];
+        if (result.contains("indicators") &&
+            result["indicators"].contains("quote") &&
+            !result["indicators"]["quote"].empty()) {
+
+            auto& closeData = result["indicators"]["quote"][0]["close"];
+            for (const auto& price : closeData) {
+                if (!price.is_null()) {
+                    prices.push_back(price.get<double>());
+                }
+            }
+        }
+    }
+
+    return prices;
+}
+
+// Calculate Simple Moving Average
+double calculateSMA(const std::vector<double>& prices, size_t period) {
+    if (prices.size() < period) return 0.0;
+
+    double sum = 0.0;
+    for (size_t i = prices.size() - period; i < prices.size(); ++i) {
+        sum += prices[i];
+    }
+    return sum / static_cast<double>(period);
+}
+
+// Check for crossover
+std::optional<std::string> checkCrossover(double prevShort, double prevLong,
+                                           double currShort, double currLong) {
+    // Golden cross: short SMA crosses above long SMA
+    if (prevShort <= prevLong && currShort > currLong) {
+        return "BUY";
+    }
+    // Death cross: short SMA crosses below long SMA
+    if (prevShort >= prevLong && currShort < currLong) {
+        return "SELL";
+    }
+    return std::nullopt;
 }
 
 int main() {
-    auto [bot_id, config] = the0::parse();
+    // Parse configuration from environment
+    auto [botId, config] = the0::parse();
 
-    std::string symbol = config.value("symbol", "BTCUSDT");
-    std::cerr << "Bot " << bot_id << " fetching price for " << symbol << std::endl;
+    // Extract configuration with defaults
+    std::string symbol = config.value("symbol", "AAPL");
+    int shortPeriod = config.value("short_period", 5);
+    int longPeriod = config.value("long_period", 20);
+    int updateIntervalMs = config.value("update_interval_ms", 60000);
 
-    try {
-        double price = fetch_binance_price(symbol);
-        std::cerr << "Current price: $" << price << std::endl;
+    the0::log("Bot " + botId + " started - " + symbol +
+              " SMA(" + std::to_string(shortPeriod) + "/" +
+              std::to_string(longPeriod) + ")");
 
-        the0::result({
-            {"status", "success"},
-            {"message", "Price fetched"},
-            {"data", {
+    // Initialize CURL
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        the0::error("Failed to initialize CURL");
+    }
+
+    BotState state;
+
+    // Main loop - runs until process is terminated
+    while (true) {
+        try {
+            std::vector<double> prices = fetchYahooFinance(curl, symbol);
+
+            if (prices.size() < static_cast<size_t>(longPeriod)) {
+                the0::log("Insufficient data: need " + std::to_string(longPeriod) +
+                         " prices, have " + std::to_string(prices.size()));
+                std::this_thread::sleep_for(std::chrono::milliseconds(updateIntervalMs));
+                continue;
+            }
+
+            // Calculate current price and change
+            double currentPrice = prices.back();
+            double previousPrice = prices[prices.size() - 2];
+            double changePct = ((currentPrice - previousPrice) / previousPrice) * 100.0;
+
+            // Emit price metric
+            the0::metric("price", {
                 {"symbol", symbol},
-                {"price", price}
-            }}
-        });
-    } catch (const std::exception& e) {
-        the0::error(std::string("Failed to fetch price: ") + e.what());
-    }
+                {"value", roundTo(currentPrice, 2)},
+                {"change_pct", roundTo(changePct, 3)}
+            });
 
-    return 0;
-}
-```
+            // Calculate SMAs
+            double shortSma = calculateSMA(prices, shortPeriod);
+            double longSma = calculateSMA(prices, longPeriod);
 
-Update CMakeLists.txt to link libcurl:
+            // Emit SMA metric
+            the0::metric("sma", {
+                {"symbol", symbol},
+                {"short_sma", roundTo(shortSma, 2)},
+                {"long_sma", roundTo(longSma, 2)},
+                {"short_period", shortPeriod},
+                {"long_period", longPeriod}
+            });
 
-```cmake
-find_package(CURL REQUIRED)
-target_link_libraries(my-cpp-bot PRIVATE nlohmann_json::nlohmann_json CURL::libcurl)
-```
+            // Check for crossover signal
+            if (state.prevShortSma.has_value() && state.prevLongSma.has_value()) {
+                auto signal = checkCrossover(
+                    state.prevShortSma.value(),
+                    state.prevLongSma.value(),
+                    shortSma,
+                    longSma
+                );
 
----
+                if (signal.has_value()) {
+                    double confidence = std::min(std::abs(shortSma - longSma) / longSma * 100.0, 0.95);
+                    std::string direction = signal.value() == "BUY" ? "above" : "below";
 
-## Best Practices
+                    the0::metric("signal", {
+                        {"type", signal.value()},
+                        {"symbol", symbol},
+                        {"price", roundTo(currentPrice, 2)},
+                        {"confidence", roundTo(confidence, 2)},
+                        {"reason", "SMA" + std::to_string(shortPeriod) + " crossed " +
+                                  direction + " SMA" + std::to_string(longPeriod)}
+                    });
+                }
+            }
 
-### 1. Error Handling with Exceptions
+            // Update state for next iteration
+            state.prevShortSma = shortSma;
+            state.prevLongSma = longSma;
 
-Use C++ exceptions for clean error handling:
-
-```cpp
-#include "the0.h"
-#include <stdexcept>
-
-int main() {
-    try {
-        auto [bot_id, config] = the0::parse();
-
-        // Validate configuration
-        if (!config.contains("api_key")) {
-            throw std::runtime_error("Missing required field: api_key");
+        } catch (const std::exception& e) {
+            the0::log(std::string("Error: ") + e.what());
         }
 
-        // Your trading logic
-        execute_trade(config);
-
-        the0::success("Trade completed");
-        return 0;
-    } catch (const std::exception& e) {
-        the0::error(e.what());
-    }
-}
-```
-
-### 2. RAII for Resource Management
-
-Use smart pointers and RAII patterns:
-
-```cpp
-#include <memory>
-
-class TradingClient {
-public:
-    TradingClient(const std::string& api_key) {
-        // Initialize connection
-    }
-    ~TradingClient() {
-        // Cleanup automatically
+        std::this_thread::sleep_for(std::chrono::milliseconds(updateIntervalMs));
     }
 
-    std::string place_order(const std::string& symbol, double amount) {
-        // Trade logic
-        return "order_123";
-    }
-};
-
-int main() {
-    auto [bot_id, config] = the0::parse();
-
-    // Client automatically cleaned up when out of scope
-    auto client = std::make_unique<TradingClient>(config["api_key"]);
-    auto order_id = client->place_order(config["symbol"], config["amount"]);
-
-    the0::success("Order placed: " + order_id);
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
     return 0;
 }
 ```
 
-### 3. Logging
+The bot fetches historical prices from Yahoo Finance, calculates short and long Simple Moving Averages, and emits signals when crossovers occur. State persists across loop iterations, allowing the bot to detect when averages cross.
 
-Both stdout and stderr go to your bot's logs:
+## SDK Functions
 
-```cpp
-std::cout << "Starting trade..." << std::endl;    // Goes to log
-std::cerr << "DEBUG: price = " << price << std::endl;  // Goes to log
-```
+The C++ SDK provides these functions in the `the0` namespace:
 
-### 4. Precise Decimal Arithmetic
+### the0::parse()
 
-For financial calculations, avoid floating-point errors:
+Reads `BOT_ID` and `BOT_CONFIG` from environment variables. Returns `std::pair<std::string, the0::json>`:
 
 ```cpp
-// Option 1: Use integers (cents/satoshis)
-int64_t price_cents = 4512350;  // $45,123.50
-int64_t quantity_sats = 50000000;  // 0.5 BTC
+auto [botId, config] = the0::parse();
 
-// Option 2: Use a decimal library
-// Consider: https://github.com/vpiotr/decimal_for_cpp
+std::string symbol = config.value("symbol", "AAPL");
+double amount = config.value("amount", 100.0);
+int retries = config.value("retries", 3);
 ```
 
----
+### the0::metric(type, data)
 
-## Build Systems
+Emits a metric to the platform dashboard:
 
-### CMake (Recommended)
+```cpp
+the0::metric("price", {
+    {"symbol", "AAPL"},
+    {"value", 150.25},
+    {"change_pct", 1.5}
+});
 
-CMake handles cross-platform builds and dependency management:
-
-```cmake
-cmake_minimum_required(VERSION 3.14)
-project(my-bot)
-
-set(CMAKE_CXX_STANDARD 17)
-
-# Fetch dependencies automatically
-include(FetchContent)
-FetchContent_Declare(json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-)
-FetchContent_MakeAvailable(json)
-
-add_executable(my-bot main.cpp)
-target_link_libraries(my-bot PRIVATE nlohmann_json::nlohmann_json)
+the0::metric("signal", {
+    {"type", "BUY"},
+    {"confidence", 0.85}
+});
 ```
 
-### Makefile (Simple Projects)
+### the0::log(message)
 
-For simple projects without external dependencies:
+Writes a log message:
 
-```makefile
-CXX = g++
-CXXFLAGS = -std=c++17 -O2 -Wall -Wextra
-
-my-bot: main.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $< -lcurl
+```cpp
+the0::log("Processing " + symbol);
+the0::log("Price updated: " + std::to_string(price));
 ```
 
----
+### the0::success(message)
 
-## Related Documentation
+Reports successful execution for scheduled bots:
 
-- [Configuration Reference](/custom-bot-development/configuration)
-- [Bot Types](/custom-bot-development/bot-types)
-- [Custom Frontends](/custom-bot-development/custom-frontends)
-- [Deployment Guide](/custom-bot-development/deployment)
+```cpp
+the0::success("Analysis complete");
+```
+
+### the0::error(message)
+
+Reports failure and terminates with exit code 1. This function does not return:
+
+```cpp
+if (prices.empty()) {
+    the0::error("No price data available");
+}
+```
+
+### the0::result(data)
+
+Outputs a custom JSON result:
+
+```cpp
+the0::result({
+    {"status", "success"},
+    {"trade_id", "abc123"},
+    {"filled_amount", 0.5}
+});
+```
+
+## Building
+
+Build with CMake:
+
+```bash
+mkdir build
+cd build
+cmake ..
+make
+```
+
+The binary appears at `build/sma_bot`, matching the entry point in `bot-config.yaml`.
+
+## Testing Locally
+
+Test by setting environment variables:
+
+```bash
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"symbol":"AAPL","short_period":5,"long_period":20,"update_interval_ms":5000}'
+export CODE_MOUNT_DIR="/tmp"
+
+./build/sma_bot
+```
+
+The bot should start fetching prices and emitting metrics. Press Ctrl+C to stop.
+
+## Deploying
+
+Deploy your compiled bot to the platform:
+
+```bash
+the0 custom-bot deploy
+```
+
+The CLI packages the compiled binary along with configuration files and uploads everything. Unlike interpreted languages, you must compile before deploying.
+
+## Creating Bot Instances
+
+Once deployed, create instances that run your bot:
+
+```json
+{
+  "name": "aapl-sma",
+  "type": "realtime/sma-crossover",
+  "version": "1.0.0",
+  "config": {
+    "symbol": "AAPL",
+    "short_period": 5,
+    "long_period": 20,
+    "update_interval_ms": 60000
+  }
+}
+```
+
+Deploy the instance:
+
+```bash
+the0 bot deploy instance-config.json
+```
+
+## Monitoring
+
+Monitor running instances:
+
+```bash
+# List running instances
+the0 bot list
+
+# View logs (use bot ID from deploy output or bot list)
+the0 bot logs <bot_id>
+
+# Stream logs in real-time
+the0 bot logs <bot_id> -w
+
+# Stop a realtime bot
+the0 bot delete <bot_id>
+```
+
+## Next Steps
+
+With your first C++ bot deployed, explore these topics:
+
+- [Configuration](./configuration) - Complete bot-config.yaml reference
+- [Bot Types](./bot-types) - Scheduled vs realtime execution models
+- [Metrics](./metrics) - Dashboard metrics and structured logging
+- [Custom Frontends](./custom-frontends) - Build React dashboards for your bot
+- [Testing](./testing) - Local testing patterns and best practices
