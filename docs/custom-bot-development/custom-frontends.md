@@ -1,34 +1,28 @@
 ---
 title: "Custom Frontends"
 description: "Build rich visual dashboards for your trading bots"
-order: 7
+order: 8
 ---
 
 # Custom Frontends
 
-Build custom React dashboards for your trading bots. This guide walks you through creating a frontend from scratch.
+Every bot emits metrics to the platform, but raw metric streams only tell part of the story. Custom frontends transform those metrics into rich visual dashboards tailored to your strategy—portfolio charts, trade histories, signal visualizations, whatever your bot needs. The platform renders your React components directly in the bot's dashboard view, giving users an experience designed specifically for your trading logic.
 
-## Prerequisites
+## How Custom Frontends Work
 
-Before starting, ensure your bot emits structured metrics. See [Metrics & Logging](./metrics) for details.
+When you include a `frontend/` directory in your bot project, the CLI automatically bundles it during deployment. The platform then renders your React component instead of the default metrics view. Your component receives the bot's event stream through a React hook, which includes all metrics emitted by your bot whether through the SDK `metric()` function or structured logging with `_metric` fields.
 
-## Quick Start
+The React SDK handles the complexity of connecting to the event stream, parsing metrics, and providing utility functions for common operations like filtering by type or extracting time series data. You focus on building the visualization.
 
-### Step 1: Create the Frontend Directory
+## Project Setup
 
-Add a `frontend/` folder to your bot project:
-
-```bash
-cd my-bot
-mkdir -p frontend
-```
-
-Your project should look like:
+A bot with a custom frontend extends the standard project structure with a frontend directory:
 
 ```
 my-bot/
 ├── main.py              # Bot entry point
 ├── bot-config.yaml      # Bot configuration
+├── bot-schema.json      # Configuration schema
 ├── requirements.txt     # Python dependencies
 └── frontend/
     ├── package.json     # Frontend dependencies
@@ -36,9 +30,11 @@ my-bot/
     └── index.tsx        # Dashboard component (required)
 ```
 
-### Step 2: Initialize package.json
+The `index.tsx` file must export a default React component. This component becomes the dashboard that users see when viewing your bot.
 
-Create `frontend/package.json`:
+### Package Configuration
+
+Create `frontend/package.json` with the React SDK as a dev dependency:
 
 ```json
 {
@@ -58,11 +54,11 @@ Create `frontend/package.json`:
 }
 ```
 
-The `the0-build` command is provided by the SDK and handles all the React bundling configuration automatically.
+The `the0-build` script handles all bundling configuration automatically. You don't need to configure esbuild or any other build tools unless you have advanced requirements.
 
-### Step 3: Add TypeScript Config
+### TypeScript Configuration
 
-Create `frontend/tsconfig.json`:
+Create `frontend/tsconfig.json` for type checking:
 
 ```json
 {
@@ -82,16 +78,18 @@ Create `frontend/tsconfig.json`:
 }
 ```
 
-Install dependencies:
+After creating these files, install dependencies:
 
 ```bash
 cd frontend
 npm install
 ```
 
-### Step 5: Create Your Dashboard
+## Building the Dashboard
 
-Create `frontend/index.tsx`:
+The React SDK provides the `useThe0Events` hook that connects your component to the bot's event stream. This hook returns the events array, utility functions for filtering and analysis, and loading/error states.
+
+Here's a complete dashboard example:
 
 ```tsx
 import React from "react";
@@ -116,16 +114,15 @@ export default function Dashboard() {
     );
   }
 
-  // Get your bot's metrics
+  // Filter events by metric type
   const portfolioValues = utils.filterByType("portfolio_value");
   const trades = utils.filterByType("trade");
   const latestPortfolio = utils.latest("portfolio_value");
 
   return (
     <div className="p-4 space-y-6 font-mono">
-      <h1 className="text-xl font-bold text-green-400">My Bot Dashboard</h1>
+      <h1 className="text-xl font-bold text-green-400">Portfolio Dashboard</h1>
 
-      {/* Latest Portfolio Value */}
       {latestPortfolio && (
         <div className="bg-gray-900 border border-green-900/50 rounded p-6">
           <div className="text-sm text-gray-500">Portfolio Value</div>
@@ -135,7 +132,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Trade History */}
       <div className="bg-gray-900 border border-gray-800 rounded p-4">
         <h2 className="text-sm font-semibold text-gray-400 mb-3">
           Recent Trades ({trades.length})
@@ -163,24 +159,11 @@ export default function Dashboard() {
 }
 ```
 
-### Step 6: Deploy
-
-```bash
-the0 custom-bot deploy
-```
-
-The CLI automatically:
-1. Detects your `frontend/` directory
-2. Builds the bundle using Docker (runs `npm run build`)
-3. Packages and deploys your bot with the frontend
-
-No manual build step required.
-
----
+The dashboard renders loading and error states first, then displays the actual metrics. The `utils` object provides methods for filtering events by type, getting the latest metric of a given type, and extracting data for visualization.
 
 ## The Events API
 
-The `useThe0Events` hook provides access to your bot's event stream:
+The `useThe0Events` hook provides everything you need to work with your bot's event stream:
 
 ```typescript
 const {
@@ -192,20 +175,24 @@ const {
 } = useThe0Events();
 ```
 
-### Event Structure
+Each event in the stream follows a consistent structure:
 
 ```typescript
 interface BotEvent {
   timestamp: Date;           // When the event occurred
   type: 'log' | 'metric';    // Event type
   data: string | object;     // Log message or metric payload
-  metricType?: string;       // For metrics: the _metric value
+  metricType?: string;       // For metrics: the type identifier
   level?: string;            // For logs: DEBUG, INFO, WARN, ERROR
   raw: string;               // Original log line
 }
 ```
 
+The `metricType` field captures the type you specified when emitting the metric, whether through `metric("price", {...})` or `logger.info(..., _metric="price")`.
+
 ### Utility Functions
+
+The `utils` object provides common operations for working with events:
 
 ```typescript
 // Filter by metric type
@@ -232,58 +219,47 @@ const series = utils.extractTimeSeries('portfolio_value', 'value');
 // Returns: [{ timestamp: Date, value: number }, ...]
 ```
 
----
+The `extractTimeSeries` function is particularly useful for building charts. It pulls the specified field from each metric of the given type and pairs it with the timestamp.
 
-## Working Example
+## Connecting to Bot Metrics
 
-See `example-bots/python-portfolio-tracker/` for a complete working example:
+Your frontend consumes whatever metrics your bot emits. The platform automatically parses metrics regardless of whether they were emitted using the SDK function or structured logging.
 
-```
-example-bots/python-portfolio-tracker/
-├── main.py              # Bot with structlog metrics
-├── bot-config.yaml      # Configuration
-├── requirements.txt     # Python deps
-└── frontend/
-    ├── package.json     # Uses @alexanderwanyoike/the0-react
-    └── index.tsx        # Full dashboard with multiple components
-```
-
-**Bot (main.py)** emits metrics:
+If your bot uses the SDK approach:
 
 ```python
-logger.info(
-    "portfolio_snapshot",
-    _metric="portfolio_value",
-    value=portfolio["total_value"],
-    change_pct=portfolio["change_pct"]
-)
+from the0 import metric
 
-logger.info(
-    "trade_executed",
-    _metric="trade",
-    symbol=trade["symbol"],
-    side=trade["side"],
-    quantity=trade["quantity"],
-    price=trade["price"]
+metric("portfolio_value", {
+    "value": 10500.00,
+    "change_pct": 2.5
+})
+```
+
+Or the structured logging approach:
+
+```python
+import structlog
+logger = structlog.get_logger()
+
+logger.info("portfolio_snapshot",
+    _metric="portfolio_value",
+    value=10500.00,
+    change_pct=2.5
 )
 ```
 
-**Frontend (index.tsx)** consumes them:
+Both produce metrics your frontend can consume identically:
 
 ```tsx
 const portfolioValues = utils.filterByType("portfolio_value");
-const trades = utils.filterByType("trade");
-const latestPortfolio = utils.latest("portfolio_value");
+const latest = utils.latest("portfolio_value");
+// latest.data contains { value: 10500.00, change_pct: 2.5 }
 ```
-
----
 
 ## Styling
 
-Your frontend has access to:
-
-- **Tailwind CSS** - All utility classes
-- **CSS Variables** - Theme-aware colors:
+Your frontend has access to Tailwind CSS for styling. All utility classes work as expected. The platform also provides CSS variables for theme-aware colors:
 
 ```css
 :root {
@@ -296,19 +272,17 @@ Your frontend has access to:
 }
 ```
 
-Use them for consistent theming:
+Use Tailwind classes for consistent styling that matches the platform:
 
 ```tsx
 <div className="bg-gray-900 border border-green-900/50 rounded p-4">
-  ...
+  <h2 className="text-green-400 font-mono">Portfolio Value</h2>
 </div>
 ```
 
----
-
 ## Adding Charts
 
-Use any React charting library. Add to `package.json`:
+Any React charting library works with custom frontends. Add the library to your package.json dependencies and use the `extractTimeSeries` utility to prepare data:
 
 ```json
 {
@@ -317,8 +291,6 @@ Use any React charting library. Add to `package.json`:
   }
 }
 ```
-
-Example with time series:
 
 ```tsx
 import { LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
@@ -338,11 +310,9 @@ function PortfolioChart() {
 }
 ```
 
----
-
 ## Error Handling
 
-Add error boundaries for resilience:
+React error boundaries prevent dashboard failures from breaking the entire view. If your frontend encounters an error, the platform falls back to the standard console view:
 
 ```tsx
 import { ErrorBoundary } from 'react-error-boundary';
@@ -356,23 +326,19 @@ export default function Dashboard() {
 }
 ```
 
-If your frontend fails to load, the platform falls back to the standard console view.
+## Deployment
 
----
+Deploying a bot with a custom frontend requires no extra steps. The CLI automatically detects the `frontend/` directory:
 
-## Troubleshooting
+```bash
+the0 custom-bot deploy
+```
 
-| Issue | Solution |
-|-------|----------|
-| Dashboard not appearing | Ensure `frontend/package.json` exists with a `build` script |
-| "React not found" error | Ensure you're using `@alexanderwanyoike/the0-react` v0.2.0+ with `the0-build` |
-| Metrics not showing | Check your bot emits `_metric` field in logs |
-| Build errors during deploy | Check the CLI output for npm/esbuild errors in your frontend code |
-| Docker not available | The CLI uses Docker to build frontends - ensure Docker is running |
+The CLI runs `npm install` and `npm run build` inside a Docker container to ensure consistent builds, then packages the bundled output with your bot code. Users creating instances of your bot will see your custom dashboard instead of the default metrics view.
 
-## Advanced: Custom Build Configuration
+## Advanced Build Configuration
 
-For advanced users who need custom esbuild configuration, you can import the plugin directly:
+For advanced users who need custom esbuild configuration, you can import the plugin directly and create your own build script:
 
 ```javascript
 // esbuild.config.mjs
@@ -385,11 +351,11 @@ await esbuild.build({
   format: "esm",
   outfile: "dist/bundle.js",
   minify: true,
-  plugins: [reactGlobalPlugin, /* your custom plugins */],
+  plugins: [reactGlobalPlugin],
 });
 ```
 
-Or use the build function with options:
+Or use the programmatic build function with options:
 
 ```javascript
 import { build } from "@alexanderwanyoike/the0-react/build";
@@ -401,10 +367,20 @@ await build({
 });
 ```
 
----
+## Troubleshooting
 
-## Next Steps
+**Dashboard not appearing**: Ensure `frontend/package.json` exists with a `build` script that runs `the0-build`.
 
-- [Metrics & Logging](./metrics) - Learn how to emit structured metrics
-- [Bot Types](./bot-types) - Understand scheduled vs real-time execution
+**React not found error**: Use `@alexanderwanyoike/the0-react` version 0.2.0 or higher, which includes React as a peer dependency.
+
+**Metrics not showing**: Verify your bot emits metrics using either the SDK `metric()` function or structured logging with the `_metric` field.
+
+**Build errors during deploy**: Check the CLI output for npm or esbuild errors. Run `npm run build` locally in the frontend directory to debug.
+
+**Docker not available**: The CLI uses Docker to build frontends for environment consistency. Ensure Docker is running before deploying.
+
+## Related
+
+- [Metrics](./metrics) - Emit metrics that your frontend consumes
+- [Bot Types](./bot-types) - Understand scheduled vs realtime execution
 - [Deployment](./deployment) - Deploy your bot with custom frontend

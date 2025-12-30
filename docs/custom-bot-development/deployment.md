@@ -1,205 +1,121 @@
 ---
 title: "Deployment"
-description: "Deploy and manage custom bots on the0 platform"
-tags: ["custom-bots", "deployment", "production"]
+description: "Deploy custom bots to the0 platform"
+tags: ["custom-bots", "deployment", "cli"]
 order: 6
 ---
 
 # Deploying Custom Bots
 
-This guide covers the complete deployment process for custom bots, from local development to production deployment on the the0 platform.
+Deployment is the process of uploading your custom bot to the platform so that you (or others) can create bot instances from it. The CLI handles packaging your code, vendoring dependencies, and uploading everything to the platform. This guide walks through the deployment process and explains what happens at each step.
 
-## Deployment Overview
+## Prerequisites
 
-### Deployment Flow
+Before deploying, ensure your bot directory contains the required files:
 
 ```
-Local Development → Validation → Package → Upload → Deploy
-```
-
-1. **Local Development**: Build and test your bot locally
-2. **Validation**: Ensure all requirements are met
-3. **Package**: Bundle bot files and dependencies
-4. **Upload**: Deploy to the0 platform
-5. **Deploy**: Create bot instances and start trading
-
-## Pre-Deployment Checklist
-
-### Required Files
-
-Ensure your bot directory contains all required files:
-
-```bash
 my-bot/
-├── bot-config.yaml          ✓ Required
-├── main.py                  ✓ Required (or main.js)
-├── bot-schema.json          ✓ Required
-├── README.md                ✓ Required
-├── requirements.txt         ✓ Optional for Python
-├── package.json             ✓ Optional for JavaScript
-└── vendor/                  ✓ Auto-generated
+├── bot-config.yaml      # Bot metadata and settings
+├── main.py              # Entry point (language-specific)
+├── bot-schema.json      # Configuration schema
+├── README.md            # Documentation
+└── requirements.txt     # Dependencies (Python)
 ```
 
-### Validation Checklist
+For other languages, the dependency file varies: `package.json` for Node.js, `Cargo.toml` for Rust, and so on. The entry point must match what's specified in your bot-config.yaml.
 
-- [ ] All required files present
-- [ ] Valid YAML configuration
-- [ ] Valid JSON schemas
-- [ ] Entry points exist and are executable
-- [ ] Dependencies properly specified
-- [ ] README documentation complete
-- [ ] Local testing successful
-
-## Deployment Process
+Test your bot locally before deploying. Set the environment variables and run directly:
 
 ```bash
-# Deploy your custom bot
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"symbol":"AAPL"}'
+export CODE_MOUNT_DIR="/tmp"
+python main.py
+```
+
+If the bot runs without errors and emits the expected metrics, you're ready to deploy.
+
+## The Deploy Command
+
+From your bot directory, run:
+
+```bash
 the0 custom-bot deploy
 ```
 
-### Step 3: Verify Deployment
+The CLI performs several steps automatically:
+
+1. **Validates configuration** - Checks that bot-config.yaml and bot-schema.json are valid and consistent
+2. **Vendors dependencies** - For Python, runs pip install into a vendor directory using Docker for compatibility
+3. **Packages the bot** - Creates a zip archive of your code, dependencies, and configuration
+4. **Uploads to the platform** - Sends the package to the platform's storage
+5. **Registers the version** - Makes the new version available for creating bot instances
+
+The CLI shows progress via a spinner as it works through each step, ending with:
+
+```
+'sma-crossover' v1.0.0 deployed successfully
+```
+
+## Verifying Deployment
+
+After deploying, verify that your bot is available:
 
 ```bash
-# List your deployed custom bots
+# List your custom bots
 the0 custom-bot list
 
-# Check specific bot details
-the0 custom-bot versions momentum-trader
+# Check versions of a specific bot
+the0 custom-bot versions sma-crossover
 
-# Get schema to verify deployment
-the0 custom-bot schema bot 1.0.0 momentum-trader
+# Get the schema to verify it's correct
+the0 custom-bot schema 1.0.0 sma-crossover
 ```
+
+The `versions` command shows all deployed versions of your bot. Users can deploy instances of any available version.
 
 ## Creating Bot Instances
 
-Once your custom bot is deployed, create instances to run it:
-
-### Configuration File
-
-Create a configuration file for your bot instance:
+Once your custom bot is deployed, create instances that actually run your code. Create a JSON configuration file specifying the custom bot type, version, and parameters:
 
 ```json
 {
-  "name": "my-momentum-bot",
-  "type": "custom/momentum-trader",
+  "name": "my-sma-bot",
+  "type": "realtime/sma-crossover",
   "version": "1.0.0",
-  "schedule": "0 9 * * *",
-  "parameters": {
-    "symbol": "BTCUSDT",
-    "position_size": 100,
-    "rsi_period": 14,
-    "rsi_oversold": 30,
-    "rsi_overbought": 70,
-    "api_key": "your-api-key",
-    "api_secret": "your-api-secret",
-    "dry_run": true
+  "config": {
+    "symbol": "AAPL",
+    "short_period": 5,
+    "long_period": 20,
+    "update_interval_ms": 60000
   }
 }
 ```
 
-### Deploy Bot Instance
-
-```bash
-# Deploy bot instance
-the0 bot deploy momentum-config.json
-
-# Verify deployment
-the0 bot list
-
-# Monitor bot logs
-the0 bot logs my-momentum-bot
-```
-
-## Dependency Management
-
-### Python Dependencies
-
-#### Automatic Vendoring
-
-The CLI automatically vendors Python dependencies using Docker:
-
-```bash
-# When you run deployment
-the0 custom-bot deploy
-
-# CLI detects requirements.txt and vendors dependencies
-🐳 Docker detected, vendoring Python dependencies...
-```
-
-#### Requirements.txt Best Practices
-
-```txt
-# Pin exact versions for reproducibility
-ccxt==3.0.91
-pandas==1.5.3
-numpy==1.24.3
-plotly==5.14.1
-
-# Use compatible release operators for flexibility
-scikit-learn~=1.2.0
-
-# Avoid system packages
-# Don't include: pip, setuptools, wheel
-
-# Group related dependencies
-# Trading libraries
-ccxt>=3.0.0
-ta-lib>=0.4.25
-
-# Data processing
-pandas>=1.5.0
-numpy>=1.24.0
-
-# Visualization
-plotly>=5.12.0
-matplotlib>=3.6.0
-
-# Utilities
-python-dotenv>=0.19.0
-requests>=2.28.0
-```
-
-### JavaScript Dependencies
-
-#### Package.json Configuration
+For scheduled bots, include a cron expression:
 
 ```json
 {
-  "name": "momentum-trader",
+  "name": "daily-portfolio-check",
+  "type": "scheduled/portfolio-tracker",
   "version": "1.0.0",
-  "description": "Momentum trading bot",
-  "main": "main.js",
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "dependencies": {
-    "ccxt": "^3.0.91",
-    "axios": "^1.4.0",
-    "ws": "^8.13.0",
-    "mathjs": "^11.9.0",
-    "plotly.js-dist": "^2.24.1"
-  },
-  "devDependencies": {
-    "mocha": "^10.2.0",
-    "chai": "^4.3.7",
-    "sinon": "^15.1.0"
-  },
-  "scripts": {
-    "test": "mocha",
-    "start": "node main.js"
+  "schedule": "0 9 * * 1-5",
+  "config": {
+    "symbols": ["BTC", "ETH", "SOL"],
+    "initial_value": 10000
   }
 }
+```
+
+Deploy the instance:
+
+```bash
+the0 bot deploy instance-config.json
 ```
 
 ## Version Management
 
-### Semantic Versioning
-
-Follow [semantic versioning](https://semver.org/) for your bot versions:
-
-- **MAJOR**: Incompatible API changes
-- **MINOR**: Backwards-compatible functionality additions
-- **PATCH**: Backwards-compatible bug fixes
+Each deployment creates a new version identified by the version field in bot-config.yaml. Follow semantic versioning: increment the patch version for bug fixes, minor version for new features, and major version for breaking changes.
 
 ```yaml
 # bot-config.yaml
@@ -209,105 +125,100 @@ version: 1.2.3
 #        └───── Major: Breaking changes
 ```
 
-### Version Deployment
+**Versions are immutable.** Once you deploy version 1.0.0, you cannot modify it. To make changes, increment the version number and deploy again. Bot instances are also tied to specific versions—to use a newer version, you must delete the instance and create a new one.
 
 ```bash
-# Update version in bot-config.yaml
-version: 1.1.0
-
-# Deploy new version
+# Deploy a new version
+# First, update version in bot-config.yaml to 1.0.1
 the0 custom-bot deploy
 
-# Users can now deploy the new version
-the0 bot deploy config-with-v1.1.0.json
+# Delete old instance
+the0 bot delete <bot_id>
+
+# Create new instance with updated version
+the0 bot deploy updated-config.json
 ```
 
-### Managing Multiple Versions
+## Dependency Vendoring
+
+The platform runs bots in isolated containers without internet access during execution. All dependencies must be vendored (bundled) with your bot at deploy time.
+
+### Python
+
+The CLI automatically vendors Python dependencies when it detects a requirements.txt file. It uses Docker to ensure compatibility with the platform's Linux environment:
 
 ```bash
-# List all versions
-the0 custom-bot versions momentum-trader
-
-# Deploy specific version
-{
-  "type": "custom/momentum-trader",
-  "version": "1.0.0"  // Specific version
-}
-
-# Use latest version (default)
-{
-  "type": "custom/momentum-trader"
-  // No version specified = latest
-}
+# CLI runs this automatically during deploy
+docker run --rm -v $(pwd):/app python:3.11 \
+  pip install -r requirements.txt -t /app/vendor
 ```
 
-> Note you can NOT update a version once it has been deployed. If you need to update a version you will need to create a new version with a new version number.
+Pin your dependencies to specific versions for reproducibility:
 
-## Platform Validation Process
+```txt
+ccxt==4.0.0
+pandas==2.0.0
+numpy==1.24.0
+```
 
-### Automated Checks
+### Node.js
 
-When you deploy, the platform performs automated validation:
-
-1. **File Structure**: Validates all required files are present
-2. **Configuration**: Validates YAML and JSON syntax
-3. **Schema Compliance**: Ensures schemas are valid JSON Schema
-4. **Code Analysis**: Basic static analysis for common issues
-5. **Security Scanning**: Checks for security vulnerabilities
-6. **Dependency Analysis**: Validates dependencies and licenses
-
-## Monitoring and Maintenance
-
-### Post-Deployment Monitoring
+For Node.js bots, the CLI runs `npm install` to create a node_modules directory:
 
 ```bash
-# Monitor bot instances
+# CLI runs this automatically
+npm install --production
+```
+
+### Compiled Languages
+
+For Rust, C++, C#, Scala, and Haskell, you must compile your bot before deploying. The CLI uploads the compiled binary along with any runtime dependencies. Ensure your build output matches the entry point in bot-config.yaml.
+
+## Excluding Files
+
+Create a `.the0ignore` file to exclude files from deployment. This works like .gitignore:
+
+```
+# .the0ignore
+__pycache__/
+*.pyc
+.env
+.git/
+tests/
+*.log
+```
+
+The CLI automatically excludes common files like `.git`, `node_modules` (before vendoring), and `__pycache__`.
+
+## Monitoring Deployed Bots
+
+After creating bot instances, monitor their execution:
+
+```bash
+# List running instances
 the0 bot list
 
-# Check bot logs
-the0 bot logs <bot-id>
+# View logs
+the0 bot logs <bot_id>
 
-# Example: Monitor specific bot logs (use -w t)
-the0 bot logs f0ef680b-a70b-4f2d-afac-98a074e8b844
-⚡ Accessing bot logs from the grid: f0ef680b-a70b-4f2d-afac-98a074e8b844
-[20250708] INFO:CustomBot:Executing bot
-INFO:root:Generating dummy cryptocurrency data...
-INFO:root:Generated 30 days of dummy data
-INFO:root:=== Trading Analysis Update ===
-INFO:root:Current Bitcoin Price: $32603.81
-INFO:root:Predicted Next Price: $31150.02 (Confidence: 0.96)
-INFO:root:Moving Average Signal: SELL
-INFO:root:Price Momentum: DOWN
-INFO:root:Volatility: 0.7195
-INFO:root:Recent Anomalies: 0
-INFO:root:Price Change: -1.35%
-INFO:root:7-day MA: $34144.21
-INFO:root:21-day MA: $40343.34
-INFO:CustomBot:Bot execution completed
-
+# Stream logs in real-time
+the0 bot logs <bot_id> -w
 ```
 
-### Updating Deployed Bots
+Logs show your bot's output, including structured log messages and any errors that occur during execution.
 
-```bash
-# Update bot configuration
-edit bot-config.yaml
+## Troubleshooting
 
-# Increment version
-version: 1.0.1
+**Validation errors**: Check that bot-config.yaml and bot-schema.json are valid YAML/JSON. The CLI reports specific syntax errors.
 
-# Deploy update
-the0 custom-bot deploy
+**Dependency errors**: Ensure all dependencies are listed in requirements.txt or package.json. Missing dependencies cause runtime failures.
 
-# Update existing instances
-the0 bot update my-bot-id updated-config.json
-```
+**Entry point not found**: Verify that the entry point in bot-config.yaml matches your actual file. For compiled languages, ensure the binary exists at the specified path.
 
-## Next Steps
+**Version already exists**: You cannot redeploy the same version. Increment the version number in bot-config.yaml and deploy again.
 
-After successful deployment:
+## Related
 
-1. **Test Thoroughly**: Use paper trading to validate behavior
-2. **Monitor Performance**: Set up comprehensive monitoring
-3. **Gather Feedback**: Collect user feedback and iterate
-4. **Optimize**: Continuously improve performance and features
+- [Configuration](./configuration) - bot-config.yaml reference
+- [Testing](./testing) - Test before deployment
+- [Bot Commands](/the0-cli/bot-commands) - Managing bot instances

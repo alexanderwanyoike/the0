@@ -5,587 +5,259 @@ tags: ["custom-bots", "configuration", "schemas"]
 order: 3
 ---
 
-# Bot Configuration Reference
+# Configuration Reference
 
-This comprehensive guide covers all aspects of configuring custom bots, from basic metadata to advanced schema definitions.
+Every custom bot requires two configuration files: bot-config.yaml defines your bot's metadata, runtime environment, and entry points, while bot-schema.json specifies what parameters users can configure when they create bot instances. Together, these files tell the platform how to run your bot and what configuration options to present in the UI.
 
----
+## bot-config.yaml
 
-## Bot Configuration File (bot-config.yaml)
-
-The `bot-config.yaml` file is the main configuration file that defines your bot's metadata, structure, and requirements.
-
-### Complete Structure
-
-```yaml
-name: string # Required: Bot identifier
-description: string # Required: Brief description
-version: string # Required: Semantic version (e.g., "1.0.0")
-author: string # Required: Author name or organization
-type: string # Required: scheduled | realtime
-runtime: string # Required: python3.11 | nodejs20 | rust-stable | dotnet8 | gcc13 | scala3 | ghc96
-
-entrypoints: # Required: Entry point definitions
-  bot: string # Required: Main bot file
-
-schema: # Required: Schema definitions
-  bot: string # Required: Bot parameter schema file
-
-readme: string # Required: Documentation file
-
-metadata: # Optional: Additional metadata
-  categories: [string] # Bot categories for organization
-  instruments: [string] # Supported instruments (stocks, crypto, forex)
-  exchanges: [string] # Supported exchanges
-  tags: [string] # Searchable tags
-  #... Additional metadata fields
-```
+The bot-config.yaml file is the heart of your custom bot definition. It tells the platform what language runtime to use, where to find your executable entry point, and what documentation to display to users.
 
 ### Required Fields
 
-#### Basic Information
+At minimum, your bot-config.yaml must specify a name, description, version, author, execution type, runtime, entry point, and schema:
 
 ```yaml
-name: momentum-trading-bot
-description: "A momentum-based trading strategy using technical indicators"
-version: 1.2.0
-author: TradingExperts
-type: scheduled
+name: sma-crossover
+description: "SMA crossover strategy for stock trading"
+version: 1.0.0
+author: "your-name"
+type: realtime
 runtime: python3.11
+
+entrypoints:
+  bot: main.py
+
+schema:
+  bot: bot-schema.json
+
 readme: README.md
 ```
 
-**Field Descriptions:**
+The `name` field serves as a unique identifier and must use lowercase letters with hyphens. This name appears in the UI and forms part of the URL path when users browse custom bots.
 
-- **name**: Unique identifier for your custom bot (lowercase, hyphens allowed)
-- **description**: Brief, clear description of what your bot does
-- **version**: [Semantic versioning](https://semver.org/) format (MAJOR.MINOR.PATCH)
-- **author**: Your name, organization, or handle
-- **type**: Execution model for your bot
-- **runtime**: Execution environment
-- **readme**: Path to a markdown file with detailed documentation
+The `type` field determines the execution model. Set it to `realtime` for bots that run continuously with an event loop, or `scheduled` for bots that execute once and exit (triggered by cron expressions on bot instances).
 
-#### Entry Points
+### Runtime Options
 
+The platform supports multiple language runtimes. Each runtime has specific requirements for how entry points are specified:
+
+| Runtime | Identifier | Entry Point |
+|---------|------------|-------------|
+| Python 3.11 | `python3.11` | `main.py` |
+| Node.js 20 | `nodejs20` | `main.js` |
+| Rust | `rust-stable` | `target/release/my-bot` |
+| C++ | `gcc13` | `build/my-bot` |
+| C# .NET 8 | `dotnet8` | `bin/Release/net8.0/publish/MyBot.dll` |
+| Scala 3 | `scala3` | `target/scala-3.3.1/my-bot-assembly-1.0.0.jar` |
+| Haskell | `ghc96` | `dist-newstyle/build/.../my-bot` |
+
+For interpreted languages like Python and JavaScript, the entry point is simply the filename. For compiled languages, it must be the exact path to the compiled binary or artifact as produced by your build system.
+
+### Entry Point Examples by Language
+
+The entry point path must match where your build system places the final executable. Here are complete examples for each compiled language:
+
+**Rust:**
 ```yaml
-entrypoints:
-  bot: main.py # Main trading logic
-```
-
-**Entry Point Types:**
-
-- **bot**: Main execution entry point (required)
-- **webhook**: Webhook event handler (for event-driven bots)
-- **analysis**: Custom analysis functions
-- **custom**: Any additional entry points
-
-#### Entrypoint Paths by Runtime
-
-The `entrypoints.bot` field specifies the exact path to your bot's executable or script. The runtime uses this path directly to start your bot.
-
-| Runtime | Entrypoint Example | Description |
-|---------|-------------------|-------------|
-| **Python** | `main.py` | Python script file |
-| **Node.js** | `main.js` | JavaScript entry file |
-| **Rust** | `target/release/my-bot` | Compiled binary path |
-| **C#/.NET** | `bin/Release/net8.0/publish/MyBot.dll` | Published DLL path |
-| **C/C++** | `build/my-bot` | Compiled binary path |
-| **Scala** | `target/scala-3.3.4/my-bot-assembly-1.0.0.jar` | Assembly JAR path |
-| **Haskell** | `dist-newstyle/build/.../my-bot` | Cabal build output path |
-
-**Important:** For compiled languages, the entrypoint path must match exactly where your build system outputs the executable. The runtime will not search for binaries - it uses the specified path directly.
-
-**Example configurations:**
-
-```yaml
-# Rust bot
+name: rust-sma-crossover
 runtime: rust-stable
 entrypoints:
   bot: target/release/sma-bot
+```
 
-# C# bot
-runtime: dotnet8
-entrypoints:
-  bot: bin/Release/net8.0/publish/SmaBot.dll
-
-# C++ bot (CMake)
+**C++:**
+```yaml
+name: cpp-sma-crossover
 runtime: gcc13
 entrypoints:
   bot: build/sma_bot
-
-# Scala bot
-runtime: scala3
-entrypoints:
-  bot: target/scala-3.3.4/sma-bot-assembly-1.0.0.jar
-
-# Haskell bot
-runtime: ghc96
-entrypoints:
-  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.6/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
 ```
 
-#### Schema Definitions
-
+**C#:**
 ```yaml
-schema:
-  bot: bot-schema.json
-```
-
-Each entry point should have a corresponding schema file defining its parameters.
-
-### Bot Types
-
-#### Scheduled Bots
-
-```yaml
-type: scheduled
-```
-
-**Characteristics:**
-
-- Execute on fixed schedules (cron expressions)
-- Suitable for: DCA strategies, portfolio rebalancing, periodic analysis
-- Execution: Single run per trigger
-- State: Stateless between executions
-
-**Use Cases:**
-
-- Daily portfolio rebalancing
-- Weekly DCA purchases
-- End-of-day analysis
-- Monthly performance reports
-
-#### Realtime Bots
-
-```yaml
-type: realtime
-```
-
-**Characteristics:**
-
-- Run continuously, processing live data
-- Execution: Continuous loop
-- State: Maintains state across iterations
-
-**Use Cases:**
-
-- Grid trading strategies
-- Market making
-- Arbitrage detection
-- Scalping
-
-### Runtime Environments
-
-#### Python 3.11
-
-```yaml
-runtime: python3.11
-```
-
-**Benefits:**
-
-- Extensive trading libraries (ccxt, pandas, numpy, scikit-learn)
-- Machine learning capabilities
-- Scientific computing ecosystem
-- Popular in quantitative finance
-
-**Dependency Management:**
-
-- Use `requirements.txt` for dependencies
-- Automatic Docker-based vendoring
-- Support for compiled packages
-
-#### Node.js 20
-
-```yaml
-runtime: nodejs20
-```
-
-**Benefits:**
-
-- Excellent async/await support
-- Large npm ecosystem
-- Good web3 support for crypto bots
-
-#### Rust (Stable)
-
-```yaml
-runtime: rust-stable
-```
-
-**Benefits:**
-
-- High performance with zero-cost abstractions
-- Memory safety without garbage collection
-- Excellent for high-frequency and low-latency trading
-- Strong type system catches errors at compile time
-- Growing ecosystem for financial applications
-
-**Dependency Management:**
-
-- Use `Cargo.toml` for dependencies
-- Include `Cargo.lock` for reproducible builds
-- Dependencies are compiled at deploy time
-
-#### C# / .NET 8
-
-```yaml
+name: csharp-sma-crossover
 runtime: dotnet8
+entrypoints:
+  bot: bin/Release/net8.0/publish/SmaBot.dll
 ```
 
-**Benefits:**
-
-- Mature ecosystem with excellent tooling
-- Strong async/await patterns for concurrent operations
-- Cross-platform support with .NET 8
-- Rich standard library for financial calculations
-- NuGet package ecosystem
-
-**Dependency Management:**
-
-- Use `.csproj` for project configuration
-- NuGet packages for dependencies
-- Compiled and published at deploy time
-
-#### C/C++ (GCC 13)
-
+**Scala:**
 ```yaml
-runtime: gcc13
-```
-
-**Benefits:**
-
-- Maximum performance for compute-intensive strategies
-- Direct hardware access and memory control
-- Extensive libraries for numerical computing
-- Ideal for ultra-low-latency trading
-
-**Dependency Management:**
-
-- Use `CMakeLists.txt` or `Makefile` for builds
-- System libraries and header-only libraries
-- Compiled at deploy time
-
-#### Scala 3
-
-```yaml
+name: scala-sma-crossover
 runtime: scala3
+entrypoints:
+  bot: target/scala-3.3.1/sma-bot-assembly-1.0.0.jar
 ```
 
-**Benefits:**
-
-- Functional programming paradigm
-- JVM ecosystem and Java interoperability
-- Excellent for complex data transformations
-- Strong type system with type inference
-- Reactive streaming patterns
-
-**Dependency Management:**
-
-- Use `build.sbt` for SBT projects
-- Maven/Ivy dependencies via SBT
-- Compiled to fat JAR at deploy time
-
-#### Haskell (GHC 9.6)
-
+**Haskell:**
 ```yaml
+name: haskell-sma-crossover
 runtime: ghc96
+entrypoints:
+  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.7/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
 ```
 
-**Benefits:**
+The Haskell path is verbose because Cabal generates deeply nested output directories. Use `cabal list-bin` to find the exact path after building.
 
-- Pure functional programming
-- Strong static typing with type inference
-- Excellent for algorithmic correctness
-- Lazy evaluation for efficient data processing
-- Mathematical approach to trading logic
+### Optional Fields
 
-**Dependency Management:**
-
-- Use `.cabal` or `package.yaml` for Cabal projects
-- Hackage package ecosystem
-- Compiled at deploy time
-
-### Metadata Configuration
-
-Metadata provides additional context for your bot, improving discoverability and organization in the marketplace.
-
-#### Categories
+Beyond the required fields, you can specify additional metadata that helps users discover and understand your bot:
 
 ```yaml
+hasFrontend: true
+
 metadata:
-  categories:
-    - trading # General trading strategies
-    - arbitrage # Arbitrage strategies
-    - market-making # Market making strategies
-    - analysis # Analysis and signals
-    - portfolio # Portfolio management
-    - defi # DeFi strategies
+  categories: [trading, technical-analysis]
+  instruments: [crypto, stocks]
+  tags: [sma, crossover, beginner]
+  complexity: beginner
 ```
 
-#### Instruments
+Setting `hasFrontend: true` tells the platform that your bot includes a custom React dashboard in a `frontend/` directory. The metadata fields power filtering and search in the bot marketplace.
 
-```yaml
-metadata:
-  instruments:
-    - crypto # Cryptocurrencies
-    - stocks # Stock markets
-    - forex # Foreign exchange
-    - commodities # Commodity markets
-    - options # Options trading
-    - futures # Futures contracts
-```
+## bot-schema.json
 
-#### Exchanges
+The bot-schema.json file defines what configuration parameters your bot accepts. It uses JSON Schema draft-07 to specify types, defaults, constraints, and descriptions. The platform uses this schema to generate the configuration form in the UI and to validate user input before deploying bot instances.
 
-```yaml
-metadata:
-  exchanges:
-    - binance # Binance
-    - coinbase # Coinbase Pro
-    - kraken # Kraken
-    - ftx # FTX
-    - bitmex # BitMEX
-    - interactive-brokers # Interactive Brokers
-```
+### Basic Structure
 
-#### Tags
-
-```yaml
-metadata:
-  tags:
-    - momentum # Momentum strategies
-    - mean-reversion # Mean reversion strategies
-    - technical-analysis # Technical analysis
-    - machine-learning # ML-based strategies
-    - beginner # Beginner-friendly
-    - high-frequency # High-frequency trading
-```
-
-#### Risk and Complexity
-
-```yaml
-metadata:
-  risk_level: medium # low | medium | high
-  complexity: intermediate # beginner | intermediate | advanced
-  min_capital: 1000 # Minimum recommended capital ($)
-  max_capital: 100000 # Maximum recommended capital ($)
-```
-
----
-
-## JSON Schema Configuration
-
-JSON schemas define the parameters your bot accepts and validate user inputs.
-
-### Bot Schema (bot-schema.json)
-
-#### Basic Structure
+A typical schema defines an object with properties for each configuration parameter:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "title": "Bot Configuration",
-  "description": "Configuration parameters for the trading bot",
+  "title": "SMA Crossover Configuration",
+  "description": "Configure the SMA crossover strategy parameters",
   "properties": {
-    // Parameter definitions
+    "symbol": {
+      "type": "string",
+      "description": "Stock or crypto symbol to monitor",
+      "default": "AAPL"
+    },
+    "short_period": {
+      "type": "integer",
+      "description": "Number of periods for the short SMA",
+      "default": 5,
+      "minimum": 2,
+      "maximum": 50
+    },
+    "long_period": {
+      "type": "integer",
+      "description": "Number of periods for the long SMA",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 200
+    },
+    "update_interval_ms": {
+      "type": "integer",
+      "description": "Milliseconds between price checks",
+      "default": 60000,
+      "minimum": 1000
+    }
   },
-  "required": ["symbol", "api_key"],
+  "required": ["symbol"],
   "additionalProperties": false
 }
 ```
 
-For more information on JSON Schema, see the [JSON Schema documentation](https://json-schema.org/).
+Each property definition can include a type, description, default value, and constraints. The description appears as help text in the UI, so write it for users who may not be familiar with trading terminology.
 
----
+### Supported Types
 
-## Validation and Testing
+JSON Schema supports several primitive and complex types:
 
-### JSON Schema Validation
+| Type | Description | Example |
+|------|-------------|---------|
+| `string` | Text values | `"AAPL"` |
+| `integer` | Whole numbers | `5` |
+| `number` | Decimal numbers | `0.02` |
+| `boolean` | True/false values | `true` |
+| `array` | Lists of values | `["BTC", "ETH"]` |
+| `object` | Nested configuration | `{"key": "value"}` |
 
-```bash
-# Validate schema files
-jsonschema --instance config.json --schema bot-schema.json
-```
+### Constraints
 
-### YAML Configuration Validation
-
-```bash
-# Validate YAML configuration files
-python -c "import yaml; yaml.safe_load(open('bot-config.yaml'))"
-
-# Or use yq for more detailed validation
-yq eval '.' bot-config.yaml > /dev/null
-```
-
-### Debugging Tips
-
-1. **Use Validation Tools**: Validate schemas and configurations early
-2. **Test Incrementally**: Test each component individually
-3. **Check Examples**: Compare with working examples
-4. **Read Error Messages**: Pay attention to specific validation errors
-5. **Use the CLI**: Leverage CLI validation commands
-
----
-
-## Private Package Configuration
-
-Each runtime supports private packages through standard configuration files. The CLI respects these config files during builds.
-
-### Python
-
-Add private indexes to `requirements.txt`:
-
-```txt
---extra-index-url https://pypi.example.com/simple/
-requests==2.28.0
-my-private-package==1.0.0
-```
-
-Or configure in `~/.the0/secrets.json`:
+Constraints ensure users provide valid configuration. For numbers, use `minimum` and `maximum`. For strings with fixed options, use `enum`. For arrays, use `minItems` and `maxItems`:
 
 ```json
 {
-  "pip_index_url": "https://user:token@pypi.example.com/simple/"
+  "risk_percentage": {
+    "type": "number",
+    "description": "Maximum portfolio risk per trade",
+    "default": 2.0,
+    "minimum": 0.1,
+    "maximum": 10.0
+  },
+  "strategy": {
+    "type": "string",
+    "description": "Technical indicator to use",
+    "enum": ["SMA", "EMA", "MACD", "RSI"]
+  },
+  "symbols": {
+    "type": "array",
+    "description": "Symbols to monitor",
+    "items": { "type": "string" },
+    "minItems": 1,
+    "maxItems": 10,
+    "default": ["BTC", "ETH"]
+  }
 }
 ```
 
-### Node.js
+### Required Parameters
 
-Create `.npmrc` in your project:
+Parameters listed in the `required` array must be provided when creating a bot instance. The UI will not allow users to proceed without filling these in:
 
-```ini
-@myorg:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```json
+{
+  "required": ["symbol", "api_key"]
+}
 ```
 
-### Rust
+Use required fields sparingly. Most parameters should have sensible defaults so users can get started quickly.
 
-Add git dependencies in `Cargo.toml`:
+## Private Dependencies
 
-```toml
-[dependencies]
-my-private-crate = { git = "https://github.com/myorg/private-crate" }
-```
-
-Or configure `.cargo/config.toml` for private registries:
-
-```toml
-[registries.my-registry]
-index = "https://my-registry.example.com/index"
-
-[net]
-git-fetch-with-cli = true
-```
-
-### C# / .NET
-
-Create `nuget.config` in your project root:
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <packageSources>
-    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-    <add key="private" value="https://nuget.example.com/v3/index.json" />
-  </packageSources>
-  <packageSourceCredentials>
-    <private>
-      <add key="Username" value="user" />
-      <add key="ClearTextPassword" value="%NUGET_TOKEN%" />
-    </private>
-  </packageSourceCredentials>
-</configuration>
-```
-
-### Scala
-
-Add resolvers in `build.sbt`:
-
-```scala
-resolvers += "Private" at "https://maven.example.com/releases"
-
-credentials += Credentials(
-  "Private Repo",
-  "maven.example.com",
-  sys.env.getOrElse("MAVEN_USER", ""),
-  sys.env.getOrElse("MAVEN_TOKEN", "")
-)
-```
-
-### Haskell
-
-Configure in `cabal.project`:
-
-```cabal
-source-repository-package
-  type: git
-  location: https://github.com/myorg/private-package
-  tag: v1.0.0
-```
-
-### C/C++
-
-Use CMake FetchContent with git:
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(
-  private_lib
-  GIT_REPOSITORY https://github.com/myorg/private-lib.git
-  GIT_TAG v1.0.0
-)
-FetchContent_MakeAvailable(private_lib)
-```
-
-### Global Secrets
-
-Configure secrets via CLI for credentials passed to builds:
+If your bot depends on packages from private registries, configure access credentials using the CLI before deployment:
 
 ```bash
-# Universal (all languages) - for git-based private dependencies
+# GitHub Packages (works for all languages)
 the0 auth secrets set github-token ghp_xxxxxxxxxxxx
 
-# Python - private PyPI index
+# Python private PyPI
 the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/
 
-# Node.js - private npm registry
+# Node.js private npm
 the0 auth secrets set npm-token npm_xxxxxxxxxxxx
 
-# C#/.NET - private NuGet feed
-the0 auth secrets set nuget-token oy2xxxxxxxxxxxxx
-
-# Rust - private Cargo registry
+# Rust private crates
 the0 auth secrets set cargo-registry-token xxxxxxxxxxxxx
 
-# Scala - private Maven repository
+# C# private NuGet
+the0 auth secrets set nuget-token oy2xxxxxxxxxxxxx
+
+# Scala private Maven
 the0 auth secrets set maven-user myuser
 the0 auth secrets set maven-token xxxxxxxxxxxxx
 ```
 
-View configured secrets:
+These credentials are stored securely and injected into the build environment when deploying your bot. See [Secrets](/the0-cli/secrets) for complete documentation.
+
+## Validating Configuration
+
+Before deploying, validate that your configuration files are syntactically correct:
 
 ```bash
-the0 auth secrets show
+python -c "import yaml; yaml.safe_load(open('bot-config.yaml'))"
+python -c "import json; json.load(open('bot-schema.json'))"
 ```
 
-These secrets are stored in `~/.the0/secrets.json` and passed as environment variables during builds:
+The CLI also validates configuration during `the0 custom-bot deploy` and reports detailed errors if anything is malformed.
 
-| Secret | Environment Variable | Used By |
-|--------|---------------------|---------|
-| `github-token` | `GITHUB_TOKEN` | All (git deps) |
-| `pip-index-url` | `PIP_EXTRA_INDEX_URL` | Python |
-| `npm-token` | `NPM_TOKEN` | Node.js |
-| `nuget-token` | `NUGET_TOKEN` | C#/.NET |
-| `cargo-registry-token` | `CARGO_REGISTRY_TOKEN` | Rust |
-| `maven-user` | `MAVEN_USER` | Scala |
-| `maven-token` | `MAVEN_TOKEN` | Scala |
+## Related
 
----
-
-## Related Documentation
-
-- [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot
-- [Testing Guide](/custom-bot-development/testing) - Validation and testing
-- [Deployment Guide](/custom-bot-development/deployment) - Deploying your bot
+- [Development Overview](./overview) - Bot structure and workflow
+- [Bot Types](./bot-types) - Scheduled vs realtime execution
+- [Secrets](/the0-cli/secrets) - Private dependency configuration

@@ -2,113 +2,152 @@
 title: "Scala Quick Start"
 description: "Build your first Scala 3 trading bot with the0"
 tags: ["custom-bots", "scala", "jvm", "quick-start"]
-order: 14
+order: 15
 ---
 
-# Scala Quick Start Guide
+# Scala Quick Start
 
-Build trading bots in Scala 3 with the0's JVM-based runtime. Scala combines functional programming elegance with Java ecosystem access, making it excellent for complex trading strategies.
+Scala combines functional programming elegance with access to the entire Java ecosystem, making it excellent for complex trading strategies that benefit from immutable data and pattern matching. The strong type system catches errors at compile time, and the JVM provides mature performance characteristics. This guide walks through building an SMA crossover bot that monitors stock prices and emits trading signals.
 
----
-
-## Why Scala for Trading Bots?
-
-Scala offers unique advantages for algorithmic trading:
-
-- **Functional Programming**: Immutable data and pure functions reduce bugs
-- **Type Safety**: Strong typing catches errors at compile time
-- **JVM Ecosystem**: Access to all Java libraries and frameworks
-- **Concurrency**: Built-in support for actors and futures
-- **Pattern Matching**: Elegant handling of market conditions
-- **Expression-Oriented**: Every construct returns a value
-
-**When to Choose Scala:**
-- Complex strategies with many market conditions
-- Teams coming from Java or functional programming
-- Need for concurrent/parallel processing
-- Building on existing JVM infrastructure
-
-**Popular Libraries for Trading:**
-- `sttp` - Modern HTTP client with functional API
-- `circe` - Type-safe JSON encoding/decoding
-- `Akka` - Actor-based concurrency (for realtime bots)
-- `cats` / `cats-effect` - Functional programming utilities
-- `fs2` - Streaming data processing
-
----
+By the end of this guide, you'll have a working realtime bot that calculates Simple Moving Averages and detects crossover signals using live market data.
 
 ## Prerequisites
 
-- Scala 3.x and SBT installed ([setup guide](https://www.scala-lang.org/download/))
-- the0 CLI installed
-- Valid the0 API key
-- Basic understanding of Scala syntax
+Before starting, ensure you have the CLI installed and authenticated:
 
----
+```bash
+# Clone the repository and build the CLI
+git clone https://github.com/alexanderwanyoike/the0.git
+cd the0/cli
+make install
+
+# Authenticate
+the0 auth login
+```
+
+You'll also need Scala 3 and SBT installed locally for building. See [scala-lang.org/download](https://www.scala-lang.org/download/) for setup instructions.
 
 ## Project Structure
 
-```
-my-scala-bot/
-├── build.sbt             # SBT project file
-├── project/
-│   ├── build.properties  # SBT version
-│   └── plugins.sbt       # sbt-assembly plugin
-├── src/main/scala/
-│   └── Main.scala        # Your bot entry point
-├── bot-config.yaml       # Bot configuration
-├── bot-schema.json       # Parameter schema
-├── config.json           # Example configuration
-└── README.md             # Documentation
-```
-
----
-
-## Step 1: Create Your Project
+Create a new directory for your bot:
 
 ```bash
-mkdir my-scala-bot
-cd my-scala-bot
+mkdir sma-crossover
+cd sma-crossover
 mkdir -p src/main/scala project
 ```
 
----
+A Scala bot requires these files:
 
-## Step 2: Create build.sbt
+```
+sma-crossover/
+├── build.sbt                # SBT project configuration
+├── project/
+│   ├── build.properties     # SBT version
+│   └── plugins.sbt          # sbt-assembly plugin
+├── src/main/scala/
+│   └── Main.scala           # Bot entry point
+├── bot-config.yaml          # Bot metadata and runtime settings
+├── bot-schema.json          # Configuration schema for users
+└── target/scala-3.3.1/
+    └── sma-bot-assembly-1.0.0.jar  # Fat JAR (after sbt assembly)
+```
+
+The entry point in `bot-config.yaml` must point to the assembled JAR file. You compile and assemble locally before deploying.
+
+## Defining Bot Metadata
+
+Create `bot-config.yaml`:
+
+```yaml
+name: sma-crossover
+description: "SMA crossover strategy bot with Yahoo Finance data"
+version: 1.0.0
+author: "your-name"
+type: realtime
+runtime: scala3
+
+entrypoints:
+  bot: target/scala-3.3.1/sma-bot-assembly-1.0.0.jar
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [sma, crossover, scala, functional]
+  complexity: beginner
+```
+
+The `entrypoints.bot` field points to the assembled JAR. The path must match your sbt-assembly output.
+
+## Defining Configuration Schema
+
+Create `bot-schema.json`:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "SMA Crossover Configuration",
+  "description": "Configuration for the SMA crossover trading strategy bot",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Stock symbol to monitor (e.g., AAPL, MSFT, GOOGL)",
+      "default": "AAPL"
+    },
+    "short_period": {
+      "type": "integer",
+      "description": "Number of periods for short SMA (fast moving average)",
+      "default": 5,
+      "minimum": 2,
+      "maximum": 50
+    },
+    "long_period": {
+      "type": "integer",
+      "description": "Number of periods for long SMA (slow moving average)",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 200
+    },
+    "update_interval_ms": {
+      "type": "integer",
+      "description": "Milliseconds between price updates",
+      "default": 60000,
+      "minimum": 30000,
+      "maximum": 3600000
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## Configuring SBT
+
+Create `build.sbt`:
 
 ```scala
-ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / scalaVersion := "3.3.1"
 ThisBuild / version := "1.0.0"
 
-// the0 SDK - add via git dependency
-lazy val the0Sdk = RootProject(uri("https://github.com/alexanderwanyoike/the0.git#v1.1.0") / "sdk" / "scala")
-
 lazy val root = (project in file("."))
-  .dependsOn(the0Sdk)
   .settings(
-    name := "my-scala-bot",
+    name := "sma-bot",
 
-    // sbt-assembly configuration
     assembly / mainClass := Some("Main"),
-    assembly / assemblyJarName := "my-scala-bot-assembly.jar",
+    assembly / assemblyJarName := "sma-bot-assembly-1.0.0.jar",
 
-    // Dependencies
     libraryDependencies ++= Seq(
-      // JSON parsing
+      "the0" %% "the0-sdk" % "0.1.0",
       "io.circe" %% "circe-core" % "0.14.6",
       "io.circe" %% "circe-parser" % "0.14.6",
-
-      // HTTP client (optional)
       "com.softwaremill.sttp.client3" %% "core" % "3.9.3"
     )
   )
 ```
-
-> **Note:** Replace `v1.1.0` with the latest release tag. Alternatively, copy `src/main/scala/the0/Input.scala` from the SDK to your project.
-
----
-
-## Step 3: Configure SBT
 
 Create `project/build.properties`:
 
@@ -119,393 +158,282 @@ sbt.version=1.9.9
 Create `project/plugins.sbt`:
 
 ```scala
-// Plugin to create fat JARs with all dependencies
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.1.5")
 ```
 
----
-
-## Step 4: Copy the SDK
-
-Copy the `the0` package from `sdk/scala/` to `src/main/scala/`. The SDK provides:
-- Configuration parsing from environment variables
-- Result output functions
-- Type-safe JSON handling
-
----
-
-## Step 5: Write Your Bot
+## Writing the Bot Logic
 
 Create `src/main/scala/Main.scala`:
 
 ```scala
 import the0.Input
 import io.circe.parser._
+import sttp.client3._
+import scala.util.{Try, Success, Failure}
 
-/**
- * Main entry point for the trading bot.
- *
- * The the0 SDK handles:
- * - Reading BOT_ID and BOT_CONFIG from environment
- * - Writing results to the correct output file
- * - Proper exit codes for success/failure
- */
 object Main extends App {
-  // Parse bot configuration from environment
+  // Bot state
+  var prevShortSma: Option[Double] = None
+  var prevLongSma: Option[Double] = None
+
+  // Parse configuration from environment
   val (botId, configJson) = Input.parse()
 
-  System.err.println(s"Bot $botId starting...")
+  val config = parse(configJson).getOrElse(io.circe.Json.Null)
+  val cursor = config.hcursor
 
-  // Parse JSON configuration with Circe
-  parse(configJson) match {
-    case Right(json) =>
-      // Extract configuration with defaults
-      val cursor = json.hcursor
-      val symbol = cursor.get[String]("symbol").getOrElse("BTC/USDT")
-      val amount = cursor.get[Double]("amount").getOrElse(100.0)
+  val symbol = cursor.get[String]("symbol").getOrElse("AAPL")
+  val shortPeriod = cursor.get[Int]("short_period").getOrElse(5)
+  val longPeriod = cursor.get[Int]("long_period").getOrElse(20)
+  val updateIntervalMs = cursor.get[Int]("update_interval_ms").getOrElse(60000)
 
-      System.err.println(s"Trading $symbol with amount $amount")
+  Input.log(s"Bot $botId started - $symbol SMA($shortPeriod/$longPeriod)")
 
-      // ===========================================
-      // YOUR TRADING LOGIC GOES HERE
-      // ===========================================
+  val backend = HttpClientSyncBackend()
 
-      // Example: Validate configuration
-      if (amount <= 0) {
-        Input.error("Amount must be positive")
+  // Main loop - runs until process is terminated
+  while (true) {
+    Try {
+      val prices = fetchYahooFinance(backend, symbol)
+
+      if (prices.length < longPeriod) {
+        Input.log(s"Insufficient data: need $longPeriod prices, have ${prices.length}")
+      } else {
+        // Calculate current price and change
+        val currentPrice = prices.last
+        val previousPrice = prices(prices.length - 2)
+        val changePct = (currentPrice - previousPrice) / previousPrice * 100
+
+        // Emit price metric
+        Input.metric("price", Map(
+          "symbol" -> symbol,
+          "value" -> roundTo(currentPrice, 2),
+          "change_pct" -> roundTo(changePct, 3)
+        ))
+
+        // Calculate SMAs
+        val shortSma = calculateSma(prices, shortPeriod)
+        val longSma = calculateSma(prices, longPeriod)
+
+        // Emit SMA metric
+        Input.metric("sma", Map(
+          "symbol" -> symbol,
+          "short_sma" -> roundTo(shortSma, 2),
+          "long_sma" -> roundTo(longSma, 2),
+          "short_period" -> shortPeriod,
+          "long_period" -> longPeriod
+        ))
+
+        // Check for crossover signal
+        (prevShortSma, prevLongSma) match {
+          case (Some(prevShort), Some(prevLong)) =>
+            checkCrossover(prevShort, prevLong, shortSma, longSma).foreach { signal =>
+              val confidence = Math.min(Math.abs(shortSma - longSma) / longSma * 100, 0.95)
+              val direction = if (signal == "BUY") "above" else "below"
+
+              Input.metric("signal", Map(
+                "type" -> signal,
+                "symbol" -> symbol,
+                "price" -> roundTo(currentPrice, 2),
+                "confidence" -> roundTo(confidence, 2),
+                "reason" -> s"SMA$shortPeriod crossed $direction SMA$longPeriod"
+              ))
+            }
+          case _ => ()
+        }
+
+        // Update state
+        prevShortSma = Some(shortSma)
+        prevLongSma = Some(longSma)
       }
+    } match {
+      case Failure(e) => Input.log(s"Error: ${e.getMessage}")
+      case Success(_) => ()
+    }
 
-      // Example: Fetch market data
-      // val price = fetchPrice(symbol)
+    Thread.sleep(updateIntervalMs)
+  }
 
-      // Example: Execute trade
-      // val orderId = placeTrade(symbol, amount)
+  def fetchYahooFinance(backend: SttpBackend[Identity, Any], symbol: String): Vector[Double] = {
+    val url = s"https://query1.finance.yahoo.com/v8/finance/chart/$symbol?interval=1d&range=1mo"
+    val response = basicRequest
+      .get(uri"$url")
+      .header("User-Agent", "the0-sma-bot/1.0")
+      .send(backend)
 
-      // ===========================================
-      // END OF TRADING LOGIC
-      // ===========================================
+    response.body match {
+      case Right(body) =>
+        parse(body).toOption.flatMap { json =>
+          json.hcursor
+            .downField("chart")
+            .downField("result")
+            .downArray
+            .downField("indicators")
+            .downField("quote")
+            .downArray
+            .downField("close")
+            .as[Vector[Option[Double]]].toOption
+            .map(_.flatten)
+        }.getOrElse(Vector.empty)
+      case Left(_) => Vector.empty
+    }
+  }
 
-      // Signal success
-      Input.success(s"Trade executed for $symbol")
+  def calculateSma(prices: Vector[Double], period: Int): Double = {
+    if (prices.length < period) 0.0
+    else prices.takeRight(period).sum / period
+  }
 
-    case Left(error) =>
-      Input.error(s"Failed to parse config: ${error.message}")
+  def checkCrossover(prevShort: Double, prevLong: Double,
+                     currShort: Double, currLong: Double): Option[String] = {
+    if (prevShort <= prevLong && currShort > currLong) Some("BUY")
+    else if (prevShort >= prevLong && currShort < currLong) Some("SELL")
+    else None
+  }
+
+  def roundTo(value: Double, decimals: Int): Double = {
+    val multiplier = Math.pow(10, decimals)
+    Math.round(value * multiplier) / multiplier
   }
 }
 ```
 
----
+## SDK Functions
 
-## Step 6: Create Bot Configuration
+The Scala SDK provides these functions in the `the0.Input` object:
 
-Create `bot-config.yaml`:
+### Input.parse()
 
-```yaml
-name: my-scala-bot
-description: "A functional Scala trading bot"
-version: "1.0.0"
-author: "Your Name"
-type: scheduled
-runtime: scala3
+Reads `BOT_ID` and `BOT_CONFIG` from environment variables. Returns a tuple of the bot ID and configuration JSON string:
 
-# The entrypoint is the source file
-entrypoints:
-  bot: src/main/scala/Main.scala
-
-schema:
-  bot: bot-schema.json
-
-readme: README.md
-
-metadata:
-  categories: [trading]
-  instruments: [crypto]
-  tags: [scala, functional, jvm]
+```scala
+val (botId, configJson) = Input.parse()
 ```
 
-**Note:** The `runtime: scala3` tells the platform to compile with Scala 3. You don't need to compile locally.
+### Input.metric(type, data)
 
----
+Emits a metric to the platform dashboard:
 
-## Step 7: Define Parameter Schema
+```scala
+Input.metric("price", Map("symbol" -> "AAPL", "value" -> 150.25))
+Input.metric("signal", Map("type" -> "BUY", "confidence" -> 0.85))
+```
 
-Create `bot-schema.json`:
+### Input.log(message)
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "title": "Scala Bot Configuration",
-  "description": "Configuration for the Scala trading bot",
-  "properties": {
-    "symbol": {
-      "type": "string",
-      "title": "Trading Symbol",
-      "description": "The trading pair (e.g., BTC/USDT)",
-      "default": "BTC/USDT"
-    },
-    "amount": {
-      "type": "number",
-      "title": "Trade Amount",
-      "description": "Amount in base currency to trade",
-      "default": 100,
-      "minimum": 0.01
-    },
-    "api_key": {
-      "type": "string",
-      "title": "API Key",
-      "description": "Your exchange API key"
-    },
-    "api_secret": {
-      "type": "string",
-      "title": "API Secret",
-      "description": "Your exchange API secret"
-    }
-  },
-  "required": ["symbol", "api_key", "api_secret"]
+Writes a log message:
+
+```scala
+Input.log(s"Processing $symbol")
+Input.log(s"Error: ${e.getMessage}")
+```
+
+### Input.success(message)
+
+Reports successful execution for scheduled bots:
+
+```scala
+Input.success("Analysis complete")
+```
+
+### Input.error(message)
+
+Reports failure and terminates with exit code 1:
+
+```scala
+if (prices.isEmpty) {
+  Input.error("No price data available")
 }
 ```
 
----
+### Input.result(json)
 
-## Step 8: Test Locally
+Outputs a custom JSON result:
 
-```bash
-# Build fat JAR
-sbt assembly
-
-# Set environment variables
-export BOT_ID="test-bot-123"
-export BOT_CONFIG='{"symbol":"BTC/USDT","amount":100}'
-export CODE_MOUNT_DIR="/tmp"
-
-# Run
-java -jar target/scala-3.3.3/my-scala-bot-assembly.jar
+```scala
+Input.resultRaw("""{"status":"success","trade_id":"abc123"}""")
 ```
 
----
+## Building
 
-## Step 9: Deploy
+Build the fat JAR with sbt-assembly:
+
+```bash
+sbt assembly
+```
+
+The JAR appears at `target/scala-3.3.1/sma-bot-assembly-1.0.0.jar`, matching the entry point in `bot-config.yaml`.
+
+## Testing Locally
+
+Test by setting environment variables:
+
+```bash
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"symbol":"AAPL","short_period":5,"long_period":20,"update_interval_ms":5000}'
+export CODE_MOUNT_DIR="/tmp"
+
+java -jar target/scala-3.3.1/sma-bot-assembly-1.0.0.jar
+```
+
+## Deploying
+
+Deploy your assembled JAR to the platform:
 
 ```bash
 the0 custom-bot deploy
 ```
 
-The platform will:
-1. Compile your Scala code with SBT
-2. Create a fat JAR with all dependencies
-3. Deploy to the JVM runtime
+The CLI packages the JAR along with configuration files and uploads everything. You must assemble locally before deploying.
 
-No need to compile locally - it all happens in the cloud!
+## Creating Bot Instances
 
----
+Once deployed, create instances that run your bot:
 
-## SDK API Reference
-
-The `the0.Input` object provides these functions:
-
-### `Input.parse(): (String, String)`
-
-Parse bot configuration from environment variables:
-
-```scala
-val (botId, configJson) = Input.parse()
-// botId: Value of BOT_ID env var
-// configJson: JSON string from BOT_CONFIG
-```
-
-### `Input.success(message: String): Unit`
-
-Output a success result:
-
-```scala
-Input.success("Trade completed")
-// Outputs: {"status":"success","message":"Trade completed"}
-```
-
-### `Input.error(message: String): Nothing`
-
-Output an error result and exit with code 1:
-
-```scala
-if (amount <= 0) {
-  Input.error("Amount must be positive")
-  // Exits here - code below never runs
-}
-```
-
-### `Input.result(status: String, message: String): Unit`
-
-Output a result with custom status:
-
-```scala
-Input.result("warning", "Rate limit approaching")
-```
-
-### `Input.resultRaw(json: String): Unit`
-
-Output raw JSON:
-
-```scala
-Input.resultRaw("""{"status":"success","trade_id":"abc123","filled":0.5}""")
-```
-
----
-
-## Example: Price Fetcher with sttp
-
-Here's a complete example that fetches real price data:
-
-```scala
-import the0.Input
-import io.circe.parser._
-import sttp.client3._
-
-object Main extends App {
-  val (botId, configJson) = Input.parse()
-
-  parse(configJson) match {
-    case Right(json) =>
-      val symbol = json.hcursor.get[String]("symbol").getOrElse("BTCUSDT")
-
-      System.err.println(s"Bot $botId fetching price for $symbol")
-
-      // Fetch price from Binance
-      val backend = HttpClientSyncBackend()
-      val response = basicRequest
-        .get(uri"https://api.binance.com/api/v3/ticker/price?symbol=$symbol")
-        .send(backend)
-
-      response.body match {
-        case Right(body) =>
-          parse(body).flatMap(_.hcursor.get[String]("price")) match {
-            case Right(price) =>
-              System.err.println(s"Current price: $$$price")
-              Input.resultRaw(s"""{"status":"success","symbol":"$symbol","price":$price}""")
-            case Left(e) =>
-              Input.error(s"Failed to parse price: ${e.message}")
-          }
-        case Left(error) =>
-          Input.error(s"Request failed: $error")
-      }
-
-    case Left(error) =>
-      Input.error(s"Failed to parse config: ${error.message}")
+```json
+{
+  "name": "aapl-sma",
+  "type": "realtime/sma-crossover",
+  "version": "1.0.0",
+  "config": {
+    "symbol": "AAPL",
+    "short_period": 5,
+    "long_period": 20,
+    "update_interval_ms": 60000
   }
 }
 ```
 
----
+Deploy the instance:
 
-## Best Practices
-
-### 1. Pattern Matching for Error Handling
-
-Use Scala's pattern matching for clean error handling:
-
-```scala
-import the0.Input
-import scala.util.{Try, Success, Failure}
-
-object Main extends App {
-  val (botId, config) = Input.parse()
-
-  Try {
-    // Your trading logic
-    executeTrade("BTC/USDT", 100.0)
-  } match {
-    case Success(tradeId) =>
-      Input.success(s"Trade $tradeId completed")
-    case Failure(e) =>
-      Input.error(s"Trade failed: ${e.getMessage}")
-  }
-
-  def executeTrade(symbol: String, amount: Double): String = {
-    // Trade logic here
-    "trade_123"
-  }
-}
+```bash
+the0 bot deploy instance-config.json
 ```
 
-### 2. Functional Configuration Parsing
+## Monitoring
 
-Use for-comprehensions for clean config extraction:
+Monitor running instances:
 
-```scala
-import io.circe.parser._
-import io.circe.Decoder
+```bash
+# List running instances
+the0 bot list
 
-case class Config(symbol: String, amount: Double, apiKey: String)
+# View logs (use bot ID from deploy output or bot list)
+the0 bot logs <bot_id>
 
-object Config {
-  implicit val decoder: Decoder[Config] = Decoder.forProduct3(
-    "symbol", "amount", "api_key"
-  )(Config.apply)
-}
+# Stream logs in real-time
+the0 bot logs <bot_id> -w
 
-// In main:
-parse(configJson).flatMap(_.as[Config]) match {
-  case Right(config) =>
-    System.err.println(s"Trading ${config.symbol}")
-    // Use strongly-typed config
-  case Left(error) =>
-    Input.error(s"Invalid config: ${error.message}")
-}
+# Stop a realtime bot
+the0 bot delete <bot_id>
 ```
 
-### 3. Logging
+## Next Steps
 
-Both stdout and stderr go to your bot's logs:
+With your first Scala bot deployed, explore these topics:
 
-```scala
-println("Starting trade...")                      // Goes to log
-System.err.println("DEBUG: Details...")           // Goes to log
-```
-
-### 4. Immutable Data
-
-Prefer immutable data structures:
-
-```scala
-// Good - immutable case class
-case class Trade(symbol: String, amount: Double, price: Double) {
-  def total: Double = amount * price
-}
-
-val trade = Trade("BTC/USDT", 0.5, 45000.0)
-val updatedTrade = trade.copy(price = 45100.0)  // Creates new instance
-```
-
----
-
-## Adding Dependencies
-
-Add libraries to `build.sbt`:
-
-```scala
-libraryDependencies ++= Seq(
-  // JSON
-  "io.circe" %% "circe-core" % "0.14.6",
-  "io.circe" %% "circe-parser" % "0.14.6",
-  "io.circe" %% "circe-generic" % "0.14.6",  // For automatic derivation
-
-  // HTTP
-  "com.softwaremill.sttp.client3" %% "core" % "3.9.3",
-  "com.softwaremill.sttp.client3" %% "circe" % "3.9.3",  // JSON integration
-
-  // Functional programming
-  "org.typelevel" %% "cats-core" % "2.10.0",
-
-  // Date/time
-  "java.time" % "java-time" % "1.0.0"
-)
-```
-
----
-
-## Related Documentation
-
-- [Configuration Reference](/custom-bot-development/configuration)
-- [Bot Types](/custom-bot-development/bot-types)
-- [Custom Frontends](/custom-bot-development/custom-frontends)
-- [Deployment Guide](/custom-bot-development/deployment)
+- [Configuration](./configuration) - Complete bot-config.yaml reference
+- [Bot Types](./bot-types) - Scheduled vs realtime execution models
+- [Metrics](./metrics) - Dashboard metrics and structured logging
+- [Custom Frontends](./custom-frontends) - Build React dashboards for your bot
+- [Testing](./testing) - Local testing patterns and best practices

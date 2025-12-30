@@ -2,88 +2,130 @@
 title: "C# Quick Start"
 description: "Build your first C# trading bot with the0"
 tags: ["custom-bots", "csharp", "dotnet", "quick-start"]
-order: 12
+order: 14
 ---
 
-# C# Quick Start Guide
+# C# Quick Start
 
-Build trading bots in C# with the0's .NET 8 runtime. C# offers excellent productivity with strong typing, modern async patterns, and a rich ecosystem of financial libraries.
+C# combines strong typing with excellent async support, making it well-suited for trading bots that need to manage multiple concurrent API calls. The .NET ecosystem provides battle-tested financial libraries, and the language's type system catches configuration errors at compile time. This guide walks through building an SMA crossover bot that monitors stock prices and emits trading signals.
 
----
-
-## Why C# for Trading Bots?
-
-C# and .NET provide a compelling platform for trading applications:
-
-- **Strong Typing**: Catch configuration errors at compile time
-- **Async/Await**: First-class support for concurrent API calls
-- **Rich Ecosystem**: NuGet has packages for every broker and exchange
-- **Cross-Platform**: .NET 8 runs natively on Linux, macOS, and Windows
-- **Enterprise Ready**: Battle-tested in production financial systems
-- **Excellent Tooling**: Visual Studio, Rider, and VS Code support
-
-**When to Choose C#:**
-- Building on existing .NET infrastructure
-- Need strong typing with good IDE support
-- Integrating with Windows-based trading systems
-- Teams familiar with C# or Java
-
-**Popular NuGet Packages for Trading:**
-- `Alpaca.Markets` - Official Alpaca SDK for stocks/crypto
-- `ExchangeSharpLib` - Multi-exchange trading library
-- `TA-Lib.NETCore` - Technical analysis indicators
-- `Newtonsoft.Json` / `System.Text.Json` - JSON handling
-- `Polly` - Resilience and retry policies
-
----
+By the end of this guide, you'll have a working realtime bot that calculates Simple Moving Averages and detects crossover signals using live market data.
 
 ## Prerequisites
 
-- .NET 8 SDK installed ([download](https://dotnet.microsoft.com/download))
-- the0 CLI installed
-- Valid the0 API key
-- Basic understanding of C# and async programming
+Before starting, ensure you have the CLI installed and authenticated:
 
----
+```bash
+# Clone the repository and build the CLI
+git clone https://github.com/alexanderwanyoike/the0.git
+cd the0/cli
+make install
+
+# Authenticate
+the0 auth login
+```
+
+You'll also need .NET 8 SDK installed locally for building. Download from [dotnet.microsoft.com](https://dotnet.microsoft.com/download).
 
 ## Project Structure
 
-```
-my-csharp-bot/
-├── MyCsharpBot.csproj    # Project file with dependencies
-├── Program.cs            # Your bot entry point
-├── bot-config.yaml       # Bot configuration
-├── bot-schema.json       # Parameter schema
-├── config.json           # Example configuration
-└── README.md             # Documentation
-```
-
----
-
-## Step 1: Create Your Project
+Create a new .NET console project:
 
 ```bash
-# Create a new .NET console project
-dotnet new console -n MyCsharpBot
-cd MyCsharpBot
+dotnet new console -n SmaBot
+cd SmaBot
 ```
 
-This creates a minimal project with `Program.cs` and `.csproj` files.
+A C# bot requires these files:
 
----
-
-## Step 2: Add the SDK
-
-Install the the0 SDK from NuGet:
-
-```bash
-dotnet add package The0.Sdk
+```
+SmaBot/
+├── SmaBot.csproj            # Project configuration
+├── Program.cs               # Bot entry point
+├── bot-config.yaml          # Bot metadata and runtime settings
+├── bot-schema.json          # Configuration schema for users
+└── bin/Release/net8.0/
+    └── publish/
+        └── SmaBot.dll       # Published output (after dotnet publish)
 ```
 
-Or add it directly to your `.csproj`:
+The entry point in `bot-config.yaml` must point to the published DLL. You compile and publish locally before deploying.
+
+## Defining Bot Metadata
+
+Create `bot-config.yaml`:
+
+```yaml
+name: sma-crossover
+description: "SMA crossover strategy bot with Yahoo Finance data"
+version: 1.0.0
+author: "your-name"
+type: realtime
+runtime: dotnet8
+
+entrypoints:
+  bot: bin/Release/net8.0/publish/SmaBot.dll
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [sma, crossover, csharp, dotnet]
+  complexity: beginner
+```
+
+The `entrypoints.bot` field points to the published DLL. The path must match your publish output location.
+
+## Defining Configuration Schema
+
+Create `bot-schema.json`:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "SMA Crossover Configuration",
+  "description": "Configuration for the SMA crossover trading strategy bot",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Stock symbol to monitor (e.g., AAPL, MSFT, GOOGL)",
+      "default": "AAPL"
+    },
+    "short_period": {
+      "type": "integer",
+      "description": "Number of periods for short SMA (fast moving average)",
+      "default": 5,
+      "minimum": 2,
+      "maximum": 50
+    },
+    "long_period": {
+      "type": "integer",
+      "description": "Number of periods for long SMA (slow moving average)",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 200
+    },
+    "update_interval_ms": {
+      "type": "integer",
+      "description": "Milliseconds between price updates",
+      "default": 60000,
+      "minimum": 30000,
+      "maximum": 3600000
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## Configuring the Project
+
+Update `SmaBot.csproj`:
 
 ```xml
-<!-- MyCsharpBot.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
@@ -100,554 +142,299 @@ Or add it directly to your `.csproj`:
 </Project>
 ```
 
----
+The SDK is published on NuGet as `The0.Sdk`. Install it with:
 
-## Step 3: Write Your Bot
+```bash
+dotnet add package The0.Sdk
+```
 
-Create `Program.cs`:
+## Writing the Bot Logic
+
+Replace `Program.cs`:
 
 ```csharp
 using The0;
 
-/// <summary>
-/// Main entry point for the trading bot.
-///
-/// The the0 SDK handles:
-/// - Parsing BOT_ID and BOT_CONFIG from environment
-/// - JSON configuration with System.Text.Json
-/// - Writing results to the correct output file
-/// </summary>
+// Bot state persists across iterations
+double? prevShortSma = null;
+double? prevLongSma = null;
 
-// Parse bot configuration from environment
+// Parse configuration from environment
 var (botId, config) = Input.Parse();
 
-Console.Error.WriteLine($"Bot {botId} starting...");
+var symbol = config?["symbol"]?.ToString() ?? "AAPL";
+var shortPeriod = config?["short_period"]?.GetValue<int>() ?? 5;
+var longPeriod = config?["long_period"]?.GetValue<int>() ?? 20;
+var updateIntervalMs = config?["update_interval_ms"]?.GetValue<int>() ?? 60000;
 
-// Access configuration with null-safe operators
-// config is a JsonNode? so we use ?. and ?? for safety
-var symbol = config?["symbol"]?.ToString() ?? "BTC/USDT";
-var amount = config?["amount"]?.GetValue<double>() ?? 100.0;
+Input.Log($"Bot {botId} started - {symbol} SMA({shortPeriod}/{longPeriod})");
 
-Console.Error.WriteLine($"Trading {symbol} with amount {amount}");
+using var client = new HttpClient();
+client.DefaultRequestHeaders.Add("User-Agent", "the0-sma-bot/1.0");
 
-// ===========================================
-// YOUR TRADING LOGIC GOES HERE
-// ===========================================
-
-try
+// Main loop - runs until process is terminated
+while (true)
 {
-    // Example: Validate configuration
-    if (amount <= 0)
+    try
     {
-        Input.Error("Amount must be positive");
-        return; // Won't reach here - Error exits
-    }
+        var prices = await FetchYahooFinance(client, symbol);
 
-    // Example: Fetch price (implement with HttpClient)
-    // var price = await FetchPrice(symbol);
+        if (prices.Count < longPeriod)
+        {
+            Input.Log($"Insufficient data: need {longPeriod} prices, have {prices.Count}");
+            await Task.Delay(updateIntervalMs);
+            continue;
+        }
 
-    // Example: Execute trade
-    // var orderId = await PlaceOrder(symbol, amount);
+        // Calculate current price and change
+        var currentPrice = prices[^1];
+        var previousPrice = prices[^2];
+        var changePct = (currentPrice - previousPrice) / previousPrice * 100;
 
-    // ===========================================
-    // END OF TRADING LOGIC
-    // ===========================================
-
-    // Signal success with additional data
-    Input.Result(new
-    {
-        status = "success",
-        message = "Trade executed",
-        data = new
+        // Emit price metric
+        Input.Metric("price", new
         {
             symbol,
-            amount,
-            timestamp = DateTime.UtcNow.ToString("O")
+            value = Math.Round(currentPrice, 2),
+            change_pct = Math.Round(changePct, 3)
+        });
+
+        // Calculate SMAs
+        var shortSma = CalculateSma(prices, shortPeriod);
+        var longSma = CalculateSma(prices, longPeriod);
+
+        // Emit SMA metric
+        Input.Metric("sma", new
+        {
+            symbol,
+            short_sma = Math.Round(shortSma, 2),
+            long_sma = Math.Round(longSma, 2),
+            short_period = shortPeriod,
+            long_period = longPeriod
+        });
+
+        // Check for crossover signal
+        if (prevShortSma.HasValue && prevLongSma.HasValue)
+        {
+            var signal = CheckCrossover(prevShortSma.Value, prevLongSma.Value, shortSma, longSma);
+            if (signal != null)
+            {
+                var confidence = Math.Min(Math.Abs(shortSma - longSma) / longSma * 100, 0.95);
+                var direction = signal == "BUY" ? "above" : "below";
+
+                Input.Metric("signal", new
+                {
+                    type = signal,
+                    symbol,
+                    price = Math.Round(currentPrice, 2),
+                    confidence = Math.Round(confidence, 2),
+                    reason = $"SMA{shortPeriod} crossed {direction} SMA{longPeriod}"
+                });
+            }
         }
-    });
-}
-catch (Exception ex)
-{
-    Input.Error($"Trade failed: {ex.Message}");
-}
-```
 
----
-
-## Step 4: Create Bot Configuration
-
-Create `bot-config.yaml`:
-
-```yaml
-name: my-csharp-bot
-description: "A C# trading bot with async support"
-version: "1.0.0"
-author: "Your Name"
-type: scheduled
-runtime: dotnet8
-
-# The entrypoint is the source file
-entrypoints:
-  bot: Program.cs
-
-schema:
-  bot: bot-schema.json
-
-readme: README.md
-
-metadata:
-  categories: [trading]
-  instruments: [crypto, stocks]
-  tags: [csharp, dotnet, async]
-```
-
-**Note:** The `runtime: dotnet8` tells the platform to build with .NET 8. You don't need to compile locally.
-
----
-
-## Step 5: Define Parameter Schema
-
-Create `bot-schema.json`:
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "title": "C# Bot Configuration",
-  "description": "Configuration for the C# trading bot",
-  "properties": {
-    "symbol": {
-      "type": "string",
-      "title": "Trading Symbol",
-      "description": "The trading pair (e.g., BTC/USDT, AAPL)",
-      "default": "BTC/USDT"
-    },
-    "amount": {
-      "type": "number",
-      "title": "Trade Amount",
-      "description": "Amount in USD to trade",
-      "default": 100,
-      "minimum": 1
-    },
-    "api_key": {
-      "type": "string",
-      "title": "API Key",
-      "description": "Your exchange API key"
-    },
-    "api_secret": {
-      "type": "string",
-      "title": "API Secret",
-      "description": "Your exchange API secret"
-    },
-    "paper": {
-      "type": "boolean",
-      "title": "Paper Trading",
-      "description": "Use paper trading mode (no real money)",
-      "default": true
+        // Update state for next iteration
+        prevShortSma = shortSma;
+        prevLongSma = longSma;
     }
-  },
-  "required": ["symbol", "api_key"]
+    catch (Exception ex)
+    {
+        Input.Log($"Error: {ex.Message}", null, LogLevel.Error);
+    }
+
+    await Task.Delay(updateIntervalMs);
+}
+
+async Task<List<double>> FetchYahooFinance(HttpClient client, string symbol)
+{
+    var url = $"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1mo";
+    var response = await client.GetStringAsync(url);
+    var json = System.Text.Json.JsonDocument.Parse(response);
+
+    var prices = new List<double>();
+    var closeData = json.RootElement
+        .GetProperty("chart")
+        .GetProperty("result")[0]
+        .GetProperty("indicators")
+        .GetProperty("quote")[0]
+        .GetProperty("close");
+
+    foreach (var price in closeData.EnumerateArray())
+    {
+        if (price.ValueKind != System.Text.Json.JsonValueKind.Null)
+        {
+            prices.Add(price.GetDouble());
+        }
+    }
+
+    return prices;
+}
+
+double CalculateSma(List<double> prices, int period)
+{
+    if (prices.Count < period) return 0;
+    return prices.TakeLast(period).Average();
+}
+
+string? CheckCrossover(double prevShort, double prevLong, double currShort, double currLong)
+{
+    // Golden cross: short SMA crosses above long SMA
+    if (prevShort <= prevLong && currShort > currLong)
+        return "BUY";
+
+    // Death cross: short SMA crosses below long SMA
+    if (prevShort >= prevLong && currShort < currLong)
+        return "SELL";
+
+    return null;
 }
 ```
 
----
+## SDK Functions
 
-## Step 6: Test Locally
+The C# SDK provides these methods in the `Input` class:
 
-```bash
-# Set environment variables for testing
-export BOT_ID="test-bot-123"
-export BOT_CONFIG='{"symbol":"BTC/USDT","amount":100,"paper":true}'
-export CODE_MOUNT_DIR="/tmp"
+### Input.Parse()
 
-# Run the bot
-dotnet run
-```
-
----
-
-## Step 7: Deploy
-
-```bash
-the0 custom-bot deploy
-```
-
-The platform will:
-1. Build your .NET project with `dotnet publish`
-2. Package the output
-3. Deploy to the runtime environment
-
-No need to compile locally - it all happens in the cloud!
-
----
-
-## SDK API Reference
-
-The `The0` namespace provides these methods in the `Input` class:
-
-### `Input.Parse() -> (string BotId, JsonNode? Config)`
-
-Parse bot configuration from environment:
+Reads `BOT_ID` and `BOT_CONFIG` from environment variables. Returns a tuple of the bot ID and configuration:
 
 ```csharp
 var (botId, config) = Input.Parse();
 
-// Access values with null-safe operators
-var symbol = config?["symbol"]?.ToString() ?? "BTC/USDT";
+var symbol = config?["symbol"]?.ToString() ?? "AAPL";
 var amount = config?["amount"]?.GetValue<double>() ?? 100.0;
-var enabled = config?["enabled"]?.GetValue<bool>() ?? true;
-
-// Check nested values
-var apiKey = config?["credentials"]?["api_key"]?.ToString();
 ```
 
-### `Input.ParseAsDict() -> (string BotId, Dictionary<string, JsonNode?> Config)`
+### Input.Metric(type, data)
 
-Parse configuration as a Dictionary for iteration:
+Emits a metric to the platform dashboard:
 
 ```csharp
-var (botId, config) = Input.ParseAsDict();
-
-// Iterate over all config values
-foreach (var (key, value) in config)
-{
-    Console.Error.WriteLine($"{key}: {value}");
-}
-
-// Use TryGetValue for safe access
-if (config.TryGetValue("symbol", out var symbolNode))
-{
-    var symbol = symbolNode?.ToString();
-}
+Input.Metric("price", new { symbol = "AAPL", value = 150.25, change_pct = 1.5 });
+Input.Metric("signal", new { type = "BUY", confidence = 0.85 });
 ```
 
-### `Input.Success(string message)`
+### Input.Log(message, data, level)
 
-Output a success result:
+Writes a structured log message:
 
 ```csharp
-Input.Success("Trade executed successfully");
-// Outputs: {"status":"success","message":"Trade executed successfully"}
+Input.Log("Processing symbol", new { symbol });
+Input.Log("API error", new { error = ex.Message }, LogLevel.Error);
 ```
 
-### `Input.Error(string message)`
+### Input.Success(message)
 
-Output an error result and exit with code 1:
+Reports successful execution for scheduled bots:
 
 ```csharp
-if (amount <= 0)
-{
-    Input.Error("Amount must be positive");
-    // Program exits here
-}
-// This line never reached if amount <= 0
+Input.Success("Analysis complete");
 ```
 
-### `Input.Result(object data)`
+### Input.Error(message)
 
-Output a custom JSON result:
+Reports failure and terminates with exit code 1:
+
+```csharp
+if (string.IsNullOrEmpty(apiKey))
+{
+    Input.Error("API key is required");
+}
+```
+
+### Input.Result(data)
+
+Outputs a custom JSON result:
 
 ```csharp
 Input.Result(new
 {
     status = "success",
     trade_id = "abc123",
-    filled_amount = 0.5,
-    average_price = 45123.50m
+    filled_amount = 0.5
 });
 ```
 
-### `Input.Metric(string type, object data)`
+## Building
 
-Emit a metric for the platform to collect (written to stdout):
+Publish in release mode:
 
-```csharp
-// Emit a price metric
-Input.Metric("price", new { symbol = "BTC/USD", value = 45000.0 });
-// Output: {"_metric":"price","symbol":"BTC/USD","value":45000,"timestamp":"..."}
-
-// Emit a trade metric
-Input.Metric("trade", new { symbol = "AAPL", quantity = 10, price = 150.50 });
+```bash
+dotnet publish -c Release
 ```
 
-### `Input.Log(string message, object? data = null, LogLevel? level = null)`
+The DLL appears at `bin/Release/net8.0/publish/SmaBot.dll`, matching the entry point in `bot-config.yaml`.
 
-Log a structured message to stderr:
+## Testing Locally
 
-```csharp
-// Simple log (defaults to info level)
-Input.Log("Starting bot");
+Test by setting environment variables:
 
-// Log with level
-Input.Log("Connection lost", null, LogLevel.Warn);
+```bash
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"symbol":"AAPL","short_period":5,"long_period":20,"update_interval_ms":5000}'
+export CODE_MOUNT_DIR="/tmp"
 
-// Log with structured data
-Input.Log("Order placed", new { orderId = "12345", symbol = "BTC" });
-
-// Log with data and level
-Input.Log("Order failed", new { orderId = "12345" }, LogLevel.Error);
+dotnet run
 ```
 
-Available log levels: `LogLevel.Info`, `LogLevel.Warn`, `LogLevel.Error`
+## Deploying
 
----
+Deploy your published bot to the platform:
 
-## Example: Alpaca Trading Bot
-
-Here's a complete example using the Alpaca API:
-
-```csharp
-using The0;
-using System.Net.Http.Json;
-
-var (botId, config) = Input.Parse();
-
-var symbol = config?["symbol"]?.ToString() ?? "AAPL";
-var amount = config?["amount"]?.GetValue<decimal>() ?? 100m;
-var apiKey = config?["api_key"]?.ToString();
-var apiSecret = config?["api_secret"]?.ToString();
-var paper = config?["paper"]?.GetValue<bool>() ?? true;
-
-if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiSecret))
-{
-    Input.Error("API key and secret are required");
-    return;
-}
-
-Console.Error.WriteLine($"Bot {botId} starting...");
-Console.Error.WriteLine($"Trading {symbol} with ${amount} (paper: {paper})");
-
-try
-{
-    // Create HTTP client for Alpaca
-    using var client = new HttpClient();
-    var baseUrl = paper
-        ? "https://paper-api.alpaca.markets"
-        : "https://api.alpaca.markets";
-
-    client.DefaultRequestHeaders.Add("APCA-API-KEY-ID", apiKey);
-    client.DefaultRequestHeaders.Add("APCA-API-SECRET-KEY", apiSecret);
-
-    // Get current price
-    var quoteUrl = $"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest";
-    var quoteResponse = await client.GetFromJsonAsync<AlpacaQuote>(quoteUrl);
-    var price = quoteResponse?.Quote?.AskPrice ?? 0m;
-
-    Console.Error.WriteLine($"Current price of {symbol}: ${price}");
-
-    // Calculate quantity
-    var quantity = Math.Floor(amount / price);
-    if (quantity <= 0)
-    {
-        Input.Error($"Amount ${amount} not enough to buy 1 share at ${price}");
-        return;
-    }
-
-    // Place market order
-    var orderRequest = new
-    {
-        symbol = symbol,
-        qty = quantity.ToString(),
-        side = "buy",
-        type = "market",
-        time_in_force = "day"
-    };
-
-    var orderResponse = await client.PostAsJsonAsync(
-        $"{baseUrl}/v2/orders",
-        orderRequest
-    );
-
-    if (orderResponse.IsSuccessStatusCode)
-    {
-        var order = await orderResponse.Content.ReadFromJsonAsync<AlpacaOrder>();
-        Console.Error.WriteLine($"Order placed: {order?.Id}");
-
-        Input.Result(new
-        {
-            status = "success",
-            message = $"Bought {quantity} shares of {symbol}",
-            data = new
-            {
-                order_id = order?.Id,
-                symbol,
-                quantity,
-                estimated_cost = quantity * price
-            }
-        });
-    }
-    else
-    {
-        var error = await orderResponse.Content.ReadAsStringAsync();
-        Input.Error($"Order failed: {error}");
-    }
-}
-catch (Exception ex)
-{
-    Input.Error($"Trade failed: {ex.Message}");
-}
-
-// Response models
-record AlpacaQuote(QuoteData Quote);
-record QuoteData(decimal AskPrice, decimal BidPrice);
-record AlpacaOrder(string Id, string Status);
+```bash
+the0 custom-bot deploy
 ```
 
----
+The CLI packages the published DLL along with configuration files and uploads everything. You must publish locally before deploying.
 
-## Best Practices
+## Creating Bot Instances
 
-### 1. Async Programming
+Once deployed, create instances that run your bot:
 
-Use async/await for non-blocking I/O:
-
-```csharp
-using The0;
-
-var (botId, config) = Input.Parse();
-
-try
+```json
 {
-    // Run async operations
-    var result = await ExecuteTradeAsync(config);
-    Input.Result(result);
-}
-catch (Exception ex)
-{
-    Input.Error(ex.Message);
-}
-
-async Task<object> ExecuteTradeAsync(System.Text.Json.Nodes.JsonNode? config)
-{
-    using var client = new HttpClient();
-
-    // Parallel API calls
-    var priceTask = client.GetStringAsync("https://api.example.com/price");
-    var balanceTask = client.GetStringAsync("https://api.example.com/balance");
-
-    await Task.WhenAll(priceTask, balanceTask);
-
-    return new { price = priceTask.Result, balance = balanceTask.Result };
+  "name": "aapl-sma",
+  "type": "realtime/sma-crossover",
+  "version": "1.0.0",
+  "config": {
+    "symbol": "AAPL",
+    "short_period": 5,
+    "long_period": 20,
+    "update_interval_ms": 60000
+  }
 }
 ```
 
-### 2. Error Handling
+Deploy the instance:
 
-Use try-catch with specific exception types:
-
-```csharp
-using The0;
-
-var (botId, config) = Input.Parse();
-
-try
-{
-    // Your trading logic
-    await ProcessTradeAsync();
-    Input.Success("Trade completed");
-}
-catch (HttpRequestException ex)
-{
-    Input.Error($"Network error: {ex.Message}");
-}
-catch (JsonException ex)
-{
-    Input.Error($"Invalid response format: {ex.Message}");
-}
-catch (Exception ex)
-{
-    Input.Error($"Unexpected error: {ex.Message}");
-}
+```bash
+the0 bot deploy instance-config.json
 ```
 
-### 3. Configuration Validation
+## Monitoring
 
-Validate early and fail fast:
+Monitor running instances:
 
-```csharp
-using The0;
+```bash
+# List running instances
+the0 bot list
 
-var (botId, config) = Input.Parse();
+# View logs (use bot ID from deploy output or bot list)
+the0 bot logs <bot_id>
 
-// Validate required fields
-var apiKey = config?["api_key"]?.ToString();
-if (string.IsNullOrEmpty(apiKey))
-{
-    Input.Error("Missing required field: api_key");
-    return;
-}
+# Stream logs in real-time
+the0 bot logs <bot_id> -w
 
-var amount = config?["amount"]?.GetValue<decimal>() ?? 0m;
-if (amount <= 0)
-{
-    Input.Error("Amount must be positive");
-    return;
-}
-
-// Continue with validated values
-Console.Error.WriteLine($"Configuration validated: amount={amount}");
+# Stop a realtime bot
+the0 bot delete <bot_id>
 ```
 
-### 4. Logging
+## Next Steps
 
-Use `Input.Log` for structured logging or `Console.Error` for simple messages:
+With your first C# bot deployed, explore these topics:
 
-```csharp
-// Structured logging (recommended)
-Input.Log("Starting trade", new { symbol, amount });
-Input.Log("Price fetched", new { price = 45000.0 }, LogLevel.Info);
-Input.Log("API rate limited", null, LogLevel.Warn);
-
-// Simple logging
-Console.Error.WriteLine($"DEBUG: price = {price}");
-```
-
-### 5. Decimal for Money
-
-Always use `decimal` for financial calculations:
-
-```csharp
-// Good - precise decimal arithmetic
-decimal price = 45123.50m;
-decimal quantity = 0.5m;
-decimal total = price * quantity;  // Exact: 22561.75
-
-// Bad - floating point errors
-double priceD = 45123.50;
-double quantityD = 0.5;
-double totalD = priceD * quantityD;  // May have rounding errors
-```
-
----
-
-## Adding Dependencies
-
-Add NuGet packages to your `.csproj`:
-
-```xml
-<ItemGroup>
-  <!-- JSON handling (built-in, but Newtonsoft is also popular) -->
-  <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-
-  <!-- HTTP client enhancements -->
-  <PackageReference Include="RestSharp" Version="110.2.0" />
-
-  <!-- Alpaca trading SDK -->
-  <PackageReference Include="Alpaca.Markets" Version="7.0.0" />
-
-  <!-- Resilience and retry policies -->
-  <PackageReference Include="Polly" Version="8.2.0" />
-
-  <!-- Technical analysis -->
-  <PackageReference Include="TALib.NETCore" Version="0.6.0" />
-</ItemGroup>
-```
-
----
-
-## Related Documentation
-
-- [Configuration Reference](/custom-bot-development/configuration)
-- [Bot Types](/custom-bot-development/bot-types)
-- [Custom Frontends](/custom-bot-development/custom-frontends)
-- [Deployment Guide](/custom-bot-development/deployment)
+- [Configuration](./configuration) - Complete bot-config.yaml reference
+- [Bot Types](./bot-types) - Scheduled vs realtime execution models
+- [Metrics](./metrics) - Dashboard metrics and structured logging
+- [Custom Frontends](./custom-frontends) - Build React dashboards for your bot
+- [Testing](./testing) - Local testing patterns and best practices

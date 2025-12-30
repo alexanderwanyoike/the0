@@ -6,21 +6,32 @@ order: 4
 
 # Custom Bot Development
 
-Learn how to create, test, and deploy custom trading bots on the the0 platform. Build sophisticated trading strategies using Python or JavaScript.
+This section covers everything you need to build, test, and deploy custom trading bots on the0. Custom bots are reusable bot definitions that contain your trading logic, configuration schema, and metadata.
 
-## Getting Started
+## Quick Start Guides
 
-- **[Quick Start Guide](./python-quick-start)** - Build your first custom bot
-- **[Overview](./overview)** - Understanding custom bot development
-- **[Configuration](./configuration)** - Configure your bot settings
+Get started with your preferred language:
+
+- [Python](./python-quick-start) - Recommended for data analysis and ML workflows
+- [TypeScript/Node.js](./nodejs-quick-start) - Async I/O and npm ecosystem
+- [Rust](./rust-quick-start) - Performance-critical strategies
+- [C#](./csharp-quick-start) - .NET 8 runtime
+- [Scala](./scala-quick-start) - Functional programming on JVM
+- [C++](./cpp-quick-start) - Low-level control
+- [Haskell](./haskell-quick-start) - Pure functional approach
 
 ## Core Concepts
 
-- **[Bot Types](./bot-types)** - Scheduled vs real-time execution
-- **[Testing](./testing)** - Test your bots locally
-- **[Deployment](./deployment)** - Deploy your bots to the platform
+- [Development Overview](./overview) - Bot structure and development workflow
+- [Configuration](./configuration) - bot-config.yaml and JSON Schema reference
+- [Bot Types](./bot-types) - Scheduled vs realtime execution models
 
-## Visualization & Monitoring
+## Testing & Deployment
 
-- **[Metrics & Logging](./metrics)** - Emit structured metrics from your bots
-- **[Custom Frontends](./custom-frontends)** - Build rich visual dashboards
+- [Testing](./testing) - Local testing strategies
+- [Deployment](./deployment) - Deploy to the platform
+
+## Visualization
+
+- [Metrics](./metrics) - Emit data to the dashboard
+- [Custom Frontends](./custom-frontends) - Build React dashboards for your bots

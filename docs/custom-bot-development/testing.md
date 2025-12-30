@@ -1,332 +1,299 @@
 ---
 title: "Testing"
-description: "Comprehensive testing strategies for custom bots"
-tags: ["custom-bots", "testing", "debugging", "validation"]
+description: "Testing strategies for custom bots"
+tags: ["custom-bots", "testing", "validation"]
 order: 5
 ---
 
 # Testing Custom Bots
 
-Comprehensive testing is crucial for reliable trading bots. This guide covers testing strategies, tools, and best practices for custom bot development. Since the0 is framework-agnostic, you can use any testing framework or library you prefer, such as `unittest` for Python or `Jest` for JavaScript. The examples below demonstrate how to implement tests in both languages.
+Testing a trading bot requires verifying that your strategy logic works correctly, that your configuration is valid, and that error conditions are handled gracefully. Since the0 is framework-agnostic, you can use whatever testing tools you prefer—pytest for Python, Jest for TypeScript, or the standard testing libraries in other languages. The platform doesn't impose a particular testing framework, but it does define how your bot receives configuration and reports results, which shapes how you structure your tests.
 
----
+## Local Execution
 
-## Testing Strategy Overview
-
-### Testing Pyramid
+The most direct way to test your bot is running it locally with the same environment variables the platform sets. When the platform starts your bot, it provides `BOT_ID` to identify the bot instance and `BOT_CONFIG` containing the JSON configuration. You can simulate this by exporting these variables before running your code:
 
 ```bash
-    ┌─────────────────┐
-    │   End-to-End    │ ← Integration with live systems (usually in CI/CD)
-    │     Tests       │
-    ├─────────────────┤
-    │  Integration    │ ← Component interactions
-    │     Tests       │
-    ├─────────────────┤
-    │   Unit Tests    │ ← Individual functions
-    └─────────────────┘
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"symbol":"AAPL","short_period":5,"long_period":20}'
+export CODE_MOUNT_DIR="/tmp"
+python main.py
 ```
 
-### Test Types
+For TypeScript:
 
-1. **Unit Tests**: Test individual functions and components
-2. **Integration Tests**: Test component interactions
-3. **Schema Tests**: Validate configuration schemas
-4. **End-to-End Tests**: Test complete bot workflows
-5. **Performance Tests**: Test under various loads
-6. **Security Tests**: Validate security measures
+```bash
+BOT_ID="test-bot" BOT_CONFIG='{"symbol":"BTC/USD","alert_threshold":5}' npx ts-node main.ts
+```
+
+This validates the complete execution path—configuration parsing, strategy logic, metric emission, and result reporting. Watch for structured log output and check that metrics emit as expected. For realtime bots, you'll see repeated metric emissions until you terminate the process.
+
+Local execution catches integration issues but doesn't isolate individual functions. For that, you need unit tests.
 
 ## Unit Testing
 
+Unit tests verify individual functions in isolation. When testing trading logic, you typically mock external dependencies like price APIs and test that your calculations produce correct results for known inputs.
+
 ### Python Unit Tests
 
-#### Test Structure
+Python's unittest module combined with pytest provides a solid foundation. Here's how to test an SMA calculation and crossover detection:
 
 ```python
-# test_trading_logic.py
+# test_strategy.py
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
+import os
 
-class TestTradingBot(unittest.TestCase):
-    """Test the TradingBot class methods."""
+class TestSMAStrategy(unittest.TestCase):
 
-    def setUp(self):
-        self.config = {
-            'symbol': 'BTCUSDT',
-            'position_size': 100,
-            'api_key': 'test-key',
-            'api_secret': 'test-secret',
-            'dry_run': True
-        }
+    def test_sma_calculation(self):
+        """Verify SMA calculation produces correct results."""
+        from strategy import calculate_sma
 
-    @patch('main.ccxt.binance')
-    def test_rsi_calculation(self, mock_exchange):
-        """Test RSI calculation with sample data."""
-        prices = [100, 102, 99, 105, 103, 108, 106, 110]
+        prices = [100, 102, 104, 103, 105]
+        sma = calculate_sma(prices, period=3)
 
-        # Calculate RSI
-        from main import calculate_rsi
-        rsi = calculate_rsi(prices, period=5)
+        # SMA of last 3 values: (104 + 103 + 105) / 3 = 104
+        self.assertAlmostEqual(sma, 104.0)
 
-        # RSI should be between 0 and 100
-        self.assertGreaterEqual(rsi, 0)
-        self.assertLessEqual(rsi, 100)
+    def test_crossover_detection(self):
+        """Verify crossover detection identifies golden cross."""
+        from strategy import detect_crossover
 
-    @patch('main.ccxt.binance')
-    def test_buy_signal(self, mock_exchange_class):
-        """Test buy signal generation."""
-        mock_exchange = Mock()
-        mock_exchange_class.return_value = mock_exchange
+        # Previous: short below long, Current: short above long
+        prev_short, prev_long = 98, 100
+        curr_short, curr_long = 102, 100
 
-        # Mock oversold condition (RSI < 30)
-        mock_exchange.fetch_ohlcv.return_value = [
-            [1640995200000, 50000, 50100, 49900, 49950, 1000],
-            [1641001200000, 49950, 50000, 49800, 49850, 1100]
-        ]
+        signal = detect_crossover(prev_short, prev_long, curr_short, curr_long)
+        self.assertEqual(signal, "BUY")
+
+    def test_no_crossover_when_parallel(self):
+        """No signal when SMAs move in parallel."""
+        from strategy import detect_crossover
+
+        signal = detect_crossover(100, 100, 101, 101)
+        self.assertIsNone(signal)
+
+    @patch('main.fetch_historical_prices')
+    def test_bot_execution_with_mocked_data(self, mock_fetch):
+        """Test complete bot execution with mocked price data."""
+        mock_fetch.return_value = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
+                                    110, 111, 112, 113, 114, 115, 116, 117, 118, 119]
+
+        os.environ['BOT_ID'] = 'test-bot'
+        os.environ['BOT_CONFIG'] = '{"symbol":"AAPL","short_period":5,"long_period":20}'
+        os.environ['CODE_MOUNT_DIR'] = '/tmp'
 
         from main import main
-        result = main('test-bot', self.config)
+        main()
 
-        self.assertEqual(result['status'], 'success')
-        mock_exchange.fetch_ohlcv.assert_called_once()
+        mock_fetch.assert_called_once()
+
+if __name__ == '__main__':
+    unittest.main()
 ```
 
-#### Running Python Tests
+Run tests with coverage reporting:
 
 ```bash
-# Install testing dependencies
-pip install pytest pytest-cov pytest-mock
-
-# Run tests with coverage
-pytest --cov=main --cov-report=html
-
-# Run specific test file
-pytest test_trading_logic.py
-
-# Run with verbose output
-pytest -v
-
-# Run tests matching a pattern
-pytest -k "test_rsi"
+pip install pytest pytest-cov
+pytest --cov=. --cov-report=term-missing
 ```
 
-### JavaScript Unit Tests
+The coverage report shows which lines your tests exercise, helping identify untested code paths.
 
-#### Test Structure
+### TypeScript Unit Tests
 
-````javascript
-// test/trading-logic.test.js
-```javascript
-// test/trading-logic.test.js
-const { main, TradingBot } = require('../main');
+Jest works well for TypeScript bots. Structure your tests to verify calculations and mock external calls:
 
-// Mock ccxt
-jest.mock('ccxt', () => ({
-    binance: jest.fn().mockImplementation(() => ({
-        fetchTicker: jest.fn(),
-        fetchOHLCV: jest.fn(),
-        createMarketBuyOrder: jest.fn(),
-        createMarketSellOrder: jest.fn(),
-    })),
-}));
+```typescript
+// strategy.test.ts
+import { calculateSMA, detectCrossover } from './strategy';
 
-describe('Trading Logic', () => {
-    const mockConfig = {
-        symbol: 'BTCUSDT',
-        position_size: 100,
-        api_key: 'test-key',
-        api_secret: 'test-secret',
-        dry_run: true,
-    };
+describe('SMA Strategy', () => {
+    describe('calculateSMA', () => {
+        it('calculates correctly for simple data', () => {
+            const prices = [100, 102, 104, 103, 105];
+            const sma = calculateSMA(prices, 3);
 
-    beforeEach(() => {
-        jest.clearAllMocks();
+            expect(sma).toBeCloseTo(104.0);
+        });
+
+        it('returns 0 for insufficient data', () => {
+            const prices = [100, 102];
+            const sma = calculateSMA(prices, 5);
+
+            expect(sma).toBe(0);
+        });
     });
 
-    test('should calculate RSI correctly', () => {
-        const prices = [100, 102, 101, 103, 105, 104, 106, 108];
-        const rsi = TradingBot.calculateRSI(prices, 5);
+    describe('detectCrossover', () => {
+        it('detects golden cross', () => {
+            const signal = detectCrossover(98, 100, 102, 100);
+            expect(signal).toBe('BUY');
+        });
 
-        expect(rsi).toBeGreaterThanOrEqual(0);
-        expect(rsi).toBeLessThanOrEqual(100);
-    });
+        it('detects death cross', () => {
+            const signal = detectCrossover(102, 100, 98, 100);
+            expect(signal).toBe('SELL');
+        });
 
-    test('should generate buy signal when oversold', async () => {
-        const ccxt = require('ccxt');
-        const mockExchange = ccxt.binance();
-
-        // Mock declining prices (oversold condition)
-        const ohlcvData = Array(20).fill(null).map((_, i) => [
-            Date.now() - i * 3600000,
-            50000 * Math.pow(0.99, i), // declining prices
-            50000 * Math.pow(0.99, i) * 1.01,
-            50000 * Math.pow(0.99, i) * 0.99,
-            50000 * Math.pow(0.99, i),
-            1000
-        ]);
-
-        mockExchange.fetchOHLCV.mockResolvedValue(ohlcvData);
-        mockExchange.fetchTicker.mockResolvedValue({ last: 45000 });
-
-        const result = await main('test-bot', mockConfig);
-
-        expect(result.status).toBe('success');
-        expect(mockExchange.fetchOHLCV).toHaveBeenCalled();
-    });
-
-    test('should handle exchange errors', async () => {
-        const ccxt = require('ccxt');
-        const mockExchange = ccxt.binance();
-
-        mockExchange.fetchOHLCV.mockRejectedValue(new Error('API Error'));
-
-        const result = await main('test-bot', mockConfig);
-
-        expect(result.status).toBe('error');
-        expect(result.message).toContain('API Error');
+        it('returns null when no crossover', () => {
+            const signal = detectCrossover(100, 100, 101, 101);
+            expect(signal).toBeNull();
+        });
     });
 });
-````
+```
 
-#### Running JavaScript Tests
+Configure Jest for TypeScript in your package.json:
 
-```bash
-# Install testing dependencies
-npm install --save-dev jest
-
-# Run tests
-npm test
-
-# Run tests with coverage
-npx jest --coverage
-
-# Run specific test file
-npx jest test/trading-logic.test.js
-
-# Run tests in watch mode
-npx jest --watch
-
-# Run tests matching a pattern
-npx jest --testNamePattern="rsi"
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node"
+  }
+}
 ```
 
 ## Integration Testing
 
-Integration tests validate how different components of your bot interact with each other and external systems like exchanges. These tests ensure that your bot can fetch data, execute trades, and handle errors correctly.
-Your effectively testing the bot as a whole, including its interaction with the exchange API, data fetching, and trading logic.
-
-### Exchange Integration Tests
+Integration tests verify that components work together. For a trading bot, this means testing the complete flow from configuration parsing through metric emission, with external services mocked at the boundary.
 
 ```python
-# test_exchange_integration.py
+# test_integration.py
 import unittest
-import ccxt
-from unittest.mock import Mock
+from unittest.mock import patch, MagicMock
+import os
+import json
 
-class TestExchangeIntegration(unittest.TestCase):
-    """Test bot integration with exchange APIs."""
+class TestBotIntegration(unittest.TestCase):
 
     def setUp(self):
-        """Set up mock exchange for testing."""
-        self.mock_exchange = Mock(spec=ccxt.binance)
-        self.test_config = {
-            'symbol': 'BTCUSDT',
-            'position_size': 100,
-            'dry_run': True
-        }
+        os.environ['BOT_ID'] = 'integration-test'
+        os.environ['BOT_CONFIG'] = json.dumps({
+            'symbol': 'AAPL',
+            'short_period': 5,
+            'long_period': 20,
+            'update_interval_ms': 1000
+        })
+        os.environ['CODE_MOUNT_DIR'] = '/tmp'
 
-    def test_data_fetching(self):
-        """Test fetching market data."""
-        # Mock responses
-        self.mock_exchange.fetch_ticker.return_value = {
-            'symbol': 'BTC/USDT',
-            'last': 50000,
-            'bid': 49950,
-            'ask': 50050
-        }
-
-        self.mock_exchange.fetch_ohlcv.return_value = [
-            [1640995200000, 50000, 50100, 49900, 49950, 1000],
-            [1641001200000, 49950, 50000, 49800, 49850, 1100]
+    @patch('main.fetch_yahoo_finance')
+    def test_full_execution_cycle(self, mock_yahoo):
+        """Test that a complete execution cycle produces expected metrics."""
+        # Provide enough data for SMA calculation
+        mock_yahoo.return_value = [
+            150.0, 151.0, 152.0, 153.0, 154.0,
+            155.0, 156.0, 157.0, 158.0, 159.0,
+            160.0, 161.0, 162.0, 163.0, 164.0,
+            165.0, 166.0, 167.0, 168.0, 169.0,
         ]
 
-        # Test data structure
-        ticker = self.mock_exchange.fetch_ticker('BTC/USDT')
-        self.assertIn('last', ticker)
-        self.assertGreater(ticker['last'], 0)
-
-        ohlcv = self.mock_exchange.fetch_ohlcv('BTC/USDT', '1h')
-        self.assertEqual(len(ohlcv[0]), 6)  # timestamp, o, h, l, c, v
-
-    def test_bot_workflow(self):
-        """Test complete bot execution."""
         from main import main
+        # For realtime bots, you'd need to interrupt after one iteration
+        main()
 
-        # Mock exchange responses
-        self.mock_exchange.fetch_ohlcv.return_value = self._generate_ohlcv_data()
+        mock_yahoo.assert_called_with('AAPL')
 
-        with patch('main.ccxt.binance', return_value=self.mock_exchange):
-            result = main('test-bot', self.test_config)
+    @patch('main.fetch_yahoo_finance')
+    def test_handles_api_failure(self, mock_yahoo):
+        """Test graceful handling of API errors."""
+        mock_yahoo.side_effect = Exception('Network timeout')
 
-        self.assertEqual(result['status'], 'success')
-        self.mock_exchange.fetch_ohlcv.assert_called_once()
-
-    def _generate_ohlcv_data(self):
-        """Generate sample OHLCV data."""
-        return [[1640995200000, 50000, 50100, 49900, 49950, 1000] for _ in range(10)]
+        from main import main
+        # Bot should catch exception and call error()
+        main()
 ```
 
-## Schema Testing
+The key difference from unit tests is that integration tests exercise the real code paths rather than isolated functions. They catch issues like incorrect import paths, misconfigured logging, and subtle bugs in how components interact.
 
-### JSON Schema Validation Tests
+## Schema Validation Testing
+
+Your bot-schema.json defines what configuration is valid. Test that the schema correctly accepts good configurations and rejects bad ones:
 
 ```python
-# test_schemas.py
+# test_schema.py
 import unittest
 import json
 import jsonschema
 
-class TestBotSchemas(unittest.TestCase):
-    """Test JSON schema validation for bot configurations."""
+class TestConfigSchema(unittest.TestCase):
 
     def setUp(self):
-        """Load schemas once per test."""
         with open('bot-schema.json') as f:
-            self.bot_schema = json.load(f)
+            self.schema = json.load(f)
 
-    def test_valid_bot_config(self):
-        """Test that valid configuration passes validation."""
+    def test_accepts_valid_config(self):
+        """Valid configuration passes validation."""
         config = {
-            'symbol': 'BTCUSDT',
-            'position_size': 100,
-            'api_key': 'test-key',
-            'api_secret': 'test-secret'
+            'symbol': 'AAPL',
+            'short_period': 5,
+            'long_period': 20,
+            'update_interval_ms': 60000
+        }
+        # Should not raise
+        jsonschema.validate(config, self.schema)
+
+    def test_accepts_minimal_config(self):
+        """Config with only required fields passes."""
+        config = {'symbol': 'BTC'}
+        jsonschema.validate(config, self.schema)
+
+    def test_rejects_missing_required(self):
+        """Missing required field fails validation."""
+        config = {'short_period': 5}
+
+        with self.assertRaises(jsonschema.ValidationError) as context:
+            jsonschema.validate(config, self.schema)
+
+        self.assertIn('symbol', str(context.exception))
+
+    def test_rejects_invalid_type(self):
+        """Wrong type fails validation."""
+        config = {
+            'symbol': 'AAPL',
+            'short_period': 'five'  # should be integer
         }
 
-        # Should not raise an exception
-        jsonschema.validate(config, self.bot_schema)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(config, self.schema)
 
-    def test_invalid_config_fails(self):
-        """Test that invalid configurations are rejected."""
-        invalid_configs = [
-            {'symbol': 'btcusdt'},  # lowercase symbol
-            {'position_size': -100},  # negative size
-            {},  # missing required fields
-        ]
+    def test_rejects_out_of_range(self):
+        """Value outside min/max fails validation."""
+        config = {
+            'symbol': 'AAPL',
+            'short_period': 1  # minimum is 2
+        }
 
-        for config in invalid_configs:
-            with self.assertRaises(jsonschema.ValidationError):
-                jsonschema.validate(config, self.bot_schema)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(config, self.schema)
 ```
 
-### Other Aspects to Consider When Testing
+These tests ensure that when users configure bot instances, the schema catches errors before deployment rather than at runtime.
 
-- **Test the unhappy path**: Always test for error conditions, such as API failures, invalid configurations, and edge cases.
-- **Profile Performance**: Use profiling tools to identify bottlenecks in your code. The [Overview](./overview) section outlines limitations that you will need to consider when testing your bot.
+## Testing Best Practices
 
----
+**Test error paths, not just success paths.** Your bot will encounter API timeouts, invalid data, and unexpected responses. Write tests that simulate these conditions and verify your error handling works correctly. A bot that crashes on bad data is worse than one that logs the error and continues.
 
-## Related Documentation
+**Mock at the boundary.** Mock external services like exchange APIs, but don't mock your own code. If you're mocking internal functions extensively, that's often a sign your code needs restructuring for better testability.
 
-- [Quick Start Guide](/custom-bot-development/python-quick-start) - Build your first bot
-- [Overview](/custom-bot-development/overview) - Understanding custom bot development
+**Use realistic test data.** Price data has characteristics—it trends, it's noisy, it has gaps. Using synthetic data like `[100, 101, 102, 103]` can miss edge cases that real market data would expose. Consider capturing real historical data for test fixtures.
+
+**Test configuration validation early.** A user entering invalid configuration should get a clear error message, not a cryptic runtime failure. Schema validation tests ensure your bot-schema.json is correctly specified.
+
+## Related
+
+- [Development Overview](./overview) - Bot structure and workflow
+- [Configuration](./configuration) - Schema definitions
+- [Deployment](./deployment) - Deploy tested bots

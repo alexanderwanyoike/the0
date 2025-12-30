@@ -7,77 +7,82 @@ order: 5
 
 # Bot Deployment
 
-Bot Deployment is the process of deploying a Bot to the platform, configuring it with specific parameters, and launching it for live or paper trading. This process can be done through the platform UI or using the CLI, providing flexibility for different user preferences and automation needs.
+Bot deployment refers to two distinct processes: deploying a custom bot definition to the platform, and deploying bot instances from that definition. Understanding the difference between these two operations is essential for working with the0.
 
----
+## Custom Bot Deployment
 
-## Overview
-
-Deployment transforms a Custom Bot template into a running Bot instance that:
-
-- Executes trading logic according to its configuration
-- Connects to specified exchanges and data sources
-- Runs continuously or on schedule based on bot type
-- Reports performance metrics and logs
-
-> Exchanges, Data Sources, Asset Classes and other aspects are all up to the Custom Bot developer to define. The0 platform provides the infrastructure to deploy and run these bots, but the actual trading logic is defined in the Custom Bot by the developer.
-
----
-
-## Deployment Methods
-
-### Platform UI Deployment
-
-1. **Navigate to Bot Source**:
-
-Go to [Custom Bots](/custom-bots) section. Note you have to deploy a custom bot before it appears in the custom bots section and also the custom bot will need to be reviewed by the 0vers33r before it can be approved for deployment.
-
-2. **Configure Deployment**:
-
-   - Click "Deploy" on the desired bot
-   - Fill in configuration parameters
-
-3. **Launch**:
-   - Review configuration
-   - Confirm deployment
-   - Monitor startup logs
-
-> Note you can always update the configuration of a Bot after it has been deployed. This allows you to change parameters without having to redeploy the bot.
-
----
-
-### CLI Deployment
+Custom bot deployment uploads your bot's code, configuration, and schema to the platform. This makes the bot available for creating instances.
 
 ```bash
-# Deploy a custom bot
-the0 bot deploy <config.json>
+the0 custom-bot deploy
 ```
 
-for more details see [Bot Commands](/the0-cli/bot-commands).
+This command runs from your bot's project directory and performs several steps:
 
-## Configuration Process
+1. Reads `bot-config.yaml` to determine the bot's metadata and runtime
+2. Vendors dependencies (installs packages into the project for Python and Node.js)
+3. Compiles code for compiled languages (Rust, C#, Scala, C++, Haskell)
+4. Builds the frontend if `hasFrontend: true` is set
+5. Packages everything into a deployable archive
+6. Uploads to the platform
 
-### Parameter Configuration
+After deployment, you can view your custom bots with:
 
-During deployment, you must provide:
+```bash
+the0 custom-bot list
+```
 
-- **Required Parameters**: As defined in the bot's schema
-- **Scheduling**: For `scheduled` bots, cron expressions or intervals
+## Bot Instance Deployment
 
----
+Bot instance deployment creates a running instance of an existing custom bot with specific configuration values.
 
-## Best Practices
+```bash
+the0 bot deploy config.json
+```
 
-### Before Deploying
+The configuration file specifies which custom bot to use and provides parameter values:
 
-- Always test with paper trading first
-- Review bot documentation thoroughly
-- Understand all configuration parameters
+```json
+{
+  "name": "my-trading-bot",
+  "type": "realtime/sma-crossover",
+  "version": "1.0.0",
+  "symbol": "AAPL",
+  "short_period": 5,
+  "long_period": 20,
+  "update_interval_ms": 60000
+}
+```
 
----
+The `type` field format is `{execution-model}/{custom-bot-name}`. The `version` field specifies which version of the custom bot to use.
 
-## Related Terms
+## Deployment Workflow
 
-- [Bots](/terminology/bots) - The deployed instances
-- [Custom Bots](/terminology/custom-bots) - Templates for deployment
-- [Monitoring](/terminology/monitoring) - Post-deployment tracking
+A typical deployment workflow follows this sequence:
+
+1. Develop your custom bot locally with `bot-config.yaml`, entry point, and schema
+2. Test locally by setting `BOT_ID` and `BOT_CONFIG` environment variables
+3. Deploy the custom bot with `the0 custom-bot deploy`
+4. Create a configuration file for your bot instance
+5. Deploy the instance with `the0 bot deploy config.json`
+6. Monitor logs with `the0 bot logs <bot_id>`
+
+## Updating Deployments
+
+To update a custom bot, increment the version in `bot-config.yaml` and run `the0 custom-bot deploy` again. The new version is stored alongside existing versions.
+
+Bot instances are immutable with respect to version. To use a newer version of a custom bot, delete the existing instance and deploy a new one:
+
+```bash
+the0 bot delete <bot_id>
+the0 bot deploy config.json  # with updated version
+```
+
+You can update a bot instance's configuration parameters using `the0 bot update`, but this does not change the underlying custom bot version.
+
+## Related Topics
+
+- [Bots](/terminology/bots) - Running bot instances
+- [Custom Bots](/terminology/custom-bots) - Bot definitions and templates
+- [Custom Bot Commands](/the0-cli/custom-bot-commands) - CLI reference for custom bot deployment
+- [Bot Commands](/the0-cli/bot-commands) - CLI reference for bot instance management

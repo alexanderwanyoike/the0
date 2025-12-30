@@ -2,106 +2,59 @@
 title: "Python Quick Start"
 description: "Build your first Python trading bot with the0"
 tags: ["custom-bots", "python", "quick-start"]
-order: 9
+order: 10
 ---
 
-# Python Quick Start Guide
+# Python Quick Start
 
-Build trading bots in Python with the0's flexible runtime. Python is the most popular choice for algorithmic trading due to its simplicity, extensive libraries, and rapid development cycle.
+Python dominates algorithmic trading for good reason. Its clean syntax makes complex strategies readable, and its ecosystem includes libraries for virtually every exchange, data source, and analysis technique. This guide walks through building a complete Python bot from scratch, covering project setup, the SDK, metrics emission, and deployment.
 
----
-
-## Why Python for Trading Bots?
-
-Python offers unmatched advantages for algorithmic trading:
-
-- **Rapid Development**: Write and iterate on strategies quickly
-- **Rich Ecosystem**: Libraries for every exchange, broker, and data source
-- **Data Science**: NumPy, Pandas, and scikit-learn for analysis
-- **Community**: Largest trading bot community and resources
-- **Simplicity**: Clean syntax makes complex strategies readable
-
-**When to Choose Python:**
-- Rapid prototyping and strategy development
-- Data-heavy strategies with analysis requirements
-- Integration with machine learning models
-- Teams new to algorithmic trading
-
-**Popular Libraries for Trading:**
-- `alpaca-py` - Official Alpaca SDK for stocks/crypto
-- `ccxt` - Unified API for 100+ cryptocurrency exchanges
-- `pandas` - Data manipulation and analysis
-- `numpy` - Numerical computing
-- `ta-lib` - Technical analysis indicators
-
----
-
-## Tutorial: Build a DCA Bot
-
-In this guide, we'll create a simple Dollar Cost Averaging (DCA) bot that an asset type using alpaca-py.
-
----
-
-## What is Dollar Cost Averaging (DCA)?
-
-Dollar Cost Averaging (DCA) is an investment strategy where you invest a fixed amount of money into a particular asset at regular intervals, regardless of the asset's current price. Instead of trying to time the market by making one large purchase, DCA spreads your investment over time.
-
-**Key Benefits of DCA:**
-
-- Reduces the impact of market volatility on your investment
-- Eliminates the need to time the market perfectly
-- Can result in a lower average cost per unit over time
-- Helps build disciplined investing habits
-- Reduces emotional decision-making in volatile markets
-
-For example, if you invest $100 every week in Bitcoin, you'll buy more Bitcoin when prices are low and less when prices are high, potentially lowering your average purchase price over time compared to making a single large purchase.
-
-## What is alpaca-py?
-
-[Alpaca-py](https://github.com/alpacahq/alpaca-py) is the official Python SDK for Alpaca Markets, a commission-free trading platform that provides APIs for stock and crypto trading. It's a modern, easy-to-use library that allows developers to:
-
-- **Trade Stocks & Crypto**: Execute buy/sell orders for US equities and cryptocurrencies
-- **Access Market Data**: Get real-time and historical price data, quotes, and market information
-- **Manage Portfolios**: Track positions, account balances, and trading history
-- **Paper Trading**: Test strategies risk-free with simulated trading
-- **Stream Live Data**: Receive real-time market updates via WebSocket connections
-- **Options Trading**: Execute options trades with built-in support for those wall street bets yoloers! 💰💰💰
-
-**Key Features:**
-
-- Type-safe Python API with full IntelliSense support
-- Built-in error handling and rate limiting
-- Comprehensive documentation and examples
-- Support for both live and paper trading environments
-
-Alpaca is particularly popular among algorithmic traders and developers building trading bots because it offers a simple REST API, generous free tier, and no minimum account balance requirements.
-
----
-
-## What You'll Build
-
-A DCA bot that:
-
-- Buys a fixed amount of a listed asset type (stocks or crypto) at regular intervals (e.g., daily, weekly)
-- Runs on a schedule (e.g., monthly)
+By the end of this guide, you'll have a working scheduled bot that tracks portfolio values and emits metrics to the dashboard.
 
 ## Prerequisites
 
-- [the0 CLI installed](/the0-cli/installation)
-- [API key configured](/the0-cli/authentication)
-- Python 3.11+ (for this example)
-- Basic understanding of trading concepts
-- Familiarity with Python programming and pip package management
+Before starting, ensure you have the CLI installed and authenticated:
 
-## Step 1: Define the `bot-config.yaml`
+```bash
+# Clone the repository and build the CLI
+git clone https://github.com/alexanderwanyoike/the0.git
+cd the0/cli
+make install
 
-Edit the `bot-config.yaml` file:
+# Authenticate
+the0 auth login
+```
+
+You'll also need Python 3.11 or higher installed locally for testing.
+
+## Project Structure
+
+Create a new directory for your bot and set up the standard project structure:
+
+```bash
+mkdir portfolio-tracker
+cd portfolio-tracker
+```
+
+A Python bot requires four essential files:
+
+```
+portfolio-tracker/
+├── bot-config.yaml      # Bot metadata and runtime settings
+├── main.py              # Entry point with trading logic
+├── bot-schema.json      # Configuration schema for users
+└── requirements.txt     # Python dependencies
+```
+
+## Defining Bot Metadata
+
+Start with `bot-config.yaml`, which tells the platform how to run your bot:
 
 ```yaml
-name: killer-dca-bot
-description: "A Dollar Cost Averaging bot that brings home the bacon 🥓"
+name: portfolio-tracker
+description: "Tracks portfolio value and emits position metrics"
 version: 1.0.0
-author: Jim Simons
+author: "your-name"
 type: scheduled
 runtime: python3.11
 
@@ -114,463 +67,331 @@ schema:
 readme: README.md
 
 metadata:
-  categories: [trading]
-  instruments: [crypto, stocks]
-  exchanges: [alpaca]
-  tags: [dca, crypto, stocks]
+  categories: [portfolio, tracking]
+  tags: [example, beginner]
+  complexity: beginner
 ```
 
-## Step 2: Define Configuration Schema
+The `type: scheduled` setting means this bot runs on a cron schedule rather than continuously. Each execution is independent—the bot starts, performs its work, reports results, and exits. The scheduler then waits until the next trigger time.
 
-Create `bot-schema.json` to define what parameters your bot accepts:
+The `runtime: python3.11` field specifies the Python version. The platform provides Python 3.11 with pip for dependency management.
+
+## Defining Configuration Schema
+
+The `bot-schema.json` file specifies what parameters users can configure when they create bot instances. The platform uses this schema to generate the configuration UI and validate user input:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "title": "DCA Bot Configuration",
+  "title": "Portfolio Tracker Configuration",
+  "description": "Configuration for the portfolio tracker bot",
   "properties": {
-    "api_key": {
-      "type": "string",
-      "description": "Your Alpaca API key"
-    },
-    "secret_key": {
-      "type": "string",
-      "description": "Your Alpaca secret key"
-    },
-    "paper": {
-      "type": "boolean",
-      "default": true,
-      "description": "Whether to use paper trading (recommended for testing)"
-    },
-    "symbol": {
-      "type": "string",
-      "description": "Trading symbol (e.g., 'AAPL', 'BTC/USD')"
-    },
-    "asset_type": {
-      "type": "string",
-      "description": "Type of asset to trade"
-    },
-    "amount": {
+    "initial_value": {
       "type": "number",
-      "description": "Amount to invest"
+      "description": "Initial portfolio value in USD",
+      "default": 10000,
+      "minimum": 100
+    },
+    "volatility": {
+      "type": "number",
+      "description": "Price volatility factor (0.01 = 1%)",
+      "default": 0.02,
+      "minimum": 0.001,
+      "maximum": 0.1
+    },
+    "symbols": {
+      "type": "array",
+      "description": "Symbols to track in the portfolio",
+      "items": {
+        "type": "string"
+      },
+      "default": ["BTC", "ETH", "SOL"]
     }
   },
-  "required": [
-    "api_key",
-    "secret_key",
-    "paper",
-    "symbol",
-    "asset_type",
-    "amount"
-  ],
   "additionalProperties": false
 }
 ```
 
-## Step 3: Implement the Bot Logic
+Every property with a `default` value becomes optional—users can override it or accept the default. Properties listed in a `required` array must be provided explicitly.
 
-Create `main.py` with your DCA bot implementation:
+## Writing the Bot Logic
+
+The entry point file contains your trading logic. The SDK provides functions for parsing configuration, emitting metrics, and reporting results. Create `main.py`:
 
 ```python
-from typing import Dict, Any
+import random
 import logging
-from datetime import datetime
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
-from alpaca.data.requests import StockLatestQuoteRequest, CryptoLatestQuoteRequest
+from the0 import parse, success, error, metric
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"level":"%(levelname)s","message":"%(message)s","timestamp":"%(asctime)s"}'
+)
 logger = logging.getLogger(__name__)
 
-def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Main DCA bot execution function using Alpaca.
 
-    Args:
-        id: Unique bot instance ID
-        config: Bot configuration from user
+def main(bot_id: str = None, config: dict = None):
+    """Bot entry point using the0 SDK."""
 
-    Returns:
-        Dict with execution status and results
-    """
-    logger.info(f"Starting DCA bot {id} with config: {config}")
+    # Parse configuration from environment if not passed directly
+    if bot_id is None or config is None:
+        bot_id, config = parse()
 
-    try:
-        # Extract configuration
-        api_key = config["api_key"]
-        secret_key = config["secret_key"]
-        paper = config.get("paper", True)
-        symbol = config["symbol"]
-        asset_type = config["asset_type"]
-        amount = config["amount"]
+    # Extract configuration with defaults
+    initial_value = config.get("initial_value", 10000)
+    volatility = config.get("volatility", 0.02)
+    symbols = config.get("symbols", ["BTC", "ETH", "SOL"])
 
-        # Initialize Alpaca trading client
-        trading_client = TradingClient(
-            api_key=api_key,
-            secret_key=secret_key,
-            paper=paper
-        )
+    logger.info(f"Bot {bot_id} started with symbols: {symbols}")
 
-        # Get current price based on asset type
-        if asset_type.lower() in ["crypto", "cryptocurrency"]:
-            data_client = CryptoHistoricalDataClient(api_key, secret_key)
-            quote_request = CryptoLatestQuoteRequest(symbol_or_symbols=[symbol])
-            quotes = data_client.get_crypto_latest_quote(quote_request)
-            current_price = float(quotes[symbol].ask_price)
-        else:  # stocks
-            data_client = StockHistoricalDataClient(api_key, secret_key)
-            quote_request = StockLatestQuoteRequest(symbol_or_symbols=[symbol])
-            quotes = data_client.get_stock_latest_quote(quote_request)
-            current_price = float(quotes[symbol].ask_price)
+    # Calculate portfolio state
+    portfolio = calculate_portfolio(initial_value, volatility, symbols)
 
-        # Calculate quantity based on dollar amount
-        if asset_type.lower() in ["crypto", "cryptocurrency"]:
-            # For crypto, we can buy fractional shares
-            quantity = amount / current_price
-        else:
-            # For stocks, calculate how many whole shares we can buy
-            quantity = int(amount / current_price)
-            if quantity == 0:
-                return {
-                    "status": "error",
-                    "message": f"Insufficient funds: ${amount} cannot buy even 1 share at ${current_price:.2f}",
-                }
+    # Emit portfolio value metric
+    metric("portfolio_value", {
+        "value": portfolio["total_value"],
+        "change_pct": portfolio["change_pct"],
+    })
 
-        logger.info(f"Current price of {symbol}: ${current_price:.2f}")
-        logger.info(f"Purchasing {quantity} shares/units for approximately ${amount}")
+    # Emit position metrics for each holding
+    for position in portfolio["positions"]:
+        metric("position", {
+            "symbol": position["symbol"],
+            "quantity": position["quantity"],
+            "value": position["value"],
+            "price": position["price"],
+        })
 
-        # Prepare market order
-        market_order_data = MarketOrderRequest(
-            symbol=symbol,
-            qty=quantity,
-            side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY
-        )
+    logger.info(f"Bot {bot_id} completed")
 
-        # Execute the order
-        order = trading_client.submit_order(order_data=market_order_data)
+    # Signal success with result data
+    success(f"Portfolio tracked: ${portfolio['total_value']:.2f}", {
+        "portfolio_value": portfolio["total_value"],
+        "positions_count": len(portfolio["positions"]),
+    })
 
-        logger.info(f"Order submitted successfully: {order.id}")
 
-        # Calculate actual cost (will be filled when order executes)
-        actual_cost = float(quantity) * current_price
+def calculate_portfolio(initial_value: float, volatility: float, symbols: list) -> dict:
+    """Calculate portfolio with simulated price movements."""
+    positions = []
+    total_value = 0
 
-        return {
-            "status": "success",
-            "message": f"DCA purchase completed for {symbol}",
-        }
+    base_prices = {
+        "BTC": 45000,
+        "ETH": 2400,
+        "SOL": 120,
+        "AVAX": 35,
+        "LINK": 15,
+    }
 
-    except Exception as e:
-        logger.error(f"Error in DCA bot execution: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"DCA bot failed: {str(e)}",
-            "data": {
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
-        }
+    value_per_symbol = initial_value / len(symbols)
+
+    for symbol in symbols:
+        base_price = base_prices.get(symbol, 100)
+        price_change = random.uniform(-volatility, volatility)
+        current_price = base_price * (1 + price_change)
+
+        quantity = value_per_symbol / current_price
+        position_value = quantity * current_price
+
+        positions.append({
+            "symbol": symbol,
+            "quantity": round(quantity, 6),
+            "price": round(current_price, 2),
+            "value": round(position_value, 2),
+        })
+
+        total_value += position_value
+
+    change_pct = ((total_value - initial_value) / initial_value) * 100
+
+    return {
+        "total_value": round(total_value, 2),
+        "change_pct": round(change_pct, 2),
+        "positions": positions,
+    }
+
 
 if __name__ == "__main__":
-    import sys
-    import json
-
-    # Use command line arguments for testing
-    if len(sys.argv) >= 3:
-        bot_id = sys.argv[1]
-        config_file = sys.argv[2]
-
-        # Load configuration from file
-        with open(config_file, 'r') as f:
-            test_config = json.load(f)
-
-        result = main(bot_id, test_config)
-        print(f"Result: {result}")
-    else:
-        print("Usage: python main.py <bot_id> <config.json>")
-        print("Example: python main.py test-bot config.json")
-        sys.exit(1)
+    main()
 ```
 
-## Step 4: Add Dependencies
+The `main()` function accepts optional `bot_id` and `config` parameters. When running on the platform, the runtime calls `main()` directly with these values. For local testing, the function falls back to parsing from environment variables via `parse()`.
 
-Create `requirements.txt`:
+## SDK Functions
 
-```txt
-alpaca-py>=0.42.0
-```
+The Python SDK provides these core functions:
 
-## Step 5: Add Documentation
+### parse()
 
-Create `README.md`:
-
-````markdown
-# DCA Bot README
-
-A simple Dollar Cost Averaging (DCA) bot that automatically purchases a fixed dollar amount of stocks or cryptocurrencies at regular intervals using the Alpaca API.
-
-## Features
-
-- ✅ **Multi-Asset Support**: Trade both stocks and cryptocurrencies
-- ✅ **Paper Trading**: Test your strategy risk-free before going live
-- ✅ **Fractional Shares**: Buy fractional amounts for crypto assets
-- ✅ **Automatic Scheduling**: Runs on your defined schedule
-- ✅ **Real-time Pricing**: Uses latest market quotes for accurate purchases
-- ✅ **Error Handling**: Robust error handling and logging
-
-## Configuration
-
-This bot accepts the following parameters:
-
-### Required Parameters
-
-- **`api_key`** (string, required) - Your Alpaca API key
-- **`secret_key`** (string, required) - Your Alpaca secret key
-- **`symbol`** (string, required) - Trading symbol (e.g., 'AAPL', 'BTC/USD')
-- **`asset_type`** (string, required) - Type of asset ('stock' or 'crypto')
-- **`amount`** (number, required) - Dollar amount to invest per execution
-
-### Optional Parameters
-
-- **`paper`** (boolean, optional) - Use paper trading (default: true)
-
-## Example Configuration
-
-```json
-{
-  "api_key": "your-alpaca-api-key",
-  "secret_key": "your-alpaca-secret-key",
-  "paper": true,
-  "symbol": "AAPL",
-  "asset_type": "stock",
-  "amount": 100,
-  "schedule": "0 9 1 * *", // Runs monthly on the 1st at 9 AM UTC
-  "name": "my-dca-bot",
-  "type": "scheduled/killer-dca-bot",
-  "version": "1.0.0"
-}
-```
-
-## How It Works
-
-1. **Get Current Price**: Fetches the latest ask price for your chosen asset
-2. **Calculate Quantity**: Determines how much to buy based on your dollar amount
-3. **Place Order**: Submits a market buy order through Alpaca
-
-## Asset Types
-
-### Stocks
-
-- Purchases whole shares only
-- Will skip purchase if amount is insufficient for 1 share
-- Uses Stock Historical Data Client for pricing
-
-### Cryptocurrencies
-
-- Supports fractional purchases
-- Can buy any dollar amount (no minimum share requirement)
-- Uses Crypto Historical Data Client for pricing
-
-## Dependencies
-
-- `alpaca-py>=0.42.0` - Official Alpaca Python SDK
-
-## Error Handling
-
-The bot includes comprehensive error handling for:
-
-- Invalid API credentials
-- Insufficient funds
-
-## Getting Started
-
-1. Get your Alpaca API keys from [alpaca.markets](https://alpaca.markets)
-2. Configure your bot parameters
-3. Test with paper trading first (`"paper": true`)
-4. Deploy and schedule your bot
-````
-
-## Step 6: Test Your Bot Locally
-
-Test your bot implementation:
-
-```bash
-# Test the main bot logic with example configuration
-cat > test-config.json << EOF
-{
-    "api_key": "your-alpaca-api-key",
-    "secret_key": "your-alpaca-secret-key",
-    "paper": true,
-    "symbol": "AAPL",
-    "asset_type": "stock",
-    "amount": 100,
-    "version": "1.0.0"
-}
-EOF
-
-python main.py test-bot test-config.json
-
-```
-
-## Step 9: Deploy Your Bot
-
-Deploy your bot to the the0 platform:
-
-```bash
-the0 custom-bot deploy
-```
-
-The CLI will:
-
-1. Validate your configuration
-2. Install dependencies using Docker
-3. Package your bot files
-4. Upload to the platform
-
-## Step 10: Create a Bot Instance
-
-Once deployed, create a bot instance:
-
-```bash
-# Create configuration file
-cat > dca-bot-config.json << EOF
-{
-    "api_key": "your-alpaca-api-key",
-    "secret_key": "your-alpaca-secret-key",
-    "paper": true,
-    "symbol": "AAPL",
-    "asset_type": "stock",
-    "amount": 100,
-    "schedule": "0 9 1 * *",  // Runs monthly on the 1st at 9 AM UTC
-    "name": "my-dca-bot",
-    "type": "scheduled/killer-dca-bot",
-    "version": "1.0.0"
-}
-EOF
-
-# Deploy the bot instance
-the0 bot deploy dca-bot-config.json
-```
-
-## Next Steps
-
-Congratulations! You've built and deployed your first trading bot. Here's what you can do next:
-
-1. Go to the [Dashboard](/dashboard) to monitor your bot's performance
-2. Explore the [Custom Bot Page](/custom-bots) to review your custom bot publish it to the marketplace
-3. Experiment with different asset types (stocks, crypto)
-4. Modify the bot to implement more complex strategies (e.g., stop-loss, take-profit)
-This is just the tip of the iceberg! DCA is the `hello world` of trading bots. You can build much more complex strategies using the same principles.
-
-## Advanced Features to Explore
-
-- **Dynamic Position Sizing**: Adjust purchase amounts based on market conditions
-- **Multi-Asset DCA**: Spread purchases across multiple cryptocurrencies
-- **Conditional Logic**: Only buy during market dips or specific conditions
-- **Integration with Technical Indicators**: Use RSI, MACD, or other indicators
-- **Portfolio Rebalancing**: Maintain target allocations across assets
-
----
-
-## SDK API Reference
-
-The `the0-sdk` Python SDK provides utilities for parsing configuration and outputting results. Install it with:
-
-```bash
-pip install the0-sdk
-```
-
-Or copy the `the0/` directory from `sdk/python/` to your project.
-
-### `parse() -> Tuple[str, Dict]`
-
-Parse bot configuration from environment variables:
+Reads `BOT_ID` and `BOT_CONFIG` from environment variables. Returns a tuple of the bot ID string and parsed configuration dictionary:
 
 ```python
 from the0 import parse
 
 bot_id, config = parse()
-# bot_id: Value of BOT_ID env var
-# config: Parsed JSON from BOT_CONFIG env var
-
-symbol = config.get("symbol", "BTC/USDT")
-amount = config.get("amount", 100.0)
+symbol = config.get("symbol", "BTC/USD")
 ```
 
-### `success(message: str, data: dict = None)`
+### metric(type, data)
 
-Output a success result:
+Emits a metric to the platform dashboard. The type string identifies the metric category, and the data dictionary contains the metric payload:
+
+```python
+from the0 import metric
+
+metric("price", {"symbol": "BTC/USD", "value": 45000, "change_pct": 2.5})
+metric("signal", {"type": "BUY", "symbol": "ETH", "confidence": 0.85})
+metric("portfolio_value", {"value": 10500, "change_pct": 5.0})
+```
+
+Metrics appear in the dashboard in real-time. Use them to track prices, positions, signals, and any other data relevant to your strategy.
+
+### success(message, data)
+
+Reports successful execution. The message appears in logs, and the optional data dictionary is stored with the execution record:
 
 ```python
 from the0 import success
 
 success("Trade completed")
-success("Trade completed", {"trade_id": "12345", "filled": 0.5})
+success("Portfolio updated", {"total_value": 10500, "positions": 3})
 ```
 
-### `error(message: str, data: dict = None)`
+### error(message)
 
-Output an error result and exit with code 1:
+Reports failure and terminates execution with exit code 1:
 
 ```python
 from the0 import error
 
-if amount <= 0:
-    error("Amount must be positive")
-    # Program exits here
+if not api_key:
+    error("API key is required")
+    # Execution stops here
 ```
 
-### `result(data: dict)`
+## Adding Dependencies
 
-Output a custom JSON result:
+Create `requirements.txt` with any packages your bot needs:
+
+```txt
+the0-sdk>=0.1.0
+```
+
+For a real trading bot, you might include exchange libraries:
+
+```txt
+the0-sdk>=0.1.0
+ccxt>=4.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+```
+
+The platform installs dependencies automatically during deployment using Docker to ensure compatibility with the runtime environment.
+
+## Testing Locally
+
+Test your bot by setting environment variables and running directly:
+
+```bash
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"initial_value":10000,"volatility":0.02,"symbols":["BTC","ETH","SOL"]}'
+export CODE_MOUNT_DIR="/tmp"
+
+python main.py
+```
+
+You should see log output and the success message. Verify that the metrics emit correctly by checking the structured output.
+
+## Deploying
+
+Deploy your bot to the platform:
+
+```bash
+the0 custom-bot deploy
+```
+
+The CLI validates your configuration, vendors dependencies using Docker, packages everything, and uploads to the platform. After deployment, the bot appears in your custom bots list.
+
+## Creating Bot Instances
+
+Once deployed, create instances that run your bot on a schedule. Create an instance configuration file:
+
+```json
+{
+  "name": "daily-portfolio",
+  "type": "scheduled/portfolio-tracker",
+  "version": "1.0.0",
+  "schedule": "0 9 * * *",
+  "config": {
+    "initial_value": 25000,
+    "symbols": ["BTC", "ETH", "SOL", "AVAX"]
+  }
+}
+```
+
+Deploy the instance:
+
+```bash
+the0 bot deploy instance-config.json
+```
+
+The bot will now run daily at 9 AM UTC, tracking the specified portfolio and emitting metrics to the dashboard.
+
+## Monitoring
+
+After deploying instances, monitor their execution:
+
+```bash
+# List running instances
+the0 bot list
+
+# View logs
+the0 bot logs <bot_id>
+
+# Stream logs in real-time
+the0 bot logs <bot_id> -w
+```
+
+## Alternative: Structured Logging for Metrics
+
+Instead of using the SDK's `metric()` function, you can emit metrics through structured logging. Include a `_metric` field in your log output:
 
 ```python
-from the0 import result
+import structlog
 
-result({
-    "status": "success",
-    "trade_id": "abc123",
-    "filled_amount": 0.5,
-    "average_price": 45123.50
-})
+structlog.configure(
+    processors=[
+        structlog.processors.JSONRenderer()
+    ]
+)
+logger = structlog.get_logger()
+
+# Emit metrics via logging
+logger.info("portfolio_snapshot",
+    _metric="portfolio_value",
+    value=10500.00,
+    change_pct=2.5
+)
+
+logger.info("position_update",
+    _metric="position",
+    symbol="BTC",
+    quantity=0.5,
+    value=22500
+)
 ```
 
-### `metric(type: str, data: dict)`
+The platform automatically detects and parses JSON log entries with `_metric` fields. This approach integrates well with existing logging infrastructure. See [Metrics](./metrics) for details on both approaches.
 
-Emit a metric for the platform dashboard:
+## Next Steps
 
-```python
-from the0 import metric
+With your first bot deployed, explore these topics to build more sophisticated strategies:
 
-# Price metric
-metric("price", {"symbol": "BTC/USD", "value": 45000, "change_pct": 2.5})
-
-# Trading signal
-metric("signal", {"symbol": "ETH/USD", "direction": "long", "confidence": 0.85})
-
-# Alert
-metric("alert", {"type": "price_spike", "severity": "high"})
-```
-
-### Logging
-
-Both stdout and stderr go to your bot's logs:
-
-```python
-print("Starting trade...")           # Goes to log
-import sys
-print("DEBUG: Details...", file=sys.stderr)  # Goes to log
-```
-
----
-
-## Related Documentation
-
-- [Configuration Reference](/custom-bot-development/configuration)
-- [Bot Types](/custom-bot-development/bot-types)
-- [Custom Frontends](/custom-bot-development/custom-frontends)
-- [Deployment Guide](/custom-bot-development/deployment)
+- [Configuration](./configuration) - Complete bot-config.yaml reference
+- [Bot Types](./bot-types) - Scheduled vs realtime execution models
+- [Metrics](./metrics) - Dashboard metrics and structured logging
+- [Custom Frontends](./custom-frontends) - Build React dashboards for your bot
+- [Testing](./testing) - Local testing patterns and best practices

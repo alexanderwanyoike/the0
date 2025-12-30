@@ -1,32 +1,118 @@
 ---
-title: "Bot Metrics & Logging"
-description: "Emit structured metrics from your trading bots for visualization and analysis"
-order: 6
+title: "Metrics"
+description: "Emit structured metrics from your trading bots"
+order: 7
 ---
 
-# Bot Metrics & Logging
+# Metrics
 
-the0 provides a powerful logging system that goes beyond simple text logs. By emitting **structured metrics**, your bot's data can be visualized in custom dashboards, analyzed over time, and used to build rich trading interfaces.
+Metrics are structured data points that your bot emits during execution. They appear in the dashboard in real-time, allowing you to monitor prices, positions, signals, and any other data your strategy produces. The platform supports two approaches for emitting metrics: the SDK's `metric()` function and structured logging with a `_metric` field.
 
-## The Concept
+## Approach 1: SDK metric() Function
 
-Logs in the0 are treated as **temporal event streams**. Your bot emits two types of events:
+The simplest approach uses the SDK's built-in `metric()` function. This handles formatting and ensures metrics are properly captured by the platform.
 
-1. **Regular logs** - Text messages for debugging and monitoring
-2. **Structured metrics** - JSON objects that represent measurable data points
+**Python:**
 
-The platform automatically detects and parses metrics from your log output, making them available for visualization.
+```python
+from the0 import parse, success, metric
 
-## Emitting Metrics
+def main():
+    bot_id, config = parse()
 
-### Python with structlog (Recommended)
+    # Emit a price metric
+    metric("price", {
+        "symbol": "AAPL",
+        "value": 150.25,
+        "change_pct": 1.2
+    })
 
-Use `structlog` for clean, Datadog-style structured logging:
+    # Emit a signal metric
+    metric("signal", {
+        "type": "BUY",
+        "symbol": "AAPL",
+        "confidence": 0.85
+    })
+
+    success("Complete")
+```
+
+**TypeScript:**
+
+```typescript
+import { parse, metric, success } from "@alexanderwanyoike/the0-node";
+
+async function main(): Promise<void> {
+    const { id, config } = parse();
+
+    metric("price", {
+        symbol: "BTC/USD",
+        value: 45000,
+        change_pct: 2.5
+    });
+
+    metric("alert", {
+        symbol: "BTC/USD",
+        type: "price_spike",
+        message: "Price increased 2.5%"
+    });
+
+    success("Complete");
+}
+
+export { main };
+```
+
+**Rust:**
+
+```rust
+use the0_sdk::input;
+use serde_json::json;
+
+fn main() {
+    let (bot_id, config) = input::parse().expect("Failed to parse config");
+
+    input::metric("sma", &json!({
+        "symbol": "AAPL",
+        "short_sma": 152.30,
+        "long_sma": 148.75
+    }));
+
+    input::metric("signal", &json!({
+        "type": "BUY",
+        "symbol": "AAPL",
+        "confidence": 0.82
+    }));
+}
+```
+
+**C++:**
+
+```cpp
+#include <the0.h>
+
+int main() {
+    auto [botId, config] = the0::parse();
+
+    the0::metric("price", {
+        {"symbol", "AAPL"},
+        {"value", 150.25},
+        {"change_pct", 1.2}
+    });
+
+    return 0;
+}
+```
+
+## Approach 2: Structured Logging with _metric Field
+
+If you prefer integrating metrics into your existing logging infrastructure, you can use structured loggers like `structlog` (Python) or `pino` (Node.js). Include a `_metric` field to identify the log entry as a metric—the platform automatically detects and parses these.
+
+**Python with structlog:**
 
 ```python
 import structlog
 
-# Configure structlog for JSON output
 structlog.configure(
     processors=[
         structlog.processors.JSONRenderer()
@@ -34,13 +120,11 @@ structlog.configure(
 )
 logger = structlog.get_logger()
 
-# Regular logging - outputs structured JSON
+# Regular logging
 logger.info("Starting trading cycle")
 logger.debug("Fetching market data", symbol="BTC/USD")
-logger.warning("High volatility detected", volatility=0.85)
-logger.error("Failed to execute order", error="timeout")
 
-# Emit metrics - just include _metric in the structured data
+# Emit metrics by including _metric field
 logger.info("portfolio_snapshot",
     _metric="portfolio_value",
     value=10500.00,
@@ -53,8 +137,7 @@ logger.info("trade_executed",
     symbol="BTC/USD",
     side="buy",
     quantity=0.1,
-    price=45000.00,
-    order_id="ord_123456"
+    price=45000.00
 )
 
 logger.info("signal_generated",
@@ -62,20 +145,16 @@ logger.info("signal_generated",
     symbol="ETH/USD",
     direction="long",
     confidence=0.85,
-    rsi=32,
-    macd="bullish_cross"
+    reason="RSI oversold"
 )
 ```
 
-### Python with python-json-logger
-
-If you prefer standard logging with JSON output:
+**Python with python-json-logger:**
 
 ```python
 import logging
 from pythonjsonlogger import jsonlogger
 
-# Setup JSON logging
 handler = logging.StreamHandler()
 handler.setFormatter(jsonlogger.JsonFormatter())
 logger = logging.getLogger()
@@ -84,7 +163,6 @@ logger.setLevel(logging.INFO)
 
 # Regular logging
 logger.info("Starting trading cycle")
-logger.warning("High volatility", extra={"volatility": 0.85})
 
 # Emit metrics via extra dict
 logger.info("portfolio_snapshot", extra={
@@ -102,7 +180,7 @@ logger.info("trade_executed", extra={
 })
 ```
 
-### Node.js with pino
+**Node.js with pino:**
 
 ```javascript
 const pino = require('pino');
@@ -112,7 +190,7 @@ const logger = pino();
 logger.info("Starting trading cycle");
 logger.info({ symbol: "BTC/USD" }, "Fetching market data");
 
-// Emit metrics
+// Emit metrics with _metric field
 logger.info({
     _metric: "portfolio_value",
     value: 10500.00,
@@ -129,218 +207,166 @@ logger.info({
 }, "trade_executed");
 ```
 
-The `_metric` field is **required** - it identifies the JSON object as a metric and specifies its type. the0 automatically detects and parses these from your log output.
+The `_metric` field is required when using this approach—it identifies the JSON object as a metric and specifies its type.
 
-## Metric Types
+## Which Approach to Use?
 
-You can emit any metric type you need. Here are some common patterns:
+**Use the SDK `metric()` function when:**
+- You want the simplest integration
+- Your bot is primarily focused on trading logic
+- You're starting a new bot from scratch
 
-### Portfolio Metrics
+**Use structured logging with `_metric` when:**
+- You have existing logging infrastructure you want to leverage
+- You want unified logging and metrics in one output stream
+- You prefer the flexibility of structured logging libraries
+
+Both approaches produce metrics that the platform handles identically. Choose whichever fits your workflow.
+
+## Common Metric Types
+
+You can emit any metric type your strategy needs. The type string is freeform—use whatever makes sense for your dashboard.
+
+### Price Metrics
 
 ```python
-logger.info(
-    "portfolio_snapshot",
-    _metric="portfolio_value",
-    total_value=10500.00,
-    cash=2500.00,
-    positions_value=8000.00,
-    unrealized_pnl=350.00,
-    daily_return_pct=1.2
-)
+metric("price", {
+    "symbol": symbol,
+    "value": current_price,
+    "change_pct": change_percentage,
+    "high_24h": high_price,
+    "low_24h": low_price
+})
+```
 
-logger.info(
-    "position_update",
-    _metric="position",
-    symbol="BTC/USD",
-    quantity=0.5,
-    avg_entry=44000.00,
-    current_price=45000.00,
-    unrealized_pnl=500.00,
-    weight_pct=21.4
-)
+### Position Metrics
+
+```python
+metric("position", {
+    "symbol": position["symbol"],
+    "quantity": position["quantity"],
+    "value": position["value"],
+    "price": position["price"]
+})
+
+metric("portfolio_value", {
+    "value": total_value,
+    "change_pct": change_percentage
+})
+```
+
+### Signal Metrics
+
+```python
+metric("signal", {
+    "type": "BUY",
+    "symbol": "AAPL",
+    "price": 150.25,
+    "confidence": 0.85,
+    "reason": "RSI oversold"
+})
+```
+
+### Technical Indicator Metrics
+
+```python
+metric("sma", {
+    "symbol": "AAPL",
+    "short_sma": 152.30,
+    "long_sma": 148.75,
+    "short_period": 5,
+    "long_period": 20
+})
+```
+
+### Alert Metrics
+
+```python
+metric("alert", {
+    "symbol": "BTC/USD",
+    "type": "price_drop",
+    "change_pct": -5.2,
+    "message": "BTC dropped 5%",
+    "severity": "high"
+})
 ```
 
 ### Trade Metrics
 
 ```python
-logger.info(
-    "trade_executed",
-    _metric="trade",
-    symbol="ETH/USD",
-    side="buy",
-    quantity=2.5,
-    price=2400.00,
-    total_value=6000.00,
-    fees=6.00,
-    order_type="market",
-    execution_time_ms=45
-)
-
-logger.info(
-    "order_filled",
-    _metric="order",
-    order_id="ord_789",
-    status="filled",
-    symbol="BTC/USD",
-    side="sell",
-    filled_qty=0.1,
-    avg_fill_price=45100.00
-)
+metric("trade", {
+    "symbol": "ETH",
+    "side": "buy",
+    "quantity": 2.5,
+    "price": 2400.00,
+    "total": 6000.00
+})
 ```
 
-### Signal & Strategy Metrics
+## Metric Timing
+
+For realtime bots, emit metrics on each iteration of your main loop:
 
 ```python
-logger.info(
-    "signal_generated",
-    _metric="signal",
-    symbol="SOL/USD",
-    direction="long",
-    strength=0.78,
-    strategy="momentum_breakout",
-    timeframe="4h"
-)
+while True:
+    price = fetch_price(symbol)
 
-logger.info(
-    "strategy_update",
-    _metric="strategy_state",
-    name="mean_reversion",
-    status="active",
-    positions_open=3,
-    signals_generated=12,
-    win_rate=0.65
-)
+    metric("price", {
+        "symbol": symbol,
+        "value": price,
+        "timestamp": time.time()
+    })
+
+    signal = analyze(price)
+    if signal:
+        metric("signal", {
+            "type": signal,
+            "symbol": symbol,
+            "price": price
+        })
+
+    sleep(update_interval)
 ```
 
-### Market Data Metrics
+For scheduled bots, emit metrics at the end of each execution:
 
 ```python
-logger.info(
-    "market_data",
-    _metric="market_snapshot",
-    symbol="BTC/USD",
-    bid=44990.00,
-    ask=45010.00,
-    spread_bps=4.4,
-    volume_24h=1250000000
-)
+def main():
+    bot_id, config = parse()
 
-logger.info(
-    "indicator_value",
-    _metric="indicator",
-    symbol="BTC/USD",
-    name="RSI",
-    value=68.5,
-    timeframe="1h",
-    signal="overbought"
-)
-```
+    portfolio = calculate_portfolio()
 
-### Risk Metrics
+    metric("portfolio_value", {
+        "value": portfolio["total"],
+        "positions": len(portfolio["holdings"])
+    })
 
-```python
-logger.info(
-    "risk_metrics",
-    _metric="risk",
-    portfolio_var_95=1250.00,
-    max_drawdown_pct=5.2,
-    sharpe_ratio=1.8,
-    exposure_pct=75.0,
-    margin_used_pct=45.0
-)
+    for holding in portfolio["holdings"]:
+        metric("position", holding)
+
+    success("Analysis complete")
 ```
 
 ## Best Practices
 
-### 1. Use Consistent Metric Names
+**Use consistent metric types.** Define a standard set of types for your bot and use them consistently. This makes it easier to build dashboards that consume your metrics.
 
-Define a standard set of metric types for your bot and stick to them:
+**Include the symbol.** Most metrics relate to a specific trading symbol. Always include it so dashboards can filter and group by symbol.
 
-```python
-# Good - consistent naming (use snake_case for _metric values)
-logger.info("trade_executed", _metric="trade", ...)
-logger.info("portfolio_snapshot", _metric="portfolio_value", ...)
-logger.info("signal_generated", _metric="signal", ...)
+**Use numeric values for quantities.** Values you want to chart should be numbers, not formatted strings. Use `150.25` rather than `"$150.25"`.
 
-# Avoid - inconsistent naming
-logger.info("Trade", _metric="Trade", ...)  # Not snake_case
-logger.info("value", _metric="portfolio-value", ...)  # Dashes instead of underscores
-```
+**Emit at meaningful moments.** Don't emit metrics on every tick if nothing changed. Emit when prices update, signals trigger, or positions change.
 
-### 2. Include Relevant Context
-
-Add fields that help with filtering and analysis:
-
-```python
-logger.info(
-    "trade_executed",
-    _metric="trade",
-    symbol="BTC/USD",      # Always include symbol
-    strategy="momentum",    # Which strategy generated this
-    timeframe="1h",        # Relevant timeframe
-    run_id=run_id,         # Link to specific bot run
-    # ... other fields
-)
-```
-
-### 3. Use Numeric Values for Charting
-
-Ensure values you want to chart are numbers, not strings:
-
-```python
-# Good - numeric values
-logger.info("portfolio_snapshot", _metric="portfolio_value", value=10500.00)
-
-# Avoid - string values that can't be charted
-logger.info("portfolio_snapshot", _metric="portfolio_value", value="$10,500.00")
-```
-
-### 4. Emit at Key Moments
-
-Emit metrics at important events in your bot's lifecycle:
-
-- Bot startup/shutdown
-- Trade execution
-- Position changes
-- Signal generation
-- Error conditions
-- Periodic snapshots (e.g., every hour)
-
-### 5. Don't Over-Emit
-
-Balance granularity with storage:
-
-```python
-# For real-time bots, emit portfolio value periodically
-if time.time() - last_snapshot > 300:  # Every 5 minutes
-    logger.info("portfolio_snapshot", _metric="portfolio_value", value=portfolio.total_value)
-    last_snapshot = time.time()
-
-# Always emit trade events immediately
-logger.info("trade_executed", _metric="trade", symbol=trade.symbol, side=trade.side)
-```
+**Include context.** Add fields that help with analysis—timestamps, confidence scores, reasons for signals. More context makes metrics more useful.
 
 ## Viewing Metrics
 
-Metrics appear in the bot's console view with visual distinction:
+Metrics appear in the bot dashboard in real-time. Each metric type can be visualized differently depending on your custom frontend configuration. If you haven't built a custom frontend, metrics display in a default format showing the type and data.
 
-- Regular logs show with colored status indicators (green for INFO, yellow for WARN, etc.)
-- Metrics display with a blue background and structured key-value format
+For realtime bots, metrics stream continuously while the bot runs. For scheduled bots, metrics appear after each execution completes.
 
-If your bot has a [custom frontend](./custom-frontends), you can build rich visualizations using the event utilities provided by the platform.
+## Related
 
-## Log Storage
-
-All logs and metrics are stored in MinIO with daily partitioning:
-
-- Path: `logs/{bot_id}/{YYYYMMDD}.log`
-- Retention: Configurable per account
-- Format: One event per line, timestamped
-
-This temporal structure makes it efficient to query historical data for backtesting analysis or performance review.
-
-## Next Steps
-
-- [Custom Frontends](./custom-frontends) - Build rich dashboards that visualize your metrics
-- [Bot Types](./bot-types) - Understand scheduled vs real-time execution
-- [Testing](./testing) - Test your metrics locally before deployment
+- [Custom Frontends](./custom-frontends) - Build dashboards that visualize your metrics
+- [Bot Types](./bot-types) - Understand scheduled vs realtime execution
+- [Development Overview](./overview) - SDK functions reference

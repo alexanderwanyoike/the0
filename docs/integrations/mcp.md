@@ -7,79 +7,68 @@ order: 1
 
 # MCP (Model Context Protocol)
 
-the0 implements the Model Context Protocol (MCP), enabling AI assistants like Claude Code to interact directly with the platform. This allows you to manage bots, view logs, and deploy strategies through natural language.
+the0 implements the Model Context Protocol (MCP), an open standard that enables AI assistants to interact with external systems through a well-defined interface. With the0's MCP server, AI assistants like Claude Code can deploy bots, retrieve logs, and manage your trading infrastructure through natural language conversations.
 
----
+## Understanding MCP
 
-## Overview
+The Model Context Protocol standardizes how AI assistants connect to external data sources and tools. Rather than building custom integrations for each AI platform, MCP provides a universal interface that any compliant assistant can use. the0's MCP server exposes the platform's core functionality through this protocol, enabling AI assistants to perform the same operations available through the CLI and web dashboard.
 
-MCP is an open protocol that standardizes how AI assistants connect to external data sources and tools. With the0's MCP server, AI assistants can:
+Through MCP, AI assistants can:
 
-- Deploy, update, and delete trading bots
-- View bot logs and execution history
-- List available custom bots and get their configuration schemas
+- Deploy, update, and delete bot instances
+- Retrieve execution logs and analyze bot behavior
+- List available custom bots and their configuration schemas
+- Check authentication status and connection health
 
----
+## Prerequisites
 
-## Setup
+Before configuring MCP integration, ensure you have:
 
-### Prerequisites
+- **API Key**: Generated from your the0 dashboard or via CLI (`the0 auth login`)
+- **Claude Code**: Installed from [claude.ai/download](https://claude.ai/download)
 
-1. **API Key**: Generate an API key from your the0 dashboard or via CLI (`the0 auth login`)
-2. **Claude Code**: Install [Claude Code](https://claude.ai/download) CLI
+## Configuration
 
-### Step 1: Add the MCP Server
+### Adding the MCP Server
 
-The MCP server requires your API key to be passed via the `x-api-key` header. Use the `--header` flag:
+The MCP server authenticates using your API key passed via the `x-api-key` header. Configure Claude Code to connect to the0's MCP endpoint using the CLI:
 
 ```bash
 claude mcp add the0 --transport http https://api.the0.dev/mcp \
   --header "x-api-key: YOUR_API_KEY"
 ```
 
-For local development:
+For local development against a self-hosted instance:
 
 ```bash
 claude mcp add the0 --transport http http://localhost:3000/mcp \
   --header "x-api-key: YOUR_API_KEY"
 ```
 
-### Step 2: Restart Claude Code
-
-**Important**: After adding or modifying MCP configuration, you must restart Claude Code for changes to take effect:
+After adding or modifying MCP configuration, restart Claude Code for the changes to take effect:
 
 ```bash
 exit  # or Ctrl+D
 claude
 ```
 
-### Step 3: Verify Connection
+Verify the connection is active:
 
 ```bash
 claude mcp list
 ```
 
-You should see:
+The output should show the0 server as connected:
+
 ```
 the0: https://api.the0.dev/mcp (HTTP) - ✓ Connected
 ```
 
-Then test within Claude Code by asking: "list my bots"
+Test the integration by asking Claude Code to "list my bots"—it should invoke the MCP tools and return your bot instances.
 
----
+### Configuration File Approach
 
-## Configuration Options
-
-### Option 1: CLI with Header (Recommended)
-
-```bash
-claude mcp add the0 --transport http https://api.the0.dev/mcp \
-  --header "x-api-key: YOUR_API_KEY"
-```
-
-### Option 2: Project Configuration File
-
-Create `.mcp.json` in your project root:
+Instead of CLI flags, you can configure MCP servers through a `.mcp.json` file in your project root:
 
 ```json
 {
@@ -95,9 +84,7 @@ Create `.mcp.json` in your project root:
 }
 ```
 
-### Option 3: Environment Variables (Recommended for Teams)
-
-Use environment variable expansion to avoid committing secrets:
+For team environments where you don't want to commit secrets, use environment variable expansion:
 
 ```json
 {
@@ -113,112 +100,126 @@ Use environment variable expansion to avoid committing secrets:
 }
 ```
 
-Then set the environment variable before starting Claude Code:
+Set the environment variable before starting Claude Code:
 
 ```bash
 export THE0_API_KEY="your-api-key-here"
 claude
 ```
 
----
-
 ## Available Tools
 
-the0 MCP server provides 11 tools:
+the0's MCP server exposes 11 tools organized into three categories:
 
-| Tool | Category | Description | Required Parameters |
-|------|----------|-------------|---------------------|
-| `auth_status` | Auth | Check if API key is valid and get connection status | None |
-| `bot_list` | Bot Instance | List all deployed bot instances for the authenticated user | None |
-| `bot_get` | Bot Instance | Get details of a specific bot instance | `bot_id` |
-| `bot_deploy` | Bot Instance | Deploy a new bot instance with configuration | `config` (object with name, type, version, bot settings) |
-| `bot_update` | Bot Instance | Update an existing bot instance | `bot_id`, `config` |
-| `bot_delete` | Bot Instance | Delete a bot instance | `bot_id` |
-| `logs_get` | Logs | Get execution logs for a bot | `bot_id`, optional: `date`, `date_range`, `limit` |
-| `logs_summary` | Logs | Get log statistics (error counts, date range, last entry) | `bot_id` |
-| `custom_bot_list` | Custom Bots | List all available custom bots | None |
-| `custom_bot_get` | Custom Bots | Get details of a specific custom bot | `name`, optional: `version` |
-| `custom_bot_schema` | Custom Bots | Get JSON schema for configuring a custom bot | `name`, optional: `version` |
+### Authentication
 
----
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `auth_status` | Check if API key is valid and get connection status | None |
 
-## Example Usage
+### Bot Instance Management
 
-Once configured, interact with the0 using natural language:
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `bot_list` | List all deployed bot instances | None |
+| `bot_get` | Get details of a specific bot instance | `bot_id` |
+| `bot_deploy` | Deploy a new bot instance | `config` (name, type, version, settings) |
+| `bot_update` | Update an existing bot instance | `bot_id`, `config` |
+| `bot_delete` | Delete a bot instance | `bot_id` |
 
-**List bots:**
+### Logs
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `logs_get` | Get execution logs for a bot | `bot_id`, optional: `date`, `date_range`, `limit` |
+| `logs_summary` | Get log statistics | `bot_id` |
+
+### Custom Bots
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `custom_bot_list` | List all available custom bots | None |
+| `custom_bot_get` | Get details of a custom bot | `name`, optional: `version` |
+| `custom_bot_schema` | Get JSON schema for configuring a custom bot | `name`, optional: `version` |
+
+## Usage Examples
+
+Once configured, interact with the0 using natural language. The AI assistant translates your requests into the appropriate MCP tool calls.
+
+### Managing Bots
+
 ```
 "list my bots"
 "show me all deployed bots"
+"get details for bot abc123"
 ```
 
-**Deploy a bot:**
+### Deploying Bots
+
 ```
-"deploy a new MoE bot for AAPL"
 "what custom bots are available?"
 "show me the schema for alpaca-mixture-of-experts"
+"deploy a new SMA bot for AAPL"
 ```
 
-**Check logs:**
+### Analyzing Logs
+
 ```
 "get logs for bot abc123"
 "show me today's logs for my META bot"
+"summarize the error logs for my portfolio tracker"
 ```
 
----
+## Bot Deployment via MCP
 
-## Bot Deployment
+When deploying through MCP, provide the AI assistant with the necessary configuration details. The assistant will construct the appropriate deployment request.
 
-When deploying via MCP, the config must include:
+A typical deployment request might look like:
 
-- `type`: Bot type (e.g., `scheduled/alpaca-mixture-of-experts`)
-- `version`: Version of the custom bot
-- `schedule`: Cron expression (e.g., `0 14 * * 1-5` for 9 AM EST weekdays)
-- `bot`: Bot-specific configuration including API credentials
-
-Example deployment request:
 ```
-Deploy a new bot called "AAPL MoE" using alpaca-mixture-of-experts version 1.0.0,
-scheduled at 9 AM EST on weekdays, trading AAPL with paper mode enabled.
+Deploy a new bot called "AAPL Monitor" using sma-crossover version 1.0.0,
+scheduled at 9 AM EST on weekdays, monitoring AAPL with a 5-day short SMA
+and 20-day long SMA.
 ```
 
----
+The assistant will use the `custom_bot_schema` tool to understand the configuration options, then construct a valid deployment using `bot_deploy`.
+
+Deployment configurations include:
+
+- `type`: Bot type (e.g., `scheduled/sma-crossover`, `realtime/price-alerts`)
+- `version`: Version of the custom bot to deploy
+- `schedule`: Cron expression for scheduled bots (e.g., `0 14 * * 1-5` for 9 AM EST weekdays)
+- `config`: Bot-specific configuration matching the schema
 
 ## Troubleshooting
 
-### "Authentication required" Error
+### Authentication Required Error
 
-The API key header is not being sent. Verify your configuration:
+This error indicates the API key header is not being sent. Verify your configuration and re-add the MCP server:
 
 ```bash
-# Check current MCP servers
 claude mcp list
-
-# Remove and re-add with correct header
 claude mcp remove the0
 claude mcp add the0 --transport http https://api.the0.dev/mcp \
   --header "x-api-key: YOUR_API_KEY"
-
-# Restart Claude Code
 exit
 claude
 ```
 
 ### Duplicate Configuration Error
 
-If you see "MCP server exists in multiple scopes":
+If you see "MCP server exists in multiple scopes", remove the configuration from both scopes:
 
 ```bash
-# Remove from both scopes
 claude mcp remove the0 -s local
 claude mcp remove the0 -s project
-
-# Re-add
 claude mcp add the0 --transport http https://api.the0.dev/mcp \
   --header "x-api-key: YOUR_API_KEY"
 ```
 
-### Test MCP Endpoint Directly
+### Testing the Endpoint Directly
+
+Verify the MCP endpoint is accessible using curl:
 
 ```bash
 curl -X POST https://api.the0.dev/mcp \
@@ -231,16 +232,16 @@ curl -X POST https://api.the0.dev/mcp \
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| "Authentication required" | Missing x-api-key header | Re-add MCP with `--header` flag |
-| "API key is invalid" | Wrong or expired key | Generate new key from dashboard |
-| "Custom bot not found" | Wrong type/version in config | Check `custom_bot_list` for available bots |
-| "Bot not found" | Invalid bot_id | Use `bot_list` to get correct IDs |
-
----
+| Authentication required | Missing x-api-key header | Re-add MCP with `--header` flag |
+| API key is invalid | Wrong or expired key | Generate new key from dashboard |
+| Custom bot not found | Wrong type/version | Use `custom_bot_list` to find available bots |
+| Bot not found | Invalid bot_id | Use `bot_list` to get correct IDs |
 
 ## Security
 
-- **User Isolation**: Each user can only access their own bots
+MCP integration follows the same security model as all the0 platform access:
+
+- **User Isolation**: Each user can only access their own bots through MCP
 - **API Key Authentication**: All operations require a valid API key
-- **Secrets**: Never commit API keys to version control; use environment variables
-- **Masked Logs**: Sensitive data in bot logs is automatically masked
+- **Secret Protection**: Never commit API keys to version control; use environment variables
+- **Log Masking**: Sensitive data in bot logs is automatically masked before being returned

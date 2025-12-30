@@ -7,209 +7,146 @@ order: 3
 
 # Bot Commands
 
-The `bot` commands allow you to deploy, manage, and monitor your trading bot instances through the CLI.
+The `bot` commands manage bot instances—running deployments of custom bots with specific configurations.
 
-## Overview
+## Deploy
 
-Bot instances are deployed configurations of Custom Bots. These commands help you:
-
-- Deploy new bot instances
-- List and monitor active bots
-- Update bot configurations
-- Delete bot instances
-
-## Commands Reference
-
-### Deploy Bot Instance
-
-Deploy a new bot instance using a configuration file:
+Create a new bot instance from a configuration file:
 
 ```bash
 the0 bot deploy <config.json>
 ```
 
-#### Configuration File Format
+The configuration file specifies which custom bot to use and provides parameter values:
 
 ```json
 {
-  "name": "my-trading-bot",
-  "type": "scheduled/rsi-momentum", // "{customBotType}/{customBotName}" for custom bots
+  "name": "my-aapl-tracker",
+  "type": "realtime/sma-crossover",
   "version": "1.0.0",
-  "schedule": "0 0 * * *",
-  "symbol": "BTCUSDT",
-  "risk_level": "medium"
-  // Other parameters specific to the bot type (flat structure)
+  "symbol": "AAPL",
+  "short_period": 5,
+  "long_period": 20,
+  "update_interval_ms": 60000
 }
 ```
 
-### Required Fields
+**Required fields:**
 
-- **name**: Unique identifier for your bot instance
-- **type**: Type of bot to deploy
-  - This is composed of:
-    - **customBotType**: The type of custom bot (e.g., `scheduled`, `realtime`)
-    - **customBotName**: The name of the custom bot
-- **version**: Version of the bot to deploy
+- `name` - Unique identifier for this instance
+- `type` - Format: `{execution-model}/{custom-bot-name}`
+- `version` - Semantic version of the custom bot
 
-### Scheduled bot fields
+**Scheduled bots** require a `schedule` field with a cron expression:
 
-- **schedule**: Cron expression for scheduled bots
-
-### Custom bot configuration
-
-Other parameters depend on the schema of the custom bot you are deploying.
-you can find out by running the following command:
-
-```bash
-the0 custom-bot schema bot <version> <custom-bot-name>
-```
-
-This will output the JSON schema for the bot configuration, which you can use to fill in the required parameters.
-
-#### Example
-
-```bash
-# Get the schema for a custom bot
-the0 custom-bot schema bot 1.0.0 another-example-bot
-* Fetching schema for another-example-bot...
-v Schema for 'another-example-bot' v1.0.0:
-
+```json
 {
-  "properties": {
-    "description": {
-      "description": "A brief description of the SMA bot's functionality.",
-      "type": "string"
-    },
-    "name": {
-      "description": "The name of the SMA bot.",
-      "type": "string"
-    },
-    "strategy": {
-      "properties": {
-        "period": {
-          "description": "The period for the simple moving average.",
-          "minimum": 1,
-          "type": "integer"
-        },
-        "symbol": {
-          "description": "The trading symbol (e.g., BTCUSD).",
-          "type": "string"
-        },
-        "type": {
-          "description": "The type of strategy, fixed as 'SMA'.",
-          "enum": [
-            "SMA"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "type",
-        "period",
-        "symbol"
-      ],
-      "type": "object"
-    }
-  },
-  "required": [
-    "name",
-    "strategy"
-  ],
-  "type": "object"
+  "name": "daily-portfolio-check",
+  "type": "scheduled/portfolio-tracker",
+  "version": "1.0.0",
+  "schedule": "0 9 * * *",
+  "symbols": ["BTC", "ETH", "SOL"]
 }
 ```
 
-### List Bot Instances
+Additional fields depend on the custom bot's schema. Use `the0 custom-bot schema` to view required parameters.
 
-Display all your deployed bot instances:
+## List
+
+Display all deployed bot instances:
 
 ```bash
 the0 bot list
 ```
 
-#### Output Format
+Output shows instance ID, name, type, version, schedule (if applicable), and timestamps.
 
-```bash
-the0 bot list
-* Fetching bots...
-v Found 1 bot(s)
+## Update
 
-ID                                    NAME                            TYPE                                      VERSION  SCHEDULE   CREATED AT        UPDATED AT
-b838f75d-cf53-4330-ae36-6ebbaf1cc46a  test-scheduled-bot-no-schema    scheduled/test-scheduled-bot-no-schema    1.2.0    * * * * *  2025-07-07 23:42  2025-07-07 23:42
-```
-
-### Update Bot Instance
-
-Update an existing bot instance with new configuration:
+Update an instance's configuration parameters:
 
 ```bash
 the0 bot update <bot_id> <config.json>
 ```
 
-#### Example
+This updates configuration values but does not change the custom bot version. To use a different version, delete the instance and deploy a new one.
 
-```bash
-# Create updated configuration
-cat > updated-config.json << EOF
-{
-  "name": "my-trading-bot-updated",
-  "type": "scheduled/rsi-momentum",
-  "version": "1.0.0",
-  "schedule": "0 0 * * *",
-  "symbol": "BTCUSDT",
-  "risk_level": "low"
-}
-EOF
+## Delete
 
-# Update the bot
-the0 bot update bot_123 updated-config.json
-* Updating bot...
-v Bot updated successfully
-  ID: bot_123
-```
-
-### Delete Bot Instance
-
-Delete a deployed bot instance:
+Remove a bot instance:
 
 ```bash
 the0 bot delete <bot_id>
 ```
 
-#### Safety Features
-
-- Requires confirmation before deletion
-- Cannot be undone
-- Active positions are handled according to bot configuration
-
-#### Example
+The CLI prompts for confirmation before deletion. Use `-y` or `--yes` to skip the prompt:
 
 ```bash
-the0 bot delete b838f75d-cf53-4330-ae36-6ebbaf1cc46a
-! Are you sure you want to delete bot 'b838f75d-cf53-4330-ae36-6ebbaf1cc46a'?
-This action cannot be undone
-Type 'yes' to confirm: yes
-* Deleting bot...
-v Bot deleted successfully
-  ID: b838f75d-cf53-4330-ae36-6ebbaf1cc46a
+the0 bot delete <bot_id> -y
 ```
 
-## Schedule Format
+## Logs
 
-For scheduled bots, use standard cron expressions:
+View execution logs for a bot instance:
 
 ```bash
-# Format: minute hour day month weekday
-
-# Examples:
-"0 9 * * *"     # Daily at 9:00 AM
-"*/15 * * * *"  # Every 15 minutes
-"0 0 * * 1"     # Weekly on Monday at midnight
-"0 */4 * * *"   # Every 4 hours
-"30 16 * * 1-5" # Weekdays at 4:30 PM
+the0 bot logs <bot_id>
 ```
 
-## Related Commands
+**Options:**
 
-- [Custom Bot Commands](/the0-cli/custom-bot-commands) - Deploy your own bot templates and get schemas
-- [Authentication](/the0-cli/authentication) - Set up API access
+- `--limit <n>` - Maximum entries to return (1-1000, default 100)
+- `-w, --watch` - Stream logs in real-time (polls every 5 seconds)
+
+**Date filtering:**
+
+```bash
+# Logs from a specific date
+the0 bot logs <bot_id> 2025-01-15
+
+# Logs from a date range
+the0 bot logs <bot_id> 2025-01-15:2025-01-20
+```
+
+**Examples:**
+
+```bash
+# Last 50 log entries
+the0 bot logs abc123 --limit 50
+
+# Watch logs in real-time
+the0 bot logs abc123 -w
+
+# Logs from today with limit
+the0 bot logs abc123 2025-01-15 --limit 200
+```
+
+## Cron Schedule Format
+
+Scheduled bots use standard cron expressions:
+
+```
+┌───────────── minute (0-59)
+│ ┌───────────── hour (0-23)
+│ │ ┌───────────── day of month (1-31)
+│ │ │ ┌───────────── month (1-12)
+│ │ │ │ ┌───────────── day of week (0-6, Sunday=0)
+│ │ │ │ │
+* * * * *
+```
+
+**Examples:**
+
+| Expression | Description |
+|------------|-------------|
+| `* * * * *` | Every minute |
+| `0 * * * *` | Every hour |
+| `0 9 * * *` | Daily at 9:00 AM |
+| `0 9 * * 1-5` | Weekdays at 9:00 AM |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 0 1 * *` | First day of each month |
+
+## Related
+
+- [Custom Bot Commands](./custom-bot-commands) - Deploy custom bots and view schemas
+- [Bots](/terminology/bots) - Understanding bot instances
