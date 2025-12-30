@@ -147,7 +147,7 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
-    tag: main
+    tag: v1.1.0
     subdir: sdk/haskell
 ```
 
