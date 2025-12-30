@@ -360,4 +360,160 @@ describe("StorageService", () => {
       expect(result.error).toContain("File not found");
     });
   });
+
+  describe("getBotFrontendStream", () => {
+    it("should get frontend bundle successfully", async () => {
+      const frontendContent =
+        'export default function Dashboard() { return "Hello"; }';
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield Buffer.from(frontendContent);
+        },
+      };
+      mockMinioClient.getObject.mockResolvedValue(mockStream as any);
+
+      const result = await service.getBotFrontendStream(
+        "user123/test-bot/1.0.0/frontend.js",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(mockStream);
+      expect(mockMinioClient.getObject).toHaveBeenCalledWith(
+        "custom-bots",
+        "user123/test-bot/1.0.0/frontend.js",
+      );
+    });
+
+    it("should return failure when frontend bundle not found", async () => {
+      const error = new Error("The specified key does not exist.") as any;
+      error.code = "NoSuchKey";
+      mockMinioClient.getObject.mockRejectedValue(error);
+
+      const result = await service.getBotFrontendStream(
+        "user123/test-bot/1.0.0/frontend.js",
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Frontend bundle not found");
+    });
+
+    it("should handle other errors", async () => {
+      mockMinioClient.getObject.mockRejectedValue(new Error("Network error"));
+
+      const result = await service.getBotFrontendStream(
+        "user123/test-bot/1.0.0/frontend.js",
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Network error");
+    });
+  });
+
+  describe("extractAndStoreFrontend", () => {
+    // Helper to create ZIP with frontend
+    const createZipWithFrontend = (frontendPath: string, content: string) => {
+      const zip = new AdmZip();
+      zip.addFile("main.py", Buffer.from('print("hello")'));
+      zip.addFile(frontendPath, Buffer.from(content));
+      return zip.toBuffer();
+    };
+
+    it("should extract frontend from frontend/dist/bundle.js", async () => {
+      const frontendContent = "export default function() {}";
+      const zipBuffer = createZipWithFrontend(
+        "frontend/dist/bundle.js",
+        frontendContent,
+      );
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield zipBuffer;
+        },
+      };
+      mockMinioClient.getObject.mockResolvedValue(mockStream as any);
+      mockMinioClient.putObject.mockResolvedValue({} as any);
+
+      const result = await service.extractAndStoreFrontend(
+        "user123/test-bot/1.0.0.zip",
+        "user123",
+        "test-bot",
+        "1.0.0",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe("user123/test-bot/1.0.0/frontend.js");
+      expect(mockMinioClient.putObject).toHaveBeenCalledWith(
+        "custom-bots",
+        "user123/test-bot/1.0.0/frontend.js",
+        expect.any(Buffer),
+        frontendContent.length,
+        expect.objectContaining({
+          "Content-Type": "application/javascript",
+        }),
+      );
+    });
+
+    it("should extract frontend from frontend.js", async () => {
+      const frontendContent = "export default function() {}";
+      const zipBuffer = createZipWithFrontend("frontend.js", frontendContent);
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield zipBuffer;
+        },
+      };
+      mockMinioClient.getObject.mockResolvedValue(mockStream as any);
+      mockMinioClient.putObject.mockResolvedValue({} as any);
+
+      const result = await service.extractAndStoreFrontend(
+        "user123/test-bot/1.0.0.zip",
+        "user123",
+        "test-bot",
+        "1.0.0",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe("user123/test-bot/1.0.0/frontend.js");
+    });
+
+    it("should return null when no frontend found", async () => {
+      const zipBuffer = createSampleZipBuffer(); // No frontend
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield zipBuffer;
+        },
+      };
+      mockMinioClient.getObject.mockResolvedValue(mockStream as any);
+
+      const result = await service.extractAndStoreFrontend(
+        "user123/test-bot/1.0.0.zip",
+        "user123",
+        "test-bot",
+        "1.0.0",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeNull();
+      expect(mockMinioClient.putObject).not.toHaveBeenCalled();
+    });
+
+    it("should handle ZIP read errors", async () => {
+      mockMinioClient.getObject.mockRejectedValue(new Error("File not found"));
+
+      const result = await service.extractAndStoreFrontend(
+        "user123/test-bot/1.0.0.zip",
+        "user123",
+        "test-bot",
+        "1.0.0",
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Error extracting frontend bundle");
+    });
+  });
+
+  describe("getFrontendPath", () => {
+    it("should return correct frontend path", () => {
+      const path = service.getFrontendPath("user123", "test-bot", "1.0.0");
+      expect(path).toBe("user123/test-bot/1.0.0/frontend.js");
+    });
+  });
 });

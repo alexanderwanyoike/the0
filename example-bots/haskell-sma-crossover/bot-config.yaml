@@ -1,0 +1,25 @@
+# SMA Crossover Bot Configuration (Haskell)
+# A scheduled bot using Yahoo Finance for live stock data
+
+name: haskell-sma-crossover
+description: "SMA crossover strategy bot using Haskell with Yahoo Finance data"
+version: 1.0.9
+author: "the0"
+type: scheduled
+runtime: ghc96
+
+entrypoints:
+  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.7/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [example, sma, crossover, haskell, functional]
+  complexity: intermediate

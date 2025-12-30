@@ -1,0 +1,25 @@
+# Portfolio Tracker Bot Configuration
+# A scheduled bot that simulates portfolio tracking with mock data
+
+name: portfolio-tracker
+description: "Simulates portfolio tracking with value history and trade execution"
+version: 1.0.18
+author: "the0"
+type: scheduled
+runtime: python3.11
+
+entrypoints:
+  bot: main.py
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [portfolio, tracking]
+  tags: [example, beginner, mock-data]
+  complexity: beginner

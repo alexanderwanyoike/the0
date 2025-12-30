@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Haskell Quick Start Guide** - Complete guide for building Haskell trading bots with the0 SDK
+  - SDK installation and usage with `The0.Input` module
+  - Project structure and Cabal configuration examples
+  - Best practices for error handling, validation, and logging
+- **Scala Quick Start Guide** - Complete guide for building Scala 3 trading bots with the0 SDK
+  - SDK installation and usage with `the0.Input` object
+  - SBT project structure and configuration examples
+  - Best practices for error handling, async programming, and logging
+- **C/C++ Quick Start Guide** - Complete guide for building C/C++ trading bots with the0
+  - SDK installation and usage with `the0.h` header-only library
+  - CMake and Makefile project setup examples
+  - Best practices for error handling, memory safety, and logging
+- **C# Quick Start Guide** - Complete guide for building C# trading bots with the0 SDK
+  - SDK installation and usage with `The0.Input` class
+  - Project structure and .NET 8 configuration examples
+  - Best practices for error handling, async programming, and logging
+- **Rust Quick Start Guide** - Complete guide for building Rust trading bots with the0 SDK
+  - SDK installation and usage with `the0::input` module
+  - Project structure and configuration examples
+  - Best practices for error handling, validation, and logging
+
 ### Changed
 
 - **Migrated from Next.js to VitePress** - Simplified documentation framework

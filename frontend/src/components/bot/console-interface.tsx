@@ -14,8 +14,17 @@ import {
   RefreshCw,
   Filter,
   X,
+  BarChart3,
+  Copy,
+  Check,
+  ChevronRight,
+  Info,
+  AlertTriangle,
+  XCircle,
+  Bug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
 
 export interface LogEntry {
   date: string;
@@ -31,6 +40,8 @@ interface ConsoleInterfaceProps {
   onDateRangeChange: (startDate: string, endDate: string) => void;
   onExport: () => void;
   className?: string;
+  /** When true, hides the header (title, badges) - useful when embedded in a parent with its own header */
+  compact?: boolean;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -40,103 +51,245 @@ const LOG_LEVEL_COLORS = {
   DEBUG: "text-gray-400 bg-gray-950/50 border-gray-800",
 };
 
+/**
+ * Format a Date to compact display format.
+ */
+function formatTimestamp(date: Date | null): { date: string; time: string } | null {
+  if (!date) return null;
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return {
+    date: `${month}-${day}`,
+    time: `${hours}:${minutes}:${seconds}`,
+  };
+}
+
 const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
   log,
-  index,
 }) => {
-  const parseLogContent = (content: string) => {
-    // Extract timestamp in various formats
-    const timestampMatch = content.match(
-      /\[?(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2})/,
-    );
-    const levelMatch = content.match(/\b(ERROR|WARN|WARNING|INFO|DEBUG)\b/);
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-    let timestamp = "";
-    if (timestampMatch) {
-      // Convert to date and time format (MM-DD HH:MM:SS)
-      const fullTimestamp = timestampMatch[1];
-      const date = new Date(fullTimestamp);
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      const seconds = String(date.getSeconds()).padStart(2, "0");
-      timestamp = `${month}-${day} ${hours}:${minutes}:${seconds}`;
-    } else {
-      const now = new Date();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const day = String(now.getDate()).padStart(2, "0");
-      const hours = String(now.getHours()).padStart(2, "0");
-      const minutes = String(now.getMinutes()).padStart(2, "0");
-      const seconds = String(now.getSeconds()).padStart(2, "0");
-      timestamp = `${month}-${day} ${hours}:${minutes}:${seconds}`;
-    }
+  // Use the event parser to get structured data
+  const event = parseLogLine(log.content);
+  const message = typeof event.data === "string" ? event.data : log.content;
+  const level = event.level || "INFO";
+  const ts = formatTimestamp(event.timestamp);
 
-    const level = levelMatch ? levelMatch[1] : "INFO";
-
-    // Clean message by removing timestamp and level prefixes
-    let message = content
-      .replace(/^\[.*?\]\s*/, "")
-      .replace(/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\s]*\s*/, "")
-      .replace(/^(ERROR|WARN|WARNING|INFO|DEBUG):?\s*/, "")
-      .trim();
-
-    if (!message) {
-      message = content; // Fallback to original content if parsing fails
-    }
-
-    return { timestamp, level, message };
-  };
-
-  const parsed = parseLogContent(log.content);
-
-  const getStatusIndicator = (level: string) => {
-    switch (level) {
-      case "ERROR":
-        return "●"; // Red dot
-      case "WARN":
-      case "WARNING":
-        return "●"; // Yellow dot
-      case "INFO":
-        return "●"; // Green dot
-      case "DEBUG":
-        return "●"; // Gray dot
-      default:
-        return "●"; // Default green dot
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in some contexts
     }
   };
 
-  const getStatusColor = (level: string) => {
-    switch (level) {
-      case "ERROR":
-        return "text-red-500 dark:text-red-400";
-      case "WARN":
-      case "WARNING":
-        return "text-yellow-500 dark:text-yellow-400";
-      case "INFO":
-        return "text-green-500 dark:text-green-400";
-      case "DEBUG":
-        return "text-gray-500 dark:text-gray-400";
-      default:
-        return "text-green-500 dark:text-green-400";
+  const getLevelStyle = (lvl: string) => {
+    switch (lvl) {
+      case "ERROR": return "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400";
+      case "WARN": return "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400";
+      case "INFO": return "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400";
+      case "DEBUG": return "bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-500";
+      default: return "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400";
+    }
+  };
+
+  const LevelIcon = ({ lvl }: { lvl: string }) => {
+    const iconClass = "h-2.5 w-2.5";
+    switch (lvl) {
+      case "ERROR": return <XCircle className={iconClass} />;
+      case "WARN": return <AlertTriangle className={iconClass} />;
+      case "INFO": return <Info className={iconClass} />;
+      case "DEBUG": return <Bug className={iconClass} />;
+      default: return <Info className={iconClass} />;
     }
   };
 
   return (
-    <div className="flex items-start gap-3 py-0.5 px-3 hover:bg-green-950/10 dark:hover:bg-green-950/10 hover:bg-green-100/20 font-mono text-sm transition-colors">
-      <span className="text-green-600 dark:text-green-400 text-sm min-w-[110px] flex-shrink-0">
-        {parsed.timestamp}
-      </span>
-      <span
-        className={`text-sm leading-none ${getStatusColor(parsed.level)} flex-shrink-0`}
-      >
-        {getStatusIndicator(parsed.level)}
-      </span>
-      <span className="flex-1 text-gray-800 dark:text-green-300 leading-tight">
-        {parsed.message}
-      </span>
+    <div
+      className={cn(
+        "group font-mono text-[11px] leading-tight cursor-pointer",
+        "hover:bg-gray-200 dark:hover:bg-gray-800/50",
+        expanded && "bg-gray-100 dark:bg-gray-800/30",
+      )}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="flex items-center gap-1.5 py-0.5 px-2">
+        <ChevronRight
+          className={cn(
+            "h-3 w-3 text-gray-500 dark:text-gray-600 flex-shrink-0 transition-transform duration-100",
+            expanded && "rotate-90 text-green-600 dark:text-green-400",
+          )}
+        />
+        {ts && (
+          <span className="text-gray-600 dark:text-gray-500 flex-shrink-0 select-none tabular-nums">
+            <span className="text-[9px]">{ts.date}</span>
+            {" "}
+            <span>{ts.time}</span>
+          </span>
+        )}
+        <span className={cn("flex-shrink-0 select-none text-[9px] font-medium px-1 rounded inline-flex items-center gap-0.5", getLevelStyle(level))}>
+          <LevelIcon lvl={level} />
+          {level}
+        </span>
+        <span className="text-gray-900 dark:text-gray-300 flex-1 min-w-0 truncate">{message}</span>
+        <button
+          onClick={handleCopy}
+          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300 dark:hover:bg-gray-700 rounded flex-shrink-0"
+          title="Copy"
+        >
+          {copied ? (
+            <Check className="h-2.5 w-2.5 text-green-500" />
+          ) : (
+            <Copy className="h-2.5 w-2.5 text-gray-400 dark:text-gray-500" />
+          )}
+        </button>
+      </div>
+      {expanded && (
+        <div className="ml-6 mr-2 my-1 px-2 py-1.5 bg-gray-50 dark:bg-gray-900 rounded border border-gray-300 dark:border-gray-700 text-[11px]">
+          <pre className="text-gray-900 dark:text-gray-300 whitespace-pre-wrap break-words">{message}</pre>
+        </div>
+      )}
     </div>
   );
+};
+
+/**
+ * Component for rendering metric entries with visual distinction.
+ */
+const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
+  log,
+}) => {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const event = parseLogLine(log.content);
+
+  if (!isMetricEvent(event)) {
+    return <LogEntryComponent log={log} index={0} />;
+  }
+
+  const metricData = event.data as Record<string, unknown>;
+  const metricType = event.metricType || "metric";
+
+  // Try to get timestamp from metric data if not already parsed
+  let ts = formatTimestamp(event.timestamp);
+  if (!ts && metricData.timestamp) {
+    const rawTs = metricData.timestamp;
+    if (typeof rawTs === "number") {
+      ts = formatTimestamp(new Date(rawTs < 10_000_000_000 ? rawTs * 1000 : rawTs));
+    } else if (typeof rawTs === "string") {
+      const numMatch = rawTs.match(/^(\d+)Z?$/);
+      if (numMatch) {
+        const ms = parseInt(numMatch[1], 10);
+        ts = formatTimestamp(new Date(ms < 10_000_000_000 ? ms * 1000 : ms));
+      } else {
+        ts = formatTimestamp(new Date(rawTs));
+      }
+    }
+  }
+
+  // Get display values (exclude _metric and timestamp keys for cleaner display)
+  const displayData = Object.entries(metricData)
+    .filter(([key]) => key !== "_metric" && key !== "timestamp")
+    .map(([key, value]) => ({
+      key,
+      value: typeof value === "object" ? JSON.stringify(value) : String(value),
+    }));
+
+  const summaryContent = displayData
+    .map(({ key, value }) => `${key}: ${value}`)
+    .join(" | ");
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const fullContent = displayData.map(({ key, value }) => `${key}: ${value}`).join("\n");
+      await navigator.clipboard.writeText(fullContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in some contexts
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        "group font-mono text-[11px] leading-tight cursor-pointer border-l-2 border-l-blue-500",
+        "hover:bg-blue-100 dark:hover:bg-blue-950/30",
+        expanded && "bg-blue-50 dark:bg-blue-950/20",
+      )}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="flex items-center gap-1.5 py-0.5 px-2">
+        <ChevronRight
+          className={cn(
+            "h-3 w-3 text-blue-500 dark:text-blue-600 flex-shrink-0 transition-transform duration-100",
+            expanded && "rotate-90 text-blue-600 dark:text-blue-400",
+          )}
+        />
+        {ts && (
+          <span className="text-blue-700 dark:text-blue-500 flex-shrink-0 select-none tabular-nums">
+            <span className="text-[9px]">{ts.date}</span>
+            {" "}
+            <span>{ts.time}</span>
+          </span>
+        )}
+        <BarChart3 className="h-2.5 w-2.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+        <span className="flex-shrink-0 select-none text-[9px] font-medium px-1 rounded bg-blue-100 dark:bg-blue-500/30 text-blue-700 dark:text-blue-300">
+          {metricType}
+        </span>
+        <span className="text-blue-800 dark:text-blue-200 flex-1 min-w-0 truncate">{summaryContent}</span>
+        <button
+          onClick={handleCopy}
+          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded flex-shrink-0"
+          title="Copy"
+        >
+          {copied ? (
+            <Check className="h-2.5 w-2.5 text-green-500" />
+          ) : (
+            <Copy className="h-2.5 w-2.5 text-blue-500 dark:text-blue-400" />
+          )}
+        </button>
+      </div>
+      {expanded && (
+        <div className="ml-6 mr-2 my-1 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/50 rounded border border-blue-200 dark:border-blue-800 text-[11px]">
+          <div className="grid gap-0.5">
+            {displayData.map(({ key, value }) => (
+              <div key={key} className="flex gap-2">
+                <span className="text-blue-600 dark:text-blue-400 min-w-[80px]">{key}:</span>
+                <span className="text-blue-800 dark:text-blue-100 break-all">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Smart entry component that detects metrics vs logs.
+ */
+const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
+  log,
+  index,
+}) => {
+  // Check if this is a metric by trying to parse
+  const event = parseLogLine(log.content);
+
+  if (isMetricEvent(event)) {
+    return <MetricEntryComponent log={log} index={index} />;
+  }
+
+  return <LogEntryComponent log={log} index={index} />;
 };
 
 export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
@@ -148,30 +301,55 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   onDateRangeChange,
   onExport,
   className,
+  compact = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [autoScroll, setAutoScroll] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: "",
     end: "",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs, autoScroll]);
+  // Track if user is at the bottom of the scroll
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-  const filteredLogs = logs.filter(
-    (log) =>
-      searchQuery === "" ||
-      log.content.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+    const threshold = 50; // pixels from bottom
+    const isAtBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      threshold;
+    setIsUserAtBottom(isAtBottom);
+  };
+
+  // Only auto-scroll if user is already at bottom or autoScroll is manually enabled
+  useEffect(() => {
+    if (
+      (autoScroll || isUserAtBottom) &&
+      bottomRef.current &&
+      scrollContainerRef.current
+    ) {
+      // Use scrollTop instead of scrollIntoView to avoid page-level scroll issues
+      scrollContainerRef.current.scrollTop =
+        scrollContainerRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll, isUserAtBottom]);
+
+  // Filter and reverse logs so newest is first
+  const filteredLogs = logs
+    .filter(
+      (log) =>
+        searchQuery === "" ||
+        log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .slice()
+    .reverse();
 
   const handleDateChange = (value: string) => {
     setSelectedDate(value);
@@ -203,40 +381,69 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   return (
     <div
       className={cn(
-        "flex flex-col h-full bg-white dark:bg-black border border-gray-300 dark:border-green-900/50",
+        "flex flex-col h-full bg-gray-100 dark:bg-gray-950 text-gray-800 dark:text-green-400",
+        !compact && "border border-gray-300 dark:border-green-900/50",
         className,
       )}
     >
-      <div className="border-b border-gray-300 dark:border-green-900/50 bg-gray-50 dark:bg-black p-4 space-y-3">
+      {/* Toolbar - always visible, but simplified in compact mode */}
+      <div
+        className={cn(
+          "border-b border-gray-300 dark:border-green-900/50 bg-gray-50 dark:bg-gray-900",
+          compact ? "px-2 py-1" : "p-4 space-y-3",
+        )}
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ScrollText className="h-5 w-5 text-green-600 dark:text-green-400" />
-            <h3 className="font-medium text-green-600 dark:text-green-400 font-mono">
-              CONSOLE
-            </h3>
-            <Badge
-              variant="outline"
-              className="text-xs bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-800 text-green-600 dark:text-green-400"
-            >
-              {filteredLogs.length} entries
-            </Badge>
-          </div>
+          {!compact && (
+            <div className="flex items-center gap-2">
+              <ScrollText className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <h3 className="font-medium text-green-600 dark:text-green-400 font-mono">
+                CONSOLE
+              </h3>
+              <Badge
+                variant="outline"
+                className="text-xs bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-800 text-green-600 dark:text-green-400"
+              >
+                {filteredLogs.length} entries
+              </Badge>
+            </div>
+          )}
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
-              className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
-            >
-              <Filter className="h-4 w-4" />
-            </Button>
+          <div
+            className={cn(
+              "flex items-center gap-1",
+              compact && "w-full justify-end",
+            )}
+          >
+            {compact && (
+              <div className="flex-1 mr-2">
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-7 text-xs"
+                />
+              </div>
+            )}
+            {!compact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
+              >
+                <Filter className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={onRefresh}
               disabled={loading}
-              className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
+              className={cn(
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
+                compact && "h-7 w-7 p-0",
+              )}
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
@@ -249,6 +456,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                 autoScroll
                   ? "bg-green-200 dark:bg-green-950/50 text-green-700 dark:text-green-300"
                   : "",
+                compact && "h-7 w-7 p-0",
               )}
             >
               {autoScroll ? (
@@ -261,14 +469,17 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               variant="ghost"
               size="sm"
               onClick={onExport}
-              className="text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300"
+              className={cn(
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
+                compact && "h-7 w-7 p-0",
+              )}
             >
               <Download className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        {showFilters && (
+        {!compact && showFilters && (
           <div className="space-y-3 pt-3 border-t">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -343,22 +554,23 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
       <div className="flex-1 relative overflow-hidden">
         <div
           ref={scrollContainerRef}
-          className="h-full overflow-auto bg-white dark:bg-black"
+          onScroll={handleScroll}
+          className="h-full overflow-auto bg-gray-100 dark:bg-gray-950"
         >
           {loading && logs.length === 0 ? (
             <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-green-600 dark:text-green-400" />
+              <RefreshCw className="h-6 w-6 animate-spin text-gray-500 dark:text-green-500" />
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-600 dark:text-green-600 font-mono">
+            <div className="flex items-center justify-center h-32 text-gray-500 dark:text-green-600 font-mono text-sm">
               {logs.length === 0
-                ? "> No logs available"
-                : "> No logs match your filters"}
+                ? "> Waiting for logs..."
+                : "> No logs match filter"}
             </div>
           ) : (
             <>
               {filteredLogs.map((log, index) => (
-                <LogEntryComponent
+                <SmartLogEntry
                   key={`log-${index}-${log.content.slice(0, 20)}`}
                   log={log}
                   index={index}

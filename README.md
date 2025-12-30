@@ -8,9 +8,13 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-Experimental-FFA500?logo=kubernetes)](https://kubernetes.io/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python)](https://www.python.org/)
-[![JavaScript](https://img.shields.io/badge/JavaScript-Node.js%2020+-F7DF1E?logo=javascript)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Rust](https://img.shields.io/badge/Rust-stable-DEA584?logo=rust)](https://www.rust-lang.org/)
+[![C++](https://img.shields.io/badge/C++-17-00599C?logo=cplusplus)](https://isocpp.org/)
+[![C#](https://img.shields.io/badge/C%23-.NET%208-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![Scala](https://img.shields.io/badge/Scala-3-DC322F?logo=scala)](https://www.scala-lang.org/)
+[![Haskell](https://img.shields.io/badge/Haskell-GHC%209.6-5D4F85?logo=haskell)](https://www.haskell.org/)
 
 </div>
 
@@ -18,13 +22,14 @@
 
 ## What is the0?
 
-**the0** is an open-source algorithmic trading execution engine that provides production-grade infrastructure for deploying and managing trading bots across multiple markets. Build strategies in Python or JavaScript, then deploy them to a self-hosted execution engine with real-time monitoring and observability.
+**the0** is an open-source algorithmic trading execution engine that provides production-grade infrastructure for deploying and managing trading bots across multiple markets. Build strategies in your preferred language—Python, TypeScript, Rust, C++, C#, Scala, or Haskell—then deploy them to a self-hosted execution engine with real-time monitoring and custom React dashboards.
 
 > **Status**: Beta - Active development. Not production-ready. Contributions and feedback welcome.
 
 ### Key Features
 
-- **Custom Bot Development** - Build bots in Python or JavaScript with any libraries you prefer
+- **Multi-Language Support** - Build bots in Python, TypeScript, Rust, C++, C#, Scala, or Haskell
+- **Custom Frontends** - Create React dashboards tailored to your trading strategies
 - **Real-time Execution** - Deploy scheduled or continuous trading bots with isolated execution
 - **Self-Hosted** - Full control over your infrastructure and data
 - **Docker Ready** - Streamlined deployment with Docker Compose
@@ -290,13 +295,31 @@ graph TB
 
 ## Bot Development
 
-### Framework Agnostic Approach
+### Supported Languages
 
-the0 doesn't lock you into specific libraries or frameworks. Create bots using:
+Build trading bots in any of these languages with official SDK support:
 
-- **Python 3.11+** with any PyPI packages (pandas, numpy, ccxt, etc.)
-- **JavaScript/Node.js 20+** with any npm packages
-- **Open Standards**: YAML configuration, JSON Schema validation
+| Language | SDK | Documentation | Package Registry |
+|----------|-----|---------------|------------------|
+| **Python** | [sdk/python](sdk/python) | [Quick Start](docs/custom-bot-development/python-quick-start.md) | [PyPI](https://pypi.org/project/the0-sdk/) |
+| **TypeScript/Node.js** | [sdk/nodejs](sdk/nodejs) | [Quick Start](docs/custom-bot-development/nodejs-quick-start.md) | [npm](https://www.npmjs.com/package/@alexanderwanyoike/the0-node) |
+| **Rust** | [sdk/rust](sdk/rust) | [Quick Start](docs/custom-bot-development/rust-quick-start.md) | [crates.io](https://crates.io/crates/the0-sdk) |
+| **C++** | [sdk/cpp](sdk/cpp) | [Quick Start](docs/custom-bot-development/cpp-quick-start.md) | Header-only (FetchContent) |
+| **C#** | [sdk/dotnet](sdk/dotnet) | [Quick Start](docs/custom-bot-development/csharp-quick-start.md) | [NuGet](https://www.nuget.org/packages/The0.Sdk) |
+| **Scala** | [sdk/scala](sdk/scala) | [Quick Start](docs/custom-bot-development/scala-quick-start.md) | [GitHub Packages](https://github.com/alexanderwanyoike/the0/packages) |
+| **Haskell** | [sdk/haskell](sdk/haskell) | [Quick Start](docs/custom-bot-development/haskell-quick-start.md) | Source (cabal) |
+
+### Custom Frontends
+
+Build React dashboards tailored to your trading strategies using the React SDK:
+
+| SDK | Documentation | Package |
+|-----|---------------|---------|
+| [sdk/react](sdk/react) | [Custom Frontends](docs/custom-bot-development/custom-frontends.md) | [@alexanderwanyoike/the0-react](https://www.npmjs.com/package/@alexanderwanyoike/the0-react) |
+
+### Framework Agnostic
+
+the0 doesn't lock you into specific libraries or frameworks. Use any packages from your language's ecosystem—pandas for Python, sttp for Scala, reqwest for Rust, or any other libraries you prefer.
 
 ### Example: Simple DCA Bot
 

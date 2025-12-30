@@ -204,12 +204,19 @@ func NewSecretsSetCmd() *cobra.Command {
 		Long: `Set a build secret for dependency vendoring.
 
 Available secrets:
-  github-token    GitHub Personal Access Token for private git repos
-  pip-index-url   Private PyPI index URL (include credentials in URL)
+  github-token          GitHub PAT for private git repos (all languages)
+  pip-index-url         Private PyPI index URL (Python)
+  npm-token             Private npm registry token (Node.js)
+  nuget-token           Private NuGet feed token (C#/.NET)
+  cargo-registry-token  Private Cargo registry token (Rust)
+  maven-user            Private Maven repo username (Scala)
+  maven-token           Private Maven repo token (Scala)
 
 Examples:
   the0 auth secrets set github-token ghp_xxxxxxxxxxxx
-  the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/`,
+  the0 auth secrets set pip-index-url https://user:pass@pypi.example.com/simple/
+  the0 auth secrets set npm-token npm_xxxxxxxxxxxx
+  the0 auth secrets set nuget-token oy2xxxxxxxxxxxxx`,
 		Args: cobra.ExactArgs(2),
 		Run:  secretsSet,
 	}
@@ -234,20 +241,41 @@ func secretsShow(cmd *cobra.Command, args []string) {
 	fmt.Println("Build Secrets:")
 	fmt.Println("--------------")
 
-	if secrets.GitHubToken != "" {
-		fmt.Printf("  github-token:  %s\n", internal.MaskToken(secrets.GitHubToken))
-	} else {
-		fmt.Println("  github-token:  (not set)")
-	}
+	// Universal
+	fmt.Println("\n  Universal (all languages):")
+	printSecret("  github-token", secrets.GitHubToken, "GITHUB_TOKEN")
 
-	if secrets.PipIndexURL != "" {
-		fmt.Printf("  pip-index-url: %s\n", internal.MaskToken(secrets.PipIndexURL))
-	} else {
-		fmt.Println("  pip-index-url: (not set)")
-	}
+	// Python
+	fmt.Println("\n  Python:")
+	printSecret("  pip-index-url", secrets.PipIndexURL, "PIP_EXTRA_INDEX_URL")
 
-	fmt.Println("\nThese secrets are used during 'the0 custom-bot deploy' to")
-	fmt.Println("authenticate with private package repositories.")
+	// Node.js
+	fmt.Println("\n  Node.js:")
+	printSecret("  npm-token", secrets.NpmToken, "NPM_TOKEN")
+
+	// C#/.NET
+	fmt.Println("\n  C#/.NET:")
+	printSecret("  nuget-token", secrets.NuGetToken, "NUGET_TOKEN")
+
+	// Rust
+	fmt.Println("\n  Rust:")
+	printSecret("  cargo-registry-token", secrets.CargoRegistryToken, "CARGO_REGISTRY_TOKEN")
+
+	// Scala
+	fmt.Println("\n  Scala:")
+	printSecret("  maven-user", secrets.MavenUser, "MAVEN_USER")
+	printSecret("  maven-token", secrets.MavenToken, "MAVEN_TOKEN")
+
+	fmt.Println("\nThese secrets are passed as environment variables during builds.")
+	fmt.Println("Use 'the0 auth secrets set <name> <value>' to configure.")
+}
+
+func printSecret(name, value, envVar string) {
+	if value != "" {
+		fmt.Printf("    %-22s %s (→ %s)\n", name+":", internal.MaskToken(value), envVar)
+	} else {
+		fmt.Printf("    %-22s (not set)\n", name+":")
+	}
 }
 
 func secretsSet(cmd *cobra.Command, args []string) {
@@ -260,14 +288,34 @@ func secretsSet(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	var envVar string
 	switch secretName {
 	case "github-token":
 		secrets.GitHubToken = secretValue
+		envVar = "GITHUB_TOKEN"
 	case "pip-index-url":
 		secrets.PipIndexURL = secretValue
+		envVar = "PIP_EXTRA_INDEX_URL"
+	case "npm-token":
+		secrets.NpmToken = secretValue
+		envVar = "NPM_TOKEN"
+	case "nuget-token":
+		secrets.NuGetToken = secretValue
+		envVar = "NUGET_TOKEN"
+	case "cargo-registry-token":
+		secrets.CargoRegistryToken = secretValue
+		envVar = "CARGO_REGISTRY_TOKEN"
+	case "maven-user":
+		secrets.MavenUser = secretValue
+		envVar = "MAVEN_USER"
+	case "maven-token":
+		secrets.MavenToken = secretValue
+		envVar = "MAVEN_TOKEN"
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown secret: %s\n", secretName)
-		fmt.Println("Available secrets: github-token, pip-index-url")
+		fmt.Println("Available secrets:")
+		fmt.Println("  github-token, pip-index-url, npm-token, nuget-token,")
+		fmt.Println("  cargo-registry-token, maven-user, maven-token")
 		os.Exit(1)
 	}
 
@@ -278,6 +326,7 @@ func secretsSet(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("✓ Secret '%s' saved\n", secretName)
 	fmt.Printf("  Value: %s\n", internal.MaskToken(secretValue))
+	fmt.Printf("  Env:   %s\n", envVar)
 }
 
 func secretsClear(cmd *cobra.Command, args []string) {

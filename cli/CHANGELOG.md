@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Haskell GHC 9.6 language support** - Build Haskell bots locally using Docker before deployment
+  - `HaskellBuilder` implementation of `LanguageBuilder` interface
+  - Detects `.cabal` projects and builds with `cabal build --enable-optimization=2`
+  - Uses `haskell:9.6-bookworm` Docker image for cross-platform builds
+- **Scala 3 language support** - Build Scala bots locally using Docker before deployment
+  - `ScalaBuilder` implementation of `LanguageBuilder` interface
+  - Detects `build.sbt` projects and builds with `sbt assembly`
+  - Uses `sbtscala/scala-sbt` Docker image for cross-platform builds
+  - Auto-configures sbt-assembly plugin if not present
+- **C/C++ GCC 13 language support** - Build C/C++ bots locally using Docker before deployment
+  - `CppBuilder` implementation of `LanguageBuilder` interface
+  - Detects `CMakeLists.txt` (priority) or `Makefile` projects
+  - CMake projects: installs cmake, builds with `cmake .. && make`
+  - Makefile projects: builds with `make`
+  - Uses `gcc:13` Docker image for cross-platform builds
+- **C# .NET 8 language support** - Build C# bots locally using Docker before deployment
+  - `DotnetBuilder` implementation of `LanguageBuilder` interface
+  - Detects `.csproj` projects and builds with `dotnet publish -c Release`
+  - Uses `mcr.microsoft.com/dotnet/sdk:8.0` Docker image for cross-platform builds
+- **LanguageBuilder interface** - Refactored language builds with common interface
+  - Extracted Rust builder to `builder_rust.go`
+  - Added `builder_dotnet.go` for C# support
+  - Extensible pattern for adding new compiled languages
+- **Rust language support** - Build Rust bots locally using Docker before deployment
+  - `ShouldBuildRust()` - Detects Cargo.toml projects
+  - `PerformRustBuild()` - Compiles Rust projects in `rust:latest` Docker container
+  - `BuildRustIfNeeded()` - Entry point for conditional Rust building
+  - Private git dependency support via `GITHUB_TOKEN` environment variable
 - **Centralized logger package** - New `internal/logger` package with modern CLI output (spinners, colored icons)
 - **Verbose mode** - Added `-v/--verbose` global flag for detailed output during operations
 - **Improved error messages** - Validation errors (HTTP 400) now display full response details

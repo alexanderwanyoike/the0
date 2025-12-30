@@ -1,0 +1,9 @@
+{
+  "name": "my-portfolio-tracker",
+  "type": "scheduled/portfolio-tracker",
+  "version": "1.0.18",
+  "schedule": "* * * * *",
+  "symbols": ["BTC", "ETH", "SOL"],
+  "initial_value": 10000,
+  "volatility": 0.02
+}

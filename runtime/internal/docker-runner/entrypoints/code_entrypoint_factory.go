@@ -20,19 +20,22 @@ func NewCodeEntrypointFactory(
 
 func (f *codeEntrypointFactory) GetCode() (string, error) {
 	switch f.entryPointType {
-	case "backtest":
-		switch f.runtime {
-		case "nodejs20":
-			return NodeJsBacktestEntrypoint, nil
-		case "python3", "python3.11":
-			return PythonBacktestEntrypoint, nil
-		}
 	case "bot":
 		switch f.runtime {
 		case "nodejs20":
 			return NodeJsBotEntrypoint, nil
 		case "python3", "python3.11":
 			return PythonBotEntrypoint, nil
+		case "rust-stable":
+			return RustBotEntrypoint, nil
+		case "dotnet8":
+			return Dotnet8BotEntrypoint, nil
+		case "gcc13":
+			return Gcc13BotEntrypoint, nil
+		case "scala3":
+			return Scala3BotEntrypoint, nil
+		case "ghc96":
+			return Ghc96BotEntrypoint, nil
 		}
 	}
 	return "", fmt.Errorf("unsupported entry point type or runtime: %s, %s", f.entryPointType, f.runtime)

@@ -5,25 +5,49 @@ description: "the0 platform documentation"
 
 # the0 Documentation
 
-Welcome to the comprehensive documentation for the0 - an open-source algorithmic trading platform.
+This documentation covers everything you need to build, deploy, and manage algorithmic trading bots on the0 platform.
 
 ## Getting Started
 
-- [Welcome to the0](/welcome-to-the0) - Platform introduction and overview
-- [Terminology](/terminology/) - Key terms and concepts
+New to the0? Start here to understand the platform and set up your environment.
 
-## the0 CLI
+- [Welcome to the0](/welcome-to-the0) - Platform overview, architecture, and supported languages
+- [Terminology](/terminology/) - Key concepts: bots, custom bots, and deployments
 
-- [Installation](/the0-cli/installation) - Install the CLI tool
-- [Authentication](/the0-cli/authentication) - Set up your API credentials
+## CLI Reference
+
+The `the0` CLI is the primary tool for deploying bots and managing instances.
+
+- [Installation](/the0-cli/installation) - Install the CLI
+- [Authentication](/the0-cli/authentication) - Configure API credentials
 - [Bot Commands](/the0-cli/bot-commands) - Manage bot instances
 - [Custom Bot Commands](/the0-cli/custom-bot-commands) - Deploy custom bots
+- [Secrets](/the0-cli/secrets) - Configure private dependencies
 
-## Custom Bot Development
+## Bot Development
 
-- [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build your first bot
-- [Overview](/custom-bot-development/overview) - Development concepts
-- [Configuration](/custom-bot-development/configuration) - Bot configuration reference
-- [Bot Types](/custom-bot-development/bot-types) - Scheduled vs realtime bots
-- [Testing](/custom-bot-development/testing) - Testing strategies
+Guides for building trading bots in your preferred language.
+
+### Language Quick Starts
+
+- [Python](/custom-bot-development/python-quick-start)
+- [TypeScript/Node.js](/custom-bot-development/nodejs-quick-start)
+- [Rust](/custom-bot-development/rust-quick-start)
+- [C#](/custom-bot-development/csharp-quick-start)
+- [Scala](/custom-bot-development/scala-quick-start)
+- [C++](/custom-bot-development/cpp-quick-start)
+- [Haskell](/custom-bot-development/haskell-quick-start)
+
+### Core Concepts
+
+- [Development Overview](/custom-bot-development/overview) - Bot development workflow
+- [Configuration](/custom-bot-development/configuration) - bot-config.yaml and schemas
+- [Bot Types](/custom-bot-development/bot-types) - Scheduled vs realtime execution
+- [Metrics](/custom-bot-development/metrics) - Emit data to the dashboard
+- [Custom Frontends](/custom-bot-development/custom-frontends) - Build custom dashboards
+- [Testing](/custom-bot-development/testing) - Local testing strategies
 - [Deployment](/custom-bot-development/deployment) - Deploy to the platform
+
+## Integrations
+
+- [MCP Server](/integrations/mcp) - Model Context Protocol integration

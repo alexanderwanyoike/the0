@@ -1,0 +1,25 @@
+# SMA Crossover Bot Configuration (C#)
+# A realtime bot using Yahoo Finance for live stock data
+
+name: csharp-sma-crossover
+description: "SMA crossover strategy bot using C# .NET 8 with Yahoo Finance data"
+version: 1.0.14
+author: "the0"
+type: realtime
+runtime: dotnet8
+
+entrypoints:
+  bot: bin/Release/net8.0/publish/SmaBot.dll
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [example, sma, crossover, csharp, dotnet]
+  complexity: beginner

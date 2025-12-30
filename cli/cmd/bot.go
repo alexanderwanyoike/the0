@@ -63,13 +63,21 @@ func NewBotUpdateCmd() *cobra.Command {
 }
 
 func NewBotDeleteCmd() *cobra.Command {
-	return &cobra.Command{
+	var skipConfirm bool
+
+	cmd := &cobra.Command{
 		Use:   "delete <bot_id>",
 		Short: "Delete a bot instance",
-		Long:  "Delete a deployed bot (requires confirmation)",
+		Long:  "Delete a deployed bot (requires confirmation unless -y is provided)",
 		Args:  cobra.ExactArgs(1),
-		Run:   deleteBotInstance,
+		Run: func(cmd *cobra.Command, args []string) {
+			deleteBotInstance(cmd, args, skipConfirm)
+		},
 	}
+
+	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompt")
+
+	return cmd
 }
 
 func NewBotLogsCmd() *cobra.Command {
@@ -344,24 +352,26 @@ func updateBotInstance(cmd *cobra.Command, args []string) {
 	logger.Print("  ID: %s", botID)
 }
 
-func deleteBotInstance(cmd *cobra.Command, args []string) {
+func deleteBotInstance(cmd *cobra.Command, args []string, skipConfirm bool) {
 	botID := args[0]
 
-	logger.Warning("Are you sure you want to delete bot '%s'?", botID)
-	logger.Print("This action cannot be undone")
-	logger.Printf("Type 'yes' to confirm: ")
+	if !skipConfirm {
+		logger.Warning("Are you sure you want to delete bot '%s'?", botID)
+		logger.Print("This action cannot be undone")
+		logger.Printf("Type 'yes' to confirm: ")
 
-	reader := bufio.NewReader(os.Stdin)
-	confirmation, err := reader.ReadString('\n')
-	if err != nil {
-		logger.Error("Failed to read confirmation: %v", err)
-		os.Exit(1)
-	}
+		reader := bufio.NewReader(os.Stdin)
+		confirmation, err := reader.ReadString('\n')
+		if err != nil {
+			logger.Error("Failed to read confirmation: %v", err)
+			os.Exit(1)
+		}
 
-	confirmation = strings.TrimSpace(strings.ToLower(confirmation))
-	if confirmation != "yes" {
-		logger.Info("Deletion cancelled")
-		return
+		confirmation = strings.TrimSpace(strings.ToLower(confirmation))
+		if confirmation != "yes" {
+			logger.Info("Deletion cancelled")
+			return
+		}
 	}
 
 	logger.StartSpinner("Deleting bot")

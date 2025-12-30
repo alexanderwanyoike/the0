@@ -5,347 +5,251 @@ tags: ["custom-bots", "bot-types", "execution-models"]
 order: 9
 ---
 
-# Bot Types and Execution Models
+# Bot Types
 
-the0 platform provides two distinct bot execution models that determine how and when your trading algorithms run. Understanding these types is crucial for choosing the right approach for your strategy.
-
----
-
-## Overview of Bot Types
-
-### Execution Models vs Trading Strategies
-
-the0 provides **execution models** (how bots run) rather than **trading strategies** (what bots do):
-
-- **scheduled**: Run on fixed intervals using cron expressions
-- **realtime**: Run continuously, processing live market data
-
-These models give you complete flexibility to implement any trading strategy within the execution framework that best suits your needs.
+Every custom bot on the0 runs in one of two execution models: scheduled or realtime. This choice fundamentally shapes how you write your code. Scheduled bots execute once and exit, triggered by cron expressions. Realtime bots run continuously with an event loop until explicitly stopped. The execution model is orthogonal to your trading strategy—you can implement price alerts, SMA crossovers, or portfolio rebalancing in either model depending on how frequently you need to react to market conditions.
 
 ## Scheduled Bots
 
-### When to Use Scheduled Bots
+A scheduled bot executes discretely. The platform launches your code, it runs to completion, reports a result, and exits. The scheduler then waits for the next trigger time before launching it again. Each execution is independent with no shared memory between runs.
 
-Scheduled bots are ideal for strategies that:
-
-- Execute at specific times or intervals
-- Don't require continuous market monitoring
-- Perform periodic analysis or rebalancing
-- Have natural timing cycles (minutely, hourly, daily, weekly, monthly)
+This model suits strategies that operate on fixed intervals. Dollar-cost averaging naturally fits a weekly schedule. Portfolio rebalancing might run daily at market open. End-of-day analysis processes the day's data after market close. These strategies don't need sub-second reaction times—they need reliable, periodic execution.
 
 ### Configuration
 
+Set the type field in your bot-config.yaml:
+
 ```yaml
-# bot-config.yaml
 type: scheduled
 ```
 
-### Common Use Cases
-
-- Dollar-Cost Averaging (DCA)
-- Portfolio rebalancing
-- Swing trading strategies
-- Day trading with fixed intervals
+When users create bot instances from your scheduled custom bot, they specify a cron expression that determines when the bot runs.
 
 ### Implementation Pattern
 
+A scheduled bot follows a simple pattern: parse configuration, execute your logic, emit metrics, and report completion. The python-portfolio-tracker example demonstrates this:
+
 ```python
-def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Scheduled bot entry point.
+from the0 import parse, success, error, metric
+import logging
 
-    Executes once per trigger, then exits.
-    Should be stateless between executions.
-    """
-    try:
-        # Fetch current market data
-        market_data = fetch_market_data(config['symbol'])
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-        # Execute strategy logic
-        result = execute_strategy(market_data, config)
+def main(bot_id: str = None, config: dict = None):
+    if bot_id is None or config is None:
+        bot_id, config = parse()
 
-        # Return execution results
-        return {
-            "status": "success",
-            "message": "Scheduled execution completed",
-            "data": result
-        }
+    # Extract configuration with defaults
+    initial_value = config.get("initial_value", 10000)
+    symbols = config.get("symbols", ["BTC", "ETH", "SOL"])
 
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Execution failed: {str(e)}"
-        }
+    logger.info(f"Bot {bot_id} started with symbols: {symbols}")
+
+    # Execute your strategy
+    portfolio = calculate_portfolio_value(symbols, initial_value)
+
+    # Emit metrics for the dashboard
+    metric("portfolio_value", {
+        "value": portfolio["total_value"],
+        "change_pct": portfolio["change_pct"],
+    })
+
+    for position in portfolio["positions"]:
+        metric("position", {
+            "symbol": position["symbol"],
+            "quantity": position["quantity"],
+            "value": position["value"],
+        })
+
+    # Report completion
+    success(f"Portfolio tracked: ${portfolio['total_value']:.2f}", {
+        "portfolio_value": portfolio["total_value"],
+        "positions_count": len(portfolio["positions"]),
+    })
+
+if __name__ == "__main__":
+    main()
 ```
 
-### Scheduling Examples
+Notice that the bot does its work and exits. There's no loop, no persistent state. If you need to remember something between executions, store it externally—in your exchange account state, a database, or the bot's configuration.
 
-#### Cron Expression Reference
+### Cron Scheduling
 
-```bash
-# Format: minute hour day month weekday
-# Examples:
-
-"0 0 * * *"     # Daily at midnight
-"0 9 * * 1-5"   # Weekdays at 9 AM
-"*/15 * * * *"  # Every 15 minutes
-"0 0 1 * *"     # Monthly on the 1st at midnight
-"0 12 * * 0"    # Weekly on Sunday at noon
-"30 14 * * 1,3,5" # Mon, Wed, Fri at 2:30 PM
-```
-
-#### Advanced Scheduling
+Bot instances specify their schedule using standard cron expressions. The expression defines minute, hour, day of month, month, and day of week:
 
 ```json
 {
-  "name": "adaptive-dca",
-  "type": "scheduled/adaptive-dca",
-  "schedule": "0 */6 * * *", // Every 6 hours
-  "parameters": {
-    "symbol": "BTCUSDT",
-    "base_amount": 50,
-    "volatility_adjustment": true,
-    "market_condition_check": true
-  }
+  "name": "weekly-dca",
+  "type": "scheduled/portfolio-tracker",
+  "version": "1.0.0",
+  "schedule": "0 9 * * 1"
 }
 ```
 
-### Advantages
+Common patterns include:
 
-- **Resource Efficient**: Only runs when needed
-- **Predictable**: Executes at known intervals
-- **Simple State Management**: Stateless between executions
-- **Cost Effective**: Lower compute costs than continuous bots cheaper than realtime bots
-
-### Limitations
-
-- **Not Real-time**: Cannot react immediately to market changes
-- **Fixed Timing**: Limited flexibility in execution timing
-- **Market Hours**: May execute during low liquidity periods
+| Expression | When it runs |
+|------------|--------------|
+| `*/5 * * * *` | Every 5 minutes |
+| `0 * * * *` | Every hour on the hour |
+| `0 9 * * *` | Daily at 9 AM |
+| `0 9 * * 1-5` | Weekdays at 9 AM |
+| `0 0 1 * *` | First day of each month at midnight |
 
 ## Realtime Bots
 
-### When to Use Realtime Bots
+A realtime bot runs continuously from the moment it starts until someone stops it. Your code typically contains an event loop that fetches data, processes it, emits metrics, and sleeps before the next iteration. State persists across loop iterations, making it easy to track moving averages, maintain position history, or detect pattern changes.
 
-Realtime bots are perfect for strategies that:
-
-- Require continuous market monitoring
-- Need to react quickly to price movements
-- Implement market making or arbitrage
+This model suits strategies that need to react quickly to market conditions. Price alert bots monitor quotes and trigger notifications when thresholds are crossed. Grid trading bots manage multiple orders across price levels. Arbitrage detection requires constant comparison of prices across venues. These strategies benefit from continuous execution with minimal latency between observations.
 
 ### Configuration
 
+Set the type field in your bot-config.yaml:
+
 ```yaml
-# bot-config.yaml
 type: realtime
 ```
 
-### Common Use Cases
-
-- Grid trading strategies
-- Market making
-- Arbitrage detection
-- Scalping strategies
+Realtime bots don't use cron schedules—they run continuously until stopped.
 
 ### Implementation Pattern
 
-```python
-def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Realtime bot entry point.
+A realtime bot contains a main loop that runs indefinitely. The typescript-price-alerts example shows the pattern:
 
-    Runs continuously until stopped.
-    Maintains state across iterations.
-    """
-    try:
-        # Initialize bot state
-        bot_state = initialize_bot_state(config)
+```typescript
+import { parse, metric, sleep } from "@alexanderwanyoike/the0-node";
+import pino from "pino";
 
-        # Main execution loop
-        while True:
-            try:
-                # Fetch real-time market data
-                market_data = fetch_realtime_data(config['symbol'])
+const logger = pino({ level: "info" });
 
-                # Process data and generate signals
-                signals = process_market_data(market_data, bot_state)
-
-                # Execute trades if signals present
-                if signals:
-                    execute_trades(signals, config, bot_state)
-
-                # Update bot state
-                update_bot_state(bot_state, market_data)
-
-                # Sleep to respect rate limits
-                time.sleep(config.get('update_interval', 1))
-
-            except Exception as e:
-                logger.error(f"Error in main loop: {e}")
-                time.sleep(5)  # Brief pause before retry
-
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-        return {"status": "stopped", "message": "Bot stopped gracefully"}
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        return {"status": "error", "message": f"Bot failed: {str(e)}"}
-```
-
-### WebSocket Integration
-
-```javascript
-// JavaScript example with WebSocket
-class RealtimeBot {
-  constructor(config) {
-    this.config = config;
-    this.positions = new Map();
-    this.orders = new Map();
-  }
-
-  async start() {
-    // Connect to exchange WebSocket
-    const ws = new WebSocket(this.getWebSocketUrl());
-
-    ws.on("message", (data) => {
-      const marketData = JSON.parse(data);
-      this.processMarketUpdate(marketData);
-    });
-
-    ws.on("error", (error) => {
-      console.error("WebSocket error:", error);
-      this.reconnect();
-    });
-  }
-
-  processMarketUpdate(data) {
-    // Process real-time market data
-    const signals = this.generateSignals(data);
-
-    // Execute trades immediately
-    for (const signal of signals) {
-      this.executeTrade(signal);
-    }
-  }
-
-  async executeTrade(signal) {
-    try {
-      const order = await this.exchange.createOrder(signal);
-      this.orders.set(order.id, order);
-      console.log(`Order placed: ${order.id}`);
-    } catch (error) {
-      console.error("Trade execution failed:", error);
-    }
-  }
+interface BotConfig {
+    symbol: string;
+    base_price: number;
+    alert_threshold: number;
+    update_interval_ms: number;
 }
 
-// Main entry point
+interface BotState {
+    lastPrice: number;
+    priceHistory: number[];
+    lastAlertTime: number;
+}
 
-function main(id, config) {
-  /**
-   * Realtime bot entry point.
-   *
-   * Creates and starts a RealtimeBot instance.
-   * Handles graceful shutdown and error recovery.
-   */
-  try {
-    // Create bot instance with configuration
-    const bot = new RealtimeBot(config);
+async function main(): Promise<void> {
+    const { id, config } = parse<BotConfig>();
 
-    // Start the bot
-    console.log(`Starting realtime bot: ${id}`);
-    bot.start();
+    const symbol = config.symbol || "BTC/USD";
+    const alertThreshold = config.alert_threshold || 1.0;
+    const updateInterval = config.update_interval_ms || 5000;
 
-    // Handle graceful shutdown
-    process.on("SIGINT", () => {
-      console.log("Shutdown signal received, stopping bot...");
-      bot.stop();
-    });
+    logger.info({ botId: id, symbol, alertThreshold }, "Bot started");
 
-    process.on("SIGTERM", () => {
-      console.log("Termination signal received, stopping bot...");
-      bot.stop();
-    });
-
-    return {
-      status: "success",
-      message: `Realtime bot ${id} started successfully`,
+    // Initialize state that persists across iterations
+    const state: BotState = {
+        lastPrice: config.base_price || 45000,
+        priceHistory: [],
+        lastAlertTime: 0,
     };
-  } catch (error) {
-    console.error(`Failed to start bot ${id}:`, error);
-    return {
-      status: "error",
-      message: `Bot startup failed: ${error.message}`,
+
+    // Main loop runs until process is terminated
+    while (true) {
+        const price = await fetchPrice(symbol);
+
+        metric("price", {
+            symbol,
+            value: price,
+            change_pct: calculateChange(state.lastPrice, price),
+        });
+
+        // Check alert conditions
+        if (shouldAlert(state, price, alertThreshold)) {
+            metric("alert", {
+                symbol,
+                type: "price_movement",
+                message: `${symbol} moved ${alertThreshold}%`,
+            });
+        }
+
+        // Update state for next iteration
+        state.lastPrice = price;
+        state.priceHistory.push(price);
+
+        await sleep(updateInterval);
+    }
+}
+
+// Export main for the runtime to invoke
+export { main };
+```
+
+The key difference from scheduled bots is the `while (true)` loop and the state object that accumulates data across iterations. The `sleep()` function controls how frequently the loop iterates, which directly affects API rate limit consumption and metric emission frequency.
+
+### Rust Example
+
+Compiled languages follow the same pattern. The rust-sma-crossover example:
+
+```rust
+use the0_sdk::input;
+use serde_json::json;
+use std::thread;
+use std::time::Duration;
+
+struct BotState {
+    prev_short_sma: Option<f64>,
+    prev_long_sma: Option<f64>,
+}
+
+fn main() {
+    let (bot_id, config) = input::parse()
+        .expect("Failed to parse configuration");
+
+    let symbol = config["symbol"].as_str().unwrap_or("AAPL");
+    let short_period = config["short_period"].as_i64().unwrap_or(5) as usize;
+    let long_period = config["long_period"].as_i64().unwrap_or(20) as usize;
+    let interval_ms = config["update_interval_ms"].as_i64().unwrap_or(60000) as u64;
+
+    let mut state = BotState {
+        prev_short_sma: None,
+        prev_long_sma: None,
     };
-  }
+
+    loop {
+        let prices = fetch_prices(symbol);
+        let short_sma = calculate_sma(&prices, short_period);
+        let long_sma = calculate_sma(&prices, long_period);
+
+        input::metric("sma", &json!({
+            "symbol": symbol,
+            "short_sma": short_sma,
+            "long_sma": long_sma,
+        }));
+
+        if let Some(signal) = detect_crossover(&state, short_sma, long_sma) {
+            input::metric("signal", &json!({
+                "type": signal,
+                "symbol": symbol,
+            }));
+        }
+
+        state.prev_short_sma = Some(short_sma);
+        state.prev_long_sma = Some(long_sma);
+
+        thread::sleep(Duration::from_millis(interval_ms));
+    }
 }
 ```
 
-### Advantages
+## Choosing Between Types
 
-- **Immediate Response**: React to market changes instantly
-- **Continuous Monitoring**: Never miss opportunities
-- **Complex Strategies**: Support sophisticated algorithms
+The decision comes down to how your strategy relates to time. If your strategy naturally operates on calendar intervals—daily rebalancing, weekly DCA purchases, monthly reporting—scheduled execution is the right fit. You write simpler code without loops, and the platform handles timing.
 
-### Limitations
+If your strategy needs to observe continuous market behavior—tracking price momentum, detecting sudden movements, maintaining live positions—realtime execution gives you that continuous presence. You control the observation frequency through your sleep interval, and state naturally persists in memory.
 
-- **Higher Resource Usage**: Consumes more CPU and memory
-- **More Complex**: Requires careful state management
-- **Higher Costs**: More expensive than scheduled bots
+Some strategies could work either way. An SMA crossover strategy could run as a scheduled bot checking hourly, or as a realtime bot checking every minute. The choice depends on how quickly you need to detect crossovers and how important that timing is to your strategy's performance.
 
-## Choosing the Right Bot Type
+## Related
 
-### Decision Matrix
-
-| Strategy Type         | Best Bot Type         | Reasoning                        |
-| --------------------- | --------------------- | -------------------------------- |
-| DCA                   | Scheduled             | Fixed timing, periodic execution |
-| Grid Trading          | Realtime              | Continuous order management      |
-| Portfolio Rebalancing | Scheduled             | Periodic analysis and adjustment |
-| Market Making         | Realtime              | Continuous liquidity provision   |
-| Arbitrage             | Realtime              | Immediate opportunity execution  |
-| Mean Reversion        | Scheduled or Realtime | Depends on timeframe             |
-
-## Performance Considerations
-
-### Resource Usage by Type
-
-#### Scheduled Bots
-
-- **CPU**: Low (only during execution)
-- **Memory**: Minimal
-- **Network**: Periodic API calls
-- **Storage**: Configuration and logs only
-
-#### Realtime Bots
-
-- **CPU**: Moderate to High (continuous processing)
-- **Memory**: Moderate (state management)
-- **Network**: High (continuous data streams)
-- **Storage**: State data and extensive logs
-
-## Best Practices by Type
-
-### Scheduled Bots
-
-1. **Keep Execution Fast**: Minimize processing time
-2. **Handle Failures Gracefully**: Implement retry logic
-3. **Log Well**: Track all executions
-4. **Validate Timing**: Ensure appropriate schedule
-5. **Stateless Design**: Don't rely on persistent state
-
-### Realtime Bots
-
-1. **Implement Circuit Breakers**: Prevent runaway execution
-2. **Monitor Resource Usage**: Track CPU and memory (remember you have a 0.5 CPU and 512MB memory limit\*)
-3. **Graceful Degradation**: Handle API rate limits
-4. **State Management**: Carefully manage bot state
-5. **Error Recovery**: Implement robust error handling
-
----
-
-## Related Documentation
-
-- [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build your first bot
-- [Testing Guide](/custom-bot-development/testing) - Validation and testing
-- [Deployment](/custom-bot-development/deployment) - Deploy your bots
+- [Configuration](./configuration) - Complete bot-config.yaml reference
+- [Metrics](./metrics) - Emit data to the dashboard
+- [Testing](./testing) - Test both bot types locally

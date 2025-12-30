@@ -61,6 +61,20 @@ export default defineConfig({
           { text: 'Authentication', link: '/the0-cli/authentication' },
           { text: 'Bot Commands', link: '/the0-cli/bot-commands' },
           { text: 'Custom Bot Commands', link: '/the0-cli/custom-bot-commands' },
+          { text: 'Secrets', link: '/the0-cli/secrets' },
+        ]
+      },
+      {
+        text: 'Language Quick Starts',
+        collapsed: false,
+        items: [
+          { text: 'Python', link: '/custom-bot-development/python-quick-start' },
+          { text: 'Node.js/TypeScript', link: '/custom-bot-development/nodejs-quick-start' },
+          { text: 'Rust', link: '/custom-bot-development/rust-quick-start' },
+          { text: 'C/C++', link: '/custom-bot-development/cpp-quick-start' },
+          { text: 'C# (.NET 8)', link: '/custom-bot-development/csharp-quick-start' },
+          { text: 'Scala 3', link: '/custom-bot-development/scala-quick-start' },
+          { text: 'Haskell', link: '/custom-bot-development/haskell-quick-start' },
         ]
       },
       {
@@ -68,12 +82,30 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'Overview', link: '/custom-bot-development/' },
-          { text: 'Quick Start Guide', link: '/custom-bot-development/quick-start-guide' },
           { text: 'Development Overview', link: '/custom-bot-development/overview' },
           { text: 'Configuration', link: '/custom-bot-development/configuration' },
           { text: 'Bot Types', link: '/custom-bot-development/bot-types' },
+          { text: 'Custom Frontends', link: '/custom-bot-development/custom-frontends' },
+          { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },
           { text: 'Deployment', link: '/custom-bot-development/deployment' },
+        ]
+      },
+      {
+        text: 'Integrations',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/integrations/' },
+          { text: 'MCP Server', link: '/integrations/mcp' },
+        ]
+      },
+      {
+        text: 'Platform Deployment',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/deployment/' },
+          { text: 'Docker Compose', link: '/deployment/docker-compose' },
+          { text: 'Kubernetes (Experimental)', link: '/deployment/kubernetes' },
         ]
       }
     ],

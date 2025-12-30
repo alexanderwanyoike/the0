@@ -1,276 +1,236 @@
 ---
-title: "Overview"
+title: "Development Overview"
 description: "Understanding custom bot development on the0"
 tags: ["custom-bots", "development", "overview"]
 order: 2
 ---
 
-# Custom Bot Development Overview
+# Development Overview
 
-Custom bots are the heart of the the0 platform - they're your trading algorithms packaged and deployed as reusable templates. This guide provides an overview of custom bot development.
+Custom bots are trading algorithms packaged as reusable templates. When you deploy a custom bot, you're creating a definition that others (or you) can instantiate with different configurations. A single "SMA Crossover" custom bot might power dozens of bot instances, each tracking different symbols or using different parameters.
 
----
+This guide walks through the structure of a custom bot project, explains how the runtime invokes your code, and outlines the development workflow from local testing to deployment.
 
-## What Are Custom Bots?
+## Project Structure
 
-Custom bots are the trading algorithms they:
+Every custom bot consists of a few essential files. The bot-config.yaml file tells the platform what runtime to use, where to find your entry point, and what schema validates user configuration. The entry point file contains your trading logic. The schema file defines what parameters users can configure when they create bot instances.
 
-- Define trading strategies and logic
-- Accept configurable parameters
-- Can be deployed multiple times with different settings
-- Support live trading
-- Can be shared or sold in the marketplace
-
-## Development Philosophy
-
-### Framework Agnostic
-
-the0 doesn't lock you into specific libraries or frameworks. You can:
-
-- Use any Python or JavaScript library (within reason and codebase size limits)
-- Implement any trading strategy
-- Integrate with any data source or API
-- Use your preferred development tools
-
-### Open Standards
-
-Custom bots use open standards:
-
-- **YAML**: For bot configuration and metadata
-- **JSON Schema**: For parameter validation
-- **Standard Entry Points**: Consistent function signatures
-- **Docker**: For dependency management and isolation
-
-### Execution Models, Not Strategies
-
-the0 provides execution models (how bots run) rather than trading strategies (what bots do):
-
-- **scheduled**: Run on fixed intervals (cron expressions)
-- **realtime**: Run continuously, processing live data
-
-## Bot Architecture
-
-### Core Components
-
-#### Python structure
-
-```bash
-custom-bot/
-├── bot-config.yaml          # Bot metadata and configuration
-├── main.py                  # Main bot execution logic
-├── bot-schema.json          # Bot parameter schema
-├── requirements.txt         # Python dependencies
-├── vendor/                  # Vendored dependencies (auto-generated)
-├── lib/                     # Your custom utilities
-|   └── __init__.py          # Module initialization (for Python only)
-├── utils.py                 # Utility functions
-├── tests/                   # Unit tests
-└── README.md                # Documentation
+```
+my-bot/
+├── bot-config.yaml      # Bot metadata and runtime settings
+├── main.py              # Entry point (or main.ts, main.rs, etc.)
+├── bot-schema.json      # JSON Schema for configuration validation
+├── requirements.txt     # Dependencies (language-specific)
+├── README.md            # Documentation shown to users
+└── frontend/            # Optional custom dashboard
+    ├── package.json
+    └── index.tsx
 ```
 
-#### JavaScript structure
+The specific files vary by language. A Rust bot has Cargo.toml instead of requirements.txt, and the entry point is a compiled binary rather than a script. See the language-specific quick start guides for exact requirements.
 
-```bash
-custom-bot/
-├── bot-config.yaml          # Bot metadata and configuration
-├── main.js                  # Main bot execution logic
-├── bot-schema.json          # Bot parameter schema
-├── node_modules/            # Node.js dependencies
-├── lib/                     # Your custom utilities
-├── utils.js                 # Utility functions
-└── package.json             # Node.js dependencies
-```
+## The Entry Point Pattern
 
----
+When the platform starts your bot, it sets two environment variables: `BOT_ID` identifies the specific bot instance, and `BOT_CONFIG` contains the JSON configuration that the user provided when creating the instance. The SDK reads these automatically through the `parse()` function.
 
-## Entry Points
+The entry point pattern looks similar across languages, though the syntax differs:
 
-Every custom bot must define entry points:
-
-### Bot Entry Point
-
-#### Python
+**Python:**
 
 ```python
-def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Main bot execution function.
+from the0 import parse, success, error, metric
 
-    Args:
-        id: Unique bot instance identifier
-        config: User-provided configuration
+def main(bot_id: str = None, config: dict = None):
+    # Parse from environment if not provided directly
+    if bot_id is None or config is None:
+        bot_id, config = parse()
 
-    Returns:
-        Execution status and results
-    """
+    # Extract configuration with defaults
+    symbol = config.get("symbol", "BTC/USD")
+
     # Your trading logic here
-    return {
-        "status": "success",
-        "message": "Bot executed successfully"
-    }
+    price = fetch_current_price(symbol)
+
+    # Emit metrics for the dashboard
+    metric("price", {"symbol": symbol, "value": price})
+
+    # Report successful completion
+    success(f"Processed {symbol}")
+
+if __name__ == "__main__":
+    main()
 ```
 
-#### JavaScript
+**TypeScript:**
 
-```javascript
-function main(id, config) {
-  /**
-   * Main bot execution function.
-   *
-   * @param {string} id - Unique bot instance identifier
-   * @param {Object} config - User-provided configuration
-   * @returns {Object} Execution status and results
-   */
-  // Your trading logic here
-  return {
-    status: "success",
-    message: "Bot executed successfully",
-  };
+```typescript
+import { parse, metric, success } from "@alexanderwanyoike/the0-node";
+
+interface BotConfig {
+    symbol: string;
+    alert_threshold: number;
 }
 
-module.exports = { main };
+async function main(): Promise<void> {
+    const { id, config } = parse<BotConfig>();
+
+    const symbol = config.symbol || "BTC/USD";
+
+    // Your trading logic here
+    const price = await fetchPrice(symbol);
+
+    metric("price", { symbol, value: price });
+
+    success("Bot completed successfully");
+}
+
+// Export main for the runtime to invoke
+export { main };
 ```
 
----
+**Rust:**
+
+```rust
+use the0_sdk::input;
+use serde_json::json;
+
+fn main() {
+    let (bot_id, config) = input::parse()
+        .expect("Failed to parse configuration");
+
+    let symbol = config["symbol"].as_str().unwrap_or("AAPL");
+
+    // Your trading logic here
+
+    input::metric("price", &json!({
+        "symbol": symbol,
+        "value": 150.0
+    }));
+}
+```
+
+**C++:**
+
+```cpp
+#include <the0.h>
+
+int main() {
+    auto [botId, config] = the0::parse();
+
+    std::string symbol = config.value("symbol", "AAPL");
+
+    // Your trading logic here
+
+    the0::metric("price", {
+        {"symbol", symbol},
+        {"value", 150.0}
+    });
+
+    return 0;
+}
+```
+
+The SDK handles the details of reading environment variables and writing result files. You focus on trading logic.
 
 ## Development Workflow
 
-### 1. Planning
+Building a custom bot follows a straightforward progression: define what your bot does, specify what configuration it needs, write the trading logic, test locally, and deploy.
 
-- Define your trading strategy
-- Identify required parameters
-- Choose execution model (scheduled/realtime)
-- Test your entry points locally
+### Define Bot Metadata
 
-### 2. Local Development
+Start with bot-config.yaml. This file tells the platform everything it needs to know about your bot:
+
+```yaml
+name: my-trading-bot
+description: "A brief description of what this bot does"
+version: 1.0.0
+author: "your-name"
+type: realtime
+runtime: python3.11
+
+entrypoints:
+  bot: main.py
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+```
+
+The `type` field determines whether your bot runs continuously (realtime) or on a schedule (scheduled). The `runtime` field tells the platform which execution environment to use.
+
+### Define Configuration Schema
+
+The bot-schema.json file uses JSON Schema to specify what parameters users can configure. This schema powers the UI form when users create bot instances and validates their input:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "Trading symbol to monitor",
+      "default": "BTC/USD"
+    },
+    "threshold": {
+      "type": "number",
+      "description": "Alert threshold percentage",
+      "default": 5.0,
+      "minimum": 0.1
+    }
+  },
+  "required": ["symbol"]
+}
+```
+
+### Test Locally
+
+Before deploying, test your bot by setting environment variables manually:
 
 ```bash
-# Initialize bot structure
-
-# Develop locally
-code main.py
-code bot-schema.json
-code requirements.txt  # Add dependencies
-code bot-config.yaml  # Define metadata
-
-# Test locally
+export BOT_ID="test-bot"
+export BOT_CONFIG='{"symbol":"AAPL","threshold":5.0}'
+export CODE_MOUNT_DIR="/tmp"
 python main.py
 ```
 
-### 3. Configuration
+This simulates how the platform invokes your bot. Check that metrics emit correctly and errors are handled gracefully.
 
-- Define `bot-config.yaml` with metadata
-- Create JSON schemas for validation
-- Write comprehensive documentation
+### Deploy
 
-### 4. Testing
-
-- Unit test your components
-- Test with various configurations
-- Validate schema compliance
-
-### 5. Deployment
+Once testing passes, deploy to the platform:
 
 ```bash
-# Deploy to the0 platform
 the0 custom-bot deploy
-
-# Create test instance if the custom bot is approved
-the0 bot deploy test-config.json
 ```
 
-### 6. Publishing (Optional)
+The CLI packages your code, validates configuration, and uploads everything to the platform. After deployment, users can create bot instances from your custom bot definition.
 
-- Test thoroughly in production
-- Polish documentation
-- Set pricing
-- Publish to marketplace
+## SDK Functions
 
-## Supported Languages
+All language SDKs provide a consistent set of functions for interacting with the platform:
 
-### Python 3.11 (`python3.11`)
+| Function | Purpose |
+|----------|---------|
+| `parse()` | Read BOT_ID and BOT_CONFIG from environment |
+| `success(message, data?)` | Report successful execution with optional result data |
+| `error(message)` | Report failure and terminate |
+| `metric(type, data)` | Emit metrics to the dashboard |
+| `log(message)` | Write structured log entries |
 
-**Advantages:**
+Metrics appear in the dashboard in real-time. Use them to track prices, signals, positions, and any other data users should see.
 
-- Rich ecosystem of trading libraries (ccxt, pandas, numpy, scikit-learn)
-- Excellent for data analysis and machine learning
-- Strong scientific computing capabilities
-- Popular in quantitative finance
+## Next Steps
 
-**Example Libraries:**
+The quickest path forward is following a language-specific quick start guide. Each one walks through building a complete bot from scratch:
 
-- `ccxt` - Exchange integrations
-- `pandas` - Data manipulation
-- `numpy` - Numerical computing
-- `scikit-learn` - Machine learning
-- `plotly` - Visualization
+- [Python Quick Start](./python-quick-start)
+- [TypeScript Quick Start](./nodejs-quick-start)
+- [Rust Quick Start](./rust-quick-start)
+- [C++ Quick Start](./cpp-quick-start)
+- [C# Quick Start](./csharp-quick-start)
+- [Scala Quick Start](./scala-quick-start)
+- [Haskell Quick Start](./haskell-quick-start)
 
-### JavaScript (`nodejs20`)
-
-**Advantages:**
-
-- Fast execution and low latency
-- Excellent for real-time applications
-- Modern async/await support
-- Large npm ecosystem
-
-**Example Libraries:**
-
-- `ccxt` - Exchange integrations
-- `axios` - HTTP requests
-- `ws` - WebSocket connections
-- `mathjs` - Mathematical operations
-- `plotly.js` - Visualization
-
-More information on bot types can be found in [Bot Types](./bot-types).
-
-## Performance Considerations
-
-### Resource Limits
-
-- CPU: 0.5 cores
-- Memory: 512MB
-
-> Note: Trading bots are designed to be lightweight and efficient. Avoid heavy computations or large data processing within the bot logic. It will make it slow and
-> unresponsive, leading to missed trades or errors.
-
-### Optimization Tips
-
-- Use efficient data structures
-- Implement proper error handling
-- Aim for stateless bots that use exchange APIs for data
-- Profile performance bottlenecks locally before deploying
-
----
-
-## Best Practices
-
-### Code Quality
-
-1. **Error Handling**: Implement comprehensive try-catch blocks
-2. **Logging**: Use structured logging for debugging
-3. **Testing**: Write unit tests for critical components
-4. **Documentation**: Maintain clear, updated documentation
-
-### Strategy Development
-
-1. **Paper Trading**: Test with simulated funds first
-2. **Risk Management**: Implement stop-losses and position limits
-3. **Monitoring**: Set up alerts for bot health and performance
-
-### User Experience
-
-1. **Clear Parameters**: Use descriptive parameter names and descriptions
-2. **Sensible Defaults**: Provide reasonable default values
-3. **Validation**: Implement input validation and error messages
-4. **Documentation**: Write a comprehensive README for users
-
----
-
-## Getting Started
-
-Ready to build your first custom bot? Check out these resources:
-
-1. [Quick Start Guide](/custom-bot-development/quick-start-guide) - Build a DCA bot in 15 minutes
-2. [Configuration Reference](/custom-bot-development/configuration) - Detailed configuration options
-3. [Testing Guide](/custom-bot-development/testing) - Testing strategies and tools
+For deeper dives into specific topics, see [Configuration](./configuration) for the complete bot-config.yaml reference, or [Bot Types](./bot-types) for details on scheduled versus realtime execution.

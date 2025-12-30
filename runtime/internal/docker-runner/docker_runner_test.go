@@ -1,12 +1,13 @@
 package dockerrunner
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/internal/model"
 	"runtime/internal/util"
@@ -14,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
@@ -51,107 +55,89 @@ func TestMain(m *testing.M) {
 // cleanupSegmentContainers removes any leftover containers from previous test runs
 // This prevents test interference when ListManagedContainers queries Docker by labels
 func cleanupSegmentContainers(t *testing.T, segment int32) {
-	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger: &util.DefaultLogger{},
-	})
+	ctx := context.Background()
+
+	// Use Docker client directly to forcibly remove containers
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		t.Logf("Warning: Failed to create runner for cleanup: %v", err)
+		t.Logf("Warning: Failed to create Docker client for cleanup: %v", err)
 		return
 	}
-	defer runner.Close()
+	defer dockerClient.Close()
 
-	ctx := context.Background()
-	containers, _ := runner.ListManagedContainers(ctx, segment)
-	for _, container := range containers {
-		runner.StopContainer(ctx, container.ContainerID, model.Executable{Segment: segment})
+	// List all containers (including stopped) with the segment label
+	filter := filters.NewArgs()
+	filter.Add("label", "runtime.managed=true")
+	filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
+
+	containers, err := dockerClient.ContainerList(ctx, container.ListOptions{
+		All:     true, // Include stopped containers
+		Filters: filter,
+	})
+	if err != nil {
+		t.Logf("Warning: Failed to list containers for cleanup: %v", err)
+		return
+	}
+
+	for _, cont := range containers {
+		// Force remove the container (stops if running, then removes)
+		err := dockerClient.ContainerRemove(ctx, cont.ID, container.RemoveOptions{
+			Force: true,
+		})
+		if err != nil {
+			t.Logf("Warning: Failed to remove container %s: %v", cont.ID[:12], err)
+		}
 	}
 }
 
 // Integration tests that verify the dynamic entrypoint functionality
 // These tests focus on the core entrypoint script generation
 
-func TestIntegration_EntrypointScriptGeneration_BotVsBacktest(t *testing.T) {
+func TestIntegration_EntrypointScriptGeneration_Bot(t *testing.T) {
 	tempDir := t.TempDir()
 	logger := &util.DefaultLogger{}
 
 	scriptManager := NewScriptManager(logger)
 
-	tests := []struct {
-		name            string
-		executable      model.Executable
-		entrypoint      string
-		expectedDir     string
-		expectedEnvType string
-	}{
-		{
-			name: "Bot entrypoint should use /bot directory",
-			executable: model.Executable{
-				ID:         "test-bot",
-				Runtime:    "python3.11",
-				Entrypoint: "bot",
-				EntrypointFiles: map[string]string{
-					"bot":      "main.py",
-					"backtest": "backtest.py",
-				},
-				Config: map[string]any{
-					"test_param": "bot_value",
-				},
-			},
-			entrypoint:      "bot",
-			expectedDir:     "/bot",
-			expectedEnvType: "bot",
+	executable := model.Executable{
+		ID:         "test-bot",
+		Runtime:    "python3.11",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "main.py",
 		},
-		{
-			name: "Backtest entrypoint should use /backtest directory",
-			executable: model.Executable{
-				ID:         "test-backtest",
-				Runtime:    "python3.11",
-				Entrypoint: "backtest",
-				EntrypointFiles: map[string]string{
-					"bot":      "main.py",
-					"backtest": "backtest.py",
-				},
-				Config: map[string]any{
-					"test_param": "backtest_value",
-				},
-			},
-			entrypoint:      "backtest",
-			expectedDir:     "/backtest",
-			expectedEnvType: "backtest",
+		Config: map[string]any{
+			"test_param": "bot_value",
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Create bot directory
-			botDir := filepath.Join(tempDir, test.executable.ID)
-			err := os.MkdirAll(botDir, 0755)
-			require.NoError(t, err)
+	// Create bot directory
+	botDir := filepath.Join(tempDir, executable.ID)
+	err := os.MkdirAll(botDir, 0755)
+	require.NoError(t, err)
 
-			// Generate entrypoint script
-			scriptPath, err := scriptManager.Create(context.Background(), test.executable, botDir)
-			require.NoError(t, err)
-			assert.NotEmpty(t, scriptPath)
+	// Generate entrypoint script
+	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, scriptPath)
 
-			// Read and verify script content
-			content, err := os.ReadFile(scriptPath)
-			require.NoError(t, err)
-			scriptContent := string(content)
+	// Read and verify script content
+	content, err := os.ReadFile(scriptPath)
+	require.NoError(t, err)
+	scriptContent := string(content)
 
-			// Verify the script sets ENTRYPOINT_TYPE environment variable correctly
-			assert.Contains(t, scriptContent, fmt.Sprintf(`export ENTRYPOINT_TYPE="%s"`, test.expectedEnvType))
+	// Verify the script sets ENTRYPOINT_TYPE environment variable correctly
+	assert.Contains(t, scriptContent, `export ENTRYPOINT_TYPE="bot"`)
 
-			// Verify the Python entrypoint script is embedded
-			assert.Contains(t, scriptContent, "ENTRYPOINT_TYPE", "Script should contain ENTRYPOINT_TYPE handling")
+	// Verify the Python entrypoint script is embedded
+	assert.Contains(t, scriptContent, "ENTRYPOINT_TYPE", "Script should contain ENTRYPOINT_TYPE handling")
 
-			// Verify bot ID and config are properly set
-			assert.Contains(t, scriptContent, test.executable.ID)
-			assert.Contains(t, scriptContent, "test_param")
+	// Verify bot ID and config are properly set
+	assert.Contains(t, scriptContent, executable.ID)
+	assert.Contains(t, scriptContent, "test_param")
 
-			// Clean up
-			os.RemoveAll(botDir)
-		})
-	}
+	// Clean up
+	os.RemoveAll(botDir)
 }
 
 func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
@@ -165,8 +151,7 @@ func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
 		Runtime:    "nodejs20",
 		Entrypoint: "bot",
 		EntrypointFiles: map[string]string{
-			"bot":      "main.js",
-			"backtest": "backtest.js",
+			"bot": "main.js",
 		},
 		Config: map[string]any{
 			"test_param": "nodejs_value",
@@ -202,6 +187,58 @@ func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
 	assert.Contains(t, scriptContent, "main") // Script path should be "main" not "main.js"
 }
 
+func TestIntegration_EntrypointScriptGeneration_Rust(t *testing.T) {
+	tempDir := t.TempDir()
+	logger := &util.DefaultLogger{}
+
+	scriptManager := NewScriptManager(logger)
+
+	executable := model.Executable{
+		ID:         "test-rust-bot",
+		Runtime:    "rust-stable",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "target/release/my-bot",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+	}
+
+	// Create bot directory
+	botDir := filepath.Join(tempDir, executable.ID)
+	err := os.MkdirAll(botDir, 0755)
+	require.NoError(t, err)
+
+	// Generate entrypoint script
+	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, scriptPath)
+
+	// Read and verify script content
+	content, err := os.ReadFile(scriptPath)
+	require.NoError(t, err)
+	scriptContent := string(content)
+
+	// Verify the script is a bash script
+	assert.Contains(t, scriptContent, "#!/bin/bash")
+
+	// Verify Rust-specific content (uses ScriptPath directly from bot-config.yaml)
+	assert.Contains(t, scriptContent, "target/release/my-bot", "Should use exact binary path from ScriptPath")
+	assert.Contains(t, scriptContent, "BINARY=", "Should set BINARY variable")
+	assert.Contains(t, scriptContent, "BOT_ID", "Should set BOT_ID environment variable")
+	assert.Contains(t, scriptContent, "BOT_CONFIG", "Should set BOT_CONFIG environment variable")
+
+	// Verify bot ID is in the script
+	assert.Contains(t, scriptContent, executable.ID)
+
+	// Verify the entrypoint executes the binary (no compilation at runtime)
+	assert.Contains(t, scriptContent, "exec", "Should exec the binary")
+	assert.NotContains(t, scriptContent, "cargo build", "Should NOT compile at runtime (CLI does this)")
+	assert.NotContains(t, scriptContent, "find", "Should NOT use find - uses ScriptPath directly")
+}
+
 func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
@@ -224,8 +261,7 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 		Runtime:    "nodejs20",
 		Entrypoint: "bot",
 		EntrypointFiles: map[string]string{
-			"bot":      "main.js",
-			"backtest": "backtest.js",
+			"bot": "main.js",
 		},
 		Config: map[string]any{
 			"test_param": "real_nodejs_value",
@@ -274,8 +310,11 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	logger := &util.DefaultLogger{}
 
+	// Use a unique test segment to avoid conflicts with real running bots
+	const testSegment int32 = 99999
+
 	// Clean up any leftover containers from previous tests with same segment
-	cleanupSegmentContainers(t, 1)
+	cleanupSegmentContainers(t, testSegment)
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
@@ -291,8 +330,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 		Runtime:    "python3.11",
 		Entrypoint: "bot",
 		EntrypointFiles: map[string]string{
-			"bot":      "main.py",
-			"backtest": "backtest.py",
+			"bot": "main.py",
 		},
 		Config: map[string]any{
 			"test_param": "real_bot_value",
@@ -300,11 +338,11 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 		FilePath:       "real-test-bot.zip",
 		IsLongRunning:  true,  // Test long-running container
 		PersistResults: false, // Bots don't produce result files
-		Segment:        1,     // Test segment
+		Segment:        testSegment,
 	}
 
 	// Create a real ZIP file with bot code and upload to MinIO
-	botZipData := createTestBotZip(t, "bot")
+	botZipData := createTestBotZip(t)
 	uploadToMinIO(t, minioServer, executable.FilePath, botZipData)
 
 	// Test StartContainer
@@ -326,7 +364,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	assert.Equal(t, "running", status.Status)
 
 	// Test ListManagedContainers
-	containers, err := runner.ListManagedContainers(ctx, 1)
+	containers, err := runner.ListManagedContainers(ctx, testSegment)
 	require.NoError(t, err)
 	if len(containers) == 0 {
 		t.Logf("Warning: No managed containers found, this might be expected for long-running containers")
@@ -337,14 +375,10 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	}
 
 	// Test GetContainerLogs - THIS IS THE CRUCIAL TEST for the fix
-	logs, err := runner.GetContainerLogs(ctx, containerID, 100)
+	_, err = runner.GetContainerLogs(ctx, containerID, 100)
 	require.NoError(t, err)
-	assert.NotEmpty(t, logs)
-
-	// Verify the container is using the bot entrypoint correctly
-	assert.Contains(t, logs, "STARTUP: Python bot wrapper starting", "Container should use bot wrapper")
-	assert.Contains(t, logs, "CHDIR_SUCCESS: Changed to working directory: /bot", "Container should change to /bot directory")
-	assert.Contains(t, logs, "CONFIG_SUCCESS: Bot ID:", "Container should parse bot configuration")
+	// Note: Runtime debug logs have been removed for cleaner output
+	// Container may or may not have logs depending on bot execution
 
 	// Test StopContainer
 	err = runner.StopContainer(ctx, containerID, executable)
@@ -352,139 +386,16 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	// Verify container is stopped
 	time.Sleep(1 * time.Second)
-	finalContainers, err := runner.ListManagedContainers(ctx, 1)
+	finalContainers, err := runner.ListManagedContainers(ctx, testSegment)
 	require.NoError(t, err)
 	assert.Empty(t, finalContainers, "Container should be removed from managed list")
 }
 
-func TestIntegration_RealDocker_StartStopContainer_BacktestEntrypoint(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping real Docker integration test in short mode")
-	}
-
-	// Use shared MinIO server (started in TestMain)
-	minioServer := sharedMinIOServer
-
-	logger := &util.DefaultLogger{}
-
-	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger: logger,
-	})
-	require.NoError(t, err)
-	defer runner.Close()
-
-	// Create test executable for backtest entrypoint
-	executable := model.Executable{
-		ID:         "real-integration-test-backtest",
-		Runtime:    "python3.11",
-		Entrypoint: "backtest",
-		EntrypointFiles: map[string]string{
-			"bot":      "main.py",
-			"backtest": "backtest.py",
-		},
-		Config: map[string]any{
-			"test_param": "real_backtest_value",
-		},
-		FilePath:       "real-test-backtest.zip",
-		IsLongRunning:  false, // Test terminating container
-		PersistResults: true,  // Backtests do produce result files
-	}
-
-	// Create a real ZIP file with backtest code and upload to MinIO
-	backtestZipData := createTestBotZip(t, "backtest")
-	uploadToMinIO(t, minioServer, executable.FilePath, backtestZipData)
-
-	// Test StartContainer
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	result, err := runner.StartContainer(ctx, executable)
-	require.NoError(t, err, "StartContainer should succeed")
-	assert.NotNil(t, result)
-	assert.False(t, result.IsLongRunning)
-	assert.Equal(t, "success", result.Status)                                                   // Should complete successfully
-	assert.Contains(t, result.Output, "STARTUP: Python backtest wrapper starting")              // Verify using backtest wrapper
-	assert.Contains(t, result.Output, "CHDIR_SUCCESS: Changed to working directory: /backtest") // Verify working in /backtest directory
-}
-
-func TestIntegration_RealDocker_DifferentExecutables_SameContainer(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping real Docker integration test in short mode")
-	}
-
-	// Use shared MinIO server (started in TestMain)
-	minioServer := sharedMinIOServer
-
-	logger := &util.DefaultLogger{}
-
-	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger: logger,
-	})
-	require.NoError(t, err)
-	defer runner.Close()
-
-	ctx := context.Background()
-
-	// Test same executable with different entrypoints
-	executable := model.Executable{
-		ID:         "multi-entrypoint-test",
-		Runtime:    "python3.11",
-		Entrypoint: "bot", // This will be overridden by the entrypoint parameter
-		EntrypointFiles: map[string]string{
-			"bot":      "main.py",
-			"backtest": "backtest.py",
-		},
-		Config: map[string]any{
-			"test_param": "multi_value",
-		},
-		FilePath:       "multi-test.zip",
-		IsLongRunning:  false, // Start with terminating for this test
-		PersistResults: false, // Bots don't produce result files
-	}
-
-	// Create ZIP with both bot and backtest files and upload to MinIO
-	zipData := createTestBotZipWithMultipleEntrypoints(t)
-	uploadToMinIO(t, minioServer, executable.FilePath, zipData)
-
-	// Test 1: Start as bot entrypoint
-	botResult, err := runner.StartContainer(ctx, executable)
-	require.NoError(t, err)
-	assert.Equal(t, "success", botResult.Status)
-
-	// Verify it used bot entrypoint
-	assert.Contains(t, botResult.Output, "STARTUP: Python bot wrapper starting")
-	assert.Contains(t, botResult.Output, "CHDIR_SUCCESS: Changed to working directory: /bot")
-
-	// Test 2: Start same executable as backtest entrypoint
-	executable.Entrypoint = "backtest" // Change to backtest entrypoint
-	executable.IsLongRunning = false   // Make it terminating for backtest
-	executable.PersistResults = true   // Backtests produce result files
-	backtestResult, err := runner.StartContainer(ctx, executable)
-	require.NoError(t, err)
-	assert.Equal(t, "success", backtestResult.Status)
-
-	// Verify it used backtest entrypoint
-	assert.Contains(t, backtestResult.Output, "STARTUP: Python backtest wrapper starting")
-	assert.Contains(t, backtestResult.Output, "CHDIR_SUCCESS: Changed to working directory: /backtest")
-}
-
 // Helper functions for real Docker integration tests
 
-func createTestBotZip(t *testing.T, entrypoint string) []byte {
-	// Use real test bot files instead of synthetic ones
-	var filename string
-	if entrypoint == "bot" || entrypoint == "backtest" {
-		filename = "py-test-bot.zip"
-	} else {
-		filename = "py-test-bot.zip" // Default to Python
-	}
-
-	return loadRealTestBotFile(t, filename)
-}
-
-func createTestBotZipWithMultipleEntrypoints(t *testing.T) []byte {
-	// Use the multi-test bot file that has both main.py and backtest.py that properly terminate
-	return loadRealTestBotFile(t, "py-multi-test-bot.zip")
+func createTestBotZip(t *testing.T) []byte {
+	// Use real test bot files
+	return loadRealTestBotFile(t, "py-test-bot.zip")
 }
 
 // loadRealTestBotFile loads actual test bot files from fixtures directory
@@ -590,85 +501,6 @@ func uploadToMinIO(t *testing.T, server *MinIOTestServer, objectName string, dat
 	require.NoError(t, err)
 }
 
-func TestIntegration_RealDocker_NodeJSBacktest(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping real Docker integration test in short mode")
-	}
-
-	// Use shared MinIO server (started in TestMain)
-	minioServer := sharedMinIOServer
-
-	logger := &util.DefaultLogger{}
-
-	runner, err := NewDockerRunner(DockerRunnerOptions{
-		Logger: logger,
-	})
-	require.NoError(t, err)
-	defer runner.Close()
-
-	executable := model.Executable{
-		ID:         "real-nodejs-backtest-test",
-		Runtime:    "nodejs20",
-		Entrypoint: "backtest",
-		EntrypointFiles: map[string]string{
-			"bot":      "main.js",
-			"backtest": "backtest.js",
-		},
-		Config: map[string]any{
-			"test_param": "real_nodejs_backtest_value",
-		},
-		FilePath:       "real-nodejs-backtest.zip",
-		IsLongRunning:  false,
-		PersistResults: true, // Backtests do produce result files
-	}
-
-	jsZipData := loadRealTestBotFile(t, "js-test-bot.zip")
-	uploadToMinIO(t, minioServer, executable.FilePath, jsZipData)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	result, err := runner.StartContainer(ctx, executable)
-	require.NoError(t, err, "StartContainer should succeed")
-	assert.NotNil(t, result)
-
-	t.Logf("Node.js backtest result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
-	if result.Output != "" {
-		t.Logf("Node.js backtest output: %s", result.Output)
-	}
-
-	require.Equal(t, "success", result.Status, "Backtest should complete successfully")
-	require.Equal(t, 0, result.ExitCode, "Backtest should exit with code 0")
-
-	// Verify result file was created and contains valid JSON
-	// Extract JSON from output (first line should be the result JSON)
-	lines := strings.Split(result.Output, "\n")
-	var jsonLine string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "{") {
-			jsonLine = line
-			break
-		}
-	}
-	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
-
-	var backtestResult map[string]any
-	err = json.Unmarshal([]byte(jsonLine), &backtestResult)
-	require.NoError(t, err, "Backtest output should be valid JSON")
-
-	// Verify expected JSON structure
-	assert.Equal(t, "success", backtestResult["status"], "Result should have success status")
-	assert.NotNil(t, backtestResult["results"], "Result should contain results object")
-
-	results, ok := backtestResult["results"].(map[string]any)
-	require.True(t, ok, "Results should be an object")
-
-	// Verify metrics exist
-	assert.NotNil(t, results["metrics"], "Results should contain metrics")
-	assert.NotNil(t, results["plots"], "Results should contain plots")
-	assert.NotNil(t, results["tables"], "Results should contain tables")
-}
-
 func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
@@ -693,8 +525,7 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 		Runtime:    "python3.11",
 		Entrypoint: "bot",
 		EntrypointFiles: map[string]string{
-			"bot":      "main.py",
-			"backtest": "backtest.py",
+			"bot": "main.py",
 		},
 		Config: map[string]any{
 			"test_param": "real_python_value",
@@ -733,19 +564,22 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "running", status.Status)
 
-	// Test GetContainerLogs
+	// Test GetContainerLogs - just verify the API works, don't assert on content
+	// (debug logs were removed from entrypoint for cleaner output)
 	logs, err := runner.GetContainerLogs(ctx, containerID, 100)
 	require.NoError(t, err)
-	assert.NotEmpty(t, logs)
-
-	t.Logf("Python bot logs: %s", logs)
+	if logs != "" {
+		t.Logf("Python bot logs: %s", logs)
+	}
 
 	// Test StopContainer
 	err = runner.StopContainer(ctx, containerID, executable)
 	require.NoError(t, err, "StopContainer should succeed")
 }
 
-func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
+// TestIntegration_RealDocker_RustBot tests a real Rust bot execution
+// This test builds the Rust bot in Docker if not already built, then executes it
+func TestIntegration_RealDocker_RustBot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping real Docker integration test in short mode")
 	}
@@ -761,42 +595,52 @@ func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
 	require.NoError(t, err)
 	defer runner.Close()
 
-	executable := model.Executable{
-		ID:         "real-python-backtest-test",
-		Runtime:    "python3.11",
-		Entrypoint: "backtest",
-		EntrypointFiles: map[string]string{
-			"bot":      "main.py",
-			"backtest": "backtest.py",
-		},
-		Config: map[string]any{
-			"test_param": "real_python_backtest_value",
-		},
-		FilePath:       "real-python-backtest.zip",
-		IsLongRunning:  false,
-		PersistResults: true, // Backtests do produce result files
+	// Build Rust test bot if binary doesn't exist
+	rustBotPath := filepath.Join("..", "fixtures", "rust-test-bot")
+	binaryPath := filepath.Join(rustBotPath, "target", "release", "rust-test-bot")
+
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Log("Building Rust test bot in Docker...")
+		buildRustTestBot(t, rustBotPath)
 	}
 
-	pyZipData := loadRealTestBotFile(t, "py-test-bot.zip")
-	uploadToMinIO(t, minioServer, executable.FilePath, pyZipData)
+	// Create ZIP with the binary
+	rustZipData := createRustTestBotZip(t, rustBotPath)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	executable := model.Executable{
+		ID:         "real-rust-bot-test",
+		Runtime:    "rust-stable",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "target/release/rust-test-bot",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+		FilePath:       "real-rust-bot.zip",
+		IsLongRunning:  false,
+		PersistResults: false,
+	}
+
+	uploadToMinIO(t, minioServer, executable.FilePath, rustZipData)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	result, err := runner.StartContainer(ctx, executable)
 	require.NoError(t, err, "StartContainer should succeed")
 	assert.NotNil(t, result)
 
-	t.Logf("Python backtest result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
+	t.Logf("Rust bot result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
 	if result.Output != "" {
-		t.Logf("Python backtest output: %s", result.Output)
+		t.Logf("Rust bot output: %s", result.Output)
 	}
 
-	require.Equal(t, "success", result.Status, "Backtest should complete successfully")
-	require.Equal(t, 0, result.ExitCode, "Backtest should exit with code 0")
+	require.Equal(t, "success", result.Status, "Rust bot should complete successfully")
+	require.Equal(t, 0, result.ExitCode, "Rust bot should exit with code 0")
 
-	// Verify result file was created and contains valid JSON
-	// Extract JSON from output (first line should be the result JSON)
+	// Verify JSON output
 	lines := strings.Split(result.Output, "\n")
 	var jsonLine string
 	for _, line := range lines {
@@ -807,34 +651,88 @@ func TestIntegration_RealDocker_PythonBacktest(t *testing.T) {
 	}
 	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
 
-	var backtestResult map[string]any
-	err = json.Unmarshal([]byte(jsonLine), &backtestResult)
-	require.NoError(t, err, "Backtest output should be valid JSON")
-
-	// Verify expected JSON structure
-	assert.Equal(t, "success", backtestResult["status"], "Result should have success status")
-	assert.NotNil(t, backtestResult["results"], "Result should contain results object")
-
-	results, ok := backtestResult["results"].(map[string]any)
-	require.True(t, ok, "Results should be an object")
-
-	// Verify metrics exist
-	assert.NotNil(t, results["metrics"], "Results should contain metrics")
-	assert.NotNil(t, results["plots"], "Results should contain plots")
-	assert.NotNil(t, results["tables"], "Results should contain tables")
+	var botResult map[string]any
+	err = json.Unmarshal([]byte(jsonLine), &botResult)
+	require.NoError(t, err, "Bot output should be valid JSON")
+	assert.Equal(t, "success", botResult["status"], "Result should have success status")
+	assert.Equal(t, "real-rust-bot-test", botResult["bot_id"], "Result should contain bot_id")
 }
 
-func TestStoreAnalysisResult(t *testing.T) {
+// buildRustTestBot builds the Rust test bot in Docker
+func buildRustTestBot(t *testing.T, botPath string) {
+	t.Helper()
+
+	absPath, err := filepath.Abs(botPath)
+	require.NoError(t, err)
+
+	// Run cargo build in Docker
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", fmt.Sprintf("%s:/project", absPath),
+		"-w", "/project",
+		"rust:latest",
+		"cargo", "build", "--release")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build Rust test bot: %v\nOutput: %s", err, string(output))
+	}
+
+	t.Logf("Rust build output: %s", string(output))
+
+	// Verify binary was created
+	binaryPath := filepath.Join(botPath, "target", "release", "rust-test-bot")
+	_, err = os.Stat(binaryPath)
+	require.NoError(t, err, "Rust binary should exist after build")
+}
+
+// createRustTestBotZip creates a ZIP containing the Rust binary
+func createRustTestBotZip(t *testing.T, botPath string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// Add the binary to the ZIP
+	binaryPath := filepath.Join(botPath, "target", "release", "rust-test-bot")
+	binaryData, err := os.ReadFile(binaryPath)
+	require.NoError(t, err, "Failed to read Rust binary")
+
+	// Create directory structure in ZIP
+	header := &zip.FileHeader{
+		Name:   "target/release/rust-test-bot",
+		Method: zip.Deflate,
+	}
+	header.SetMode(0755) // Executable permission
+
+	writer, err := zipWriter.CreateHeader(header)
+	require.NoError(t, err)
+
+	_, err = writer.Write(binaryData)
+	require.NoError(t, err)
+
+	// Add Cargo.toml (needed for project detection)
+	cargoTomlPath := filepath.Join(botPath, "Cargo.toml")
+	cargoTomlData, err := os.ReadFile(cargoTomlPath)
+	require.NoError(t, err)
+
+	cargoWriter, err := zipWriter.Create("Cargo.toml")
+	require.NoError(t, err)
+	_, err = cargoWriter.Write(cargoTomlData)
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	return buf.Bytes()
+}
+
+func TestIntegration_RealDocker_CppBot(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping Docker runner integration test in short mode")
+		t.Skip("Skipping real Docker integration test in short mode")
 	}
 
 	// Use shared MinIO server (started in TestMain)
 	minioServer := sharedMinIOServer
-
-	// Set environment variables for backtests bucket
-	os.Setenv("MINIO_BACKTESTS_BUCKET", "test-backtests")
-	defer os.Unsetenv("MINIO_BACKTESTS_BUCKET")
 
 	logger := &util.DefaultLogger{}
 
@@ -844,88 +742,254 @@ func TestStoreAnalysisResult(t *testing.T) {
 	require.NoError(t, err)
 	defer runner.Close()
 
-	// Test analysis result storage through backtest execution
+	// Build C++ test bot if binary doesn't exist
+	cppBotPath := filepath.Join("..", "fixtures", "cpp-test-bot")
+	binaryPath := filepath.Join(cppBotPath, "build", "cpp-test-bot")
+
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Log("Building C++ test bot in Docker...")
+		buildCppTestBot(t, cppBotPath)
+	}
+
+	// Create ZIP with the binary
+	cppZipData := createCppTestBotZip(t, cppBotPath)
+
 	executable := model.Executable{
-		ID:         "analysis-test-backtest",
-		Runtime:    "python3.11",
-		Entrypoint: "backtest",
+		ID:         "real-cpp-bot-test",
+		Runtime:    "gcc13",
+		Entrypoint: "bot",
 		EntrypointFiles: map[string]string{
-			"bot":      "main.py",
-			"backtest": "backtest.py",
+			"bot": "build/cpp-test-bot",
 		},
 		Config: map[string]any{
-			"test_param": "analysis_test_value",
+			"symbol": "BTC/USDT",
+			"amount": 100,
 		},
-		FilePath:       "analysis-test-backtest.zip",
+		FilePath:       "real-cpp-bot.zip",
 		IsLongRunning:  false,
-		PersistResults: true, // This will trigger analysis storage
+		PersistResults: false,
 	}
 
-	// Create and upload test backtest code
-	pyZipData := loadRealTestBotFile(t, "py-test-bot.zip")
-	uploadToMinIO(t, minioServer, executable.FilePath, pyZipData)
+	uploadToMinIO(t, minioServer, executable.FilePath, cppZipData)
 
-	// Create the backtests bucket in MinIO for analysis storage
-	client, err := minio.New(minioServer.endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(minioServer.accessKey, minioServer.secretKey, ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	backtestsBucket := "test-backtests"
-	exists, err := client.BucketExists(ctx, backtestsBucket)
-	require.NoError(t, err)
-	if !exists {
-		err = client.MakeBucket(ctx, backtestsBucket, minio.MakeBucketOptions{})
-		require.NoError(t, err)
-	}
-
-	// Execute the backtest
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	result, err := runner.StartContainer(ctx, executable)
 	require.NoError(t, err, "StartContainer should succeed")
 	assert.NotNil(t, result)
 
-	t.Logf("Analysis test backtest result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
+	t.Logf("C++ bot result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
 	if result.Output != "" {
-		t.Logf("Analysis test backtest output: %s", result.Output)
+		t.Logf("C++ bot output: %s", result.Output)
 	}
 
-	// Verify backtest completed successfully
-	require.Equal(t, "success", result.Status, "Backtest should complete successfully")
-	require.Equal(t, 0, result.ExitCode, "Backtest should exit with code 0")
+	require.Equal(t, "success", result.Status, "C++ bot should complete successfully")
+	require.Equal(t, 0, result.ExitCode, "C++ bot should exit with code 0")
 
-	// Wait a moment for analysis file to be stored
-	time.Sleep(2 * time.Second)
+	// Verify JSON output
+	lines := strings.Split(result.Output, "\n")
+	var jsonLine string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "{") {
+			jsonLine = line
+			break
+		}
+	}
+	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
 
-	// Verify analysis file was stored in the correct bucket
-	analysisPath := fmt.Sprintf("%s/analysis.json", executable.ID)
+	var botResult map[string]any
+	err = json.Unmarshal([]byte(jsonLine), &botResult)
+	require.NoError(t, err, "Bot output should be valid JSON")
+	assert.Equal(t, "success", botResult["status"], "Result should have success status")
+	assert.Equal(t, "real-cpp-bot-test", botResult["bot_id"], "Result should contain bot_id")
+}
 
-	obj, err := client.GetObject(ctx, backtestsBucket, analysisPath, minio.GetObjectOptions{})
-	require.NoError(t, err, "Analysis file should be stored in backtests bucket")
-	defer obj.Close()
+// buildCppTestBot builds the C++ test bot in Docker
+func buildCppTestBot(t *testing.T, botPath string) {
+	t.Helper()
 
-	content, err := io.ReadAll(obj)
+	absPath, err := filepath.Abs(botPath)
 	require.NoError(t, err)
 
-	// Parse and verify analysis JSON structure
-	var analysisResult map[string]any
-	err = json.Unmarshal(content, &analysisResult)
-	require.NoError(t, err, "Analysis file should contain valid JSON")
+	// Run cmake and make in Docker
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", fmt.Sprintf("%s:/project", absPath),
+		"-w", "/project",
+		"gcc:13",
+		"bash", "-c", "apt-get update && apt-get install -y --no-install-recommends cmake >/dev/null 2>&1 && mkdir -p build && cd build && cmake .. && make")
 
-	// Verify analysis structure
-	assert.Equal(t, "success", analysisResult["status"], "Analysis should have success status")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build C++ test bot: %v\nOutput: %s", err, string(output))
+	}
 
-	// The analysis result has a nested "results" structure
-	results, hasResults := analysisResult["results"].(map[string]any)
-	require.True(t, hasResults, "Analysis should contain results object")
+	t.Logf("C++ build output: %s", string(output))
 
-	assert.NotNil(t, results["metrics"], "Analysis should contain metrics")
-	assert.NotNil(t, results["plots"], "Analysis should contain plots")
-	assert.NotNil(t, results["tables"], "Analysis should contain tables")
+	// Verify binary was created
+	binaryPath := filepath.Join(botPath, "build", "cpp-test-bot")
+	_, err = os.Stat(binaryPath)
+	require.NoError(t, err, "C++ binary should exist after build")
+}
 
-	t.Logf("Analysis file successfully stored and verified: %s", string(content))
+// createCppTestBotZip creates a ZIP containing the C++ binary
+func createCppTestBotZip(t *testing.T, botPath string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// Add the binary to the ZIP
+	binaryPath := filepath.Join(botPath, "build", "cpp-test-bot")
+	binaryData, err := os.ReadFile(binaryPath)
+	require.NoError(t, err, "Failed to read C++ binary")
+
+	// Create directory structure in ZIP
+	header := &zip.FileHeader{
+		Name:   "build/cpp-test-bot",
+		Method: zip.Deflate,
+	}
+	header.SetMode(0755) // Executable permission
+
+	writer, err := zipWriter.CreateHeader(header)
+	require.NoError(t, err)
+
+	_, err = writer.Write(binaryData)
+	require.NoError(t, err)
+
+	// Add CMakeLists.txt (needed for project detection)
+	cmakePath := filepath.Join(botPath, "CMakeLists.txt")
+	cmakeData, err := os.ReadFile(cmakePath)
+	require.NoError(t, err)
+
+	cmakeWriter, err := zipWriter.Create("CMakeLists.txt")
+	require.NoError(t, err)
+	_, err = cmakeWriter.Write(cmakeData)
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	return buf.Bytes()
+}
+
+// TestIntegration_RealDocker_ScalaBot tests running a real Scala bot in Docker
+func TestIntegration_RealDocker_ScalaBot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping real Docker integration test in short mode")
+	}
+
+	// Use shared MinIO server (started in TestMain)
+	minioServer := sharedMinIOServer
+
+	logger := &util.DefaultLogger{}
+
+	runner, err := NewDockerRunner(DockerRunnerOptions{
+		Logger: logger,
+	})
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Scala test bot path
+	scalaBotPath := filepath.Join("..", "fixtures", "scala-test-bot")
+	jarPath := filepath.Join(scalaBotPath, "target", "scala-3.3.3", "scala-test-bot-assembly.jar")
+
+	// Check if JAR exists
+	if _, err := os.Stat(jarPath); os.IsNotExist(err) {
+		t.Skip("Scala test bot JAR not found - run 'sbt assembly' in fixtures/scala-test-bot first")
+	}
+
+	// Create ZIP with the JAR
+	scalaZipData := createScalaTestBotZip(t, scalaBotPath)
+
+	executable := model.Executable{
+		ID:         "real-scala-bot-test",
+		Runtime:    "scala3",
+		Entrypoint: "bot",
+		EntrypointFiles: map[string]string{
+			"bot": "target/scala-3.3.3/scala-test-bot-assembly.jar",
+		},
+		Config: map[string]any{
+			"symbol": "BTC/USDT",
+			"amount": 100,
+		},
+		FilePath:       "real-scala-bot.zip",
+		IsLongRunning:  false,
+		PersistResults: false,
+	}
+
+	uploadToMinIO(t, minioServer, executable.FilePath, scalaZipData)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	result, err := runner.StartContainer(ctx, executable)
+	require.NoError(t, err, "StartContainer should succeed")
+	assert.NotNil(t, result)
+
+	t.Logf("Scala bot result: Status=%s, ExitCode=%d", result.Status, result.ExitCode)
+	if result.Output != "" {
+		t.Logf("Scala bot output: %s", result.Output)
+	}
+
+	require.Equal(t, "success", result.Status, "Scala bot should complete successfully")
+	require.Equal(t, 0, result.ExitCode, "Scala bot should exit with code 0")
+
+	// Verify JSON output
+	lines := strings.Split(result.Output, "\n")
+	var jsonLine string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "{") {
+			jsonLine = line
+			break
+		}
+	}
+	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+
+	var botResult map[string]any
+	err = json.Unmarshal([]byte(jsonLine), &botResult)
+	require.NoError(t, err, "Bot output should be valid JSON")
+	assert.Equal(t, "success", botResult["status"], "Result should have success status")
+	assert.Equal(t, "real-scala-bot-test", botResult["bot_id"], "Result should contain bot_id")
+}
+
+// createScalaTestBotZip creates a ZIP containing the Scala JAR
+func createScalaTestBotZip(t *testing.T, botPath string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// Add the JAR to the ZIP
+	jarPath := filepath.Join(botPath, "target", "scala-3.3.3", "scala-test-bot-assembly.jar")
+	jarData, err := os.ReadFile(jarPath)
+	require.NoError(t, err, "Failed to read Scala JAR")
+
+	// Create directory structure in ZIP
+	header := &zip.FileHeader{
+		Name:   "target/scala-3.3.3/scala-test-bot-assembly.jar",
+		Method: zip.Deflate,
+	}
+	header.SetMode(0644)
+
+	writer, err := zipWriter.CreateHeader(header)
+	require.NoError(t, err)
+
+	_, err = writer.Write(jarData)
+	require.NoError(t, err)
+
+	// Add build.sbt (needed for project detection)
+	buildSbtPath := filepath.Join(botPath, "build.sbt")
+	buildSbtData, err := os.ReadFile(buildSbtPath)
+	require.NoError(t, err)
+
+	sbtWriter, err := zipWriter.Create("build.sbt")
+	require.NoError(t, err)
+	_, err = sbtWriter.Write(buildSbtData)
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	return buf.Bytes()
 }

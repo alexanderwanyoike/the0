@@ -1,0 +1,25 @@
+cabal-version:      3.0
+name:               sma-bot
+version:            1.0.0
+synopsis:           SMA Crossover trading bot
+description:        A scheduled bot implementing SMA crossover strategy with Yahoo Finance data
+license:            Apache-2.0
+author:             the0
+build-type:         Simple
+
+executable sma-bot
+    main-is:          Main.hs
+    other-modules:
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    ghc-options:      -O2 -Wall
+    build-depends:
+        base >= 4.14 && < 5,
+        the0-sdk,
+        http-conduit >= 2.3,
+        aeson >= 2.0,
+        bytestring >= 0.10,
+        text >= 1.2,
+        time >= 1.9,
+        vector >= 0.12,
+        containers >= 0.6

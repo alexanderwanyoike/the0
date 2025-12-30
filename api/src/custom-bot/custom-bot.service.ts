@@ -39,19 +39,11 @@ export class CustomBotService {
         return Failure(existsResult.error);
       }
 
-      if (
-        config.type === "realtime" &&
-        (!config.runtime ||
-          !["python3.11", "nodejs20"].includes(config.runtime))
-      ) {
-        return Failure(
-          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
-        );
-      }
+      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
 
-      if (config.type === "scheduled" && config.runtime !== "python3.11") {
+      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
-          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
+          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
         );
       }
 
@@ -59,20 +51,47 @@ export class CustomBotService {
         return Failure("Custom bot with this name already exists");
       }
 
+      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
+      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const requiredFiles = compiledRuntimes.includes(config.runtime)
+        ? [] // Skip entrypoint validation for compiled languages
+        : Object.values(config.entrypoints).filter(Boolean);
+
       // Validate ZIP file structure from uploaded file
       const zipValidation = await this.storageService.validateZipStructure(
         filePath,
-        Object.values(config.entrypoints).filter(Boolean),
+        requiredFiles,
       );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
 
+      // Extract frontend bundle if present (do this before creating bot record)
+      const frontendResult = await this.storageService.extractAndStoreFrontend(
+        filePath,
+        userId,
+        config.name,
+        config.version,
+      );
+
+      // Update config with hasFrontend flag
+      const finalConfig = {
+        ...config,
+        hasFrontend: frontendResult.success && frontendResult.data !== null,
+      };
+
+      if (frontendResult.success && frontendResult.data) {
+        this.logger.info(
+          { botName: config.name, frontendPath: frontendResult.data },
+          "Frontend bundle extracted for bot",
+        );
+      }
+
       // Create the bot
       const botData: Partial<CustomBot> = {
-        name: config.name,
-        version: config.version,
-        config,
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
         filePath: filePath,
         status: "active",
       };
@@ -114,19 +133,11 @@ export class CustomBotService {
         return Failure("Bot name in config must match the URL parameter");
       }
 
-      if (
-        config.type === "realtime" &&
-        (!config.runtime ||
-          !["python3.11", "nodejs20"].includes(config.runtime))
-      ) {
-        return Failure(
-          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
-        );
-      }
+      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
 
-      if (config.type === "scheduled" && config.runtime !== "python3.11") {
+      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
-          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
+          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
         );
       }
 
@@ -183,20 +194,47 @@ export class CustomBotService {
         return Failure(`Version ${config.version} already exists for this bot`);
       }
 
+      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
+      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const requiredFiles = compiledRuntimes.includes(config.runtime)
+        ? [] // Skip entrypoint validation for compiled languages
+        : Object.values(config.entrypoints).filter(Boolean);
+
       // Validate ZIP file structure from uploaded file
       const zipValidation = await this.storageService.validateZipStructure(
         filePath,
-        Object.values(config.entrypoints).filter(Boolean),
+        requiredFiles,
       );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
 
+      // Extract frontend bundle if present
+      const frontendResult = await this.storageService.extractAndStoreFrontend(
+        filePath,
+        userId,
+        config.name,
+        config.version,
+      );
+
+      // Update config with hasFrontend flag
+      const finalConfig = {
+        ...config,
+        hasFrontend: frontendResult.success && frontendResult.data !== null,
+      };
+
+      if (frontendResult.success && frontendResult.data) {
+        this.logger.info(
+          { botName: config.name, frontendPath: frontendResult.data },
+          "Frontend bundle extracted for bot update",
+        );
+      }
+
       // Create new version
       const botData: Partial<CustomBot> = {
-        name: config.name,
-        version: config.version,
-        config,
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
         filePath: filePath,
         status: "active",
       };
@@ -272,7 +310,9 @@ export class CustomBotService {
     );
   }
 
-  async getGlobalLatestVersion(name: string): Promise<Result<CustomBot, string>> {
+  async getGlobalLatestVersion(
+    name: string,
+  ): Promise<Result<CustomBot, string>> {
     return await this.customBotRepository.getGlobalLatestVersion(name);
   }
 
@@ -280,5 +320,9 @@ export class CustomBotService {
     Result<CustomBotWithVersions[], string>
   > {
     return await this.customBotRepository.getAllGlobalCustomBots();
+  }
+
+  async getById(id: string): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.findOneById(id);
   }
 }

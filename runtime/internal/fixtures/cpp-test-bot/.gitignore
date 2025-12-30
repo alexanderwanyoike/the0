@@ -1,0 +1,5 @@
+# Keep build directory but ignore CMake cache files
+build/CMakeCache.txt
+build/CMakeFiles/
+build/cmake_install.cmake
+build/Makefile

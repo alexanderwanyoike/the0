@@ -1,0 +1,21 @@
+# Build artifacts
+dist/
+dist-newstyle/
+.stack-work/
+*.hi
+*.o
+*.exe
+
+# Cabal
+cabal.sandbox.config
+.cabal-sandbox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
