@@ -129,6 +129,49 @@ reviews:
     unit_tests:
       enabled: true
 
+  tools:
+    # TypeScript/JavaScript
+    eslint:
+      enabled: true
+    biome:
+      enabled: true
+
+    # Go
+    golangci-lint:
+      enabled: true
+
+    # Python
+    ruff:
+      enabled: true
+
+    # Security
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+
+    # YAML/Config
+    yamllint:
+      enabled: true
+    actionlint:
+      enabled: true
+
+    # Kubernetes
+    checkov:
+      enabled: true
+
+    # Markdown
+    markdownlint:
+      enabled: true
+    languagetool:
+      enabled: true
+      enabled_rules: []
+      disabled_rules:
+        - "MORFOLOGIK_RULE_EN_US"
+      enabled_categories: []
+      disabled_categories:
+        - "TYPOS"
+
 chat:
   auto_reply: true
 
@@ -138,46 +181,3 @@ knowledge_base:
     enabled: true
   learnings:
     scope: "auto"
-
-tools:
-  # TypeScript/JavaScript
-  eslint:
-    enabled: true
-  biome:
-    enabled: true
-
-  # Go
-  golangci-lint:
-    enabled: true
-
-  # Python
-  ruff:
-    enabled: true
-
-  # Security
-  gitleaks:
-    enabled: true
-  semgrep:
-    enabled: true
-
-  # YAML/Config
-  yamllint:
-    enabled: true
-  actionlint:
-    enabled: true
-
-  # Kubernetes
-  checkov:
-    enabled: true
-
-  # Markdown
-  markdownlint:
-    enabled: true
-  languagetool:
-    enabled: true
-    enabled_rules: []
-    disabled_rules:
-      - "MORFOLOGIK_RULE_EN_US"  # Ignore spelling for technical terms
-    enabled_categories: []
-    disabled_categories:
-      - "TYPOS"
