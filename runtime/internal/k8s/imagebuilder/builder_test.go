@@ -256,9 +256,10 @@ func TestKanikoImageBuilder_GetEntrypoint(t *testing.T) {
 func TestKanikoImageBuilder_CreateKanikoJob(t *testing.T) {
 	builder := NewKanikoImageBuilder(
 		KanikoBuilderConfig{
-			Namespace:   "the0",
-			Registry:    "localhost:5000",
-			KanikoImage: "gcr.io/kaniko-project/executor:v1.9.0",
+			Namespace:        "the0",
+			Registry:         "localhost:5000",
+			KanikoImage:      "gcr.io/kaniko-project/executor:v1.9.0",
+			InsecureRegistry: true, // For testing with local registry
 			MinIO: MinIOConfig{
 				Endpoint:        "minio:9000",
 				AccessKeyID:     "access-key",

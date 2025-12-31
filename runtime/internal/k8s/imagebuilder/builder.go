@@ -70,6 +70,9 @@ type KanikoBuilderConfig struct {
 	BuildTimeout time.Duration
 	// KanikoImage is the Kaniko executor image to use.
 	KanikoImage string
+	// InsecureRegistry allows HTTP registry communication (for local development).
+	// In production, this should be false to enforce TLS.
+	InsecureRegistry bool
 }
 
 // KanikoImageBuilder builds container images using Kaniko Jobs.
@@ -246,14 +249,20 @@ chmod +x /workspace/entrypoint.sh
 						{
 							Name:  "kaniko",
 							Image: b.config.KanikoImage,
-							Args: []string{
-								"--dockerfile=/workspace/Dockerfile",
-								fmt.Sprintf("--context=%s", contextURL),
-								fmt.Sprintf("--destination=%s", imageRef),
-								"--insecure", // Allow HTTP registry (for local development)
-								"--cache=true",
-								"--cache-ttl=24h",
-							},
+							Args: func() []string {
+								args := []string{
+									"--dockerfile=/workspace/Dockerfile",
+									fmt.Sprintf("--context=%s", contextURL),
+									fmt.Sprintf("--destination=%s", imageRef),
+									"--cache=true",
+									"--cache-ttl=24h",
+								}
+								// Only add --insecure for local/development registries
+								if b.config.InsecureRegistry {
+									args = append(args, "--insecure")
+								}
+								return args
+							}(),
 							Env: []corev1.EnvVar{
 								{Name: "AWS_ACCESS_KEY_ID", Value: b.config.MinIO.AccessKeyID},
 								{Name: "AWS_SECRET_ACCESS_KEY", Value: b.config.MinIO.SecretAccessKey},

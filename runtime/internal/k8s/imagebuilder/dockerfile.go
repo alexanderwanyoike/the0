@@ -251,7 +251,7 @@ set -e
 cd /bot
 
 # Restore and build if not already done
-if [ -f "*.csproj" ] || [ -f "*.sln" ]; then
+if ls *.csproj 1>/dev/null 2>&1 || ls *.sln 1>/dev/null 2>&1; then
     dotnet restore 2>/dev/null || true
     dotnet build -c Release 2>/dev/null || true
 fi
