@@ -480,23 +480,26 @@ func TestMockK8sCronJobClient(t *testing.T) {
 
 func TestMustParseQuantity(t *testing.T) {
 	tests := []struct {
-		input    string
-		isValid  bool
+		input       string
+		isValid     bool
+		expectValue string // Expected value for valid inputs
 	}{
-		{"512Mi", true},
-		{"500m", true},
-		{"1Gi", true},
-		{"invalid", false},
-		{"", false},
+		{"512Mi", true, "512Mi"},
+		{"500m", true, "500m"},
+		{"1Gi", true, "1Gi"},
+		{"invalid", false, "128Mi"}, // Returns safe default on invalid input
+		{"", false, "128Mi"},        // Returns safe default on empty input
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := mustParseQuantity(tt.input)
+			assert.False(t, result.IsZero(), "quantity should never be zero")
 			if tt.isValid {
-				assert.False(t, result.IsZero())
+				assert.Equal(t, tt.expectValue, result.String())
 			} else {
-				assert.True(t, result.IsZero())
+				// Invalid inputs should return the safe default (128Mi)
+				assert.Equal(t, "128Mi", result.String())
 			}
 		})
 	}

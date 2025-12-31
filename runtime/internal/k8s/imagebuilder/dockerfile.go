@@ -5,8 +5,29 @@ package imagebuilder
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// entrypointFileRegex validates entrypoint filenames to prevent command injection.
+// Allows alphanumeric characters, dots, hyphens, underscores, and forward slashes.
+var entrypointFileRegex = regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
+
+// validateEntrypointFile checks that the entrypoint filename is safe.
+// Returns an error if the filename contains potentially dangerous characters.
+func validateEntrypointFile(entrypointFile string) error {
+	if entrypointFile == "" {
+		return fmt.Errorf("entrypoint file cannot be empty")
+	}
+	if !entrypointFileRegex.MatchString(entrypointFile) {
+		return fmt.Errorf("invalid entrypoint file: contains disallowed characters")
+	}
+	// Check for path traversal
+	if strings.Contains(entrypointFile, "..") {
+		return fmt.Errorf("invalid entrypoint file: path traversal not allowed")
+	}
+	return nil
+}
 
 // RuntimeConfig holds configuration for a specific runtime.
 type RuntimeConfig struct {
@@ -31,7 +52,7 @@ var runtimeConfigs = map[string]RuntimeConfig{
 	"nodejs20": {
 		BaseImage:         "node:20-alpine",
 		InstallCommand:    "npm install --production",
-		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
+		EntrypointCommand: "/bin/sh /bot/entrypoint.sh",
 		DependencyFile:    "package.json",
 	},
 	"rust-stable": {
@@ -44,7 +65,7 @@ var runtimeConfigs = map[string]RuntimeConfig{
 		BaseImage:         "mcr.microsoft.com/dotnet/sdk:8.0",
 		InstallCommand:    "dotnet restore && dotnet build -c Release",
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "*.csproj",
+		DependencyFile:    "project.csproj", // Will use glob pattern in Dockerfile
 	},
 	"gcc13": {
 		BaseImage:         "gcc:13",
@@ -62,7 +83,7 @@ var runtimeConfigs = map[string]RuntimeConfig{
 		BaseImage:         "haskell:9.6-slim",
 		InstallCommand:    "cabal update && cabal build",
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "*.cabal",
+		DependencyFile:    "package.cabal", // Will use glob pattern in Dockerfile
 	},
 }
 
@@ -82,6 +103,11 @@ func NewDockerfileGenerator() *DockerfileGenerator {
 // 4. Installs dependencies if dependency file exists
 // 5. Sets up the entrypoint script
 func (g *DockerfileGenerator) GenerateDockerfile(runtime, entrypointFile string) (string, error) {
+	// Validate entrypoint file to prevent command injection
+	if err := validateEntrypointFile(entrypointFile); err != nil {
+		return "", err
+	}
+
 	config, ok := runtimeConfigs[runtime]
 	if !ok {
 		// Fallback to Python for unknown runtimes
@@ -101,18 +127,32 @@ func (g *DockerfileGenerator) GenerateDockerfile(runtime, entrypointFile string)
 	dockerfile.WriteString("COPY . /bot/\n\n")
 
 	// Install dependencies (if dependency file exists)
+	// Use glob-safe check for runtimes that use glob patterns
 	dockerfile.WriteString("# Install dependencies (if dependency file exists)\n")
-	dockerfile.WriteString(fmt.Sprintf("RUN if [ -f \"%s\" ]; then %s; fi\n\n",
-		config.DependencyFile, config.InstallCommand))
+	switch runtime {
+	case "dotnet8":
+		// Use shell glob expansion for .csproj files
+		dockerfile.WriteString(fmt.Sprintf("RUN if ls *.csproj 1>/dev/null 2>&1; then %s; fi\n\n", config.InstallCommand))
+	case "ghc96":
+		// Use shell glob expansion for .cabal files
+		dockerfile.WriteString(fmt.Sprintf("RUN if ls *.cabal 1>/dev/null 2>&1; then %s; fi\n\n", config.InstallCommand))
+	default:
+		dockerfile.WriteString(fmt.Sprintf("RUN if [ -f \"%s\" ]; then %s; fi\n\n",
+			config.DependencyFile, config.InstallCommand))
+	}
 
 	// Set entrypoint file as environment variable
 	dockerfile.WriteString("# Set entrypoint configuration\n")
 	dockerfile.WriteString(fmt.Sprintf("ENV SCRIPT_PATH=%s\n", entrypointFile))
 	dockerfile.WriteString("ENV CODE_MOUNT_DIR=bot\n\n")
 
-	// Set entrypoint command
+	// Set entrypoint command - use /bin/sh for Alpine-based images
 	dockerfile.WriteString("# Run the bot\n")
-	dockerfile.WriteString(fmt.Sprintf("CMD [\"/bin/bash\", \"/bot/entrypoint.sh\"]\n"))
+	if runtime == "nodejs20" {
+		dockerfile.WriteString("CMD [\"/bin/sh\", \"/bot/entrypoint.sh\"]\n")
+	} else {
+		dockerfile.WriteString("CMD [\"/bin/bash\", \"/bot/entrypoint.sh\"]\n")
+	}
 
 	return dockerfile.String(), nil
 }
@@ -121,6 +161,11 @@ func (g *DockerfileGenerator) GenerateDockerfile(runtime, entrypointFile string)
 // the runtime-specific entrypoint. This script is included in the container
 // image alongside the bot code.
 func (g *DockerfileGenerator) GenerateEntrypointScript(runtime, entrypointFile string) (string, error) {
+	// Validate entrypoint file to prevent command injection
+	if err := validateEntrypointFile(entrypointFile); err != nil {
+		return "", err
+	}
+
 	switch runtime {
 	case "python3.11":
 		return g.generatePythonEntrypoint(entrypointFile), nil
@@ -160,7 +205,7 @@ exec python3 %s
 }
 
 func (g *DockerfileGenerator) generateNodeJSEntrypoint(entrypointFile string) string {
-	return fmt.Sprintf(`#!/bin/bash
+	return fmt.Sprintf(`#!/bin/sh
 set -e
 
 # Node.js bot entrypoint

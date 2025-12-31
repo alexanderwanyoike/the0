@@ -87,7 +87,8 @@ func TestDockerfileGenerator_GenerateEntrypointScript_NodeJS(t *testing.T) {
 	script, err := generator.GenerateEntrypointScript("nodejs20", "index.js")
 
 	require.NoError(t, err)
-	assert.Contains(t, script, "#!/bin/bash")
+	// Node.js uses /bin/sh because node:20-alpine doesn't have bash
+	assert.Contains(t, script, "#!/bin/sh")
 	assert.Contains(t, script, "node index.js")
 	assert.Contains(t, script, "npm install")
 }

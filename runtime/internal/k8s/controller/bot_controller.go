@@ -310,7 +310,7 @@ func NewRealK8sClientFromConfig(config *rest.Config) (*RealK8sClient, error) {
 // ListBotPods returns all pods with the bot label.
 func (c *RealK8sClient) ListBotPods(ctx context.Context, namespace string) ([]corev1.Pod, error) {
 	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s", podgen.LabelManagedBy),
+		LabelSelector: fmt.Sprintf("%s=%s", podgen.LabelManagedBy, "the0-bot-controller"),
 	}
 
 	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, listOpts)

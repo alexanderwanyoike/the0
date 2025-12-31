@@ -273,7 +273,11 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule sche
 
 // createCronJobSpec creates a CronJob spec for the schedule.
 func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSchedule, cronExpr, imageRef string) *batchv1.CronJob {
-	configJSON, _ := json.Marshal(schedule.Config)
+	configJSON, err := json.Marshal(schedule.Config)
+	if err != nil {
+		util.LogMaster("[ScheduleController] Warning: failed to marshal config for schedule %s: %v", schedule.ID, err)
+		configJSON = []byte("{}")
+	}
 	configHash := computeScheduleHash(schedule)
 
 	// Resource limits
@@ -285,8 +289,8 @@ func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSche
 	if m, ok := schedule.Config["memory_limit"].(string); ok && m != "" {
 		memoryLimit = m
 	}
-	if c, ok := schedule.Config["cpu_limit"].(string); ok && c != "" {
-		cpuLimit = c
+	if cpu, ok := schedule.Config["cpu_limit"].(string); ok && cpu != "" {
+		cpuLimit = cpu
 	}
 
 	successfulJobsHistory := int32(3)
@@ -439,10 +443,12 @@ func computeScheduleHash(schedule scheduleModel.BotSchedule) string {
 }
 
 // mustParseQuantity parses a resource quantity string.
+// On invalid input, logs a warning and returns the default value.
 func mustParseQuantity(s string) resource.Quantity {
 	q, err := resource.ParseQuantity(s)
 	if err != nil {
-		return resource.MustParse("0")
+		util.LogMaster("[ScheduleController] Warning: invalid resource quantity '%s': %v, using default", s, err)
+		return resource.MustParse("128Mi") // Safe default
 	}
 	return q
 }
@@ -472,7 +478,7 @@ func NewRealK8sCronJobClient() (*RealK8sCronJobClient, error) {
 // ListCronJobs returns all CronJobs with the schedule label.
 func (c *RealK8sCronJobClient) ListCronJobs(ctx context.Context, namespace string) ([]batchv1.CronJob, error) {
 	listOpts := metav1.ListOptions{
-		LabelSelector: LabelScheduleManagedBy,
+		LabelSelector: fmt.Sprintf("%s=%s", LabelScheduleManagedBy, "the0-schedule-controller"),
 	}
 
 	cronJobs, err := c.clientset.BatchV1().CronJobs(namespace).List(ctx, listOpts)
