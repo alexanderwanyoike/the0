@@ -478,29 +478,28 @@ func TestMockK8sCronJobClient(t *testing.T) {
 	})
 }
 
-func TestMustParseQuantity(t *testing.T) {
+func TestMustParseQuantityWithDefault(t *testing.T) {
 	tests := []struct {
-		input       string
-		isValid     bool
-		expectValue string // Expected value for valid inputs
+		name         string
+		input        string
+		defaultValue string
+		isValid      bool
+		expectValue  string
 	}{
-		{"512Mi", true, "512Mi"},
-		{"500m", true, "500m"},
-		{"1Gi", true, "1Gi"},
-		{"invalid", false, "128Mi"}, // Returns safe default on invalid input
-		{"", false, "128Mi"},        // Returns safe default on empty input
+		{"valid memory", "512Mi", "128Mi", true, "512Mi"},
+		{"valid cpu", "500m", "100m", true, "500m"},
+		{"valid large memory", "1Gi", "512Mi", true, "1Gi"},
+		{"invalid with memory default", "invalid", "128Mi", false, "128Mi"},
+		{"invalid with cpu default", "invalid", "100m", false, "100m"},
+		{"empty with memory default", "", "512Mi", false, "512Mi"},
+		{"empty with cpu default", "", "500m", false, "500m"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := mustParseQuantity(tt.input)
+		t.Run(tt.name, func(t *testing.T) {
+			result := mustParseQuantityWithDefault(tt.input, tt.defaultValue)
 			assert.False(t, result.IsZero(), "quantity should never be zero")
-			if tt.isValid {
-				assert.Equal(t, tt.expectValue, result.String())
-			} else {
-				// Invalid inputs should return the safe default (128Mi)
-				assert.Equal(t, "128Mi", result.String())
-			}
+			assert.Equal(t, tt.expectValue, result.String())
 		})
 	}
 }

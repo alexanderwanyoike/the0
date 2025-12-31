@@ -359,7 +359,9 @@ func runController() {
 	)
 
 	// Create K8s client
-	k8sClient, err := controller.NewRealK8sClient()
+	// Controller name must match what's used in BotControllerConfig
+	botControllerName := "the0-bot-controller"
+	k8sClient, err := controller.NewRealK8sClient(botControllerName)
 	if err != nil {
 		util.LogMaster("Failed to create K8s client: %v", err)
 		util.LogMaster("Make sure the controller is running inside a Kubernetes cluster with proper RBAC.")
@@ -407,7 +409,7 @@ func runController() {
 		controller.BotControllerConfig{
 			Namespace:         controllerNamespace,
 			ReconcileInterval: controllerReconcileInterval,
-			ControllerName:    "the0-bot-controller",
+			ControllerName:    botControllerName,
 		},
 		botRepo,
 		k8sClient,
@@ -421,7 +423,8 @@ func runController() {
 		constants.BOT_SCHEDULE_COLLECTION,
 	)
 
-	cronClient, err := controller.NewRealK8sCronJobClient()
+	scheduleControllerName := "the0-schedule-controller"
+	cronClient, err := controller.NewRealK8sCronJobClient(scheduleControllerName)
 	if err != nil {
 		util.LogMaster("Failed to create K8s CronJob client: %v", err)
 		os.Exit(1)
@@ -431,7 +434,7 @@ func runController() {
 		controller.BotScheduleControllerConfig{
 			Namespace:         controllerNamespace,
 			ReconcileInterval: controllerReconcileInterval,
-			ControllerName:    "the0-schedule-controller",
+			ControllerName:    scheduleControllerName,
 		},
 		scheduleRepo,
 		cronClient,

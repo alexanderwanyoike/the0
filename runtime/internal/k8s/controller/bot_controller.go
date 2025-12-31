@@ -279,11 +279,13 @@ func isPodHealthy(pod *corev1.Pod) bool {
 
 // RealK8sClient implements K8sClient using a real Kubernetes clientset.
 type RealK8sClient struct {
-	clientset *kubernetes.Clientset
+	clientset      *kubernetes.Clientset
+	controllerName string
 }
 
 // NewRealK8sClient creates a K8sClient using in-cluster config.
-func NewRealK8sClient() (*RealK8sClient, error) {
+// The controllerName is used for label selectors when listing pods.
+func NewRealK8sClient(controllerName string) (*RealK8sClient, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
@@ -294,23 +296,31 @@ func NewRealK8sClient() (*RealK8sClient, error) {
 		return nil, fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	return &RealK8sClient{clientset: clientset}, nil
+	if controllerName == "" {
+		controllerName = "the0-bot-controller"
+	}
+
+	return &RealK8sClient{clientset: clientset, controllerName: controllerName}, nil
 }
 
 // NewRealK8sClientFromConfig creates a K8sClient using provided config.
-func NewRealK8sClientFromConfig(config *rest.Config) (*RealK8sClient, error) {
+func NewRealK8sClientFromConfig(config *rest.Config, controllerName string) (*RealK8sClient, error) {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	return &RealK8sClient{clientset: clientset}, nil
+	if controllerName == "" {
+		controllerName = "the0-bot-controller"
+	}
+
+	return &RealK8sClient{clientset: clientset, controllerName: controllerName}, nil
 }
 
-// ListBotPods returns all pods with the bot label.
+// ListBotPods returns all pods with the bot label managed by this controller.
 func (c *RealK8sClient) ListBotPods(ctx context.Context, namespace string) ([]corev1.Pod, error) {
 	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", podgen.LabelManagedBy, "the0-bot-controller"),
+		LabelSelector: fmt.Sprintf("%s=%s", podgen.LabelManagedBy, c.controllerName),
 	}
 
 	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, listOpts)

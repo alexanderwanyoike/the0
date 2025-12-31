@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -430,6 +431,33 @@ func TestBotController_Reconcile_MixedState(t *testing.T) {
 	assert.Equal(t, 1, mockK8s.CreateCalled, "should create 1 pod for bot-1")
 	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete 1 pod for bot-3")
 	assert.Contains(t, mockK8s.DeletedPods, "bot-bot-3")
+}
+
+func TestBotController_Reconcile_RepositoryError(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Error: errors.New("database connection lost"),
+	}
+	mockK8s := &MockK8sClient{}
+	mockImageBuilder := &MockImageBuilder{}
+
+	controller := NewBotController(
+		BotControllerConfig{
+			Namespace: "the0",
+		},
+		mockRepo,
+		mockK8s,
+		mockImageBuilder,
+	)
+
+	ctx := context.Background()
+	err := controller.Reconcile(ctx)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database connection lost")
+	assert.Equal(t, 1, mockRepo.Called, "should call repository")
+	assert.Equal(t, 0, mockK8s.ListCalled, "should not query K8s on repo error")
+	assert.Equal(t, 0, mockK8s.CreateCalled, "should not create pods on repo error")
+	assert.Equal(t, 0, mockK8s.DeleteCalled, "should not delete pods on repo error")
 }
 
 func TestBotController_Start_RunsReconciliation(t *testing.T) {

@@ -341,12 +341,12 @@ func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSche
 									},
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
-											corev1.ResourceMemory: mustParseQuantity(memoryLimit),
-											corev1.ResourceCPU:    mustParseQuantity(cpuLimit),
+											corev1.ResourceMemory: mustParseQuantityWithDefault(memoryLimit, "512Mi"),
+											corev1.ResourceCPU:    mustParseQuantityWithDefault(cpuLimit, "500m"),
 										},
 										Requests: corev1.ResourceList{
-											corev1.ResourceMemory: mustParseQuantity(memoryRequest),
-											corev1.ResourceCPU:    mustParseQuantity(cpuRequest),
+											corev1.ResourceMemory: mustParseQuantityWithDefault(memoryRequest, "128Mi"),
+											corev1.ResourceCPU:    mustParseQuantityWithDefault(cpuRequest, "100m"),
 										},
 									},
 								},
@@ -446,13 +446,13 @@ func computeScheduleHash(schedule scheduleModel.BotSchedule) string {
 	return hex.EncodeToString(hash[:])[:16]
 }
 
-// mustParseQuantity parses a resource quantity string.
-// On invalid input, logs a warning and returns the default value.
-func mustParseQuantity(s string) resource.Quantity {
+// mustParseQuantityWithDefault parses a resource quantity string.
+// On invalid input, logs a warning and returns the provided default value.
+func mustParseQuantityWithDefault(s, defaultValue string) resource.Quantity {
 	q, err := resource.ParseQuantity(s)
 	if err != nil {
-		util.LogMaster("[ScheduleController] Warning: invalid resource quantity '%s': %v, using default", s, err)
-		return resource.MustParse("128Mi") // Safe default
+		util.LogMaster("[ScheduleController] Warning: invalid resource quantity '%s': %v, using default '%s'", s, err, defaultValue)
+		return resource.MustParse(defaultValue)
 	}
 	return q
 }
@@ -461,11 +461,13 @@ func mustParseQuantity(s string) resource.Quantity {
 
 // RealK8sCronJobClient implements K8sCronJobClient.
 type RealK8sCronJobClient struct {
-	clientset *kubernetes.Clientset
+	clientset      *kubernetes.Clientset
+	controllerName string
 }
 
 // NewRealK8sCronJobClient creates a K8sCronJobClient using in-cluster config.
-func NewRealK8sCronJobClient() (*RealK8sCronJobClient, error) {
+// The controllerName is used for label selectors when listing CronJobs.
+func NewRealK8sCronJobClient(controllerName string) (*RealK8sCronJobClient, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
@@ -476,13 +478,17 @@ func NewRealK8sCronJobClient() (*RealK8sCronJobClient, error) {
 		return nil, fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	return &RealK8sCronJobClient{clientset: clientset}, nil
+	if controllerName == "" {
+		controllerName = "the0-schedule-controller"
+	}
+
+	return &RealK8sCronJobClient{clientset: clientset, controllerName: controllerName}, nil
 }
 
-// ListCronJobs returns all CronJobs with the schedule label.
+// ListCronJobs returns all CronJobs with the schedule label managed by this controller.
 func (c *RealK8sCronJobClient) ListCronJobs(ctx context.Context, namespace string) ([]batchv1.CronJob, error) {
 	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", LabelScheduleManagedBy, "the0-schedule-controller"),
+		LabelSelector: fmt.Sprintf("%s=%s", LabelScheduleManagedBy, c.controllerName),
 	}
 
 	cronJobs, err := c.clientset.BatchV1().CronJobs(namespace).List(ctx, listOpts)
