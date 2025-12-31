@@ -322,6 +322,18 @@ func runController() {
 	util.LogMaster("Reconcile interval: %v", controllerReconcileInterval)
 	util.LogMaster("Image builder enabled: %v", enableImageBuilder)
 
+	// Validate MinIO credentials when image builder is enabled
+	if enableImageBuilder {
+		if minioAccessKey == "" || minioSecretKey == "" {
+			util.LogMaster("ERROR: MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY) are required when image builder is enabled")
+			os.Exit(1)
+		}
+		if minioEndpoint == "" {
+			util.LogMaster("ERROR: MINIO_ENDPOINT is required when image builder is enabled")
+			os.Exit(1)
+		}
+	}
+
 	// Start health server for K8s probes
 	healthServer := health.NewServer(8080)
 	healthServer.Start()

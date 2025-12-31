@@ -42,9 +42,8 @@ func TestDockerfileGenerator_GenerateDockerfile_Rust(t *testing.T) {
 	dockerfile, err := generator.GenerateDockerfile("rust-stable", "sma_bot")
 
 	require.NoError(t, err)
-	assert.Contains(t, dockerfile, "FROM rust:latest")
-	assert.Contains(t, dockerfile, "Cargo.toml")
-	assert.Contains(t, dockerfile, "cargo build --release")
+	assert.Contains(t, dockerfile, "FROM debian:bookworm-slim")
+	assert.Contains(t, dockerfile, "Pre-built by CLI") // No build commands for compiled languages
 	assert.Contains(t, dockerfile, "ENV SCRIPT_PATH=sma_bot")
 }
 
@@ -54,9 +53,8 @@ func TestDockerfileGenerator_GenerateDockerfile_DotNet(t *testing.T) {
 	dockerfile, err := generator.GenerateDockerfile("dotnet8", "SmaBot")
 
 	require.NoError(t, err)
-	assert.Contains(t, dockerfile, "FROM mcr.microsoft.com/dotnet/sdk:8.0")
-	assert.Contains(t, dockerfile, "dotnet restore")
-	assert.Contains(t, dockerfile, "dotnet build")
+	assert.Contains(t, dockerfile, "FROM mcr.microsoft.com/dotnet/runtime:8.0")
+	assert.Contains(t, dockerfile, "Pre-built by CLI") // No build commands for compiled languages
 }
 
 func TestDockerfileGenerator_GenerateDockerfile_UnknownRuntime(t *testing.T) {
@@ -100,8 +98,8 @@ func TestDockerfileGenerator_GenerateEntrypointScript_Rust(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, script, "#!/bin/bash")
-	assert.Contains(t, script, "cargo build --release")
-	assert.Contains(t, script, "target/release/sma_bot")
+	assert.Contains(t, script, "pre-built by CLI")
+	assert.Contains(t, script, "exec ./sma_bot")
 }
 
 func TestDockerfileGenerator_GenerateEntrypointScript_DotNet(t *testing.T) {
@@ -111,7 +109,8 @@ func TestDockerfileGenerator_GenerateEntrypointScript_DotNet(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, script, "#!/bin/bash")
-	assert.Contains(t, script, "dotnet run")
+	assert.Contains(t, script, "pre-built by CLI")
+	assert.Contains(t, script, "exec ./SmaBot")
 }
 
 func TestDockerfileGenerator_GenerateEntrypointScript_Cpp(t *testing.T) {
@@ -121,28 +120,30 @@ func TestDockerfileGenerator_GenerateEntrypointScript_Cpp(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, script, "#!/bin/bash")
-	assert.Contains(t, script, "make")
-	assert.Contains(t, script, "./main")
+	assert.Contains(t, script, "pre-built by CLI")
+	assert.Contains(t, script, "exec ./main")
 }
 
 func TestDockerfileGenerator_GenerateEntrypointScript_Scala(t *testing.T) {
 	generator := NewDockerfileGenerator()
 
-	script, err := generator.GenerateEntrypointScript("scala3", "Main")
+	script, err := generator.GenerateEntrypointScript("scala3", "app.jar")
 
 	require.NoError(t, err)
 	assert.Contains(t, script, "#!/bin/bash")
-	assert.Contains(t, script, "sbt")
+	assert.Contains(t, script, "pre-built by CLI")
+	assert.Contains(t, script, "java -jar app.jar")
 }
 
 func TestDockerfileGenerator_GenerateEntrypointScript_Haskell(t *testing.T) {
 	generator := NewDockerfileGenerator()
 
-	script, err := generator.GenerateEntrypointScript("ghc96", "Main")
+	script, err := generator.GenerateEntrypointScript("ghc96", "main")
 
 	require.NoError(t, err)
 	assert.Contains(t, script, "#!/bin/bash")
-	assert.Contains(t, script, "cabal")
+	assert.Contains(t, script, "pre-built by CLI")
+	assert.Contains(t, script, "exec ./main")
 }
 
 func TestDockerfileGenerator_GenerateEntrypointScript_Unknown(t *testing.T) {
@@ -162,12 +163,12 @@ func TestGetBaseImage(t *testing.T) {
 	}{
 		{"python3.11", "python:3.11-slim"},
 		{"nodejs20", "node:20-alpine"},
-		{"rust-stable", "rust:latest"},
-		{"dotnet8", "mcr.microsoft.com/dotnet/sdk:8.0"},
-		{"gcc13", "gcc:13"},
-		{"scala3", "eclipse-temurin:21-jre"},
-		{"ghc96", "haskell:9.6-slim"},
-		{"unknown", "python:3.11-slim"}, // fallback
+		{"rust-stable", "debian:bookworm-slim"},         // Pre-built binary, minimal runtime
+		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"}, // Runtime only, not SDK
+		{"gcc13", "debian:bookworm-slim"},               // Pre-built binary, minimal runtime
+		{"scala3", "eclipse-temurin:21-jre"},            // JRE for pre-built JAR
+		{"ghc96", "debian:bookworm-slim"},               // Pre-built binary, minimal runtime
+		{"unknown", "python:3.11-slim"},                 // fallback
 	}
 
 	for _, tt := range tests {

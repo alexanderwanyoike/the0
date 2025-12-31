@@ -56,34 +56,34 @@ var runtimeConfigs = map[string]RuntimeConfig{
 		DependencyFile:    "package.json",
 	},
 	"rust-stable": {
-		BaseImage:         "rust:latest",
-		InstallCommand:    "cargo build --release",
+		BaseImage:         "debian:bookworm-slim",
+		InstallCommand:    "", // CLI pre-builds, just run binary
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "Cargo.toml",
+		DependencyFile:    "",
 	},
 	"dotnet8": {
-		BaseImage:         "mcr.microsoft.com/dotnet/sdk:8.0",
-		InstallCommand:    "dotnet restore && dotnet build -c Release",
+		BaseImage:         "mcr.microsoft.com/dotnet/runtime:8.0",
+		InstallCommand:    "", // CLI pre-builds, just run binary
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "project.csproj", // Will use glob pattern in Dockerfile
+		DependencyFile:    "",
 	},
 	"gcc13": {
-		BaseImage:         "gcc:13",
-		InstallCommand:    "make build || cmake . && make",
+		BaseImage:         "debian:bookworm-slim",
+		InstallCommand:    "", // CLI pre-builds, just run binary
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "Makefile",
+		DependencyFile:    "",
 	},
 	"scala3": {
 		BaseImage:         "eclipse-temurin:21-jre",
-		InstallCommand:    "sbt compile",
+		InstallCommand:    "", // CLI pre-builds, just run JAR
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "build.sbt",
+		DependencyFile:    "",
 	},
 	"ghc96": {
-		BaseImage:         "haskell:9.6-slim",
-		InstallCommand:    "cabal update && cabal build",
+		BaseImage:         "debian:bookworm-slim",
+		InstallCommand:    "", // CLI pre-builds, just run binary
 		EntrypointCommand: "/bin/bash /bot/entrypoint.sh",
-		DependencyFile:    "package.cabal", // Will use glob pattern in Dockerfile
+		DependencyFile:    "",
 	},
 }
 
@@ -126,19 +126,13 @@ func (g *DockerfileGenerator) GenerateDockerfile(runtime, entrypointFile string)
 	dockerfile.WriteString("# Copy bot code\n")
 	dockerfile.WriteString("COPY . /bot/\n\n")
 
-	// Install dependencies (if dependency file exists)
-	// Use glob-safe check for runtimes that use glob patterns
-	dockerfile.WriteString("# Install dependencies (if dependency file exists)\n")
-	switch runtime {
-	case "dotnet8":
-		// Use shell glob expansion for .csproj files
-		dockerfile.WriteString(fmt.Sprintf("RUN if ls *.csproj 1>/dev/null 2>&1; then %s; fi\n\n", config.InstallCommand))
-	case "ghc96":
-		// Use shell glob expansion for .cabal files
-		dockerfile.WriteString(fmt.Sprintf("RUN if ls *.cabal 1>/dev/null 2>&1; then %s; fi\n\n", config.InstallCommand))
-	default:
+	// Install dependencies (only for interpreted languages - compiled languages are pre-built by CLI)
+	if config.InstallCommand != "" && config.DependencyFile != "" {
+		dockerfile.WriteString("# Install dependencies (if dependency file exists)\n")
 		dockerfile.WriteString(fmt.Sprintf("RUN if [ -f \"%s\" ]; then %s; fi\n\n",
 			config.DependencyFile, config.InstallCommand))
+	} else {
+		dockerfile.WriteString("# Pre-built by CLI, no dependency installation needed\n\n")
 	}
 
 	// Set entrypoint file as environment variable
@@ -225,99 +219,60 @@ func (g *DockerfileGenerator) generateRustEntrypoint(entrypointFile string) stri
 	return fmt.Sprintf(`#!/bin/bash
 set -e
 
-# Rust bot entrypoint
+# Rust bot entrypoint (pre-built by CLI)
 cd /bot
 
-# Build if not already built
-if [ -f "Cargo.toml" ] && [ ! -f "target/release/%s" ]; then
-    cargo build --release 2>/dev/null || true
-fi
-
-# Run the Rust binary
-if [ -f "target/release/%s" ]; then
-    exec ./target/release/%s
-else
-    # Fallback: try to run main.rs directly with cargo run
-    exec cargo run --release
-fi
-`, entrypointFile, entrypointFile, entrypointFile)
+# Run the pre-built binary
+exec ./%s
+`, entrypointFile)
 }
 
 func (g *DockerfileGenerator) generateDotNetEntrypoint(entrypointFile string) string {
-	return `#!/bin/bash
+	return fmt.Sprintf(`#!/bin/bash
 set -e
 
-# .NET bot entrypoint
+# .NET bot entrypoint (pre-built by CLI)
 cd /bot
 
-# Restore and build if not already done
-if ls *.csproj 1>/dev/null 2>&1 || ls *.sln 1>/dev/null 2>&1; then
-    dotnet restore 2>/dev/null || true
-    dotnet build -c Release 2>/dev/null || true
-fi
-
-# Run the .NET project
-exec dotnet run -c Release
-`
+# Run the pre-built binary
+exec ./%s
+`, entrypointFile)
 }
 
 func (g *DockerfileGenerator) generateCppEntrypoint(entrypointFile string) string {
 	return fmt.Sprintf(`#!/bin/bash
 set -e
 
-# C++ bot entrypoint
+# C++ bot entrypoint (pre-built by CLI)
 cd /bot
 
-# Build if Makefile exists
-if [ -f "Makefile" ]; then
-    make build 2>/dev/null || make 2>/dev/null || true
-fi
-
-# Try to run the binary
-if [ -f "./%s" ]; then
-    exec ./%s
-elif [ -f "./build/%s" ]; then
-    exec ./build/%s
-else
-    # Fallback: try main
-    exec ./main || ./a.out
-fi
-`, entrypointFile, entrypointFile, entrypointFile, entrypointFile)
+# Run the pre-built binary
+exec ./%s
+`, entrypointFile)
 }
 
 func (g *DockerfileGenerator) generateScalaEntrypoint(entrypointFile string) string {
-	return `#!/bin/bash
+	return fmt.Sprintf(`#!/bin/bash
 set -e
 
-# Scala bot entrypoint
+# Scala bot entrypoint (pre-built by CLI)
 cd /bot
 
-# Compile if build.sbt exists
-if [ -f "build.sbt" ]; then
-    sbt compile 2>/dev/null || true
-fi
-
-# Run via sbt
-exec sbt run
-`
+# Run the pre-built JAR
+exec java -jar %s
+`, entrypointFile)
 }
 
 func (g *DockerfileGenerator) generateHaskellEntrypoint(entrypointFile string) string {
-	return `#!/bin/bash
+	return fmt.Sprintf(`#!/bin/bash
 set -e
 
-# Haskell bot entrypoint
+# Haskell bot entrypoint (pre-built by CLI)
 cd /bot
 
-# Build if cabal file exists
-if ls *.cabal 1>/dev/null 2>&1; then
-    cabal update 2>/dev/null || true
-    cabal build 2>/dev/null || true
-fi
-
-# Run via cabal
-exec cabal run
-`
+# Run the pre-built binary
+exec ./%s
+`, entrypointFile)
 }
 
 // GetBaseImage returns the base Docker image for a given runtime.
