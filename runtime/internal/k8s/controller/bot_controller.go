@@ -341,20 +341,24 @@ func (c *RealK8sClient) GetPod(ctx context.Context, namespace, name string) (*co
 	return pod, err
 }
 
-// NoOpImageBuilder is a placeholder image builder that returns a fixed image reference.
-// This is used until the real Kaniko-based image builder is implemented.
+// NoOpImageBuilder is a placeholder image builder that constructs image references
+// based on bot metadata. This is used until the real Kaniko-based image builder is implemented.
 type NoOpImageBuilder struct {
-	// DefaultImageRef is the default image reference to return.
-	// Format: registry/repo:tag
-	DefaultImageRef string
+	// Registry is the container registry URL (e.g., "localhost:5000").
+	// If empty, defaults to "localhost:5000".
+	Registry string
 }
 
-// NewNoOpImageBuilder creates a NoOpImageBuilder.
-func NewNoOpImageBuilder(defaultImageRef string) *NoOpImageBuilder {
-	return &NoOpImageBuilder{DefaultImageRef: defaultImageRef}
+// NewNoOpImageBuilder creates a NoOpImageBuilder with the given registry.
+// The registry should be the base URL without a trailing slash (e.g., "localhost:5000").
+func NewNoOpImageBuilder(registry string) *NoOpImageBuilder {
+	if registry == "" {
+		registry = "localhost:5000"
+	}
+	return &NoOpImageBuilder{Registry: registry}
 }
 
-// EnsureImage returns the configured default image reference.
+// EnsureImage constructs an image reference based on bot metadata.
 // In the real implementation, this would check the registry and trigger a Kaniko build if needed.
 func (b *NoOpImageBuilder) EnsureImage(ctx context.Context, bot model.Bot) (string, error) {
 	// In Phase 2, this will:
@@ -363,21 +367,18 @@ func (b *NoOpImageBuilder) EnsureImage(ctx context.Context, bot model.Bot) (stri
 	// 3. Wait for job completion
 	// 4. Return the image reference
 
-	// For now, construct an expected image ref
-	customBotID := bot.CustomBotVersion.Config.Name
-	if customBotID == "" {
-		customBotID = "unknown"
+	// Extract custom bot ID from config
+	customBotID := "unknown"
+	if bot.CustomBotVersion.Config.Name != "" {
+		customBotID = bot.CustomBotVersion.Config.Name
 	}
+
+	// Extract version with fallback
 	version := bot.CustomBotVersion.Version
 	if version == "" {
 		version = "latest"
 	}
 
-	// If a default is configured, use it
-	if b.DefaultImageRef != "" {
-		return b.DefaultImageRef, nil
-	}
-
-	// Otherwise, generate based on bot details
-	return fmt.Sprintf("localhost:5000/the0/bots/%s:%s", customBotID, version), nil
+	// Construct image reference: registry/the0/bots/{customBotId}:{version}
+	return fmt.Sprintf("%s/the0/bots/%s:%s", b.Registry, customBotID, version), nil
 }

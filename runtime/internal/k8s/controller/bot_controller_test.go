@@ -544,17 +544,17 @@ func TestIsPodHealthy(t *testing.T) {
 }
 
 func TestNoOpImageBuilder_EnsureImage(t *testing.T) {
-	t.Run("with default image ref", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("my-registry/test:v1")
-		bot := createTestBot("bot-1", "test", "1.0.0", "python3.11")
+	t.Run("with custom registry", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("my-registry.io:5000")
+		bot := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 
 		require.NoError(t, err)
-		assert.Equal(t, "my-registry/test:v1", imageRef)
+		assert.Equal(t, "my-registry.io:5000/the0/bots/price-alerts:1.0.0", imageRef)
 	})
 
-	t.Run("without default image ref", func(t *testing.T) {
+	t.Run("with default registry", func(t *testing.T) {
 		builder := NewNoOpImageBuilder("")
 		bot := createTestBot("bot-1", "price-alerts", "2.0.0", "python3.11")
 
@@ -567,6 +567,34 @@ func TestNoOpImageBuilder_EnsureImage(t *testing.T) {
 	t.Run("with empty bot name", func(t *testing.T) {
 		builder := NewNoOpImageBuilder("")
 		bot := createTestBot("bot-1", "", "1.0.0", "python3.11")
+
+		imageRef, err := builder.EnsureImage(context.Background(), bot)
+
+		require.NoError(t, err)
+		assert.Equal(t, "localhost:5000/the0/bots/unknown:1.0.0", imageRef)
+	})
+
+	t.Run("with empty version", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("gcr.io/my-project")
+		bot := createTestBot("bot-1", "my-bot", "", "python3.11")
+
+		imageRef, err := builder.EnsureImage(context.Background(), bot)
+
+		require.NoError(t, err)
+		assert.Equal(t, "gcr.io/my-project/the0/bots/my-bot:latest", imageRef)
+	})
+
+	t.Run("with empty config", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("")
+		enabled := true
+		bot := model.Bot{
+			ID:      "bot-1",
+			Enabled: &enabled,
+			CustomBotVersion: model.CustomBotVersion{
+				Version: "1.0.0",
+				Config:  model.APIBotConfig{}, // empty config (zero value)
+			},
+		}
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 

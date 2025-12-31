@@ -67,10 +67,10 @@ func (s *Server) SetHealthy(healthy bool) {
 func (s *Server) healthzHandler(w http.ResponseWriter, r *http.Request) {
 	if s.healthy.Load() {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("unhealthy"))
+		_, _ = w.Write([]byte("unhealthy"))
 	}
 }
 
@@ -79,9 +79,9 @@ func (s *Server) healthzHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	if s.ready.Load() {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("not ready"))
+		_, _ = w.Write([]byte("not ready"))
 	}
 }

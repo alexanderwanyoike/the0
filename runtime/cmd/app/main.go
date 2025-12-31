@@ -453,25 +453,67 @@ func runController() {
 		cancel()
 	}()
 
-	// Mark as ready once controllers are starting
-	healthServer.SetReady(true)
-
-	// Start both controllers in parallel
+	// Start both controllers in parallel and track errors
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// Track controller errors for exit status
+	var botCtrlErr, scheduleCtrlErr error
+	var errMu sync.Mutex
+
+	// Channel to signal when controllers are ready
+	readyCh := make(chan struct{}, 2)
+
 	go func() {
 		defer wg.Done()
+		// Signal readiness after a brief delay to allow controller to initialize
+		go func() {
+			// Wait for first successful reconciliation (or short timeout)
+			select {
+			case <-time.After(2 * time.Second):
+				readyCh <- struct{}{}
+			case <-ctx.Done():
+			}
+		}()
 		if err := botCtrl.Start(ctx); err != nil && err != context.Canceled {
 			util.LogMaster("Bot controller stopped with error: %v", err)
+			errMu.Lock()
+			botCtrlErr = err
+			errMu.Unlock()
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
+		// Signal readiness after a brief delay to allow controller to initialize
+		go func() {
+			select {
+			case <-time.After(2 * time.Second):
+				readyCh <- struct{}{}
+			case <-ctx.Done():
+			}
+		}()
 		if err := scheduleCtrl.Start(ctx); err != nil && err != context.Canceled {
 			util.LogMaster("Schedule controller stopped with error: %v", err)
+			errMu.Lock()
+			scheduleCtrlErr = err
+			errMu.Unlock()
 		}
+	}()
+
+	// Wait for both controllers to signal readiness before marking as ready
+	go func() {
+		count := 0
+		for count < 2 {
+			select {
+			case <-readyCh:
+				count++
+			case <-ctx.Done():
+				return
+			}
+		}
+		util.LogMaster("Controllers ready")
+		healthServer.SetReady(true)
 	}()
 
 	wg.Wait()
@@ -482,6 +524,11 @@ func runController() {
 	healthServer.Stop(shutdownCtx)
 
 	util.LogMaster("Controllers stopped")
+
+	// Exit with error code if any controller failed
+	if botCtrlErr != nil || scheduleCtrlErr != nil {
+		os.Exit(1)
+	}
 }
 
 // Utility functions

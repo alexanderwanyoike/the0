@@ -85,7 +85,7 @@ spec:
   type: NodePort
   ports:
     - port: 3002
-      targetPort: 3000
+      targetPort: 80  # nginx serves on port 80
       nodePort: {{ .Values.externalServices.nodePort.docs }}
       protocol: TCP
       name: http

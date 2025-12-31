@@ -168,7 +168,7 @@ the0Docs:
   # image:
   #   repository: the0org/the0-docs
   #   tag: latest
-  port: 3000
+  port: 80  # nginx serves on port 80
   env:
     # Documentation configuration
     NEXT_PUBLIC_APP_NAME: "the0"

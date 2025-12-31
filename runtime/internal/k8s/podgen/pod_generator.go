@@ -75,6 +75,11 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 // GeneratePod creates a Kubernetes Pod spec for the given bot.
 // The imageRef should be the full container image reference (e.g., "registry:5000/the0/bots/my-bot:1.0.0").
 func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod, error) {
+	// Validate imageRef
+	if imageRef == "" {
+		return nil, fmt.Errorf("imageRef cannot be empty")
+	}
+
 	// Marshal config to JSON for BOT_CONFIG env var
 	configJSON, err := json.Marshal(bot.Config)
 	if err != nil {
@@ -91,6 +96,10 @@ func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod,
 	// Get custom bot ID from file path or generate one
 	customBotID := extractCustomBotID(bot)
 
+	// Safely extract version and runtime with defaults
+	version := bot.CustomBotVersion.Version
+	runtime := bot.CustomBotVersion.Config.Runtime
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("bot-%s", bot.ID),
@@ -98,8 +107,8 @@ func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod,
 			Labels: map[string]string{
 				LabelBotID:            bot.ID,
 				LabelCustomBotID:      customBotID,
-				LabelCustomBotVersion: bot.CustomBotVersion.Version,
-				LabelRuntime:          bot.CustomBotVersion.Config.Runtime,
+				LabelCustomBotVersion: version,
+				LabelRuntime:          runtime,
 				LabelManagedBy:        g.config.ControllerName,
 			},
 			Annotations: map[string]string{

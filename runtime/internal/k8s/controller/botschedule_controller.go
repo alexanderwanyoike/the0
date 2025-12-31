@@ -435,7 +435,11 @@ func computeScheduleHash(schedule scheduleModel.BotSchedule) string {
 
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		return ""
+		// Return a deterministic fallback hash based on schedule ID to avoid false matches
+		if len(schedule.ID) > 8 {
+			return fmt.Sprintf("err-%s", schedule.ID[:8])
+		}
+		return fmt.Sprintf("err-%s", schedule.ID)
 	}
 
 	hash := sha256.Sum256(jsonBytes)
