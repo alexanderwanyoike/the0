@@ -357,6 +357,86 @@ kubectl run debug --image=busybox -it --rm --restart=Never -- sh
 3. **Testing**: Use `make logs`, `make status`, and `make services` to monitor
 4. **Production**: Use `make deploy` with external infrastructure
 
+## Kubernetes-Native Controller Mode
+
+The0 supports two runtime modes for bot execution:
+
+### Docker Mode (Default)
+The traditional master-worker architecture using Docker-in-Docker:
+- Workers run bot containers inside Kubernetes pods
+- Requires privileged pods with Docker socket access
+- Good for development and testing
+
+```bash
+make minikube-up  # Uses Docker mode by default
+```
+
+### Controller Mode (Kubernetes-Native)
+A Kubernetes-native approach where the controller manages bots directly:
+- Each bot runs as its own Kubernetes Pod
+- Scheduled bots use native Kubernetes CronJobs
+- Kaniko builds bot images automatically (no Docker-in-Docker)
+- No privileged containers required
+- Better security and Kubernetes integration
+
+```bash
+make minikube-controller  # Deploys in controller mode
+```
+
+### Controller Mode Benefits
+
+| Feature | Docker Mode | Controller Mode |
+|---------|-------------|-----------------|
+| **Privileged Pods** | Required | Not required |
+| **Bot Isolation** | Docker containers | K8s Pods |
+| **Scheduled Bots** | Cron in worker | K8s CronJobs |
+| **Image Building** | Docker in worker | Kaniko Jobs |
+| **Resource Limits** | Docker limits | K8s ResourceQuota |
+| **Monitoring** | Docker logs | kubectl logs |
+| **Scaling** | Add workers | K8s handles it |
+
+### Controller Mode Commands
+
+```bash
+# Deploy in controller mode
+make minikube-controller
+
+# View controller logs
+make logs-controller
+
+# Enable registry addon (for bot images)
+make enable-registry
+```
+
+### How Controller Mode Works
+
+1. **Bot Controller** reads enabled bots from MongoDB
+2. For each bot, it ensures a matching Pod exists
+3. If the bot image doesn't exist, Kaniko builds it automatically
+4. Config changes trigger Pod recreation
+5. Deleted bots have their Pods removed
+
+**Schedule Controller** does the same for scheduled bots using CronJobs.
+
+### Configuration
+
+Enable controller mode in `values.yaml`:
+
+```yaml
+# Disable Docker mode
+botRunner:
+  enabled: false
+botScheduler:
+  enabled: false
+
+# Enable controller mode
+botController:
+  enabled: true
+  imageBuilder:
+    enabled: true
+    registry: "localhost:5000"  # Minikube registry
+```
+
 ## Comparison with Docker Compose
 
 | Feature | Docker Compose | Kubernetes |

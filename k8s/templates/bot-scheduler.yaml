@@ -1,3 +1,4 @@
+{{- if .Values.botScheduler.enabled }}
 # Bot Scheduler Master
 ---
 apiVersion: v1
@@ -112,3 +113,4 @@ spec:
           hostPath:
             path: {{ .hostPath }}
         {{- end }}
+{{- end }}

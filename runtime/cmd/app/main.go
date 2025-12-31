@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 	botRunner "runtime/internal/bot-runner/server"
 	botScheduler "runtime/internal/bot-scheduler/server"
 	"runtime/internal/constants"
+	"runtime/internal/k8s/controller"
+	"runtime/internal/k8s/detect"
+	"runtime/internal/k8s/imagebuilder"
 	"runtime/internal/util"
 )
 
@@ -27,6 +31,18 @@ var (
 	mode       string
 	mongoUri   string
 	workerId   string
+
+	// Controller-specific flags
+	controllerNamespace         string
+	controllerReconcileInterval time.Duration
+
+	// Image builder flags
+	imageRegistry       string
+	minioEndpoint       string
+	minioAccessKey      string
+	minioSecretKey      string
+	minioBucket         string
+	enableImageBuilder  bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -89,6 +105,21 @@ var botSchedulerWorkerCmd = &cobra.Command{
 	},
 }
 
+// Controller Command (Kubernetes-native mode)
+var controllerCmd = &cobra.Command{
+	Use:   "controller",
+	Short: "Run Kubernetes-native bot controller",
+	Long: `Runs the bot controller in Kubernetes-native mode.
+Each bot becomes its own Pod managed by this controller.
+The controller reads desired state from MongoDB and reconciles with K8s.
+
+This mode should only be used when running inside a Kubernetes cluster
+with RUNTIME_MODE=controller environment variable set.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runController()
+	},
+}
+
 // Version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -111,6 +142,17 @@ func main() {
 
 	rootCmd.AddCommand(botSchedulerCmd)
 	botSchedulerCmd.AddCommand(botSchedulerMasterCmd, botSchedulerWorkerCmd)
+
+	// Controller command with flags
+	controllerCmd.Flags().StringVar(&controllerNamespace, "namespace", getEnv("NAMESPACE", "the0"), "Kubernetes namespace for bot pods")
+	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
+	controllerCmd.Flags().BoolVar(&enableImageBuilder, "enable-image-builder", getEnvBool("ENABLE_IMAGE_BUILDER", false), "Enable Kaniko image builder")
+	controllerCmd.Flags().StringVar(&imageRegistry, "registry", getEnv("IMAGE_REGISTRY", "localhost:5000"), "Container registry URL")
+	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint")
+	controllerCmd.Flags().StringVar(&minioAccessKey, "minio-access-key", getEnv("MINIO_ACCESS_KEY", ""), "MinIO access key")
+	controllerCmd.Flags().StringVar(&minioSecretKey, "minio-secret-key", getEnv("MINIO_SECRET_KEY", ""), "MinIO secret key")
+	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
+	rootCmd.AddCommand(controllerCmd)
 
 	rootCmd.AddCommand(versionCmd)
 
@@ -271,6 +313,150 @@ func runBotSchedulerWorker() {
 	util.LogWorker("Bot-scheduler worker stopped")
 }
 
+// Controller Implementation (Kubernetes-native mode)
+func runController() {
+	util.LogMaster("Starting Kubernetes-native bot controller...")
+	util.LogMaster("Runtime mode: %s", detect.DetectRuntimeMode())
+	util.LogMaster("Namespace: %s", controllerNamespace)
+	util.LogMaster("Reconcile interval: %v", controllerReconcileInterval)
+	util.LogMaster("Image builder enabled: %v", enableImageBuilder)
+
+	// Check if we're in the right environment
+	if !detect.IsKubernetesEnvironment() {
+		util.LogMaster("WARNING: Not running in Kubernetes environment. Controller may not work correctly.")
+	}
+
+	// Create MongoDB client
+	mongoClient, err := createMongoClient(mongoUri)
+	if err != nil {
+		util.LogMaster("Failed to create MongoDB client: %v", err)
+		os.Exit(1)
+	}
+	defer mongoClient.Disconnect(context.Background())
+
+	// Create MongoDB repository for bots
+	botRepo := controller.NewMongoBotRepository(
+		mongoClient,
+		constants.BOT_RUNNER_DB_NAME,
+		constants.BOT_RUNNER_COLLECTION,
+	)
+
+	// Create K8s client
+	k8sClient, err := controller.NewRealK8sClient()
+	if err != nil {
+		util.LogMaster("Failed to create K8s client: %v", err)
+		util.LogMaster("Make sure the controller is running inside a Kubernetes cluster with proper RBAC.")
+		os.Exit(1)
+	}
+
+	// Create image builder
+	var imgBuilder controller.ImageBuilder
+	if enableImageBuilder {
+		util.LogMaster("Using Kaniko image builder (registry: %s)", imageRegistry)
+
+		// Create K8s job client for Kaniko jobs
+		jobClient, err := imagebuilder.NewRealK8sJobClient()
+		if err != nil {
+			util.LogMaster("Failed to create K8s job client: %v", err)
+			os.Exit(1)
+		}
+
+		// Create registry client
+		registryClient := imagebuilder.NewHTTPRegistryClient(imagebuilder.RegistryClientConfig{
+			DefaultRegistry: imageRegistry,
+		})
+
+		imgBuilder = imagebuilder.NewKanikoImageBuilder(
+			imagebuilder.KanikoBuilderConfig{
+				Namespace: controllerNamespace,
+				Registry:  imageRegistry,
+				MinIO: imagebuilder.MinIOConfig{
+					Endpoint:        minioEndpoint,
+					AccessKeyID:     minioAccessKey,
+					SecretAccessKey: minioSecretKey,
+					Bucket:          minioBucket,
+				},
+			},
+			registryClient,
+			jobClient,
+		)
+	} else {
+		util.LogMaster("Using NoOp image builder (images must exist in registry)")
+		imgBuilder = controller.NewNoOpImageBuilder(imageRegistry)
+	}
+
+	// Create bot controller
+	botCtrl := controller.NewBotController(
+		controller.BotControllerConfig{
+			Namespace:         controllerNamespace,
+			ReconcileInterval: controllerReconcileInterval,
+			ControllerName:    "the0-bot-controller",
+		},
+		botRepo,
+		k8sClient,
+		imgBuilder,
+	)
+
+	// Create schedule controller
+	scheduleRepo := controller.NewMongoBotScheduleRepository(
+		mongoClient,
+		constants.BOT_SCHEDULER_DB_NAME,
+		constants.BOT_SCHEDULE_COLLECTION,
+	)
+
+	cronClient, err := controller.NewRealK8sCronJobClient()
+	if err != nil {
+		util.LogMaster("Failed to create K8s CronJob client: %v", err)
+		os.Exit(1)
+	}
+
+	scheduleCtrl := controller.NewBotScheduleController(
+		controller.BotScheduleControllerConfig{
+			Namespace:         controllerNamespace,
+			ReconcileInterval: controllerReconcileInterval,
+			ControllerName:    "the0-schedule-controller",
+		},
+		scheduleRepo,
+		cronClient,
+		imgBuilder,
+	)
+
+	// Setup signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		util.LogMaster("Received interrupt signal, shutting down controllers...")
+		botCtrl.Stop()
+		scheduleCtrl.Stop()
+		cancel()
+	}()
+
+	// Start both controllers in parallel
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		if err := botCtrl.Start(ctx); err != nil && err != context.Canceled {
+			util.LogMaster("Bot controller stopped with error: %v", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := scheduleCtrl.Start(ctx); err != nil && err != context.Canceled {
+			util.LogMaster("Schedule controller stopped with error: %v", err)
+		}
+	}()
+
+	wg.Wait()
+	util.LogMaster("Controllers stopped")
+}
+
 // Utility functions
 func getEnv(key string, defaultValue string) string {
 	value, exists := os.LookupEnv(key)
@@ -278,6 +464,14 @@ func getEnv(key string, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return defaultValue
+	}
+	return value == "true" || value == "1" || value == "yes"
 }
 
 func generateWorkerID() string {

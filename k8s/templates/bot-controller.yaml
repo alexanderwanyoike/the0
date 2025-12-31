@@ -1,0 +1,138 @@
+{{- if .Values.botController.enabled }}
+# Bot Controller - Kubernetes-native mode
+# This replaces the master-worker architecture with a single controller
+# that manages bot Pods and scheduled CronJobs directly
+
+# ServiceAccount for the controller
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-controller
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-controller
+
+# ClusterRole with permissions to manage Pods, CronJobs, and Jobs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-controller
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-controller
+rules:
+  # Pod management for bot execution
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  # CronJob management for scheduled bots
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Job management for Kaniko builds and CronJob jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Events for debugging
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  # ConfigMaps for leader election (future)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Leases for leader election (future)
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# ClusterRoleBinding
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-controller
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "the0.fullname" . }}-bot-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "the0.fullname" . }}-bot-controller
+    namespace: {{ .Release.Namespace }}
+
+# Controller Deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-controller
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-controller
+spec:
+  replicas: {{ .Values.botController.replicas }}
+  selector:
+    matchLabels:
+      {{- include "the0.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bot-controller
+  template:
+    metadata:
+      labels:
+        {{- include "the0.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bot-controller
+    spec:
+      serviceAccountName: {{ include "the0.fullname" . }}-bot-controller
+      containers:
+        - name: bot-controller
+          image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["./runtime", "controller"]
+          args:
+            - "--namespace={{ .Release.Namespace }}"
+            - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
+            {{- if .Values.botController.imageBuilder.enabled }}
+            - "--enable-image-builder=true"
+            - "--registry={{ .Values.botController.imageBuilder.registry }}"
+            - "--minio-endpoint={{ .Values.botController.imageBuilder.minio.endpoint }}"
+            - "--minio-bucket={{ .Values.botController.imageBuilder.minio.bucket }}"
+            {{- end }}
+          env:
+            # MongoDB configuration
+            - name: MONGO_URI
+              value: {{ .Values.botController.env.MONGO_URI | quote }}
+            # Namespace for bot pods
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            # Image builder configuration
+            {{- if .Values.botController.imageBuilder.enabled }}
+            - name: ENABLE_IMAGE_BUILDER
+              value: "true"
+            - name: IMAGE_REGISTRY
+              value: {{ .Values.botController.imageBuilder.registry | quote }}
+            - name: MINIO_ENDPOINT
+              value: {{ .Values.botController.imageBuilder.minio.endpoint | quote }}
+            - name: MINIO_ACCESS_KEY
+              value: {{ .Values.botController.imageBuilder.minio.accessKey | quote }}
+            - name: MINIO_SECRET_KEY
+              value: {{ .Values.botController.imageBuilder.minio.secretKey | quote }}
+            - name: MINIO_BUCKET
+              value: {{ .Values.botController.imageBuilder.minio.bucket | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.botController.env }}
+            {{- if not (has $key (list "MONGO_URI")) }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.botController.resources | nindent 12 }}
+{{- end }}
