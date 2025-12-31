@@ -106,13 +106,9 @@ spec:
             - "--minio-bucket={{ .Values.botController.imageBuilder.minio.bucket }}"
             {{- end }}
           env:
-            # MongoDB configuration
-            - name: MONGO_URI
-              value: {{ .Values.botController.env.MONGO_URI | quote }}
-            # Namespace for bot pods
+            # Namespace for bot pods (always set)
             - name: NAMESPACE
               value: {{ .Release.Namespace | quote }}
-            # Image builder configuration
             {{- if .Values.botController.imageBuilder.enabled }}
             - name: ENABLE_IMAGE_BUILDER
               value: "true"
@@ -120,19 +116,11 @@ spec:
               value: {{ .Values.botController.imageBuilder.registry | quote }}
             - name: MINIO_ENDPOINT
               value: {{ .Values.botController.imageBuilder.minio.endpoint | quote }}
-            - name: MINIO_ACCESS_KEY
-              value: {{ .Values.botController.imageBuilder.minio.accessKey | quote }}
-            - name: MINIO_SECRET_KEY
-              value: {{ .Values.botController.imageBuilder.minio.secretKey | quote }}
             - name: MINIO_BUCKET
               value: {{ .Values.botController.imageBuilder.minio.bucket | quote }}
             {{- end }}
-            {{- range $key, $value := .Values.botController.env }}
-            {{- if not (has $key (list "MONGO_URI")) }}
-            - name: {{ $key }}
-              value: {{ $value | quote }}
-            {{- end }}
-            {{- end }}
+            # User-defined environment variables (supports value or valueFrom)
+            {{- toYaml .Values.botController.env | nindent 12 }}
           # Health probes for proper lifecycle management
           livenessProbe:
             httpGet:

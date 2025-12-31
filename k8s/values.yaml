@@ -279,9 +279,34 @@ botController:
     tag: latest
   # How often to reconcile state with MongoDB
   reconcileInterval: "30s"
+  # Environment variables for the controller
+  # Each entry supports standard K8s env syntax: value, valueFrom, secretKeyRef, etc.
+  # For production, use secretKeyRef to reference Sealed Secrets
   env:
-    # MongoDB configuration
-    MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
+    # MongoDB connection string
+    - name: MONGO_URI
+      value: "mongodb://root:the0_mongo_password@the0-mongo:27017"
+    # MinIO credentials for image builder
+    - name: MINIO_ACCESS_KEY
+      value: "the0admin"
+    - name: MINIO_SECRET_KEY
+      value: "the0password"
+    # Example: Using secretKeyRef for production (uncomment and modify):
+    # - name: MONGO_URI
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: the0-secrets  # Your Sealed Secret name
+    #       key: MONGO_URI
+    # - name: MINIO_ACCESS_KEY
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: the0-secrets
+    #       key: MINIO_ACCESS_KEY
+    # - name: MINIO_SECRET_KEY
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: the0-secrets
+    #       key: MINIO_SECRET_KEY
   # Image builder (Kaniko) for custom bots
   imageBuilder:
     enabled: true
@@ -291,8 +316,6 @@ botController:
     registry: "localhost:5000"
     minio:
       endpoint: "the0-minio:9000"
-      accessKey: "the0admin"
-      secretKey: "the0password"
       bucket: "custom-bots"
   resources:
     requests:
