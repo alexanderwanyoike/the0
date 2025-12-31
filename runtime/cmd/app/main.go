@@ -18,6 +18,7 @@ import (
 	"runtime/internal/constants"
 	"runtime/internal/k8s/controller"
 	"runtime/internal/k8s/detect"
+	"runtime/internal/k8s/health"
 	"runtime/internal/k8s/imagebuilder"
 	"runtime/internal/util"
 )
@@ -321,6 +322,10 @@ func runController() {
 	util.LogMaster("Reconcile interval: %v", controllerReconcileInterval)
 	util.LogMaster("Image builder enabled: %v", enableImageBuilder)
 
+	// Start health server for K8s probes
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
 	// Check if we're in the right environment
 	if !detect.IsKubernetesEnvironment() {
 		util.LogMaster("WARNING: Not running in Kubernetes environment. Controller may not work correctly.")
@@ -430,10 +435,14 @@ func runController() {
 	go func() {
 		<-ch
 		util.LogMaster("Received interrupt signal, shutting down controllers...")
+		healthServer.SetReady(false)
 		botCtrl.Stop()
 		scheduleCtrl.Stop()
 		cancel()
 	}()
+
+	// Mark as ready once controllers are starting
+	healthServer.SetReady(true)
 
 	// Start both controllers in parallel
 	var wg sync.WaitGroup
@@ -454,6 +463,12 @@ func runController() {
 	}()
 
 	wg.Wait()
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
+
 	util.LogMaster("Controllers stopped")
 }
 

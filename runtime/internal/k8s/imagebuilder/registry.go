@@ -167,10 +167,50 @@ func parseImageRef(imageRef, defaultRegistry string) (registry, repository, tag 
 // GenerateImageRef generates a full image reference for a bot.
 func GenerateImageRef(registry, customBotID, version string) string {
 	// Sanitize customBotID for use in image ref
-	sanitized := strings.ToLower(customBotID)
-	sanitized = strings.ReplaceAll(sanitized, " ", "-")
+	// Docker image names can only contain lowercase letters, digits, periods, dashes, and underscores
+	sanitized := sanitizeImageName(customBotID)
+	sanitizedVersion := sanitizeImageTag(version)
 
-	return fmt.Sprintf("%s/the0/bots/%s:%s", registry, sanitized, version)
+	return fmt.Sprintf("%s/the0/bots/%s:%s", registry, sanitized, sanitizedVersion)
+}
+
+// sanitizeImageName sanitizes a string for use as a Docker image name component.
+// Docker image names can only contain lowercase letters, digits, periods, dashes, and underscores.
+func sanitizeImageName(s string) string {
+	s = strings.ToLower(s)
+	result := make([]byte, 0, len(s))
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_' {
+			result = append(result, byte(c))
+		} else if c == ' ' {
+			result = append(result, '-')
+		}
+		// Skip other invalid characters
+	}
+	if len(result) == 0 {
+		return "bot"
+	}
+	return string(result)
+}
+
+// sanitizeImageTag sanitizes a string for use as a Docker image tag.
+// Tags can contain lowercase/uppercase letters, digits, underscores, periods, and dashes.
+func sanitizeImageTag(s string) string {
+	result := make([]byte, 0, len(s))
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+			c == '.' || c == '-' || c == '_' {
+			result = append(result, byte(c))
+		}
+	}
+	if len(result) == 0 {
+		return "latest"
+	}
+	// Tags can be max 128 characters
+	if len(result) > 128 {
+		result = result[:128]
+	}
+	return string(result)
 }
 
 // MockRegistryClient is a mock implementation of RegistryClient for testing.

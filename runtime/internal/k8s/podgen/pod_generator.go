@@ -130,12 +130,12 @@ func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod,
 					},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse(memoryLimit),
-							corev1.ResourceCPU:    resource.MustParse(cpuLimit),
+							corev1.ResourceMemory: parseResourceOrDefault(memoryLimit, DefaultMemoryLimit),
+							corev1.ResourceCPU:    parseResourceOrDefault(cpuLimit, DefaultCPULimit),
 						},
 						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse(memoryRequest),
-							corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+							corev1.ResourceMemory: parseResourceOrDefault(memoryRequest, DefaultMemoryRequest),
+							corev1.ResourceCPU:    parseResourceOrDefault(cpuRequest, DefaultCPURequest),
 						},
 					},
 				},
@@ -212,6 +212,16 @@ func (g *PodGenerator) getResourceRequests(bot model.Bot) (memory, cpu string) {
 	return
 }
 
+// parseResourceOrDefault parses a resource quantity string, returning a default if invalid.
+// This prevents panics from invalid user input.
+func parseResourceOrDefault(value, defaultValue string) resource.Quantity {
+	q, err := resource.ParseQuantity(value)
+	if err != nil {
+		return resource.MustParse(defaultValue)
+	}
+	return q
+}
+
 // computeConfigHash creates a hash of the bot config for change detection.
 // Uses SHA256 hash of the JSON-serialized config data.
 func computeConfigHash(bot model.Bot) string {
@@ -227,7 +237,8 @@ func computeConfigHash(bot model.Bot) string {
 
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		return ""
+		// Return a deterministic fallback hash based on bot ID to avoid false positives
+		return fmt.Sprintf("err-%s", bot.ID[:min(8, len(bot.ID))])
 	}
 
 	// Use SHA256 for proper content-based hash
@@ -255,14 +266,11 @@ func extractCustomBotID(bot model.Bot) string {
 // and contain only alphanumerics, dashes, underscores, and dots.
 func sanitizeLabelValue(s string) string {
 	result := make([]byte, 0, len(s))
-	for i, c := range s {
+	for _, c := range s {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
 			result = append(result, byte(c))
 		} else if c == '-' || c == '_' || c == '.' {
-			// Only add if not at start or end
-			if i > 0 && i < len(s)-1 {
-				result = append(result, byte(c))
-			}
+			result = append(result, byte(c))
 		}
 	}
 
@@ -271,10 +279,25 @@ func sanitizeLabelValue(s string) string {
 		result = result[:63]
 	}
 
+	// Trim leading non-alphanumeric characters
+	for len(result) > 0 && !isAlphanumeric(result[0]) {
+		result = result[1:]
+	}
+
+	// Trim trailing non-alphanumeric characters
+	for len(result) > 0 && !isAlphanumeric(result[len(result)-1]) {
+		result = result[:len(result)-1]
+	}
+
 	// Ensure not empty
 	if len(result) == 0 {
 		return "bot"
 	}
 
 	return string(result)
+}
+
+// isAlphanumeric returns true if the byte is a letter or digit.
+func isAlphanumeric(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
 }

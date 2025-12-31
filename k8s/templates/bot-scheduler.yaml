@@ -64,6 +64,13 @@ spec:
               port: http
             initialDelaySeconds: 60
             periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
           resources:
             {{- toYaml .Values.botScheduler.master.resources | nindent 12 }}
 
