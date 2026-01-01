@@ -319,7 +319,7 @@ func TestKanikoImageBuilder_CreateKanikoJob(t *testing.T) {
 	}
 	assert.Equal(t, "access-key", envMap["AWS_ACCESS_KEY_ID"])
 	assert.Equal(t, "secret-key", envMap["AWS_SECRET_ACCESS_KEY"])
-	assert.Equal(t, "minio:9000", envMap["S3_ENDPOINT"])
+	assert.Equal(t, "http://minio:9000", envMap["S3_ENDPOINT"]) // http:// prefix added automatically
 
 	// Check volumes
 	require.Len(t, job.Spec.Template.Spec.Volumes, 1)
@@ -341,6 +341,61 @@ func TestEscapeForShell(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := escapeForShell(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetS3EndpointURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		useSSL   bool
+		expected string
+	}{
+		{
+			name:     "adds http:// when no protocol",
+			endpoint: "minio:9000",
+			useSSL:   false,
+			expected: "http://minio:9000",
+		},
+		{
+			name:     "adds https:// when UseSSL is true",
+			endpoint: "minio:9000",
+			useSSL:   true,
+			expected: "https://minio:9000",
+		},
+		{
+			name:     "keeps http:// if already present",
+			endpoint: "http://minio:9000",
+			useSSL:   false,
+			expected: "http://minio:9000",
+		},
+		{
+			name:     "keeps https:// if already present even when UseSSL is false",
+			endpoint: "https://minio:9000",
+			useSSL:   false,
+			expected: "https://minio:9000",
+		},
+		{
+			name:     "keeps http:// if present even when UseSSL is true",
+			endpoint: "http://minio:9000",
+			useSSL:   true,
+			expected: "http://minio:9000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := &KanikoImageBuilder{
+				config: KanikoBuilderConfig{
+					MinIO: MinIOConfig{
+						Endpoint: tt.endpoint,
+						UseSSL:   tt.useSSL,
+					},
+				},
+			}
+			result := builder.getS3EndpointURL()
 			assert.Equal(t, tt.expected, result)
 		})
 	}

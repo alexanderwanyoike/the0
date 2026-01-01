@@ -224,9 +224,9 @@ botController:
   imageBuilder:
     enabled: true
     # Container registry for bot images
-    # For Minikube: use the registry addon (localhost:5000)
+    # For Minikube: use the registry addon (registry.kube-system.svc.cluster.local)
     # For production: use your registry (e.g., gcr.io/project, docker.io/org)
-    registry: "localhost:5000"
+    registry: "registry.kube-system.svc.cluster.local"
     minio:
       endpoint: "the0-minio:9000"
       bucket: "custom-bots"

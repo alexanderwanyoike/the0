@@ -267,7 +267,7 @@ chmod +x /workspace/entrypoint.sh
 								{Name: "AWS_ACCESS_KEY_ID", Value: b.config.MinIO.AccessKeyID},
 								{Name: "AWS_SECRET_ACCESS_KEY", Value: b.config.MinIO.SecretAccessKey},
 								{Name: "AWS_REGION", Value: "us-east-1"}, // MinIO doesn't care about region
-								{Name: "S3_ENDPOINT", Value: b.config.MinIO.Endpoint},
+								{Name: "S3_ENDPOINT", Value: b.getS3EndpointURL()},
 								{Name: "S3_FORCE_PATH_STYLE", Value: "true"},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -332,6 +332,21 @@ func (b *KanikoImageBuilder) getEntrypoint(bot model.Bot) string {
 func escapeForShell(s string) string {
 	// Replace single quotes with '\''
 	return strings.ReplaceAll(s, "'", "'\\''")
+}
+
+// getS3EndpointURL returns the full S3 endpoint URL with protocol prefix.
+// Kaniko requires the endpoint to include http:// or https://.
+func (b *KanikoImageBuilder) getS3EndpointURL() string {
+	endpoint := b.config.MinIO.Endpoint
+	// If endpoint already has a protocol, return as-is
+	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+		return endpoint
+	}
+	// Add protocol based on UseSSL setting
+	if b.config.MinIO.UseSSL {
+		return "https://" + endpoint
+	}
+	return "http://" + endpoint
 }
 
 // ---- Real K8s Job Client Implementation ----
