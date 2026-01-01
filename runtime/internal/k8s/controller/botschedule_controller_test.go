@@ -10,7 +10,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	botModel "runtime/internal/bot-runner/model"
 	scheduleModel "runtime/internal/bot-scheduler/model"
 	"runtime/internal/k8s/podgen"
 )
@@ -27,23 +26,6 @@ func (m *MockBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]sched
 	return m.Schedules, m.Error
 }
 
-// MockScheduleImageBuilder mocks the ImageBuilder for schedule tests.
-type MockScheduleImageBuilder struct {
-	ImageRef string
-	Error    error
-	Called   int
-	BotIDs   []string
-}
-
-func (m *MockScheduleImageBuilder) EnsureImage(ctx context.Context, bot botModel.Bot) (string, error) {
-	m.Called++
-	m.BotIDs = append(m.BotIDs, bot.ID)
-	if m.Error != nil {
-		return "", m.Error
-	}
-	return m.ImageRef, nil
-}
-
 func createTestSchedule(id, name, version, runtime, schedule string) scheduleModel.BotSchedule {
 	enabled := true
 	return scheduleModel.BotSchedule{
@@ -54,7 +36,7 @@ func createTestSchedule(id, name, version, runtime, schedule string) scheduleMod
 		},
 		CustomBotVersion: scheduleModel.CustomBotVersion{
 			Version:  version,
-			FilePath: "custom-bots/" + name + "/" + version + ".tar.gz",
+			FilePath: "custom-bots/" + name + "/" + version + ".zip",
 			Config: scheduleModel.APIBotConfig{
 				Name:    name,
 				Runtime: runtime,
@@ -70,13 +52,11 @@ func createTestSchedule(id, name, version, runtime, schedule string) scheduleMod
 func TestNewBotScheduleController(t *testing.T) {
 	mockRepo := &MockBotScheduleRepository{}
 	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{ImageRef: "registry/test:1.0.0"}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	assert.NotNil(t, controller)
@@ -92,9 +72,6 @@ func TestBotScheduleController_Reconcile_CreatesCronJob(t *testing.T) {
 		Schedules: []scheduleModel.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{
-		ImageRef: "localhost:5000/the0/bots/daily-report:1.0.0",
-	}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{
@@ -103,14 +80,12 @@ func TestBotScheduleController_Reconcile_CreatesCronJob(t *testing.T) {
 		},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	err := controller.Reconcile(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, mockCronClient.CreateCalled)
-	assert.Equal(t, 1, mockImageBuilder.Called)
 
 	// Verify CronJob was created
 	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
@@ -135,13 +110,11 @@ func TestBotScheduleController_Reconcile_DeletesOrphanedCronJob(t *testing.T) {
 			},
 		},
 	}
-	mockImageBuilder := &MockScheduleImageBuilder{}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{Namespace: "the0"},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	err := controller.Reconcile(context.Background())
@@ -173,15 +146,11 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobOnChange(t *testing.T) {
 			Schedule: "0 9 * * *", // Old schedule
 		},
 	}
-	mockImageBuilder := &MockScheduleImageBuilder{
-		ImageRef: "localhost:5000/the0/bots/daily-report:2.0.0",
-	}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{Namespace: "the0"},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	err := controller.Reconcile(context.Background())
@@ -213,13 +182,11 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 		Schedules: []scheduleModel.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{Namespace: "the0"},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	err := controller.Reconcile(context.Background())
@@ -251,13 +218,11 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 			Schedule: "0 9 * * *",
 		},
 	}
-	mockImageBuilder := &MockScheduleImageBuilder{}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{Namespace: "the0"},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	err := controller.Reconcile(context.Background())
@@ -331,13 +296,11 @@ func TestComputeScheduleHash(t *testing.T) {
 func TestScheduleToBot(t *testing.T) {
 	mockRepo := &MockBotScheduleRepository{}
 	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
@@ -354,7 +317,6 @@ func TestScheduleToBot(t *testing.T) {
 func TestBotScheduleController_StartStop(t *testing.T) {
 	mockRepo := &MockBotScheduleRepository{}
 	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{
@@ -362,7 +324,6 @@ func TestBotScheduleController_StartStop(t *testing.T) {
 		},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -394,7 +355,6 @@ func TestBotScheduleController_StartStop(t *testing.T) {
 func TestBotScheduleController_DoubleStart(t *testing.T) {
 	mockRepo := &MockBotScheduleRepository{}
 	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{}
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{
@@ -402,7 +362,6 @@ func TestBotScheduleController_DoubleStart(t *testing.T) {
 		},
 		mockRepo,
 		mockCronClient,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
@@ -502,49 +461,4 @@ func TestMustParseQuantityWithDefault(t *testing.T) {
 			assert.Equal(t, tt.expectValue, result.String())
 		})
 	}
-}
-
-func TestCronJobSpec(t *testing.T) {
-	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-
-	mockRepo := &MockBotScheduleRepository{}
-	mockCronClient := NewMockK8sCronJobClient()
-	mockImageBuilder := &MockScheduleImageBuilder{}
-
-	controller := NewBotScheduleController(
-		BotScheduleControllerConfig{
-			Namespace:      "the0",
-			ControllerName: "test-controller",
-		},
-		mockRepo,
-		mockCronClient,
-		mockImageBuilder,
-	)
-
-	cronJob := controller.createCronJobSpec(schedule, "0 9 * * *", "registry/image:1.0.0")
-
-	// Check metadata
-	assert.Equal(t, "schedule-schedule-1", cronJob.Name)
-	assert.Equal(t, "the0", cronJob.Namespace)
-	assert.Equal(t, "schedule-1", cronJob.Labels[LabelScheduleID])
-	assert.Equal(t, "daily-report", cronJob.Labels[podgen.LabelCustomBotID])
-	assert.Equal(t, "test-controller", cronJob.Labels[LabelScheduleManagedBy])
-
-	// Check spec
-	assert.Equal(t, "0 9 * * *", cronJob.Spec.Schedule)
-	assert.Equal(t, batchv1.ForbidConcurrent, cronJob.Spec.ConcurrencyPolicy)
-
-	// Check job template
-	container := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0]
-	assert.Equal(t, "bot", container.Name)
-	assert.Equal(t, "registry/image:1.0.0", container.Image)
-	assert.Equal(t, []string{"/bin/bash", "/bot/entrypoint.sh"}, container.Command)
-
-	// Check env vars
-	envMap := make(map[string]string)
-	for _, env := range container.Env {
-		envMap[env.Name] = env.Value
-	}
-	assert.Equal(t, "schedule-1", envMap["BOT_ID"])
-	assert.Contains(t, envMap["BOT_CONFIG"], "schedule")
 }

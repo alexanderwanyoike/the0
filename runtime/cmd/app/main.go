@@ -14,12 +14,13 @@ import (
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 
 	botRunner "runtime/internal/bot-runner/server"
+	botnatssubscriber "runtime/internal/bot-runner/subscriber"
 	botScheduler "runtime/internal/bot-scheduler/server"
+	schedulenatssubscriber "runtime/internal/bot-scheduler/subscriber"
 	"runtime/internal/constants"
 	"runtime/internal/k8s/controller"
 	"runtime/internal/k8s/detect"
 	"runtime/internal/k8s/health"
-	"runtime/internal/k8s/imagebuilder"
 	"runtime/internal/util"
 )
 
@@ -37,13 +38,11 @@ var (
 	controllerNamespace         string
 	controllerReconcileInterval time.Duration
 
-	// Image builder flags
-	imageRegistry       string
-	minioEndpoint       string
-	minioAccessKey      string
-	minioSecretKey      string
-	minioBucket         string
-	enableImageBuilder  bool
+	// MinIO flags for bot code download
+	minioEndpoint  string
+	minioAccessKey string
+	minioSecretKey string
+	minioBucket    string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -147,9 +146,7 @@ func main() {
 	// Controller command with flags
 	controllerCmd.Flags().StringVar(&controllerNamespace, "namespace", getEnv("NAMESPACE", "the0"), "Kubernetes namespace for bot pods")
 	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
-	controllerCmd.Flags().BoolVar(&enableImageBuilder, "enable-image-builder", getEnvBool("ENABLE_IMAGE_BUILDER", false), "Enable Kaniko image builder")
-	controllerCmd.Flags().StringVar(&imageRegistry, "registry", getEnv("IMAGE_REGISTRY", "localhost:5000"), "Container registry URL")
-	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint")
+	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
 	controllerCmd.Flags().StringVar(&minioAccessKey, "minio-access-key", getEnv("MINIO_ACCESS_KEY", ""), "MinIO access key")
 	controllerCmd.Flags().StringVar(&minioSecretKey, "minio-secret-key", getEnv("MINIO_SECRET_KEY", ""), "MinIO secret key")
 	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
@@ -320,18 +317,15 @@ func runController() {
 	util.LogMaster("Runtime mode: %s", detect.DetectRuntimeMode())
 	util.LogMaster("Namespace: %s", controllerNamespace)
 	util.LogMaster("Reconcile interval: %v", controllerReconcileInterval)
-	util.LogMaster("Image builder enabled: %v", enableImageBuilder)
 
-	// Validate MinIO credentials when image builder is enabled
-	if enableImageBuilder {
-		if minioAccessKey == "" || minioSecretKey == "" {
-			util.LogMaster("ERROR: MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY) are required when image builder is enabled")
-			os.Exit(1)
-		}
-		if minioEndpoint == "" {
-			util.LogMaster("ERROR: MINIO_ENDPOINT is required when image builder is enabled")
-			os.Exit(1)
-		}
+	// Validate MinIO credentials (required for downloading bot code)
+	if minioAccessKey == "" || minioSecretKey == "" {
+		util.LogMaster("ERROR: MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY) are required")
+		os.Exit(1)
+	}
+	if minioEndpoint == "" {
+		util.LogMaster("ERROR: MINIO_ENDPOINT is required")
+		os.Exit(1)
 	}
 
 	// Start health server for K8s probes
@@ -351,6 +345,53 @@ func runController() {
 	}
 	defer mongoClient.Disconnect(context.Background())
 
+	// Start NATS subscribers to sync bots and schedules from API to MongoDB
+	ctx := context.Background()
+	natsUrl := os.Getenv("NATS_URL")
+	if natsUrl == "" {
+		util.LogMaster("WARNING: NATS_URL not set, bots/schedules won't be synced from API")
+	} else {
+		// Bot NATS subscriber
+		botSubscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
+			NATSUrl:            natsUrl,
+			DBName:             constants.BOT_RUNNER_DB_NAME,
+			CollectionName:     constants.BOT_RUNNER_COLLECTION,
+			MaxBotPerPartition: 100,
+			MaxRetries:         3,
+			Logger:             &util.DefaultLogger{},
+		})
+		if err != nil {
+			util.LogMaster("Failed to create bot NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		if err := botSubscriber.Start(ctx); err != nil {
+			util.LogMaster("Failed to start bot NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		defer botSubscriber.Stop()
+		util.LogMaster("Bot NATS subscriber started - listening for bot events")
+
+		// Schedule NATS subscriber
+		scheduleSubscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
+			NATSUrl:                    natsUrl,
+			DBName:                     constants.BOT_SCHEDULER_DB_NAME,
+			CollectionName:             constants.BOT_SCHEDULE_COLLECTION,
+			MaxBotSchedulePerPartition: 100,
+			MaxRetries:                 3,
+			Logger:                     &util.DefaultLogger{},
+		})
+		if err != nil {
+			util.LogMaster("Failed to create schedule NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		if err := scheduleSubscriber.Start(ctx); err != nil {
+			util.LogMaster("Failed to start schedule NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		defer scheduleSubscriber.Stop()
+		util.LogMaster("Schedule NATS subscriber started - listening for schedule events")
+	}
+
 	// Create MongoDB repository for bots
 	botRepo := controller.NewMongoBotRepository(
 		mongoClient,
@@ -368,52 +409,19 @@ func runController() {
 		os.Exit(1)
 	}
 
-	// Create image builder
-	var imgBuilder controller.ImageBuilder
-	if enableImageBuilder {
-		util.LogMaster("Using Kaniko image builder (registry: %s)", imageRegistry)
-
-		// Create K8s job client for Kaniko jobs
-		jobClient, err := imagebuilder.NewRealK8sJobClient()
-		if err != nil {
-			util.LogMaster("Failed to create K8s job client: %v", err)
-			os.Exit(1)
-		}
-
-		// Create registry client
-		registryClient := imagebuilder.NewHTTPRegistryClient(imagebuilder.RegistryClientConfig{
-			DefaultRegistry: imageRegistry,
-		})
-
-		imgBuilder = imagebuilder.NewKanikoImageBuilder(
-			imagebuilder.KanikoBuilderConfig{
-				Namespace: controllerNamespace,
-				Registry:  imageRegistry,
-				MinIO: imagebuilder.MinIOConfig{
-					Endpoint:        minioEndpoint,
-					AccessKeyID:     minioAccessKey,
-					SecretAccessKey: minioSecretKey,
-					Bucket:          minioBucket,
-				},
-			},
-			registryClient,
-			jobClient,
-		)
-	} else {
-		util.LogMaster("Using NoOp image builder (images must exist in registry)")
-		imgBuilder = controller.NewNoOpImageBuilder(imageRegistry)
-	}
-
-	// Create bot controller
+	// Create bot controller (uses base images + init container, no image building)
 	botCtrl := controller.NewBotController(
 		controller.BotControllerConfig{
 			Namespace:         controllerNamespace,
 			ReconcileInterval: controllerReconcileInterval,
 			ControllerName:    botControllerName,
+			MinIOEndpoint:     minioEndpoint,
+			MinIOAccessKey:    minioAccessKey,
+			MinIOSecretKey:    minioSecretKey,
+			MinIOBucket:       minioBucket,
 		},
 		botRepo,
 		k8sClient,
-		imgBuilder,
 	)
 
 	// Create schedule controller
@@ -435,11 +443,30 @@ func runController() {
 			Namespace:         controllerNamespace,
 			ReconcileInterval: controllerReconcileInterval,
 			ControllerName:    scheduleControllerName,
+			MinIOEndpoint:     minioEndpoint,
+			MinIOAccessKey:    minioAccessKey,
+			MinIOSecretKey:    minioSecretKey,
+			MinIOBucket:       minioBucket,
 		},
 		scheduleRepo,
 		cronClient,
-		imgBuilder,
 	)
+
+	// Create and start log collector for bot pods
+	logCollector, err := controller.NewK8sLogCollector(ctx, controller.K8sLogCollectorConfig{
+		Namespace:      controllerNamespace,
+		Interval:       30 * time.Second,
+		MinIOEndpoint:  minioEndpoint,
+		MinIOAccessKey: minioAccessKey,
+		MinIOSecretKey: minioSecretKey,
+	}, &util.DefaultLogger{})
+	if err != nil {
+		util.LogMaster("Failed to create log collector: %v", err)
+		util.LogMaster("Logs will not be collected from bot pods")
+	} else {
+		logCollector.Start()
+		util.LogMaster("Log collector started - collecting logs every 30s")
+	}
 
 	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())
@@ -453,6 +480,9 @@ func runController() {
 		healthServer.SetReady(false)
 		botCtrl.Stop()
 		scheduleCtrl.Stop()
+		if logCollector != nil {
+			logCollector.Stop()
+		}
 		cancel()
 	}()
 
@@ -541,14 +571,6 @@ func getEnv(key string, defaultValue string) string {
 		return defaultValue
 	}
 	return value
-}
-
-func getEnvBool(key string, defaultValue bool) bool {
-	value, exists := os.LookupEnv(key)
-	if !exists {
-		return defaultValue
-	}
-	return value == "true" || value == "1" || value == "yes"
 }
 
 func generateWorkerID() string {

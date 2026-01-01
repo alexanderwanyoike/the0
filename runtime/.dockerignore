@@ -34,7 +34,6 @@ Thumbs.db
 *.swp
 
 # Docker files (optional)
-Dockerfile*
 docker-compose*
 
 # Node modules (if not used, can be removed)

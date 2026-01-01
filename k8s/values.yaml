@@ -199,6 +199,9 @@ botController:
     # MongoDB connection string
     - name: MONGO_URI
       value: "mongodb://root:the0_mongo_password@the0-mongo:27017"
+    # NATS connection for syncing bots from API
+    - name: NATS_URL
+      value: "nats://the0-nats:4222"
     # MinIO credentials for image builder
     - name: MINIO_ACCESS_KEY
       value: "the0admin"

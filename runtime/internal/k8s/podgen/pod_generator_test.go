@@ -14,6 +14,10 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
 	})
 
 	bot := model.Bot{
@@ -31,13 +35,11 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 					"bot": "main.py",
 				},
 			},
-			FilePath: "custom-bots/price-alerts/v1.0.0.tar.gz",
+			FilePath: "price-alerts/1.0.0",
 		},
 	}
 
-	imageRef := "registry.local:5000/the0/bots/price-alerts:1.0.0"
-
-	pod, err := generator.GeneratePod(bot, imageRef)
+	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 	require.NotNil(t, pod)
 
@@ -55,11 +57,20 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	// Check annotations
 	assert.NotEmpty(t, pod.Annotations[AnnotationConfigHash])
 
-	// Check container
+	// Check init containers (download and extract code from MinIO)
+	require.Len(t, pod.Spec.InitContainers, 2)
+	downloadContainer := pod.Spec.InitContainers[0]
+	assert.Equal(t, "download-code", downloadContainer.Name)
+	assert.Equal(t, "minio/mc:latest", downloadContainer.Image)
+	extractContainer := pod.Spec.InitContainers[1]
+	assert.Equal(t, "extract-code", extractContainer.Name)
+	assert.Equal(t, "busybox:latest", extractContainer.Image)
+
+	// Check main container
 	require.Len(t, pod.Spec.Containers, 1)
 	container := pod.Spec.Containers[0]
 	assert.Equal(t, "bot", container.Name)
-	assert.Equal(t, imageRef, container.Image)
+	assert.Equal(t, "python:3.11-slim", container.Image) // base image
 	assert.Equal(t, []string{"/bin/bash", "/bot/entrypoint.sh"}, container.Command)
 	assert.Equal(t, "/bot", container.WorkingDir)
 
@@ -75,11 +86,19 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	// Check resources
 	assert.Equal(t, DefaultMemoryLimit, container.Resources.Limits.Memory().String())
 	assert.Equal(t, DefaultCPULimit, container.Resources.Limits.Cpu().String())
+
+	// Check volume
+	require.Len(t, pod.Spec.Volumes, 1)
+	assert.Equal(t, "bot-code", pod.Spec.Volumes[0].Name)
 }
 
 func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace: "the0",
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
 	})
 
 	bot := model.Bot{
@@ -99,7 +118,7 @@ func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
 		},
 	}
 
-	pod, err := generator.GeneratePod(bot, "registry/the0/bots/heavy-bot:2.0.0")
+	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
 	container := pod.Spec.Containers[0]
@@ -110,7 +129,12 @@ func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
 }
 
 func TestPodGenerator_GeneratePod_NodeJSRuntime(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{})
+	generator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+	})
 
 	bot := model.Bot{
 		ID:     "nodejs-bot",
@@ -124,14 +148,20 @@ func TestPodGenerator_GeneratePod_NodeJSRuntime(t *testing.T) {
 		},
 	}
 
-	pod, err := generator.GeneratePod(bot, "registry/the0/bots/js-trader:1.0.0")
+	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
 	assert.Equal(t, "nodejs20", pod.Labels[LabelRuntime])
+	assert.Equal(t, "node:20-alpine", pod.Spec.Containers[0].Image)
 }
 
 func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{})
+	generator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+	})
 
 	bot := model.Bot{
 		ID:     "rust-bot",
@@ -145,15 +175,21 @@ func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
 		},
 	}
 
-	pod, err := generator.GeneratePod(bot, "registry/the0/bots/rust-trader:1.0.0")
+	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
 	assert.Equal(t, "rust-stable", pod.Labels[LabelRuntime])
+	assert.Equal(t, "rust:latest", pod.Spec.Containers[0].Image)
 }
 
 func TestPodGenerator_DefaultConfig(t *testing.T) {
 	// Test that default namespace and controller name are set
-	generator := NewPodGenerator(PodGeneratorConfig{})
+	generator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+	})
 
 	bot := model.Bot{
 		ID: "default-test",
@@ -166,7 +202,7 @@ func TestPodGenerator_DefaultConfig(t *testing.T) {
 		},
 	}
 
-	pod, err := generator.GeneratePod(bot, "image:latest")
+	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
 	assert.Equal(t, "the0", pod.Namespace)
@@ -225,7 +261,12 @@ func TestExtractBotID(t *testing.T) {
 }
 
 func TestConfigChanged(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{})
+	generator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+	})
 
 	bot := model.Bot{
 		ID: "change-test",
@@ -242,7 +283,7 @@ func TestConfigChanged(t *testing.T) {
 	}
 
 	// Generate initial pod
-	pod, err := generator.GeneratePod(bot, "image:latest")
+	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
 	// Same config should not be changed

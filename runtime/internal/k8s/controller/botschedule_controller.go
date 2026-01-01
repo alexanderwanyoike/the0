@@ -63,6 +63,11 @@ type BotScheduleControllerConfig struct {
 	ReconcileInterval time.Duration
 	// ControllerName identifies this controller for the managed-by label.
 	ControllerName string
+	// MinIO configuration for downloading bot code
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
 }
 
 // BotScheduleController reconciles bot schedule state between MongoDB and Kubernetes.
@@ -70,7 +75,7 @@ type BotScheduleController struct {
 	config       BotScheduleControllerConfig
 	scheduleRepo BotScheduleRepository
 	cronClient   K8sCronJobClient
-	imageBuilder ImageBuilder
+	podGenerator *podgen.PodGenerator
 
 	mu      sync.Mutex
 	running bool
@@ -82,7 +87,6 @@ func NewBotScheduleController(
 	config BotScheduleControllerConfig,
 	scheduleRepo BotScheduleRepository,
 	cronClient K8sCronJobClient,
-	imageBuilder ImageBuilder,
 ) *BotScheduleController {
 	if config.Namespace == "" {
 		config.Namespace = "the0"
@@ -94,11 +98,21 @@ func NewBotScheduleController(
 		config.ControllerName = "the0-schedule-controller"
 	}
 
+	// Create pod generator for base image + init container approach
+	pg := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
+		Namespace:      config.Namespace,
+		ControllerName: config.ControllerName,
+		MinIOEndpoint:  config.MinIOEndpoint,
+		MinIOAccessKey: config.MinIOAccessKey,
+		MinIOSecretKey: config.MinIOSecretKey,
+		MinIOBucket:    config.MinIOBucket,
+	})
+
 	return &BotScheduleController{
 		config:       config,
 		scheduleRepo: scheduleRepo,
 		cronClient:   cronClient,
-		imageBuilder: imageBuilder,
+		podGenerator: pg,
 		stopCh:       make(chan struct{}),
 	}
 }
@@ -228,14 +242,11 @@ func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedu
 	// Convert to K8s cron format if needed
 	k8sCronExpr := convertToK8sCronFormat(cronExpr)
 
-	// Ensure image exists
-	imageRef, err := c.imageBuilder.EnsureImage(ctx, c.scheduleToBot(schedule))
+	// Create CronJob spec using podGenerator
+	cronJob, err := c.createCronJobSpec(schedule, k8sCronExpr)
 	if err != nil {
-		return fmt.Errorf("failed to ensure image: %w", err)
+		return fmt.Errorf("failed to create CronJob spec: %w", err)
 	}
-
-	// Create CronJob spec
-	cronJob := c.createCronJobSpec(schedule, k8sCronExpr, imageRef)
 
 	if err := c.cronClient.CreateCronJob(ctx, cronJob); err != nil {
 		return fmt.Errorf("failed to create CronJob: %w", err)
@@ -254,13 +265,11 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule sche
 
 	k8sCronExpr := convertToK8sCronFormat(cronExpr)
 
-	imageRef, err := c.imageBuilder.EnsureImage(ctx, c.scheduleToBot(schedule))
-	if err != nil {
-		return fmt.Errorf("failed to ensure image: %w", err)
-	}
-
 	// Update the CronJob
-	updated := c.createCronJobSpec(schedule, k8sCronExpr, imageRef)
+	updated, err := c.createCronJobSpec(schedule, k8sCronExpr)
+	if err != nil {
+		return fmt.Errorf("failed to create CronJob spec: %w", err)
+	}
 	updated.ResourceVersion = existing.ResourceVersion
 
 	if err := c.cronClient.UpdateCronJob(ctx, updated); err != nil {
@@ -271,27 +280,18 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule sche
 	return nil
 }
 
-// createCronJobSpec creates a CronJob spec for the schedule.
-func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSchedule, cronExpr, imageRef string) *batchv1.CronJob {
-	configJSON, err := json.Marshal(schedule.Config)
+// createCronJobSpec creates a CronJob spec for the schedule using base images + init containers.
+func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSchedule, cronExpr string) (*batchv1.CronJob, error) {
+	// Convert schedule to bot model for podGenerator
+	bot := c.scheduleToBot(schedule)
+
+	// Generate pod spec using the same approach as bot controller
+	pod, err := c.podGenerator.GeneratePod(bot)
 	if err != nil {
-		util.LogMaster("[ScheduleController] Warning: failed to marshal config for schedule %s: %v", schedule.ID, err)
-		configJSON = []byte("{}")
+		return nil, fmt.Errorf("failed to generate pod spec: %w", err)
 	}
+
 	configHash := computeScheduleHash(schedule)
-
-	// Resource limits
-	memoryLimit := "512Mi"
-	cpuLimit := "500m"
-	memoryRequest := "128Mi"
-	cpuRequest := "100m"
-
-	if m, ok := schedule.Config["memory_limit"].(string); ok && m != "" {
-		memoryLimit = m
-	}
-	if cpu, ok := schedule.Config["cpu_limit"].(string); ok && cpu != "" {
-		cpuLimit = cpu
-	}
 
 	successfulJobsHistory := int32(3)
 	failedJobsHistory := int32(1)
@@ -302,10 +302,10 @@ func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSche
 			Name:      generateCronJobName(schedule.ID),
 			Namespace: c.config.Namespace,
 			Labels: map[string]string{
-				LabelScheduleID:            schedule.ID,
+				LabelScheduleID:        schedule.ID,
 				podgen.LabelCustomBotID:    schedule.CustomBotVersion.Config.Name,
 				podgen.LabelRuntime:        schedule.CustomBotVersion.Config.Runtime,
-				LabelScheduleManagedBy:     c.config.ControllerName,
+				LabelScheduleManagedBy: c.config.ControllerName,
 			},
 			Annotations: map[string]string{
 				AnnotationScheduleHash: configHash,
@@ -322,41 +322,18 @@ func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSche
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								LabelScheduleID:         schedule.ID,
-								podgen.LabelCustomBotID: schedule.CustomBotVersion.Config.Name,
+								LabelScheduleID:            schedule.ID,
+								podgen.LabelCustomBotID:    schedule.CustomBotVersion.Config.Name,
+								podgen.LabelManagedBy:      c.config.ControllerName,
+								podgen.LabelBotID:          schedule.ID, // Use schedule ID as bot ID for log collection
 							},
 						},
-						Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyNever,
-							Containers: []corev1.Container{
-								{
-									Name:       "bot",
-									Image:      imageRef,
-									Command:    []string{"/bin/bash", "/bot/entrypoint.sh"},
-									WorkingDir: "/bot",
-									Env: []corev1.EnvVar{
-										{Name: "BOT_ID", Value: schedule.ID},
-										{Name: "BOT_CONFIG", Value: string(configJSON)},
-										{Name: "CODE_MOUNT_DIR", Value: "/bot"},
-									},
-									Resources: corev1.ResourceRequirements{
-										Limits: corev1.ResourceList{
-											corev1.ResourceMemory: mustParseQuantityWithDefault(memoryLimit, "512Mi"),
-											corev1.ResourceCPU:    mustParseQuantityWithDefault(cpuLimit, "500m"),
-										},
-										Requests: corev1.ResourceList{
-											corev1.ResourceMemory: mustParseQuantityWithDefault(memoryRequest, "128Mi"),
-											corev1.ResourceCPU:    mustParseQuantityWithDefault(cpuRequest, "100m"),
-										},
-									},
-								},
-							},
-						},
+						Spec: pod.Spec, // Use the full pod spec from podGenerator (includes init containers)
 					},
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 // scheduleChanged returns true if the schedule config has changed.

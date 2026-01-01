@@ -39,6 +39,7 @@ type K8sClient interface {
 }
 
 // ImageBuilder checks if images exist and builds them if needed.
+// Used by BotScheduleController until it's updated to use base images.
 type ImageBuilder interface {
 	// EnsureImage ensures the bot image exists, building it if needed.
 	// Returns the image reference to use for the pod.
@@ -53,6 +54,13 @@ type BotControllerConfig struct {
 	ReconcileInterval time.Duration
 	// ControllerName identifies this controller for the managed-by label.
 	ControllerName string
+
+	// MinIO configuration for downloading bot code
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
+	MinIOUseSSL    bool
 }
 
 // BotController reconciles bot state between MongoDB and Kubernetes.
@@ -63,7 +71,6 @@ type BotController struct {
 	config       BotControllerConfig
 	botRepo      BotRepository
 	k8sClient    K8sClient
-	imageBuilder ImageBuilder
 	podGenerator *podgen.PodGenerator
 
 	// mu protects running state
@@ -77,7 +84,6 @@ func NewBotController(
 	config BotControllerConfig,
 	botRepo BotRepository,
 	k8sClient K8sClient,
-	imageBuilder ImageBuilder,
 ) *BotController {
 	if config.Namespace == "" {
 		config.Namespace = "the0"
@@ -92,13 +98,17 @@ func NewBotController(
 	podGenConfig := podgen.PodGeneratorConfig{
 		Namespace:      config.Namespace,
 		ControllerName: config.ControllerName,
+		MinIOEndpoint:  config.MinIOEndpoint,
+		MinIOAccessKey: config.MinIOAccessKey,
+		MinIOSecretKey: config.MinIOSecretKey,
+		MinIOBucket:    config.MinIOBucket,
+		MinIOUseSSL:    config.MinIOUseSSL,
 	}
 
 	return &BotController{
 		config:       config,
 		botRepo:      botRepo,
 		k8sClient:    k8sClient,
-		imageBuilder: imageBuilder,
 		podGenerator: podgen.NewPodGenerator(podGenConfig),
 		stopCh:       make(chan struct{}),
 	}
@@ -233,19 +243,13 @@ func (c *BotController) ensurePodRunning(ctx context.Context, bot model.Bot) err
 	util.LogMaster("[BotController] Creating pod for bot %s (custom-bot: %s, version: %s)",
 		bot.ID, bot.CustomBotVersion.Config.Name, bot.CustomBotVersion.Version)
 
-	// 1. Ensure the image exists (build if needed)
-	imageRef, err := c.imageBuilder.EnsureImage(ctx, bot)
-	if err != nil {
-		return fmt.Errorf("failed to ensure image for bot %s: %w", bot.ID, err)
-	}
-
-	// 2. Generate pod spec
-	pod, err := c.podGenerator.GeneratePod(bot, imageRef)
+	// Generate pod spec (uses base image + init container to download code)
+	pod, err := c.podGenerator.GeneratePod(bot)
 	if err != nil {
 		return fmt.Errorf("failed to generate pod spec for bot %s: %w", bot.ID, err)
 	}
 
-	// 3. Create pod
+	// Create pod
 	if err := c.k8sClient.CreatePod(ctx, pod); err != nil {
 		return fmt.Errorf("failed to create pod for bot %s: %w", bot.ID, err)
 	}
@@ -352,20 +356,27 @@ func (c *RealK8sClient) GetPod(ctx context.Context, namespace, name string) (*co
 }
 
 // NoOpImageBuilder is a placeholder image builder that constructs image references
-// based on bot metadata. This is used until the real Kaniko-based image builder is implemented.
+// based on bot metadata. Used by schedule controller until it's updated to use base images.
 type NoOpImageBuilder struct {
-	// Registry is the container registry URL (e.g., "localhost:5000").
-	// If empty, defaults to "localhost:5000".
-	Registry string
+	Registry       string
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
 }
 
-// NewNoOpImageBuilder creates a NoOpImageBuilder with the given registry.
-// The registry should be the base URL without a trailing slash (e.g., "localhost:5000").
-func NewNoOpImageBuilder(registry string) *NoOpImageBuilder {
+// NewNoOpImageBuilder creates a NoOpImageBuilder with the given configuration.
+func NewNoOpImageBuilder(registry, minioEndpoint, minioAccessKey, minioSecretKey, minioBucket string) *NoOpImageBuilder {
 	if registry == "" {
 		registry = "localhost:5000"
 	}
-	return &NoOpImageBuilder{Registry: registry}
+	return &NoOpImageBuilder{
+		Registry:       registry,
+		MinIOEndpoint:  minioEndpoint,
+		MinIOAccessKey: minioAccessKey,
+		MinIOSecretKey: minioSecretKey,
+		MinIOBucket:    minioBucket,
+	}
 }
 
 // EnsureImage constructs an image reference based on bot metadata.

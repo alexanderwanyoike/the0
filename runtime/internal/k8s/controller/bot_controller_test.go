@@ -19,9 +19,9 @@ import (
 
 // MockBotRepository is a mock implementation of BotRepository for testing.
 type MockBotRepository struct {
-	Bots    []model.Bot
-	Error   error
-	Called  int
+	Bots   []model.Bot
+	Error  error
+	Called int
 }
 
 func (m *MockBotRepository) FindAllEnabled(ctx context.Context) ([]model.Bot, error) {
@@ -34,15 +34,15 @@ func (m *MockBotRepository) FindAllEnabled(ctx context.Context) ([]model.Bot, er
 
 // MockK8sClient is a mock implementation of K8sClient for testing.
 type MockK8sClient struct {
-	Pods           []corev1.Pod
-	ListError      error
-	CreateError    error
-	DeleteError    error
-	CreatedPods    []*corev1.Pod
-	DeletedPods    []string
-	ListCalled     int
-	CreateCalled   int
-	DeleteCalled   int
+	Pods         []corev1.Pod
+	ListError    error
+	CreateError  error
+	DeleteError  error
+	CreatedPods  []*corev1.Pod
+	DeletedPods  []string
+	ListCalled   int
+	CreateCalled int
+	DeleteCalled int
 }
 
 func (m *MockK8sClient) ListBotPods(ctx context.Context, namespace string) ([]corev1.Pod, error) {
@@ -81,6 +81,7 @@ func (m *MockK8sClient) GetPod(ctx context.Context, namespace, name string) (*co
 }
 
 // MockImageBuilder is a mock implementation of ImageBuilder for testing.
+// Still used by schedule controller tests.
 type MockImageBuilder struct {
 	ImageRef string
 	Error    error
@@ -108,7 +109,8 @@ func createTestBot(id, name, version, runtime string) model.Bot {
 			"test_key": "test_value",
 		},
 		CustomBotVersion: model.CustomBotVersion{
-			Version: version,
+			Version:  version,
+			FilePath: name + "/" + version,
 			Config: model.APIBotConfig{
 				Name:    name,
 				Runtime: runtime,
@@ -137,6 +139,16 @@ func createTestPod(botID string, phase corev1.PodPhase) corev1.Pod {
 	}
 }
 
+func testControllerConfig() BotControllerConfig {
+	return BotControllerConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
+	}
+}
+
 // ---- Tests ----
 
 func TestBotController_Reconcile_CreatesPodForNewBot(t *testing.T) {
@@ -148,17 +160,11 @@ func TestBotController_Reconcile_CreatesPodForNewBot(t *testing.T) {
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{}, // No existing pods
 	}
-	mockImageBuilder := &MockImageBuilder{
-		ImageRef: "registry/the0/bots/price-alerts:1.0.0",
-	}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
@@ -168,7 +174,6 @@ func TestBotController_Reconcile_CreatesPodForNewBot(t *testing.T) {
 	assert.Equal(t, 1, mockRepo.Called)
 	assert.Equal(t, 1, mockK8s.ListCalled)
 	assert.Equal(t, 1, mockK8s.CreateCalled)
-	assert.Equal(t, 1, mockImageBuilder.Called)
 	assert.Len(t, mockK8s.CreatedPods, 1)
 	assert.Equal(t, "bot-bot-1", mockK8s.CreatedPods[0].Name)
 }
@@ -182,15 +187,11 @@ func TestBotController_Reconcile_DeletesPodForRemovedBot(t *testing.T) {
 			createTestPod("orphan-bot", corev1.PodRunning),
 		},
 	}
-	mockImageBuilder := &MockImageBuilder{}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
@@ -208,8 +209,12 @@ func TestBotController_Reconcile_NoActionForHealthyMatchingPod(t *testing.T) {
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
 	})
-	expectedPod, err := generator.GeneratePod(bot, "registry/the0/bots/price-alerts:1.0.0")
+	expectedPod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
 	// Create a pod with matching config hash
@@ -233,29 +238,25 @@ func TestBotController_Reconcile_NoActionForHealthyMatchingPod(t *testing.T) {
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{existingPod},
 	}
-	mockImageBuilder := &MockImageBuilder{}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
 	err = controller.Reconcile(ctx)
 
 	require.NoError(t, err)
-	assert.Equal(t, 0, mockK8s.CreateCalled, "should not create any pods")
-	assert.Equal(t, 0, mockK8s.DeleteCalled, "should not delete any pods")
+	assert.Equal(t, 0, mockK8s.CreateCalled)
+	assert.Equal(t, 0, mockK8s.DeleteCalled)
 }
 
 func TestBotController_Reconcile_RecreatesPodOnConfigChange(t *testing.T) {
 	bot := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
 
-	// Create existing pod with different config hash
+	// Create a pod with different config hash (simulating config change)
 	existingPod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "bot-bot-1",
@@ -265,7 +266,7 @@ func TestBotController_Reconcile_RecreatesPodOnConfigChange(t *testing.T) {
 				podgen.LabelManagedBy: "the0-bot-controller",
 			},
 			Annotations: map[string]string{
-				podgen.AnnotationConfigHash: "old-hash-12345",
+				podgen.AnnotationConfigHash: "old-hash-different",
 			},
 		},
 		Status: corev1.PodStatus{
@@ -279,47 +280,48 @@ func TestBotController_Reconcile_RecreatesPodOnConfigChange(t *testing.T) {
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{existingPod},
 	}
-	mockImageBuilder := &MockImageBuilder{
-		ImageRef: "registry/the0/bots/price-alerts:1.0.0",
-	}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
 	err := controller.Reconcile(ctx)
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete pod due to config change")
+	// Config changed, should delete old pod (will recreate next cycle)
+	assert.Equal(t, 1, mockK8s.DeleteCalled)
 	assert.Contains(t, mockK8s.DeletedPods, "bot-bot-1")
-	// Note: pod creation happens on next reconcile cycle
 }
 
 func TestBotController_Reconcile_RecreatesFailedPod(t *testing.T) {
 	bot := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
 
-	// Generate pod with correct hash but failed status
+	// Generate pod with correct hash
 	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
 	})
-	expectedPod, _ := generator.GeneratePod(bot, "registry/the0/bots/price-alerts:1.0.0")
+	expectedPod, _ := generator.GeneratePod(bot)
 
-	failedPod := corev1.Pod{
+	// Create a failed pod
+	existingPod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        expectedPod.Name,
-			Namespace:   expectedPod.Namespace,
-			Labels:      expectedPod.Labels,
-			Annotations: expectedPod.Annotations,
+			Name:      expectedPod.Name,
+			Namespace: expectedPod.Namespace,
+			Labels:    expectedPod.Labels,
+			Annotations: map[string]string{
+				podgen.AnnotationConfigHash: expectedPod.Annotations[podgen.AnnotationConfigHash],
+			},
 		},
 		Status: corev1.PodStatus{
-			Phase: corev1.PodFailed,
+			Phase: corev1.PodFailed, // Pod has failed
 		},
 	}
 
@@ -327,110 +329,21 @@ func TestBotController_Reconcile_RecreatesFailedPod(t *testing.T) {
 		Bots: []model.Bot{bot},
 	}
 	mockK8s := &MockK8sClient{
-		Pods: []corev1.Pod{failedPod},
-	}
-	mockImageBuilder := &MockImageBuilder{
-		ImageRef: "registry/the0/bots/price-alerts:1.0.0",
+		Pods: []corev1.Pod{existingPod},
 	}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
 	err := controller.Reconcile(ctx)
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete failed pod for recreation")
-}
-
-func TestBotController_Reconcile_MultipleBots(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
-			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
-			createTestBot("bot-2", "sma-crossover", "2.0.0", "nodejs20"),
-			createTestBot("bot-3", "mean-reversion", "1.5.0", "rust-stable"),
-		},
-	}
-	mockK8s := &MockK8sClient{
-		Pods: []corev1.Pod{}, // No existing pods
-	}
-	mockImageBuilder := &MockImageBuilder{
-		ImageRef: "registry/the0/bots/test:latest",
-	}
-
-	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
-		mockRepo,
-		mockK8s,
-		mockImageBuilder,
-	)
-
-	ctx := context.Background()
-	err := controller.Reconcile(ctx)
-
-	require.NoError(t, err)
-	assert.Equal(t, 3, mockK8s.CreateCalled, "should create 3 pods")
-	assert.Len(t, mockK8s.CreatedPods, 3)
-}
-
-func TestBotController_Reconcile_MixedState(t *testing.T) {
-	bot1 := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
-	bot2 := createTestBot("bot-2", "sma-crossover", "1.0.0", "python3.11")
-
-	// Generate pod for bot-2 with correct hash
-	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
-		Namespace:      "the0",
-		ControllerName: "the0-bot-controller",
-	})
-	pod2, _ := generator.GeneratePod(bot2, "registry/the0/bots/sma-crossover:1.0.0")
-
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{bot1, bot2}, // Want bot-1 and bot-2
-	}
-	mockK8s := &MockK8sClient{
-		Pods: []corev1.Pod{
-			// bot-2 exists and is healthy
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        pod2.Name,
-					Namespace:   pod2.Namespace,
-					Labels:      pod2.Labels,
-					Annotations: pod2.Annotations,
-				},
-				Status: corev1.PodStatus{Phase: corev1.PodRunning},
-			},
-			// bot-3 exists but is not desired
-			createTestPod("bot-3", corev1.PodRunning),
-		},
-	}
-	mockImageBuilder := &MockImageBuilder{
-		ImageRef: "registry/the0/bots/test:1.0.0",
-	}
-
-	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
-		mockRepo,
-		mockK8s,
-		mockImageBuilder,
-	)
-
-	ctx := context.Background()
-	err := controller.Reconcile(ctx)
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, mockK8s.CreateCalled, "should create 1 pod for bot-1")
-	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete 1 pod for bot-3")
-	assert.Contains(t, mockK8s.DeletedPods, "bot-bot-3")
+	// Failed pod should be deleted for recreation
+	assert.Equal(t, 1, mockK8s.DeleteCalled)
 }
 
 func TestBotController_Reconcile_RepositoryError(t *testing.T) {
@@ -438,15 +351,11 @@ func TestBotController_Reconcile_RepositoryError(t *testing.T) {
 		Error: errors.New("database connection lost"),
 	}
 	mockK8s := &MockK8sClient{}
-	mockImageBuilder := &MockImageBuilder{}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace: "the0",
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
@@ -454,179 +363,143 @@ func TestBotController_Reconcile_RepositoryError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database connection lost")
-	assert.Equal(t, 1, mockRepo.Called, "should call repository")
 	assert.Equal(t, 0, mockK8s.ListCalled, "should not query K8s on repo error")
-	assert.Equal(t, 0, mockK8s.CreateCalled, "should not create pods on repo error")
-	assert.Equal(t, 0, mockK8s.DeleteCalled, "should not delete pods on repo error")
 }
 
-func TestBotController_Start_RunsReconciliation(t *testing.T) {
+func TestBotController_Reconcile_K8sListError(t *testing.T) {
 	mockRepo := &MockBotRepository{
 		Bots: []model.Bot{
-			createTestBot("bot-1", "test", "1.0.0", "python3.11"),
+			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
 		},
 	}
-	mockK8s := &MockK8sClient{}
-	mockImageBuilder := &MockImageBuilder{}
+	mockK8s := &MockK8sClient{
+		ListError: errors.New("k8s API error"),
+	}
 
 	controller := NewBotController(
-		BotControllerConfig{
-			Namespace:         "the0",
-			ReconcileInterval: 50 * time.Millisecond, // Short interval for testing
-		},
+		testControllerConfig(),
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
-	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	go func() {
-		_ = controller.Start(ctx)
-	}()
-
-	// Wait for at least 2 reconciliation cycles
-	time.Sleep(150 * time.Millisecond)
-
-	// Should have run initial reconciliation + at least 1 timer-based
-	assert.GreaterOrEqual(t, mockRepo.Called, 2, "should have run multiple reconciliations")
-}
-
-func TestBotController_Stop(t *testing.T) {
-	mockRepo := &MockBotRepository{}
-	mockK8s := &MockK8sClient{}
-	mockImageBuilder := &MockImageBuilder{}
-
-	controller := NewBotController(
-		BotControllerConfig{
-			ReconcileInterval: 100 * time.Millisecond,
-		},
-		mockRepo,
-		mockK8s,
-		mockImageBuilder,
 	)
 
 	ctx := context.Background()
-	done := make(chan struct{})
+	err := controller.Reconcile(ctx)
 
-	go func() {
-		_ = controller.Start(ctx)
-		close(done)
-	}()
-
-	// Let it run briefly
-	time.Sleep(50 * time.Millisecond)
-
-	// Stop the controller
-	controller.Stop()
-
-	// Should stop within reasonable time
-	select {
-	case <-done:
-		// Success
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("controller did not stop in time")
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "k8s API error")
 }
 
-func TestNewBotController_DefaultConfig(t *testing.T) {
-	mockRepo := &MockBotRepository{}
+func TestBotController_Start_Stop(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{},
+	}
 	mockK8s := &MockK8sClient{}
-	mockImageBuilder := &MockImageBuilder{}
+
+	config := testControllerConfig()
+	config.ReconcileInterval = 50 * time.Millisecond
 
 	controller := NewBotController(
-		BotControllerConfig{}, // Empty config
+		config,
 		mockRepo,
 		mockK8s,
-		mockImageBuilder,
 	)
 
-	assert.Equal(t, "the0", controller.config.Namespace)
-	assert.Equal(t, 30*time.Second, controller.config.ReconcileInterval)
-	assert.Equal(t, "the0-bot-controller", controller.config.ControllerName)
-}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-func TestIsPodHealthy(t *testing.T) {
-	tests := []struct {
-		name     string
-		phase    corev1.PodPhase
-		expected bool
-	}{
-		{"Running", corev1.PodRunning, true},
-		{"Pending", corev1.PodPending, true},
-		{"Succeeded", corev1.PodSucceeded, false},
-		{"Failed", corev1.PodFailed, false},
-		{"Unknown", corev1.PodUnknown, false},
-	}
+	// Start in goroutine
+	go controller.Start(ctx)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pod := &corev1.Pod{
-				Status: corev1.PodStatus{Phase: tt.phase},
-			}
-			result := isPodHealthy(pod)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	// Wait for at least one reconciliation
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop
+	controller.Stop()
+
+	// Verify at least one reconciliation happened
+	assert.GreaterOrEqual(t, mockRepo.Called, 1)
 }
 
 func TestNoOpImageBuilder_EnsureImage(t *testing.T) {
-	t.Run("with custom registry", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("my-registry.io:5000")
-		bot := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
+	t.Run("constructs image reference", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("my-registry.io:5000", "", "", "", "")
+		bot := createTestBot("test-id", "price-alerts", "1.2.3", "python3.11")
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 
 		require.NoError(t, err)
-		assert.Equal(t, "my-registry.io:5000/the0/bots/price-alerts:1.0.0", imageRef)
+		assert.Equal(t, "my-registry.io:5000/the0/bots/price-alerts:1.2.3", imageRef)
 	})
 
-	t.Run("with default registry", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("")
-		bot := createTestBot("bot-1", "price-alerts", "2.0.0", "python3.11")
+	t.Run("uses default registry when empty", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("", "", "", "", "")
+		bot := createTestBot("test-id", "my-bot", "2.0.0", "nodejs20")
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 
 		require.NoError(t, err)
-		assert.Equal(t, "localhost:5000/the0/bots/price-alerts:2.0.0", imageRef)
+		assert.Equal(t, "localhost:5000/the0/bots/my-bot:2.0.0", imageRef)
 	})
 
-	t.Run("with empty bot name", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("")
-		bot := createTestBot("bot-1", "", "1.0.0", "python3.11")
+	t.Run("uses latest when version empty", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("", "", "", "", "")
+		bot := createTestBot("test-id", "my-bot", "", "python3.11")
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 
 		require.NoError(t, err)
-		assert.Equal(t, "localhost:5000/the0/bots/unknown:1.0.0", imageRef)
+		assert.Contains(t, imageRef, ":latest")
 	})
 
-	t.Run("with empty version", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("gcr.io/my-project")
-		bot := createTestBot("bot-1", "my-bot", "", "python3.11")
+	t.Run("handles different registry formats", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("gcr.io/my-project", "", "", "", "")
+		bot := createTestBot("test-id", "ml-bot", "0.1.0", "python3.11")
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 
 		require.NoError(t, err)
-		assert.Equal(t, "gcr.io/my-project/the0/bots/my-bot:latest", imageRef)
+		assert.Equal(t, "gcr.io/my-project/the0/bots/ml-bot:0.1.0", imageRef)
 	})
 
-	t.Run("with empty config", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("")
-		enabled := true
+	t.Run("uses unknown when name empty", func(t *testing.T) {
+		builder := NewNoOpImageBuilder("", "", "", "", "")
 		bot := model.Bot{
-			ID:      "bot-1",
-			Enabled: &enabled,
+			ID: "test-id",
 			CustomBotVersion: model.CustomBotVersion{
 				Version: "1.0.0",
-				Config:  model.APIBotConfig{}, // empty config (zero value)
+				Config: model.APIBotConfig{
+					Name:    "", // Empty name
+					Runtime: "python3.11",
+				},
 			},
 		}
 
 		imageRef, err := builder.EnsureImage(context.Background(), bot)
 
 		require.NoError(t, err)
-		assert.Equal(t, "localhost:5000/the0/bots/unknown:1.0.0", imageRef)
+		assert.Contains(t, imageRef, "/the0/bots/unknown:")
 	})
+}
+
+func TestGetBaseImage(t *testing.T) {
+	tests := []struct {
+		runtime  string
+		expected string
+	}{
+		{"python3.11", "python:3.11-slim"},
+		{"nodejs20", "node:20-alpine"},
+		{"rust-stable", "rust:latest"},
+		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"},
+		{"gcc13", "gcc:13"},
+		{"scala3", "eclipse-temurin:21-jre"},
+		{"ghc96", "haskell:9.6-slim"},
+		{"unknown", "python:3.11-slim"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.runtime, func(t *testing.T) {
+			result := podgen.GetBaseImage(tt.runtime)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

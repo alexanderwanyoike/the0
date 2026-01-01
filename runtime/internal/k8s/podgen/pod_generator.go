@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -54,6 +55,13 @@ type PodGeneratorConfig struct {
 
 	// ControllerName identifies this controller for the managed-by label.
 	ControllerName string
+
+	// MinIO configuration for downloading bot code
+	MinIOEndpoint   string
+	MinIOAccessKey  string
+	MinIOSecretKey  string
+	MinIOBucket     string
+	MinIOUseSSL     bool
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -73,13 +81,8 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 }
 
 // GeneratePod creates a Kubernetes Pod spec for the given bot.
-// The imageRef should be the full container image reference (e.g., "registry:5000/the0/bots/my-bot:1.0.0").
-func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod, error) {
-	// Validate imageRef
-	if imageRef == "" {
-		return nil, fmt.Errorf("imageRef cannot be empty")
-	}
-
+// Uses base images with an init container to download code from MinIO.
+func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 	// Marshal config to JSON for BOT_CONFIG env var
 	configJSON, err := json.Marshal(bot.Config)
 	if err != nil {
@@ -99,6 +102,17 @@ func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod,
 	// Safely extract version and runtime with defaults
 	version := bot.CustomBotVersion.Version
 	runtime := bot.CustomBotVersion.Config.Runtime
+	filePath := bot.CustomBotVersion.FilePath
+	entrypoint := g.getEntrypoint(bot)
+
+	// Get base image for the runtime
+	baseImage := GetBaseImage(runtime)
+
+	// Build MinIO endpoint URL
+	minioURL := g.getMinIOURL()
+
+	// Generate entrypoint script based on runtime
+	entrypointScript := g.generateEntrypointScript(runtime, entrypoint)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -117,25 +131,60 @@ func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod,
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
+			InitContainers: []corev1.Container{
+				{
+					Name:    "download-code",
+					Image:   "minio/mc:latest",
+					Command: []string{"/bin/sh", "-c"},
+					Args: []string{
+						fmt.Sprintf(`
+set -e
+mc alias set minio %s $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+mc cp minio/%s/%s /bot/code.zip
+ls -la /bot/
+`, minioURL, g.config.MinIOBucket, filePath),
+					},
+					Env: []corev1.EnvVar{
+						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
+						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "bot-code", MountPath: "/bot"},
+					},
+				},
+				{
+					Name:    "extract-code",
+					Image:   "busybox:latest",
+					Command: []string{"/bin/sh", "-c"},
+					Args: []string{
+						fmt.Sprintf(`
+set -e
+cd /bot
+unzip -o code.zip
+rm code.zip
+echo '%s' > /bot/entrypoint.sh
+chmod +x /bot/entrypoint.sh
+ls -la /bot/
+`, escapeForShell(entrypointScript)),
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "bot-code", MountPath: "/bot"},
+					},
+				},
+			},
 			Containers: []corev1.Container{
 				{
 					Name:       "bot",
-					Image:      imageRef,
+					Image:      baseImage,
 					Command:    []string{"/bin/bash", "/bot/entrypoint.sh"},
 					WorkingDir: "/bot",
 					Env: []corev1.EnvVar{
-						{
-							Name:  "BOT_ID",
-							Value: bot.ID,
-						},
-						{
-							Name:  "BOT_CONFIG",
-							Value: string(configJSON),
-						},
-						{
-							Name:  "CODE_MOUNT_DIR",
-							Value: "/bot",
-						},
+						{Name: "BOT_ID", Value: bot.ID},
+						{Name: "BOT_CONFIG", Value: string(configJSON)},
+						{Name: "CODE_MOUNT_DIR", Value: "/bot"},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "bot-code", MountPath: "/bot"},
 					},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -146,6 +195,14 @@ func (g *PodGenerator) GeneratePod(bot model.Bot, imageRef string) (*corev1.Pod,
 							corev1.ResourceMemory: parseResourceOrDefault(memoryRequest, DefaultMemoryRequest),
 							corev1.ResourceCPU:    parseResourceOrDefault(cpuRequest, DefaultCPURequest),
 						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "bot-code",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 			},
@@ -309,4 +366,105 @@ func sanitizeLabelValue(s string) string {
 // isAlphanumeric returns true if the byte is a letter or digit.
 func isAlphanumeric(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
+// GetBaseImage returns the base Docker image for a given runtime.
+func GetBaseImage(runtime string) string {
+	switch runtime {
+	case "python3.11":
+		return "python:3.11-slim"
+	case "nodejs20":
+		return "node:20-alpine"
+	case "rust-stable":
+		return "rust:latest"
+	case "dotnet8":
+		return "mcr.microsoft.com/dotnet/runtime:8.0"
+	case "gcc13", "cpp-gcc13":
+		return "gcc:13"
+	case "scala3":
+		return "eclipse-temurin:21-jre"
+	case "ghc96":
+		return "haskell:9.6-slim"
+	default:
+		return "python:3.11-slim" // fallback
+	}
+}
+
+// getMinIOURL builds the MinIO endpoint URL with protocol.
+func (g *PodGenerator) getMinIOURL() string {
+	endpoint := g.config.MinIOEndpoint
+	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+		return endpoint
+	}
+	if g.config.MinIOUseSSL {
+		return "https://" + endpoint
+	}
+	return "http://" + endpoint
+}
+
+// getEntrypoint extracts the bot entrypoint from the config.
+func (g *PodGenerator) getEntrypoint(bot model.Bot) string {
+	if bot.CustomBotVersion.Config.Entrypoints != nil {
+		if entry, ok := bot.CustomBotVersion.Config.Entrypoints["bot"]; ok {
+			return entry
+		}
+	}
+	// Default entrypoints based on runtime
+	switch bot.CustomBotVersion.Config.Runtime {
+	case "python3.11":
+		return "main.py"
+	case "nodejs20":
+		return "index.js"
+	default:
+		return "main"
+	}
+}
+
+// generateEntrypointScript creates the entrypoint script based on runtime.
+// Dependencies are already vendored in the zip file, so no installation needed.
+func (g *PodGenerator) generateEntrypointScript(runtime, entrypoint string) string {
+	switch runtime {
+	case "python3.11":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+cd /bot
+exec python3 %s
+`, entrypoint)
+	case "nodejs20":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+cd /bot
+exec node %s
+`, entrypoint)
+	case "rust-stable", "gcc13", "cpp-gcc13", "ghc96":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+cd /bot
+chmod +x %s
+exec ./%s
+`, entrypoint, entrypoint)
+	case "dotnet8":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+cd /bot
+exec dotnet %s.dll
+`, strings.TrimSuffix(entrypoint, ".dll"))
+	case "scala3":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+cd /bot
+exec java -jar %s
+`, entrypoint)
+	default:
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+cd /bot
+exec python3 %s
+`, entrypoint)
+	}
+}
+
+// escapeForShell escapes a string for use in shell single quotes.
+func escapeForShell(s string) string {
+	return strings.ReplaceAll(s, "'", "'\\''")
 }
