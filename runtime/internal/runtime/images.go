@@ -22,18 +22,8 @@ var runtimeImages = map[string]string{
 }
 
 // GetDockerImage returns the Docker image for the given runtime.
-// Returns the Python 3.11 image as fallback for unknown runtimes.
-// Use GetDockerImageOrError if you need explicit error handling.
-func GetDockerImage(runtime string) string {
-	if image, ok := runtimeImages[runtime]; ok {
-		return image
-	}
-	return "python:3.11-slim" // Default fallback
-}
-
-// GetDockerImageOrError returns the Docker image for the given runtime.
 // Returns an error if the runtime is not supported.
-func GetDockerImageOrError(runtime string) (string, error) {
+func GetDockerImage(runtime string) (string, error) {
 	if image, ok := runtimeImages[runtime]; ok {
 		return image, nil
 	}

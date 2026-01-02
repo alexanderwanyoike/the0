@@ -114,7 +114,10 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 	}
 
 	// Get base image for the runtime (using shared runtime package)
-	baseImage := runtimepkg.GetDockerImage(runtime)
+	baseImage, err := runtimepkg.GetDockerImage(runtime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Docker image: %w", err)
+	}
 
 	// Build MinIO endpoint URL
 	minioURL := g.getMinIOURL()

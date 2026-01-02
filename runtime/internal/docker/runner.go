@@ -185,7 +185,7 @@ func (r *dockerRunner) isValidRuntime(runtime string) bool {
 	return runtimepkg.IsValidRuntime(runtime)
 }
 
-func (r *dockerRunner) getDockerImage(runtime string) string {
+func (r *dockerRunner) getDockerImage(runtime string) (string, error) {
 	return runtimepkg.GetDockerImage(runtime)
 }
 
@@ -364,7 +364,16 @@ func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Exec
 	}
 
 	// Pull Docker image
-	imageName := r.getDockerImage(executable.Runtime)
+	imageName, err := r.getDockerImage(executable.Runtime)
+	if err != nil {
+		return &ExecutionResult{
+			Status:   "error",
+			Message:  "Unsupported runtime",
+			Error:    err.Error(),
+			ExitCode: 1,
+			Duration: time.Since(startTime),
+		}, nil
+	}
 	if err := r.orchestrator.PullImage(ctx, imageName); err != nil {
 		return &ExecutionResult{
 			Status:   "error",
