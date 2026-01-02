@@ -13,8 +13,13 @@ import (
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 
 	botRunner "runtime/internal/bot-runner/server"
+	botnatssubscriber "runtime/internal/bot-runner/subscriber"
 	botScheduler "runtime/internal/bot-scheduler/server"
+	schedulenatssubscriber "runtime/internal/bot-scheduler/subscriber"
 	"runtime/internal/constants"
+	"runtime/internal/k8s/controller"
+	"runtime/internal/k8s/detect"
+	"runtime/internal/k8s/health"
 	"runtime/internal/util"
 )
 
@@ -27,6 +32,16 @@ var (
 	mode       string
 	mongoUri   string
 	workerId   string
+
+	// Controller-specific flags
+	controllerNamespace         string
+	controllerReconcileInterval time.Duration
+
+	// MinIO flags for bot code download
+	minioEndpoint  string
+	minioAccessKey string
+	minioSecretKey string
+	minioBucket    string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -89,6 +104,21 @@ var botSchedulerWorkerCmd = &cobra.Command{
 	},
 }
 
+// Controller Command (Kubernetes-native mode)
+var controllerCmd = &cobra.Command{
+	Use:   "controller",
+	Short: "Run Kubernetes-native bot controller",
+	Long: `Runs the bot controller in Kubernetes-native mode.
+Each bot becomes its own Pod managed by this controller.
+The controller reads desired state from MongoDB and reconciles with K8s.
+
+This mode should only be used when running inside a Kubernetes cluster
+with RUNTIME_MODE=controller environment variable set.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runController()
+	},
+}
+
 // Version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -111,6 +141,16 @@ func main() {
 
 	rootCmd.AddCommand(botSchedulerCmd)
 	botSchedulerCmd.AddCommand(botSchedulerMasterCmd, botSchedulerWorkerCmd)
+
+	// Controller command with flags
+	controllerCmd.Flags().StringVar(&controllerNamespace, "namespace", getEnv("NAMESPACE", "the0"), "Kubernetes namespace for bot pods")
+	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
+	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
+	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
+	// MinIO credentials read from environment only (not CLI flags) for security
+	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
+	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
+	rootCmd.AddCommand(controllerCmd)
 
 	rootCmd.AddCommand(versionCmd)
 
@@ -269,6 +309,143 @@ func runBotSchedulerWorker() {
 
 	worker.Start() // This blocks until shutdown
 	util.LogWorker("Bot-scheduler worker stopped")
+}
+
+// Controller Implementation (Kubernetes-native mode)
+func runController() {
+	util.LogMaster("Starting Kubernetes-native bot controller...")
+	util.LogMaster("Runtime mode: %s", detect.DetectRuntimeMode())
+	util.LogMaster("Namespace: %s", controllerNamespace)
+	util.LogMaster("Reconcile interval: %v", controllerReconcileInterval)
+
+	// Validate MinIO credentials (required for downloading bot code)
+	if minioAccessKey == "" || minioSecretKey == "" {
+		util.LogMaster("ERROR: MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY) are required")
+		os.Exit(1)
+	}
+	if minioEndpoint == "" {
+		util.LogMaster("ERROR: MINIO_ENDPOINT is required")
+		os.Exit(1)
+	}
+
+	// Start health server for K8s probes
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
+	// Check if we're in the right environment
+	if !detect.IsKubernetesEnvironment() {
+		util.LogMaster("WARNING: Not running in Kubernetes environment. Controller may not work correctly.")
+	}
+
+	// Create MongoDB client
+	mongoClient, err := createMongoClient(mongoUri)
+	if err != nil {
+		util.LogMaster("Failed to create MongoDB client: %v", err)
+		os.Exit(1)
+	}
+	defer mongoClient.Disconnect(context.Background())
+
+	// Start NATS subscribers to sync bots and schedules from API to MongoDB
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	natsUrl := os.Getenv("NATS_URL")
+	if natsUrl == "" {
+		util.LogMaster("WARNING: NATS_URL not set, bots/schedules won't be synced from API")
+	} else {
+		// Bot NATS subscriber
+		botSubscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
+			NATSUrl:            natsUrl,
+			DBName:             constants.BOT_RUNNER_DB_NAME,
+			CollectionName:     constants.BOT_RUNNER_COLLECTION,
+			MaxBotPerPartition: 100,
+			MaxRetries:         3,
+			Logger:             &util.DefaultLogger{},
+		})
+		if err != nil {
+			util.LogMaster("Failed to create bot NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		if err := botSubscriber.Start(ctx); err != nil {
+			util.LogMaster("Failed to start bot NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		defer botSubscriber.Stop()
+		util.LogMaster("Bot NATS subscriber started - listening for bot events")
+
+		// Schedule NATS subscriber
+		scheduleSubscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
+			NATSUrl:                    natsUrl,
+			DBName:                     constants.BOT_SCHEDULER_DB_NAME,
+			CollectionName:             constants.BOT_SCHEDULE_COLLECTION,
+			MaxBotSchedulePerPartition: 100,
+			MaxRetries:                 3,
+			Logger:                     &util.DefaultLogger{},
+		})
+		if err != nil {
+			util.LogMaster("Failed to create schedule NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		if err := scheduleSubscriber.Start(ctx); err != nil {
+			util.LogMaster("Failed to start schedule NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		defer scheduleSubscriber.Stop()
+		util.LogMaster("Schedule NATS subscriber started - listening for schedule events")
+	}
+
+	// Create controller manager
+	manager, err := controller.NewManager(mongoClient, controller.ManagerConfig{
+		Namespace:         controllerNamespace,
+		ReconcileInterval: controllerReconcileInterval,
+		MinIOEndpoint:     minioEndpoint,
+		MinIOAccessKey:    minioAccessKey,
+		MinIOSecretKey:    minioSecretKey,
+		MinIOBucket:       minioBucket,
+		Logger:            &util.DefaultLogger{},
+	})
+	if err != nil {
+		util.LogMaster("Failed to create controller manager: %v", err)
+		util.LogMaster("Make sure the controller is running inside a Kubernetes cluster with proper RBAC.")
+		os.Exit(1)
+	}
+
+	// Setup signal handling
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		util.LogMaster("Received interrupt signal, shutting down controllers...")
+		healthServer.SetReady(false)
+		manager.Stop()
+		cancel()
+	}()
+
+	// Start controllers and wait for readiness
+	readyCh, err := manager.Start(ctx)
+	if err != nil {
+		util.LogMaster("Failed to start controller manager: %v", err)
+		os.Exit(1)
+	}
+
+	// Wait for controllers to be ready, then mark health server as ready
+	go func() {
+		select {
+		case <-readyCh:
+			healthServer.SetReady(true)
+		case <-ctx.Done():
+		}
+	}()
+
+	// Wait for context cancellation (signal handler)
+	<-ctx.Done()
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
+
+	util.LogMaster("Controllers stopped")
 }
 
 // Utility functions

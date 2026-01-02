@@ -114,6 +114,72 @@ minikube-restart: minikube-down minikube-up ## Quick restart (rebuild and redepl
 .PHONY: minikube
 minikube: minikube-up ## Alias for minikube-up (backward compatibility)
 
+# Kubernetes-Native Controller Mode
+# Uses K8s Pods and CronJobs instead of Docker-in-Docker
+
+.PHONY: minikube-controller
+minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode (no Docker-in-Docker)
+	@echo "🏗️  Starting minikube deployment in controller mode..."
+	@minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker 2>/dev/null || echo "Minikube already running"
+	@echo "⏳ Enabling registry addon for bot images..."
+	@minikube addons enable registry
+	@echo "⏳ Waiting for minikube cluster to be ready..."
+	@kubectl cluster-info >/dev/null 2>&1 || { echo "❌ Failed to connect to minikube cluster"; exit 1; }
+	@echo "✅ Minikube cluster is ready with registry"
+	@echo "🔨 Building application images in minikube environment..."
+	@eval $$(minikube docker-env) && \
+		docker build -t the0-api:latest ../api && \
+		docker build --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30004 -t the0-frontend:latest ../frontend && \
+		docker build -t the0-docs:latest ../docs && \
+		docker build -t runtime:latest ../runtime
+	@echo "🚀 Deploying to minikube in controller mode..."
+	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
+		--namespace $(NAMESPACE) \
+		--set global.imagePullPolicy=IfNotPresent \
+		--set the0Api.imagePullPolicy=Never \
+		--set the0Frontend.imagePullPolicy=Never \
+		--set the0Docs.imagePullPolicy=Never \
+		--set botRunner.enabled=false \
+		--set botScheduler.enabled=false \
+		--set botController.enabled=true \
+		--set botController.imagePullPolicy=Never \
+		--set botController.imageBuilder.registry=localhost:5000 \
+		--set minikube.enabled=true \
+		--set externalServices.enabled=true
+	@echo ""
+	@echo "✅ Controller mode deployment completed!"
+	@echo ""
+	@echo "🔧 Controller mode benefits:"
+	@echo "   - No Docker-in-Docker (no privileged pods)"
+	@echo "   - Each bot runs as its own K8s Pod"
+	@echo "   - Scheduled bots use K8s CronJobs"
+	@echo "   - Kaniko builds bot images automatically"
+	@echo ""
+	@echo "🌐 NodePort URLs (no tunnel required):"
+	@echo "   Frontend:  http://the0.local:30001"
+	@echo "   API:       http://api.the0.local:30000"
+	@echo "   MinIO:     http://minio.the0.local:30002"
+	@echo "   Docs:      http://docs.the0.local:30004"
+	@echo ""
+	@echo "⚠️  To access services:"
+	@echo "   1. Run: make setup-hosts"
+	@echo "   2. That's it! No tunnel needed."
+	@echo ""
+	@echo "💡 Use 'make status' to check pod readiness"
+	@echo "💡 Use 'make logs-controller' to view controller logs"
+
+.PHONY: enable-registry
+enable-registry: ## Enable minikube registry addon for bot images
+	@echo "📦 Enabling minikube registry addon..."
+	@minikube addons enable registry
+	@echo "✅ Registry enabled at localhost:5000"
+	@echo "💡 Images can be pushed to localhost:5000/image:tag"
+
+.PHONY: logs-controller
+logs-controller: check-deps ## Show controller logs
+	@kubectl logs -n $(NAMESPACE) -l app.kubernetes.io/component=bot-controller --tail=100 -f
+
 .PHONY: setup-hosts
 setup-hosts: ## Add the0.local hostnames to /etc/hosts
 	@echo "🔧 Setting up /etc/hosts entries..."
