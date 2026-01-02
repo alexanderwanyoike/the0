@@ -81,7 +81,7 @@ services:
 
   # The0 API Service (TypeScript/NestJS)
   the0-api:
-    build: 
+    build:
       context: ../api
       dockerfile: Dockerfile
       args:
@@ -91,39 +91,39 @@ services:
       # Database configuration
       DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss?sslmode=disable
       DATABASE_TYPE: postgres
-      
+
       # NATS configuration
       NATS_URLS: nats://nats:4222
-      
-      
+
+
       # MinIO configuration
       MINIO_ENDPOINT: minio # Internal endpoint hostname for API to connect to MinIO
       MINIO_PORT: "9000"
       MINIO_USE_SSL: "false"
       MINIO_ACCESS_KEY: the0admin
       MINIO_SECRET_KEY: the0password
-      
+
       # Application configuration
       NODE_ENV: production
       PORT: 3000
       API_BASE_URL: http://localhost:3000
-      
+
       # Frontend configuration
       FRONTEND_URL: http://localhost:3001
-      
+
       # JWT configuration
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       JWT_EXPIRES_IN: 24h
-      
+
       # Storage configuration
       STORAGE_PATH: /app/uploads/custom-bots
       CUSTOM_BOTS_BUCKET: custom-bots
       LOG_BUCKET: bot-logs
       BACKTEST_BUCKET: backtests
-      
+
       # Bot API configuration (used by frontend API routes)
       BOT_API_URL: http://the0-api:3000
-      
+
     ports:
       - "3000:3000"
     depends_on:
@@ -144,9 +144,9 @@ services:
     volumes:
       - the0-api-uploads:/app/uploads
 
-  # Bot Runner Master Service (Go - coordinates workers and serves HTTP API)
-  bot-runner-master:
-    build: 
+  # Bot Runner Service (Go - single-process bot execution)
+  bot-runner:
+    build:
       context: ../runtime
       dockerfile: Dockerfile
       args:
@@ -155,60 +155,10 @@ services:
     environment:
       # MongoDB configuration
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: the0admin
-      MINIO_SECRET_KEY: the0password
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: bot-logs
-      MINIO_CODE_BUCKET: custom-bots
-      MINIO_REGION: us-east-1
-      
-      # Worker ID (will be auto-generated if not set)
-      WORKER_ID: bot-runner-master-1
-      
-      # Partition configuration
-      MAX_BOTS_PER_PARTITION: "10"
-      
-    ports:
-      - "8080:8080"  # HTTP health endpoint
-      - "50051:50051"  # gRPC port (bot-runner default)
-    volumes:
-      - bot_runner_data:/app/data
-    depends_on:
-      mongo:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-      - the0-network
-    command: ["./runtime", "bot-runner", "master"]
 
-  # Bot Runner Worker Service (Go - executes bots with Docker)
-  bot-runner-worker:
-    build: 
-      context: ../runtime
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-    pull_policy: always
-    deploy:
-      replicas: 4
-    environment:
-      # MongoDB configuration
-      MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
-      
-      # NATS configuration
+      # NATS configuration (optional - enables instant updates)
       NATS_URL: nats://nats:4222
-      
+
       # MinIO configuration
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: the0admin
@@ -217,71 +167,25 @@ services:
       MINIO_LOGS_BUCKET: bot-logs
       MINIO_CODE_BUCKET: custom-bots
       MINIO_REGION: us-east-1
-      
-      # Worker configuration
-      # WORKER_ID will be auto-generated for each replica
-      MASTER_SERVICE: bot-runner-master
-      
-      # Partition configuration
-      MAX_BOTS_PER_PARTITION: "10"
-      
+
       # Docker configuration
       DOCKER_TEMP_DIR: /tmp/bot-runner
       TEMP_DIR: /tmp/bot-runner
       DOCKER_LOG_DIR: /var/log/bot-runner
-      
+
+    ports:
+      - "8080:8080"  # HTTP health endpoint
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker
-      - bot_runner_worker_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - bot_runner_data:/app/data
       - /tmp/bot-runner:/tmp/bot-runner
-    privileged: true  # Required for Docker-in-Docker
+    privileged: true
     sysctls:
       - net.ipv4.ip_forward=1
     depends_on:
-      bot-runner-master:
-        condition: service_healthy
       mongo:
         condition: service_healthy
-      minio:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - the0-network
-    command: ["./runtime", "bot-runner", "worker"]
-
-  # Bot Scheduler Master Service (Go - coordinates workers and schedules bots)
-  bot-scheduler-master:
-    build: 
-      context: ../runtime
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-    pull_policy: always
-    environment:
-      # MongoDB configuration
-      MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: the0admin
-      MINIO_SECRET_KEY: the0password
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: bot-logs
-      MINIO_CODE_BUCKET: custom-bots
-      
-      # Worker ID (will be auto-generated if not set)
-      WORKER_ID: bot-scheduler-master-1
-      
-      # Partition configuration
-      MAX_BOT_SCHEDULE_PER_PARTITION: "10"
-      
-    ports:
-      - "8082:8080"  # HTTP API port (external:internal)
-      - "50053:50053"  # gRPC port (bot-scheduler default)
-    volumes:
-      - bot_scheduler_data:/app/data
-    depends_on:
-      mongo:
+      nats:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -294,24 +198,23 @@ services:
       start_period: 60s
     networks:
       - the0-network
-    command: ["./runtime", "bot-scheduler", "master"]
+    command: ["./runtime", "bot-runner"]
 
-  # Bot Scheduler Worker Service (Go - executes scheduled bots with Docker)
-  bot-scheduler-worker:
-    build: 
+  # Bot Scheduler Service (Go - single-process scheduled bot execution)
+  bot-scheduler:
+    build:
       context: ../runtime
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
     pull_policy: always
-    deploy:
-      replicas: 4
     environment:
       # MongoDB configuration
-      MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017  
-      # NATS configuration
+      MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
+
+      # NATS configuration (required for scheduler)
       NATS_URL: nats://nats:4222
-      
+
       # MinIO configuration
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: the0admin
@@ -319,42 +222,43 @@ services:
       MINIO_USE_SSL: "false"
       MINIO_LOGS_BUCKET: bot-logs
       MINIO_CODE_BUCKET: custom-bots
-      
-      # Worker configuration
-      # WORKER_ID will be auto-generated for each replica
-      MASTER_SERVICE: bot-scheduler-master
-      
-      # Partition configuration
-      MAX_BOT_SCHEDULE_PER_PARTITION: "10"
-      
+
       # Docker configuration
       DOCKER_TEMP_DIR: /tmp/bot-scheduler
       TEMP_DIR: /tmp/bot-scheduler
       DOCKER_LOG_DIR: /var/log/bot-scheduler
       BOT_MEMORY_LIMIT_MB: "512"
       BOT_CPU_SHARES: "512"
-      
+
+    ports:
+      - "8082:8080"  # HTTP health endpoint
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker
-      - bot_scheduler_worker_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - bot_scheduler_data:/app/data
       - /tmp/bot-scheduler:/tmp/bot-scheduler
-    privileged: true  # Required for Docker-in-Docker
+    privileged: true
     sysctls:
       - net.ipv4.ip_forward=1
     depends_on:
-      bot-scheduler-master:
-        condition: service_healthy
       mongo:
+        condition: service_healthy
+      nats:
         condition: service_healthy
       minio:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - the0-network
-    command: ["./runtime", "bot-scheduler", "worker"]
+    command: ["./runtime", "bot-scheduler"]
 
   the0-frontend:
-    build: 
+    build:
       context: ../frontend
       dockerfile: Dockerfile
       args:
@@ -370,17 +274,17 @@ services:
       CLI_DOWNLOAD_BASE_URL: https://github.com/your-org/the0-oss/releases/download
       CLI_INSTALL_BASE_URL: http://localhost:3001
       NEXT_PUBLIC_CLI_INSTALL_BASE_URL: http://localhost:3001
-      
+
       # JWT configuration (for admin auth middleware)
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
-      
+
       # App configuration
       NEXT_PUBLIC_APP_NAME: "the0"
       NEXT_PUBLIC_APP_VERSION: "1.0.0"
       NEXT_BASE_URL: http://localhost:3001
-      
+
       NODE_ENV: production
-      
+
     ports:
       - "3001:3000"
     depends_on:
@@ -452,16 +356,13 @@ volumes:
     driver: local
   bot_runner_data:
     driver: local
-  bot_runner_worker_data:
-    driver: local
   bot_scheduler_data:
-    driver: local
-  bot_scheduler_worker_data:
     driver: local
   the0-api-uploads:
     driver: local
   the0-frontend-node-modules:
     driver: local
+
 networks:
   the0-network:
     driver: bridge
