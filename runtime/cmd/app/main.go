@@ -24,7 +24,7 @@ import (
 )
 
 // Version is the current version of the runtime
-const Version = "1.0.0"
+const Version = "1.2.0"
 
 var (
 	// Global flags
