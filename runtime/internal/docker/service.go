@@ -238,8 +238,8 @@ func (s *BotService) getDesiredBots(ctx context.Context) ([]model.Bot, error) {
 	// Query for enabled bots (no segment filter)
 	filter := bson.M{
 		"$or": []bson.M{
-			{"config.enabled": bson.M{"$ne": false}},     // explicitly not disabled
-			{"config.enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
+			{"enabled": bson.M{"$ne": false}},     // explicitly not disabled
+			{"enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
 		},
 	}
 

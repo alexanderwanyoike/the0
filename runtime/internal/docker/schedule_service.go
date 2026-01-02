@@ -243,8 +243,8 @@ func (s *ScheduleService) checkAndExecuteSchedules() {
 
 	// Execute each due schedule
 	for _, schedule := range dueSchedules {
-		// Skip if already executing
-		if s.isExecuting(schedule.ID) {
+		// Atomically check and mark as executing to prevent TOCTOU race
+		if !s.tryStartExecution(schedule.ID) {
 			s.logger.Info("Schedule %s is already executing, skipping", schedule.ID)
 			continue
 		}
@@ -271,8 +271,8 @@ func (s *ScheduleService) getDueSchedules(ctx context.Context, now time.Time) ([
 	filter := bson.M{
 		"next_execution_time": bson.M{"$lte": now.Unix()},
 		"$or": []bson.M{
-			{"config.enabled": bson.M{"$ne": false}},
-			{"config.enabled": bson.M{"$exists": false}},
+			{"enabled": bson.M{"$ne": false}},
+			{"enabled": bson.M{"$exists": false}},
 		},
 	}
 
@@ -298,16 +298,28 @@ func (s *ScheduleService) isExecuting(scheduleID string) bool {
 	return exists
 }
 
+// tryStartExecution atomically checks if a schedule is already executing and marks it as executing if not.
+// Returns true if the schedule was successfully marked as executing, false if it was already executing.
+// This prevents TOCTOU race conditions between checking and marking.
+func (s *ScheduleService) tryStartExecution(scheduleID string) bool {
+	s.state.mu.Lock()
+	defer s.state.mu.Unlock()
+
+	if _, exists := s.state.executing[scheduleID]; exists {
+		return false // Already executing
+	}
+
+	s.state.executing[scheduleID] = time.Now()
+	s.state.activeExecutions++
+	return true
+}
+
 // executeSchedule runs a scheduled bot and updates the next execution time
+// Note: The schedule is already marked as executing by tryStartExecution before this is called
 func (s *ScheduleService) executeSchedule(ctx context.Context, schedule model.BotSchedule) {
 	s.logger.Info("Executing schedule %s", schedule.ID)
 
-	// Mark as executing
-	s.state.mu.Lock()
-	s.state.executing[schedule.ID] = time.Now()
-	s.state.activeExecutions++
-	s.state.mu.Unlock()
-
+	// Clean up executing state when done
 	defer func() {
 		s.state.mu.Lock()
 		delete(s.state.executing, schedule.ID)

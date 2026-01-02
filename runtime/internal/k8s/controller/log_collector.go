@@ -39,9 +39,10 @@ type K8sLogCollector struct {
 	completedPods   map[string]bool
 	completedPodsMu sync.RWMutex
 
-	ticker *time.Ticker
-	stopCh chan struct{}
-	doneCh chan struct{}
+	ticker   *time.Ticker
+	stopCh   chan struct{}
+	doneCh   chan struct{}
+	stopOnce sync.Once // Ensures Stop() is idempotent
 }
 
 // K8sLogCollectorConfig holds configuration for the log collector.
@@ -134,12 +135,15 @@ func (lc *K8sLogCollector) Start() {
 }
 
 // Stop signals the background goroutine to stop and waits for it to finish.
+// This method is idempotent - calling it multiple times is safe.
 func (lc *K8sLogCollector) Stop() {
-	close(lc.stopCh)
-	<-lc.doneCh
-	if lc.minioLogger != nil {
-		lc.minioLogger.Close()
-	}
+	lc.stopOnce.Do(func() {
+		close(lc.stopCh)
+		<-lc.doneCh
+		if lc.minioLogger != nil {
+			lc.minioLogger.Close()
+		}
+	})
 }
 
 // collectAllLogs fetches logs from all managed bot pods.

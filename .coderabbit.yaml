@@ -82,7 +82,7 @@ reviews:
         - Verify proper label/annotation usage
         - Check for potential infinite reconciliation loops
 
-    - path: "runtime/internal/docker-runner/**"
+    - path: "runtime/internal/docker/**"
       instructions: |
         Docker container orchestration code.
         - Check for container escape vulnerabilities
