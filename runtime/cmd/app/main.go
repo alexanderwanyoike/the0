@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -132,9 +133,9 @@ func main() {
 // runBotService runs the simplified bot service
 func runBotService() {
 	util.LogMaster("Starting bot-runner service...")
-	util.LogMaster("MongoDB: %s", mongoUri)
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
 	if natsUrl != "" {
-		util.LogMaster("NATS: %s", natsUrl)
+		util.LogMaster("NATS: %s", maskCredentialsInURL(natsUrl))
 	} else {
 		util.LogMaster("NATS: disabled (poll-only mode)")
 	}
@@ -174,8 +175,8 @@ func runBotService() {
 // runScheduleService runs the simplified schedule service
 func runScheduleService() {
 	util.LogMaster("Starting bot-scheduler service...")
-	util.LogMaster("MongoDB: %s", mongoUri)
-	util.LogMaster("NATS: %s", natsUrl)
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
+	util.LogMaster("NATS: %s", maskCredentialsInURL(natsUrl))
 
 	// Validate NATS URL (required for schedule service)
 	if natsUrl == "" {
@@ -253,7 +254,7 @@ func runController() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	natsUrl := os.Getenv("NATS_URL")
+	// Use global natsUrl (already set via CLI flag or env var)
 	if natsUrl == "" {
 		util.LogMaster("WARNING: NATS_URL not set, bots/schedules won't be synced from API")
 	} else {
@@ -377,4 +378,23 @@ func createMongoClient(mongoUri string) (*mongo.Client, error) {
 	}
 
 	return mongoClient, nil
+}
+
+// maskCredentialsInURL masks password in a connection URL for safe logging.
+// Example: mongodb://user:secret@host:27017 -> mongodb://user:***@host:27017
+func maskCredentialsInURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		// If parsing fails, return a masked placeholder to be safe
+		return "***"
+	}
+
+	if parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			username := parsed.User.Username()
+			parsed.User = url.UserPassword(username, "***")
+		}
+	}
+
+	return parsed.String()
 }

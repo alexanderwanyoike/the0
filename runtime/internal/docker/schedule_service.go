@@ -51,10 +51,13 @@ type ScheduleState struct {
 	// Currently executing schedules (scheduleID -> start time)
 	executing map[string]time.Time
 
+	// WaitGroup for tracking execution goroutines
+	executionWg sync.WaitGroup
+
 	// Metrics
-	lastCheck       time.Time
-	executionCount  int64
-	failedCount     int64
+	lastCheck        time.Time
+	executionCount   int64
+	failedCount      int64
 	activeExecutions int
 }
 
@@ -108,7 +111,11 @@ func (s *ScheduleService) Run(ctx context.Context) error {
 	if err := s.initMongoDB(ctx); err != nil {
 		return fmt.Errorf("failed to initialize MongoDB: %w", err)
 	}
-	defer s.mongoClient.Disconnect(context.Background())
+	defer func() {
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		s.mongoClient.Disconnect(disconnectCtx)
+	}()
 
 	// Initialize DockerRunner
 	runner, err := NewDockerRunner(DockerRunnerOptions{
@@ -238,9 +245,13 @@ func (s *ScheduleService) checkAndExecuteSchedules() {
 			continue
 		}
 
-		// Execute in goroutine with its own context (not tied to the check loop)
-		// Use service context so it can be cancelled on shutdown
-		go s.executeSchedule(s.ctx, schedule)
+		// Track goroutine with WaitGroup for graceful shutdown
+		s.state.executionWg.Add(1)
+		go func(sched model.BotSchedule) {
+			defer s.state.executionWg.Done()
+			// Use service context so it can be cancelled on shutdown
+			s.executeSchedule(s.ctx, sched)
+		}(schedule)
 	}
 
 	s.state.mu.Lock()
@@ -393,26 +404,22 @@ func (s *ScheduleService) shutdown() {
 
 // waitForExecutions waits for executing schedules to complete
 func (s *ScheduleService) waitForExecutions(timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	done := make(chan struct{})
+	go func() {
+		s.state.executionWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		s.logger.Info("All executions completed")
+	case <-time.After(timeout):
 		s.state.mu.RLock()
-		count := s.state.activeExecutions
+		remaining := s.state.activeExecutions
 		s.state.mu.RUnlock()
-
-		if count == 0 {
-			return
+		if remaining > 0 {
+			s.logger.Info("Shutdown timeout: %d executions still running", remaining)
 		}
-
-		s.logger.Info("Waiting for %d executions to complete...", count)
-		time.Sleep(1 * time.Second)
-	}
-
-	s.state.mu.RLock()
-	remaining := s.state.activeExecutions
-	s.state.mu.RUnlock()
-
-	if remaining > 0 {
-		s.logger.Info("Shutdown timeout: %d executions still running", remaining)
 	}
 }
 

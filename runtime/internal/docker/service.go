@@ -86,7 +86,11 @@ func (s *BotService) Run(ctx context.Context) error {
 	if err := s.initMongoDB(ctx); err != nil {
 		return fmt.Errorf("failed to initialize MongoDB: %w", err)
 	}
-	defer s.mongoClient.Disconnect(context.Background())
+	defer func() {
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		s.mongoClient.Disconnect(disconnectCtx)
+	}()
 
 	// Initialize DockerRunner
 	runner, err := NewDockerRunner(DockerRunnerOptions{
@@ -350,9 +354,13 @@ func (s *BotService) performReconciliation(ctx context.Context, desiredBots []mo
 func (s *BotService) startBot(ctx context.Context, botID string, bot model.Bot) {
 	s.logger.Info("Starting bot %s", botID)
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
+
 		executable := s.toExecutable(bot)
-		result, err := s.runner.StartContainer(context.Background(), executable)
+		// Use service context for cancellation support
+		result, err := s.runner.StartContainer(s.ctx, executable)
 		if err != nil {
 			s.logger.Error("Failed to start bot %s: %v", botID, err)
 			s.state.IncrementFailedRestarts()
@@ -381,19 +389,42 @@ func (s *BotService) startBot(ctx context.Context, botID string, bot model.Bot) 
 func (s *BotService) stopBot(ctx context.Context, botID string, containerID string) error {
 	s.logger.Info("Stopping bot %s (container: %s)", botID, containerID)
 
-	// Get bot reference before removing from state
+	// Get bot reference and mark as "stopping" before attempting stop
 	var bot model.Bot
+	var originalState *RunningBot
 	if trackedBot, ok := s.state.GetRunningBot(botID); ok {
 		bot = trackedBot.Bot
+		originalState = trackedBot
+		// Mark as "stopping" to prevent restart attempts during stop
+		s.state.SetRunningBot(&RunningBot{
+			BotID:       botID,
+			ContainerID: containerID,
+			Status:      "stopping",
+			StartTime:   trackedBot.StartTime,
+			Bot:         trackedBot.Bot,
+			Restarts:    trackedBot.Restarts,
+		})
 	}
 
-	s.state.RemoveRunningBot(botID)
-
+	// Attempt to stop the container
 	if err := s.runner.StopContainer(ctx, containerID, s.toExecutable(bot)); err != nil {
 		s.logger.Error("Failed to stop bot %s: %v", botID, err)
+		// Revert status back to running since stop failed
+		if originalState != nil {
+			s.state.SetRunningBot(&RunningBot{
+				BotID:       botID,
+				ContainerID: containerID,
+				Status:      "running",
+				StartTime:   originalState.StartTime,
+				Bot:         originalState.Bot,
+				Restarts:    originalState.Restarts,
+			})
+		}
 		return err
 	}
 
+	// Only remove from state after successful stop
+	s.state.RemoveRunningBot(botID)
 	return nil
 }
 
@@ -421,11 +452,12 @@ func (s *BotService) hasConfigChanged(oldBot, newBot model.Bot) bool {
 // hashMap creates a consistent hash of a map
 func (s *BotService) hashMap(m map[string]interface{}) string {
 	if m == nil {
-		return ""
+		return "nil"
 	}
 	jsonBytes, err := json.Marshal(m)
 	if err != nil {
-		return ""
+		// Return unique error sentinel so failed hashes never match each other
+		return fmt.Sprintf("error:%p", m)
 	}
 	hasher := sha256.New()
 	hasher.Write(jsonBytes)
@@ -439,21 +471,44 @@ func (s *BotService) shutdown() {
 	// Cancel context to stop reconciliation loop
 	s.cancel()
 
-	// Wait for reconciliation loop to stop
+	// Wait for reconciliation loop and any pending startBot goroutines to stop
 	s.wg.Wait()
 
-	// Stop all running containers
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
+	// Stop all running containers concurrently
 	runningBots := s.state.GetAllRunningBots()
-	for _, bot := range runningBots {
-		if err := s.runner.StopContainer(ctx, bot.ContainerID, s.toExecutable(bot.Bot)); err != nil {
-			s.logger.Error("Failed to stop container %s during shutdown: %v", bot.ContainerID, err)
-		}
+	if len(runningBots) == 0 {
+		s.logger.Info("Shutdown complete")
+		return
 	}
 
-	s.logger.Info("Shutdown complete")
+	// Use a WaitGroup to track all stop operations
+	var stopWg sync.WaitGroup
+	for _, bot := range runningBots {
+		stopWg.Add(1)
+		go func(b *RunningBot) {
+			defer stopWg.Done()
+			// Each container gets its own 30s timeout
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := s.runner.StopContainer(ctx, b.ContainerID, s.toExecutable(b.Bot)); err != nil {
+				s.logger.Error("Failed to stop container %s during shutdown: %v", b.ContainerID, err)
+			}
+		}(bot)
+	}
+
+	// Wait for all containers with overall timeout
+	done := make(chan struct{})
+	go func() {
+		stopWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		s.logger.Info("Shutdown complete")
+	case <-time.After(2 * time.Minute):
+		s.logger.Info("Shutdown timeout reached, some containers may still be running")
+	}
 }
 
 // Stop initiates graceful shutdown

@@ -530,7 +530,7 @@ func (r *dockerRunner) startTerminatingContainer(
 	// since they run quickly and we want all logs immediately after completion
 	// They are not part of the managedContainers map since they are short-lived
 	logs := runResult.Logs
-	if len(logs) > 0 {
+	if len(logs) > 0 && r.logCollector != nil {
 		r.logCollector.StoreLogs(exec.ID, logs)
 	}
 

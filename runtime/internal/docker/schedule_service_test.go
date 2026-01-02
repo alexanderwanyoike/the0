@@ -35,6 +35,8 @@ func TestNewScheduleService_ValidConfig(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, service)
+	defer service.Stop()
+
 	assert.NotNil(t, service.state)
 	assert.NotNil(t, service.logger)
 	assert.NotNil(t, service.ctx)
@@ -47,6 +49,8 @@ func TestNewScheduleService_DefaultsDBName(t *testing.T) {
 		NATSUrl:  "nats://localhost:4222",
 	})
 	require.NoError(t, err)
+	defer service.Stop()
+
 	assert.Equal(t, "bot_scheduler", service.config.DBName)
 	assert.Equal(t, "bot_schedules", service.config.Collection)
 }
@@ -59,6 +63,8 @@ func TestNewScheduleService_CustomDBName(t *testing.T) {
 		Collection: "custom_collection",
 	})
 	require.NoError(t, err)
+	defer service.Stop()
+
 	assert.Equal(t, "custom_db", service.config.DBName)
 	assert.Equal(t, "custom_collection", service.config.Collection)
 }
@@ -68,6 +74,7 @@ func TestScheduleService_ToExecutable(t *testing.T) {
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	defer service.Stop()
 
 	schedule := model.BotSchedule{
 		ID:                "schedule-123",
@@ -122,6 +129,7 @@ func TestScheduleService_GetStatus_EmptyState(t *testing.T) {
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	defer service.Stop()
 
 	status := service.GetStatus()
 
@@ -153,6 +161,7 @@ func TestScheduleState_ExecutingTracking(t *testing.T) {
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	defer service.Stop()
 
 	// Initially not executing
 	assert.False(t, service.isExecuting("schedule-1"))
@@ -181,6 +190,7 @@ func TestScheduleState_MetricsTracking(t *testing.T) {
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	defer service.Stop()
 
 	// Simulate execution counts
 	service.state.mu.Lock()

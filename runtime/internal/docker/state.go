@@ -39,7 +39,7 @@ func NewServiceState() *ServiceState {
 	}
 }
 
-// GetRunningBot returns a copy of a running bot by ID
+// GetRunningBot returns a deep copy of a running bot by ID
 func (s *ServiceState) GetRunningBot(botID string) (*RunningBot, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -47,19 +47,31 @@ func (s *ServiceState) GetRunningBot(botID string) (*RunningBot, bool) {
 	if !ok {
 		return nil, false
 	}
-	// Return a copy
-	copy := *bot
-	return &copy, true
+	// Return a deep copy to prevent data races on nested references
+	return &RunningBot{
+		BotID:       bot.BotID,
+		ContainerID: bot.ContainerID,
+		Status:      bot.Status,
+		StartTime:   bot.StartTime,
+		Bot:         bot.Bot.DeepCopy(),
+		Restarts:    bot.Restarts,
+	}, true
 }
 
-// GetAllRunningBots returns a copy of all running bots
+// GetAllRunningBots returns deep copies of all running bots
 func (s *ServiceState) GetAllRunningBots() map[string]*RunningBot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make(map[string]*RunningBot, len(s.runningBots))
 	for k, v := range s.runningBots {
-		copy := *v
-		result[k] = &copy
+		result[k] = &RunningBot{
+			BotID:       v.BotID,
+			ContainerID: v.ContainerID,
+			Status:      v.Status,
+			StartTime:   v.StartTime,
+			Bot:         v.Bot.DeepCopy(),
+			Restarts:    v.Restarts,
+		}
 	}
 	return result
 }
@@ -115,10 +127,21 @@ func (s *ServiceState) ClearAllRunningBots() {
 	s.activeContainers = 0
 }
 
-// UpdateRunningBotsFromMap replaces the running bots map with the provided one
+// UpdateRunningBotsFromMap replaces the running bots map with a defensive copy
 func (s *ServiceState) UpdateRunningBotsFromMap(newState map[string]*RunningBot) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.runningBots = newState
-	s.activeContainers = len(newState)
+	// Create defensive copy to prevent external modifications
+	s.runningBots = make(map[string]*RunningBot, len(newState))
+	for k, v := range newState {
+		s.runningBots[k] = &RunningBot{
+			BotID:       v.BotID,
+			ContainerID: v.ContainerID,
+			Status:      v.Status,
+			StartTime:   v.StartTime,
+			Bot:         v.Bot.DeepCopy(),
+			Restarts:    v.Restarts,
+		}
+	}
+	s.activeContainers = len(s.runningBots)
 }
