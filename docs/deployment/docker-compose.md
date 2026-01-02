@@ -69,13 +69,9 @@ The Docker Compose configuration starts these services:
 
 **the0-docs** (port 3002) serves the platform documentation.
 
-**bot-runner-master** (port 8080) coordinates realtime bot execution. It receives work requests and distributes them to workers.
+**bot-runner** executes realtime bots. It uses a reconciliation loop to compare desired state (from MongoDB) with running containers and makes corrections. Bots run in isolated Docker containers with resource limits.
 
-**bot-runner-worker** (4 replicas) executes realtime bot code. Workers run bots in isolated Docker containers.
-
-**bot-scheduler-master** (port 8082) manages scheduled bot execution. It monitors cron schedules and triggers executions.
-
-**bot-scheduler-worker** (4 replicas) executes scheduled bot code. Like the runner workers, these run bots in isolated containers.
+**bot-scheduler** manages scheduled bot execution. It monitors cron schedules from MongoDB and triggers bot executions when due. Requires NATS for receiving schedule events from the API.
 
 ## Management Commands
 
@@ -186,15 +182,28 @@ MinIO data can be backed up using the `mc` CLI or by copying the volume directly
 docker cp $(docker compose ps -q minio):/data ./minio-backup
 ```
 
-## Scaling Workers
+## Service Configuration
 
-Increase worker replicas for higher throughput:
+### Reconciliation Intervals
 
-```bash
-docker compose up -d --scale bot-runner-worker=8 --scale bot-scheduler-worker=8
+The bot-runner and bot-scheduler services support configurable intervals:
+
+```yaml
+environment:
+  # How often bot-runner reconciles bot state (default: 30s)
+  RECONCILE_INTERVAL: "30s"
+  # How often bot-scheduler checks for due schedules (default: 10s)
+  CHECK_INTERVAL: "10s"
 ```
 
-Each worker can execute multiple bots concurrently. Scale based on your expected bot count and execution frequency.
+### NATS Configuration
+
+NATS is optional for bot-runner (falls back to polling) but required for bot-scheduler:
+
+```yaml
+environment:
+  NATS_URL: nats://nats:4222
+```
 
 ## Troubleshooting
 
@@ -204,7 +213,8 @@ Check container logs for errors:
 
 ```bash
 docker compose logs the0-api
-docker compose logs bot-runner-master
+docker compose logs bot-runner
+docker compose logs bot-scheduler
 ```
 
 ### Port Conflicts

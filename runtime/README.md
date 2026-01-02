@@ -1,180 +1,236 @@
 # the0 Runtime
 
-A unified, distributed Docker container orchestration system for the0 platform that manages bot execution and scheduled jobs using a master-worker architecture.
+A unified Docker container orchestration system for the0 platform that manages bot execution and scheduled jobs.
 
-## Architecture Overview
+## Overview
 
-A unified runtime system for the0 platform that provides two distinct services sharing common infrastructure:
-- **Bot Runner**: Executes live trading bots in isolated Docker containers
-- **Bot Scheduler**: Manages scheduled bot execution with cron-based timing
+The runtime provides two deployment modes:
 
-All services use a master-worker architecture with Docker-based container isolation and MongoDB for persistence.
+- **Docker Mode**: Single-process services for local development and small deployments
+  - `bot-runner`: Executes live trading bots
+  - `bot-scheduler`: Manages cron-based scheduled bot execution
+- **Kubernetes Mode**: Controller-based deployment for production scale
+  - `controller`: K8s-native Pod/CronJob management
 
-### Key Components
+## Architecture
 
-#### Master Node
-- **gRPC Server**: Handles worker registration and streaming rebalance notifications
-- **Segment Management**:
-  - Simple 1:1 assignment of database segments to worker nodes
-  - Handles segment rebalancing when workers join/leave
-  - Discovers active segments from MongoDB partitions collection
-- **Health Monitoring**:
-  - Tracks worker health via 5-second heartbeat timeout
-  - Automatically reassigns segments from failed workers
-- **HTTP API**: Provides health check endpoint (/healthz) for Kubernetes probes
-- **Autoscaling**: Native Kubernetes autoscaler that scales workers to match segment count (1 worker per segment)
+### Docker Mode (Recommended for Development)
 
-#### Worker Nodes
-- **Bot Execution**:
-  - Executes bots in isolated Docker containers
-  - Supports Python 3.11 and Node.js 20 runtimes
-  - Downloads code from MinIO/S3 storage
-- **Segment Processing**:
-  - Scans assigned database segment for executables
-  - Each worker handles exactly one segment at a time
-- **Health Reporting**:
-  - Sends heartbeats every 2 seconds to master
-  - Resubscribes if master requests reconnection
-- **Event Processing**:
-  - Handles bot creation/updates/deletions via NATS
-  - Manages bot lifecycle events
+Docker mode uses a simplified single-process architecture with a reconciliation loop:
 
-### Data Flow
-
-1. **Bot Registration**:
-   - Bots are created via NATS events
-   - Workers process creation events and store in MongoDB
-   - Bots are assigned to segments using random distribution
-
-2. **Execution Flow**:
-   ```
-   Worker Node --> Scan Segments --> Find Bots --> Docker Runner --> Execute in Container --> Return Results
-   ```
-
-3. **Bot Updates**:
-   - Updates handled via NATS events
-   - Optimistic locking prevents concurrent modification issues
-   - Automatic bot configuration updates
-
-### Docker Execution
-
-#### Runtime Support
-- **Python 3.11**: Uses `python:3.11-slim` Docker image
-- **Node.js 20**: Uses `node:20-alpine` Docker image
-
-#### Execution Process
-1. **Code Download**: Fetches bot code from MinIO/S3 (ZIP or TAR.GZ)
-2. **Extraction**: Securely extracts code with directory traversal protection
-3. **Script Generation**: Creates runtime-specific entrypoint scripts
-4. **Container Execution**: Runs bot with mounted code and environment variables
-5. **Result Collection**: Captures output, status, and execution metrics
-
-#### Bot Configuration
-```json
-{
-  "id": "bot-123",
-  "segment_id": 1,
-  "config": {
-    "apiKey": "secret",
-    "threshold": 0.95
-  },
-  "custom": {
-    "version": "1.0.0",
-    "gcsPath": "gs://bucket/bot.zip",
-    "config": {
-      "name": "Trading Bot",
-      "runtime": "python3.11",
-      "entrypoints": {
-        "bot": "main.py",
-        "backtest": "backtest.py"
-      }
-    }
-  }
-}
+```
+┌─────────────────────────────────────────────────────────┐
+│                      BotService                          │
+│                                                          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │    NATS     │  │   Service   │  │  DockerRunner   │  │
+│  │ (optional)  │──│    State    │──│                 │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+│                                                          │
+│  Events:              State:              Actions:       │
+│  - bot.created        map[botID]*Bot      - Start        │
+│  - bot.updated        map[botID]contID    - Stop         │
+│  - bot.deleted                            - Restart      │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Fault Tolerance Mechanisms
+**How it works:**
+1. BotService queries MongoDB for enabled bots (desired state)
+2. Lists running containers from Docker (actual state)
+3. Reconciles: starts missing bots, stops extra containers
+4. Detects config changes and restarts as needed
+5. Repeats every 30 seconds (configurable)
 
-1. **Worker Failure Handling**:
-   - Dead worker detection after 5 seconds of missed heartbeats
-   - Automatic segment reassignment to healthy workers
-   - Graceful worker shutdown with container cleanup
-   - Workers automatically resubscribe on master reconnection
+### Kubernetes Mode (Production Scale)
 
-2. **Container Isolation**:
-   - Each bot runs in isolated Docker container
-   - Resource limits (CPU shares and memory)
-   - Automatic cleanup of failed containers
-   - File system permissions handling for cleanup
+For deployments exceeding ~1000 bots, use Kubernetes mode with the controller:
 
-3. **Message Processing**:
-   - Dead letter queues for failed message handling
-   - Configurable retry policies with exponential backoff
-   - Message acknowledgment tracking
-   - Graceful degradation when NATS is unavailable
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Controller Manager                    │
+│  ┌─────────────────┐      ┌─────────────────┐          │
+│  │  Bot Controller │      │Schedule Controller│         │
+│  └────────┬────────┘      └────────┬────────┘          │
+│           │                        │                    │
+│           ▼                        ▼                    │
+│      ┌─────────┐              ┌─────────┐              │
+│      │  Pods   │              │CronJobs │              │
+│      └─────────┘              └─────────┘              │
+└─────────────────────────────────────────────────────────┘
+```
 
-4. **Autoscaling Resilience**:
-   - 15-second check interval with 10-second cooldown
-   - Gradual scaling (+/-1 replica at a time)
-   - Min/max replica bounds enforcement
-   - Continues operation if autoscaler unavailable
+## Quick Start
 
-## Technical Implementation
+### Using Docker Compose
 
-### Core Technologies
-- **Language**: Go 1.24+
-- **Database**: MongoDB (with partitions collection for segment tracking)
-- **Messaging**: NATS (optional, gracefully degrades)
-- **Container Runtime**: Docker
-- **Container Orchestration**: Kubernetes
-- **Service Communication**: gRPC with streaming
-- **Cloud Storage**: MinIO/S3 compatible storage
+```bash
+# Start the platform (includes runtime services)
+cd docker
+make up
 
-### Key Packages
+# View logs
+docker compose logs -f bot-runner
+docker compose logs -f bot-scheduler
+```
 
-1. **core/**
-   - Generic master/worker infrastructure shared by all services
-   - Master: gRPC server, segment assignment, health monitoring
-   - Worker: Subscription-based segment updates, heartbeat mechanism
-   - Server: Rebalance logic and worker coordination
+### Running Locally
 
-2. **docker-runner/**
-   - Container lifecycle orchestration (create, start, stop, cleanup)
-   - MinIO code download and extraction with security checks
-   - Runtime-specific entrypoint script generation
-   - Background log collection for long-running containers
-   - Supports Python 3.11 and Node.js 20
+```bash
+# Build
+go build -o build/runtime ./cmd/app
 
-3. **bot-runner/**, **bot-scheduler/**
-   - Service-specific master/worker implementations
-   - NATS subscribers for lifecycle events
-   - Database-specific models and logic
-   - Each service uses dedicated MongoDB database
+# Run bot-runner (live bots)
+./build/runtime bot-runner --mongo-uri mongodb://localhost:27017
 
-4. **autoscaler/**
-   - Native Kubernetes autoscaler (no HPA required)
-   - Scales workers to match segment count
-   - Gradual scaling with cooldown periods
-   - Works without additional Kubernetes permissions if unavailable
+# Run bot-scheduler (scheduled bots, requires NATS)
+./build/runtime bot-scheduler \
+  --mongo-uri mongodb://localhost:27017 \
+  --nats-url nats://localhost:4222
 
-### Bot Entrypoint Interface
+# Run controller (Kubernetes mode)
+./build/runtime controller --namespace the0
+```
 
-#### Python Bots
+## CLI Commands
+
+### Bot Runner
+
+Manages live trading bot execution.
+
+```bash
+./runtime bot-runner [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--mongo-uri` | `mongodb://localhost:27017` | MongoDB connection URI |
+| `--nats-url` | (empty) | NATS URL (optional, enables instant updates) |
+| `--reconcile-interval` | `30s` | How often to reconcile bot state |
+
+**NATS is optional**: Without NATS, the service polls MongoDB every reconcile interval. With NATS, bot changes are applied immediately.
+
+### Bot Scheduler
+
+Manages cron-based scheduled bot execution.
+
+```bash
+./runtime bot-scheduler [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--mongo-uri` | `mongodb://localhost:27017` | MongoDB connection URI |
+| `--nats-url` | (required) | NATS URL for API communication |
+| `--check-interval` | `10s` | How often to check for due schedules |
+
+**NATS is required** for bot-scheduler to receive schedule events from the API.
+
+### Controller (Kubernetes Mode)
+
+Manages bots as Kubernetes Pods and CronJobs.
+
+```bash
+./runtime controller [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--namespace` | `the0` | Kubernetes namespace for bot pods |
+| `--reconcile-interval` | `30s` | How often to reconcile state |
+| `--minio-endpoint` | `minio:9000` | MinIO endpoint for bot code |
+| `--minio-bucket` | `the0-custom-bots` | MinIO bucket for bot code |
+
+### Version
+
+```bash
+./runtime version
+```
+
+## Environment Variables
+
+### Required for All Modes
+
+```bash
+MONGO_URI=mongodb://localhost:27017    # MongoDB connection
+```
+
+### Optional for bot-runner
+
+```bash
+NATS_URL=nats://localhost:4222         # NATS for real-time events (optional)
+```
+
+### Required for bot-scheduler
+
+```bash
+NATS_URL=nats://localhost:4222         # NATS for API communication (required)
+```
+
+### Required for Docker Mode (Bot Execution)
+
+```bash
+MINIO_ENDPOINT=localhost:9000          # MinIO endpoint
+MINIO_ACCESS_KEY=the0admin             # MinIO access key
+MINIO_SECRET_KEY=the0password          # MinIO secret key
+```
+
+### Required for Controller Mode
+
+```bash
+NAMESPACE=the0                         # K8s namespace
+MINIO_ENDPOINT=minio:9000              # MinIO endpoint (in-cluster)
+MINIO_ACCESS_KEY=the0admin
+MINIO_SECRET_KEY=the0password
+MINIO_BUCKET=the0-custom-bots
+```
+
+## When to Use Each Mode
+
+| Scenario | Recommended Mode |
+|----------|-----------------|
+| Local development | Docker Mode (`bot-runner`) |
+| Small self-hosted (<100 bots) | Docker Mode |
+| Medium deployments (<1000 bots) | Docker Mode |
+| Large deployments (>1000 bots) | Kubernetes Mode (`controller`) |
+| High availability requirements | Kubernetes Mode |
+
+**Docker Mode** is simpler to operate and debug. A single process manages all containers on the host.
+
+**Kubernetes Mode** leverages K8s for scheduling, health checks, and automatic restarts. Each bot becomes its own Pod.
+
+## Supported Runtimes
+
+| Runtime | Docker Image | Entrypoint |
+|---------|-------------|------------|
+| Python 3.11 | `python:3.11-slim` | `main.py` |
+| Node.js 20 | `node:20-alpine` | `main.js` |
+| Rust | `rust:1-slim` | Binary executable |
+| C++ | `gcc:13` | Binary executable |
+| C# | `mcr.microsoft.com/dotnet/runtime:8.0` | DLL |
+| Scala | `sbtscala/scala-sbt:eclipse-temurin-21` | JAR |
+| Haskell | `haskell:9.6` | Binary executable |
+
+## Bot Interface
+
+### Python
+
 ```python
 def main(id: str, config: dict):
-    print(f"Running bot {id} with config {config}")
-    # Bot logic here
+    """Bot entry point"""
+    print(f"Running bot {id}")
+    # Your trading logic here
     return {
         "status": "success",
         "message": f"Bot {id} executed successfully"
     }
 ```
 
-#### Node.js Bots
+### Node.js
+
 ```javascript
 function main(id, config) {
-    console.log(`Running bot ${id} with config`, config);
-    // Bot logic here
+    console.log(`Running bot ${id}`);
+    // Your trading logic here
     return {
         status: "success",
         message: `Bot ${id} executed successfully`
@@ -184,217 +240,79 @@ function main(id, config) {
 module.exports = { main };
 ```
 
-### CLI Commands
-
-The runtime uses Cobra for a unified command-line interface:
+## Building
 
 ```bash
-# Bot Runner (live bot execution)
-./runtime bot-runner master
-./runtime bot-runner worker
+# Build binary
+go build -o build/runtime ./cmd/app
 
-# Bot Scheduler (cron-based scheduled execution)
-./runtime bot-scheduler master
-./runtime bot-scheduler worker
-```
-
-Common flags:
-- `--max-segment`: Maximum segment ID (default: 16)
-- `--mode`: Run mode - cluster or standalone (default: cluster)
-- `--mongo-uri`: MongoDB connection string
-- `--worker-id`: Unique worker identifier (auto-generated if not set)
-
-## Deployment
-
-### Prerequisites
-- Docker and Docker Compose for local development
-- Kubernetes cluster for production deployment
-- MongoDB instance (with partitions collection for segment tracking)
-- MinIO or S3-compatible storage (for bot code and logs)
-- Optional: NATS (for bot lifecycle events, system degrades gracefully without it)
-- Docker daemon accessible to worker nodes (via socket mount)
-
-### Local Development
-
-1. Build the service:
-   ```bash
-   make go-build
-   ```
-
-2. Run tests:
-   ```bash
-   make test
-   ```
-
-3. Start the service with Docker Compose:
-   ```bash
-   make up
-   ```
-
-4. Stop the service:
-   ```bash
-   make down
-   ```
-
-### Container Setup
-- Multi-stage Docker builds
-- Base image: `golang:1.24-alpine`
-- Final image: `alpine:latest`
-- Docker-in-Docker capability for bot execution
-
-### Kubernetes Deployment
-
-1. **RBAC Configuration**: Optional for autoscaler (falls back gracefully if unavailable)
-2. **Docker Access**: Workers need access to Docker daemon via socket mount
-3. **Storage**: Persistent volumes for temporary file storage
-4. **Network**: Internal gRPC communication on service ports (50051, 50053)
-5. **Separate Deployments**: One deployment per service (bot-runner, bot-scheduler)
-6. **Master vs Worker**: Each service has separate master and worker deployments
-
-### Environment Variables
-```bash
-# Core Configuration
-MONGO_URI=mongodb://mongo:27017
-WORKER_ID=<auto-generated from hostname-pid if not set>
-MASTER_SERVICE=<service-name>-master  # e.g., bot-runner-master
-MASTER_HOST=localhost  # For standalone mode
-
-# Database (service-specific)
-# Bot Runner uses: bot_runner/bots
-# Bot Scheduler uses: bot_scheduler/bot_schedules
-
-# NATS Messaging (optional)
-NATS_URL=nats://nats:4222
-
-# MinIO/S3 Storage
-MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY_ID=minioadmin
-MINIO_SECRET_ACCESS_KEY=minioadmin
-MINIO_USE_SSL=false
-MINIO_BOTS_BUCKET=bots
-MINIO_LOGS_BUCKET=logs
-MINIO_RESULTS_BUCKET=results
-
-# Docker Runner
-TEMP_DIR=/tmp/runtime
-MEMORY_LIMIT_MB=512
-CPU_SHARES=1024
-
-# Autoscaler (optional)
-NAMESPACE=default
-DEPLOYMENT_NAME=runtime-worker
-MIN_REPLICAS=3
-MAX_REPLICAS=4
-```
-
-### Segment Assignment Strategy
-
-The system uses a simple 1:1 segment-to-worker assignment strategy:
-- Each worker is assigned exactly one database segment at a time
-- Segments are discovered from MongoDB `partitions` collection
-- Only partitions with `bot_count > 0` are assigned
-- When workers join/leave, unassigned segments are redistributed
-- Rebalancing occurs automatically on worker connection/disconnection
-- Additional rebalancing happens every 10 seconds via timer
-
-This simple approach provides:
-- Predictable segment ownership
-- Fast rebalancing on worker changes
-- Easy debugging and monitoring
-- Native Kubernetes autoscaler matches worker count to segment count
-
-### Security Considerations
-
-1. **Container Isolation**: Bots run in isolated containers
-2. **File System Security**: Directory traversal protection during extraction
-3. **Resource Limits**: CPU and memory limits on bot containers
-4. **Network Isolation**: Containers have limited network access
-5. **Secret Management**: Sensitive configuration via environment variables
-
-## Monitoring and Observability
-
-- **Health Endpoints**: `/healthz` endpoint on port 8080 for Kubernetes liveness/readiness probes
-- **Execution Metrics**: Container execution time, success/failure rates via logs
-- **Resource Usage**: Container resource consumption via Docker stats
-- **Log Collection**: Background log collector uploads container logs to MinIO every 30 seconds
-- **Structured Logging**: Prefixed logs (MASTER/WORKER) with timestamps and context
-
-## Scalability Considerations
-
-1. **Horizontal Scaling**:
-   - Native autoscaler automatically adds/removes workers to match segment count
-   - Workers scale independently per service (bot-runner, bot-scheduler)
-   - 1 worker per active segment for optimal distribution
-   - Gradual scaling (+/-1 replica) prevents thundering herd
-   - Masters are stateless and can be scaled (though typically run as single instance)
-
-2. **Performance Tuning**:
-   - Docker image caching reduces container startup time
-   - Rebalance timer interval (default: 10s) can be adjusted
-   - Autoscaler check interval (15s) and cooldown (10s) are configurable
-
-3. **Resource Management**:
-   - Container resource limits (CPU shares, memory limits) prevent resource exhaustion
-   - Automatic cleanup of bot directories on container stop
-   - Permission fixing for root-owned files created by containers
-   - Background log collection prevents disk space issues
-
-## Development and Testing
-
-### Running Tests
-
-#### Using Make Targets
-
-```bash
-# Run all tests (unit + integration)
-make test
-
-# Run only unit tests
-make test-unit
-
-# Run only integration tests
-make test-integration
-
-# Run all tests with explicit labeling
-make test-all
-```
-
-#### Manual Test Commands
-
-##### Unit Tests
-```bash
-# Run all unit tests
+# Run tests
 go test ./...
 
-# Run specific package tests
-go test ./internal/docker-runner/ -v
-go test ./internal/subscriber/ -v
+# Run tests with verbose output
+go test -v ./internal/docker/...
+```
 
-# Run with coverage
+## Testing
+
+```bash
+# All tests
+go test ./...
+
+# Skip integration tests
+go test -short ./...
+
+# Specific package
+go test -v ./internal/docker/
+
+# With coverage
 go test -cover ./...
 ```
 
-##### Integration Tests
-Integration tests require Docker to be running and will pull Docker images during execution.
+Integration tests require Docker to be running and will pull images during execution.
 
-```bash
-# Run integration tests (requires Docker)
-go test -tags=integration ./internal/docker-runner/ -v
+## Capacity
 
-# Run integration tests with timeout
-go test -tags=integration -timeout=10m ./internal/docker-runner/ -v
+| Metric | Docker Mode |
+|--------|-------------|
+| Bots managed | 10,000+ |
+| Memory overhead | ~100MB for 1000 bots |
+| Goroutines | 1 per bot + collectors |
+| Docker container limit | ~1000 per host |
 
-# Skip integration tests in short mode
-go test -short ./...
+For more than 1000 bots per host, use Kubernetes mode.
+
+## Security
+
+- **Container Isolation**: Each bot runs in an isolated Docker container
+- **Resource Limits**: CPU and memory limits per container
+- **Code Validation**: YARA rule scanning for uploaded bot code
+- **File System Protection**: Directory traversal prevention during extraction
+- **Secret Management**: Configuration passed via environment variables
+
+## Project Structure
+
+```
+runtime/
+├── cmd/app/                    # CLI entry point
+│   └── main.go                 # Cobra commands
+├── internal/
+│   ├── docker/                 # Docker mode implementation
+│   │   ├── service.go          # BotService (live bots)
+│   │   ├── schedule_service.go # ScheduleService (cron bots)
+│   │   ├── state.go            # In-memory state management
+│   │   ├── runner.go           # DockerRunner interface
+│   │   └── ...                 # Container orchestration
+│   ├── k8s/                    # Kubernetes mode
+│   │   ├── controller/         # Bot and schedule controllers
+│   │   ├── podgen/             # Pod spec generation
+│   │   └── health/             # Health server
+│   ├── model/                  # Shared data models
+│   ├── runtime/                # Runtime configuration
+│   └── entrypoints/            # Script generation
+├── Makefile
+├── go.mod
+└── README.md
 ```
 
-**Prerequisites for Integration Tests:**
-- Docker daemon must be running
-- Internet connection (to pull Docker images)
-- Sufficient disk space for Docker images (~200MB for python:3.11-slim and node:20-alpine)
-
-### Test Coverage
-- **Docker Runner**: Runtime validation, script generation, file extraction
-- **Subscriber**: Bot lifecycle events, database operations
-- **Server**: Worker management, segment distribution
-- **Security**: Directory traversal protection, input validation
+See [CLAUDE.md](./CLAUDE.md) for detailed developer documentation.

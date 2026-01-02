@@ -11,7 +11,13 @@ order: 2
 The Kubernetes deployment has been tested previously but may require updates. If you encounter issues, please report them on [GitHub](https://github.com/alexanderwanyoike/the0/issues). For a fully tested deployment path, use [Docker Compose](./docker-compose).
 :::
 
-Kubernetes deployment provides production-ready orchestration for the0 platform. The included Helm chart mirrors the Docker Compose configuration while adding proper health checks, resource management, and scaling capabilities.
+Kubernetes deployment provides production-ready orchestration for the0 platform. Use Kubernetes mode when:
+
+- Running more than ~1000 bots
+- High availability is required
+- You need K8s-native observability and management
+
+The runtime uses a **controller pattern** in Kubernetes mode: each bot becomes its own Pod, and the controller manages the lifecycle by comparing desired state (MongoDB) with actual state (Pods) and making corrections.
 
 ## Prerequisites
 
@@ -172,26 +178,31 @@ the0Api:
       cpu: 1000m
 ```
 
-### Bot Runner Configuration
+### Runtime Controller Configuration
 
-The bot runner uses a master-worker architecture:
+In Kubernetes mode, the runtime runs as a controller that manages bots as Pods:
 
 ```yaml
-botRunner:
+runtimeController:
   enabled: true
   image:
     repository: runtime
     tag: latest
-  master:
-    replicas: 1
-    port: 8080
-    grpcPort: 50051
-  worker:
-    replicas: 4
-    privileged: true  # Required for Docker-in-Docker
+  replicas: 1
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  env:
+    NAMESPACE: the0
+    RECONCILE_INTERVAL: "30s"
+    MINIO_ENDPOINT: "the0-minio:9000"
 ```
 
-Workers require privileged access to mount the Docker socket for executing bot code in isolated containers.
+The controller creates a Pod for each enabled bot. Bot Pods run with resource limits and are automatically restarted by Kubernetes if they fail.
 
 ### External Access
 
@@ -252,17 +263,17 @@ make clean
 
 ## Scaling
 
-### Horizontal Scaling
+### Bot Scaling
 
-Scale application services by adjusting replica counts:
+In Kubernetes mode, each bot runs as its own Pod. The controller automatically creates and removes Pods based on the enabled bots in MongoDB. There's no need to manually scale workers - Kubernetes handles scheduling across nodes.
+
+### API Scaling
+
+Scale the API service by adjusting replica counts:
 
 ```yaml
 the0Api:
   replicas: 3
-
-botRunner:
-  worker:
-    replicas: 8
 ```
 
 Apply changes:
@@ -352,17 +363,18 @@ kubectl logs <pod-name> -n the0
 kubectl logs <pod-name> -n the0 --previous  # Previous container logs
 ```
 
-## Docker Compose Comparison
+## Docker Compose vs Kubernetes
 
 | Feature | Docker Compose | Kubernetes |
 |---------|----------------|------------|
 | Setup command | `make up` | `make minikube-up` |
-| Endpoints | localhost:3000/3001 | the0.local:30001 |
+| Bot model | Containers on single host | Pod per bot |
+| Recommended for | <1000 bots | >1000 bots |
 | Infrastructure | Included | Included (configurable) |
-| Horizontal scaling | Manual | Automatic + manual |
-| Health checks | Basic | Liveness + readiness |
+| Bot scaling | Single-process reconciliation | Controller + Pods |
+| Health checks | Application level | Liveness + readiness probes |
 | Service discovery | Container names | DNS-based |
 | Persistence | Docker volumes | PersistentVolumes |
-| Production ready | Development only | Yes |
+| Complexity | Simple | More complex |
 
-Kubernetes adds production features while maintaining a similar developer experience.
+Use Docker Compose for development and small deployments. Use Kubernetes for production scale and high availability requirements.
