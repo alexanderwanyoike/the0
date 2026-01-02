@@ -223,16 +223,10 @@ botController:
     #     secretKeyRef:
     #       name: the0-secrets
     #       key: MINIO_SECRET_KEY
-  # Image builder (Kaniko) for custom bots
-  imageBuilder:
-    enabled: true
-    # Container registry for bot images
-    # For Minikube: use the registry addon (registry.kube-system.svc.cluster.local)
-    # For production: use your registry (e.g., gcr.io/project, docker.io/org)
-    registry: "registry.kube-system.svc.cluster.local"
-    minio:
-      endpoint: "the0-minio:9000"
-      bucket: "custom-bots"
+  # MinIO configuration for bot code storage
+  minio:
+    endpoint: "the0-minio:9000"
+    bucket: "custom-bots"
   resources:
     requests:
       memory: 256Mi

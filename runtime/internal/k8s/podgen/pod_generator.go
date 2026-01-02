@@ -437,6 +437,7 @@ func (g *PodGenerator) generateEntrypointScript(runtime, entrypoint string) stri
 		return fmt.Sprintf(`#!/bin/bash
 set -e
 cd /bot
+export PYTHONPATH=/bot/vendor
 exec python3 %s
 `, entrypoint)
 	case "nodejs20":
@@ -468,6 +469,7 @@ exec java -jar %s
 		return fmt.Sprintf(`#!/bin/bash
 set -e
 cd /bot
+export PYTHONPATH=/bot/vendor
 exec python3 %s
 `, entrypoint)
 	}

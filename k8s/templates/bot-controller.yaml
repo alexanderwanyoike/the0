@@ -102,26 +102,17 @@ spec:
           args:
             - "--namespace={{ .Release.Namespace }}"
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
-            {{- if .Values.botController.imageBuilder.enabled }}
-            - "--enable-image-builder=true"
-            - "--registry={{ .Values.botController.imageBuilder.registry }}"
-            - "--minio-endpoint={{ .Values.botController.imageBuilder.minio.endpoint }}"
-            - "--minio-bucket={{ .Values.botController.imageBuilder.minio.bucket }}"
-            {{- end }}
+            - "--minio-endpoint={{ .Values.botController.minio.endpoint }}"
+            - "--minio-bucket={{ .Values.botController.minio.bucket }}"
           env:
-            # Namespace for bot pods (always set)
+            # Namespace for bot pods
             - name: NAMESPACE
               value: {{ .Release.Namespace | quote }}
-            {{- if .Values.botController.imageBuilder.enabled }}
-            - name: ENABLE_IMAGE_BUILDER
-              value: "true"
-            - name: IMAGE_REGISTRY
-              value: {{ .Values.botController.imageBuilder.registry | quote }}
+            # MinIO configuration for bot code storage
             - name: MINIO_ENDPOINT
-              value: {{ .Values.botController.imageBuilder.minio.endpoint | quote }}
+              value: {{ .Values.botController.minio.endpoint | quote }}
             - name: MINIO_BUCKET
-              value: {{ .Values.botController.imageBuilder.minio.bucket | quote }}
-            {{- end }}
+              value: {{ .Values.botController.minio.bucket | quote }}
             # User-defined environment variables (supports value or valueFrom)
             {{- toYaml .Values.botController.env | nindent 12 }}
           # Health probes for proper lifecycle management
