@@ -104,39 +104,46 @@ func (r *minioCodeManager) extractZip(data []byte, destDir string) error {
 	}
 
 	for _, file := range zipReader.File {
-		path := filepath.Join(destDir, file.Name)
-
-		// Security check: prevent directory traversal
-		if !strings.HasPrefix(path, filepath.Clean(destDir)+string(os.PathSeparator)) {
-			continue
-		}
-
-		if file.FileInfo().IsDir() {
-			os.MkdirAll(path, file.FileInfo().Mode())
-			continue
-		}
-
-		// Create directory if needed
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			return err
-		}
-
-		fileReader, err := file.Open()
-		if err != nil {
-			return err
-		}
-		defer fileReader.Close()
-
-		targetFile, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.FileInfo().Mode())
-		if err != nil {
-			return err
-		}
-		defer targetFile.Close()
-
-		if _, err = io.Copy(targetFile, fileReader); err != nil {
+		if err := extractZipFile(file, destDir); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// extractZipFile extracts a single file from a zip archive.
+// Using a separate function ensures defers execute after each file,
+// preventing file descriptor exhaustion with large archives.
+func extractZipFile(file *zip.File, destDir string) error {
+	path := filepath.Join(destDir, file.Name)
+
+	// Security check: prevent directory traversal
+	if !strings.HasPrefix(path, filepath.Clean(destDir)+string(os.PathSeparator)) {
+		return nil
+	}
+
+	if file.FileInfo().IsDir() {
+		return os.MkdirAll(path, file.FileInfo().Mode())
+	}
+
+	// Create directory if needed
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+
+	fileReader, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer fileReader.Close()
+
+	targetFile, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.FileInfo().Mode())
+	if err != nil {
+		return err
+	}
+	defer targetFile.Close()
+
+	_, err = io.Copy(targetFile, fileReader)
+	return err
 }
