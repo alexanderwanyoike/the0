@@ -7,8 +7,4 @@ const (
 	BOT_RUNNER_COLLECTION   = "bots"
 	BOT_SCHEDULER_DB_NAME   = "bot_scheduler"
 	BOT_SCHEDULE_COLLECTION = "bot_schedules"
-
-	// Default service ports
-	BOT_RUNNER_PORT    = 50051
-	BOT_SCHEDULER_PORT = 50053
 )
