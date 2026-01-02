@@ -289,10 +289,12 @@ func runController() {
 		})
 		if err != nil {
 			util.LogMaster("Failed to create schedule NATS subscriber: %v", err)
+			botSubscriber.Stop() // Clean up before exit
 			os.Exit(1)
 		}
 		if err := scheduleSubscriber.Start(ctx); err != nil {
 			util.LogMaster("Failed to start schedule NATS subscriber: %v", err)
+			botSubscriber.Stop() // Clean up before exit
 			os.Exit(1)
 		}
 		defer scheduleSubscriber.Stop()

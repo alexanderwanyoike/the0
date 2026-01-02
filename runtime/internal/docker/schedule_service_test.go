@@ -70,10 +70,11 @@ func TestNewScheduleService_CustomDBName(t *testing.T) {
 }
 
 func TestScheduleService_ToExecutable(t *testing.T) {
-	service, _ := NewScheduleService(ScheduleServiceConfig{
+	service, err := NewScheduleService(ScheduleServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	require.NoError(t, err)
 	defer service.Stop()
 
 	schedule := model.BotSchedule{
@@ -107,10 +108,11 @@ func TestScheduleService_ToExecutable(t *testing.T) {
 }
 
 func TestScheduleService_Stop(t *testing.T) {
-	service, _ := NewScheduleService(ScheduleServiceConfig{
+	service, err := NewScheduleService(ScheduleServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	require.NoError(t, err)
 
 	// Should not panic
 	service.Stop()
@@ -125,10 +127,11 @@ func TestScheduleService_Stop(t *testing.T) {
 }
 
 func TestScheduleService_GetStatus_EmptyState(t *testing.T) {
-	service, _ := NewScheduleService(ScheduleServiceConfig{
+	service, err := NewScheduleService(ScheduleServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	require.NoError(t, err)
 	defer service.Stop()
 
 	status := service.GetStatus()
@@ -157,10 +160,11 @@ func TestNewScheduleState(t *testing.T) {
 }
 
 func TestScheduleState_ExecutingTracking(t *testing.T) {
-	service, _ := NewScheduleService(ScheduleServiceConfig{
+	service, err := NewScheduleService(ScheduleServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	require.NoError(t, err)
 	defer service.Stop()
 
 	// Initially not executing
@@ -186,10 +190,11 @@ func TestScheduleState_ExecutingTracking(t *testing.T) {
 }
 
 func TestScheduleState_MetricsTracking(t *testing.T) {
-	service, _ := NewScheduleService(ScheduleServiceConfig{
+	service, err := NewScheduleService(ScheduleServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 		NATSUrl:  "nats://localhost:4222",
 	})
+	require.NoError(t, err)
 	defer service.Stop()
 
 	// Simulate execution counts

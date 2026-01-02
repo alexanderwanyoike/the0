@@ -23,6 +23,8 @@ func TestNewBotService_ValidConfig(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, service)
+	defer service.Stop()
+
 	assert.NotNil(t, service.state)
 	assert.NotNil(t, service.logger)
 	assert.NotNil(t, service.ctx)
@@ -34,6 +36,8 @@ func TestNewBotService_DefaultsDBName(t *testing.T) {
 		MongoURI: "mongodb://localhost:27017",
 	})
 	require.NoError(t, err)
+	defer service.Stop()
+
 	assert.Equal(t, "bot_runner", service.config.DBName)
 	assert.Equal(t, "bots", service.config.Collection)
 }
@@ -45,14 +49,18 @@ func TestNewBotService_CustomDBName(t *testing.T) {
 		Collection: "custom_collection",
 	})
 	require.NoError(t, err)
+	defer service.Stop()
+
 	assert.Equal(t, "custom_db", service.config.DBName)
 	assert.Equal(t, "custom_collection", service.config.Collection)
 }
 
 func TestBotService_ToExecutable(t *testing.T) {
-	service, _ := NewBotService(BotServiceConfig{
+	service, err := NewBotService(BotServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 	})
+	require.NoError(t, err)
+	defer service.Stop()
 
 	bot := model.Bot{
 		ID: "test-bot-123",
@@ -83,9 +91,11 @@ func TestBotService_ToExecutable(t *testing.T) {
 }
 
 func TestBotService_HashMap(t *testing.T) {
-	service, _ := NewBotService(BotServiceConfig{
+	service, err := NewBotService(BotServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 	})
+	require.NoError(t, err)
+	defer service.Stop()
 
 	tests := []struct {
 		name     string
@@ -152,9 +162,11 @@ func TestBotService_HashMap(t *testing.T) {
 }
 
 func TestBotService_HasConfigChanged(t *testing.T) {
-	service, _ := NewBotService(BotServiceConfig{
+	service, err := NewBotService(BotServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 	})
+	require.NoError(t, err)
+	defer service.Stop()
 
 	tests := []struct {
 		name     string
@@ -233,9 +245,11 @@ func TestBotService_HasConfigChanged(t *testing.T) {
 }
 
 func TestBotService_GetStatus_EmptyState(t *testing.T) {
-	service, _ := NewBotService(BotServiceConfig{
+	service, err := NewBotService(BotServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 	})
+	require.NoError(t, err)
+	defer service.Stop()
 
 	status := service.GetStatus()
 
@@ -246,9 +260,10 @@ func TestBotService_GetStatus_EmptyState(t *testing.T) {
 }
 
 func TestBotService_Stop(t *testing.T) {
-	service, _ := NewBotService(BotServiceConfig{
+	service, err := NewBotService(BotServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
 	})
+	require.NoError(t, err)
 
 	// Should not panic
 	service.Stop()
