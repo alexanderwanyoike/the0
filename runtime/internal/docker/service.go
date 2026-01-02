@@ -22,11 +22,12 @@ import (
 
 // BotServiceConfig contains configuration for the BotService
 type BotServiceConfig struct {
-	MongoURI   string
-	NATSUrl    string // Optional - service degrades gracefully without NATS
-	Logger     util.Logger
-	DBName     string
-	Collection string
+	MongoURI          string
+	NATSUrl           string // Optional - service degrades gracefully without NATS
+	Logger            util.Logger
+	DBName            string
+	Collection        string
+	ReconcileInterval time.Duration // How often to reconcile (default: 30s)
 }
 
 // BotService is a simplified single-process bot management service
@@ -63,6 +64,10 @@ func NewBotService(config BotServiceConfig) (*BotService, error) {
 
 	if config.Collection == "" {
 		config.Collection = constants.BOT_RUNNER_COLLECTION
+	}
+
+	if config.ReconcileInterval == 0 {
+		config.ReconcileInterval = 30 * time.Second
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -180,7 +185,7 @@ func (s *BotService) initNATSSubscriber(ctx context.Context) error {
 func (s *BotService) runReconciliationLoop() {
 	defer s.wg.Done()
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(s.config.ReconcileInterval)
 	defer ticker.Stop()
 
 	for {

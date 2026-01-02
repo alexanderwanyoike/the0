@@ -31,6 +31,12 @@ var (
 	mongoUri string
 	natsUrl  string
 
+	// Bot Runner flags
+	botRunnerReconcileInterval time.Duration
+
+	// Bot Scheduler flags
+	botSchedulerCheckInterval time.Duration
+
 	// Controller-specific flags
 	controllerNamespace         string
 	controllerReconcileInterval time.Duration
@@ -105,10 +111,12 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&mongoUri, "mongo-uri", getEnv("MONGO_URI", "mongodb://localhost:27017"), "MongoDB connection URI")
 	rootCmd.PersistentFlags().StringVar(&natsUrl, "nats-url", getEnv("NATS_URL", ""), "NATS connection URL (optional)")
 
-	// Bot Runner command
+	// Bot Runner command with flags
+	botRunnerCmd.Flags().DurationVar(&botRunnerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile bot state")
 	rootCmd.AddCommand(botRunnerCmd)
 
-	// Bot Scheduler command
+	// Bot Scheduler command with flags
+	botSchedulerCmd.Flags().DurationVar(&botSchedulerCheckInterval, "check-interval", 10*time.Second, "How often to check for due schedules")
 	rootCmd.AddCommand(botSchedulerCmd)
 
 	// Controller command with flags
@@ -139,14 +147,16 @@ func runBotService() {
 	} else {
 		util.LogMaster("NATS: disabled (poll-only mode)")
 	}
+	util.LogMaster("Reconcile interval: %v", botRunnerReconcileInterval)
 
 	// Create bot service
 	service, err := dockerrunner.NewBotService(dockerrunner.BotServiceConfig{
-		MongoURI:   mongoUri,
-		NATSUrl:    natsUrl,
-		Logger:     &util.DefaultLogger{},
-		DBName:     constants.BOT_RUNNER_DB_NAME,
-		Collection: constants.BOT_RUNNER_COLLECTION,
+		MongoURI:          mongoUri,
+		NATSUrl:           natsUrl,
+		Logger:            &util.DefaultLogger{},
+		DBName:            constants.BOT_RUNNER_DB_NAME,
+		Collection:        constants.BOT_RUNNER_COLLECTION,
+		ReconcileInterval: botRunnerReconcileInterval,
 	})
 	if err != nil {
 		util.LogMaster("Failed to create bot service: %v", err)
@@ -177,6 +187,7 @@ func runScheduleService() {
 	util.LogMaster("Starting bot-scheduler service...")
 	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
 	util.LogMaster("NATS: %s", maskCredentialsInURL(natsUrl))
+	util.LogMaster("Check interval: %v", botSchedulerCheckInterval)
 
 	// Validate NATS URL (required for schedule service)
 	if natsUrl == "" {
@@ -186,11 +197,12 @@ func runScheduleService() {
 
 	// Create schedule service
 	service, err := dockerrunner.NewScheduleService(dockerrunner.ScheduleServiceConfig{
-		MongoURI:   mongoUri,
-		NATSUrl:    natsUrl,
-		Logger:     &util.DefaultLogger{},
-		DBName:     constants.BOT_SCHEDULER_DB_NAME,
-		Collection: constants.BOT_SCHEDULE_COLLECTION,
+		MongoURI:      mongoUri,
+		NATSUrl:       natsUrl,
+		Logger:        &util.DefaultLogger{},
+		DBName:        constants.BOT_SCHEDULER_DB_NAME,
+		Collection:    constants.BOT_SCHEDULE_COLLECTION,
+		CheckInterval: botSchedulerCheckInterval,
 	})
 	if err != nil {
 		util.LogMaster("Failed to create schedule service: %v", err)

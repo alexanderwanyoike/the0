@@ -20,11 +20,12 @@ import (
 
 // ScheduleServiceConfig contains configuration for the ScheduleService
 type ScheduleServiceConfig struct {
-	MongoURI   string
-	NATSUrl    string // Required - for API communication
-	Logger     util.Logger
-	DBName     string
-	Collection string
+	MongoURI      string
+	NATSUrl       string // Required - for API communication
+	Logger        util.Logger
+	DBName        string
+	Collection    string
+	CheckInterval time.Duration // How often to check for due schedules (default: 10s)
 }
 
 // ScheduleService is a simplified single-process scheduled bot execution service
@@ -88,6 +89,10 @@ func NewScheduleService(config ScheduleServiceConfig) (*ScheduleService, error) 
 
 	if config.Collection == "" {
 		config.Collection = constants.BOT_SCHEDULE_COLLECTION
+	}
+
+	if config.CheckInterval == 0 {
+		config.CheckInterval = 10 * time.Second
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,8 +202,7 @@ func (s *ScheduleService) initNATSSubscriber(ctx context.Context) error {
 func (s *ScheduleService) runScheduleLoop() {
 	defer s.wg.Done()
 
-	// Check every 10 seconds for due schedules
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
 
 	// Run immediately on start
