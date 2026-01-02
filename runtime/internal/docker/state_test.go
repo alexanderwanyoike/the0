@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -147,7 +148,8 @@ func TestServiceState_UpdateReconcileMetrics(t *testing.T) {
 	metrics := state.GetMetrics()
 	assert.Equal(t, int64(1), metrics["reconcile_count"])
 
-	lastReconcile := metrics["last_reconcile"].(time.Time)
+	lastReconcile, ok := metrics["last_reconcile"].(time.Time)
+	require.True(t, ok, "last_reconcile should be time.Time")
 	assert.True(t, lastReconcile.After(before) || lastReconcile.Equal(before))
 	assert.True(t, lastReconcile.Before(after) || lastReconcile.Equal(after))
 }
@@ -218,15 +220,15 @@ func TestServiceState_ConcurrentAccess(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			state.SetRunningBot(&RunningBot{
-				BotID:       "bot-" + string(rune(id)),
-				ContainerID: "container-" + string(rune(id)),
+				BotID:       fmt.Sprintf("bot-%d", id),
+				ContainerID: fmt.Sprintf("container-%d", id),
 			})
 		}(i)
 
 		// Reader
 		go func(id int) {
 			defer wg.Done()
-			state.GetRunningBot("bot-" + string(rune(id)))
+			state.GetRunningBot(fmt.Sprintf("bot-%d", id))
 		}(i)
 
 		// Metrics reader
