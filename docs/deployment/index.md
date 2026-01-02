@@ -16,30 +16,44 @@ A complete the0 deployment includes:
 - **API Server** (NestJS/TypeScript) - REST API handling authentication, bot management, and orchestration
 - **Frontend** (Next.js/React) - Web dashboard for bot management and monitoring
 - **Documentation** (VitePress) - Platform documentation site
-- **Bot Runner** (Go) - Master-worker architecture for executing realtime bots
-- **Bot Scheduler** (Go) - Master-worker architecture for executing scheduled bots
+- **Bot Runner** (Go) - Single-process service for executing realtime bots
+- **Bot Scheduler** (Go) - Single-process service for executing scheduled bots
 
 **Infrastructure Services**:
 - **PostgreSQL** - Primary database for users, bots, and configuration
-- **MongoDB** - Runtime state, job queues, and execution logs
+- **MongoDB** - Runtime state and execution tracking
 - **NATS with JetStream** - Event streaming and inter-service communication
 - **MinIO** - S3-compatible storage for bot code, logs, and artifacts
 
-The platform uses a master-worker pattern for bot execution. Each runtime service has a master node that coordinates work distribution and multiple worker nodes that actually execute bot code. Workers run bot code in isolated Docker containers with resource limits.
+The runtime services use a **reconciliation loop** pattern: they periodically compare desired state (from MongoDB) with actual state (running containers) and make corrections. Bots run in isolated Docker containers with resource limits.
 
 ## Deployment Options
 
 ### Docker Compose (Recommended)
 
-Docker Compose provides the simplest and most tested path to running the0. A single `make up` command starts all services with sensible defaults. This approach works well for local development, small teams, evaluation, and self-hosted production.
+Docker Compose provides the simplest and most tested path to running the0. A single `make up` command starts all services with sensible defaults. This approach works well for:
+
+- Local development
+- Small teams and evaluation
+- Self-hosted production (up to ~1000 bots)
 
 See [Docker Compose Deployment](./docker-compose) for setup instructions.
 
-### Kubernetes (Experimental)
+### Kubernetes (Production Scale)
 
-Kubernetes deployment via Helm charts provides orchestration with automatic restarts, health checks, and scaling. The platform includes a Helm chart that mirrors the Docker Compose configuration. Note that this deployment path has been tested previously but may require updates.
+For large deployments with more than 1000 bots, use Kubernetes mode. The runtime controller manages bots as individual Pods, leveraging K8s for scheduling, health checks, and automatic restarts.
 
 See [Kubernetes Deployment](./kubernetes) for setup instructions.
+
+## When to Use Each Mode
+
+| Scenario | Recommended Deployment |
+|----------|----------------------|
+| Local development | Docker Compose |
+| Small team (<10 users) | Docker Compose |
+| Medium deployment (<1000 bots) | Docker Compose |
+| Large deployment (>1000 bots) | Kubernetes |
+| High availability required | Kubernetes |
 
 ## Hardware Requirements
 
@@ -50,18 +64,21 @@ The platform's resource requirements depend on the number of bots and execution 
 - 8GB RAM
 - 20GB disk space
 
+**Production (Docker Compose)**:
+- 8+ CPU cores
+- 16GB+ RAM
+- 100GB+ disk space
+
 **Production (Kubernetes)**:
 - 8+ CPU cores across nodes
 - 16GB+ RAM
 - 100GB+ disk space for persistent volumes
-- Worker nodes with Docker socket access for bot execution
 
 ## Service Communication
 
 Services communicate through multiple channels:
 
 - **HTTP/REST** - External API access and frontend-to-API communication
-- **gRPC** - Master-worker coordination within runtime services
 - **NATS JetStream** - Event-driven communication between API and runtime services
 - **Direct Database** - Services access PostgreSQL and MongoDB directly for their data
 

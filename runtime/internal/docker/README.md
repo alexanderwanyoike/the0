@@ -1,8 +1,113 @@
-# Docker Runner Module
+# Docker Mode Package
+
+The `internal/docker` package provides single-process services for running bots in Docker containers. This is the recommended deployment mode for local development and small-to-medium deployments.
+
+## Overview
+
+This package contains:
+- **BotService**: Manages live trading bot execution
+- **ScheduleService**: Manages cron-based scheduled bot execution
+- **ServiceState**: Thread-safe in-memory state management
+- **DockerRunner**: Container lifecycle orchestration (shared by both services)
+
+## Services
+
+### BotService
+
+**File:** `service.go`
+
+BotService manages live trading bots using a reconciliation loop pattern.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      BotService                          │
+│                                                          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │    NATS     │  │   Service   │  │  DockerRunner   │  │
+│  │ (optional)  │──│    State    │──│                 │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+1. Queries MongoDB for enabled bots (desired state)
+2. Lists running containers from Docker (actual state)
+3. Reconciles: starts missing bots, stops extra containers
+4. Detects config changes and restarts as needed
+5. Repeats every `ReconcileInterval` (default: 30s)
+
+**Key Configuration:**
+```go
+type BotServiceConfig struct {
+    MongoURI          string        // Required
+    NATSUrl           string        // Optional (enables instant updates)
+    ReconcileInterval time.Duration // Default: 30s
+    DBName            string        // Default: bot_runner
+    Collection        string        // Default: bots
+}
+```
+
+**NATS Integration (Optional):**
+- Without NATS: Service polls MongoDB every reconcile interval
+- With NATS: Bot changes are applied immediately via event subscription
+
+### ScheduleService
+
+**File:** `schedule_service.go`
+
+ScheduleService manages cron-based scheduled bot execution.
+
+**How it works:**
+1. Queries MongoDB for enabled schedules
+2. Evaluates cron expressions to find due schedules
+3. Executes scheduled bots as terminating containers
+4. Tracks execution state to prevent duplicate runs
+5. Repeats every `CheckInterval` (default: 10s)
+
+**Key Configuration:**
+```go
+type ScheduleServiceConfig struct {
+    MongoURI      string        // Required
+    NATSUrl       string        // Required (for API events)
+    CheckInterval time.Duration // Default: 10s
+    DBName        string        // Default: bot_scheduler
+    Collection    string        // Default: bot_schedules
+}
+```
+
+**NATS Integration (Required):**
+- Receives schedule create/update/delete events from the API
+- Required for schedule synchronization
+
+### ServiceState
+
+**File:** `state.go`
+
+Thread-safe in-memory state management for running bots.
+
+**Features:**
+- Concurrent-safe map operations with RWMutex
+- Deep copying to prevent data races
+- Metrics tracking (reconcile count, active containers, failed restarts)
+
+**Key Methods:**
+```go
+type ServiceState interface {
+    SetRunningBot(bot *RunningBot)
+    GetRunningBot(botID string) (*RunningBot, bool)
+    GetAllRunningBots() map[string]*RunningBot
+    RemoveRunningBot(botID string)
+    GetMetrics() map[string]interface{}
+}
+```
+
+---
+
+## DockerRunner Module
 
 A modular, component-based Docker execution environment for running bots and backtests in isolated containers.
 
-## Architecture Overview
+### Architecture Overview
 
 The Docker Runner follows a **component-based architecture** with clear separation of concerns. Each component handles a specific responsibility, making the system easier to test, maintain, and extend.
 
