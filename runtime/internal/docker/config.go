@@ -1,6 +1,6 @@
 // Package dockerrunner provides configuration management for the Docker-based runtime environment.
 // This file handles environment-based configuration loading for MinIO, Docker, and resource limits.
-package dockerrunner
+package docker
 
 import (
 	"fmt"

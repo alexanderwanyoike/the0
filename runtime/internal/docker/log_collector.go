@@ -3,7 +3,7 @@
 // LogCollector is a background service that periodically collects logs from
 // long-running containers and stores them in MinIO. It runs on a configurable
 // interval and handles each container independently to prevent blocking.
-package dockerrunner
+package docker
 
 import (
 	"context"

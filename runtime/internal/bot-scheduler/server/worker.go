@@ -10,7 +10,7 @@ import (
 	"runtime/internal/bot-scheduler/subscriber"
 	"runtime/internal/constants"
 	base "runtime/internal/core"
-	dockerrunner "runtime/internal/docker-runner"
+	dockerrunner "runtime/internal/docker"
 	core "runtime/internal/model"
 	"runtime/internal/util"
 

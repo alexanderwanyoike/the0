@@ -15,6 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/bot-runner/model"
+	"runtime/internal/entrypoints"
+	runtimepkg "runtime/internal/runtime"
 )
 
 const (
@@ -35,18 +37,15 @@ const (
 
 	// AnnotationConfigHash stores a hash of the bot config for change detection.
 	AnnotationConfigHash = "the0.dev/config-hash"
+)
 
-	// DefaultMemoryLimit is the default memory limit for bot pods.
-	DefaultMemoryLimit = "512Mi"
-
-	// DefaultCPULimit is the default CPU limit for bot pods.
-	DefaultCPULimit = "500m"
-
-	// DefaultMemoryRequest is the default memory request for bot pods.
-	DefaultMemoryRequest = "128Mi"
-
-	// DefaultCPURequest is the default CPU request for bot pods.
-	DefaultCPURequest = "100m"
+// Resource defaults are defined in runtime/internal/runtime/resources.go
+// Re-exported here for backward compatibility
+const (
+	DefaultMemoryLimit   = runtimepkg.DefaultMemoryLimit
+	DefaultCPULimit      = runtimepkg.DefaultCPULimit
+	DefaultMemoryRequest = runtimepkg.DefaultMemoryRequest
+	DefaultCPURequest    = runtimepkg.DefaultCPURequest
 )
 
 // PodGeneratorConfig holds configuration for pod generation.
@@ -114,14 +113,21 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		return nil, fmt.Errorf("invalid bucket name: %w", err)
 	}
 
-	// Get base image for the runtime
-	baseImage := GetBaseImage(runtime)
+	// Get base image for the runtime (using shared runtime package)
+	baseImage := runtimepkg.GetDockerImage(runtime)
 
 	// Build MinIO endpoint URL
 	minioURL := g.getMinIOURL()
 
-	// Generate entrypoint script based on runtime
-	entrypointScript := g.generateEntrypointScript(runtime, entrypoint)
+	// Generate entrypoint script using shared entrypoints package
+	entrypointScript, err := entrypoints.GenerateK8sEntrypoint(runtime, entrypoints.GeneratorOptions{
+		EntryPointType: "bot",
+		Entrypoint:     entrypoint,
+		WorkDir:        "/bot",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate entrypoint script: %w", err)
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -378,25 +384,9 @@ func isAlphanumeric(b byte) bool {
 }
 
 // GetBaseImage returns the base Docker image for a given runtime.
+// Deprecated: Use runtimepkg.GetDockerImage() directly.
 func GetBaseImage(runtime string) string {
-	switch runtime {
-	case "python3.11":
-		return "python:3.11-slim"
-	case "nodejs20":
-		return "node:20-alpine"
-	case "rust-stable":
-		return "rust:latest"
-	case "dotnet8":
-		return "mcr.microsoft.com/dotnet/runtime:8.0"
-	case "gcc13", "cpp-gcc13":
-		return "gcc:13"
-	case "scala3":
-		return "eclipse-temurin:21-jre"
-	case "ghc96":
-		return "haskell:9.6-slim"
-	default:
-		return "python:3.11-slim" // fallback
-	}
+	return runtimepkg.GetDockerImage(runtime)
 }
 
 // getMinIOURL builds the MinIO endpoint URL with protocol.
@@ -429,50 +419,19 @@ func (g *PodGenerator) getEntrypoint(bot model.Bot) string {
 	}
 }
 
-// generateEntrypointScript creates the entrypoint script based on runtime.
-// Dependencies are already vendored in the zip file, so no installation needed.
+// generateEntrypointScript is deprecated - uses shared entrypoints package now.
+// Kept for backward compatibility with existing code.
 func (g *PodGenerator) generateEntrypointScript(runtime, entrypoint string) string {
-	switch runtime {
-	case "python3.11":
-		return fmt.Sprintf(`#!/bin/bash
-set -e
-cd /bot
-export PYTHONPATH=/bot/vendor
-exec python3 %s
-`, entrypoint)
-	case "nodejs20":
-		return fmt.Sprintf(`#!/bin/bash
-set -e
-cd /bot
-exec node %s
-`, entrypoint)
-	case "rust-stable", "gcc13", "cpp-gcc13", "ghc96":
-		return fmt.Sprintf(`#!/bin/bash
-set -e
-cd /bot
-chmod +x %s
-exec ./%s
-`, entrypoint, entrypoint)
-	case "dotnet8":
-		return fmt.Sprintf(`#!/bin/bash
-set -e
-cd /bot
-exec dotnet %s.dll
-`, strings.TrimSuffix(entrypoint, ".dll"))
-	case "scala3":
-		return fmt.Sprintf(`#!/bin/bash
-set -e
-cd /bot
-exec java -jar %s
-`, entrypoint)
-	default:
-		return fmt.Sprintf(`#!/bin/bash
-set -e
-cd /bot
-export PYTHONPATH=/bot/vendor
-exec python3 %s
-`, entrypoint)
+	script, err := entrypoints.GenerateK8sEntrypoint(runtime, entrypoints.GeneratorOptions{
+		EntryPointType: "bot",
+		Entrypoint:     entrypoint,
+		WorkDir:        "/bot",
+	})
+	if err != nil {
+		// Fallback to simple Python script on error
+		return "#!/bin/bash\nset -e\ncd /bot\nexport PYTHONPATH=/bot/vendor\nexec python3 " + entrypoint + "\n"
 	}
+	return script
 }
 
 // validateMinIOPath ensures a MinIO path doesn't contain shell metacharacters.

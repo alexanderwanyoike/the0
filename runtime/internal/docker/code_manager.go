@@ -3,7 +3,7 @@
 // CodeManager handles downloading bot code archives from MinIO and extracting them
 // to temporary directories. It implements security checks like directory traversal
 // prevention and supports ZIP archive format with automatic format detection.
-package dockerrunner
+package docker
 
 import (
 	"archive/zip"

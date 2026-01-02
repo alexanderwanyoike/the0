@@ -13,7 +13,7 @@ import (
 	subscriber "runtime/internal/bot-runner/subscriber"
 	"runtime/internal/constants"
 	base "runtime/internal/core"
-	dockerrunner "runtime/internal/docker-runner"
+	dockerrunner "runtime/internal/docker"
 	"runtime/internal/util"
 	"runtime/pb"
 

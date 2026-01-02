@@ -4,7 +4,7 @@
 // configurations. It provides a clean API for setting up environment variables,
 // volume mounts, resource limits, and labels without dealing with low-level
 // Docker API structures directly.
-package dockerrunner
+package docker
 
 import (
 	"encoding/json"
