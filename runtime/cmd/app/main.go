@@ -172,15 +172,47 @@ func runBotService() {
 }
 
 // runScheduleService runs the simplified schedule service
-// TODO: Implement ScheduleService similar to BotService
 func runScheduleService() {
 	util.LogMaster("Starting bot-scheduler service...")
 	util.LogMaster("MongoDB: %s", mongoUri)
 	util.LogMaster("NATS: %s", natsUrl)
 
-	// For now, log that this is not yet implemented
-	util.LogMaster("ERROR: ScheduleService not yet implemented. Use controller mode for K8s.")
-	os.Exit(1)
+	// Validate NATS URL (required for schedule service)
+	if natsUrl == "" {
+		util.LogMaster("ERROR: NATS_URL is required for bot-scheduler")
+		os.Exit(1)
+	}
+
+	// Create schedule service
+	service, err := dockerrunner.NewScheduleService(dockerrunner.ScheduleServiceConfig{
+		MongoURI:   mongoUri,
+		NATSUrl:    natsUrl,
+		Logger:     &util.DefaultLogger{},
+		DBName:     constants.BOT_SCHEDULER_DB_NAME,
+		Collection: constants.BOT_SCHEDULE_COLLECTION,
+	})
+	if err != nil {
+		util.LogMaster("Failed to create schedule service: %v", err)
+		os.Exit(1)
+	}
+
+	// Setup signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		util.LogMaster("Received interrupt signal, shutting down...")
+		cancel()
+	}()
+
+	// Run the service (blocks until shutdown)
+	if err := service.Run(ctx); err != nil {
+		util.LogMaster("Schedule service error: %v", err)
+		os.Exit(1)
+	}
+
+	util.LogMaster("Schedule service stopped")
 }
 
 // Controller Implementation (Kubernetes-native mode)
