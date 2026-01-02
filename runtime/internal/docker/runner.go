@@ -443,11 +443,15 @@ func (r *dockerRunner) StopContainer(
 	return nil
 }
 
-// ListManagedContainers returns information about managed containers for the specified segment
+// ListManagedContainers returns information about managed containers for the specified segment.
+// Use segment=-1 to list all managed containers regardless of segment.
 func (r *dockerRunner) ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
 	filter := filters.NewArgs()
 	filter.Add("label", "runtime.managed=true")
-	filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
+	// Only filter by segment if a specific segment is requested (-1 means all segments)
+	if segment >= 0 {
+		filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
+	}
 	return r.orchestrator.ListContainer(ctx, filter)
 }
 
