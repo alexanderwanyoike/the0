@@ -178,10 +178,11 @@ func (m *Manager) Start(ctx context.Context) (<-chan struct{}, error) {
 
 	go func() {
 		defer wg.Done()
-		// Signal readiness after initialization
+		// Signal readiness after initialization delay
+		// 5 seconds allows time for initial reconciliation to complete
 		go func() {
 			select {
-			case <-time.After(2 * time.Second):
+			case <-time.After(5 * time.Second):
 				controllerReadyCh <- struct{}{}
 			case <-ctx.Done():
 			}
@@ -193,10 +194,11 @@ func (m *Manager) Start(ctx context.Context) (<-chan struct{}, error) {
 
 	go func() {
 		defer wg.Done()
-		// Signal readiness after initialization
+		// Signal readiness after initialization delay
+		// 5 seconds allows time for initial reconciliation to complete
 		go func() {
 			select {
-			case <-time.After(2 * time.Second):
+			case <-time.After(5 * time.Second):
 				controllerReadyCh <- struct{}{}
 			case <-ctx.Done():
 			}

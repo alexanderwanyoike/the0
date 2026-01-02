@@ -29,6 +29,7 @@ type K8sLogCollector struct {
 	logger      util.Logger
 	namespace   string
 	interval    time.Duration
+	maxLogBytes int64
 
 	// Track last log positions per pod to avoid re-uploading
 	lastLogTimes   map[string]time.Time
@@ -47,11 +48,19 @@ type K8sLogCollector struct {
 type K8sLogCollectorConfig struct {
 	Namespace      string
 	Interval       time.Duration
+	MaxLogBytes    int64 // Max bytes per log read, default 10MB
 	MinIOEndpoint  string
 	MinIOAccessKey string
 	MinIOSecretKey string
 	MinIOUseSSL    bool
 }
+
+const (
+	// DefaultMaxLogBytes is the default max log size per pod (10MB)
+	DefaultMaxLogBytes int64 = 10 * 1024 * 1024
+	// maxConcurrentLogCollectors limits goroutines spawned for log collection
+	maxConcurrentLogCollectors = 10
+)
 
 // NewK8sLogCollector creates a new K8s LogCollector.
 func NewK8sLogCollector(ctx context.Context, config K8sLogCollectorConfig, logger util.Logger) (*K8sLogCollector, error) {
@@ -82,6 +91,10 @@ func NewK8sLogCollector(ctx context.Context, config K8sLogCollectorConfig, logge
 		config.Interval = 30 * time.Second
 	}
 
+	if config.MaxLogBytes == 0 {
+		config.MaxLogBytes = DefaultMaxLogBytes
+	}
+
 	if logger == nil {
 		logger = &util.DefaultLogger{}
 	}
@@ -92,6 +105,7 @@ func NewK8sLogCollector(ctx context.Context, config K8sLogCollectorConfig, logge
 		logger:        logger,
 		namespace:     config.Namespace,
 		interval:      config.Interval,
+		maxLogBytes:   config.MaxLogBytes,
 		lastLogTimes:  make(map[string]time.Time),
 		completedPods: make(map[string]bool),
 		stopCh:        make(chan struct{}),
@@ -167,6 +181,15 @@ func (lc *K8sLogCollector) collectAllLogs() {
 		}
 	}
 
+	// Build set of existing pod names for cleanup
+	existingPods := make(map[string]bool)
+	for _, p := range allPods {
+		existingPods[p.Name] = true
+	}
+
+	// Clean up stale entries from tracking maps
+	lc.cleanupStalePods(existingPods)
+
 	if len(allPods) == 0 {
 		return
 	}
@@ -175,22 +198,71 @@ func (lc *K8sLogCollector) collectAllLogs() {
 
 	lc.logger.Info("K8s Log Collector: Collecting logs from pods", "count", len(pods.Items))
 
+	// Use semaphore to limit concurrent log collectors
+	sem := make(chan struct{}, maxConcurrentLogCollectors)
+	var wg sync.WaitGroup
+
 	for _, pod := range pods.Items {
 		// Collect logs from running pods AND recently completed pods (for CronJob pods)
 		switch pod.Status.Phase {
 		case corev1.PodRunning:
 			// Always collect from running pods
-			go lc.collectAndStoreLogs(pod, false)
+			sem <- struct{}{} // Acquire semaphore
+			wg.Add(1)
+			go func(p corev1.Pod) {
+				defer wg.Done()
+				defer func() { <-sem }() // Release semaphore
+				lc.collectAndStoreLogs(p, false)
+			}(pod)
 		case corev1.PodSucceeded, corev1.PodFailed:
 			// Only collect from completed pods if we haven't already
 			lc.completedPodsMu.RLock()
 			alreadyCollected := lc.completedPods[pod.Name]
 			lc.completedPodsMu.RUnlock()
 			if !alreadyCollected {
-				go lc.collectAndStoreLogs(pod, true)
+				sem <- struct{}{} // Acquire semaphore
+				wg.Add(1)
+				go func(p corev1.Pod) {
+					defer wg.Done()
+					defer func() { <-sem }() // Release semaphore
+					lc.collectAndStoreLogs(p, true)
+				}(pod)
 			}
 		}
 	}
+
+	// Wait for all collectors to finish (with timeout via context)
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All collectors finished
+	case <-ctx.Done():
+		lc.logger.Info("K8s Log Collector: Collection timed out, some logs may be incomplete")
+	}
+}
+
+// cleanupStalePods removes tracking entries for pods that no longer exist.
+func (lc *K8sLogCollector) cleanupStalePods(existingPods map[string]bool) {
+	lc.lastLogTimesMu.Lock()
+	for podName := range lc.lastLogTimes {
+		if !existingPods[podName] {
+			delete(lc.lastLogTimes, podName)
+		}
+	}
+	lc.lastLogTimesMu.Unlock()
+
+	lc.completedPodsMu.Lock()
+	for podName := range lc.completedPods {
+		if !existingPods[podName] {
+			delete(lc.completedPods, podName)
+		}
+	}
+	lc.completedPodsMu.Unlock()
 }
 
 // collectAndStoreLogs fetches logs from a single pod and stores them in MinIO.
@@ -211,7 +283,8 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 	// Build log options - only collect from the "bot" container
 	logOpts := &corev1.PodLogOptions{
 		Container:  "bot",
-		Timestamps: true, // Include timestamps to help with deduplication
+		Timestamps: true,      // Include timestamps to help with deduplication
+		LimitBytes: &lc.maxLogBytes, // Prevent OOM from large logs
 	}
 
 	// For running pods, only get logs since last collection using exact time

@@ -146,9 +146,10 @@ func main() {
 	controllerCmd.Flags().StringVar(&controllerNamespace, "namespace", getEnv("NAMESPACE", "the0"), "Kubernetes namespace for bot pods")
 	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
 	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
-	controllerCmd.Flags().StringVar(&minioAccessKey, "minio-access-key", getEnv("MINIO_ACCESS_KEY", ""), "MinIO access key")
-	controllerCmd.Flags().StringVar(&minioSecretKey, "minio-secret-key", getEnv("MINIO_SECRET_KEY", ""), "MinIO secret key")
 	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
+	// MinIO credentials read from environment only (not CLI flags) for security
+	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
+	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
 	rootCmd.AddCommand(controllerCmd)
 
 	rootCmd.AddCommand(versionCmd)

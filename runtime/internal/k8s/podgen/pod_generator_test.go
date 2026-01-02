@@ -378,3 +378,63 @@ func TestExtractCustomBotID(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateMinIOPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{"valid simple", "mybot/1.0.0", false},
+		{"valid with dashes", "my-bot/1.0.0-beta", false},
+		{"valid with underscores", "my_bot/1_0_0", false},
+		{"valid with dots", "my.bot/1.0.0", false},
+		{"valid alphanumeric", "bot123/v1", false},
+		{"shell injection semicolon", "mybot; rm -rf /", true},
+		{"shell injection pipe", "mybot | cat /etc/passwd", true},
+		{"shell injection backtick", "mybot`whoami`", true},
+		{"shell injection dollar", "mybot$(whoami)", true},
+		{"shell injection ampersand", "mybot && rm -rf /", true},
+		{"shell injection space", "my bot/1.0.0", true},
+		{"shell injection quotes", "mybot'test", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateMinIOPath(tt.path)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestPodGenerator_GeneratePod_CommandInjection(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+	})
+
+	// Test that malicious filePath is rejected
+	bot := model.Bot{
+		ID:     "test-bot",
+		Config: map[string]interface{}{},
+		CustomBotVersion: model.CustomBotVersion{
+			Version: "1.0.0",
+			Config: model.APIBotConfig{
+				Name:    "test",
+				Runtime: "python3.11",
+			},
+			FilePath: "mybot; rm -rf /", // Injection attempt
+		},
+	}
+
+	_, err := generator.GeneratePod(bot)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid file path")
+}

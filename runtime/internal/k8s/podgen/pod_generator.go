@@ -4,6 +4,7 @@ package podgen
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -105,6 +106,14 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 	filePath := bot.CustomBotVersion.FilePath
 	entrypoint := g.getEntrypoint(bot)
 
+	// Validate filePath and bucket to prevent command injection
+	if err := validateMinIOPath(filePath); err != nil {
+		return nil, fmt.Errorf("invalid file path: %w", err)
+	}
+	if err := validateMinIOPath(g.config.MinIOBucket); err != nil {
+		return nil, fmt.Errorf("invalid bucket name: %w", err)
+	}
+
 	// Get base image for the runtime
 	baseImage := GetBaseImage(runtime)
 
@@ -162,10 +171,10 @@ set -e
 cd /bot
 unzip -o code.zip
 rm code.zip
-echo '%s' > /bot/entrypoint.sh
+echo '%s' | base64 -d > /bot/entrypoint.sh
 chmod +x /bot/entrypoint.sh
 ls -la /bot/
-`, escapeForShell(entrypointScript)),
+`, base64.StdEncoding.EncodeToString([]byte(entrypointScript))),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-code", MountPath: "/bot"},
@@ -464,7 +473,20 @@ exec python3 %s
 	}
 }
 
-// escapeForShell escapes a string for use in shell single quotes.
-func escapeForShell(s string) string {
-	return strings.ReplaceAll(s, "'", "'\\''")
+// validateMinIOPath ensures a MinIO path doesn't contain shell metacharacters.
+// Returns an error if the path contains potentially dangerous characters.
+func validateMinIOPath(path string) error {
+	// Allow only safe characters in MinIO paths
+	for _, c := range path {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			continue
+		}
+		switch c {
+		case '/', '-', '_', '.':
+			continue
+		default:
+			return fmt.Errorf("invalid character '%c' in MinIO path", c)
+		}
+	}
+	return nil
 }
