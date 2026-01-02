@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
-	"runtime/internal/bot-runner/model"
+	"runtime/internal/model"
 )
 
 func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {

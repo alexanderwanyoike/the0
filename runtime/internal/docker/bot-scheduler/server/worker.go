@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"runtime/internal/bot-scheduler/model"
-	"runtime/internal/bot-scheduler/subscriber"
+	"runtime/internal/model"
+	"runtime/internal/docker/bot-scheduler/subscriber"
 	"runtime/internal/constants"
 	base "runtime/internal/core"
 	dockerrunner "runtime/internal/docker"

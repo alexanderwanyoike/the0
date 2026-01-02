@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"runtime/internal/bot-runner/model"
+	"runtime/internal/model"
 	"runtime/internal/entrypoints"
 	runtimepkg "runtime/internal/runtime"
 )
@@ -383,12 +383,6 @@ func isAlphanumeric(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
 }
 
-// GetBaseImage returns the base Docker image for a given runtime.
-// Deprecated: Use runtimepkg.GetDockerImage() directly.
-func GetBaseImage(runtime string) string {
-	return runtimepkg.GetDockerImage(runtime)
-}
-
 // getMinIOURL builds the MinIO endpoint URL with protocol.
 func (g *PodGenerator) getMinIOURL() string {
 	endpoint := g.config.MinIOEndpoint
@@ -417,21 +411,6 @@ func (g *PodGenerator) getEntrypoint(bot model.Bot) string {
 	default:
 		return "main"
 	}
-}
-
-// generateEntrypointScript is deprecated - uses shared entrypoints package now.
-// Kept for backward compatibility with existing code.
-func (g *PodGenerator) generateEntrypointScript(runtime, entrypoint string) string {
-	script, err := entrypoints.GenerateK8sEntrypoint(runtime, entrypoints.GeneratorOptions{
-		EntryPointType: "bot",
-		Entrypoint:     entrypoint,
-		WorkDir:        "/bot",
-	})
-	if err != nil {
-		// Fallback to simple Python script on error
-		return "#!/bin/bash\nset -e\ncd /bot\nexport PYTHONPATH=/bot/vendor\nexec python3 " + entrypoint + "\n"
-	}
-	return script
 }
 
 // validateMinIOPath ensures a MinIO path doesn't contain shell metacharacters.

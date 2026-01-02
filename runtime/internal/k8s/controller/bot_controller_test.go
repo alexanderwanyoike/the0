@@ -11,7 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"runtime/internal/bot-runner/model"
+	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
 )
 
@@ -401,25 +401,3 @@ func TestBotController_Start_Stop(t *testing.T) {
 	assert.GreaterOrEqual(t, mockRepo.Called, 1)
 }
 
-func TestGetBaseImage(t *testing.T) {
-	tests := []struct {
-		runtime  string
-		expected string
-	}{
-		{"python3.11", "python:3.11-slim"},
-		{"nodejs20", "node:20-alpine"},
-		{"rust-stable", "rust:1.83-slim"},
-		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"},
-		{"gcc13", "gcc:13"},
-		{"scala3", "eclipse-temurin:21-jre"},
-		{"ghc96", "haskell:9.6-slim"},
-		{"unknown", "python:3.11-slim"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.runtime, func(t *testing.T) {
-			result := podgen.GetBaseImage(tt.runtime)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}

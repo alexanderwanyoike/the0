@@ -22,8 +22,8 @@ var runtimeImages = map[string]string{
 }
 
 // GetDockerImage returns the Docker image for the given runtime.
-// DEPRECATED: Use GetDockerImageOrError for explicit error handling.
 // Returns the Python 3.11 image as fallback for unknown runtimes.
+// Use GetDockerImageOrError if you need explicit error handling.
 func GetDockerImage(runtime string) string {
 	if image, ok := runtimeImages[runtime]; ok {
 		return image

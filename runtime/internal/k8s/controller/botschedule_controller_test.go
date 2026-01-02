@@ -10,34 +10,34 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	scheduleModel "runtime/internal/bot-scheduler/model"
+	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
 )
 
 // MockBotScheduleRepository is a mock implementation of BotScheduleRepository.
 type MockBotScheduleRepository struct {
-	Schedules []scheduleModel.BotSchedule
+	Schedules []model.BotSchedule
 	Error     error
 	Called    int
 }
 
-func (m *MockBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]scheduleModel.BotSchedule, error) {
+func (m *MockBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]model.BotSchedule, error) {
 	m.Called++
 	return m.Schedules, m.Error
 }
 
-func createTestSchedule(id, name, version, runtime, schedule string) scheduleModel.BotSchedule {
+func createTestSchedule(id, name, version, runtime, schedule string) model.BotSchedule {
 	enabled := true
-	return scheduleModel.BotSchedule{
+	return model.BotSchedule{
 		ID: id,
 		Config: map[string]interface{}{
 			"schedule": schedule,
 			"symbol":   "BTC/USD",
 		},
-		CustomBotVersion: scheduleModel.CustomBotVersion{
+		CustomBotVersion: model.CustomBotVersion{
 			Version:  version,
 			FilePath: "custom-bots/" + name + "/" + version + ".zip",
-			Config: scheduleModel.APIBotConfig{
+			Config: model.APIBotConfig{
 				Name:    name,
 				Runtime: runtime,
 				Entrypoints: map[string]string{
@@ -69,7 +69,7 @@ func TestBotScheduleController_Reconcile_CreatesCronJob(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 
 	mockRepo := &MockBotScheduleRepository{
-		Schedules: []scheduleModel.BotSchedule{schedule},
+		Schedules: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -98,7 +98,7 @@ func TestBotScheduleController_Reconcile_CreatesCronJob(t *testing.T) {
 
 func TestBotScheduleController_Reconcile_DeletesOrphanedCronJob(t *testing.T) {
 	mockRepo := &MockBotScheduleRepository{
-		Schedules: []scheduleModel.BotSchedule{}, // No schedules
+		Schedules: []model.BotSchedule{}, // No schedules
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-orphan"] = &batchv1.CronJob{
@@ -128,7 +128,7 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobOnChange(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 10 * * *")
 
 	mockRepo := &MockBotScheduleRepository{
-		Schedules: []scheduleModel.BotSchedule{schedule},
+		Schedules: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
@@ -166,12 +166,12 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobOnChange(t *testing.T) {
 }
 
 func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t *testing.T) {
-	schedule := scheduleModel.BotSchedule{
+	schedule := model.BotSchedule{
 		ID:     "schedule-1",
 		Config: map[string]interface{}{}, // No schedule expression
-		CustomBotVersion: scheduleModel.CustomBotVersion{
+		CustomBotVersion: model.CustomBotVersion{
 			Version: "1.0.0",
-			Config: scheduleModel.APIBotConfig{
+			Config: model.APIBotConfig{
 				Name:    "test-bot",
 				Runtime: "python3.11",
 			},
@@ -179,7 +179,7 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 	}
 
 	mockRepo := &MockBotScheduleRepository{
-		Schedules: []scheduleModel.BotSchedule{schedule},
+		Schedules: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -200,7 +200,7 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	configHash := computeScheduleHash(schedule)
 
 	mockRepo := &MockBotScheduleRepository{
-		Schedules: []scheduleModel.BotSchedule{schedule},
+		Schedules: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{

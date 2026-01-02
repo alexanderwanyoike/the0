@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	subscriber "runtime/internal/bot-runner/subscriber"
+	subscriber "runtime/internal/docker/bot-runner/subscriber"
 	"runtime/internal/constants"
 	base "runtime/internal/core"
 	dockerrunner "runtime/internal/docker"

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"runtime/internal/bot-runner/model"
+	"runtime/internal/model"
 	"runtime/internal/constants"
 	"runtime/internal/util"
 	"strconv"

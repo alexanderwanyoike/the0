@@ -1,5 +1,6 @@
 package model
 
+// Bot represents a bot instance for execution.
 type Bot struct {
 	ID               string                 `bson:"id" json:"id"`
 	SegmentId        int32                  `bson:"segment_id"`
@@ -8,6 +9,7 @@ type Bot struct {
 	Enabled          *bool                  `bson:"enabled,omitempty"`
 }
 
+// CustomBotVersion contains version-specific bot configuration.
 type CustomBotVersion struct {
 	Version   string       `json:"version" bson:"version"`
 	Config    APIBotConfig `json:"config" bson:"config"`
@@ -16,6 +18,7 @@ type CustomBotVersion struct {
 	UpdatedAt string       `json:"updatedAt" bson:"updatedAt"`
 }
 
+// APIBotConfig defines the bot's runtime configuration.
 type APIBotConfig struct {
 	Name        string                 `json:"name" bson:"name"`
 	Description string                 `json:"description" bson:"description"`

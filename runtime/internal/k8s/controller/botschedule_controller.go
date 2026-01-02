@@ -18,8 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	botModel "runtime/internal/bot-runner/model"
-	scheduleModel "runtime/internal/bot-scheduler/model"
+	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/util"
 )
@@ -38,7 +37,7 @@ const (
 // BotScheduleRepository provides access to bot schedule data from MongoDB.
 type BotScheduleRepository interface {
 	// FindAllEnabled returns all schedules that should be running.
-	FindAllEnabled(ctx context.Context) ([]scheduleModel.BotSchedule, error)
+	FindAllEnabled(ctx context.Context) ([]model.BotSchedule, error)
 }
 
 // K8sCronJobClient provides access to Kubernetes CronJob operations.
@@ -183,7 +182,7 @@ func (c *BotScheduleController) Reconcile(ctx context.Context) error {
 	util.LogMaster("[ScheduleController] Found %d CronJobs in K8s", len(actualCronJobs))
 
 	// Build maps for lookup
-	desiredMap := make(map[string]scheduleModel.BotSchedule)
+	desiredMap := make(map[string]model.BotSchedule)
 	for _, schedule := range desiredSchedules {
 		desiredMap[schedule.ID] = schedule
 	}
@@ -230,7 +229,7 @@ func (c *BotScheduleController) Reconcile(ctx context.Context) error {
 }
 
 // ensureCronJobRunning creates a CronJob for the schedule.
-func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedule scheduleModel.BotSchedule) error {
+func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedule model.BotSchedule) error {
 	util.LogMaster("[ScheduleController] Creating CronJob for schedule %s", schedule.ID)
 
 	// Get cron expression from config
@@ -257,7 +256,7 @@ func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedu
 }
 
 // updateCronJob updates an existing CronJob.
-func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule scheduleModel.BotSchedule, existing *batchv1.CronJob) error {
+func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule model.BotSchedule, existing *batchv1.CronJob) error {
 	cronExpr, ok := schedule.Config["schedule"].(string)
 	if !ok || cronExpr == "" {
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
@@ -281,7 +280,7 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule sche
 }
 
 // createCronJobSpec creates a CronJob spec for the schedule using base images + init containers.
-func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSchedule, cronExpr string) (*batchv1.CronJob, error) {
+func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cronExpr string) (*batchv1.CronJob, error) {
 	// Convert schedule to bot model for podGenerator
 	bot := c.scheduleToBot(schedule)
 
@@ -337,7 +336,7 @@ func (c *BotScheduleController) createCronJobSpec(schedule scheduleModel.BotSche
 }
 
 // scheduleChanged returns true if the schedule config has changed.
-func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedule scheduleModel.BotSchedule) bool {
+func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedule model.BotSchedule) bool {
 	existingHash := ""
 	if cronJob.Annotations != nil {
 		existingHash = cronJob.Annotations[AnnotationScheduleHash]
@@ -347,18 +346,18 @@ func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedu
 }
 
 // scheduleToBot converts a BotSchedule to a Bot model for the image builder.
-func (c *BotScheduleController) scheduleToBot(schedule scheduleModel.BotSchedule) botModel.Bot {
+func (c *BotScheduleController) scheduleToBot(schedule model.BotSchedule) model.Bot {
 	enabled := true
 	if schedule.Enabled != nil {
 		enabled = *schedule.Enabled
 	}
-	return botModel.Bot{
+	return model.Bot{
 		ID:     schedule.ID,
 		Config: schedule.Config,
-		CustomBotVersion: botModel.CustomBotVersion{
+		CustomBotVersion: model.CustomBotVersion{
 			Version:  schedule.CustomBotVersion.Version,
 			FilePath: schedule.CustomBotVersion.FilePath,
-			Config: botModel.APIBotConfig{
+			Config: model.APIBotConfig{
 				Name:        schedule.CustomBotVersion.Config.Name,
 				Runtime:     schedule.CustomBotVersion.Config.Runtime,
 				Entrypoints: schedule.CustomBotVersion.Config.Entrypoints,
@@ -399,7 +398,7 @@ func convertToK8sCronFormat(cronExpr string) string {
 }
 
 // computeScheduleHash creates a hash of the schedule config.
-func computeScheduleHash(schedule scheduleModel.BotSchedule) string {
+func computeScheduleHash(schedule model.BotSchedule) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
