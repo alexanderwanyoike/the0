@@ -13,7 +13,7 @@ The Kubernetes deployment has been tested previously but may require updates. If
 
 Kubernetes deployment provides production-ready orchestration for the0 platform. Use Kubernetes mode when:
 
-- Running more than ~1000 bots
+- Deploying across multiple nodes
 - High availability is required
 - You need K8s-native observability and management
 
@@ -369,7 +369,7 @@ kubectl logs <pod-name> -n the0 --previous  # Previous container logs
 |---------|----------------|------------|
 | Setup command | `make up` | `make minikube-up` |
 | Bot model | Containers on single host | Pod per bot |
-| Recommended for | <1000 bots | >1000 bots |
+| Recommended for | Single-host deployments | Multi-node, HA |
 | Infrastructure | Included | Included (configurable) |
 | Bot scaling | Single-process reconciliation | Controller + Pods |
 | Health checks | Application level | Liveness + readiness probes |
@@ -377,4 +377,4 @@ kubectl logs <pod-name> -n the0 --previous  # Previous container logs
 | Persistence | Docker volumes | PersistentVolumes |
 | Complexity | Simple | More complex |
 
-Use Docker Compose for development and small deployments. Use Kubernetes for production scale and high availability requirements.
+Use Docker Compose for development and single-host production. Use Kubernetes when you need multi-node scaling or high availability.

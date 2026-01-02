@@ -267,4 +267,4 @@ Docker Compose works for small production deployments with these adjustments:
 5. **Enable health monitoring** - Configure external monitoring for service health
 6. **Restrict network access** - Infrastructure services should not be publicly accessible
 
-For larger deployments, consider [Kubernetes](./kubernetes) for better orchestration and scaling capabilities.
+For multi-node deployments or high availability requirements, consider [Kubernetes](./kubernetes).

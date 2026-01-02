@@ -35,13 +35,13 @@ Docker Compose provides the simplest and most tested path to running the0. A sin
 
 - Local development
 - Small teams and evaluation
-- Self-hosted production (up to ~1000 bots)
+- Self-hosted production on a single host
 
 See [Docker Compose Deployment](./docker-compose) for setup instructions.
 
-### Kubernetes (Production Scale)
+### Kubernetes (Multi-Node & HA)
 
-For large deployments with more than 1000 bots, use Kubernetes mode. The runtime controller manages bots as individual Pods, leveraging K8s for scheduling, health checks, and automatic restarts.
+Kubernetes mode is for deployments that need multi-node scaling or high availability. The runtime controller manages bots as individual Pods, leveraging K8s for scheduling, health checks, and automatic restarts.
 
 See [Kubernetes Deployment](./kubernetes) for setup instructions.
 
@@ -50,9 +50,8 @@ See [Kubernetes Deployment](./kubernetes) for setup instructions.
 | Scenario | Recommended Deployment |
 |----------|----------------------|
 | Local development | Docker Compose |
-| Small team (<10 users) | Docker Compose |
-| Medium deployment (<1000 bots) | Docker Compose |
-| Large deployment (>1000 bots) | Kubernetes |
+| Single-host production | Docker Compose |
+| Multi-node clusters | Kubernetes |
 | High availability required | Kubernetes |
 
 ## Hardware Requirements
