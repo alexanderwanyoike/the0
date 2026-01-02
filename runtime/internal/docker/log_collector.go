@@ -34,10 +34,13 @@ type logCollector struct {
 	getContainersFunc func() []*ContainerInfo
 
 	// Internal state
-	ticker   *time.Ticker
-	stopCh   chan bool
-	doneCh   chan bool
-	stopOnce sync.Once // Prevents panic from double-close of stopCh
+	ticker    *time.Ticker
+	stopCh    chan bool
+	doneCh    chan bool
+	startOnce sync.Once // Ensures Start() only runs once
+	stopOnce  sync.Once // Prevents panic from double-close of stopCh
+	started   bool      // Tracks whether Start() goroutine was launched
+	mu        sync.Mutex
 }
 
 // NewLogCollector creates a new LogCollector that collects logs at the specified interval.
@@ -60,30 +63,45 @@ func NewLogCollector(
 }
 
 // Start begins the background goroutine that periodically collects logs.
+// Safe to call multiple times; only the first call starts the goroutine.
 func (lc *logCollector) Start() {
-	lc.logger.Info("Log Collector: Starting log collection service")
-	go func() {
-		defer close(lc.doneCh)
-		for {
-			select {
-			case <-lc.ticker.C:
-				lc.collectAllLogs()
-			case <-lc.stopCh:
-				lc.logger.Info("Log Collector: Stopping log collection service")
-				lc.ticker.Stop()
-				return
+	lc.startOnce.Do(func() {
+		lc.mu.Lock()
+		lc.started = true
+		lc.mu.Unlock()
+
+		lc.logger.Info("Log Collector: Starting log collection service")
+		go func() {
+			defer close(lc.doneCh)
+			for {
+				select {
+				case <-lc.ticker.C:
+					lc.collectAllLogs()
+				case <-lc.stopCh:
+					lc.logger.Info("Log Collector: Stopping log collection service")
+					lc.ticker.Stop()
+					return
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 // Stop signals the background goroutine to stop and waits for it to finish.
-// Safe to call multiple times.
+// Safe to call multiple times. Also safe to call before Start() (no-op).
 func (lc *logCollector) Stop() {
+	lc.mu.Lock()
+	wasStarted := lc.started
+	lc.mu.Unlock()
+
 	lc.stopOnce.Do(func() {
 		close(lc.stopCh)
 	})
-	<-lc.doneCh
+
+	// Only wait for goroutine if Start() was called
+	if wasStarted {
+		<-lc.doneCh
+	}
 }
 
 // collectAllLogs fetches logs from all managed containers concurrently.

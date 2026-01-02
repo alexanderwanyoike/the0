@@ -194,7 +194,7 @@ ls -la /bot/
 				{
 					Name:       "bot",
 					Image:      baseImage,
-					Command:    []string{"/bin/bash", "/bot/entrypoint.sh"},
+					Command:    []string{getShellForImage(baseImage), "/bot/entrypoint.sh"},
 					WorkingDir: "/bot",
 					Env: []corev1.EnvVar{
 						{Name: "BOT_ID", Value: bot.ID},
@@ -414,6 +414,15 @@ func (g *PodGenerator) getEntrypoint(bot model.Bot) string {
 	default:
 		return "main"
 	}
+}
+
+// getShellForImage returns the appropriate shell for the given image.
+// Alpine-based images use /bin/sh, others use /bin/bash.
+func getShellForImage(imageName string) string {
+	if strings.Contains(imageName, "alpine") {
+		return "/bin/sh"
+	}
+	return "/bin/bash"
 }
 
 // validateMinIOPath ensures a MinIO path doesn't contain shell metacharacters.

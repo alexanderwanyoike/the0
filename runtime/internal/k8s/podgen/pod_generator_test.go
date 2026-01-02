@@ -153,6 +153,8 @@ func TestPodGenerator_GeneratePod_NodeJSRuntime(t *testing.T) {
 
 	assert.Equal(t, "nodejs20", pod.Labels[LabelRuntime])
 	assert.Equal(t, "node:20-alpine", pod.Spec.Containers[0].Image)
+	// Alpine images use /bin/sh, not /bin/bash
+	assert.Equal(t, []string{"/bin/sh", "/bot/entrypoint.sh"}, pod.Spec.Containers[0].Command)
 }
 
 func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
@@ -437,4 +439,31 @@ func TestPodGenerator_GeneratePod_CommandInjection(t *testing.T) {
 	_, err := generator.GeneratePod(bot)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid file path")
+}
+
+func TestGetShellForImage(t *testing.T) {
+	tests := []struct {
+		image    string
+		expected string
+	}{
+		// Alpine images use /bin/sh
+		{"node:20-alpine", "/bin/sh"},
+		{"python:3.11-alpine", "/bin/sh"},
+		{"some-alpine-image", "/bin/sh"},
+
+		// Non-Alpine images use /bin/bash
+		{"python:3.11-slim", "/bin/bash"},
+		{"rust:1.83-slim", "/bin/bash"},
+		{"gcc:13", "/bin/bash"},
+		{"mcr.microsoft.com/dotnet/runtime:8.0", "/bin/bash"},
+		{"haskell:9.6-slim", "/bin/bash"},
+		{"eclipse-temurin:21-jre", "/bin/bash"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.image, func(t *testing.T) {
+			result := getShellForImage(tt.image)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
