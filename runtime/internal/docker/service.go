@@ -13,7 +13,8 @@ import (
 	"runtime/internal/model"
 	"runtime/internal/util"
 
-	"github.com/nats-io/nats.go"
+	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
@@ -37,9 +38,8 @@ type BotService struct {
 	logger      util.Logger
 	mongoClient *mongo.Client
 
-	// NATS (optional)
-	natsConn      *nats.Conn
-	subscriptions []*nats.Subscription
+	// NATS subscriber for persisting bot events to MongoDB
+	subscriber *botnatssubscriber.NATSSubscriber
 
 	// Lifecycle
 	ctx    context.Context
@@ -98,13 +98,13 @@ func (s *BotService) Run(ctx context.Context) error {
 	s.runner = runner
 	defer s.runner.Close()
 
-	// Initialize NATS (optional - degrades gracefully)
+	// Initialize NATS subscriber (optional - degrades gracefully)
 	if s.config.NATSUrl != "" {
-		if err := s.initNATS(); err != nil {
+		if err := s.initNATSSubscriber(ctx); err != nil {
 			s.logger.Info("NATS not available, running without real-time events: %v", err)
 		} else {
-			s.logger.Info("NATS connected - real-time bot events enabled")
-			defer s.closeNATS()
+			s.logger.Info("NATS subscriber started - listening for bot events")
+			defer s.subscriber.Stop()
 		}
 	} else {
 		s.logger.Info("NATS URL not configured - running in poll-only mode")
@@ -150,57 +150,26 @@ func (s *BotService) initMongoDB(ctx context.Context) error {
 	return nil
 }
 
-// initNATS initializes the NATS connection and subscriptions
-func (s *BotService) initNATS() error {
-	conn, err := nats.Connect(s.config.NATSUrl)
+// initNATSSubscriber initializes the NATS subscriber for bot events
+func (s *BotService) initNATSSubscriber(ctx context.Context) error {
+	subscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
+		NATSUrl:            s.config.NATSUrl,
+		DBName:             s.config.DBName,
+		CollectionName:     s.config.Collection,
+		MaxBotPerPartition: 100, // Not used in simplified mode
+		MaxRetries:         3,
+		Logger:             s.logger,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to connect to NATS: %w", err)
-	}
-	s.natsConn = conn
-
-	// Subscribe to bot events with queue group for load balancing
-	queueGroup := "bot-service"
-	subjects := []string{
-		"the0.bot.created",
-		"the0.bot.updated",
-		"the0.bot.deleted",
+		return fmt.Errorf("failed to create NATS subscriber: %w", err)
 	}
 
-	for _, subject := range subjects {
-		sub, err := conn.QueueSubscribe(subject, queueGroup, s.handleNATSMessage)
-		if err != nil {
-			s.closeNATS()
-			return fmt.Errorf("failed to subscribe to %s: %w", subject, err)
-		}
-		s.subscriptions = append(s.subscriptions, sub)
-		s.logger.Info("Subscribed to NATS subject: %s", subject)
+	if err := subscriber.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start NATS subscriber: %w", err)
 	}
 
+	s.subscriber = subscriber
 	return nil
-}
-
-// handleNATSMessage handles incoming NATS messages
-func (s *BotService) handleNATSMessage(msg *nats.Msg) {
-	s.logger.Info("Received NATS message on %s", msg.Subject)
-
-	// Parse the message to determine what changed
-	// The actual bot data is persisted by the existing subscriber
-	// We just need to trigger a reconciliation
-	switch msg.Subject {
-	case "the0.bot.created", "the0.bot.updated", "the0.bot.deleted":
-		// Trigger immediate reconciliation
-		go s.reconcile()
-	}
-}
-
-// closeNATS closes NATS connections
-func (s *BotService) closeNATS() {
-	for _, sub := range s.subscriptions {
-		sub.Unsubscribe()
-	}
-	if s.natsConn != nil {
-		s.natsConn.Close()
-	}
 }
 
 // runReconciliationLoop runs the periodic reconciliation
@@ -495,7 +464,7 @@ func (s *BotService) Stop() {
 // GetStatus returns the current service status
 func (s *BotService) GetStatus() map[string]interface{} {
 	metrics := s.state.GetMetrics()
-	metrics["nats_connected"] = s.natsConn != nil && s.natsConn.IsConnected()
+	metrics["nats_connected"] = s.subscriber != nil
 	return metrics
 }
 

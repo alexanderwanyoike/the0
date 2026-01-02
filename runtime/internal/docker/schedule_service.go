@@ -238,8 +238,9 @@ func (s *ScheduleService) checkAndExecuteSchedules() {
 			continue
 		}
 
-		// Execute in goroutine to allow parallel execution
-		go s.executeSchedule(ctx, schedule)
+		// Execute in goroutine with its own context (not tied to the check loop)
+		// Use service context so it can be cancelled on shutdown
+		go s.executeSchedule(s.ctx, schedule)
 	}
 
 	s.state.mu.Lock()
