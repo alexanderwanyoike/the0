@@ -208,22 +208,23 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Build log options
+	// Build log options - only collect from the "bot" container
 	logOpts := &corev1.PodLogOptions{
 		Container:  "bot",
-		Timestamps: false,
+		Timestamps: true, // Include timestamps to help with deduplication
 	}
 
-	// For running pods, only get logs since last collection
-	// For completed pods, get all logs (final collection)
+	// For running pods, only get logs since last collection using exact time
+	// This prevents duplicate logs from overlapping time windows
 	if !isCompleted {
 		lc.lastLogTimesMu.RLock()
 		sinceTime := lc.lastLogTimes[pod.Name]
 		lc.lastLogTimesMu.RUnlock()
 
 		if !sinceTime.IsZero() {
-			sinceSeconds := int64(lc.interval.Seconds()) + 5 // Add buffer
-			logOpts.SinceSeconds = &sinceSeconds
+			// Use SinceTime for precise log collection without overlap
+			metaTime := metav1.NewTime(sinceTime)
+			logOpts.SinceTime = &metaTime
 		}
 	}
 
@@ -245,8 +246,12 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 
 	logs := string(logBytes)
 	if len(logs) == 0 {
-		// Even if no logs, mark completed pods as collected
-		if isCompleted {
+		// Even if no logs, update the tracking time to current
+		if !isCompleted {
+			lc.lastLogTimesMu.Lock()
+			lc.lastLogTimes[pod.Name] = time.Now()
+			lc.lastLogTimesMu.Unlock()
+		} else {
 			lc.completedPodsMu.Lock()
 			lc.completedPods[pod.Name] = true
 			lc.completedPodsMu.Unlock()
@@ -260,7 +265,8 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 		return
 	}
 
-	// Update tracking
+	// Update tracking with current time AFTER successful upload
+	now := time.Now()
 	if isCompleted {
 		// Mark as collected so we don't re-upload
 		lc.completedPodsMu.Lock()
@@ -270,7 +276,7 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 	} else {
 		// Update last log time for running pods
 		lc.lastLogTimesMu.Lock()
-		lc.lastLogTimes[pod.Name] = time.Now()
+		lc.lastLogTimes[pod.Name] = now
 		lc.lastLogTimesMu.Unlock()
 		lc.logger.Info("K8s Log Collector: Stored logs", "bot_id", botID, "size", len(logs))
 	}

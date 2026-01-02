@@ -80,25 +80,6 @@ func (m *MockK8sClient) GetPod(ctx context.Context, namespace, name string) (*co
 	return nil, nil
 }
 
-// MockImageBuilder is a mock implementation of ImageBuilder for testing.
-// Still used by schedule controller tests.
-type MockImageBuilder struct {
-	ImageRef string
-	Error    error
-	Called   int
-}
-
-func (m *MockImageBuilder) EnsureImage(ctx context.Context, bot model.Bot) (string, error) {
-	m.Called++
-	if m.Error != nil {
-		return "", m.Error
-	}
-	if m.ImageRef != "" {
-		return m.ImageRef, nil
-	}
-	return "mock-registry/the0/bots/test:1.0.0", nil
-}
-
 // ---- Helper Functions ----
 
 func createTestBot(id, name, version, runtime string) model.Bot {
@@ -418,67 +399,6 @@ func TestBotController_Start_Stop(t *testing.T) {
 
 	// Verify at least one reconciliation happened
 	assert.GreaterOrEqual(t, mockRepo.Called, 1)
-}
-
-func TestNoOpImageBuilder_EnsureImage(t *testing.T) {
-	t.Run("constructs image reference", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("my-registry.io:5000", "", "", "", "")
-		bot := createTestBot("test-id", "price-alerts", "1.2.3", "python3.11")
-
-		imageRef, err := builder.EnsureImage(context.Background(), bot)
-
-		require.NoError(t, err)
-		assert.Equal(t, "my-registry.io:5000/the0/bots/price-alerts:1.2.3", imageRef)
-	})
-
-	t.Run("uses default registry when empty", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("", "", "", "", "")
-		bot := createTestBot("test-id", "my-bot", "2.0.0", "nodejs20")
-
-		imageRef, err := builder.EnsureImage(context.Background(), bot)
-
-		require.NoError(t, err)
-		assert.Equal(t, "localhost:5000/the0/bots/my-bot:2.0.0", imageRef)
-	})
-
-	t.Run("uses latest when version empty", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("", "", "", "", "")
-		bot := createTestBot("test-id", "my-bot", "", "python3.11")
-
-		imageRef, err := builder.EnsureImage(context.Background(), bot)
-
-		require.NoError(t, err)
-		assert.Contains(t, imageRef, ":latest")
-	})
-
-	t.Run("handles different registry formats", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("gcr.io/my-project", "", "", "", "")
-		bot := createTestBot("test-id", "ml-bot", "0.1.0", "python3.11")
-
-		imageRef, err := builder.EnsureImage(context.Background(), bot)
-
-		require.NoError(t, err)
-		assert.Equal(t, "gcr.io/my-project/the0/bots/ml-bot:0.1.0", imageRef)
-	})
-
-	t.Run("uses unknown when name empty", func(t *testing.T) {
-		builder := NewNoOpImageBuilder("", "", "", "", "")
-		bot := model.Bot{
-			ID: "test-id",
-			CustomBotVersion: model.CustomBotVersion{
-				Version: "1.0.0",
-				Config: model.APIBotConfig{
-					Name:    "", // Empty name
-					Runtime: "python3.11",
-				},
-			},
-		}
-
-		imageRef, err := builder.EnsureImage(context.Background(), bot)
-
-		require.NoError(t, err)
-		assert.Contains(t, imageRef, "/the0/bots/unknown:")
-	})
 }
 
 func TestGetBaseImage(t *testing.T) {

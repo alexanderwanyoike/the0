@@ -38,13 +38,6 @@ type K8sClient interface {
 	GetPod(ctx context.Context, namespace, name string) (*corev1.Pod, error)
 }
 
-// ImageBuilder checks if images exist and builds them if needed.
-// Used by BotScheduleController until it's updated to use base images.
-type ImageBuilder interface {
-	// EnsureImage ensures the bot image exists, building it if needed.
-	// Returns the image reference to use for the pod.
-	EnsureImage(ctx context.Context, bot model.Bot) (string, error)
-}
 
 // BotControllerConfig holds configuration for the bot controller.
 type BotControllerConfig struct {
@@ -281,15 +274,16 @@ func isPodHealthy(pod *corev1.Pod) bool {
 
 // ---- Implementations ----
 
-// RealK8sClient implements K8sClient using a real Kubernetes clientset.
-type RealK8sClient struct {
+// PodClient implements K8sClient using a Kubernetes clientset.
+// It provides operations for managing bot pods in a namespace.
+type PodClient struct {
 	clientset      *kubernetes.Clientset
 	controllerName string
 }
 
-// NewRealK8sClient creates a K8sClient using in-cluster config.
+// NewPodClient creates a K8sClient using in-cluster config.
 // The controllerName is used for label selectors when listing pods.
-func NewRealK8sClient(controllerName string) (*RealK8sClient, error) {
+func NewPodClient(controllerName string) (*PodClient, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
@@ -304,11 +298,11 @@ func NewRealK8sClient(controllerName string) (*RealK8sClient, error) {
 		controllerName = "the0-bot-controller"
 	}
 
-	return &RealK8sClient{clientset: clientset, controllerName: controllerName}, nil
+	return &PodClient{clientset: clientset, controllerName: controllerName}, nil
 }
 
-// NewRealK8sClientFromConfig creates a K8sClient using provided config.
-func NewRealK8sClientFromConfig(config *rest.Config, controllerName string) (*RealK8sClient, error) {
+// NewPodClientFromConfig creates a K8sClient using provided config.
+func NewPodClientFromConfig(config *rest.Config, controllerName string) (*PodClient, error) {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clientset: %w", err)
@@ -318,11 +312,11 @@ func NewRealK8sClientFromConfig(config *rest.Config, controllerName string) (*Re
 		controllerName = "the0-bot-controller"
 	}
 
-	return &RealK8sClient{clientset: clientset, controllerName: controllerName}, nil
+	return &PodClient{clientset: clientset, controllerName: controllerName}, nil
 }
 
 // ListBotPods returns all pods with the bot label managed by this controller.
-func (c *RealK8sClient) ListBotPods(ctx context.Context, namespace string) ([]corev1.Pod, error) {
+func (c *PodClient) ListBotPods(ctx context.Context, namespace string) ([]corev1.Pod, error) {
 	listOpts := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", podgen.LabelManagedBy, c.controllerName),
 	}
@@ -336,70 +330,21 @@ func (c *RealK8sClient) ListBotPods(ctx context.Context, namespace string) ([]co
 }
 
 // CreatePod creates a new pod.
-func (c *RealK8sClient) CreatePod(ctx context.Context, pod *corev1.Pod) error {
+func (c *PodClient) CreatePod(ctx context.Context, pod *corev1.Pod) error {
 	_, err := c.clientset.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	return err
 }
 
 // DeletePod deletes a pod.
-func (c *RealK8sClient) DeletePod(ctx context.Context, namespace, name string) error {
+func (c *PodClient) DeletePod(ctx context.Context, namespace, name string) error {
 	return c.clientset.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // GetPod gets a pod.
-func (c *RealK8sClient) GetPod(ctx context.Context, namespace, name string) (*corev1.Pod, error) {
+func (c *PodClient) GetPod(ctx context.Context, namespace, name string) (*corev1.Pod, error) {
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return nil, nil
 	}
 	return pod, err
-}
-
-// NoOpImageBuilder is a placeholder image builder that constructs image references
-// based on bot metadata. Used by schedule controller until it's updated to use base images.
-type NoOpImageBuilder struct {
-	Registry       string
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-}
-
-// NewNoOpImageBuilder creates a NoOpImageBuilder with the given configuration.
-func NewNoOpImageBuilder(registry, minioEndpoint, minioAccessKey, minioSecretKey, minioBucket string) *NoOpImageBuilder {
-	if registry == "" {
-		registry = "localhost:5000"
-	}
-	return &NoOpImageBuilder{
-		Registry:       registry,
-		MinIOEndpoint:  minioEndpoint,
-		MinIOAccessKey: minioAccessKey,
-		MinIOSecretKey: minioSecretKey,
-		MinIOBucket:    minioBucket,
-	}
-}
-
-// EnsureImage constructs an image reference based on bot metadata.
-// In the real implementation, this would check the registry and trigger a Kaniko build if needed.
-func (b *NoOpImageBuilder) EnsureImage(ctx context.Context, bot model.Bot) (string, error) {
-	// In Phase 2, this will:
-	// 1. Check if image exists in registry
-	// 2. If not, trigger Kaniko job to build it
-	// 3. Wait for job completion
-	// 4. Return the image reference
-
-	// Extract custom bot ID from config
-	customBotID := "unknown"
-	if bot.CustomBotVersion.Config.Name != "" {
-		customBotID = bot.CustomBotVersion.Config.Name
-	}
-
-	// Extract version with fallback
-	version := bot.CustomBotVersion.Version
-	if version == "" {
-		version = "latest"
-	}
-
-	// Construct image reference: registry/the0/bots/{customBotId}:{version}
-	return fmt.Sprintf("%s/the0/bots/%s:%s", b.Registry, customBotID, version), nil
 }

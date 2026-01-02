@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -346,7 +345,9 @@ func runController() {
 	defer mongoClient.Disconnect(context.Background())
 
 	// Start NATS subscribers to sync bots and schedules from API to MongoDB
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	natsUrl := os.Getenv("NATS_URL")
 	if natsUrl == "" {
 		util.LogMaster("WARNING: NATS_URL not set, bots/schedules won't be synced from API")
@@ -392,164 +393,51 @@ func runController() {
 		util.LogMaster("Schedule NATS subscriber started - listening for schedule events")
 	}
 
-	// Create MongoDB repository for bots
-	botRepo := controller.NewMongoBotRepository(
-		mongoClient,
-		constants.BOT_RUNNER_DB_NAME,
-		constants.BOT_RUNNER_COLLECTION,
-	)
-
-	// Create K8s client
-	// Controller name must match what's used in BotControllerConfig
-	botControllerName := "the0-bot-controller"
-	k8sClient, err := controller.NewRealK8sClient(botControllerName)
+	// Create controller manager
+	manager, err := controller.NewManager(mongoClient, controller.ManagerConfig{
+		Namespace:         controllerNamespace,
+		ReconcileInterval: controllerReconcileInterval,
+		MinIOEndpoint:     minioEndpoint,
+		MinIOAccessKey:    minioAccessKey,
+		MinIOSecretKey:    minioSecretKey,
+		MinIOBucket:       minioBucket,
+		Logger:            &util.DefaultLogger{},
+	})
 	if err != nil {
-		util.LogMaster("Failed to create K8s client: %v", err)
+		util.LogMaster("Failed to create controller manager: %v", err)
 		util.LogMaster("Make sure the controller is running inside a Kubernetes cluster with proper RBAC.")
 		os.Exit(1)
 	}
 
-	// Create bot controller (uses base images + init container, no image building)
-	botCtrl := controller.NewBotController(
-		controller.BotControllerConfig{
-			Namespace:         controllerNamespace,
-			ReconcileInterval: controllerReconcileInterval,
-			ControllerName:    botControllerName,
-			MinIOEndpoint:     minioEndpoint,
-			MinIOAccessKey:    minioAccessKey,
-			MinIOSecretKey:    minioSecretKey,
-			MinIOBucket:       minioBucket,
-		},
-		botRepo,
-		k8sClient,
-	)
-
-	// Create schedule controller
-	scheduleRepo := controller.NewMongoBotScheduleRepository(
-		mongoClient,
-		constants.BOT_SCHEDULER_DB_NAME,
-		constants.BOT_SCHEDULE_COLLECTION,
-	)
-
-	scheduleControllerName := "the0-schedule-controller"
-	cronClient, err := controller.NewRealK8sCronJobClient(scheduleControllerName)
-	if err != nil {
-		util.LogMaster("Failed to create K8s CronJob client: %v", err)
-		os.Exit(1)
-	}
-
-	scheduleCtrl := controller.NewBotScheduleController(
-		controller.BotScheduleControllerConfig{
-			Namespace:         controllerNamespace,
-			ReconcileInterval: controllerReconcileInterval,
-			ControllerName:    scheduleControllerName,
-			MinIOEndpoint:     minioEndpoint,
-			MinIOAccessKey:    minioAccessKey,
-			MinIOSecretKey:    minioSecretKey,
-			MinIOBucket:       minioBucket,
-		},
-		scheduleRepo,
-		cronClient,
-	)
-
-	// Create and start log collector for bot pods
-	logCollector, err := controller.NewK8sLogCollector(ctx, controller.K8sLogCollectorConfig{
-		Namespace:      controllerNamespace,
-		Interval:       30 * time.Second,
-		MinIOEndpoint:  minioEndpoint,
-		MinIOAccessKey: minioAccessKey,
-		MinIOSecretKey: minioSecretKey,
-	}, &util.DefaultLogger{})
-	if err != nil {
-		util.LogMaster("Failed to create log collector: %v", err)
-		util.LogMaster("Logs will not be collected from bot pods")
-	} else {
-		logCollector.Start()
-		util.LogMaster("Log collector started - collecting logs every 30s")
-	}
-
 	// Setup signal handling
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-ch
 		util.LogMaster("Received interrupt signal, shutting down controllers...")
 		healthServer.SetReady(false)
-		botCtrl.Stop()
-		scheduleCtrl.Stop()
-		if logCollector != nil {
-			logCollector.Stop()
-		}
+		manager.Stop()
 		cancel()
 	}()
 
-	// Start both controllers in parallel and track errors
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// Start controllers and wait for readiness
+	readyCh, err := manager.Start(ctx)
+	if err != nil {
+		util.LogMaster("Failed to start controller manager: %v", err)
+		os.Exit(1)
+	}
 
-	// Track controller errors for exit status
-	var botCtrlErr, scheduleCtrlErr error
-	var errMu sync.Mutex
-
-	// Channel to signal when controllers are ready
-	readyCh := make(chan struct{}, 2)
-
+	// Wait for controllers to be ready, then mark health server as ready
 	go func() {
-		defer wg.Done()
-		// Signal readiness after a brief delay to allow controller to initialize
-		go func() {
-			// Wait for first successful reconciliation (or short timeout)
-			select {
-			case <-time.After(2 * time.Second):
-				readyCh <- struct{}{}
-			case <-ctx.Done():
-			}
-		}()
-		if err := botCtrl.Start(ctx); err != nil && err != context.Canceled {
-			util.LogMaster("Bot controller stopped with error: %v", err)
-			errMu.Lock()
-			botCtrlErr = err
-			errMu.Unlock()
+		select {
+		case <-readyCh:
+			healthServer.SetReady(true)
+		case <-ctx.Done():
 		}
 	}()
 
-	go func() {
-		defer wg.Done()
-		// Signal readiness after a brief delay to allow controller to initialize
-		go func() {
-			select {
-			case <-time.After(2 * time.Second):
-				readyCh <- struct{}{}
-			case <-ctx.Done():
-			}
-		}()
-		if err := scheduleCtrl.Start(ctx); err != nil && err != context.Canceled {
-			util.LogMaster("Schedule controller stopped with error: %v", err)
-			errMu.Lock()
-			scheduleCtrlErr = err
-			errMu.Unlock()
-		}
-	}()
-
-	// Wait for both controllers to signal readiness before marking as ready
-	go func() {
-		count := 0
-		for count < 2 {
-			select {
-			case <-readyCh:
-				count++
-			case <-ctx.Done():
-				return
-			}
-		}
-		util.LogMaster("Controllers ready")
-		healthServer.SetReady(true)
-	}()
-
-	wg.Wait()
+	// Wait for context cancellation (signal handler)
+	<-ctx.Done()
 
 	// Shutdown health server
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -557,11 +445,6 @@ func runController() {
 	healthServer.Stop(shutdownCtx)
 
 	util.LogMaster("Controllers stopped")
-
-	// Exit with error code if any controller failed
-	if botCtrlErr != nil || scheduleCtrlErr != nil {
-		os.Exit(1)
-	}
 }
 
 // Utility functions
