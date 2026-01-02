@@ -7,9 +7,6 @@ order: 2
 
 # Kubernetes Deployment
 
-::: warning Experimental
-The Kubernetes deployment has been tested previously but may require updates. If you encounter issues, please report them on [GitHub](https://github.com/alexanderwanyoike/the0/issues). For a fully tested deployment path, use [Docker Compose](./docker-compose).
-:::
 
 Kubernetes deployment provides production-ready orchestration for the0 platform. Use Kubernetes mode when:
 

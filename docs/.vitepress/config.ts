@@ -105,7 +105,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/deployment/' },
           { text: 'Docker Compose', link: '/deployment/docker-compose' },
-          { text: 'Kubernetes (Experimental)', link: '/deployment/kubernetes' },
+          { text: 'Kubernetes', link: '/deployment/kubernetes' },
         ]
       }
     ],
