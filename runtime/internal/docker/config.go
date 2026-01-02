@@ -1,4 +1,4 @@
-// Package dockerrunner provides configuration management for the Docker-based runtime environment.
+// Package docker provides configuration management for the Docker-based runtime environment.
 // This file handles environment-based configuration loading for MinIO, Docker, and resource limits.
 package docker
 

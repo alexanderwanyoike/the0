@@ -408,7 +408,7 @@ func TestGetBaseImage(t *testing.T) {
 	}{
 		{"python3.11", "python:3.11-slim"},
 		{"nodejs20", "node:20-alpine"},
-		{"rust-stable", "rust:latest"},
+		{"rust-stable", "rust:1.83-slim"},
 		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"},
 		{"gcc13", "gcc:13"},
 		{"scala3", "eclipse-temurin:21-jre"},

@@ -1,4 +1,4 @@
-// Package dockerrunner provides a Docker-based execution environment for bots and backtests.
+// Package docker provides a Docker-based execution environment for bots and backtests.
 // It orchestrates the entire lifecycle from code download to container execution and log collection.
 package docker
 

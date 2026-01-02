@@ -1,4 +1,4 @@
-// Package dockerrunner provides the ContainerBuilder component.
+// Package docker provides the ContainerBuilder component.
 //
 // ContainerBuilder uses the fluent builder pattern to construct Docker container
 // configurations. It provides a clean API for setting up environment variables,
@@ -79,7 +79,7 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 	b.config.Env = append(b.config.Env,
 		fmt.Sprintf("ID=%s", executable.ID),
 		fmt.Sprintf("CONFIG=%s", string(configJSON)),
-		fmt.Sprintf("ENTRYPPOINT_TYPE=%s", executable.Entrypoint),
+		fmt.Sprintf("ENTRYPOINT_TYPE=%s", executable.Entrypoint),
 		fmt.Sprintf("CODE_MOUNT_DIR=%s", executable.Entrypoint),
 	)
 

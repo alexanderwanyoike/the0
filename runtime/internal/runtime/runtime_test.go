@@ -13,19 +13,53 @@ func TestGetDockerImage(t *testing.T) {
 	}{
 		{"python3.11", "python:3.11-slim"},
 		{"nodejs20", "node:20-alpine"},
-		{"rust-stable", "rust:latest"},
+		{"rust-stable", "rust:1.83-slim"},
 		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"},
 		{"gcc13", "gcc:13"},
 		{"cpp-gcc13", "gcc:13"},
 		{"scala3", "eclipse-temurin:21-jre"},
 		{"ghc96", "haskell:9.6-slim"},
-		{"unknown", "python:3.11-slim"}, // fallback
+		{"unknown", "python:3.11-slim"}, // fallback (deprecated behavior)
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.runtime, func(t *testing.T) {
 			result := GetDockerImage(tt.runtime)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetDockerImageOrError(t *testing.T) {
+	// Test valid runtimes
+	validTests := []struct {
+		runtime  string
+		expected string
+	}{
+		{"python3.11", "python:3.11-slim"},
+		{"nodejs20", "node:20-alpine"},
+		{"rust-stable", "rust:1.83-slim"},
+	}
+
+	for _, tt := range validTests {
+		t.Run(tt.runtime+"_valid", func(t *testing.T) {
+			result, err := GetDockerImageOrError(tt.runtime)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+
+	// Test invalid runtimes
+	invalidRuntimes := []string{"unknown", "python3.10", ""}
+	for _, rt := range invalidRuntimes {
+		name := rt
+		if name == "" {
+			name = "empty"
+		}
+		t.Run(name+"_invalid", func(t *testing.T) {
+			_, err := GetDockerImageOrError(rt)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "unsupported runtime")
 		})
 	}
 }
@@ -64,7 +98,27 @@ func TestIsValidRuntime(t *testing.T) {
 
 func TestSupportedRuntimes(t *testing.T) {
 	runtimes := SupportedRuntimes()
-	assert.NotEmpty(t, runtimes)
-	assert.Contains(t, runtimes, "python3.11")
-	assert.Contains(t, runtimes, "nodejs20")
+
+	// Verify expected count - all runtimes in runtimeImages
+	expectedRuntimes := []string{
+		"cpp-gcc13",
+		"dotnet8",
+		"gcc13",
+		"ghc96",
+		"nodejs20",
+		"python3.11",
+		"rust-stable",
+		"scala3",
+	}
+	assert.Len(t, runtimes, len(expectedRuntimes))
+
+	// Verify all expected runtimes are present
+	for _, expected := range expectedRuntimes {
+		assert.Contains(t, runtimes, expected, "missing runtime: %s", expected)
+	}
+
+	// Verify SupportedRuntimes is consistent with IsValidRuntime
+	for _, rt := range runtimes {
+		assert.True(t, IsValidRuntime(rt), "SupportedRuntimes contains %s but IsValidRuntime returns false", rt)
+	}
 }

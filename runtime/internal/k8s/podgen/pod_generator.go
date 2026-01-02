@@ -149,7 +149,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			InitContainers: []corev1.Container{
 				{
 					Name:    "download-code",
-					Image:   "minio/mc:latest",
+					Image:   "minio/mc:RELEASE.2024-11-17T19-35-25Z",
 					Command: []string{"/bin/sh", "-c"},
 					Args: []string{
 						fmt.Sprintf(`
@@ -169,7 +169,7 @@ ls -la /bot/
 				},
 				{
 					Name:    "extract-code",
-					Image:   "busybox:latest",
+					Image:   "busybox:1.36.1",
 					Command: []string{"/bin/sh", "-c"},
 					Args: []string{
 						fmt.Sprintf(`

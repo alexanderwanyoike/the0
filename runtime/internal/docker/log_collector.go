@@ -1,4 +1,4 @@
-// Package dockerrunner provides the LogCollector component.
+// Package docker provides the LogCollector component.
 //
 // LogCollector is a background service that periodically collects logs from
 // long-running containers and stores them in MinIO. It runs on a configurable
@@ -9,6 +9,7 @@ import (
 	"context"
 	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/util"
+	"sync"
 	"time"
 )
 
@@ -33,9 +34,10 @@ type logCollector struct {
 	getContainersFunc func() []*ContainerInfo
 
 	// Internal state
-	ticker *time.Ticker
-	stopCh chan bool
-	doneCh chan bool
+	ticker   *time.Ticker
+	stopCh   chan bool
+	doneCh   chan bool
+	stopOnce sync.Once // Prevents panic from double-close of stopCh
 }
 
 // NewLogCollector creates a new LogCollector that collects logs at the specified interval.
@@ -76,8 +78,11 @@ func (lc *logCollector) Start() {
 }
 
 // Stop signals the background goroutine to stop and waits for it to finish.
+// Safe to call multiple times.
 func (lc *logCollector) Stop() {
-	close(lc.stopCh)
+	lc.stopOnce.Do(func() {
+		close(lc.stopCh)
+	})
 	<-lc.doneCh
 }
 

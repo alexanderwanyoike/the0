@@ -1,4 +1,4 @@
-// Package dockerrunner provides the ContainerOrchestrator component.
+// Package docker provides the ContainerOrchestrator component.
 //
 // ContainerOrchestrator encapsulates all Docker API interactions, providing a clean
 // interface for pulling images, creating/starting containers, retrieving logs,

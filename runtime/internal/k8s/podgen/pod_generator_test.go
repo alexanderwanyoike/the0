@@ -61,10 +61,10 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	require.Len(t, pod.Spec.InitContainers, 2)
 	downloadContainer := pod.Spec.InitContainers[0]
 	assert.Equal(t, "download-code", downloadContainer.Name)
-	assert.Equal(t, "minio/mc:latest", downloadContainer.Image)
+	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", downloadContainer.Image)
 	extractContainer := pod.Spec.InitContainers[1]
 	assert.Equal(t, "extract-code", extractContainer.Name)
-	assert.Equal(t, "busybox:latest", extractContainer.Image)
+	assert.Equal(t, "busybox:1.36.1", extractContainer.Image)
 
 	// Check main container
 	require.Len(t, pod.Spec.Containers, 1)
@@ -179,7 +179,7 @@ func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "rust-stable", pod.Labels[LabelRuntime])
-	assert.Equal(t, "rust:latest", pod.Spec.Containers[0].Image)
+	assert.Equal(t, "rust:1.83-slim", pod.Spec.Containers[0].Image)
 }
 
 func TestPodGenerator_DefaultConfig(t *testing.T) {

@@ -2,9 +2,30 @@ package entrypoints
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"text/template"
 )
+
+// validEntrypointPattern matches safe entrypoint paths.
+// Allows alphanumeric characters, underscores, hyphens, dots, and forward slashes.
+// No shell metacharacters, backticks, $, ;, &, |, >, <, etc.
+var validEntrypointPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-./]+$`)
+
+// validateEntrypoint ensures the entrypoint path doesn't contain shell injection risks.
+func validateEntrypoint(entrypoint string) error {
+	if entrypoint == "" {
+		return fmt.Errorf("entrypoint cannot be empty")
+	}
+	if !validEntrypointPattern.MatchString(entrypoint) {
+		return fmt.Errorf("entrypoint contains invalid characters: %q", entrypoint)
+	}
+	// Prevent path traversal
+	if strings.Contains(entrypoint, "..") {
+		return fmt.Errorf("entrypoint cannot contain path traversal: %q", entrypoint)
+	}
+	return nil
+}
 
 // GeneratorOptions controls entrypoint script generation.
 type GeneratorOptions struct {
@@ -121,6 +142,11 @@ type templateData struct {
 // Unlike Docker, K8s passes BOT_ID and BOT_CONFIG via pod environment variables,
 // so we don't need to embed them in the script.
 func GenerateK8sEntrypoint(runtime string, opts GeneratorOptions) (string, error) {
+	// Validate entrypoint to prevent shell injection
+	if err := validateEntrypoint(opts.Entrypoint); err != nil {
+		return "", fmt.Errorf("invalid entrypoint: %w", err)
+	}
+
 	if opts.EntryPointType == "" {
 		opts.EntryPointType = "bot"
 	}
@@ -154,9 +180,7 @@ func GenerateK8sEntrypoint(runtime string, opts GeneratorOptions) (string, error
 		selectedTemplate = k8sScalaEntrypoint
 
 	default:
-		// Default to Python
-		data.ScriptContent = PythonBotEntrypoint
-		selectedTemplate = k8sPythonEntrypoint
+		return "", fmt.Errorf("unsupported runtime: %q (supported: python3.11, nodejs20, rust-stable, gcc13, cpp-gcc13, dotnet8, scala3, ghc96)", runtime)
 	}
 
 	tmpl, err := template.New("k8sEntrypoint").Parse(selectedTemplate)

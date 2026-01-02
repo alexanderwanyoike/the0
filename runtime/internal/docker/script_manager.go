@@ -1,4 +1,4 @@
-// Package dockerrunner provides the ScriptManager component.
+// Package docker provides the ScriptManager component.
 //
 // ScriptManager generates dynamic entrypoint scripts for containers using the
 // factory pattern. It orchestrates CodeEntrypointFactory and BashEntrypointFactory
