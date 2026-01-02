@@ -271,8 +271,8 @@ func (s *ScheduleService) getDueSchedules(ctx context.Context, now time.Time) ([
 	filter := bson.M{
 		"next_execution_time": bson.M{"$lte": now.Unix()},
 		"$or": []bson.M{
-			{"enabled": bson.M{"$ne": false}},
-			{"enabled": bson.M{"$exists": false}},
+			{"config.enabled": bson.M{"$ne": false}},
+			{"config.enabled": bson.M{"$exists": false}},
 		},
 	}
 

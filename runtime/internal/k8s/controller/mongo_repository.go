@@ -28,8 +28,8 @@ func (r *MongoBotRepository) FindAllEnabled(ctx context.Context) ([]model.Bot, e
 	// Note: In K8s mode we don't filter by segment - the controller manages ALL bots
 	filter := bson.M{
 		"$or": []bson.M{
-			{"enabled": bson.M{"$ne": false}},     // explicitly not disabled
-			{"enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
+			{"config.enabled": bson.M{"$ne": false}},     // explicitly not disabled
+			{"config.enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
 		},
 	}
 
@@ -64,8 +64,8 @@ func (r *MongoBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]mode
 	// Query for all enabled schedules
 	filter := bson.M{
 		"$or": []bson.M{
-			{"enabled": bson.M{"$ne": false}},     // explicitly not disabled
-			{"enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
+			{"config.enabled": bson.M{"$ne": false}},     // explicitly not disabled
+			{"config.enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
 		},
 	}
 
