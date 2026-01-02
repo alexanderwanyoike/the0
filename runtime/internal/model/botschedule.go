@@ -12,6 +12,12 @@ type BotSchedule struct {
 
 // IsEnabled returns true if the schedule is enabled (default true for backward compatibility)
 func (b *BotSchedule) IsEnabled() bool {
+	// Check struct field first (matches MongoDB query on top-level "enabled" field)
+	if b.Enabled != nil {
+		return *b.Enabled
+	}
+
+	// Fall back to Config["enabled"] for backward compatibility
 	if b.Config == nil {
 		return true // Default to enabled if no config
 	}

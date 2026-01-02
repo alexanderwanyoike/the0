@@ -117,6 +117,12 @@ func NewK8sLogCollector(ctx context.Context, config K8sLogCollectorConfig, logge
 // Start begins the background goroutine that periodically collects logs.
 func (lc *K8sLogCollector) Start() {
 	lc.logger.Info("K8s Log Collector: Starting log collection service", "interval", lc.interval.String())
+
+	// Reinitialize channels and stopOnce for restart support
+	lc.stopCh = make(chan struct{})
+	lc.doneCh = make(chan struct{})
+	lc.stopOnce = sync.Once{}
+
 	lc.ticker = time.NewTicker(lc.interval)
 
 	go func() {
