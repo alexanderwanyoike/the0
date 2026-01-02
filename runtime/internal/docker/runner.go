@@ -1,6 +1,6 @@
-// Package dockerrunner provides a Docker-based execution environment for bots and backtests.
+// Package docker provides a Docker-based execution environment for bots and backtests.
 // It orchestrates the entire lifecycle from code download to container execution and log collection.
-package dockerrunner
+package docker
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/model"
+	runtimepkg "runtime/internal/runtime"
 	"runtime/internal/util"
 	"strings"
 	"sync"
@@ -181,34 +182,11 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 }
 
 func (r *dockerRunner) isValidRuntime(runtime string) bool {
-	validRuntimes := []string{"python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"}
-	for _, valid := range validRuntimes {
-		if runtime == valid {
-			return true
-		}
-	}
-	return false
+	return runtimepkg.IsValidRuntime(runtime)
 }
 
-func (r *dockerRunner) getDockerImage(runtime string) string {
-	switch runtime {
-	case "python3.11":
-		return "python:3.11-slim"
-	case "nodejs20":
-		return "node:20-alpine"
-	case "rust-stable":
-		return "rust:latest"
-	case "dotnet8":
-		return "mcr.microsoft.com/dotnet/runtime:8.0"
-	case "gcc13":
-		return "gcc:13"
-	case "scala3":
-		return "eclipse-temurin:21-jre"
-	case "ghc96":
-		return "haskell:9.6-slim"
-	default:
-		return "python:3.11-slim" // fallback
-	}
+func (r *dockerRunner) getDockerImage(runtime string) (string, error) {
+	return runtimepkg.GetDockerImage(runtime)
 }
 
 func removeDir(dir string) error {
@@ -386,7 +364,16 @@ func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Exec
 	}
 
 	// Pull Docker image
-	imageName := r.getDockerImage(executable.Runtime)
+	imageName, err := r.getDockerImage(executable.Runtime)
+	if err != nil {
+		return &ExecutionResult{
+			Status:   "error",
+			Message:  "Unsupported runtime",
+			Error:    err.Error(),
+			ExitCode: 1,
+			Duration: time.Since(startTime),
+		}, nil
+	}
 	if err := r.orchestrator.PullImage(ctx, imageName); err != nil {
 		return &ExecutionResult{
 			Status:   "error",

@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
-	"runtime/internal/bot-runner/model"
+	"runtime/internal/model"
 )
 
 func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
@@ -61,10 +61,10 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	require.Len(t, pod.Spec.InitContainers, 2)
 	downloadContainer := pod.Spec.InitContainers[0]
 	assert.Equal(t, "download-code", downloadContainer.Name)
-	assert.Equal(t, "minio/mc:latest", downloadContainer.Image)
+	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", downloadContainer.Image)
 	extractContainer := pod.Spec.InitContainers[1]
 	assert.Equal(t, "extract-code", extractContainer.Name)
-	assert.Equal(t, "busybox:latest", extractContainer.Image)
+	assert.Equal(t, "busybox:1.36.1", extractContainer.Image)
 
 	// Check main container
 	require.Len(t, pod.Spec.Containers, 1)
@@ -153,6 +153,8 @@ func TestPodGenerator_GeneratePod_NodeJSRuntime(t *testing.T) {
 
 	assert.Equal(t, "nodejs20", pod.Labels[LabelRuntime])
 	assert.Equal(t, "node:20-alpine", pod.Spec.Containers[0].Image)
+	// Alpine images use /bin/sh, not /bin/bash
+	assert.Equal(t, []string{"/bin/sh", "/bot/entrypoint.sh"}, pod.Spec.Containers[0].Command)
 }
 
 func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
@@ -179,7 +181,7 @@ func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "rust-stable", pod.Labels[LabelRuntime])
-	assert.Equal(t, "rust:latest", pod.Spec.Containers[0].Image)
+	assert.Equal(t, "rust:1.83-slim", pod.Spec.Containers[0].Image)
 }
 
 func TestPodGenerator_DefaultConfig(t *testing.T) {
@@ -437,4 +439,31 @@ func TestPodGenerator_GeneratePod_CommandInjection(t *testing.T) {
 	_, err := generator.GeneratePod(bot)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid file path")
+}
+
+func TestGetShellForImage(t *testing.T) {
+	tests := []struct {
+		image    string
+		expected string
+	}{
+		// Alpine images use /bin/sh
+		{"node:20-alpine", "/bin/sh"},
+		{"python:3.11-alpine", "/bin/sh"},
+		{"some-alpine-image", "/bin/sh"},
+
+		// Non-Alpine images use /bin/bash
+		{"python:3.11-slim", "/bin/bash"},
+		{"rust:1.83-slim", "/bin/bash"},
+		{"gcc:13", "/bin/bash"},
+		{"mcr.microsoft.com/dotnet/runtime:8.0", "/bin/bash"},
+		{"haskell:9.6-slim", "/bin/bash"},
+		{"eclipse-temurin:21-jre", "/bin/bash"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.image, func(t *testing.T) {
+			result := getShellForImage(tt.image)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

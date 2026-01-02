@@ -281,9 +281,11 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 	defer cancel()
 
 	// Build log options - only collect from the "bot" container
+	// Note: Timestamps: false to match Docker mode - the frontend parser expects
+	// logs without K8s timestamp prefixes for metric detection to work.
 	logOpts := &corev1.PodLogOptions{
 		Container:  "bot",
-		Timestamps: true,      // Include timestamps to help with deduplication
+		Timestamps: false,     // Don't include timestamps - breaks frontend metric parsing
 		LimitBytes: &lc.maxLogBytes, // Prevent OOM from large logs
 	}
 

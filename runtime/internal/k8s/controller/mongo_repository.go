@@ -7,8 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"runtime/internal/bot-runner/model"
-	scheduleModel "runtime/internal/bot-scheduler/model"
+	"runtime/internal/model"
 )
 
 // MongoBotRepository implements BotRepository using MongoDB.
@@ -61,7 +60,7 @@ func NewMongoBotScheduleRepository(client *mongo.Client, dbName, collectionName 
 
 // FindAllEnabled returns all schedules that should be running.
 // This uses the same query pattern as the Docker mode worker.
-func (r *MongoBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]scheduleModel.BotSchedule, error) {
+func (r *MongoBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]model.BotSchedule, error) {
 	// Query for all enabled schedules
 	filter := bson.M{
 		"$or": []bson.M{
@@ -76,7 +75,7 @@ func (r *MongoBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]sche
 	}
 	defer cursor.Close(ctx)
 
-	var schedules []scheduleModel.BotSchedule
+	var schedules []model.BotSchedule
 	if err = cursor.All(ctx, &schedules); err != nil {
 		return nil, fmt.Errorf("failed to decode schedules: %w", err)
 	}

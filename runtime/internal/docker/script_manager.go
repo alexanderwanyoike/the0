@@ -1,10 +1,10 @@
-// Package dockerrunner provides the ScriptManager component.
+// Package docker provides the ScriptManager component.
 //
 // ScriptManager generates dynamic entrypoint scripts for containers using the
 // factory pattern. It orchestrates CodeEntrypointFactory and BashEntrypointFactory
 // to create runtime-specific wrapper scripts (Python/Node.js) with injected
 // configuration and writes them to the filesystem.
-package dockerrunner
+package docker
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime/internal/docker-runner/entrypoints"
+	"runtime/internal/entrypoints"
 	"runtime/internal/model"
 	"runtime/internal/util"
 )

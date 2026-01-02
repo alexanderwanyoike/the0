@@ -1,4 +1,4 @@
-package dockerrunner
+package docker
 
 import (
 	"archive/zip"

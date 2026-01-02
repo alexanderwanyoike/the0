@@ -1,9 +1,9 @@
-// Package dockerrunner provides the CodeManager component.
+// Package docker provides the CodeManager component.
 //
 // CodeManager handles downloading bot code archives from MinIO and extracting them
 // to temporary directories. It implements security checks like directory traversal
 // prevention and supports ZIP archive format with automatic format detection.
-package dockerrunner
+package docker
 
 import (
 	"archive/zip"
@@ -125,17 +125,15 @@ func (r *minioCodeManager) extractZip(data []byte, destDir string) error {
 		if err != nil {
 			return err
 		}
+		defer fileReader.Close()
 
 		targetFile, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.FileInfo().Mode())
 		if err != nil {
-			fileReader.Close()
 			return err
 		}
+		defer targetFile.Close()
 
-		_, err = io.Copy(targetFile, fileReader)
-		fileReader.Close()
-		targetFile.Close()
-		if err != nil {
+		if _, err = io.Copy(targetFile, fileReader); err != nil {
 			return err
 		}
 	}

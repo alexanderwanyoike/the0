@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"runtime/internal/bot-runner/model"
+	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/util"
 )
