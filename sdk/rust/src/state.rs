@@ -305,6 +305,7 @@ pub fn exists(key: &str) -> bool {
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
+    use serial_test::serial;
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -321,6 +322,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_set_and_get_dict() {
         let _temp = setup_test_env();
         let mut holdings = HashMap::new();
@@ -334,6 +336,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_set_and_get_vec() {
         let _temp = setup_test_env();
         let prices = vec![45000.5, 45100.0, 45050.25];
@@ -343,6 +346,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_set_and_get_number() {
         let _temp = setup_test_env();
         set("count", &42i32).unwrap();
@@ -351,6 +355,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_set_and_get_string() {
         let _temp = setup_test_env();
         set("symbol", &"BTC/USD").unwrap();
@@ -359,6 +364,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_nonexistent_returns_error() {
         let _temp = setup_test_env();
         let result: Result<i32, _> = get("nonexistent");
@@ -366,6 +372,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_or_returns_default() {
         let _temp = setup_test_env();
         let result: i32 = get_or("nonexistent", 42);
@@ -373,6 +380,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_or_returns_stored_value() {
         let _temp = setup_test_env();
         set("key", &100i32).unwrap();
@@ -381,6 +389,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_exists_true() {
         let _temp = setup_test_env();
         set("exists_test", &"value").unwrap();
@@ -388,12 +397,14 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_exists_false() {
         let _temp = setup_test_env();
         assert!(!exists("nonexistent"));
     }
 
     #[test]
+    #[serial]
     fn test_delete_existing_key() {
         let _temp = setup_test_env();
         set("to_delete", &"value").unwrap();
@@ -404,6 +415,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_delete_nonexistent_key() {
         let _temp = setup_test_env();
         let result = delete("nonexistent");
@@ -411,6 +423,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_list_keys() {
         let _temp = setup_test_env();
         set("key1", &"value1").unwrap();
@@ -422,6 +435,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_list_empty() {
         let _temp = setup_test_env();
         let keys = list();
@@ -429,6 +443,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_clear() {
         let _temp = setup_test_env();
         set("key1", &"value1").unwrap();
@@ -439,6 +454,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_clear_empty_state() {
         let _temp = setup_test_env();
         // Should not error when already empty
@@ -447,6 +463,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_key_empty() {
         let _temp = setup_test_env();
         let result = set("", &"value");
@@ -458,6 +475,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_key_path_separator() {
         let _temp = setup_test_env();
         let result = set("../escape", &"evil");
@@ -469,6 +487,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_key_backslash() {
         let _temp = setup_test_env();
         let result = set("..\\escape", &"evil");
@@ -480,6 +499,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_complex_nested_data() {
         let _temp = setup_test_env();
 
@@ -538,6 +558,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_overwrite_existing_key() {
         let _temp = setup_test_env();
         set("key", &"original").unwrap();
