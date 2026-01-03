@@ -456,9 +456,14 @@ func (r *dockerRunner) StopContainer(
 	}
 
 	// Upload state to MinIO before cleanup
+	// CRITICAL: Only delete state directory if upload succeeds to prevent data loss
+	stateUploadSucceeded := false
 	if info != nil && info.StateDir != "" {
 		if err := r.stateManager.UploadState(ctx, executable.ID, info.StateDir); err != nil {
-			r.logger.Info("Failed to upload state to MinIO", "bot_id", executable.ID, "error", err.Error())
+			r.logger.Error("Failed to upload state to MinIO - preserving local state for recovery",
+				"bot_id", executable.ID, "state_dir", info.StateDir, "error", err.Error())
+		} else {
+			stateUploadSucceeded = true
 		}
 	}
 
@@ -468,8 +473,9 @@ func (r *dockerRunner) StopContainer(
 		}
 	}
 
-	// Clean up state directory
-	if info != nil && info.StateDir != "" {
+	// Clean up state directory only if upload succeeded
+	// If upload failed, preserve state for manual recovery to prevent data loss
+	if info != nil && info.StateDir != "" && stateUploadSucceeded {
 		if err := removeDir(info.StateDir); err != nil {
 			r.logger.Info("Failed to clean up state directory", "state_dir", info.StateDir, "error", err.Error())
 		}

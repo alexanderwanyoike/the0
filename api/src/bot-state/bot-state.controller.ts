@@ -6,6 +6,9 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
+  PayloadTooLargeException,
+  UnprocessableEntityException,
+  ConflictException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { BotStateService, BotStateErrorCode } from "./bot-state.service";
@@ -66,6 +69,10 @@ export class BotStateController {
           throw new NotFoundException("Bot or state key not found");
         case BotStateErrorCode.INVALID_KEY:
           throw new BadRequestException("Invalid state key");
+        case BotStateErrorCode.FILE_TOO_LARGE:
+          throw new PayloadTooLargeException(result.error.message);
+        case BotStateErrorCode.INVALID_JSON:
+          throw new UnprocessableEntityException("State file contains invalid JSON");
         default:
           throw new BadRequestException("Failed to get state key");
       }
@@ -89,6 +96,10 @@ export class BotStateController {
   @ApiResponse({ status: 200, description: "State key deleted successfully" })
   @ApiResponse({ status: 400, description: "Invalid state key" })
   @ApiResponse({ status: 404, description: "Bot not found" })
+  @ApiResponse({
+    status: 409,
+    description: "Concurrent modification - state was modified by another operation",
+  })
   async deleteKey(@Param("botId") botId: string, @Param("key") key: string) {
     const result = await this.botStateService.deleteKey(botId, key);
 
@@ -98,6 +109,10 @@ export class BotStateController {
           throw new NotFoundException("Bot not found or access denied");
         case BotStateErrorCode.INVALID_KEY:
           throw new BadRequestException("Invalid state key");
+        case BotStateErrorCode.CONCURRENT_MODIFICATION:
+          throw new ConflictException(
+            "State was modified by another operation. Please retry the request.",
+          );
         default:
           throw new BadRequestException("Failed to delete state key");
       }

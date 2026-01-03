@@ -6,6 +6,7 @@ import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 import { REQUEST } from "@nestjs/core";
 import { Ok, Failure } from "@/common/result";
+import { MINIO_CLIENT } from "@/minio";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -53,9 +54,24 @@ describe("BotStateService", () => {
       }),
     } as any;
 
+    // Create mock MinIO client
+    const mockMinioClient = {
+      statObject: jest.fn(),
+      getObject: jest.fn(),
+      fGetObject: jest.fn(),
+      putObject: jest.fn(),
+      fPutObject: jest.fn(),
+      removeObject: jest.fn(),
+      listObjects: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BotStateService,
+        {
+          provide: MINIO_CLIENT,
+          useValue: mockMinioClient,
+        },
         {
           provide: ConfigService,
           useValue: mockConfigService,

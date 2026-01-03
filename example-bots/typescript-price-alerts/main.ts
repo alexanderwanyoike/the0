@@ -79,9 +79,13 @@ async function main(): Promise<void> {
     alertCount: persisted?.alertCount ?? 0,
   };
 
+  // Iteration counter for periodic persistence (not tied to array length)
+  let iterationCount = 0;
+
   // Main loop - runs until process is terminated
   try {
     while (true) {
+      iterationCount++;
       // Simulate price update
       const priceData = simulatePrice(botState, symbol, basePrice);
 
@@ -132,7 +136,7 @@ async function main(): Promise<void> {
       }
 
       // Persist state every 10 iterations for recovery
-      if (botState.priceHistory.length % 10 === 0) {
+      if (iterationCount % 10 === 0) {
         state.set<PersistedState>("bot_state", {
           priceHistory: botState.priceHistory,
           alertCount: botState.alertCount,

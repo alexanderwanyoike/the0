@@ -38,9 +38,11 @@ type StateManager interface {
 
 // minioStateManager implements StateManager using MinIO as the storage backend.
 type minioStateManager struct {
-	minioClient *minio.Client
-	bucket      string
-	logger      util.Logger
+	minioClient      *minio.Client
+	bucket           string
+	maxStateSize     int64 // Maximum total state folder size in bytes
+	maxStateFileSize int64 // Maximum individual state file size in bytes
+	logger           util.Logger
 }
 
 // NewMinioStateManager creates a new StateManager that stores state in MinIO.
@@ -49,10 +51,20 @@ func NewMinioStateManager(minioClient *minio.Client, config *DockerRunnerConfig,
 	if bucket == "" {
 		bucket = "bot-state"
 	}
+	maxStateSize := config.MaxStateSizeBytes
+	if maxStateSize == 0 {
+		maxStateSize = 8 * 1024 * 1024 * 1024 // Default 8GB
+	}
+	maxStateFileSize := config.MaxStateFileSizeBytes
+	if maxStateFileSize == 0 {
+		maxStateFileSize = 10 * 1024 * 1024 // Default 10MB
+	}
 	return &minioStateManager{
-		minioClient: minioClient,
-		bucket:      bucket,
-		logger:      logger,
+		minioClient:      minioClient,
+		bucket:           bucket,
+		maxStateSize:     maxStateSize,
+		maxStateFileSize: maxStateFileSize,
+		logger:           logger,
 	}
 }
 
@@ -127,6 +139,13 @@ func (m *minioStateManager) UploadState(ctx context.Context, botID string, srcDi
 		m.logger.Info("Empty state directory for bot %s, skipping upload", botID)
 		return nil
 	}
+
+	// Validate state size limits before uploading
+	totalSize, err := m.validateStateSize(srcDir)
+	if err != nil {
+		return err
+	}
+	m.logger.Info("State size for bot %s: %d bytes", botID, totalSize)
 
 	// Ensure bucket exists
 	if err := m.ensureBucket(ctx); err != nil {
@@ -224,13 +243,9 @@ func (m *minioStateManager) createTarGz(srcDir string, w io.Writer) error {
 
 		// Write file content if it's a regular file
 		if !info.IsDir() {
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			if _, err := io.Copy(tw, file); err != nil {
+			// Use a helper function to ensure file is closed immediately after use
+			// (defer inside loop would accumulate and exhaust file descriptors)
+			if err := copyFileToTar(path, tw); err != nil {
 				return err
 			}
 		}
@@ -239,7 +254,58 @@ func (m *minioStateManager) createTarGz(srcDir string, w io.Writer) error {
 	})
 }
 
+// copyFileToTar copies a file to a tar writer and ensures the file is closed immediately.
+// This avoids the file handle leak that would occur with defer inside filepath.Walk.
+func copyFileToTar(path string, tw *tar.Writer) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(tw, file)
+	file.Close() // Close immediately, don't defer
+	return err
+}
+
+// validateStateSize checks that the state directory doesn't exceed size limits.
+// Returns the total size if valid, or an error if limits are exceeded.
+func (m *minioStateManager) validateStateSize(srcDir string) (int64, error) {
+	var totalSize int64
+
+	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		// Check individual file size
+		if info.Size() > m.maxStateFileSize {
+			return fmt.Errorf("state file %s exceeds maximum size limit (%d bytes > %d bytes)",
+				info.Name(), info.Size(), m.maxStateFileSize)
+		}
+
+		totalSize += info.Size()
+
+		// Check total size as we go (fail fast)
+		if totalSize > m.maxStateSize {
+			return fmt.Errorf("total state size exceeds maximum limit (%d bytes > %d bytes)",
+				totalSize, m.maxStateSize)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return totalSize, nil
+}
+
 // extractTarGz extracts a tar.gz archive to a directory.
+// Includes protection against zip bombs by limiting extracted file sizes.
 func (m *minioStateManager) extractTarGz(r io.Reader, destDir string) error {
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
@@ -248,6 +314,8 @@ func (m *minioStateManager) extractTarGz(r io.Reader, destDir string) error {
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
+
+	var totalExtracted int64
 
 	for {
 		header, err := tr.Next()
@@ -262,6 +330,7 @@ func (m *minioStateManager) extractTarGz(r io.Reader, destDir string) error {
 
 		// Security check: prevent directory traversal
 		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)+string(os.PathSeparator)) {
+			m.logger.Info("Skipping file with path traversal attempt: %s", header.Name)
 			continue
 		}
 
@@ -271,6 +340,19 @@ func (m *minioStateManager) extractTarGz(r io.Reader, destDir string) error {
 				return err
 			}
 		case tar.TypeReg:
+			// Check individual file size limit (zip bomb protection)
+			if header.Size > m.maxStateFileSize {
+				return fmt.Errorf("file %s exceeds maximum size limit (%d bytes > %d bytes)",
+					header.Name, header.Size, m.maxStateFileSize)
+			}
+
+			// Check total extracted size (zip bomb protection)
+			totalExtracted += header.Size
+			if totalExtracted > m.maxStateSize {
+				return fmt.Errorf("total extracted size exceeds maximum limit (%d bytes > %d bytes)",
+					totalExtracted, m.maxStateSize)
+			}
+
 			// Ensure parent directory exists
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
@@ -281,11 +363,24 @@ func (m *minioStateManager) extractTarGz(r io.Reader, destDir string) error {
 				return err
 			}
 
-			if _, err := io.Copy(file, tr); err != nil {
-				file.Close()
+			// Use LimitReader to enforce size limit during extraction (defense in depth)
+			// This protects against archives with falsified header sizes
+			limited := io.LimitReader(tr, m.maxStateFileSize+1)
+			written, err := io.Copy(file, limited)
+			file.Close()
+
+			if err != nil {
 				return err
 			}
-			file.Close()
+
+			// Check if we hit the limit (file was larger than header claimed)
+			if written > m.maxStateFileSize {
+				os.Remove(target) // Clean up partial file
+				return fmt.Errorf("file %s exceeded maximum size during extraction", header.Name)
+			}
+		default:
+			// Skip symlinks and other types for security
+			m.logger.Info("Skipping unsupported tar entry type %d: %s", header.Typeflag, header.Name)
 		}
 	}
 
