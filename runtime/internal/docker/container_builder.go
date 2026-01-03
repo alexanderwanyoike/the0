@@ -81,6 +81,9 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 		fmt.Sprintf("CONFIG=%s", string(configJSON)),
 		fmt.Sprintf("ENTRYPOINT_TYPE=%s", executable.Entrypoint),
 		fmt.Sprintf("CODE_MOUNT_DIR=%s", executable.Entrypoint),
+		// STATE_DIR points to the SDK-managed state directory inside /state
+		// Users can also write directly to /state for custom persistent data
+		"STATE_DIR=/state/.the0-state",
 	)
 
 	b.config.Labels["runtime.id"] = executable.ID

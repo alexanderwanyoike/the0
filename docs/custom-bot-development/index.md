@@ -34,4 +34,5 @@ Get started with your preferred language:
 ## Visualization
 
 - [Metrics](./metrics) - Emit data to the dashboard
+- [Persistent State](./state) - Save data between bot executions
 - [Custom Frontends](./custom-frontends) - Build React dashboards for your bots

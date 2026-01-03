@@ -13,6 +13,7 @@ categories = ["development-tools", "api-bindings"]
 authors = ["alexanderwanyoike <hello@the0.dev>"]
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [dev-dependencies]

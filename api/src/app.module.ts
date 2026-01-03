@@ -10,6 +10,7 @@ import { LogsModule } from "./logs/logs.module";
 import { NatsModule } from "./nats/nats.module";
 import { LoggerModule } from "./logger/logger.module";
 import { McpModule } from "./mcp/mcp.module";
+import { BotStateModule } from "./bot-state/bot-state.module";
 import configuration from "./config/configuration";
 
 @Module({
@@ -26,6 +27,7 @@ import configuration from "./config/configuration";
     LogsModule,
     NatsModule,
     McpModule,
+    BotStateModule,
   ],
   controllers: [AppController],
   providers: [AppService],

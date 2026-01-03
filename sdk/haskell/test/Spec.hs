@@ -2,6 +2,9 @@ module Main (main) where
 
 import Test.Hspec
 import qualified InputSpec
+import qualified StateSpec
 
 main :: IO ()
-main = hspec InputSpec.spec
+main = hspec $ do
+    InputSpec.spec
+    StateSpec.spec

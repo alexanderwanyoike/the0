@@ -57,11 +57,12 @@ type PodGeneratorConfig struct {
 	ControllerName string
 
 	// MinIO configuration for downloading bot code
-	MinIOEndpoint   string
-	MinIOAccessKey  string
-	MinIOSecretKey  string
-	MinIOBucket     string
-	MinIOUseSSL     bool
+	MinIOEndpoint    string
+	MinIOAccessKey   string
+	MinIOSecretKey   string
+	MinIOBucket      string
+	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
+	MinIOUseSSL      bool
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -76,6 +77,9 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	}
 	if config.Namespace == "" {
 		config.Namespace = "the0"
+	}
+	if config.MinIOStateBucket == "" {
+		config.MinIOStateBucket = "bot-state"
 	}
 	return &PodGenerator{config: config}
 }
@@ -189,6 +193,32 @@ ls -la /bot/
 						{Name: "bot-code", MountPath: "/bot"},
 					},
 				},
+				{
+					Name:    "download-state",
+					Image:   "minio/mc:RELEASE.2024-11-17T19-35-25Z",
+					Command: []string{"/bin/sh", "-c"},
+					Args: []string{
+						fmt.Sprintf(`
+# Download existing state if it exists (ignore errors for first run)
+mc alias set minio %s $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+mc cp minio/%s/%s/state.tar.gz /tmp/state.tar.gz 2>/dev/null || true
+if [ -f /tmp/state.tar.gz ]; then
+    echo "Found existing state, extracting..."
+    tar -xzf /tmp/state.tar.gz -C /state
+    ls -la /state/
+else
+    echo "No existing state found (first run)"
+fi
+`, minioURL, g.config.MinIOStateBucket, bot.ID),
+					},
+					Env: []corev1.EnvVar{
+						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
+						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "bot-state", MountPath: "/state"},
+					},
+				},
 			},
 			Containers: []corev1.Container{
 				{
@@ -200,9 +230,11 @@ ls -la /bot/
 						{Name: "BOT_ID", Value: bot.ID},
 						{Name: "BOT_CONFIG", Value: string(configJSON)},
 						{Name: "CODE_MOUNT_DIR", Value: "/bot"},
+						{Name: "STATE_DIR", Value: "/state/.the0-state"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-code", MountPath: "/bot"},
+						{Name: "bot-state", MountPath: "/state"},
 					},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -219,6 +251,12 @@ ls -la /bot/
 			Volumes: []corev1.Volume{
 				{
 					Name: "bot-code",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "bot-state",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},

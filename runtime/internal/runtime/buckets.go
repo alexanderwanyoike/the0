@@ -10,4 +10,7 @@ const (
 
 	// BucketBacktests is the bucket for storing backtest results.
 	BucketBacktests = "backtests"
+
+	// BucketBotState is the bucket for storing persistent bot state.
+	BucketBotState = "bot-state"
 )

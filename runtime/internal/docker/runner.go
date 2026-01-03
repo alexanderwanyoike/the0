@@ -79,8 +79,9 @@ type ContainerInfo struct {
 	Status      string            `json:"status"`       // Container status
 	StartedAt   string            `json:"started_at"`   // RFC3339 timestamp
 	Labels      map[string]string `json:"labels,omitempty"`
-	BotDir      string            `json:"bot_dir,omitempty"`    // Host directory path for cleanup
-	LastLogTime time.Time         `json:"last_log_time"`        // Last log collection timestamp
+	BotDir      string            `json:"bot_dir,omitempty"`   // Host directory path for code cleanup
+	StateDir    string            `json:"state_dir,omitempty"` // Host directory path for state cleanup
+	LastLogTime time.Time         `json:"last_log_time"`       // Last log collection timestamp
 	LogsSince   string            `json:"logs_since,omitempty"` // RFC3339Nano for incremental logs
 }
 
@@ -90,6 +91,7 @@ type dockerRunner struct {
 	// Component dependencies
 	orchestrator  ContainerOrchestrator // Handles Docker operations
 	codeManager   CodeManager           // Handles code download/extraction
+	stateManager  StateManager          // Handles persistent state download/upload
 	scriptManager ScriptManager         // Handles entrypoint script generation
 	logCollector  LogCollector          // Background log collection for long-running containers
 	minioLogger   miniologger.MinIOLogger
@@ -162,6 +164,7 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 
 	runner := &dockerRunner{
 		codeManager:   NewMinioCodeManager(minioClient, config, logger),
+		stateManager:  NewMinioStateManager(minioClient, config, logger),
 		scriptManager: NewScriptManager(logger),
 		orchestrator:  NewDockerOrchestrator(dockerClient, logger),
 		minioLogger:   minioLogger,
@@ -299,7 +302,7 @@ func (r *dockerRunner) cleanupManagedContainers() {
 // It determines the appropriate shell, sets up volume mounts, and applies resource limits.
 func (r *dockerRunner) buildContainerConfig(
 	executable model.Executable,
-	botDir, imageName string,
+	botDir, stateDir, imageName string,
 ) (*container.Config, *container.HostConfig) {
 	// Determine shell based on image (Alpine uses /bin/sh, others use /bin/bash)
 	shell := "/bin/bash"
@@ -311,6 +314,7 @@ func (r *dockerRunner) buildContainerConfig(
 		WithExecutable(executable).
 		WithCommand(shell, fmt.Sprintf("/%s/entrypoint.sh", executable.Entrypoint)).
 		WithBinds(fmt.Sprintf("%s:/%s", botDir, executable.Entrypoint)).
+		WithBinds(fmt.Sprintf("%s:/state", stateDir)). // Mount state directory for persistent data
 		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
 
 	// Long-running containers auto-remove on exit, terminating containers need manual cleanup
@@ -363,6 +367,23 @@ func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Exec
 		}, nil
 	}
 
+	// Create state directory and download existing state
+	stateDir := filepath.Join(r.config.TempDir, executable.ID+"-state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		return &ExecutionResult{
+			Status:   "error",
+			Message:  "Failed to create state directory",
+			Error:    err.Error(),
+			ExitCode: 1,
+			Duration: time.Since(startTime),
+		}, nil
+	}
+
+	// Download existing state (ignore errors - first run has no state)
+	if err := r.stateManager.DownloadState(ctx, executable.ID, stateDir); err != nil {
+		r.logger.Info("No existing state or download failed (first run is normal)", "bot_id", executable.ID, "error", err.Error())
+	}
+
 	// Pull Docker image
 	imageName, err := r.getDockerImage(executable.Runtime)
 	if err != nil {
@@ -396,13 +417,13 @@ func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Exec
 		}, nil
 	}
 
-	config, hostConfig := r.buildContainerConfig(executable, botDir, imageName)
+	config, hostConfig := r.buildContainerConfig(executable, botDir, stateDir, imageName)
 
 	// Create and start container for long-running mode
 	if executable.IsLongRunning {
-		return r.startLongRunningContainer(ctx, executable, config, hostConfig, botDir, startTime)
+		return r.startLongRunningContainer(ctx, executable, config, hostConfig, botDir, stateDir, startTime)
 	} else {
-		return r.startTerminatingContainer(ctx, executable, config, hostConfig, botDir, startTime)
+		return r.startTerminatingContainer(ctx, executable, config, hostConfig, botDir, stateDir, startTime)
 	}
 }
 
@@ -434,9 +455,23 @@ func (r *dockerRunner) StopContainer(
 		}
 	}
 
+	// Upload state to MinIO before cleanup
+	if info != nil && info.StateDir != "" {
+		if err := r.stateManager.UploadState(ctx, executable.ID, info.StateDir); err != nil {
+			r.logger.Info("Failed to upload state to MinIO", "bot_id", executable.ID, "error", err.Error())
+		}
+	}
+
 	if info != nil && info.BotDir != "" {
 		if err := removeDir(info.BotDir); err != nil {
 			r.logger.Info("Failed to clean up bot directory", "bot_dir", info.BotDir, "error", err.Error())
+		}
+	}
+
+	// Clean up state directory
+	if info != nil && info.StateDir != "" {
+		if err := removeDir(info.StateDir); err != nil {
+			r.logger.Info("Failed to clean up state directory", "state_dir", info.StateDir, "error", err.Error())
 		}
 	}
 
@@ -462,12 +497,16 @@ func (r *dockerRunner) startLongRunningContainer(
 	config *container.Config,
 	hostConfig *container.HostConfig,
 	botDir string,
+	stateDir string,
 	startTime time.Time,
 ) (*ExecutionResult, error) {
 	containerID, err := r.orchestrator.CreateAndStart(ctx, config, hostConfig)
 	if err != nil {
 		if rmErr := removeDir(botDir); rmErr != nil {
 			r.logger.Info("Failed to clean up bot directory after container start failure", "bot_dir", botDir, "error", err.Error())
+		}
+		if rmErr := removeDir(stateDir); rmErr != nil {
+			r.logger.Info("Failed to clean up state directory after container start failure", "state_dir", stateDir, "error", err.Error())
 		}
 
 		return &ExecutionResult{
@@ -480,7 +519,7 @@ func (r *dockerRunner) startLongRunningContainer(
 	}
 
 	// If successful, track the container
-	r.addManagedContainer(containerID, exec, botDir, config)
+	r.addManagedContainer(containerID, exec, botDir, stateDir, config)
 	r.logger.Info("Started long-running container", "container_id", containerID, "bot_id", exec.ID)
 
 	return &ExecutionResult{
@@ -499,10 +538,12 @@ func (r *dockerRunner) startTerminatingContainer(
 	config *container.Config,
 	hostConfig *container.HostConfig,
 	botDir string,
+	stateDir string,
 	startTime time.Time,
 ) (*ExecutionResult, error) {
-	// Add logging for debugging short-lived containers
-	defer os.RemoveAll(botDir) // Ensure bot directory is cleaned up
+	// Ensure directories are cleaned up after container completes
+	defer os.RemoveAll(botDir)
+	defer os.RemoveAll(stateDir)
 
 	// Always try to read result file - bots write their result to this file
 	resultFilePath := fmt.Sprintf("/%s/result.json", exec.Entrypoint)
@@ -516,6 +557,11 @@ func (r *dockerRunner) startTerminatingContainer(
 			ExitCode: 1,
 			Duration: time.Since(startTime),
 		}, nil
+	}
+
+	// Upload state to MinIO after container completes (for backtests/scheduled runs)
+	if err := r.stateManager.UploadState(ctx, exec.ID, stateDir); err != nil {
+		r.logger.Info("Failed to upload state after terminating container", "bot_id", exec.ID, "error", err.Error())
 	}
 
 	// Store result to MinIO if we have result file contents and PersistResults is true
@@ -588,6 +634,7 @@ func (r *dockerRunner) addManagedContainer(
 	containerID string,
 	exec model.Executable,
 	botDir string,
+	stateDir string,
 	config *container.Config,
 ) {
 	r.containersMutex.Lock()
@@ -601,7 +648,8 @@ func (r *dockerRunner) addManagedContainer(
 		Status:      "running",
 		StartedAt:   startTime.Format(time.RFC3339),
 		Labels:      config.Labels,
-		BotDir:      botDir, // Store for cleanup when container is stopped
+		BotDir:      botDir,   // Store for cleanup when container is stopped
+		StateDir:    stateDir, // Store for state upload when container is stopped
 		LastLogTime: startTime,
 		LogsSince:   startTime.Format(time.RFC3339Nano), // Initialize for incremental log collection
 	}
