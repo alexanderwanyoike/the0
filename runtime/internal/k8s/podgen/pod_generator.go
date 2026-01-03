@@ -109,12 +109,18 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 	filePath := bot.CustomBotVersion.FilePath
 	entrypoint := g.getEntrypoint(bot)
 
-	// Validate filePath and bucket to prevent command injection
+	// Validate paths and IDs to prevent command injection
 	if err := validateMinIOPath(filePath); err != nil {
 		return nil, fmt.Errorf("invalid file path: %w", err)
 	}
 	if err := validateMinIOPath(g.config.MinIOBucket); err != nil {
 		return nil, fmt.Errorf("invalid bucket name: %w", err)
+	}
+	if err := validateMinIOPath(bot.ID); err != nil {
+		return nil, fmt.Errorf("invalid bot ID: %w", err)
+	}
+	if err := validateMinIOPath(g.config.MinIOStateBucket); err != nil {
+		return nil, fmt.Errorf("invalid state bucket name: %w", err)
 	}
 
 	// Get base image for the runtime (using shared runtime package)

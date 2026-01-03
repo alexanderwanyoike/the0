@@ -27,7 +27,7 @@ type DockerRunnerConfig struct {
 // LoadConfigFromEnv loads configuration from environment variables.
 // Required env vars: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 // Optional env vars: MINIO_SSL, MINIO_BACKTESTS_BUCKET, TEMP_DIR, MINIO_CODE_BUCKET,
-// BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES
+// MINIO_STATE_BUCKET, MINIO_LOGS_BUCKET, BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES
 func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	endpoint := os.Getenv("MINIO_ENDPOINT")
 	if endpoint == "" {

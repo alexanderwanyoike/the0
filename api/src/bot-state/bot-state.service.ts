@@ -9,6 +9,18 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 
+export enum BotStateErrorCode {
+  BOT_NOT_FOUND = "BOT_NOT_FOUND",
+  KEY_NOT_FOUND = "KEY_NOT_FOUND",
+  INVALID_KEY = "INVALID_KEY",
+  STORAGE_ERROR = "STORAGE_ERROR",
+}
+
+export interface BotStateError {
+  code: BotStateErrorCode;
+  message: string;
+}
+
 export interface StateKey {
   key: string;
   size?: number;
@@ -41,11 +53,14 @@ export class BotStateService {
   /**
    * List all state keys for a bot.
    */
-  async listKeys(botId: string): Promise<Result<StateKey[], string>> {
+  async listKeys(botId: string): Promise<Result<StateKey[], BotStateError>> {
     // Verify bot ownership
     const botResult = await this.botService.findOne(botId);
     if (!botResult.success) {
-      return Failure("Bot not found or access denied");
+      return Failure({
+        code: BotStateErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found or access denied",
+      });
     }
 
     try {
@@ -80,7 +95,10 @@ export class BotStateService {
       }
     } catch (error: any) {
       this.logger.error({ err: error, botId }, "Error listing state keys");
-      return Failure(`Failed to list state keys: ${error.message}`);
+      return Failure({
+        code: BotStateErrorCode.STORAGE_ERROR,
+        message: "Failed to list state keys",
+      });
     }
   }
 
@@ -90,22 +108,31 @@ export class BotStateService {
   async getKey(
     botId: string,
     key: string,
-  ): Promise<Result<unknown, string>> {
+  ): Promise<Result<unknown, BotStateError>> {
     // Verify bot ownership
     const botResult = await this.botService.findOne(botId);
     if (!botResult.success) {
-      return Failure("Bot not found or access denied");
+      return Failure({
+        code: BotStateErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found or access denied",
+      });
     }
 
     // Validate key
     if (!key || key.includes("/") || key.includes("\\") || key.includes("..")) {
-      return Failure("Invalid state key");
+      return Failure({
+        code: BotStateErrorCode.INVALID_KEY,
+        message: "Invalid state key",
+      });
     }
 
     try {
       const tempDir = await this.downloadAndExtractState(botId);
       if (!tempDir) {
-        return Failure("State key not found");
+        return Failure({
+          code: BotStateErrorCode.KEY_NOT_FOUND,
+          message: "State key not found",
+        });
       }
 
       try {
@@ -113,7 +140,10 @@ export class BotStateService {
         try {
           await fs.access(filepath);
         } catch {
-          return Failure("State key not found");
+          return Failure({
+            code: BotStateErrorCode.KEY_NOT_FOUND,
+            message: "State key not found",
+          });
         }
 
         const content = await fs.readFile(filepath, "utf-8");
@@ -125,23 +155,35 @@ export class BotStateService {
       }
     } catch (error: any) {
       this.logger.error({ err: error, botId, key }, "Error getting state key");
-      return Failure(`Failed to get state key: ${error.message}`);
+      return Failure({
+        code: BotStateErrorCode.STORAGE_ERROR,
+        message: "Failed to get state key",
+      });
     }
   }
 
   /**
    * Delete a specific state key.
    */
-  async deleteKey(botId: string, key: string): Promise<Result<boolean, string>> {
+  async deleteKey(
+    botId: string,
+    key: string,
+  ): Promise<Result<boolean, BotStateError>> {
     // Verify bot ownership
     const botResult = await this.botService.findOne(botId);
     if (!botResult.success) {
-      return Failure("Bot not found or access denied");
+      return Failure({
+        code: BotStateErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found or access denied",
+      });
     }
 
     // Validate key
     if (!key || key.includes("/") || key.includes("\\") || key.includes("..")) {
-      return Failure("Invalid state key");
+      return Failure({
+        code: BotStateErrorCode.INVALID_KEY,
+        message: "Invalid state key",
+      });
     }
 
     try {
@@ -171,18 +213,24 @@ export class BotStateService {
       }
     } catch (error: any) {
       this.logger.error({ err: error, botId, key }, "Error deleting state key");
-      return Failure(`Failed to delete state key: ${error.message}`);
+      return Failure({
+        code: BotStateErrorCode.STORAGE_ERROR,
+        message: "Failed to delete state key",
+      });
     }
   }
 
   /**
    * Clear all state for a bot.
    */
-  async clearState(botId: string): Promise<Result<boolean, string>> {
+  async clearState(botId: string): Promise<Result<boolean, BotStateError>> {
     // Verify bot ownership
     const botResult = await this.botService.findOne(botId);
     if (!botResult.success) {
-      return Failure("Bot not found or access denied");
+      return Failure({
+        code: BotStateErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found or access denied",
+      });
     }
 
     try {
@@ -204,7 +252,10 @@ export class BotStateService {
       return Ok(true);
     } catch (error: any) {
       this.logger.error({ err: error, botId }, "Error clearing state");
-      return Failure(`Failed to clear state: ${error.message}`);
+      return Failure({
+        code: BotStateErrorCode.STORAGE_ERROR,
+        message: "Failed to clear state",
+      });
     }
   }
 

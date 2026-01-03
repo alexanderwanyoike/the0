@@ -7,9 +7,11 @@ import {
   BadRequestException,
   NotFoundException,
 } from "@nestjs/common";
-import { BotStateService } from "./bot-state.service";
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
+import { BotStateService, BotStateErrorCode } from "./bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 
+@ApiTags("Bot State")
 @Controller("bots/:botId/state")
 @UseGuards(AuthCombinedGuard)
 export class BotStateController {
@@ -20,17 +22,20 @@ export class BotStateController {
    * GET /bots/:botId/state
    */
   @Get()
+  @ApiOperation({ summary: "List all state keys for a bot" })
+  @ApiParam({ name: "botId", description: "Bot identifier" })
+  @ApiResponse({ status: 200, description: "State keys retrieved successfully" })
+  @ApiResponse({ status: 404, description: "Bot not found" })
   async listKeys(@Param("botId") botId: string) {
     const result = await this.botStateService.listKeys(botId);
 
     if (!result.success) {
-      if (
-        result.error?.includes("not found") ||
-        result.error?.includes("access denied")
-      ) {
-        throw new NotFoundException(result.error);
+      switch (result.error?.code) {
+        case BotStateErrorCode.BOT_NOT_FOUND:
+          throw new NotFoundException("Bot not found or access denied");
+        default:
+          throw new BadRequestException("Failed to list state keys");
       }
-      throw new BadRequestException(result.error);
     }
 
     return {
@@ -45,17 +50,25 @@ export class BotStateController {
    * GET /bots/:botId/state/:key
    */
   @Get(":key")
+  @ApiOperation({ summary: "Get a specific state value" })
+  @ApiParam({ name: "botId", description: "Bot identifier" })
+  @ApiParam({ name: "key", description: "State key name" })
+  @ApiResponse({ status: 200, description: "State value retrieved successfully" })
+  @ApiResponse({ status: 400, description: "Invalid state key" })
+  @ApiResponse({ status: 404, description: "Bot or state key not found" })
   async getKey(@Param("botId") botId: string, @Param("key") key: string) {
     const result = await this.botStateService.getKey(botId, key);
 
     if (!result.success) {
-      if (result.error?.includes("not found")) {
-        throw new NotFoundException(result.error);
+      switch (result.error?.code) {
+        case BotStateErrorCode.BOT_NOT_FOUND:
+        case BotStateErrorCode.KEY_NOT_FOUND:
+          throw new NotFoundException("Bot or state key not found");
+        case BotStateErrorCode.INVALID_KEY:
+          throw new BadRequestException("Invalid state key");
+        default:
+          throw new BadRequestException("Failed to get state key");
       }
-      if (result.error?.includes("access denied")) {
-        throw new NotFoundException("Bot not found or access denied");
-      }
-      throw new BadRequestException(result.error);
     }
 
     return {
@@ -70,17 +83,24 @@ export class BotStateController {
    * DELETE /bots/:botId/state/:key
    */
   @Delete(":key")
+  @ApiOperation({ summary: "Delete a specific state key" })
+  @ApiParam({ name: "botId", description: "Bot identifier" })
+  @ApiParam({ name: "key", description: "State key name" })
+  @ApiResponse({ status: 200, description: "State key deleted successfully" })
+  @ApiResponse({ status: 400, description: "Invalid state key" })
+  @ApiResponse({ status: 404, description: "Bot not found" })
   async deleteKey(@Param("botId") botId: string, @Param("key") key: string) {
     const result = await this.botStateService.deleteKey(botId, key);
 
     if (!result.success) {
-      if (
-        result.error?.includes("not found") ||
-        result.error?.includes("access denied")
-      ) {
-        throw new NotFoundException(result.error);
+      switch (result.error?.code) {
+        case BotStateErrorCode.BOT_NOT_FOUND:
+          throw new NotFoundException("Bot not found or access denied");
+        case BotStateErrorCode.INVALID_KEY:
+          throw new BadRequestException("Invalid state key");
+        default:
+          throw new BadRequestException("Failed to delete state key");
       }
-      throw new BadRequestException(result.error);
     }
 
     return {
@@ -97,17 +117,20 @@ export class BotStateController {
    * DELETE /bots/:botId/state
    */
   @Delete()
+  @ApiOperation({ summary: "Clear all state for a bot" })
+  @ApiParam({ name: "botId", description: "Bot identifier" })
+  @ApiResponse({ status: 200, description: "Bot state cleared successfully" })
+  @ApiResponse({ status: 404, description: "Bot not found" })
   async clearState(@Param("botId") botId: string) {
     const result = await this.botStateService.clearState(botId);
 
     if (!result.success) {
-      if (
-        result.error?.includes("not found") ||
-        result.error?.includes("access denied")
-      ) {
-        throw new NotFoundException(result.error);
+      switch (result.error?.code) {
+        case BotStateErrorCode.BOT_NOT_FOUND:
+          throw new NotFoundException("Bot not found or access denied");
+        default:
+          throw new BadRequestException("Failed to clear state");
       }
-      throw new BadRequestException(result.error);
     }
 
     return {

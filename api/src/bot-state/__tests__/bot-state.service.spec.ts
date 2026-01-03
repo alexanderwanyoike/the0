@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { BotStateService, StateKey } from "../bot-state.service";
+import { BotStateService, StateKey, BotStateErrorCode } from "../bot-state.service";
 import { ConfigService } from "@nestjs/config";
 import { BotService } from "@/bot/bot.service";
 import { PinoLogger } from "nestjs-pino";
@@ -92,7 +92,7 @@ describe("BotStateService", () => {
       const result = await service.listKeys("nonexistent-bot");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
     });
 
     it("should verify bot ownership before listing", async () => {
@@ -101,6 +101,7 @@ describe("BotStateService", () => {
       const result = await service.listKeys(testBotId);
 
       expect(result.success).toBe(false);
+      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
       expect(mockBotService.findOne).toHaveBeenCalledWith(testBotId);
     });
   });
@@ -112,35 +113,35 @@ describe("BotStateService", () => {
       const result = await service.getKey("nonexistent-bot", "portfolio");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
     });
 
     it("should reject invalid keys with forward slash", async () => {
       const result = await service.getKey(testBotId, "../escape");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid");
+      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject invalid keys with backslash", async () => {
       const result = await service.getKey(testBotId, "..\\escape");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid");
+      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject invalid keys with double dots", async () => {
       const result = await service.getKey(testBotId, "..");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid");
+      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject empty key", async () => {
       const result = await service.getKey(testBotId, "");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid");
+      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
   });
 
@@ -151,21 +152,21 @@ describe("BotStateService", () => {
       const result = await service.deleteKey("nonexistent-bot", "portfolio");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
     });
 
     it("should reject invalid keys with path separators", async () => {
       const result = await service.deleteKey(testBotId, "../escape");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid");
+      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject empty key", async () => {
       const result = await service.deleteKey(testBotId, "");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid");
+      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
   });
 
@@ -176,7 +177,7 @@ describe("BotStateService", () => {
       const result = await service.clearState("nonexistent-bot");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
     });
 
     it("should verify bot ownership before clearing", async () => {
@@ -185,6 +186,7 @@ describe("BotStateService", () => {
       const result = await service.clearState(testBotId);
 
       expect(result.success).toBe(false);
+      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
       expect(mockBotService.findOne).toHaveBeenCalledWith(testBotId);
     });
   });
@@ -203,7 +205,7 @@ describe("BotStateService", () => {
       it(`should reject ${description}`, async () => {
         const result = await service.getKey(testBotId, key);
         expect(result.success).toBe(false);
-        expect(result.error).toContain("Invalid");
+        expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
       });
     });
 

@@ -57,14 +57,17 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	// Check annotations
 	assert.NotEmpty(t, pod.Annotations[AnnotationConfigHash])
 
-	// Check init containers (download and extract code from MinIO)
-	require.Len(t, pod.Spec.InitContainers, 2)
+	// Check init containers (download code, extract code, download state)
+	require.Len(t, pod.Spec.InitContainers, 3)
 	downloadContainer := pod.Spec.InitContainers[0]
 	assert.Equal(t, "download-code", downloadContainer.Name)
 	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", downloadContainer.Image)
 	extractContainer := pod.Spec.InitContainers[1]
 	assert.Equal(t, "extract-code", extractContainer.Name)
 	assert.Equal(t, "busybox:1.36.1", extractContainer.Image)
+	stateContainer := pod.Spec.InitContainers[2]
+	assert.Equal(t, "download-state", stateContainer.Name)
+	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", stateContainer.Image)
 
 	// Check main container
 	require.Len(t, pod.Spec.Containers, 1)
@@ -87,9 +90,13 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	assert.Equal(t, DefaultMemoryLimit, container.Resources.Limits.Memory().String())
 	assert.Equal(t, DefaultCPULimit, container.Resources.Limits.Cpu().String())
 
-	// Check volume
-	require.Len(t, pod.Spec.Volumes, 1)
+	// Check volumes (bot-code and bot-state)
+	require.Len(t, pod.Spec.Volumes, 2)
 	assert.Equal(t, "bot-code", pod.Spec.Volumes[0].Name)
+	assert.Equal(t, "bot-state", pod.Spec.Volumes[1].Name)
+
+	// Check STATE_DIR env var
+	assert.Equal(t, "/state/.the0-state", envMap["STATE_DIR"])
 }
 
 func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {

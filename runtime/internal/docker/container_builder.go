@@ -71,11 +71,16 @@ func (b *ContainerBuilder) WithAutoRemove(autoRemove bool) *ContainerBuilder {
 
 // WithExecutable configures the container from an Executable, setting environment
 // variables, labels, and extracting the entrypoint file.
+// If config marshaling fails, an empty JSON object is used as fallback.
 func (b *ContainerBuilder) WithExecutable(executable model.Executable) *ContainerBuilder {
 	// Extract entrypoint file from executable
 	entrypointFile := executable.EntrypointFiles[executable.Entrypoint]
 
-	configJSON, _ := json.Marshal(executable.Config)
+	configJSON, err := json.Marshal(executable.Config)
+	if err != nil {
+		// Fallback to empty config if marshaling fails
+		configJSON = []byte("{}")
+	}
 	b.config.Env = append(b.config.Env,
 		fmt.Sprintf("ID=%s", executable.ID),
 		fmt.Sprintf("CONFIG=%s", string(configJSON)),

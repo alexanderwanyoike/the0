@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BotStateController } from "../bot-state.controller";
-import { BotStateService } from "../bot-state.service";
+import { BotStateService, BotStateErrorCode } from "../bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
 import { Ok, Failure } from "@/common/result";
@@ -52,7 +52,10 @@ describe("BotStateController", () => {
 
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.listKeys!.mockResolvedValue(
-        Failure("Bot not found or access denied"),
+        Failure({
+          code: BotStateErrorCode.BOT_NOT_FOUND,
+          message: "Bot not found or access denied",
+        }),
       );
 
       await expect(controller.listKeys(testBotId)).rejects.toThrow(
@@ -60,9 +63,12 @@ describe("BotStateController", () => {
       );
     });
 
-    it("should throw BadRequestException on other errors", async () => {
+    it("should throw BadRequestException on storage errors", async () => {
       mockBotStateService.listKeys!.mockResolvedValue(
-        Failure("Some other error"),
+        Failure({
+          code: BotStateErrorCode.STORAGE_ERROR,
+          message: "Failed to list state keys",
+        }),
       );
 
       await expect(controller.listKeys(testBotId)).rejects.toThrow(
@@ -88,7 +94,10 @@ describe("BotStateController", () => {
 
     it("should throw NotFoundException when key not found", async () => {
       mockBotStateService.getKey!.mockResolvedValue(
-        Failure("State key not found"),
+        Failure({
+          code: BotStateErrorCode.KEY_NOT_FOUND,
+          message: "State key not found",
+        }),
       );
 
       await expect(controller.getKey(testBotId, "nonexistent")).rejects.toThrow(
@@ -98,7 +107,10 @@ describe("BotStateController", () => {
 
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.getKey!.mockResolvedValue(
-        Failure("Bot not found or access denied"),
+        Failure({
+          code: BotStateErrorCode.BOT_NOT_FOUND,
+          message: "Bot not found or access denied",
+        }),
       );
 
       await expect(controller.getKey(testBotId, "portfolio")).rejects.toThrow(
@@ -107,7 +119,12 @@ describe("BotStateController", () => {
     });
 
     it("should throw BadRequestException for invalid key", async () => {
-      mockBotStateService.getKey!.mockResolvedValue(Failure("Invalid state key"));
+      mockBotStateService.getKey!.mockResolvedValue(
+        Failure({
+          code: BotStateErrorCode.INVALID_KEY,
+          message: "Invalid state key",
+        }),
+      );
 
       await expect(controller.getKey(testBotId, "../escape")).rejects.toThrow(
         BadRequestException,
@@ -138,7 +155,10 @@ describe("BotStateController", () => {
 
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.deleteKey!.mockResolvedValue(
-        Failure("Bot not found or access denied"),
+        Failure({
+          code: BotStateErrorCode.BOT_NOT_FOUND,
+          message: "Bot not found or access denied",
+        }),
       );
 
       await expect(
@@ -148,7 +168,10 @@ describe("BotStateController", () => {
 
     it("should throw BadRequestException for invalid key", async () => {
       mockBotStateService.deleteKey!.mockResolvedValue(
-        Failure("Invalid state key"),
+        Failure({
+          code: BotStateErrorCode.INVALID_KEY,
+          message: "Invalid state key",
+        }),
       );
 
       await expect(
@@ -170,7 +193,10 @@ describe("BotStateController", () => {
 
     it("should throw NotFoundException when bot not found", async () => {
       mockBotStateService.clearState!.mockResolvedValue(
-        Failure("Bot not found or access denied"),
+        Failure({
+          code: BotStateErrorCode.BOT_NOT_FOUND,
+          message: "Bot not found or access denied",
+        }),
       );
 
       await expect(controller.clearState(testBotId)).rejects.toThrow(
@@ -178,9 +204,12 @@ describe("BotStateController", () => {
       );
     });
 
-    it("should throw BadRequestException on other errors", async () => {
+    it("should throw BadRequestException on storage errors", async () => {
       mockBotStateService.clearState!.mockResolvedValue(
-        Failure("Failed to clear state"),
+        Failure({
+          code: BotStateErrorCode.STORAGE_ERROR,
+          message: "Failed to clear state",
+        }),
       );
 
       await expect(controller.clearState(testBotId)).rejects.toThrow(
