@@ -30,7 +30,7 @@ FetchContent_MakeAvailable(json)
 # Fetch the0 SDK
 FetchContent_Declare(the0
     GIT_REPOSITORY https://github.com/alexanderwanyoike/the0.git
-    GIT_TAG v1.1.0
+    GIT_TAG v1.3.0
     SOURCE_SUBDIR sdk/cpp
 )
 FetchContent_MakeAvailable(the0)

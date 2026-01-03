@@ -5,7 +5,7 @@ import { BotService } from "@/bot/bot.service";
 import { Result, Ok, Failure } from "@/common/result";
 import * as Minio from "minio";
 import * as tar from "tar";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 
@@ -56,26 +56,27 @@ export class BotStateService {
 
       try {
         const stateDir = path.join(tempDir, ".the0-state");
-        if (!fs.existsSync(stateDir)) {
+        try {
+          await fs.access(stateDir);
+        } catch {
           return Ok([]);
         }
 
-        const files = fs.readdirSync(stateDir);
-        const keys: StateKey[] = files
-          .filter((f) => f.endsWith(".json"))
-          .map((f) => {
-            const filepath = path.join(stateDir, f);
-            const stats = fs.statSync(filepath);
-            return {
-              key: f.slice(0, -5), // Remove .json extension
-              size: stats.size,
-            };
+        const files = await fs.readdir(stateDir);
+        const keys: StateKey[] = [];
+        for (const f of files.filter((f) => f.endsWith(".json"))) {
+          const filepath = path.join(stateDir, f);
+          const stats = await fs.stat(filepath);
+          keys.push({
+            key: f.slice(0, -5), // Remove .json extension
+            size: stats.size,
           });
+        }
 
         return Ok(keys);
       } finally {
         // Cleanup temp directory
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: any) {
       this.logger.error({ err: error, botId }, "Error listing state keys");
@@ -109,16 +110,18 @@ export class BotStateService {
 
       try {
         const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
-        if (!fs.existsSync(filepath)) {
+        try {
+          await fs.access(filepath);
+        } catch {
           return Failure("State key not found");
         }
 
-        const content = fs.readFileSync(filepath, "utf-8");
+        const content = await fs.readFile(filepath, "utf-8");
         const value = JSON.parse(content);
         return Ok(value);
       } finally {
         // Cleanup temp directory
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: any) {
       this.logger.error({ err: error, botId, key }, "Error getting state key");
@@ -149,12 +152,14 @@ export class BotStateService {
 
       try {
         const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
-        if (!fs.existsSync(filepath)) {
+        try {
+          await fs.access(filepath);
+        } catch {
           return Ok(false);
         }
 
         // Delete the file
-        fs.unlinkSync(filepath);
+        await fs.unlink(filepath);
 
         // Re-upload the modified state
         await this.uploadState(botId, tempDir);
@@ -162,7 +167,7 @@ export class BotStateService {
         return Ok(true);
       } finally {
         // Cleanup temp directory
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: any) {
       this.logger.error({ err: error, botId, key }, "Error deleting state key");
@@ -223,7 +228,7 @@ export class BotStateService {
     }
 
     // Create temp directory
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "bot-state-"));
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bot-state-"));
     const tarPath = path.join(tempDir, "state.tar.gz");
 
     try {
@@ -237,12 +242,12 @@ export class BotStateService {
       });
 
       // Remove the tar.gz file
-      fs.unlinkSync(tarPath);
+      await fs.unlink(tarPath);
 
       return tempDir;
     } catch (error) {
       // Cleanup on error
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      await fs.rm(tempDir, { recursive: true, force: true });
       throw error;
     }
   }
@@ -256,7 +261,9 @@ export class BotStateService {
     const stateDir = path.join(tempDir, ".the0-state");
 
     // Check if there's any state left
-    if (!fs.existsSync(stateDir)) {
+    try {
+      await fs.access(stateDir);
+    } catch {
       // No state directory, remove the object
       try {
         await this.minioClient.removeObject(this.stateBucket, statePath);
@@ -266,7 +273,7 @@ export class BotStateService {
       return;
     }
 
-    const files = fs.readdirSync(stateDir).filter((f) => f.endsWith(".json"));
+    const files = (await fs.readdir(stateDir)).filter((f) => f.endsWith(".json"));
     if (files.length === 0) {
       // No state files left, remove the object
       try {
