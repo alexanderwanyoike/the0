@@ -48,6 +48,13 @@ type DockerRunner interface {
 	// ListManagedContainers returns all containers managed by this runner for a given segment.
 	ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
 
+	// ListAllManagedContainers returns ALL containers (including exited/crashed) for a segment.
+	ListAllManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
+
+	// HandleCrashedContainer captures logs from a crashed container and cleans it up.
+	// Returns the crash logs that were captured.
+	HandleCrashedContainer(ctx context.Context, containerInfo *ContainerInfo) (string, error)
+
 	// GetContainerLogs retrieves the last N lines of logs from a container.
 	GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error)
 
@@ -77,7 +84,10 @@ type ContainerInfo struct {
 	ID          string            `json:"id"`           // Bot/backtest ID
 	Entrypoint  string            `json:"entrypoint"`   // Entrypoint script filename (e.g., "main.py")
 	Status      string            `json:"status"`       // Container status
+	ExitCode    int               `json:"exit_code"`    // Exit code (for crashed containers)
+	Error       string            `json:"error,omitempty"` // Error message from container
 	StartedAt   string            `json:"started_at"`   // RFC3339 timestamp
+	FinishedAt  string            `json:"finished_at,omitempty"` // RFC3339 timestamp (for exited containers)
 	Labels      map[string]string `json:"labels,omitempty"`
 	BotDir      string            `json:"bot_dir,omitempty"`   // Host directory path for code cleanup
 	StateDir    string            `json:"state_dir,omitempty"` // Host directory path for state cleanup
@@ -317,11 +327,12 @@ func (r *dockerRunner) buildContainerConfig(
 		WithBinds(fmt.Sprintf("%s:/state", stateDir)). // Mount state directory for persistent data
 		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
 
-	// Long-running containers auto-remove on exit, terminating containers need manual cleanup
+	// Long-running containers should NOT auto-remove on exit so we can capture crash logs.
+	// Terminating containers auto-remove after we collect results.
 	if executable.IsLongRunning {
-		builder = builder.WithAutoRemove(true)
+		builder = builder.WithAutoRemove(false) // Keep container on crash for log capture
 	} else {
-		builder = builder.WithAutoRemove(false)
+		builder = builder.WithAutoRemove(true) // Run-to-completion cleans up after result extraction
 	}
 
 	return builder.Build()
@@ -496,6 +507,58 @@ func (r *dockerRunner) ListManagedContainers(ctx context.Context, segment int32)
 	return r.orchestrator.ListContainer(ctx, filter)
 }
 
+// ListAllManagedContainers returns ALL containers including exited/crashed ones.
+func (r *dockerRunner) ListAllManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+	filter := filters.NewArgs()
+	filter.Add("label", "runtime.managed=true")
+	if segment >= 0 {
+		filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
+	}
+	return r.orchestrator.ListAllContainers(ctx, filter)
+}
+
+// HandleCrashedContainer captures logs from a crashed container and cleans it up.
+// Returns the crash logs that were captured and stored.
+func (r *dockerRunner) HandleCrashedContainer(ctx context.Context, containerInfo *ContainerInfo) (string, error) {
+	r.logger.Info("Handling crashed container",
+		"container_id", containerInfo.ContainerID,
+		"bot_id", containerInfo.ID,
+		"exit_code", containerInfo.ExitCode)
+
+	// Format crash info as a clean, single-line error entry.
+	// Note: The actual stack trace/error output is already captured by LogCollector
+	// before the crash was detected, so we don't need to duplicate it here.
+	crashLogs := fmt.Sprintf(`{"level":"error","message":"Bot crashed with exit code %d","exit_code":%d,"timestamp":"%s","bot_id":"%s","container_id":"%s"}`,
+		containerInfo.ExitCode,
+		containerInfo.ExitCode,
+		time.Now().UTC().Format(time.RFC3339),
+		containerInfo.ID,
+		containerInfo.ContainerID)
+
+	// Store crash logs to MinIO (use StoreRawLogs since crashLogs is already formatted JSON)
+	if r.logCollector != nil {
+		if err := r.logCollector.StoreRawLogs(containerInfo.ID, crashLogs); err != nil {
+			r.logger.Error("Failed to store crash logs",
+				"bot_id", containerInfo.ID,
+				"error", err.Error())
+		} else {
+			r.logger.Info("Stored crash logs for bot", "bot_id", containerInfo.ID)
+		}
+	}
+
+	// Remove the crashed container
+	if err := r.orchestrator.Remove(ctx, containerInfo.ContainerID); err != nil {
+		r.logger.Error("Failed to remove crashed container",
+			"container_id", containerInfo.ContainerID,
+			"error", err.Error())
+	}
+
+	// Remove from managed containers list
+	r.removeManagedContainer(containerInfo.ContainerID)
+
+	return crashLogs, nil
+}
+
 // startLongRunningContainer creates and starts a container for long-running mode
 func (r *dockerRunner) startLongRunningContainer(
 	ctx context.Context,
@@ -584,6 +647,18 @@ func (r *dockerRunner) startTerminatingContainer(
 	logs := runResult.Logs
 	if len(logs) > 0 && r.logCollector != nil {
 		r.logCollector.StoreLogs(exec.ID, logs)
+	}
+
+	// Add crash marker for non-zero exit codes (similar to HandleCrashedContainer for long-running bots)
+	if runResult.ExitCode != 0 && r.logCollector != nil {
+		crashLog := fmt.Sprintf(`{"level":"error","message":"Bot crashed with exit code %d","exit_code":%d,"timestamp":"%s","bot_id":"%s"}`,
+			runResult.ExitCode,
+			runResult.ExitCode,
+			time.Now().UTC().Format(time.RFC3339),
+			exec.ID)
+		if err := r.logCollector.StoreRawLogs(exec.ID, crashLog); err != nil {
+			r.logger.Info("Failed to store crash log for terminating container", "bot_id", exec.ID, "error", err.Error())
+		}
 	}
 
 	// Determine output based on result file and exit code

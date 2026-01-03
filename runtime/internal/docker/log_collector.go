@@ -21,8 +21,13 @@ type LogCollector interface {
 	// Stop gracefully stops the log collection service.
 	Stop()
 
-	// StoreLogs appends the given logs for the specified bot ID in MinIO.
+	// StoreLogs processes and appends the given logs for the specified bot ID in MinIO.
+	// Raw logs are converted to JSON-line format with multi-line grouping.
 	StoreLogs(botID string, logs string) error
+
+	// StoreRawLogs appends already-formatted logs without processing.
+	// Use this for logs that are already in JSON format.
+	StoreRawLogs(botID string, logs string) error
 }
 
 // logCollector implements LogCollector with periodic log collection.
@@ -149,6 +154,15 @@ func (lc *logCollector) collectAndStoreLogs(containerInfo *ContainerInfo) {
 }
 
 func (lc *logCollector) StoreLogs(botID string, logs string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Process raw logs into JSON-line format, grouping multi-line entries
+	processedLogs := ProcessLogsToJSONLines(logs)
+	return lc.minioLogger.AppendBotLogs(ctx, botID, processedLogs)
+}
+
+func (lc *logCollector) StoreRawLogs(botID string, logs string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return lc.minioLogger.AppendBotLogs(ctx, botID, logs)

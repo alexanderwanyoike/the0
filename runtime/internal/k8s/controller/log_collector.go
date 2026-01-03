@@ -350,6 +350,17 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 		return
 	}
 
+	// Add crash marker for failed pods (similar to Docker runner's HandleCrashedContainer)
+	if pod.Status.Phase == corev1.PodFailed {
+		exitCode := getContainerExitCode(pod)
+		crashLog := fmt.Sprintf(`{"level":"error","message":"Bot crashed with exit code %d","exit_code":%d,"timestamp":"%s","bot_id":"%s","pod":"%s"}`,
+			exitCode, exitCode, time.Now().UTC().Format(time.RFC3339), botID, pod.Name)
+		if err := lc.minioLogger.AppendBotLogs(ctx, botID, crashLog); err != nil {
+			lc.logger.Error("K8s Log Collector: Failed to store crash log", "bot_id", botID, "error", err.Error())
+		}
+		lc.logger.Info("K8s Log Collector: Pod crashed", "bot_id", botID, "pod", pod.Name, "exit_code", exitCode)
+	}
+
 	// Update tracking with current time AFTER successful upload
 	now := time.Now()
 	if isCompleted {
@@ -365,4 +376,20 @@ func (lc *K8sLogCollector) collectAndStoreLogs(pod corev1.Pod, isCompleted bool)
 		lc.lastLogTimesMu.Unlock()
 		lc.logger.Info("K8s Log Collector: Stored logs", "bot_id", botID, "size", len(logs))
 	}
+}
+
+// getContainerExitCode extracts the exit code from the "bot" container.
+func getContainerExitCode(pod corev1.Pod) int {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == "bot" && cs.State.Terminated != nil {
+			return int(cs.State.Terminated.ExitCode)
+		}
+	}
+	// Fallback: check init container statuses
+	for _, cs := range pod.Status.InitContainerStatuses {
+		if cs.State.Terminated != nil && cs.State.Terminated.ExitCode != 0 {
+			return int(cs.State.Terminated.ExitCode)
+		}
+	}
+	return 1 // Default to exit code 1 if not found
 }

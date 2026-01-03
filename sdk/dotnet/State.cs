@@ -83,6 +83,11 @@ public static class State
         {
             return defaultValue;
         }
+        catch (DirectoryNotFoundException)
+        {
+            // State directory doesn't exist yet (first run)
+            return defaultValue;
+        }
         catch (JsonException)
         {
             return defaultValue;

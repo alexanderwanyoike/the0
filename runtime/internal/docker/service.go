@@ -215,17 +215,28 @@ func (s *BotService) reconcile() {
 	}
 	s.logger.Info("Found %d desired bots", len(desiredBots))
 
-	// Step 2: Get actual running containers from Docker
-	// Use segment -1 to get ALL containers (no segment filtering)
-	actualContainers, err := s.runner.ListManagedContainers(ctx, -1)
+	// Step 2: Get ALL containers including crashed/exited ones
+	allContainers, err := s.runner.ListAllManagedContainers(ctx, -1)
 	if err != nil {
-		s.logger.Error("Failed to get actual containers: %v", err)
+		s.logger.Error("Failed to get all containers: %v", err)
 		return
 	}
-	s.logger.Info("Found %d actual containers", len(actualContainers))
 
-	// Step 3: Reconcile state
-	s.performReconciliation(ctx, desiredBots, actualContainers)
+	// Step 3: Handle crashed containers - capture logs before cleanup
+	var runningContainers []*ContainerInfo
+	for _, container := range allContainers {
+		if container.Status == "exited" {
+			s.logger.Error("Bot %s crashed with exit code %d", container.ID, container.ExitCode)
+			// Capture crash logs and cleanup the container
+			s.runner.HandleCrashedContainer(ctx, container)
+		} else if container.Status == "running" {
+			runningContainers = append(runningContainers, container)
+		}
+	}
+	s.logger.Info("Found %d actual containers", len(runningContainers))
+
+	// Step 4: Reconcile state with running containers only
+	s.performReconciliation(ctx, desiredBots, runningContainers)
 	s.state.UpdateReconcileMetrics()
 
 	s.logger.Info("Reconciliation completed in %v", time.Since(start))
