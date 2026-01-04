@@ -18,7 +18,8 @@ type BotConfig struct {
 	Runtime     string `yaml:"runtime,omitempty" json:"runtime,omitempty"` // e.g., "python3.11", "nodejs20", defaults to "none"
 	Type        string `yaml:"type" json:"type"`                           // e.g., "scheduled", "event", "realtime"
 	Entrypoints struct {
-		Bot string `yaml:"bot" json:"bot"`
+		Bot   string `yaml:"bot" json:"bot"`
+		Query string `yaml:"query,omitempty" json:"query,omitempty"`
 	} `yaml:"entrypoints" json:"entrypoints"`
 	Schema struct {
 		Bot string `yaml:"bot" json:"bot"`

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -302,6 +303,9 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 	// Prepare entrypoints
 	entrypoints := map[string]any{
 		"bot": config.Entrypoints.Bot,
+	}
+	if config.Entrypoints.Query != "" {
+		entrypoints["query"] = config.Entrypoints.Query
 	}
 
 	// Prepare schema
@@ -1081,7 +1085,7 @@ func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryR
 		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/bot/%s/query", c.BaseURL, botID), bytes.NewBuffer(reqBody))
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/query/%s", c.BaseURL, botID), bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -1110,7 +1114,37 @@ func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryR
 		return nil, fmt.Errorf("bot not found: %s", botID)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Try to extract a cleaner error message from the response
+		var errorResp struct {
+			Message string `json:"message"`
+			Data    struct {
+				Error string `json:"error"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &errorResp); err == nil {
+			// Try to extract nested error from the message (query error response)
+			if errorResp.Message != "" {
+				// Check if message contains JSON with status/error
+				var nestedError struct {
+					Status string `json:"status"`
+					Error  string `json:"error"`
+				}
+				// The message often contains "Query failed: {json}"
+				if idx := strings.Index(errorResp.Message, "{"); idx >= 0 {
+					jsonPart := errorResp.Message[idx:]
+					if endIdx := strings.LastIndex(jsonPart, "}"); endIdx >= 0 {
+						if err := json.Unmarshal([]byte(jsonPart[:endIdx+1]), &nestedError); err == nil && nestedError.Error != "" {
+							return nil, fmt.Errorf("%s", nestedError.Error)
+						}
+					}
+				}
+				return nil, fmt.Errorf("%s", errorResp.Message)
+			}
+			if errorResp.Data.Error != "" {
+				return nil, fmt.Errorf("%s", errorResp.Data.Error)
+			}
+		}
 		return nil, fmt.Errorf("query failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
