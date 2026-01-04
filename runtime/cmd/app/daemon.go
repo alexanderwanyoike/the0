@@ -37,9 +37,7 @@ var daemonSyncCmd = &cobra.Command{
 State is only uploaded when it has actually changed.
 Logs are uploaded incrementally (new content only).
 
-Modes:
-  - Continuous (default): Runs as a sidecar, syncing periodically
-  - Once (--once): Syncs once and exits, for scheduled bots
+For scheduled bots, use --watch-done to exit when bot completes.
 
 Required environment variables:
   MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
@@ -58,7 +56,7 @@ var (
 	daemonRuntime      string
 	daemonEntrypoint   string
 	daemonSyncInterval time.Duration
-	daemonSyncOnce     bool
+	daemonWatchDone    string
 )
 
 func init() {
@@ -76,7 +74,7 @@ func init() {
 	daemonSyncCmd.Flags().StringVar(&daemonStatePath, "state-path", "/state", "Path for state directory")
 	daemonSyncCmd.Flags().StringVar(&daemonLogsPath, "logs-path", "/var/the0/logs", "Path for logs directory")
 	daemonSyncCmd.Flags().DurationVar(&daemonSyncInterval, "interval", 60*time.Second, "Sync interval")
-	daemonSyncCmd.Flags().BoolVar(&daemonSyncOnce, "once", false, "Sync once and exit (for scheduled bots)")
+	daemonSyncCmd.Flags().StringVar(&daemonWatchDone, "watch-done", "", "Watch for done file and exit when it appears (for scheduled bots)")
 	daemonSyncCmd.MarkFlagRequired("bot-id")
 
 	daemonCmd.AddCommand(daemonInitCmd)
@@ -101,6 +99,6 @@ func runDaemonSync(cmd *cobra.Command, args []string) error {
 		StatePath: daemonStatePath,
 		LogsPath:  daemonLogsPath,
 		Interval:  daemonSyncInterval,
-		Once:      daemonSyncOnce,
+		WatchDone: daemonWatchDone,
 	})
 }

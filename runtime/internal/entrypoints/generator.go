@@ -38,7 +38,12 @@ type GeneratorOptions struct {
 }
 
 // K8s-specific entrypoint templates that read config from environment variables
+// All K8s entrypoints:
+// - Write exit code to /var/the0/done for sidecar sync coordination
+// - Pipe output to /var/the0/logs/bot.log for log collection
 const k8sPythonEntrypoint = `#!/bin/bash
+mkdir -p /var/the0/logs
+trap 'EXIT_CODE=$?; echo $EXIT_CODE > /var/the0/done; exit $EXIT_CODE' EXIT
 set -e
 
 cd /bot
@@ -58,10 +63,13 @@ PYTHON_SCRIPT
 export SCRIPT_PATH="{{ .Entrypoint }}"
 export ENTRYPOINT_TYPE="{{ .EntryPointType }}"
 export CODE_MOUNT_DIR="bot"
-exec python3 /tmp/python_entrypoint.py
+python3 /tmp/python_entrypoint.py 2>&1 | tee -a /var/the0/logs/bot.log
+exit ${PIPESTATUS[0]}
 `
 
 const k8sNodeEntrypoint = `#!/bin/bash
+mkdir -p /var/the0/logs
+trap 'EXIT_CODE=$?; echo $EXIT_CODE > /var/the0/done; exit $EXIT_CODE' EXIT
 set -e
 
 cd /bot
@@ -75,10 +83,13 @@ NODEJS_SCRIPT
 export SCRIPT_PATH="{{ .Entrypoint }}"
 export ENTRYPOINT_TYPE="{{ .EntryPointType }}"
 export CODE_MOUNT_DIR="bot"
-exec node /tmp/nodejs_entrypoint.js
+node /tmp/nodejs_entrypoint.js 2>&1 | tee -a /var/the0/logs/bot.log
+exit ${PIPESTATUS[0]}
 `
 
 const k8sBinaryEntrypoint = `#!/bin/bash
+mkdir -p /var/the0/logs
+trap 'EXIT_CODE=$?; echo $EXIT_CODE > /var/the0/done; exit $EXIT_CODE' EXIT
 set -e
 
 cd /bot
@@ -94,10 +105,13 @@ chmod +x "$BINARY"
 
 # Environment variables BOT_ID and BOT_CONFIG are already set by K8s pod spec
 export CODE_MOUNT_DIR="bot"
-exec "./$BINARY"
+"./$BINARY" 2>&1 | tee -a /var/the0/logs/bot.log
+exit ${PIPESTATUS[0]}
 `
 
 const k8sDotnetEntrypoint = `#!/bin/bash
+mkdir -p /var/the0/logs
+trap 'EXIT_CODE=$?; echo $EXIT_CODE > /var/the0/done; exit $EXIT_CODE' EXIT
 set -e
 
 cd /bot
@@ -111,10 +125,13 @@ fi
 
 # Environment variables BOT_ID and BOT_CONFIG are already set by K8s pod spec
 export CODE_MOUNT_DIR="bot"
-exec dotnet "$DLL"
+dotnet "$DLL" 2>&1 | tee -a /var/the0/logs/bot.log
+exit ${PIPESTATUS[0]}
 `
 
 const k8sScalaEntrypoint = `#!/bin/bash
+mkdir -p /var/the0/logs
+trap 'EXIT_CODE=$?; echo $EXIT_CODE > /var/the0/done; exit $EXIT_CODE' EXIT
 set -e
 
 cd /bot
@@ -128,7 +145,8 @@ fi
 
 # Environment variables BOT_ID and BOT_CONFIG are already set by K8s pod spec
 export CODE_MOUNT_DIR="bot"
-exec java -jar "$JAR"
+java -jar "$JAR" 2>&1 | tee -a /var/the0/logs/bot.log
+exit ${PIPESTATUS[0]}
 `
 
 // templateData holds the data for template execution

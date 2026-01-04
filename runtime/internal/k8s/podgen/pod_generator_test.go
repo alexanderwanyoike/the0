@@ -57,17 +57,12 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	// Check annotations
 	assert.NotEmpty(t, pod.Annotations[AnnotationConfigHash])
 
-	// Check init containers (download code, extract code, download state)
-	require.Len(t, pod.Spec.InitContainers, 3)
-	downloadContainer := pod.Spec.InitContainers[0]
-	assert.Equal(t, "download-code", downloadContainer.Name)
-	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", downloadContainer.Image)
-	extractContainer := pod.Spec.InitContainers[1]
-	assert.Equal(t, "extract-code", extractContainer.Name)
-	assert.Equal(t, "busybox:1.36.1", extractContainer.Image)
-	stateContainer := pod.Spec.InitContainers[2]
-	assert.Equal(t, "download-state", stateContainer.Name)
-	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", stateContainer.Image)
+	// Check init container (daemon init handles code + state download)
+	require.Len(t, pod.Spec.InitContainers, 1)
+	initContainer := pod.Spec.InitContainers[0]
+	assert.Equal(t, "init", initContainer.Name)
+	assert.Equal(t, "runtime:latest", initContainer.Image)
+	assert.Equal(t, []string{"/app", "daemon", "init"}, initContainer.Command)
 
 	// Check main container
 	require.Len(t, pod.Spec.Containers, 1)

@@ -24,12 +24,12 @@ type SyncOptions struct {
 	StatePath string        // State directory to sync (default: /state)
 	LogsPath  string        // Logs directory to sync (default: /var/the0/logs)
 	Interval  time.Duration // Sync interval (default: 60s)
-	Once      bool          // If true, sync once and exit (for scheduled bots)
+	WatchDone string        // Path to done file - when it appears, sync and exit (for scheduled bots)
 }
 
 // Sync periodically uploads state and logs to MinIO.
-// If opts.Once is true, performs a single sync and exits (for scheduled bots).
-// Otherwise runs as a sidecar container alongside the main bot container.
+// If opts.WatchDone is set, exits when done file appears (for scheduled bots).
+// Otherwise runs indefinitely as a sidecar container.
 func Sync(ctx context.Context, opts SyncOptions) error {
 	logger := &util.DefaultLogger{}
 
@@ -44,11 +44,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		opts.Interval = 60 * time.Second
 	}
 
-	if opts.Once {
-		logger.Info("Daemon sync starting (once mode)", "bot_id", opts.BotID)
-	} else {
-		logger.Info("Daemon sync starting", "bot_id", opts.BotID, "interval", opts.Interval)
-	}
+	logger.Info("Daemon sync starting", "bot_id", opts.BotID, "interval", opts.Interval)
 
 	// Load config
 	cfg, err := storage.LoadConfigFromEnv()
@@ -106,26 +102,48 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		}
 	}
 
-	// Once mode: sync once and exit (for scheduled bots)
-	if opts.Once {
-		doSync()
-		cleanup()
-		logger.Info("Daemon sync complete (once mode)")
-		return nil
-	}
-
-	// Continuous mode: run as sidecar with periodic sync
+	// Sidecar mode: run with periodic sync
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 
+	// Check for done file (for scheduled bots)
+	checkDone := func() bool {
+		if opts.WatchDone == "" {
+			return false
+		}
+		_, err := os.Stat(opts.WatchDone)
+		return err == nil
+	}
+
+	// Done file check ticker (check every 2 seconds)
+	var doneTicker *time.Ticker
+	if opts.WatchDone != "" {
+		doneTicker = time.NewTicker(2 * time.Second)
+		defer doneTicker.Stop()
+		logger.Info("Watching for done file", "path", opts.WatchDone)
+	}
+
 	// Main loop
 	for {
 		select {
 		case <-ticker.C:
 			doSync()
+		case <-func() <-chan time.Time {
+			if doneTicker != nil {
+				return doneTicker.C
+			}
+			return nil
+		}():
+			if checkDone() {
+				logger.Info("Done file detected, performing final sync")
+				doSync()
+				cleanup()
+				logger.Info("Daemon sync shutdown complete (bot finished)")
+				return nil
+			}
 		case <-ctx.Done():
 			logger.Info("Context cancelled, performing final sync")
 			doSync()

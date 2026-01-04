@@ -4,7 +4,6 @@ package podgen
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/model"
-	"runtime/internal/entrypoints"
 	runtimepkg "runtime/internal/runtime"
 )
 
@@ -63,6 +61,9 @@ type PodGeneratorConfig struct {
 	MinIOBucket      string
 	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
 	MinIOUseSSL      bool
+
+	// RuntimeImage is the image for init and sidecar containers (e.g., "the0/runtime:latest")
+	RuntimeImage string
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -80,6 +81,9 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	}
 	if config.MinIOStateBucket == "" {
 		config.MinIOStateBucket = "bot-state"
+	}
+	if config.RuntimeImage == "" {
+		config.RuntimeImage = "runtime:latest"
 	}
 	return &PodGenerator{config: config}
 }
@@ -129,19 +133,6 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		return nil, fmt.Errorf("failed to get Docker image: %w", err)
 	}
 
-	// Build MinIO endpoint URL
-	minioURL := g.getMinIOURL()
-
-	// Generate entrypoint script using shared entrypoints package
-	entrypointScript, err := entrypoints.GenerateK8sEntrypoint(runtime, entrypoints.GeneratorOptions{
-		EntryPointType: "bot",
-		Entrypoint:     entrypoint,
-		WorkDir:        "/bot",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate entrypoint script: %w", err)
-	}
-
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("bot-%s", bot.ID),
@@ -161,67 +152,25 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			RestartPolicy: corev1.RestartPolicyNever,
 			InitContainers: []corev1.Container{
 				{
-					Name:    "download-code",
-					Image:   "minio/mc:RELEASE.2024-11-17T19-35-25Z",
-					Command: []string{"/bin/sh", "-c"},
+					Name:    "init",
+					Image:   g.config.RuntimeImage,
+					Command: []string{"/app", "daemon", "init"},
 					Args: []string{
-						fmt.Sprintf(`
-set -e
-mc alias set minio %s $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
-mc cp minio/%s/%s /bot/code.zip
-ls -la /bot/
-`, minioURL, g.config.MinIOBucket, filePath),
+						"--bot-id", bot.ID,
+						"--code-path", "/bot",
+						"--state-path", "/state",
+						"--code-file", fmt.Sprintf("%s/%s", g.config.MinIOBucket, filePath),
+						"--runtime", runtime,
+						"--entrypoint", entrypoint,
 					},
 					Env: []corev1.EnvVar{
+						{Name: "MINIO_ENDPOINT", Value: g.config.MinIOEndpoint},
 						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
 						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+						{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", g.config.MinIOUseSSL)},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-code", MountPath: "/bot"},
-					},
-				},
-				{
-					Name:    "extract-code",
-					Image:   "busybox:1.36.1",
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{
-						fmt.Sprintf(`
-set -e
-cd /bot
-unzip -o code.zip
-rm code.zip
-echo '%s' | base64 -d > /bot/entrypoint.sh
-chmod +x /bot/entrypoint.sh
-ls -la /bot/
-`, base64.StdEncoding.EncodeToString([]byte(entrypointScript))),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "bot-code", MountPath: "/bot"},
-					},
-				},
-				{
-					Name:    "download-state",
-					Image:   "minio/mc:RELEASE.2024-11-17T19-35-25Z",
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{
-						fmt.Sprintf(`
-# Download existing state if it exists (ignore errors for first run)
-mc alias set minio %s $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
-mc cp minio/%s/%s/state.tar.gz /tmp/state.tar.gz 2>/dev/null || true
-if [ -f /tmp/state.tar.gz ]; then
-    echo "Found existing state, extracting..."
-    tar -xzf /tmp/state.tar.gz -C /state
-    ls -la /state/
-else
-    echo "No existing state found (first run)"
-fi
-`, minioURL, g.config.MinIOStateBucket, bot.ID),
-					},
-					Env: []corev1.EnvVar{
-						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
-						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
-					},
-					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-state", MountPath: "/state"},
 					},
 				},
@@ -272,6 +221,71 @@ fi
 	}
 
 	return pod, nil
+}
+
+// GenerateScheduledPodSpec creates a Pod spec for scheduled bots (CronJobs).
+// Adds a daemon sidecar that syncs state/logs and exits when the bot completes.
+func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec, error) {
+	// Generate base pod
+	pod, err := g.GeneratePod(bot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the0 volume for done marker and logs
+	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+		Name: "the0",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+
+	// Add volume mount to bot container
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "bot" {
+			pod.Spec.Containers[i].VolumeMounts = append(
+				pod.Spec.Containers[i].VolumeMounts,
+				corev1.VolumeMount{Name: "the0", MountPath: "/var/the0"},
+			)
+		}
+	}
+
+	// Add daemon sync sidecar
+	sidecar := corev1.Container{
+		Name:    "sync",
+		Image:   g.config.RuntimeImage,
+		Command: []string{"/app", "daemon", "sync"},
+		Args: []string{
+			"--bot-id", bot.ID,
+			"--state-path", "/state",
+			"--logs-path", "/var/the0/logs",
+			"--watch-done", "/var/the0/done",
+		},
+		Env: []corev1.EnvVar{
+			{Name: "MINIO_ENDPOINT", Value: g.config.MinIOEndpoint},
+			{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
+			{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+			{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", g.config.MinIOUseSSL)},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "bot-state", MountPath: "/state"},
+			{Name: "the0", MountPath: "/var/the0"},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: parseResourceOrDefault("32Mi", "32Mi"),
+				corev1.ResourceCPU:    parseResourceOrDefault("10m", "10m"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: parseResourceOrDefault("64Mi", "64Mi"),
+				corev1.ResourceCPU:    parseResourceOrDefault("100m", "100m"),
+			},
+		},
+	}
+
+	pod.Spec.Containers = append(pod.Spec.Containers, sidecar)
+
+	return &pod.Spec, nil
 }
 
 // GeneratePodName generates the pod name for a given bot ID.
@@ -428,18 +442,6 @@ func sanitizeLabelValue(s string) string {
 // isAlphanumeric returns true if the byte is a letter or digit.
 func isAlphanumeric(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
-}
-
-// getMinIOURL builds the MinIO endpoint URL with protocol.
-func (g *PodGenerator) getMinIOURL() string {
-	endpoint := g.config.MinIOEndpoint
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		return endpoint
-	}
-	if g.config.MinIOUseSSL {
-		return "https://" + endpoint
-	}
-	return "http://" + endpoint
 }
 
 // getEntrypoint extracts the bot entrypoint from the config.
