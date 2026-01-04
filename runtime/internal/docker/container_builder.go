@@ -99,6 +99,43 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 	return b
 }
 
+// WithMinIOConfig adds MinIO credentials as environment variables.
+// Required for daemon init/sync to access MinIO from within the container.
+func (b *ContainerBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string, useSSL bool) *ContainerBuilder {
+	b.config.Env = append(b.config.Env,
+		fmt.Sprintf("MINIO_ENDPOINT=%s", endpoint),
+		fmt.Sprintf("MINIO_ACCESS_KEY=%s", accessKey),
+		fmt.Sprintf("MINIO_SECRET_KEY=%s", secretKey),
+		fmt.Sprintf("MINIO_USE_SSL=%t", useSSL),
+	)
+	return b
+}
+
+// WithDaemonConfig adds bot-specific config for daemon init/sync.
+// This enables the daemon subprocess approach where the container handles
+// its own code download, state sync, and log collection.
+func (b *ContainerBuilder) WithDaemonConfig(botID, codeFile, runtime, entrypoint, config string, isScheduled bool) *ContainerBuilder {
+	b.config.Env = append(b.config.Env,
+		fmt.Sprintf("BOT_ID=%s", botID),
+		fmt.Sprintf("CODE_FILE=%s", codeFile),
+		fmt.Sprintf("RUNTIME=%s", runtime),
+		fmt.Sprintf("ENTRYPOINT=%s", entrypoint),
+		fmt.Sprintf("BOT_CONFIG=%s", config),
+		fmt.Sprintf("IS_SCHEDULED=%t", isScheduled),
+	)
+	return b
+}
+
+// WithDevRuntime mounts the runtime binary from the host for development.
+// Allows testing daemon changes without rebuilding images.
+func (b *ContainerBuilder) WithDevRuntime(hostPath string) *ContainerBuilder {
+	if hostPath != "" {
+		b.hostConfig.Binds = append(b.hostConfig.Binds,
+			fmt.Sprintf("%s:/app/runtime:ro", hostPath))
+	}
+	return b
+}
+
 // Build returns the finalized container.Config and container.HostConfig.
 func (b *ContainerBuilder) Build() (*container.Config, *container.HostConfig) {
 	return b.config, b.hostConfig

@@ -11,26 +11,28 @@ import (
 // DockerRunnerConfig holds all configuration needed to run containers
 // including MinIO credentials, resource limits, and directory paths.
 type DockerRunnerConfig struct {
-	MinIOEndpoint        string // MinIO server endpoint (e.g., "localhost:9000")
-	MinIOAccessKeyID     string // MinIO access key
-	MinIOSecretAccessKey string // MinIO secret key
-	MinIOUseSSL          bool   // Whether to use SSL/TLS for MinIO connections
-	MinIOCodeBucket      string // Bucket containing bot code archives
-	MinioResultsBucket   string // Bucket for storing backtest results
-	MinioLogsBucket      string // Bucket for storing logs
-	MinioStateBucket     string // Bucket for storing persistent bot state
-	MaxStateSizeBytes    int64  // Maximum total size of bot state folder (default: 8GB)
-	MaxStateFileSizeBytes int64 // Maximum size of individual state file (default: 10MB)
-	TempDir              string // Temporary directory for extracted bot code
-	MemoryLimitMB        int64  // Memory limit in bytes for containers
-	CPUShares            int64  // CPU shares allocated to containers
+	MinIOEndpoint         string // MinIO server endpoint (e.g., "localhost:9000")
+	MinIOAccessKeyID      string // MinIO access key
+	MinIOSecretAccessKey  string // MinIO secret key
+	MinIOUseSSL           bool   // Whether to use SSL/TLS for MinIO connections
+	MinIOCodeBucket       string // Bucket containing bot code archives
+	MinioResultsBucket    string // Bucket for storing backtest results
+	MinioLogsBucket       string // Bucket for storing logs
+	MinioStateBucket      string // Bucket for storing persistent bot state
+	MaxStateSizeBytes     int64  // Maximum total size of bot state folder (default: 8GB)
+	MaxStateFileSizeBytes int64  // Maximum size of individual state file (default: 10MB)
+	TempDir               string // Temporary directory for extracted bot code
+	MemoryLimitMB         int64  // Memory limit in bytes for containers
+	CPUShares             int64  // CPU shares allocated to containers
+	DevRuntimePath        string // Optional: host path to runtime binary for dev mode
 }
 
 // LoadConfigFromEnv loads configuration from environment variables.
 // Required env vars: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 // Optional env vars: MINIO_SSL, MINIO_BACKTESTS_BUCKET, TEMP_DIR, MINIO_CODE_BUCKET,
 // MINIO_STATE_BUCKET, MINIO_LOGS_BUCKET, BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES,
-// MAX_STATE_SIZE_MB (default: 8192 = 8GB), MAX_STATE_FILE_SIZE_MB (default: 10)
+// MAX_STATE_SIZE_MB (default: 8192 = 8GB), MAX_STATE_FILE_SIZE_MB (default: 10),
+// DEV_RUNTIME_PATH (optional: host path to runtime binary for dev mode)
 func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	endpoint := os.Getenv("MINIO_ENDPOINT")
 	if endpoint == "" {
@@ -74,6 +76,9 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		tempDir = "/tmp/runtime"
 	}
 
+	// Optional: Dev mode runtime path for mounting binary from host
+	devRuntimePath := os.Getenv("DEV_RUNTIME_PATH")
+
 	return &DockerRunnerConfig{
 		MinIOEndpoint:         endpoint,
 		MinIOAccessKeyID:      accessKey,
@@ -88,6 +93,7 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		TempDir:               tempDir,
 		MemoryLimitMB:         getMemoryLimit(),
 		CPUShares:             getCPUShares(),
+		DevRuntimePath:        devRuntimePath,
 	}, nil
 }
 
