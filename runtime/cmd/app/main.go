@@ -46,6 +46,9 @@ var (
 	minioAccessKey string
 	minioSecretKey string
 	minioBucket    string
+
+	// Runtime image for init containers and sidecars
+	runtimeImage string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -124,6 +127,7 @@ func main() {
 	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
 	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
 	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
+	controllerCmd.Flags().StringVar(&runtimeImage, "runtime-image", getEnv("RUNTIME_IMAGE", "runtime:latest"), "Runtime image for init containers and sidecars")
 	// MinIO credentials read from environment only (not CLI flags) for security
 	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
 	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
@@ -321,6 +325,7 @@ func runController() {
 		MinIOAccessKey:    minioAccessKey,
 		MinIOSecretKey:    minioSecretKey,
 		MinIOBucket:       minioBucket,
+		RuntimeImage:      runtimeImage,
 		Logger:            &util.DefaultLogger{},
 	})
 	if err != nil {

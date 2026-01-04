@@ -67,6 +67,9 @@ type BotScheduleControllerConfig struct {
 	MinIOAccessKey string
 	MinIOSecretKey string
 	MinIOBucket    string
+	MinIOUseSSL    bool
+	// RuntimeImage for init containers and sidecars
+	RuntimeImage string
 }
 
 // BotScheduleController reconciles bot schedule state between MongoDB and Kubernetes.
@@ -105,6 +108,8 @@ func NewBotScheduleController(
 		MinIOAccessKey: config.MinIOAccessKey,
 		MinIOSecretKey: config.MinIOSecretKey,
 		MinIOBucket:    config.MinIOBucket,
+		MinIOUseSSL:    config.MinIOUseSSL,
+		RuntimeImage:   config.RuntimeImage,
 	})
 
 	return &BotScheduleController{

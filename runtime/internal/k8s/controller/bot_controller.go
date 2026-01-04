@@ -54,6 +54,9 @@ type BotControllerConfig struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+
+	// RuntimeImage for init containers and sidecars
+	RuntimeImage string
 }
 
 // BotController reconciles bot state between MongoDB and Kubernetes.
@@ -96,6 +99,7 @@ func NewBotController(
 		MinIOSecretKey: config.MinIOSecretKey,
 		MinIOBucket:    config.MinIOBucket,
 		MinIOUseSSL:    config.MinIOUseSSL,
+		RuntimeImage:   config.RuntimeImage,
 	}
 
 	return &BotController{

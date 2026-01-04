@@ -190,6 +190,8 @@ botController:
   image:
     repository: runtime
     tag: latest
+  # Runtime image for init containers and sidecars in bot pods
+  runtimeImage: "runtime:latest"
   # How often to reconcile state with MongoDB
   reconcileInterval: "30s"
   # Environment variables for the controller

@@ -28,6 +28,9 @@ type ManagerConfig struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
+	// RuntimeImage for init containers and sidecars in bot pods
+	RuntimeImage string
+
 	// Logger for the manager (optional)
 	Logger util.Logger
 }
@@ -89,6 +92,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			MinIOSecretKey:    config.MinIOSecretKey,
 			MinIOBucket:       config.MinIOBucket,
 			MinIOUseSSL:       config.MinIOUseSSL,
+			RuntimeImage:      config.RuntimeImage,
 		},
 		botRepo,
 		podClient,
@@ -118,6 +122,8 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			MinIOAccessKey:    config.MinIOAccessKey,
 			MinIOSecretKey:    config.MinIOSecretKey,
 			MinIOBucket:       config.MinIOBucket,
+			MinIOUseSSL:       config.MinIOUseSSL,
+			RuntimeImage:      config.RuntimeImage,
 		},
 		scheduleRepo,
 		cronClient,
