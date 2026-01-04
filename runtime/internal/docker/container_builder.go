@@ -163,6 +163,14 @@ func (b *ContainerBuilder) WithQueryConfig(queryPath string, queryParams string)
 	return b
 }
 
+// WithExtraHosts adds extra host-to-IP mappings to the container.
+// Use "host.docker.internal:host-gateway" to allow containers to reach
+// the Docker host on Linux systems.
+func (b *ContainerBuilder) WithExtraHosts(hosts ...string) *ContainerBuilder {
+	b.hostConfig.ExtraHosts = append(b.hostConfig.ExtraHosts, hosts...)
+	return b
+}
+
 // Build returns the finalized container.Config and container.HostConfig.
 func (b *ContainerBuilder) Build() (*container.Config, *container.HostConfig) {
 	return b.config, b.hostConfig

@@ -251,6 +251,10 @@ func (r *dockerRunner) buildContainerConfig(
 		builder = builder.WithAutoRemove(true) // Run-to-completion cleans up after result extraction
 	}
 
+	// Enable host.docker.internal on Linux for containers to reach the Docker host.
+	// This is needed for containers to access services running on the host (e.g., MinIO in tests).
+	builder = builder.WithExtraHosts("host.docker.internal:host-gateway")
+
 	return builder.Build()
 }
 
