@@ -26,8 +26,7 @@ RUN chmod 755 /app/runtime
 RUN mkdir -p /bot /state /var/the0/logs
 
 # Bootstrap script that runs daemon init, daemon sync, then the bot
-# Reads configuration from environment variables
-RUN cat > /app/bootstrap.sh << 'BOOTSTRAP'
+COPY <<'EOF' /app/bootstrap.sh
 #!/bin/bash
 set -e
 
@@ -68,7 +67,7 @@ trap cleanup EXIT INT TERM
 # Don't use exec - we need the trap to fire on exit
 cd /bot
 /bin/bash /bot/entrypoint.sh
-BOOTSTRAP
+EOF
 RUN chmod 755 /app/bootstrap.sh
 
 # Default working directory

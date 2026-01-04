@@ -27,8 +27,8 @@ RUN chmod 755 /app/runtime
 # Create required directories
 RUN mkdir -p /bot /state /var/the0/logs
 
-# Bootstrap script
-RUN cat > /app/bootstrap.sh << 'BOOTSTRAP'
+# Bootstrap script that runs daemon init, daemon sync, then the bot
+COPY <<'EOF' /app/bootstrap.sh
 #!/bin/bash
 set -e
 
@@ -61,9 +61,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 cd /bot
-# Don't use exec - we need the trap to fire on exit
 /bin/bash /bot/entrypoint.sh
-BOOTSTRAP
+EOF
 RUN chmod 755 /app/bootstrap.sh
 
 WORKDIR /bot
