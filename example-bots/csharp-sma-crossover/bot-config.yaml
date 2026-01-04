@@ -3,13 +3,14 @@
 
 name: csharp-sma-crossover
 description: "SMA crossover strategy bot using C# .NET 8 with Yahoo Finance data"
-version: 1.1.0
+version: 1.3.0
 author: "the0"
 type: realtime
 runtime: dotnet8
 
 entrypoints:
   bot: bin/Release/net8.0/publish/SmaBot.dll
+  query: bin/Release/net8.0/publish/SmaQuery.dll
 
 schema:
   bot: bot-schema.json
