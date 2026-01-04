@@ -184,10 +184,11 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			},
 			Containers: []corev1.Container{
 				{
-					Name:       "bot",
-					Image:      baseImage,
-					Command:    []string{getShellForImage(baseImage), "/bot/entrypoint.sh"},
-					WorkingDir: "/bot",
+					Name:            "bot",
+					Image:           baseImage,
+					ImagePullPolicy: g.config.RuntimeImagePullPolicy,
+					Command:         []string{getShellForImage(baseImage), "/bot/entrypoint.sh"},
+					WorkingDir:      "/bot",
 					Env: []corev1.EnvVar{
 						{Name: "BOT_ID", Value: bot.ID},
 						{Name: "BOT_CONFIG", Value: string(configJSON)},
