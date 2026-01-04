@@ -1059,3 +1059,65 @@ func (c *APIClient) ClearBotState(auth *Auth, botID string) (bool, error) {
 
 	return response.Data.Cleared, nil
 }
+
+// BotQueryRequest represents a request to execute a query against a bot
+type BotQueryRequest struct {
+	QueryPath  string         `json:"query_path"`
+	Params     map[string]any `json:"params,omitempty"`
+	TimeoutSec int            `json:"timeout_sec,omitempty"`
+}
+
+// BotQueryResponse represents the response from a bot query
+type BotQueryResponse struct {
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// ExecuteBotQuery executes a query against a bot's query handlers
+func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryRequest) (*BotQueryResponse, error) {
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/bot/%s/query", c.BaseURL, botID), bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Use longer timeout for query execution
+	client := &http.Client{
+		Timeout: time.Duration(request.TimeoutSec+10) * time.Second, // Add buffer for network
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("bot not found: %s", botID)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("query failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var response BotQueryResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return &response, nil
+}

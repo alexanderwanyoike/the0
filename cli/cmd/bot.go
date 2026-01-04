@@ -33,6 +33,7 @@ func NewBotCmd() *cobra.Command {
 	cmd.AddCommand(NewBotEnableCmd())
 	cmd.AddCommand(NewBotDisableCmd())
 	cmd.AddCommand(NewBotStateCmd())
+	cmd.AddCommand(NewBotQueryCmd())
 	return cmd
 }
 

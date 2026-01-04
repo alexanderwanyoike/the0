@@ -615,3 +615,137 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIClient_ExecuteBotQuery(t *testing.T) {
+	tests := []struct {
+		name          string
+		botID         string
+		request       *internal.BotQueryRequest
+		statusCode    int
+		responseBody  string
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name:  "successful query",
+			botID: "bot-123",
+			request: &internal.BotQueryRequest{
+				QueryPath:  "/portfolio",
+				Params:     map[string]any{"symbol": "BTC"},
+				TimeoutSec: 30,
+			},
+			statusCode: 200,
+			responseBody: `{
+				"success": true,
+				"data": {"positions": [{"symbol": "BTC", "amount": 1.5}]}
+			}`,
+			expectedError: false,
+		},
+		{
+			name:  "query with no params",
+			botID: "bot-456",
+			request: &internal.BotQueryRequest{
+				QueryPath:  "/health",
+				TimeoutSec: 10,
+			},
+			statusCode: 200,
+			responseBody: `{
+				"success": true,
+				"data": {"status": "ok"}
+			}`,
+			expectedError: false,
+		},
+		{
+			name:  "bot not found",
+			botID: "nonexistent-bot",
+			request: &internal.BotQueryRequest{
+				QueryPath:  "/status",
+				TimeoutSec: 30,
+			},
+			statusCode:    404,
+			responseBody:  `{"success": false, "message": "Bot not found"}`,
+			expectedError: true,
+			errorContains: "bot not found",
+		},
+		{
+			name:  "unauthorized",
+			botID: "bot-789",
+			request: &internal.BotQueryRequest{
+				QueryPath:  "/portfolio",
+				TimeoutSec: 30,
+			},
+			statusCode:    401,
+			responseBody:  `{"error": "Unauthorized"}`,
+			expectedError: true,
+			errorContains: "authentication failed",
+		},
+		{
+			name:  "query execution error",
+			botID: "bot-error",
+			request: &internal.BotQueryRequest{
+				QueryPath:  "/failing-query",
+				TimeoutSec: 30,
+			},
+			statusCode:    500,
+			responseBody:  `{"success": false, "message": "Query handler threw an exception"}`,
+			expectedError: true,
+			errorContains: "query failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := "/bot/" + tt.botID + "/query"
+				if r.URL.Path != expectedPath {
+					t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+
+				if r.Method != "POST" {
+					t.Errorf("Expected POST method, got %s", r.Method)
+				}
+
+				// Verify authorization header
+				authHeader := r.Header.Get("Authorization")
+				if !strings.HasPrefix(authHeader, "ApiKey ") {
+					t.Errorf("Expected Authorization header with ApiKey prefix, got %s", authHeader)
+				}
+
+				// Verify content type
+				contentType := r.Header.Get("Content-Type")
+				if contentType != "application/json" {
+					t.Errorf("Expected Content-Type application/json, got %s", contentType)
+				}
+
+				w.WriteHeader(tt.statusCode)
+				w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			client := internal.NewAPIClient(server.URL)
+			auth := &internal.Auth{
+				APIKey:    "test-key",
+				CreatedAt: time.Now(),
+			}
+
+			response, err := client.ExecuteBotQuery(auth, tt.botID, tt.request)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("ExecuteBotQuery() expected error but got nil")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("ExecuteBotQuery() error = %v, expected to contain %v", err, tt.errorContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ExecuteBotQuery() unexpected error = %v", err)
+				}
+				if response == nil {
+					t.Errorf("ExecuteBotQuery() returned nil response")
+				} else if !response.Success {
+					t.Errorf("ExecuteBotQuery() expected success=true, got false")
+				}
+			}
+		})
+	}
+}
