@@ -24,6 +24,7 @@
 //! }
 //! ```
 
+pub mod query;
 pub mod state;
 
 use serde_json::Value;

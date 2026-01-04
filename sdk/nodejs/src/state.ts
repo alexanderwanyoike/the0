@@ -30,6 +30,36 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
+ * Error thrown when attempting to modify state during query execution.
+ */
+export class ReadOnlyStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReadOnlyStateError';
+  }
+}
+
+/**
+ * Check if currently running in query mode (read-only).
+ */
+function isQueryMode(): boolean {
+  return process.env.QUERY_PATH !== undefined;
+}
+
+/**
+ * Check if write operations are allowed.
+ * Throws ReadOnlyStateError if in query mode.
+ */
+function checkWriteAllowed(): void {
+  if (isQueryMode()) {
+    throw new ReadOnlyStateError(
+      'State modifications are not allowed during query execution. ' +
+        'Queries are read-only. Use state.get() to read state values.'
+    );
+  }
+}
+
+/**
  * Get the path to the state directory.
  */
 function getStateDir(): string {
@@ -88,9 +118,11 @@ export function get<T>(key: string, defaultValue?: T): T | undefined {
  * Set a value in persistent state.
  *
  * The value must be JSON serializable.
+ * Note: This function will throw ReadOnlyStateError if called during query execution.
  *
  * @param key - The state key (alphanumeric, hyphens, underscores)
  * @param value - The value to store (must be JSON serializable)
+ * @throws ReadOnlyStateError if called during query execution (queries are read-only)
  *
  * @example
  * ```typescript
@@ -100,6 +132,7 @@ export function get<T>(key: string, defaultValue?: T): T | undefined {
  * ```
  */
 export function set<T>(key: string, value: T): void {
+  checkWriteAllowed();
   validateKey(key);
   const stateDir = getStateDir();
   fs.mkdirSync(stateDir, { recursive: true });
@@ -110,8 +143,11 @@ export function set<T>(key: string, value: T): void {
 /**
  * Delete a key from persistent state.
  *
+ * Note: This function will throw ReadOnlyStateError if called during query execution.
+ *
  * @param key - The state key to delete
  * @returns True if the key existed and was deleted, false otherwise
+ * @throws ReadOnlyStateError if called during query execution (queries are read-only)
  *
  * @example
  * ```typescript
@@ -121,6 +157,7 @@ export function set<T>(key: string, value: T): void {
  * ```
  */
 export function remove(key: string): boolean {
+  checkWriteAllowed();
   validateKey(key);
   const filepath = getKeyPath(key);
   try {
@@ -167,6 +204,9 @@ export function list(): string[] {
  * Clear all state.
  *
  * Removes all stored state keys.
+ * Note: This function will throw ReadOnlyStateError if called during query execution.
+ *
+ * @throws ReadOnlyStateError if called during query execution (queries are read-only)
  *
  * @example
  * ```typescript
@@ -175,6 +215,7 @@ export function list(): string[] {
  * ```
  */
 export function clear(): void {
+  checkWriteAllowed();
   const stateDir = getStateDir();
   try {
     const files = fs.readdirSync(stateDir);
