@@ -101,6 +101,14 @@ func NewDockerOrchestrator(dockerClient *client.Client, logger util.Logger) Cont
 }
 
 func (r *dockerOrchestrator) PullImage(ctx context.Context, imageName string) error {
+	// Check if image exists locally first
+	_, _, err := r.dockerClient.ImageInspectWithRaw(ctx, imageName)
+	if err == nil {
+		r.logger.Info("Image already exists locally", "image", imageName)
+		return nil
+	}
+
+	// Image not found locally, try to pull
 	r.logger.Info("Pulling Docker image", "image", imageName)
 
 	reader, err := r.dockerClient.ImagePull(ctx, imageName, image.PullOptions{})

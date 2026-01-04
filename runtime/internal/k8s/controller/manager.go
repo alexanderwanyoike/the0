@@ -39,7 +39,8 @@ type ManagerConfig struct {
 }
 
 // Manager coordinates multiple K8s controllers and their dependencies.
-// It manages the lifecycle of bot controller, schedule controller, and log collector.
+// It manages the lifecycle of bot controller and schedule controller.
+// Log collection is handled by the daemon sidecar in each pod.
 type Manager struct {
 	config ManagerConfig
 	logger util.Logger
@@ -47,7 +48,6 @@ type Manager struct {
 	// Controllers
 	botController      *BotController
 	scheduleController *BotScheduleController
-	logCollector       *K8sLogCollector
 
 	// State
 	mu      sync.Mutex
@@ -134,26 +134,11 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 		cronClient,
 	)
 
-	// Create log collector (optional - logs warning if fails)
-	var logCollector *K8sLogCollector
-	logCollector, err = NewK8sLogCollector(context.Background(), K8sLogCollectorConfig{
-		Namespace:      config.Namespace,
-		Interval:       30 * time.Second,
-		MinIOEndpoint:  config.MinIOEndpoint,
-		MinIOAccessKey: config.MinIOAccessKey,
-		MinIOSecretKey: config.MinIOSecretKey,
-		MinIOUseSSL:    config.MinIOUseSSL,
-	}, logger)
-	if err != nil {
-		logger.Info("WARNING: Failed to create log collector, logs will not be collected from bot pods", "error", err.Error())
-	}
-
 	return &Manager{
 		config:             config,
 		logger:             logger,
 		botController:      botCtrl,
 		scheduleController: scheduleCtrl,
-		logCollector:       logCollector,
 		stopCh:             make(chan struct{}),
 	}, nil
 }
@@ -171,12 +156,6 @@ func (m *Manager) Start(ctx context.Context) (<-chan struct{}, error) {
 	m.mu.Unlock()
 
 	m.logger.Info("Starting controller manager")
-
-	// Start log collector if available
-	if m.logCollector != nil {
-		m.logCollector.Start()
-		m.logger.Info("Log collector started - collecting logs every 30s")
-	}
 
 	// Channel to signal when controllers are ready
 	readyCh := make(chan struct{})
@@ -256,10 +235,6 @@ func (m *Manager) Stop() {
 
 	m.botController.Stop()
 	m.scheduleController.Stop()
-
-	if m.logCollector != nil {
-		m.logCollector.Stop()
-	}
 
 	m.running = false
 }

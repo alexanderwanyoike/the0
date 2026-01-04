@@ -10,20 +10,22 @@ RUNTIMES = python311 nodejs20 rust-stable dotnet8 gcc13 scala3 ghc96
 # Build context is the repository root (to access runtime/ source)
 BUILD_CONTEXT = ../..
 
-.PHONY: all build-all $(RUNTIMES) push-all clean
+.PHONY: all build-all push-all clean list test minikube-build-all
 
 all: build-all
 
-build-all: $(RUNTIMES)
-
-$(RUNTIMES):
-	@echo "Building $(REGISTRY)/$@:$(VERSION)..."
-	docker build -t $(REGISTRY)/$@:$(VERSION) -f $@/Dockerfile $(BUILD_CONTEXT)
+# Build all images locally (for Docker Compose)
+build-all:
+	@for runtime in $(RUNTIMES); do \
+		echo "Building $(REGISTRY)/$$runtime:$(VERSION)..."; \
+		docker build -t $(REGISTRY)/$$runtime:$(VERSION) -f $$runtime/Dockerfile $(BUILD_CONTEXT); \
+	done
 
 # Build a single image: make python311
 python311 nodejs20 rust-stable dotnet8 gcc13 scala3 ghc96:
 	docker build -t $(REGISTRY)/$@:$(VERSION) -f $@/Dockerfile $(BUILD_CONTEXT)
 
+# Push all images to registry
 push-all:
 	@for runtime in $(RUNTIMES); do \
 		echo "Pushing $(REGISTRY)/$$runtime:$(VERSION)..."; \
@@ -47,3 +49,15 @@ clean:
 	@for runtime in $(RUNTIMES); do \
 		docker rmi $(REGISTRY)/$$runtime:$(VERSION) 2>/dev/null || true; \
 	done
+
+# Build images directly into minikube's cache (no registry needed)
+minikube-build-all:
+	@echo "Building images directly into minikube..."
+	@for runtime in $(RUNTIMES); do \
+		echo "Building $(REGISTRY)/$$runtime:$(VERSION) in minikube..."; \
+		minikube image build -t $(REGISTRY)/$$runtime:$(VERSION) -f $$runtime/Dockerfile $(BUILD_CONTEXT); \
+	done
+
+# Build a single image in minikube: make minikube-python311
+minikube-%:
+	minikube image build -t $(REGISTRY)/$*:$(VERSION) -f $*/Dockerfile $(BUILD_CONTEXT)

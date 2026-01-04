@@ -25,6 +25,7 @@ type DockerRunnerConfig struct {
 	MemoryLimitMB         int64  // Memory limit in bytes for containers
 	CPUShares             int64  // CPU shares allocated to containers
 	DevRuntimePath        string // Optional: host path to runtime binary for dev mode
+	DockerNetwork         string // Docker network to connect containers to (e.g., "the0-oss-network")
 }
 
 // LoadConfigFromEnv loads configuration from environment variables.
@@ -32,7 +33,8 @@ type DockerRunnerConfig struct {
 // Optional env vars: MINIO_SSL, MINIO_BACKTESTS_BUCKET, TEMP_DIR, MINIO_CODE_BUCKET,
 // MINIO_STATE_BUCKET, MINIO_LOGS_BUCKET, BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES,
 // MAX_STATE_SIZE_MB (default: 8192 = 8GB), MAX_STATE_FILE_SIZE_MB (default: 10),
-// DEV_RUNTIME_PATH (optional: host path to runtime binary for dev mode)
+// DEV_RUNTIME_PATH (optional: host path to runtime binary for dev mode),
+// DOCKER_NETWORK (optional: Docker network for bot containers, e.g., "the0-oss-network")
 func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	endpoint := os.Getenv("MINIO_ENDPOINT")
 	if endpoint == "" {
@@ -79,6 +81,9 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	// Optional: Dev mode runtime path for mounting binary from host
 	devRuntimePath := os.Getenv("DEV_RUNTIME_PATH")
 
+	// Optional: Docker network for bot containers
+	dockerNetwork := os.Getenv("DOCKER_NETWORK")
+
 	return &DockerRunnerConfig{
 		MinIOEndpoint:         endpoint,
 		MinIOAccessKeyID:      accessKey,
@@ -94,6 +99,7 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		MemoryLimitMB:         getMemoryLimit(),
 		CPUShares:             getCPUShares(),
 		DevRuntimePath:        devRuntimePath,
+		DockerNetwork:         dockerNetwork,
 	}, nil
 }
 

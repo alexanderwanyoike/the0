@@ -31,9 +31,19 @@ func NewContainerBuilder(imageName string) *ContainerBuilder {
 			Env:        []string{"PYTHONDONTWRITEBYTECODE=1"}, // Prevent Python from creating __pycache__ directories
 		},
 		hostConfig: &container.HostConfig{
-			NetworkMode: "host",
+			// Default to bridge mode; use WithNetwork to join a specific network
+			NetworkMode: "bridge",
 		},
 	}
+}
+
+// WithNetwork sets the Docker network for the container.
+// Use this to connect bot containers to the same network as infrastructure services.
+func (b *ContainerBuilder) WithNetwork(networkName string) *ContainerBuilder {
+	if networkName != "" {
+		b.hostConfig.NetworkMode = container.NetworkMode(networkName)
+	}
+	return b
 }
 
 // WithCommand sets the container's command (shell and script path).

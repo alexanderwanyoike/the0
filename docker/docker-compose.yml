@@ -172,6 +172,7 @@ services:
       DOCKER_TEMP_DIR: /tmp/bot-runner
       TEMP_DIR: /tmp/bot-runner
       DOCKER_LOG_DIR: /var/log/bot-runner
+      DOCKER_NETWORK: the0-oss-network
 
     ports:
       - "8080:8080"  # HTTP health endpoint
@@ -229,6 +230,7 @@ services:
       DOCKER_LOG_DIR: /var/log/bot-scheduler
       BOT_MEMORY_LIMIT_MB: "512"
       BOT_CPU_SHARES: "512"
+      DOCKER_NETWORK: the0-oss-network
 
     ports:
       - "8082:8080"  # HTTP health endpoint
