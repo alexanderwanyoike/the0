@@ -4,7 +4,6 @@ package podgen
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/model"
-	"runtime/internal/entrypoints"
 	runtimepkg "runtime/internal/runtime"
 )
 
@@ -57,11 +55,18 @@ type PodGeneratorConfig struct {
 	ControllerName string
 
 	// MinIO configuration for downloading bot code
-	MinIOEndpoint   string
-	MinIOAccessKey  string
-	MinIOSecretKey  string
-	MinIOBucket     string
-	MinIOUseSSL     bool
+	MinIOEndpoint    string
+	MinIOAccessKey   string
+	MinIOSecretKey   string
+	MinIOBucket      string
+	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
+	MinIOUseSSL      bool
+
+	// RuntimeImage is the image for init and sidecar containers (e.g., "the0/runtime:latest")
+	RuntimeImage string
+
+	// RuntimeImagePullPolicy for init and sidecar containers (default: IfNotPresent)
+	RuntimeImagePullPolicy corev1.PullPolicy
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -76,6 +81,15 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	}
 	if config.Namespace == "" {
 		config.Namespace = "the0"
+	}
+	if config.MinIOStateBucket == "" {
+		config.MinIOStateBucket = "bot-state"
+	}
+	if config.RuntimeImage == "" {
+		config.RuntimeImage = "runtime:latest"
+	}
+	if config.RuntimeImagePullPolicy == "" {
+		config.RuntimeImagePullPolicy = corev1.PullIfNotPresent
 	}
 	return &PodGenerator{config: config}
 }
@@ -105,31 +119,24 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 	filePath := bot.CustomBotVersion.FilePath
 	entrypoint := g.getEntrypoint(bot)
 
-	// Validate filePath and bucket to prevent command injection
+	// Validate paths and IDs to prevent command injection
 	if err := validateMinIOPath(filePath); err != nil {
 		return nil, fmt.Errorf("invalid file path: %w", err)
 	}
 	if err := validateMinIOPath(g.config.MinIOBucket); err != nil {
 		return nil, fmt.Errorf("invalid bucket name: %w", err)
 	}
+	if err := validateMinIOPath(bot.ID); err != nil {
+		return nil, fmt.Errorf("invalid bot ID: %w", err)
+	}
+	if err := validateMinIOPath(g.config.MinIOStateBucket); err != nil {
+		return nil, fmt.Errorf("invalid state bucket name: %w", err)
+	}
 
 	// Get base image for the runtime (using shared runtime package)
 	baseImage, err := runtimepkg.GetDockerImage(runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker image: %w", err)
-	}
-
-	// Build MinIO endpoint URL
-	minioURL := g.getMinIOURL()
-
-	// Generate entrypoint script using shared entrypoints package
-	entrypointScript, err := entrypoints.GenerateK8sEntrypoint(runtime, entrypoints.GeneratorOptions{
-		EntryPointType: "bot",
-		Entrypoint:     entrypoint,
-		WorkDir:        "/bot",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate entrypoint script: %w", err)
 	}
 
 	pod := &corev1.Pod{
@@ -148,61 +155,50 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
+			RestartPolicy: corev1.RestartPolicyAlways, // Realtime bots should restart on crash
 			InitContainers: []corev1.Container{
 				{
-					Name:    "download-code",
-					Image:   "minio/mc:RELEASE.2024-11-17T19-35-25Z",
-					Command: []string{"/bin/sh", "-c"},
+					Name:            "init",
+					Image:           g.config.RuntimeImage,
+					ImagePullPolicy: g.config.RuntimeImagePullPolicy,
+					Command:         []string{"/app/runtime", "daemon", "init"},
 					Args: []string{
-						fmt.Sprintf(`
-set -e
-mc alias set minio %s $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
-mc cp minio/%s/%s /bot/code.zip
-ls -la /bot/
-`, minioURL, g.config.MinIOBucket, filePath),
+						"--bot-id", bot.ID,
+						"--code-path", "/bot",
+						"--state-path", "/state",
+						"--code-file", filePath,
+						"--runtime", runtime,
+						"--entrypoint", entrypoint,
 					},
 					Env: []corev1.EnvVar{
+						{Name: "MINIO_ENDPOINT", Value: g.config.MinIOEndpoint},
 						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
 						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+						{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", g.config.MinIOUseSSL)},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-code", MountPath: "/bot"},
-					},
-				},
-				{
-					Name:    "extract-code",
-					Image:   "busybox:1.36.1",
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{
-						fmt.Sprintf(`
-set -e
-cd /bot
-unzip -o code.zip
-rm code.zip
-echo '%s' | base64 -d > /bot/entrypoint.sh
-chmod +x /bot/entrypoint.sh
-ls -la /bot/
-`, base64.StdEncoding.EncodeToString([]byte(entrypointScript))),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "bot-code", MountPath: "/bot"},
+						{Name: "bot-state", MountPath: "/state"},
 					},
 				},
 			},
 			Containers: []corev1.Container{
 				{
-					Name:       "bot",
-					Image:      baseImage,
-					Command:    []string{getShellForImage(baseImage), "/bot/entrypoint.sh"},
-					WorkingDir: "/bot",
+					Name:            "bot",
+					Image:           baseImage,
+					ImagePullPolicy: g.config.RuntimeImagePullPolicy,
+					Command:         []string{getShellForImage(baseImage), "/bot/entrypoint.sh"},
+					WorkingDir:      "/bot",
 					Env: []corev1.EnvVar{
 						{Name: "BOT_ID", Value: bot.ID},
 						{Name: "BOT_CONFIG", Value: string(configJSON)},
 						{Name: "CODE_MOUNT_DIR", Value: "/bot"},
+						{Name: "STATE_DIR", Value: "/state/.the0-state"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-code", MountPath: "/bot"},
+						{Name: "bot-state", MountPath: "/state"},
+						{Name: "the0", MountPath: "/var/the0"},
 					},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -215,10 +211,54 @@ ls -la /bot/
 						},
 					},
 				},
+				// Sync sidecar for state persistence (runs continuously for realtime bots)
+				{
+					Name:            "sync",
+					Image:           g.config.RuntimeImage,
+					ImagePullPolicy: g.config.RuntimeImagePullPolicy,
+					Command:         []string{"/app/runtime", "daemon", "sync"},
+					Args: []string{
+						"--bot-id", bot.ID,
+						"--state-path", "/state",
+						"--logs-path", "/var/the0/logs",
+					},
+					Env: []corev1.EnvVar{
+						{Name: "MINIO_ENDPOINT", Value: g.config.MinIOEndpoint},
+						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
+						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+						{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", g.config.MinIOUseSSL)},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "bot-state", MountPath: "/state"},
+						{Name: "the0", MountPath: "/var/the0"},
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: parseResourceOrDefault("32Mi", "32Mi"),
+							corev1.ResourceCPU:    parseResourceOrDefault("10m", "10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: parseResourceOrDefault("64Mi", "64Mi"),
+							corev1.ResourceCPU:    parseResourceOrDefault("100m", "100m"),
+						},
+					},
+				},
 			},
 			Volumes: []corev1.Volume{
 				{
 					Name: "bot-code",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "bot-state",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "the0",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
@@ -228,6 +268,31 @@ ls -la /bot/
 	}
 
 	return pod, nil
+}
+
+// GenerateScheduledPodSpec creates a Pod spec for scheduled bots (CronJobs).
+// Modifies the sync sidecar to watch for done marker and exit when bot completes.
+func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec, error) {
+	// Generate base pod (includes sync sidecar)
+	pod, err := g.GeneratePod(bot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Scheduled bots should not restart - they run once per cron trigger
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	// Find the sync sidecar and add --watch-done flag for scheduled bots
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "sync" {
+			pod.Spec.Containers[i].Args = append(
+				pod.Spec.Containers[i].Args,
+				"--watch-done", "/var/the0/done",
+			)
+		}
+	}
+
+	return &pod.Spec, nil
 }
 
 // GeneratePodName generates the pod name for a given bot ID.
@@ -384,18 +449,6 @@ func sanitizeLabelValue(s string) string {
 // isAlphanumeric returns true if the byte is a letter or digit.
 func isAlphanumeric(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
-}
-
-// getMinIOURL builds the MinIO endpoint URL with protocol.
-func (g *PodGenerator) getMinIOURL() string {
-	endpoint := g.config.MinIOEndpoint
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		return endpoint
-	}
-	if g.config.MinIOUseSSL {
-		return "https://" + endpoint
-	}
-	return "http://" + endpoint
 }
 
 // getEntrypoint extracts the bot entrypoint from the config.

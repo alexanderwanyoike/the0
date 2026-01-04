@@ -11,12 +11,16 @@ Differences from main.py:
 - Uses `the0.metric()` instead of structlog with _metric field
 - Uses Python's logging module for structured logging
 - Uses `the0.success()` for result output
+
+State Usage:
+- Persists portfolio_history between runs for trend analysis
+- Tracks total_trades count across executions
 """
 
 import random
 import logging
 from datetime import datetime, timezone
-from the0 import parse, success, error, metric
+from the0 import parse, success, error, metric, state
 
 # Configure logging - JSON format for structured logs
 logging.basicConfig(
@@ -38,7 +42,12 @@ def main(bot_id: str = None, config: dict = None):
     volatility = config.get("volatility", 0.02)
     symbols = config.get("symbols", ["BTC", "ETH", "SOL"])
 
+    # Load persistent state - portfolio history and trade count
+    portfolio_history = state.get("portfolio_history", [])
+    total_trades = state.get("total_trades", 0)
+
     logger.info(f"Bot {bot_id} started with symbols: {symbols}")
+    logger.info(f"Loaded {len(portfolio_history)} historical values, {total_trades} total trades")
 
     # Simulate portfolio state
     portfolio = simulate_portfolio(initial_value, volatility, symbols)
@@ -59,6 +68,7 @@ def main(bot_id: str = None, config: dict = None):
         })
 
     # Randomly simulate a trade (50% chance)
+    trade_executed = False
     if random.random() > 0.5:
         trade = simulate_trade(symbols)
         metric("trade", {
@@ -68,13 +78,30 @@ def main(bot_id: str = None, config: dict = None):
             "price": trade["price"],
             "total": trade["total"],
         })
+        trade_executed = True
+        total_trades += 1
 
-    logger.info(f"Bot {bot_id} completed")
+    # Update portfolio history (keep last 100 values)
+    portfolio_history.append({
+        "value": portfolio["total_value"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+    if len(portfolio_history) > 100:
+        portfolio_history = portfolio_history[-100:]
+
+    # Save state for next run
+    state.set("portfolio_history", portfolio_history)
+    state.set("total_trades", total_trades)
+
+    logger.info(f"Bot {bot_id} completed - saved {len(portfolio_history)} history entries")
 
     # Signal success with result data
     success(f"Portfolio tracked: ${portfolio['total_value']:.2f}", {
         "portfolio_value": portfolio["total_value"],
         "positions_count": len(portfolio["positions"]),
+        "history_entries": len(portfolio_history),
+        "total_trades": total_trades,
+        "trade_executed": trade_executed,
     })
 
 

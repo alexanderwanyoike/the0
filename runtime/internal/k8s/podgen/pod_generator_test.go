@@ -57,20 +57,18 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	// Check annotations
 	assert.NotEmpty(t, pod.Annotations[AnnotationConfigHash])
 
-	// Check init containers (download and extract code from MinIO)
-	require.Len(t, pod.Spec.InitContainers, 2)
-	downloadContainer := pod.Spec.InitContainers[0]
-	assert.Equal(t, "download-code", downloadContainer.Name)
-	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", downloadContainer.Image)
-	extractContainer := pod.Spec.InitContainers[1]
-	assert.Equal(t, "extract-code", extractContainer.Name)
-	assert.Equal(t, "busybox:1.36.1", extractContainer.Image)
+	// Check init container (daemon init handles code + state download)
+	require.Len(t, pod.Spec.InitContainers, 1)
+	initContainer := pod.Spec.InitContainers[0]
+	assert.Equal(t, "init", initContainer.Name)
+	assert.Equal(t, "runtime:latest", initContainer.Image)
+	assert.Equal(t, []string{"/app/runtime", "daemon", "init"}, initContainer.Command)
 
-	// Check main container
-	require.Len(t, pod.Spec.Containers, 1)
+	// Check containers (bot + sync sidecar)
+	require.Len(t, pod.Spec.Containers, 2)
 	container := pod.Spec.Containers[0]
 	assert.Equal(t, "bot", container.Name)
-	assert.Equal(t, "python:3.11-slim", container.Image) // base image
+	assert.Equal(t, "the0/python311:latest", container.Image) // the0 custom image
 	assert.Equal(t, []string{"/bin/bash", "/bot/entrypoint.sh"}, container.Command)
 	assert.Equal(t, "/bot", container.WorkingDir)
 
@@ -87,9 +85,14 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	assert.Equal(t, DefaultMemoryLimit, container.Resources.Limits.Memory().String())
 	assert.Equal(t, DefaultCPULimit, container.Resources.Limits.Cpu().String())
 
-	// Check volume
-	require.Len(t, pod.Spec.Volumes, 1)
+	// Check volumes (bot-code, bot-state, the0)
+	require.Len(t, pod.Spec.Volumes, 3)
 	assert.Equal(t, "bot-code", pod.Spec.Volumes[0].Name)
+	assert.Equal(t, "bot-state", pod.Spec.Volumes[1].Name)
+	assert.Equal(t, "the0", pod.Spec.Volumes[2].Name)
+
+	// Check STATE_DIR env var
+	assert.Equal(t, "/state/.the0-state", envMap["STATE_DIR"])
 }
 
 func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
@@ -152,9 +155,9 @@ func TestPodGenerator_GeneratePod_NodeJSRuntime(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "nodejs20", pod.Labels[LabelRuntime])
-	assert.Equal(t, "node:20-alpine", pod.Spec.Containers[0].Image)
-	// Alpine images use /bin/sh, not /bin/bash
-	assert.Equal(t, []string{"/bin/sh", "/bot/entrypoint.sh"}, pod.Spec.Containers[0].Command)
+	assert.Equal(t, "the0/nodejs20:latest", pod.Spec.Containers[0].Image)
+	// the0 images use /bin/bash
+	assert.Equal(t, []string{"/bin/bash", "/bot/entrypoint.sh"}, pod.Spec.Containers[0].Command)
 }
 
 func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
@@ -181,7 +184,7 @@ func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "rust-stable", pod.Labels[LabelRuntime])
-	assert.Equal(t, "rust:1.83-slim", pod.Spec.Containers[0].Image)
+	assert.Equal(t, "the0/rust-stable:latest", pod.Spec.Containers[0].Image)
 }
 
 func TestPodGenerator_DefaultConfig(t *testing.T) {
@@ -451,13 +454,19 @@ func TestGetShellForImage(t *testing.T) {
 		{"python:3.11-alpine", "/bin/sh"},
 		{"some-alpine-image", "/bin/sh"},
 
+		// the0 custom images use /bin/bash (have bash installed)
+		{"the0/python311:latest", "/bin/bash"},
+		{"the0/nodejs20:latest", "/bin/bash"},
+		{"the0/rust-stable:latest", "/bin/bash"},
+		{"the0/dotnet8:latest", "/bin/bash"},
+		{"the0/gcc13:latest", "/bin/bash"},
+		{"the0/scala3:latest", "/bin/bash"},
+		{"the0/ghc96:latest", "/bin/bash"},
+
 		// Non-Alpine images use /bin/bash
 		{"python:3.11-slim", "/bin/bash"},
 		{"rust:1.83-slim", "/bin/bash"},
 		{"gcc:13", "/bin/bash"},
-		{"mcr.microsoft.com/dotnet/runtime:8.0", "/bin/bash"},
-		{"haskell:9.6-slim", "/bin/bash"},
-		{"eclipse-temurin:21-jre", "/bin/bash"},
 	}
 
 	for _, tt := range tests {

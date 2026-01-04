@@ -28,7 +28,20 @@ The platform consists of the following services:
 - Docker Compose 2.0+
 - At least 4GB RAM available for containers
 
-### 1. Start All Services
+### 1. Build Runtime Images
+
+Before starting services, you need to build the runtime images used for bot execution:
+
+```bash
+cd docker
+make build-images
+```
+
+This builds `the0/python311`, `the0/nodejs20`, `the0/rust-stable`, etc. These images contain the daemon binary for state/log synchronization.
+
+**Note:** `make up` automatically builds these images, but you can build them separately if needed.
+
+### 2. Start All Services
 
 ```bash
 # Navigate to docker directory
@@ -38,7 +51,7 @@ cd docker
 make up
 ```
 
-### 2. Access the Platform
+### 3. Access the Platform
 
 - **Frontend**: http://localhost:3001
 - **API**: http://localhost:3000
@@ -46,7 +59,7 @@ make up
 - **MinIO Console**: http://localhost:9001 (admin/password: the0admin/the0password)
 - **Database Admin** (dev): http://localhost:8081
 
-### 3. Initial Setup
+### 4. Initial Setup
 
 The system will automatically:
 - Create database schemas

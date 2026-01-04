@@ -2,14 +2,12 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { StorageService } from "../storage.service";
 import { Ok, Failure } from "@/common/result";
+import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import { EventEmitter } from "events";
 import AdmZip from "adm-zip";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
-
-// Mock the minio module
-jest.mock("minio");
 
 describe("StorageService", () => {
   let service: StorageService;
@@ -47,19 +45,21 @@ describe("StorageService", () => {
       bucketExists: jest.fn(),
       makeBucket: jest.fn(),
       presignedPutObject: jest.fn(),
+      listObjects: jest.fn(),
     } as any;
-
-    // Mock the Minio.Client constructor
-    (Minio.Client as jest.Mock).mockImplementation(() => mockMinioClient);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         StorageService,
         {
+          provide: MINIO_CLIENT,
+          useValue: mockMinioClient,
+        },
+        {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              const config = {
+              const config: Record<string, string> = {
                 MINIO_ENDPOINT: "localhost",
                 MINIO_PORT: "9000",
                 MINIO_USE_SSL: "false",
@@ -87,17 +87,7 @@ describe("StorageService", () => {
   });
 
   describe("constructor", () => {
-    it("should initialize MinIO client with correct configuration", () => {
-      expect(Minio.Client).toHaveBeenCalledWith({
-        endPoint: "localhost",
-        port: 9000,
-        useSSL: false,
-        accessKey: "testkey",
-        secretKey: "testsecret",
-      });
-    });
-
-    it("should set the correct bucket name", () => {
+    it("should set the correct bucket name from config", () => {
       expect(configService.get).toHaveBeenCalledWith("CUSTOM_BOTS_BUCKET");
     });
   });

@@ -1,318 +1,141 @@
 # the0 Runtime
 
-A unified Docker container orchestration system for the0 platform that manages bot execution and scheduled jobs.
+The runtime is a unified container orchestration system for the0 platform that manages bot execution with persistent state.
 
 ## Overview
 
-The runtime provides two deployment modes:
+The runtime provides two deployment modes. **Docker mode** uses single-process services for local development and small deployments - bot-runner for live trading bots and bot-scheduler for cron-based scheduled execution. **Kubernetes mode** uses a controller-based deployment for production scale, managing bots as native K8s Pods and CronJobs.
 
-- **Docker Mode**: Single-process services for local development and small deployments
-  - `bot-runner`: Executes live trading bots
-  - `bot-scheduler`: Manages cron-based scheduled bot execution
-- **Kubernetes Mode**: Controller-based deployment for production scale
-  - `controller`: K8s-native Pod/CronJob management
+## The Daemon Architecture
 
-## Architecture
+The runtime uses a **unified daemon architecture** where each bot container is self-managing. Rather than the orchestrator handling code download, state persistence, and log streaming, all of this is delegated to a daemon process running inside the container itself.
 
-### Docker Mode (Recommended for Development)
+```mermaid
+flowchart LR
+    subgraph Container["Bot Container"]
+        direction TB
+        Init["daemon init<br/>Download code & state<br/>Generate entrypoint"]
+        Sync["daemon sync<br/>Watch state changes<br/>Stream logs"]
+        Bot["Bot Process"]
 
-Docker mode uses a simplified single-process architecture with a reconciliation loop:
+        Init --> Bot
+        Init --> Sync
+        Bot <-.-> Sync
+    end
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      BotService                          │
-│                                                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │    NATS     │  │   Service   │  │  DockerRunner   │  │
-│  │ (optional)  │──│    State    │──│                 │  │
-│  └─────────────┘  └─────────────┘  └─────────────────┘  │
-│                                                          │
-│  Events:              State:              Actions:       │
-│  - bot.created        map[botID]*Bot      - Start        │
-│  - bot.updated        map[botID]contID    - Stop         │
-│  - bot.deleted                            - Restart      │
-└─────────────────────────────────────────────────────────┘
+    MinIO[(MinIO)]
+    Sync --> MinIO
 ```
 
-**How it works:**
-1. BotService queries MongoDB for enabled bots (desired state)
-2. Lists running containers from Docker (actual state)
-3. Reconciles: starts missing bots, stops extra containers
-4. Detects config changes and restarts as needed
-5. Repeats every 30 seconds (configurable)
+The daemon binary is embedded in each runtime base image. When a container starts, `daemon init` downloads the bot code and any existing state from MinIO, then generates a runtime-specific entrypoint script. The `daemon sync` process runs alongside the bot, watching for state file changes and uploading them to MinIO, while also periodically syncing logs.
 
-### Kubernetes Mode (Production Scale)
+This architecture means the same daemon logic runs in both Docker and Kubernetes modes. The only difference is how the daemon is orchestrated - in Docker mode via a bootstrap script, in K8s mode via init container and sidecar.
 
-For deployments exceeding ~1000 bots, use Kubernetes mode with the controller:
+## Docker Mode
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Controller Manager                    │
-│  ┌─────────────────┐      ┌─────────────────┐          │
-│  │  Bot Controller │      │Schedule Controller│         │
-│  └────────┬────────┘      └────────┬────────┘          │
-│           │                        │                    │
-│           ▼                        ▼                    │
-│      ┌─────────┐              ┌─────────┐              │
-│      │  Pods   │              │CronJobs │              │
-│      └─────────┘              └─────────┘              │
-└─────────────────────────────────────────────────────────┘
-```
+In Docker mode, a `bootstrap.sh` script within each container orchestrates the daemon:
 
-## Quick Start
+```mermaid
+flowchart TB
+    NATS["NATS"] --> Runner
+    NATS --> Scheduler
 
-### Using Docker Compose
+    subgraph Services["Runtime Services"]
+        Runner["bot-runner"]
+        Scheduler["bot-scheduler"]
+    end
 
-```bash
-# Start the platform (includes runtime services)
-cd docker
-make up
+    Runner <--> MongoDB[(MongoDB)]
+    Scheduler <--> MongoDB
 
-# View logs
-docker compose logs -f bot-runner
-docker compose logs -f bot-scheduler
+    Runner --> Docker["Docker Engine"]
+    Scheduler --> Docker
+
+    subgraph Container["Bot Container"]
+        Bootstrap["bootstrap.sh"] --> DInit["daemon init"]
+        DInit --> DSync["daemon sync"]
+        DInit --> BotProc["Bot Process"]
+    end
+
+    Docker --> Container
+    DSync --> MinIO[(MinIO)]
 ```
 
-### Running Locally
+The services query MongoDB for desired state and reconcile with Docker. When a bot should be running, the service starts a container. The container's bootstrap script handles the rest - downloading code, syncing state, and running the bot.
 
-```bash
-# Build
-go build -o build/runtime ./cmd/app
+See [internal/docker/README.md](internal/docker/README.md) for details.
 
-# Run bot-runner (live bots)
-./build/runtime bot-runner --mongo-uri mongodb://localhost:27017
+## Kubernetes Mode
 
-# Run bot-scheduler (scheduled bots, requires NATS)
-./build/runtime bot-scheduler \
-  --mongo-uri mongodb://localhost:27017 \
-  --nats-url nats://localhost:4222
+In K8s mode, the daemon runs as init container and sidecar:
 
-# Run controller (Kubernetes mode)
-./build/runtime controller --namespace the0
+```mermaid
+flowchart TB
+    subgraph Controller["Controller Manager"]
+        BC["Bot Controller"]
+        SC["Schedule Controller"]
+    end
+
+    BC --> Pods["Pods"]
+    SC --> CronJobs["CronJobs"]
+
+    subgraph Pod["Bot Pod"]
+        direction LR
+        InitC["init: daemon init"]
+        SyncC["sidecar: daemon sync"]
+        BotC["bot: entrypoint.sh"]
+
+        InitC --> SyncC
+        InitC --> BotC
+    end
+
+    Pods --> Pod
+    SyncC --> MinIO[(MinIO)]
 ```
 
-## CLI Commands
+The controller creates Pods with three containers sharing volumes. The init container downloads code and state. The sidecar syncs state and logs continuously. The bot container runs the actual trading logic.
 
-### Bot Runner
+See [internal/k8s/README.md](internal/k8s/README.md) for details.
 
-Manages live trading bot execution.
+## State Persistence
 
-```bash
-./runtime bot-runner [flags]
-```
+Bot state is automatically synced to MinIO. When a bot writes to `/state/state.json`, the daemon detects the change via filesystem notifications and uploads the new state. On restart, `daemon init` downloads the existing state before the bot starts, ensuring continuity across container restarts.
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--mongo-uri` | `mongodb://localhost:27017` | MongoDB connection URI |
-| `--nats-url` | (empty) | NATS URL (optional, enables instant updates) |
-| `--reconcile-interval` | `30s` | How often to reconcile bot state |
-
-**NATS is optional**: Without NATS, the service polls MongoDB every reconcile interval. With NATS, bot changes are applied immediately.
-
-### Bot Scheduler
-
-Manages cron-based scheduled bot execution.
-
-```bash
-./runtime bot-scheduler [flags]
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--mongo-uri` | `mongodb://localhost:27017` | MongoDB connection URI |
-| `--nats-url` | (required) | NATS URL for API communication |
-| `--check-interval` | `10s` | How often to check for due schedules |
-
-**NATS is required** for bot-scheduler to receive schedule events from the API.
-
-### Controller (Kubernetes Mode)
-
-Manages bots as Kubernetes Pods and CronJobs.
-
-```bash
-./runtime controller [flags]
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--namespace` | `the0` | Kubernetes namespace for bot pods |
-| `--reconcile-interval` | `30s` | How often to reconcile state |
-| `--minio-endpoint` | `minio:9000` | MinIO endpoint for bot code |
-| `--minio-bucket` | `the0-custom-bots` | MinIO bucket for bot code |
-
-### Version
-
-```bash
-./runtime version
-```
-
-## Environment Variables
-
-### Required for All Modes
-
-```bash
-MONGO_URI=mongodb://localhost:27017    # MongoDB connection
-```
-
-### Optional for bot-runner
-
-```bash
-NATS_URL=nats://localhost:4222         # NATS for real-time events (optional)
-```
-
-### Required for bot-scheduler
-
-```bash
-NATS_URL=nats://localhost:4222         # NATS for API communication (required)
-```
-
-### Required for Docker Mode (Bot Execution)
-
-```bash
-MINIO_ENDPOINT=localhost:9000          # MinIO endpoint
-MINIO_ACCESS_KEY=the0admin             # MinIO access key
-MINIO_SECRET_KEY=the0password          # MinIO secret key
-```
-
-### Required for Controller Mode
-
-```bash
-NAMESPACE=the0                         # K8s namespace
-MINIO_ENDPOINT=minio:9000              # MinIO endpoint (in-cluster)
-MINIO_ACCESS_KEY=the0admin
-MINIO_SECRET_KEY=the0password
-MINIO_BUCKET=the0-custom-bots
-```
-
-## When to Use Each Mode
-
-| Scenario | Recommended Mode |
-|----------|-----------------|
-| Local development | Docker Mode (`bot-runner`) |
-| Small self-hosted (<100 bots) | Docker Mode |
-| Medium deployments (<1000 bots) | Docker Mode |
-| Large deployments (>1000 bots) | Kubernetes Mode (`controller`) |
-| High availability requirements | Kubernetes Mode |
-
-**Docker Mode** is simpler to operate and debug. A single process manages all containers on the host.
-
-**Kubernetes Mode** leverages K8s for scheduling, health checks, and automatic restarts. Each bot becomes its own Pod.
+For scheduled bots, the daemon performs a final sync when the bot completes, ensuring all state and logs are captured before the container terminates.
 
 ## Supported Runtimes
 
-| Runtime | Docker Image | Entrypoint |
-|---------|-------------|------------|
-| Python 3.11 | `python:3.11-slim` | `main.py` |
-| Node.js 20 | `node:20-alpine` | `main.js` |
-| Rust | `rust:1-slim` | Binary executable |
-| C++ | `gcc:13` | Binary executable |
-| C# | `mcr.microsoft.com/dotnet/runtime:8.0` | DLL |
-| Scala | `sbtscala/scala-sbt:eclipse-temurin-21` | JAR |
-| Haskell | `haskell:9.6` | Binary executable |
+The platform supports Python 3.11, Node.js 20, Rust, C++, C# (.NET 8), Scala, and Haskell. Each runtime has a base image in `docker/images/` that includes the daemon binary and a bootstrap script.
 
-## Bot Interface
+## Quick Start
 
-### Python
+Using Docker Compose:
 
-```python
-def main(id: str, config: dict):
-    """Bot entry point"""
-    print(f"Running bot {id}")
-    # Your trading logic here
-    return {
-        "status": "success",
-        "message": f"Bot {id} executed successfully"
-    }
+```bash
+cd docker
+make up
 ```
 
-### Node.js
+This starts all services including bot-runner and bot-scheduler. Runtime images are built automatically.
 
-```javascript
-function main(id, config) {
-    console.log(`Running bot ${id}`);
-    // Your trading logic here
-    return {
-        status: "success",
-        message: `Bot ${id} executed successfully`
-    };
-}
+For Kubernetes:
 
-module.exports = { main };
+```bash
+cd k8s
+make minikube-up
 ```
 
 ## Building
 
 ```bash
-# Build binary
+# Build the runtime binary
 go build -o build/runtime ./cmd/app
+
+# Build runtime images (for Docker mode)
+cd docker && make build-images
 
 # Run tests
 go test ./...
-
-# Run tests with verbose output
-go test -v ./internal/docker/...
-```
-
-## Testing
-
-```bash
-# All tests
-go test ./...
-
-# Skip integration tests
-go test -short ./...
-
-# Specific package
-go test -v ./internal/docker/
-
-# With coverage
-go test -cover ./...
-```
-
-Integration tests require Docker to be running and will pull images during execution.
-
-## Capacity
-
-| Metric | Docker Mode |
-|--------|-------------|
-| Bots managed | 10,000+ |
-| Memory overhead | ~100MB for 1000 bots |
-| Goroutines | 1 per bot + collectors |
-| Docker container limit | ~1000 per host |
-
-For more than 1000 bots per host, use Kubernetes mode.
-
-## Security
-
-- **Container Isolation**: Each bot runs in an isolated Docker container
-- **Resource Limits**: CPU and memory limits per container
-- **Code Validation**: YARA rule scanning for uploaded bot code
-- **File System Protection**: Directory traversal prevention during extraction
-- **Secret Management**: Configuration passed via environment variables
-
-## Project Structure
-
-```
-runtime/
-├── cmd/app/                    # CLI entry point
-│   └── main.go                 # Cobra commands
-├── internal/
-│   ├── docker/                 # Docker mode implementation
-│   │   ├── service.go          # BotService (live bots)
-│   │   ├── schedule_service.go # ScheduleService (cron bots)
-│   │   ├── state.go            # In-memory state management
-│   │   ├── runner.go           # DockerRunner interface
-│   │   └── ...                 # Container orchestration
-│   ├── k8s/                    # Kubernetes mode
-│   │   ├── controller/         # Bot and schedule controllers
-│   │   ├── podgen/             # Pod spec generation
-│   │   └── health/             # Health server
-│   ├── model/                  # Shared data models
-│   ├── runtime/                # Runtime configuration
-│   └── entrypoints/            # Script generation
-├── Makefile
-├── go.mod
-└── README.md
 ```
 
 See [CLAUDE.md](./CLAUDE.md) for detailed developer documentation.

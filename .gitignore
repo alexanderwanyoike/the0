@@ -31,3 +31,4 @@ example-bots/*/package-lock.json
 sdk/react/.npmrc
 sdk/react/node_modules/
 sdk/react/dist/
+_debug_test_bots/

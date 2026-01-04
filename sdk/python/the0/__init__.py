@@ -25,7 +25,10 @@ from typing import Any, Dict, Tuple, Optional, Union, Literal
 from datetime import datetime, timezone
 
 __version__ = "1.0.0"
-__all__ = ["parse", "success", "error", "result", "metric", "log", "sleep"]
+__all__ = ["parse", "success", "error", "result", "metric", "log", "sleep", "state"]
+
+# Import state module for namespace access (e.g., the0.state.get())
+from . import state
 
 
 def _get_result_file_path() -> str:

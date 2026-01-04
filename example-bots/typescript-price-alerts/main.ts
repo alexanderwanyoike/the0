@@ -11,9 +11,13 @@
  * - Uses `metric()` instead of pino with _metric field
  * - Uses pino for structured logging
  * - Uses `sleep()` from SDK instead of custom implementation
+ *
+ * State Usage:
+ * - Persists price_history across restarts for continuous analysis
+ * - Tracks alert_count for monitoring bot activity
  */
 
-import { parse, metric, sleep, success } from "@alexanderwanyoike/the0-node";
+import { parse, metric, sleep, success, state } from "@alexanderwanyoike/the0-node";
 import pino from "pino";
 
 // Configure pino logger for structured JSON output
@@ -21,11 +25,18 @@ const logger = pino({
   level: "info",
 });
 
-// Bot state (persists across iterations)
+// Bot state (persists across iterations within a run)
 interface BotState {
   lastPrice: number;
   priceHistory: number[];
   lastAlertTime: number;
+  alertCount: number;
+}
+
+// Persistent state structure (saved to disk)
+interface PersistedState {
+  priceHistory: number[];
+  alertCount: number;
 }
 
 interface BotConfig {
@@ -49,20 +60,34 @@ async function main(): Promise<void> {
   const alertThreshold = config.alert_threshold || 1.0;
   const updateInterval = config.update_interval_ms || 5000;
 
-  logger.info({ botId: id, symbol, alertThreshold }, "Bot started");
+  // Load persistent state from previous runs
+  const persisted = state.get<PersistedState>("bot_state", {
+    priceHistory: [],
+    alertCount: 0,
+  });
 
-  // Initialize bot state
-  const state: BotState = {
-    lastPrice: basePrice,
-    priceHistory: [basePrice],
+  logger.info(
+    { botId: id, symbol, alertThreshold, loadedHistory: persisted?.priceHistory?.length ?? 0 },
+    "Bot started"
+  );
+
+  // Initialize bot state, merging with persisted data
+  const botState: BotState = {
+    lastPrice: persisted?.priceHistory?.length ? persisted.priceHistory[persisted.priceHistory.length - 1] : basePrice,
+    priceHistory: persisted?.priceHistory?.length ? persisted.priceHistory : [basePrice],
     lastAlertTime: 0,
+    alertCount: persisted?.alertCount ?? 0,
   };
+
+  // Iteration counter for periodic persistence (not tied to array length)
+  let iterationCount = 0;
 
   // Main loop - runs until process is terminated
   try {
     while (true) {
+      iterationCount++;
       // Simulate price update
-      const priceData = simulatePrice(state, symbol, basePrice);
+      const priceData = simulatePrice(botState, symbol, basePrice);
 
       // Emit price metric
       metric("price", {
@@ -75,23 +100,25 @@ async function main(): Promise<void> {
 
       // Check for alert conditions
       const alert = checkAlertConditions(
-        state,
+        botState,
         priceData,
         alertThreshold,
         symbol
       );
       if (alert) {
+        botState.alertCount++;
         metric("alert", {
           symbol: alert.symbol,
           type: alert.type,
           change_pct: alert.change_pct,
           message: alert.message,
           severity: alert.severity,
+          total_alerts: botState.alertCount,
         });
       }
 
       // Generate trading signals based on trend
-      const signal = generateSignal(state, symbol);
+      const signal = generateSignal(botState, symbol);
       if (signal) {
         metric("signal", {
           symbol: signal.symbol,
@@ -102,18 +129,32 @@ async function main(): Promise<void> {
       }
 
       // Update state
-      state.lastPrice = priceData.value;
-      state.priceHistory.push(priceData.value);
-      if (state.priceHistory.length > 100) {
-        state.priceHistory.shift(); // Keep last 100 prices
+      botState.lastPrice = priceData.value;
+      botState.priceHistory.push(priceData.value);
+      if (botState.priceHistory.length > 100) {
+        botState.priceHistory.shift(); // Keep last 100 prices
+      }
+
+      // Persist state every 10 iterations for recovery
+      if (iterationCount % 10 === 0) {
+        state.set<PersistedState>("bot_state", {
+          priceHistory: botState.priceHistory,
+          alertCount: botState.alertCount,
+        });
       }
 
       // Wait for next update (using SDK's sleep)
       await sleep(updateInterval);
     }
   } catch (err) {
+    // Save state before exit
+    state.set<PersistedState>("bot_state", {
+      priceHistory: botState.priceHistory,
+      alertCount: botState.alertCount,
+    });
+
     if ((err as Error).message === "SIGTERM") {
-      logger.info({ botId: id }, "Bot stopped");
+      logger.info({ botId: id, alertCount: botState.alertCount }, "Bot stopped");
       success("Bot stopped gracefully");
       return;
     }
