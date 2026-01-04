@@ -61,7 +61,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 cd /bot
-exec /bin/bash /bot/entrypoint.sh
+# Don't use exec - we need the trap to fire on exit
+/bin/bash /bot/entrypoint.sh
 BOOTSTRAP
 RUN chmod 755 /app/bootstrap.sh
 
