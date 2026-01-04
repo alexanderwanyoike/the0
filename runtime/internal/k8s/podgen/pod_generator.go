@@ -295,6 +295,51 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 	return &pod.Spec, nil
 }
 
+// GenerateQueryPod creates a Pod spec for executing a query against a bot.
+// The pod runs with QUERY_PATH and QUERY_PARAMS environment variables set,
+// which the SDK uses to run in query mode instead of bot mode.
+func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryParams map[string]interface{}) (*corev1.Pod, error) {
+	// Generate base pod
+	pod, err := g.GeneratePod(bot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Query pods should not restart - they run once
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	// Serialize query params to JSON
+	paramsJSON := "{}"
+	if queryParams != nil && len(queryParams) > 0 {
+		paramsBytes, err := json.Marshal(queryParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal query params: %w", err)
+		}
+		paramsJSON = string(paramsBytes)
+	}
+
+	// Find the bot container and add query environment variables
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "bot" {
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
+				corev1.EnvVar{Name: "QUERY_PATH", Value: queryPath},
+				corev1.EnvVar{Name: "QUERY_PARAMS", Value: paramsJSON},
+			)
+		}
+	}
+
+	// Remove the sync sidecar - not needed for query execution
+	var containers []corev1.Container
+	for _, c := range pod.Spec.Containers {
+		if c.Name != "sync" {
+			containers = append(containers, c)
+		}
+	}
+	pod.Spec.Containers = containers
+
+	return pod, nil
+}
+
 // GeneratePodName generates the pod name for a given bot ID.
 func GeneratePodName(botID string) string {
 	return fmt.Sprintf("bot-%s", botID)

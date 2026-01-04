@@ -146,6 +146,23 @@ func (b *ContainerBuilder) WithDevRuntime(hostPath string) *ContainerBuilder {
 	return b
 }
 
+// WithQueryConfig configures the container for query execution mode.
+// Sets QUERY_PATH and QUERY_PARAMS environment variables that the SDK
+// uses to detect query mode and execute the appropriate handler.
+func (b *ContainerBuilder) WithQueryConfig(queryPath string, queryParams string) *ContainerBuilder {
+	if queryPath != "" {
+		b.config.Env = append(b.config.Env,
+			fmt.Sprintf("QUERY_PATH=%s", queryPath),
+		)
+		if queryParams != "" {
+			b.config.Env = append(b.config.Env,
+				fmt.Sprintf("QUERY_PARAMS=%s", queryParams),
+			)
+		}
+	}
+	return b
+}
+
 // Build returns the finalized container.Config and container.HostConfig.
 func (b *ContainerBuilder) Build() (*container.Config, *container.HostConfig) {
 	return b.config, b.hostConfig

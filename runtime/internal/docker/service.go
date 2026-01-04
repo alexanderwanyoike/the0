@@ -42,6 +42,9 @@ type BotService struct {
 	// NATS subscriber for persisting bot events to MongoDB
 	subscriber *botnatssubscriber.NATSSubscriber
 
+	// Query server for executing queries against bots
+	queryServer *QueryServer
+
 	// Lifecycle
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -106,6 +109,28 @@ func (s *BotService) Run(ctx context.Context) error {
 	}
 	s.runner = runner
 	defer s.runner.Close()
+
+	// Initialize QueryHandler and QueryServer
+	queryHandler := NewQueryHandler(QueryHandlerConfig{
+		Runner: s.runner,
+		Logger: s.logger,
+	})
+	s.queryServer = NewQueryServer(QueryServerConfig{
+		Port:        9477,
+		Handler:     queryHandler,
+		BotResolver: s,
+		Logger:      s.logger,
+	})
+	if err := s.queryServer.Start(); err != nil {
+		s.logger.Error("Failed to start query server: %v", err)
+		// Non-fatal - continue without query server
+	} else {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			s.queryServer.Stop(shutdownCtx)
+		}()
+	}
 
 	// Initialize NATS subscriber (optional - degrades gracefully)
 	if s.config.NATSUrl != "" {
@@ -537,6 +562,31 @@ func (s *BotService) GetStatus() map[string]interface{} {
 	metrics := s.state.GetMetrics()
 	metrics["nats_connected"] = s.subscriber != nil
 	return metrics
+}
+
+// GetBot retrieves a bot by ID from MongoDB (implements BotResolver interface)
+func (s *BotService) GetBot(ctx context.Context, botID string) (*model.Bot, error) {
+	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
+
+	var bot model.Bot
+	err := collection.FindOne(ctx, bson.M{"_id": botID}).Decode(&bot)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("bot not found: %s", botID)
+		}
+		return nil, fmt.Errorf("failed to get bot: %w", err)
+	}
+
+	return &bot, nil
+}
+
+// GetContainerID returns the container ID for a running bot (implements BotResolver interface)
+func (s *BotService) GetContainerID(ctx context.Context, botID string) (string, bool) {
+	runningBot, ok := s.state.GetRunningBot(botID)
+	if !ok {
+		return "", false
+	}
+	return runningBot.ContainerID, true
 }
 
 // DefaultBotServiceConfig returns a BotServiceConfig with environment defaults

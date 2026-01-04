@@ -54,6 +54,9 @@ type DockerRunner interface {
 	// GetContainerLogs retrieves the last N lines of logs from a container.
 	GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error)
 
+	// GetContainerIP returns the IP address of a running container.
+	GetContainerIP(ctx context.Context, containerID string) (string, error)
+
 	// Close shuts down the runner and cleans up all managed resources.
 	Close() error
 }
@@ -558,4 +561,8 @@ func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, re
 
 func (r *dockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
 	return r.orchestrator.GetLogs(ctx, containerID, tail)
+}
+
+func (r *dockerRunner) GetContainerIP(ctx context.Context, containerID string) (string, error) {
+	return r.orchestrator.GetContainerIP(ctx, containerID)
 }
