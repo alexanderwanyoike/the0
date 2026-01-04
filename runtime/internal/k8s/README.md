@@ -1,229 +1,86 @@
-# Kubernetes Mode Package
+# Kubernetes Mode
 
-The `internal/k8s` package provides a Kubernetes-native controller for managing bots at scale. Each bot becomes its own Pod, leveraging K8s for scheduling, health checks, and automatic restarts.
+The Kubernetes mode provides a controller-based deployment for running bots at scale. Each bot becomes its own Pod, leveraging Kubernetes for scheduling, health checks, and automatic restarts.
 
-## Overview
-
-Use Kubernetes mode when:
-- Running more than ~1000 bots per host
-- High availability is required
-- You need K8s-native observability and management
+Use Kubernetes mode when running more than ~1000 bots per host, when high availability is required, or when you need K8s-native observability and management.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Controller Manager                    │
-│  ┌─────────────────┐      ┌─────────────────┐          │
-│  │  Bot Controller │      │Schedule Controller│         │
-│  └────────┬────────┘      └────────┬────────┘          │
-│           │                        │                    │
-│           ▼                        ▼                    │
-│      ┌─────────┐              ┌─────────┐              │
-│      │  Pods   │              │CronJobs │              │
-│      └─────────┘              └─────────┘              │
-└─────────────────────────────────────────────────────────┘
-```
+The controller manager runs two reconciliation controllers that watch MongoDB for desired state and manage Kubernetes resources accordingly. The Bot Controller manages Pods for live trading bots, while the Schedule Controller manages CronJobs for scheduled bots.
 
-**How it works:**
-1. Controller Manager queries MongoDB for enabled bots/schedules (desired state)
-2. Queries Kubernetes API for existing Pods/CronJobs (actual state)
-3. Reconciles: creates missing Pods, deletes extra Pods, updates changed configs
-4. Repeats every `ReconcileInterval` (default: 30s)
+```mermaid
+flowchart TB
+    NATS["NATS Events"] --> Manager
 
-## Components
+    subgraph Manager["Controller Manager"]
+        BC["Bot Controller"]
+        SC["Schedule Controller"]
+    end
 
-### Controller Manager
+    Manager <--> MongoDB[(MongoDB)]
 
-**File:** `controller/manager.go`
-
-Coordinates multiple K8s controllers and their dependencies.
-
-```go
-type ManagerConfig struct {
-    Namespace         string        // K8s namespace for bot pods
-    ReconcileInterval time.Duration // Default: 30s
-    MinIOEndpoint     string        // For bot code download
-    MinIOAccessKey    string
-    MinIOSecretKey    string
-    MinIOBucket       string
-}
+    BC --> Pods["Pods"]
+    SC --> CronJobs["CronJobs"]
+    CronJobs --> Jobs["Jobs"]
+    Jobs --> JobPods["Job Pods"]
 ```
 
-**Managed Controllers:**
-- `BotController` - Manages live bot Pods
-- `BotScheduleController` - Manages scheduled bot CronJobs
-- `K8sLogCollector` - Collects logs from bot Pods
+## Pod Structure
 
-### Bot Controller
+Unlike Docker mode where a single container runs everything, Kubernetes mode splits the daemon into separate containers that share volumes. This follows the Kubernetes sidecar pattern and provides better visibility into each component's health.
 
-**File:** `controller/bot_controller.go`
+```mermaid
+flowchart TB
+    subgraph Pod["Bot Pod"]
+        Init["init container<br/>daemon init"]
+        Sync["sidecar container<br/>daemon sync"]
+        Bot["bot container<br/>Bot Process"]
 
-Manages live trading bots as Kubernetes Pods.
+        subgraph Volumes["Shared Volumes"]
+            Code["/bot"]
+            State["/state"]
+            Logs["/var/the0/logs"]
+        end
 
-**Reconciliation Logic:**
-1. List enabled bots from MongoDB
-2. List existing Pods with `managed-by: the0-bot-controller` label
-3. Create Pods for new bots
-4. Delete Pods for removed bots
-5. Update Pods with config changes (delete + recreate)
+        Init --> Code
+        Init --> State
+        Bot --> State
+        Bot --> Logs
+        Sync -.-> State
+        Sync -.-> Logs
+    end
 
-**Pod Lifecycle:**
-- Pods are created with bot code mounted via init container
-- Bot code downloaded from MinIO to ephemeral volume
-- Pod runs until explicitly deleted or bot disabled
-
-### Schedule Controller
-
-**File:** `controller/botschedule_controller.go`
-
-Manages scheduled bots as Kubernetes CronJobs.
-
-**How it works:**
-1. Schedules stored in MongoDB with cron expressions
-2. Controller creates CronJobs matching schedule definitions
-3. K8s handles cron scheduling and Job creation
-4. Jobs run to completion and are cleaned up
-
-### PodGen (Pod Generator)
-
-**File:** `podgen/pod_generator.go`
-
-Generates Pod specifications for bots.
-
-**Generated Pod Structure:**
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: bot-{botID}
-  namespace: the0
-  labels:
-    app: the0-bot
-    bot-id: {botID}
-    managed-by: the0-bot-controller
-spec:
-  initContainers:
-    - name: code-downloader
-      # Downloads bot code from MinIO
-  containers:
-    - name: bot
-      image: {runtime-image}
-      command: ["/entrypoint.sh"]
-      resources:
-        limits:
-          memory: "512Mi"
-          cpu: "500m"
-      env:
-        - name: BOT_ID
-        - name: BOT_CONFIG
+    MinIO[(MinIO)]
+    Init -.->|downloads| MinIO
+    Sync -->|uploads| MinIO
 ```
 
-### Health Server
+The **init container** runs `daemon init` to download bot code and existing state from MinIO, then generates the entrypoint script. It writes to the shared volumes and exits.
 
-**File:** `health/server.go`
+The **sidecar container** runs `daemon sync` continuously, watching the state directory for changes and periodically syncing logs to MinIO. For scheduled bots, it also watches for a "done" file to know when to perform a final sync and exit.
 
-Provides health endpoints for K8s probes.
+The **bot container** runs the actual bot code using the runtime-specific base image (Python, Node.js, etc.). It reads code from `/bot`, reads and writes state to `/state`, and writes logs to `/var/the0/logs`.
 
-**Endpoints:**
-- `/healthz` - Liveness probe (always returns 200 if server running)
-- `/readyz` - Readiness probe (returns 200 when controllers are ready)
+## How It Works
 
-### Runtime Mode Detection
+### Realtime Bots
 
-**File:** `detect/runtime_mode.go`
+For live trading bots, the Bot Controller creates Pods with `RestartPolicy: Always`. When the bot crashes, Kubernetes automatically restarts the bot container. The sidecar continues running throughout, ensuring state and logs are synced even across restarts.
 
-Detects whether running inside Kubernetes cluster.
+The controller watches for changes via NATS events and also runs periodic reconciliation. When a bot is disabled, the controller deletes the Pod. When configuration changes, it deletes and recreates the Pod with the new settings.
 
-**Detection Methods:**
-- Checks `KUBERNETES_SERVICE_HOST` environment variable
-- Checks for service account token at `/var/run/secrets/kubernetes.io/serviceaccount/token`
+### Scheduled Bots
 
-## Configuration
+For scheduled bots, the Schedule Controller creates CronJobs rather than Pods directly. Kubernetes handles the cron scheduling, creating a new Job (and thus a new Pod) at each scheduled time.
 
-### Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NAMESPACE` | No | `the0` | K8s namespace for bot pods |
-| `MONGO_URI` | Yes | - | MongoDB connection string |
-| `NATS_URL` | No | - | NATS URL for events (recommended) |
-| `MINIO_ENDPOINT` | Yes | - | MinIO endpoint for bot code |
-| `MINIO_ACCESS_KEY` | Yes | - | MinIO access key |
-| `MINIO_SECRET_KEY` | Yes | - | MinIO secret key |
-| `MINIO_BUCKET` | No | `the0-custom-bots` | MinIO bucket name |
-
-### CLI Usage
-
-```bash
-./runtime controller \
-  --namespace the0 \
-  --reconcile-interval 30s \
-  --minio-endpoint minio:9000 \
-  --minio-bucket the0-custom-bots
-```
-
-## RBAC Requirements
-
-The controller needs permissions to manage Pods and CronJobs in its namespace:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: the0-controller
-  namespace: the0
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "pods/log"]
-    verbs: ["get", "list", "watch", "create", "delete"]
-  - apiGroups: ["batch"]
-    resources: ["cronjobs", "jobs"]
-    verbs: ["get", "list", "watch", "create", "delete", "update"]
-```
-
-## Directory Structure
-
-```
-internal/k8s/
-├── controller/
-│   ├── manager.go              # Controller manager
-│   ├── bot_controller.go       # Bot Pod management
-│   ├── botschedule_controller.go # Schedule CronJob management
-│   ├── log_collector.go        # Pod log collection
-│   ├── mongo_repository.go     # MongoDB data access
-│   └── *_test.go               # Tests
-├── podgen/
-│   ├── pod_generator.go        # Pod spec generation
-│   └── pod_generator_test.go   # Tests
-├── health/
-│   └── server.go               # Health probe endpoints
-├── detect/
-│   └── runtime_mode.go         # K8s environment detection
-└── README.md                   # This file
-```
-
-## Testing
-
-```bash
-# Run all k8s tests
-go test -v ./internal/k8s/...
-
-# Run specific controller tests
-go test -v ./internal/k8s/controller/
-
-# Run podgen tests
-go test -v ./internal/k8s/podgen/
-```
+These Pods use `RestartPolicy: Never` since completion is expected. When the bot finishes, it writes its exit code to a "done" file. The sidecar detects this, performs a final state and log sync, and exits. The Job then completes and Kubernetes cleans up according to the CronJob's history limits.
 
 ## Comparison with Docker Mode
 
-| Feature | Docker Mode | Kubernetes Mode |
-|---------|-------------|-----------------|
-| Process model | Single process | Controller + Pods |
-| Bot isolation | Docker containers | K8s Pods |
-| Scaling | Manual | K8s native |
-| Health checks | Application level | K8s probes |
-| Log collection | Background service | K8s native + collector |
-| Recommended for | <1000 bots | >1000 bots |
-| Complexity | Simple | More complex |
+Both modes use the same daemon commands (`daemon init` and `daemon sync`) with the same logic. The difference is in how they're orchestrated:
+
+In Docker mode, `bootstrap.sh` runs both daemon commands within a single container. The sync runs as a background process, and shell traps handle cleanup on exit.
+
+In Kubernetes mode, the daemon commands run in separate containers. The init container runs `daemon init` once at startup. The sidecar container runs `daemon sync` continuously. Kubernetes handles the coordination and lifecycle management.
+
+This separation provides better observability in K8s - you can see the status of each container independently, view their logs separately, and Kubernetes can restart individual containers if needed.

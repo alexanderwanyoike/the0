@@ -104,6 +104,8 @@ spec:
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
             - "--minio-endpoint={{ .Values.botController.minio.endpoint }}"
             - "--minio-bucket={{ .Values.botController.minio.bucket }}"
+            - "--runtime-image={{ .Values.botController.runtimeImage }}"
+            - "--runtime-image-pull-policy={{ .Values.botController.runtimeImagePullPolicy }}"
           env:
             # Namespace for bot pods
             - name: NAMESPACE

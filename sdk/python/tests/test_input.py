@@ -1,5 +1,5 @@
 """
-Tests for the0 Python SDK
+Tests for the0 Python SDK input module (parse, success, error, result, metric, log, sleep)
 """
 
 import json
@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from io import StringIO
 
 # Add parent directory to path for imports

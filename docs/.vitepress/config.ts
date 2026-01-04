@@ -85,6 +85,7 @@ export default defineConfig({
           { text: 'Development Overview', link: '/custom-bot-development/overview' },
           { text: 'Configuration', link: '/custom-bot-development/configuration' },
           { text: 'Bot Types', link: '/custom-bot-development/bot-types' },
+          { text: 'State (Persistence)', link: '/custom-bot-development/state' },
           { text: 'Custom Frontends', link: '/custom-bot-development/custom-frontends' },
           { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },

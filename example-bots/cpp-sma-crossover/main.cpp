@@ -9,14 +9,20 @@
  * - Calculating Simple Moving Averages (SMA)
  * - Detecting SMA crossovers for trading signals
  * - Structured metric emission for dashboard visualization
+ * - Persistent state for SMA values across restarts
  *
  * Metrics emitted:
  * - price: Current stock price with change percentage
  * - sma: Short and long SMA values
  * - signal: BUY/SELL signals when crossover detected
+ *
+ * State Usage:
+ * - Persists previous SMA values for crossover detection across restarts
+ * - Tracks total signal count for monitoring
  */
 
-#include <the0.h>
+#include <the0/the0.h>
+#include <the0/state.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -28,10 +34,11 @@
 
 using json = the0::json;
 
-// Bot state
+// Bot state (in-memory)
 struct BotState {
     std::optional<double> prevShortSma;
     std::optional<double> prevLongSma;
+    int64_t signalCount = 0;
 };
 
 // Callback for CURL to write response
@@ -122,7 +129,20 @@ int main() {
     int longPeriod = config.value("long_period", 20);
     int updateIntervalMs = config.value("update_interval_ms", 60000);
 
-    the0::log("Bot " + botId + " started - " + symbol + " SMA(" + std::to_string(shortPeriod) + "/" + std::to_string(longPeriod) + ")");
+    // Load persistent state from previous runs
+    auto persisted = the0::state::get("bot_state");
+    BotState state;
+    if (persisted.has_value()) {
+        state.prevShortSma = persisted->value("prev_short_sma", 0.0);
+        state.prevLongSma = persisted->value("prev_long_sma", 0.0);
+        state.signalCount = persisted->value("signal_count", 0);
+        if (state.prevShortSma == 0.0) state.prevShortSma = std::nullopt;
+        if (state.prevLongSma == 0.0) state.prevLongSma = std::nullopt;
+    }
+
+    the0::log("Bot " + botId + " started - " + symbol + " SMA(" +
+              std::to_string(shortPeriod) + "/" + std::to_string(longPeriod) +
+              ") - loaded " + std::to_string(state.signalCount) + " signals");
 
     // Initialize CURL
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -130,8 +150,6 @@ int main() {
     if (!curl) {
         the0::error("Failed to initialize CURL");
     }
-
-    BotState state;
 
     // Main loop
     while (true) {
@@ -181,6 +199,7 @@ int main() {
                 );
 
                 if (signal.has_value()) {
+                    state.signalCount++;
                     double confidence = std::min(std::abs(shortSma - longSma) / longSma * 100.0, 0.95);
                     std::string direction = signal.value() == "BUY" ? "above" : "below";
 
@@ -189,6 +208,7 @@ int main() {
                         {"symbol", symbol},
                         {"price", roundTo(currentPrice, 2)},
                         {"confidence", roundTo(confidence, 2)},
+                        {"total_signals", state.signalCount},
                         {"reason", "SMA" + std::to_string(shortPeriod) + " crossed " + direction + " SMA" + std::to_string(longPeriod)}
                     });
                 }
@@ -197,6 +217,16 @@ int main() {
             // Update previous SMA values
             state.prevShortSma = shortSma;
             state.prevLongSma = longSma;
+
+            // Persist state every 10 iterations
+            static int iteration = 0;
+            if (++iteration % 10 == 0) {
+                the0::state::set("bot_state", {
+                    {"prev_short_sma", state.prevShortSma.value_or(0.0)},
+                    {"prev_long_sma", state.prevLongSma.value_or(0.0)},
+                    {"signal_count", state.signalCount}
+                });
+            }
 
         } catch (const std::exception& e) {
             the0::log(std::string("Error: ") + e.what());

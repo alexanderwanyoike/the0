@@ -64,6 +64,7 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.2.0",
     "semver": "^7.7.2",
+    "tar": "^7.5.2",
     "uuid": "^11.1.0",
     "zod": "^4.1.13"
   },
@@ -81,6 +82,7 @@
     "@types/passport-local": "^1.0.35",
     "@types/semver": "^7.7.0",
     "@types/supertest": "^2.0.12",
+    "@types/tar": "^6.1.13",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",

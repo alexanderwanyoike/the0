@@ -25,6 +25,7 @@
 #define THE0_H
 
 #include <nlohmann/json.hpp>
+#include "state.h"  // Persistent state management
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>

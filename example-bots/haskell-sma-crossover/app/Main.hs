@@ -9,11 +9,16 @@ This example demonstrates:
 - Calculating Simple Moving Averages (SMA) with pure functions
 - Detecting SMA crossovers for trading signals
 - Structured metric emission for dashboard visualization
+- Persistent state for SMA values across runs
 
 Metrics emitted:
 - price: Current stock price with change percentage
 - sma: Short and long SMA values
 - signal: BUY/SELL signals when crossover detected
+
+State Usage:
+- Persists previous SMA values for crossover detection across runs
+- Tracks total signal count for monitoring
 
 This is a SCHEDULED bot - it runs once per trigger, analyzes current data,
 and exits with a result.
@@ -25,7 +30,7 @@ and exits with a result.
 module Main where
 
 import Network.HTTP.Simple
-import Data.Aeson
+import Data.Aeson (FromJSON, ToJSON, Value(..), decode, encode, object, withObject, (.=), (.:?), (.!=))
 import Data.Aeson.Key (fromText)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
@@ -37,6 +42,7 @@ import GHC.Generics
 import Text.Printf (printf)
 
 import qualified The0.Input as Input
+import qualified The0.State as State
 
 -- Configuration
 data Config = Config
@@ -50,6 +56,29 @@ instance FromJSON Config where
     <$> v .:? "symbol" .!= "AAPL"
     <*> v .:? "short_period" .!= 5
     <*> v .:? "long_period" .!= 20
+
+-- Persistent state for crossover detection
+data PersistedState = PersistedState
+  { psPrevShortSma :: Maybe Double
+  , psPrevLongSma :: Maybe Double
+  , psSignalCount :: Int
+  } deriving (Show, Generic)
+
+instance FromJSON PersistedState where
+  parseJSON = withObject "PersistedState" $ \v -> PersistedState
+    <$> v .:? "prev_short_sma"
+    <*> v .:? "prev_long_sma"
+    <*> v .:? "signal_count" .!= 0
+
+instance ToJSON PersistedState where
+  toJSON s = object
+    [ fromText "prev_short_sma" .= psPrevShortSma s
+    , fromText "prev_long_sma" .= psPrevLongSma s
+    , fromText "signal_count" .= psSignalCount s
+    ]
+
+defaultState :: PersistedState
+defaultState = PersistedState Nothing Nothing 0
 
 -- Yahoo Finance response structure
 data YahooResponse = YahooResponse
@@ -93,12 +122,16 @@ main = do
           Object _ -> decode (encode configVal)
           _ -> Nothing
 
+  -- Load persistent state from previous runs
+  persistedState <- fromMaybe defaultState <$> State.get "bot_state"
+
   Input.log $ "Bot " ++ botId ++ " started - " ++ cfgSymbol config ++
               " SMA(" ++ show (cfgShortPeriod config) ++ "/" ++
-              show (cfgLongPeriod config) ++ ")"
+              show (cfgLongPeriod config) ++ ") - loaded " ++
+              show (psSignalCount persistedState) ++ " signals"
 
   -- Fetch and process data
-  processResult <- processData config
+  processResult <- processData config persistedState
 
   case processResult of
     Left err -> do
@@ -109,8 +142,8 @@ main = do
       Input.success msg
 
 -- | Process market data and generate signals
-processData :: Config -> IO (Either String String)
-processData config = do
+processData :: Config -> PersistedState -> IO (Either String String)
+processData config persistedState = do
   pricesResult <- fetchYahooFinance (cfgSymbol config)
 
   case pricesResult of
@@ -153,25 +186,47 @@ processData config = do
             , fromText "long_period" .= longPeriod
             ]
 
-          -- Determine trend
+          -- Check for crossover signal using previous SMA values from state
+          let prevShort = psPrevShortSma persistedState
+              prevLong = psPrevLongSma persistedState
+              currentSignalCount = psSignalCount persistedState
+              crossoverSignal = checkCrossover prevShort prevLong shortSma longSma
+              newSignalCount = if crossoverSignal /= Nothing
+                               then currentSignalCount + 1
+                               else currentSignalCount
+
+          -- Emit signal if crossover detected
+          case crossoverSignal of
+            Just signalType -> do
+              let confidence = min (abs (shortSma - longSma) / longSma * 100) 0.95
+                  direction = if signalType == "BUY" then "above" else "below"
+              Input.metric "signal" $ object
+                [ fromText "type" .= signalType
+                , fromText "symbol" .= symbol
+                , fromText "price" .= roundTo 2 currentPrice
+                , fromText "confidence" .= roundTo 2 confidence
+                , fromText "total_signals" .= newSignalCount
+                , fromText "reason" .=
+                    ("SMA" ++ show shortPeriod ++ " crossed " ++ direction ++
+                     " SMA" ++ show longPeriod)
+                ]
+            Nothing -> return ()
+
+          -- Save state for next run
+          let newState = PersistedState
+                { psPrevShortSma = Just shortSma
+                , psPrevLongSma = Just longSma
+                , psSignalCount = newSignalCount
+                }
+          State.set "bot_state" newState
+
           let trend = if shortSma > longSma then "bullish" else "bearish"
-              confidence = min (abs (shortSma - longSma) / longSma * 100) 0.95
-              signalType = if shortSma > longSma then "BUY" else "SELL"
-
-          -- Emit signal metric using SDK
-          Input.metric "signal" $ object
-            [ fromText "type" .= signalType
-            , fromText "symbol" .= symbol
-            , fromText "price" .= roundTo 2 currentPrice
-            , fromText "confidence" .= roundTo 2 confidence
-            , fromText "reason" .=
-                ("SMA" ++ show shortPeriod ++ " is " ++
-                (if shortSma > longSma then "above" else "below") ++
-                " SMA" ++ show longPeriod ++ " (" ++ trend ++ " trend)")
-            ]
-
-          return $ Right $ "Analyzed " ++ symbol ++ ": " ++ signalType ++
-                          " recommendation (" ++ trend ++ ")"
+              signalStr = case crossoverSignal of
+                Just s -> s ++ " signal"
+                Nothing -> "no crossover"
+          return $ Right $ "Analyzed " ++ symbol ++ ": " ++ signalStr ++
+                          " (" ++ trend ++ " trend, " ++
+                          show newSignalCount ++ " total signals)"
 
 -- | Fetch historical data from Yahoo Finance
 fetchYahooFinance :: String -> IO (Either String [Double])
@@ -207,3 +262,16 @@ calculateSMA prices period
 -- | Round to specified decimal places
 roundTo :: Int -> Double -> Double
 roundTo n x = fromIntegral (round (x * 10^n) :: Integer) / 10^n
+
+-- | Check for SMA crossover
+-- Returns Just "BUY" for golden cross (short crosses above long)
+-- Returns Just "SELL" for death cross (short crosses below long)
+-- Returns Nothing if no crossover or insufficient history
+checkCrossover :: Maybe Double -> Maybe Double -> Double -> Double -> Maybe String
+checkCrossover (Just prevShort) (Just prevLong) currShort currLong
+  -- Golden cross: short SMA crosses above long SMA
+  | prevShort <= prevLong && currShort > currLong = Just "BUY"
+  -- Death cross: short SMA crosses below long SMA
+  | prevShort >= prevLong && currShort < currLong = Just "SELL"
+  | otherwise = Nothing
+checkCrossover _ _ _ _ = Nothing

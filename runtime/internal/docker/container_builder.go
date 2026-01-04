@@ -31,9 +31,19 @@ func NewContainerBuilder(imageName string) *ContainerBuilder {
 			Env:        []string{"PYTHONDONTWRITEBYTECODE=1"}, // Prevent Python from creating __pycache__ directories
 		},
 		hostConfig: &container.HostConfig{
-			NetworkMode: "host",
+			// Default to bridge mode; use WithNetwork to join a specific network
+			NetworkMode: "bridge",
 		},
 	}
+}
+
+// WithNetwork sets the Docker network for the container.
+// Use this to connect bot containers to the same network as infrastructure services.
+func (b *ContainerBuilder) WithNetwork(networkName string) *ContainerBuilder {
+	if networkName != "" {
+		b.hostConfig.NetworkMode = container.NetworkMode(networkName)
+	}
+	return b
 }
 
 // WithCommand sets the container's command (shell and script path).
@@ -71,16 +81,24 @@ func (b *ContainerBuilder) WithAutoRemove(autoRemove bool) *ContainerBuilder {
 
 // WithExecutable configures the container from an Executable, setting environment
 // variables, labels, and extracting the entrypoint file.
+// If config marshaling fails, an empty JSON object is used as fallback.
 func (b *ContainerBuilder) WithExecutable(executable model.Executable) *ContainerBuilder {
 	// Extract entrypoint file from executable
 	entrypointFile := executable.EntrypointFiles[executable.Entrypoint]
 
-	configJSON, _ := json.Marshal(executable.Config)
+	configJSON, err := json.Marshal(executable.Config)
+	if err != nil {
+		// Fallback to empty config if marshaling fails
+		configJSON = []byte("{}")
+	}
 	b.config.Env = append(b.config.Env,
 		fmt.Sprintf("ID=%s", executable.ID),
 		fmt.Sprintf("CONFIG=%s", string(configJSON)),
 		fmt.Sprintf("ENTRYPOINT_TYPE=%s", executable.Entrypoint),
 		fmt.Sprintf("CODE_MOUNT_DIR=%s", executable.Entrypoint),
+		// STATE_DIR points to the SDK-managed state directory inside /state
+		// Users can also write directly to /state for custom persistent data
+		"STATE_DIR=/state/.the0-state",
 	)
 
 	b.config.Labels["runtime.id"] = executable.ID
@@ -88,6 +106,43 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 	b.config.Labels["runtime.managed"] = "true"
 	b.config.Labels["runtime.segment"] = fmt.Sprintf("%d", executable.Segment)
 
+	return b
+}
+
+// WithMinIOConfig adds MinIO credentials as environment variables.
+// Required for daemon init/sync to access MinIO from within the container.
+func (b *ContainerBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string, useSSL bool) *ContainerBuilder {
+	b.config.Env = append(b.config.Env,
+		fmt.Sprintf("MINIO_ENDPOINT=%s", endpoint),
+		fmt.Sprintf("MINIO_ACCESS_KEY=%s", accessKey),
+		fmt.Sprintf("MINIO_SECRET_KEY=%s", secretKey),
+		fmt.Sprintf("MINIO_USE_SSL=%t", useSSL),
+	)
+	return b
+}
+
+// WithDaemonConfig adds bot-specific config for daemon init/sync.
+// This enables the daemon subprocess approach where the container handles
+// its own code download, state sync, and log collection.
+func (b *ContainerBuilder) WithDaemonConfig(botID, codeFile, runtime, entrypoint, config string, isScheduled bool) *ContainerBuilder {
+	b.config.Env = append(b.config.Env,
+		fmt.Sprintf("BOT_ID=%s", botID),
+		fmt.Sprintf("CODE_FILE=%s", codeFile),
+		fmt.Sprintf("RUNTIME=%s", runtime),
+		fmt.Sprintf("ENTRYPOINT=%s", entrypoint),
+		fmt.Sprintf("BOT_CONFIG=%s", config),
+		fmt.Sprintf("IS_SCHEDULED=%t", isScheduled),
+	)
+	return b
+}
+
+// WithDevRuntime mounts the runtime binary from the host for development.
+// Allows testing daemon changes without rebuilding images.
+func (b *ContainerBuilder) WithDevRuntime(hostPath string) *ContainerBuilder {
+	if hostPath != "" {
+		b.hostConfig.Binds = append(b.hostConfig.Binds,
+			fmt.Sprintf("%s:/app/runtime:ro", hostPath))
+	}
 	return b
 }
 

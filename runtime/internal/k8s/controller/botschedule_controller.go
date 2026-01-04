@@ -67,6 +67,11 @@ type BotScheduleControllerConfig struct {
 	MinIOAccessKey string
 	MinIOSecretKey string
 	MinIOBucket    string
+	MinIOUseSSL    bool
+	// RuntimeImage for init containers and sidecars
+	RuntimeImage string
+	// RuntimeImagePullPolicy for init/sidecar containers
+	RuntimeImagePullPolicy string
 }
 
 // BotScheduleController reconciles bot schedule state between MongoDB and Kubernetes.
@@ -99,12 +104,15 @@ func NewBotScheduleController(
 
 	// Create pod generator for base image + init container approach
 	pg := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
-		Namespace:      config.Namespace,
-		ControllerName: config.ControllerName,
-		MinIOEndpoint:  config.MinIOEndpoint,
-		MinIOAccessKey: config.MinIOAccessKey,
-		MinIOSecretKey: config.MinIOSecretKey,
-		MinIOBucket:    config.MinIOBucket,
+		Namespace:              config.Namespace,
+		ControllerName:         config.ControllerName,
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	})
 
 	return &BotScheduleController{
@@ -284,8 +292,8 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 	// Convert schedule to bot model for podGenerator
 	bot := c.scheduleToBot(schedule)
 
-	// Generate pod spec using the same approach as bot controller
-	pod, err := c.podGenerator.GeneratePod(bot)
+	// Generate scheduled pod spec with daemon sidecar
+	podSpec, err := c.podGenerator.GenerateScheduledPodSpec(bot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec: %w", err)
 	}
@@ -327,7 +335,7 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 								podgen.LabelBotID:          schedule.ID, // Use schedule ID as bot ID for log collection
 							},
 						},
-						Spec: pod.Spec, // Use the full pod spec from podGenerator (includes init containers)
+						Spec: *podSpec, // Use the full pod spec from podGenerator (includes init containers + sidecar)
 					},
 				},
 			},

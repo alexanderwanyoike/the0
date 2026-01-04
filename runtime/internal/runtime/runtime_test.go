@@ -7,19 +7,19 @@ import (
 )
 
 func TestGetDockerImage(t *testing.T) {
-	// Test valid runtimes
+	// Test valid runtimes - using the0 custom images with daemon baked in
 	validTests := []struct {
 		runtime  string
 		expected string
 	}{
-		{"python3.11", "python:3.11-slim"},
-		{"nodejs20", "node:20-alpine"},
-		{"rust-stable", "rust:1.83-slim"},
-		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"},
-		{"gcc13", "gcc:13"},
-		{"cpp-gcc13", "gcc:13"},
-		{"scala3", "eclipse-temurin:21-jre"},
-		{"ghc96", "haskell:9.6-slim"},
+		{"python3.11", "the0/python311:latest"},
+		{"nodejs20", "the0/nodejs20:latest"},
+		{"rust-stable", "the0/rust-stable:latest"},
+		{"dotnet8", "the0/dotnet8:latest"},
+		{"gcc13", "the0/gcc13:latest"},
+		{"cpp-gcc13", "the0/gcc13:latest"},
+		{"scala3", "the0/scala3:latest"},
+		{"ghc96", "the0/ghc96:latest"},
 	}
 
 	for _, tt := range validTests {

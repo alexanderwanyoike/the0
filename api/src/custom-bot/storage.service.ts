@@ -1,36 +1,20 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { Result, Ok, Failure } from "@/common/result";
+import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import AdmZip from "adm-zip";
 
 @Injectable()
 export class StorageService {
-  private minioClient: Minio.Client;
   private bucketName: string;
 
   constructor(
+    @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
     private readonly configService: ConfigService,
     private readonly logger: PinoLogger,
   ) {
-    const endpoint =
-      this.configService.get<string>("MINIO_ENDPOINT") || "localhost";
-    const port = parseInt(
-      this.configService.get<string>("MINIO_PORT") || "9000",
-    );
-
-    // Internal client for API operations
-    this.minioClient = new Minio.Client({
-      endPoint: endpoint,
-      port,
-      useSSL: this.configService.get<string>("MINIO_USE_SSL") === "true",
-      accessKey:
-        this.configService.get<string>("MINIO_ACCESS_KEY") || "minioadmin",
-      secretKey:
-        this.configService.get<string>("MINIO_SECRET_KEY") || "minioadmin",
-    });
-
     this.bucketName =
       this.configService.get<string>("CUSTOM_BOTS_BUCKET") || "custom-bots";
 
