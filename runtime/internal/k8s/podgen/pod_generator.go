@@ -64,6 +64,9 @@ type PodGeneratorConfig struct {
 
 	// RuntimeImage is the image for init and sidecar containers (e.g., "the0/runtime:latest")
 	RuntimeImage string
+
+	// RuntimeImagePullPolicy for init and sidecar containers (default: IfNotPresent)
+	RuntimeImagePullPolicy corev1.PullPolicy
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -84,6 +87,9 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	}
 	if config.RuntimeImage == "" {
 		config.RuntimeImage = "runtime:latest"
+	}
+	if config.RuntimeImagePullPolicy == "" {
+		config.RuntimeImagePullPolicy = corev1.PullIfNotPresent
 	}
 	return &PodGenerator{config: config}
 }
@@ -152,14 +158,15 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			RestartPolicy: corev1.RestartPolicyNever,
 			InitContainers: []corev1.Container{
 				{
-					Name:    "init",
-					Image:   g.config.RuntimeImage,
-					Command: []string{"/app", "daemon", "init"},
+					Name:            "init",
+					Image:           g.config.RuntimeImage,
+					ImagePullPolicy: g.config.RuntimeImagePullPolicy,
+					Command:         []string{"/app/runtime", "daemon", "init"},
 					Args: []string{
 						"--bot-id", bot.ID,
 						"--code-path", "/bot",
 						"--state-path", "/state",
-						"--code-file", fmt.Sprintf("%s/%s", g.config.MinIOBucket, filePath),
+						"--code-file", filePath,
 						"--runtime", runtime,
 						"--entrypoint", entrypoint,
 					},
@@ -190,6 +197,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "bot-code", MountPath: "/bot"},
 						{Name: "bot-state", MountPath: "/state"},
+						{Name: "the0", MountPath: "/var/the0"},
 					},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -199,6 +207,38 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 						Requests: corev1.ResourceList{
 							corev1.ResourceMemory: parseResourceOrDefault(memoryRequest, DefaultMemoryRequest),
 							corev1.ResourceCPU:    parseResourceOrDefault(cpuRequest, DefaultCPURequest),
+						},
+					},
+				},
+				// Sync sidecar for state persistence (runs continuously for realtime bots)
+				{
+					Name:            "sync",
+					Image:           g.config.RuntimeImage,
+					ImagePullPolicy: g.config.RuntimeImagePullPolicy,
+					Command:         []string{"/app/runtime", "daemon", "sync"},
+					Args: []string{
+						"--bot-id", bot.ID,
+						"--state-path", "/state",
+						"--logs-path", "/var/the0/logs",
+					},
+					Env: []corev1.EnvVar{
+						{Name: "MINIO_ENDPOINT", Value: g.config.MinIOEndpoint},
+						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
+						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
+						{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", g.config.MinIOUseSSL)},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "bot-state", MountPath: "/state"},
+						{Name: "the0", MountPath: "/var/the0"},
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: parseResourceOrDefault("32Mi", "32Mi"),
+							corev1.ResourceCPU:    parseResourceOrDefault("10m", "10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: parseResourceOrDefault("64Mi", "64Mi"),
+							corev1.ResourceCPU:    parseResourceOrDefault("100m", "100m"),
 						},
 					},
 				},
@@ -216,6 +256,12 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
+				{
+					Name: "the0",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
 			},
 		},
 	}
@@ -224,66 +270,23 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 }
 
 // GenerateScheduledPodSpec creates a Pod spec for scheduled bots (CronJobs).
-// Adds a daemon sidecar that syncs state/logs and exits when the bot completes.
+// Modifies the sync sidecar to watch for done marker and exit when bot completes.
 func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec, error) {
-	// Generate base pod
+	// Generate base pod (includes sync sidecar)
 	pod, err := g.GeneratePod(bot)
 	if err != nil {
 		return nil, err
 	}
 
-	// Add the0 volume for done marker and logs
-	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
-		Name: "the0",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
-
-	// Add volume mount to bot container
+	// Find the sync sidecar and add --watch-done flag for scheduled bots
 	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "bot" {
-			pod.Spec.Containers[i].VolumeMounts = append(
-				pod.Spec.Containers[i].VolumeMounts,
-				corev1.VolumeMount{Name: "the0", MountPath: "/var/the0"},
+		if pod.Spec.Containers[i].Name == "sync" {
+			pod.Spec.Containers[i].Args = append(
+				pod.Spec.Containers[i].Args,
+				"--watch-done", "/var/the0/done",
 			)
 		}
 	}
-
-	// Add daemon sync sidecar
-	sidecar := corev1.Container{
-		Name:    "sync",
-		Image:   g.config.RuntimeImage,
-		Command: []string{"/app", "daemon", "sync"},
-		Args: []string{
-			"--bot-id", bot.ID,
-			"--state-path", "/state",
-			"--logs-path", "/var/the0/logs",
-			"--watch-done", "/var/the0/done",
-		},
-		Env: []corev1.EnvVar{
-			{Name: "MINIO_ENDPOINT", Value: g.config.MinIOEndpoint},
-			{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
-			{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
-			{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", g.config.MinIOUseSSL)},
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{Name: "bot-state", MountPath: "/state"},
-			{Name: "the0", MountPath: "/var/the0"},
-		},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceMemory: parseResourceOrDefault("32Mi", "32Mi"),
-				corev1.ResourceCPU:    parseResourceOrDefault("10m", "10m"),
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceMemory: parseResourceOrDefault("64Mi", "64Mi"),
-				corev1.ResourceCPU:    parseResourceOrDefault("100m", "100m"),
-			},
-		},
-	}
-
-	pod.Spec.Containers = append(pod.Spec.Containers, sidecar)
 
 	return &pod.Spec, nil
 }

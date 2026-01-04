@@ -70,6 +70,8 @@ type BotScheduleControllerConfig struct {
 	MinIOUseSSL    bool
 	// RuntimeImage for init containers and sidecars
 	RuntimeImage string
+	// RuntimeImagePullPolicy for init/sidecar containers
+	RuntimeImagePullPolicy string
 }
 
 // BotScheduleController reconciles bot schedule state between MongoDB and Kubernetes.
@@ -102,14 +104,15 @@ func NewBotScheduleController(
 
 	// Create pod generator for base image + init container approach
 	pg := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
-		Namespace:      config.Namespace,
-		ControllerName: config.ControllerName,
-		MinIOEndpoint:  config.MinIOEndpoint,
-		MinIOAccessKey: config.MinIOAccessKey,
-		MinIOSecretKey: config.MinIOSecretKey,
-		MinIOBucket:    config.MinIOBucket,
-		MinIOUseSSL:    config.MinIOUseSSL,
-		RuntimeImage:   config.RuntimeImage,
+		Namespace:              config.Namespace,
+		ControllerName:         config.ControllerName,
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	})
 
 	return &BotScheduleController{

@@ -31,6 +31,9 @@ type ManagerConfig struct {
 	// RuntimeImage for init containers and sidecars in bot pods
 	RuntimeImage string
 
+	// RuntimeImagePullPolicy for init/sidecar containers (default: IfNotPresent)
+	RuntimeImagePullPolicy string
+
 	// Logger for the manager (optional)
 	Logger util.Logger
 }
@@ -84,15 +87,16 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	// Create bot controller
 	botCtrl := NewBotController(
 		BotControllerConfig{
-			Namespace:         config.Namespace,
-			ReconcileInterval: config.ReconcileInterval,
-			ControllerName:    botControllerName,
-			MinIOEndpoint:     config.MinIOEndpoint,
-			MinIOAccessKey:    config.MinIOAccessKey,
-			MinIOSecretKey:    config.MinIOSecretKey,
-			MinIOBucket:       config.MinIOBucket,
-			MinIOUseSSL:       config.MinIOUseSSL,
-			RuntimeImage:      config.RuntimeImage,
+			Namespace:              config.Namespace,
+			ReconcileInterval:      config.ReconcileInterval,
+			ControllerName:         botControllerName,
+			MinIOEndpoint:          config.MinIOEndpoint,
+			MinIOAccessKey:         config.MinIOAccessKey,
+			MinIOSecretKey:         config.MinIOSecretKey,
+			MinIOBucket:            config.MinIOBucket,
+			MinIOUseSSL:            config.MinIOUseSSL,
+			RuntimeImage:           config.RuntimeImage,
+			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
 		botRepo,
 		podClient,
@@ -115,15 +119,16 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	// Create schedule controller
 	scheduleCtrl := NewBotScheduleController(
 		BotScheduleControllerConfig{
-			Namespace:         config.Namespace,
-			ReconcileInterval: config.ReconcileInterval,
-			ControllerName:    scheduleControllerName,
-			MinIOEndpoint:     config.MinIOEndpoint,
-			MinIOAccessKey:    config.MinIOAccessKey,
-			MinIOSecretKey:    config.MinIOSecretKey,
-			MinIOBucket:       config.MinIOBucket,
-			MinIOUseSSL:       config.MinIOUseSSL,
-			RuntimeImage:      config.RuntimeImage,
+			Namespace:              config.Namespace,
+			ReconcileInterval:      config.ReconcileInterval,
+			ControllerName:         scheduleControllerName,
+			MinIOEndpoint:          config.MinIOEndpoint,
+			MinIOAccessKey:         config.MinIOAccessKey,
+			MinIOSecretKey:         config.MinIOSecretKey,
+			MinIOBucket:            config.MinIOBucket,
+			MinIOUseSSL:            config.MinIOUseSSL,
+			RuntimeImage:           config.RuntimeImage,
+			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
 		scheduleRepo,
 		cronClient,

@@ -48,7 +48,8 @@ var (
 	minioBucket    string
 
 	// Runtime image for init containers and sidecars
-	runtimeImage string
+	runtimeImage           string
+	runtimeImagePullPolicy string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -128,6 +129,7 @@ func main() {
 	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
 	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
 	controllerCmd.Flags().StringVar(&runtimeImage, "runtime-image", getEnv("RUNTIME_IMAGE", "runtime:latest"), "Runtime image for init containers and sidecars")
+	controllerCmd.Flags().StringVar(&runtimeImagePullPolicy, "runtime-image-pull-policy", getEnv("RUNTIME_IMAGE_PULL_POLICY", "IfNotPresent"), "Image pull policy for runtime init/sidecar (Never, IfNotPresent, Always)")
 	// MinIO credentials read from environment only (not CLI flags) for security
 	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
 	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
@@ -319,14 +321,15 @@ func runController() {
 
 	// Create controller manager
 	manager, err := controller.NewManager(mongoClient, controller.ManagerConfig{
-		Namespace:         controllerNamespace,
-		ReconcileInterval: controllerReconcileInterval,
-		MinIOEndpoint:     minioEndpoint,
-		MinIOAccessKey:    minioAccessKey,
-		MinIOSecretKey:    minioSecretKey,
-		MinIOBucket:       minioBucket,
-		RuntimeImage:      runtimeImage,
-		Logger:            &util.DefaultLogger{},
+		Namespace:              controllerNamespace,
+		ReconcileInterval:      controllerReconcileInterval,
+		MinIOEndpoint:          minioEndpoint,
+		MinIOAccessKey:         minioAccessKey,
+		MinIOSecretKey:         minioSecretKey,
+		MinIOBucket:            minioBucket,
+		RuntimeImage:           runtimeImage,
+		RuntimeImagePullPolicy: runtimeImagePullPolicy,
+		Logger:                 &util.DefaultLogger{},
 	})
 	if err != nil {
 		util.LogMaster("Failed to create controller manager: %v", err)

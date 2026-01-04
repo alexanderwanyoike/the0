@@ -192,6 +192,8 @@ botController:
     tag: latest
   # Runtime image for init containers and sidecars in bot pods
   runtimeImage: "runtime:latest"
+  # Image pull policy for runtime image (Never for local minikube, Always for production)
+  runtimeImagePullPolicy: "Never"
   # How often to reconcile state with MongoDB
   reconcileInterval: "30s"
   # Environment variables for the controller
