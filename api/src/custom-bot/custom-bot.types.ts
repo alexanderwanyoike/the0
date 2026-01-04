@@ -15,6 +15,7 @@ export interface CustomBotConfig {
   author: string;
   entrypoints: {
     bot: string;
+    query?: string;
   };
   schema: {
     bot: Record<string, any>;

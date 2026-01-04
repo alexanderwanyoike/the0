@@ -10,17 +10,25 @@ import {
   GatewayTimeoutException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from "@nestjs/swagger";
+import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
 import { BotQueryService, BotQueryErrorCode } from "./bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 
 class ExecuteQueryDto {
+  @IsString()
   query_path: string;
+
+  @IsOptional()
+  @IsObject()
   params?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsNumber()
   timeout_sec?: number;
 }
 
 @ApiTags("Bot Query")
-@Controller("bots/:botId/query")
+@Controller("query/:botId")
 @UseGuards(AuthCombinedGuard)
 export class BotQueryController {
   constructor(private readonly botQueryService: BotQueryService) {}
