@@ -192,8 +192,19 @@ def run():
         _run_ephemeral("/info")
 
 
+def _write_result(result: dict):
+    """Write query result to /query/result.json file."""
+    result_path = "/query/result.json"
+    try:
+        os.makedirs("/query", exist_ok=True)
+        with open(result_path, "w") as f:
+            json.dump(result, f)
+    except Exception as e:
+        print(f"RESULT_ERROR: Failed to write result file: {e}", file=sys.stderr)
+
+
 def _run_ephemeral(query_path: str):
-    """Execute single query and output JSON to stdout."""
+    """Execute single query and write result to /bot/result.json."""
     global _current_params
 
     # Parse parameters from environment
@@ -211,15 +222,15 @@ def _run_ephemeral(query_path: str):
             "error": f"No handler for path: {query_path}",
             "available": list(_handlers.keys()),
         }
-        print(json.dumps(result))
+        _write_result(result)
         sys.exit(1)
 
     try:
         request = QueryRequest(query_path, _current_params)
-        result = handler_fn(request)
-        print(json.dumps({"status": "ok", "data": result}))
+        data = handler_fn(request)
+        _write_result({"status": "ok", "data": data})
     except Exception as e:
-        print(json.dumps({"status": "error", "error": str(e)}))
+        _write_result({"status": "error", "error": str(e)})
         sys.exit(1)
 
 

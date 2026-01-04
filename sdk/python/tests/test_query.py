@@ -5,7 +5,7 @@ import os
 import json
 import sys
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import patch, mock_open
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -131,51 +131,61 @@ class TestEphemeralMode(unittest.TestCase):
 
     @patch.dict(os.environ, {"QUERY_PATH": "/test", "QUERY_PARAMS": '{"key": "value"}'})
     def test_ephemeral_execution(self):
-        """Test ephemeral mode executes handler and outputs JSON."""
+        """Test ephemeral mode executes handler and writes result to file."""
 
         @query.handler("/test")
         def test_handler(req):
             return {"key": req.get("key")}
 
-        with patch("sys.stdout", new=StringIO()) as mock_stdout:
-            # Successful ephemeral execution doesn't exit, just prints
-            query._run_ephemeral("/test")
+        # Mock the file write using mock_open
+        m = mock_open()
+        with patch("builtins.open", m):
+            with patch("os.makedirs"):
+                query._run_ephemeral("/test")
 
-            output = mock_stdout.getvalue()
-            result = json.loads(output)
-            self.assertEqual(result["status"], "ok")
-            self.assertEqual(result["data"]["key"], "value")
+        # Get the written data from all write calls
+        handle = m()
+        written = "".join(call.args[0] for call in handle.write.call_args_list)
+        result = json.loads(written)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["data"]["key"], "value")
 
     @patch.dict(os.environ, {"QUERY_PATH": "/missing"})
     def test_ephemeral_missing_handler(self):
-        """Test ephemeral mode with missing handler."""
-        with patch("sys.stdout", new=StringIO()) as mock_stdout:
-            with self.assertRaises(SystemExit) as cm:
-                query._run_ephemeral("/missing")
+        """Test ephemeral mode with missing handler writes error to file."""
+        m = mock_open()
+        with patch("builtins.open", m):
+            with patch("os.makedirs"):
+                with self.assertRaises(SystemExit) as cm:
+                    query._run_ephemeral("/missing")
 
-            self.assertEqual(cm.exception.code, 1)
-            output = mock_stdout.getvalue()
-            result = json.loads(output)
-            self.assertEqual(result["status"], "error")
-            self.assertIn("No handler", result["error"])
+        self.assertEqual(cm.exception.code, 1)
+        handle = m()
+        written = "".join(call.args[0] for call in handle.write.call_args_list)
+        result = json.loads(written)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("No handler", result["error"])
 
     @patch.dict(os.environ, {"QUERY_PATH": "/error", "QUERY_PARAMS": "{}"})
     def test_ephemeral_handler_error(self):
-        """Test ephemeral mode with handler that raises error."""
+        """Test ephemeral mode with handler that raises error writes error to file."""
 
         @query.handler("/error")
         def error_handler(req):
             raise ValueError("Test error")
 
-        with patch("sys.stdout", new=StringIO()) as mock_stdout:
-            with self.assertRaises(SystemExit) as cm:
-                query._run_ephemeral("/error")
+        m = mock_open()
+        with patch("builtins.open", m):
+            with patch("os.makedirs"):
+                with self.assertRaises(SystemExit) as cm:
+                    query._run_ephemeral("/error")
 
-            self.assertEqual(cm.exception.code, 1)
-            output = mock_stdout.getvalue()
-            result = json.loads(output)
-            self.assertEqual(result["status"], "error")
-            self.assertIn("Test error", result["error"])
+        self.assertEqual(cm.exception.code, 1)
+        handle = m()
+        written = "".join(call.args[0] for call in handle.write.call_args_list)
+        result = json.loads(written)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Test error", result["error"])
 
 
 class TestBuiltInHandlers(unittest.TestCase):
