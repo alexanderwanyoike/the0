@@ -5,7 +5,7 @@
  */
 
 #include <doctest/doctest.h>
-#include "../state.h"
+#include <the0/state.h>
 #include "helpers/test_helpers.hpp"
 #include <algorithm>
 #include <filesystem>
