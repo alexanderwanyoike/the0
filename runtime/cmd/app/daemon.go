@@ -6,20 +6,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"runtime/internal/k8s/daemon"
+	"runtime/internal/daemon"
 )
 
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "K8s pod daemon commands",
-	Long:  `Commands for initializing and syncing bot state in Kubernetes pods.`,
+	Short: "Bot container daemon commands",
+	Long:  `Commands for initializing and syncing bot state in containers (Docker and K8s).`,
 }
 
 var daemonInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize bot environment (download code and state)",
-	Long: `Downloads bot code and state from MinIO to prepare the pod environment.
-Used as an init container in Kubernetes.
+	Long: `Downloads bot code and state from MinIO to prepare the container environment.
+Used as init container (K8s) or entrypoint prefix (Docker).
 
 Required environment variables:
   MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY

@@ -1,6 +1,6 @@
-// Package daemon provides the K8s pod daemon for bot lifecycle management.
-// The daemon runs as init container and sidecar to handle code/state download
-// and periodic state synchronization.
+// Package daemon provides bot container lifecycle management for both Docker and K8s.
+// The daemon runs as init container/entrypoint prefix (for setup) and sidecar/background
+// process (for periodic state and log synchronization).
 package daemon
 
 import (
@@ -24,8 +24,8 @@ type InitOptions struct {
 	Entrypoint string // Entrypoint file (e.g., "main.py")
 }
 
-// Init downloads bot code and state, preparing the pod for execution.
-// This runs as an init container before the main bot container starts.
+// Init downloads bot code and state, preparing the container for execution.
+// Runs as init container (K8s) or entrypoint prefix (Docker) before the bot starts.
 func Init(ctx context.Context, opts InitOptions) error {
 	logger := &util.DefaultLogger{}
 	logger.Info("Daemon init starting", "bot_id", opts.BotID)
@@ -62,7 +62,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 	// Generate entrypoint script if runtime and entrypoint are specified
 	if opts.Runtime != "" && opts.Entrypoint != "" {
 		logger.Info("Generating entrypoint script", "runtime", opts.Runtime, "entrypoint", opts.Entrypoint)
-		script, err := entrypoints.GenerateK8sEntrypoint(opts.Runtime, entrypoints.GeneratorOptions{
+		script, err := entrypoints.GenerateEntrypoint(opts.Runtime, entrypoints.GeneratorOptions{
 			EntryPointType: "bot",
 			Entrypoint:     opts.Entrypoint,
 			WorkDir:        opts.CodePath,

@@ -156,10 +156,10 @@ type templateData struct {
 	ScriptContent  string
 }
 
-// GenerateK8sEntrypoint generates an entrypoint script for K8s pods.
-// Unlike Docker, K8s passes BOT_ID and BOT_CONFIG via pod environment variables,
-// so we don't need to embed them in the script.
-func GenerateK8sEntrypoint(runtime string, opts GeneratorOptions) (string, error) {
+// GenerateEntrypoint generates an entrypoint script for bot containers.
+// Works for both K8s pods and Docker containers. Config is passed via environment
+// variables (BOT_ID, BOT_CONFIG), not embedded in the script.
+func GenerateEntrypoint(runtime string, opts GeneratorOptions) (string, error) {
 	// Validate entrypoint to prevent shell injection
 	if err := validateEntrypoint(opts.Entrypoint); err != nil {
 		return "", fmt.Errorf("invalid entrypoint: %w", err)
