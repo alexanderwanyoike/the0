@@ -155,7 +155,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			},
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
+			RestartPolicy: corev1.RestartPolicyAlways, // Realtime bots should restart on crash
 			InitContainers: []corev1.Container{
 				{
 					Name:            "init",
@@ -277,6 +277,9 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 	if err != nil {
 		return nil, err
 	}
+
+	// Scheduled bots should not restart - they run once per cron trigger
+	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Find the sync sidecar and add --watch-done flag for scheduled bots
 	for i := range pod.Spec.Containers {
