@@ -26,6 +26,7 @@ RUN chmod 755 /app/runtime
 RUN mkdir -p /bot /state /var/the0/logs
 
 # Bootstrap script that runs daemon init, daemon sync, then the bot
+# For query mode (QUERY_PATH set), runs a lightweight path without sync
 COPY <<'EOF' /app/bootstrap.sh
 #!/bin/bash
 set -e
@@ -39,6 +40,17 @@ set -e
   --runtime "$RUNTIME" \
   --entrypoint "$ENTRYPOINT"
 
+# Query mode: lightweight execution without sync
+if [ -n "$QUERY_PATH" ]; then
+  # Create query result directory
+  mkdir -p /query
+
+  # Run the query entrypoint directly (no sync, no cleanup)
+  cd /bot
+  exec /bin/bash /bot/entrypoint.sh
+fi
+
+# Normal bot mode: full sync and cleanup
 # Determine sync flags based on IS_SCHEDULED
 SYNC_FLAGS="--bot-id $BOT_ID --state-path /state --logs-path /var/the0/logs"
 if [ "$IS_SCHEDULED" = "true" ]; then

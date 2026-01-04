@@ -30,13 +30,28 @@ COPY <<'EOF' /app/bootstrap.sh
 #!/bin/bash
 set -e
 
-/app/runtime daemon init \
-  --bot-id "$BOT_ID" \
-  --code-path /bot \
-  --state-path /state \
-  --code-file "$CODE_FILE" \
-  --runtime "$RUNTIME" \
-  --entrypoint "$ENTRYPOINT"
+# Query mode: lightweight execution without sync
+if [ -n "$QUERY_PATH" ]; then
+  # Create query result directory
+  mkdir -p /query
+  # Initialize code only (no sync needed for queries)
+  /app/runtime daemon init \
+    --bot-id "$BOT_ID" \
+    --code-path /bot \
+    --state-path /state \
+    --code-file "$CODE_FILE" \
+    --runtime "$RUNTIME" \
+    --entrypoint "$ENTRYPOINT"
+  # Run the query entrypoint directly
+  cd /bot
+  exec /bin/bash /bot/entrypoint.sh
+fi
+
+INIT_FLAGS="--bot-id $BOT_ID --code-path /bot --state-path /state --code-file $CODE_FILE --runtime $RUNTIME --entrypoint $ENTRYPOINT"
+if [ -n "$QUERY_ENTRYPOINT" ]; then
+  INIT_FLAGS="$INIT_FLAGS --query-entrypoint $QUERY_ENTRYPOINT"
+fi
+/app/runtime daemon init $INIT_FLAGS
 
 SYNC_FLAGS="--bot-id $BOT_ID --state-path /state --logs-path /var/the0/logs"
 if [ "$IS_SCHEDULED" = "true" ]; then
@@ -46,12 +61,21 @@ fi
 /app/runtime daemon sync $SYNC_FLAGS &
 SYNC_PID=$!
 
+# Start query server if query entrypoint exists (for realtime bots)
+QUERY_PID=""
+if [ -n "$QUERY_ENTRYPOINT" ] && [ "$BOT_TYPE" = "realtime" ]; then
+  cd /bot
+  BOT_TYPE=realtime /bin/bash /bot/query-entrypoint.sh &
+  QUERY_PID=$!
+fi
+
 cleanup() {
   EXIT_CODE=$?
   if [ "$IS_SCHEDULED" = "true" ]; then
     echo $EXIT_CODE > /var/the0/done
   fi
   sleep 3
+  [ -n "$QUERY_PID" ] && kill $QUERY_PID 2>/dev/null || true
   kill $SYNC_PID 2>/dev/null || true
   wait $SYNC_PID 2>/dev/null || true
   exit $EXIT_CODE
