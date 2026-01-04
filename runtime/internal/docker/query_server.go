@@ -134,6 +134,10 @@ func (s *QueryServer) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Convert bot to executable
 	executable := s.botToExecutable(bot, isRunning, containerID)
+	if executable == nil {
+		s.sendError(w, http.StatusBadRequest, fmt.Sprintf("bot %s does not have a query entrypoint defined", req.BotID))
+		return
+	}
 
 	// Execute the query
 	queryReq := QueryRequest{
@@ -143,7 +147,7 @@ func (s *QueryServer) handleQuery(w http.ResponseWriter, r *http.Request) {
 		TimeoutSec: req.TimeoutSec,
 	}
 
-	response, err := s.handler.ExecuteQuery(r.Context(), queryReq, executable, containerID)
+	response, err := s.handler.ExecuteQuery(r.Context(), queryReq, *executable, containerID)
 	if err != nil {
 		s.sendError(w, http.StatusInternalServerError, fmt.Sprintf("query execution failed: %v", err))
 		return
@@ -171,27 +175,34 @@ func (s *QueryServer) sendError(w http.ResponseWriter, status int, message strin
 }
 
 // botToExecutable converts a Bot model to an Executable for query execution.
-func (s *QueryServer) botToExecutable(bot *model.Bot, isRunning bool, containerID string) model.Executable {
-	entrypointFiles := make(map[string]string)
-	var runtime, filePath string
-
-	if bot.CustomBotVersion.Config.Entrypoints != nil {
-		if ep, ok := bot.CustomBotVersion.Config.Entrypoints["bot"]; ok {
-			entrypointFiles["bot"] = ep
-			entrypointFiles["query"] = ep // Same file, different mode
-		}
+// Returns nil if the bot has no query entrypoint defined.
+func (s *QueryServer) botToExecutable(bot *model.Bot, isRunning bool, containerID string) *model.Executable {
+	if bot.CustomBotVersion.Config.Entrypoints == nil {
+		return nil
 	}
-	runtime = bot.CustomBotVersion.Config.Runtime
-	filePath = bot.CustomBotVersion.FilePath
 
-	return model.Executable{
+	// Check if query entrypoint exists
+	queryEntrypoint, hasQuery := bot.CustomBotVersion.Config.Entrypoints["query"]
+	if !hasQuery {
+		return nil
+	}
+
+	entrypointFiles := make(map[string]string)
+	for k, v := range bot.CustomBotVersion.Config.Entrypoints {
+		entrypointFiles[k] = v
+	}
+
+	// Use queryEntrypoint to avoid unused variable warning
+	_ = queryEntrypoint
+
+	return &model.Executable{
 		ID:              bot.ID,
-		Runtime:         runtime,
+		Runtime:         bot.CustomBotVersion.Config.Runtime,
 		Entrypoint:      "query",
 		EntrypointFiles: entrypointFiles,
 		Config:          bot.Config,
-		FilePath:        filePath,
-		IsLongRunning:   isRunning, // If running, it's a realtime bot
+		FilePath:        bot.CustomBotVersion.FilePath,
+		IsLongRunning:   isRunning,
 		PersistResults:  false,
 	}
 }

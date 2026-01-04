@@ -89,6 +89,7 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req QueryReque
 	queryExecutable.QueryParams = req.Params
 	queryExecutable.IsLongRunning = false
 	queryExecutable.PersistResults = false
+	queryExecutable.ResultFilePath = "/query/result.json"
 
 	// Add query entrypoint file if not present
 	if queryExecutable.EntrypointFiles == nil {
@@ -113,23 +114,30 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req QueryReque
 		}, err
 	}
 
-	// Parse the output as JSON
+	// Parse the result from the result file (result.ResultFileContents)
 	response := &QueryResponse{
 		Duration:  time.Since(start),
 		Timestamp: time.Now(),
 	}
 
-	// The container output should be JSON from the SDK's query system
+	// The query result should be in result.json file
+	var resultData []byte
+	if len(result.ResultFileContents) > 0 {
+		resultData = result.ResultFileContents
+	} else {
+		// Fallback to stdout if no result file (shouldn't happen with proper SDK)
+		resultData = []byte(result.Output)
+	}
+
 	var output struct {
 		Status string          `json:"status"`
 		Data   json.RawMessage `json:"data"`
 		Error  string          `json:"error"`
 	}
 
-	if err := json.Unmarshal([]byte(result.Output), &output); err != nil {
-		// If we can't parse as JSON, treat the raw output as the response
+	if err := json.Unmarshal(resultData, &output); err != nil {
 		response.Status = "error"
-		response.Error = fmt.Sprintf("failed to parse query response: %v (output: %s)", err, result.Output)
+		response.Error = fmt.Sprintf("failed to parse query response: %v (result: %s)", err, string(resultData))
 		return response, nil
 	}
 

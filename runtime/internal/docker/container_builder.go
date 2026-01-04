@@ -121,6 +121,18 @@ func (b *ContainerBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string
 	return b
 }
 
+// DaemonConfig holds configuration for daemon init/sync.
+type DaemonConfig struct {
+	BotID           string
+	CodeFile        string
+	Runtime         string
+	Entrypoint      string
+	QueryEntrypoint string // Optional: query entrypoint for realtime bots
+	Config          string
+	IsScheduled     bool
+	BotType         string // "realtime" or "scheduled"
+}
+
 // WithDaemonConfig adds bot-specific config for daemon init/sync.
 // This enables the daemon subprocess approach where the container handles
 // its own code download, state sync, and log collection.
@@ -133,6 +145,29 @@ func (b *ContainerBuilder) WithDaemonConfig(botID, codeFile, runtime, entrypoint
 		fmt.Sprintf("BOT_CONFIG=%s", config),
 		fmt.Sprintf("IS_SCHEDULED=%t", isScheduled),
 	)
+	return b
+}
+
+// WithDaemonConfigFull adds bot-specific config for daemon init/sync with all options.
+func (b *ContainerBuilder) WithDaemonConfigFull(cfg DaemonConfig) *ContainerBuilder {
+	b.config.Env = append(b.config.Env,
+		fmt.Sprintf("BOT_ID=%s", cfg.BotID),
+		fmt.Sprintf("CODE_FILE=%s", cfg.CodeFile),
+		fmt.Sprintf("RUNTIME=%s", cfg.Runtime),
+		fmt.Sprintf("ENTRYPOINT=%s", cfg.Entrypoint),
+		fmt.Sprintf("BOT_CONFIG=%s", cfg.Config),
+		fmt.Sprintf("IS_SCHEDULED=%t", cfg.IsScheduled),
+	)
+	if cfg.QueryEntrypoint != "" {
+		b.config.Env = append(b.config.Env,
+			fmt.Sprintf("QUERY_ENTRYPOINT=%s", cfg.QueryEntrypoint),
+		)
+	}
+	if cfg.BotType != "" {
+		b.config.Env = append(b.config.Env,
+			fmt.Sprintf("BOT_TYPE=%s", cfg.BotType),
+		)
+	}
 	return b
 }
 

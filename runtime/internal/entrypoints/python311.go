@@ -162,3 +162,58 @@ def main():
 if __name__ == "__main__":
     main()
 `
+
+// PythonQueryEntrypoint is a simple entrypoint for query execution.
+// It just runs the query script directly - the script handles everything via query.run()
+const PythonQueryEntrypoint = `
+#!/usr/bin/env python3
+"""
+Python Query Entrypoint Script
+Simply runs the query script which handles QUERY_PATH and QUERY_PARAMS internally.
+"""
+
+import sys
+import os
+
+def setup_environment():
+    """Setup Python environment and working directory"""
+    # Get code mount directory from environment
+    code_mount_dir = os.environ.get('CODE_MOUNT_DIR', 'bot')
+    work_dir = f"/{code_mount_dir}"
+
+    # Change to working directory
+    try:
+        os.chdir(work_dir)
+    except Exception as e:
+        print(f"CHDIR_ERROR: Could not change to {work_dir} directory: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Setup Python path
+    sys.path.insert(0, work_dir)
+
+    # Add vendor directory to path if it exists
+    vendor_dir = f"{work_dir}/vendor"
+    if os.path.exists(vendor_dir):
+        sys.path.insert(0, vendor_dir)
+
+def run_query_script(script_path):
+    """Run the query script directly"""
+    code_mount_dir = os.environ.get('CODE_MOUNT_DIR', 'bot')
+    work_dir = f"/{code_mount_dir}"
+    full_path = f"{work_dir}/{script_path}"
+
+    try:
+        with open(full_path, 'r') as f:
+            code = f.read()
+        exec(compile(code, full_path, 'exec'), {'__name__': '__main__', '__file__': full_path})
+    except Exception as e:
+        import traceback
+        print(f'{{"status": "error", "error": "{str(e)}"}}')
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    setup_environment()
+    script_path = os.environ.get('SCRIPT_PATH', 'query.py')
+    run_query_script(script_path)
+`

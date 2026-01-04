@@ -219,6 +219,13 @@ func (r *dockerRunner) buildContainerConfig(
 		}
 	}
 
+	// Determine bot type and query entrypoint
+	botType := "scheduled"
+	if executable.IsLongRunning {
+		botType = "realtime"
+	}
+	queryEntrypoint := executable.EntrypointFiles["query"] // May be empty
+
 	builder := NewContainerBuilder(imageName).
 		WithExecutable(executable).
 		WithNetwork(r.config.DockerNetwork).
@@ -228,15 +235,29 @@ func (r *dockerRunner) buildContainerConfig(
 			r.config.MinIOSecretAccessKey,
 			r.config.MinIOUseSSL,
 		).
-		WithDaemonConfig(
-			executable.ID,
-			executable.FilePath, // Path to code.zip in MinIO
-			executable.Runtime,
-			executable.EntrypointFiles[executable.Entrypoint],
-			configJSON,
-			!executable.IsLongRunning, // isScheduled = not long-running
-		).
+		WithDaemonConfigFull(DaemonConfig{
+			BotID:           executable.ID,
+			CodeFile:        executable.FilePath, // Path to code.zip in MinIO
+			Runtime:         executable.Runtime,
+			Entrypoint:      executable.EntrypointFiles[executable.Entrypoint],
+			QueryEntrypoint: queryEntrypoint,
+			Config:          configJSON,
+			IsScheduled:     !executable.IsLongRunning,
+			BotType:         botType,
+		}).
 		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
+
+	// Add query config if this is a query execution
+	if executable.QueryPath != "" {
+		queryParamsJSON := "{}"
+		if executable.QueryParams != nil {
+			if data, err := json.Marshal(executable.QueryParams); err == nil {
+				queryParamsJSON = string(data)
+			}
+		}
+		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", queryParamsJSON)
+		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
+	}
 
 	// Dev mode: mount runtime binary from host for faster iteration
 	if r.config.DevRuntimePath != "" {
@@ -244,11 +265,12 @@ func (r *dockerRunner) buildContainerConfig(
 	}
 
 	// Long-running containers should NOT auto-remove on exit so we can capture crash logs.
-	// Terminating containers auto-remove after we collect results.
-	if executable.IsLongRunning {
-		builder = builder.WithAutoRemove(false) // Keep container on crash for log capture
+	// Terminating containers that need result files also shouldn't auto-remove (race condition).
+	// Only enable auto-remove for terminating containers that don't need result extraction.
+	if executable.IsLongRunning || executable.ResultFilePath != "" {
+		builder = builder.WithAutoRemove(false) // Keep container for log/result capture
 	} else {
-		builder = builder.WithAutoRemove(true) // Run-to-completion cleans up after result extraction
+		builder = builder.WithAutoRemove(true) // Run-to-completion cleans up automatically
 	}
 
 	// Enable host.docker.internal on Linux for containers to reach the Docker host.
@@ -441,8 +463,11 @@ func (r *dockerRunner) startTerminatingContainer(
 	hostConfig *container.HostConfig,
 	startTime time.Time,
 ) (*ExecutionResult, error) {
-	// Result file path inside container
+	// Result file path inside container (can be customized for queries)
 	resultFilePath := "/bot/result.json"
+	if exec.ResultFilePath != "" {
+		resultFilePath = exec.ResultFilePath
+	}
 
 	runResult, err := r.orchestrator.RunAndWait(ctx, config, hostConfig, resultFilePath)
 	if err != nil {

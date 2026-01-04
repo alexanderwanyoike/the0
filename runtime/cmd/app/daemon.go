@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -48,15 +49,16 @@ Optional environment variables:
 }
 
 var (
-	daemonBotID        string
-	daemonCodePath     string
-	daemonStatePath    string
-	daemonLogsPath     string
-	daemonCodeFile     string
-	daemonRuntime      string
-	daemonEntrypoint   string
-	daemonSyncInterval time.Duration
-	daemonWatchDone    string
+	daemonBotID           string
+	daemonCodePath        string
+	daemonStatePath       string
+	daemonLogsPath        string
+	daemonCodeFile        string
+	daemonRuntime         string
+	daemonEntrypoint      string
+	daemonQueryEntrypoint string
+	daemonSyncInterval    time.Duration
+	daemonWatchDone       string
 )
 
 func init() {
@@ -67,6 +69,7 @@ func init() {
 	daemonInitCmd.Flags().StringVar(&daemonCodeFile, "code-file", "", "MinIO object path for code (e.g., my-bot/v1.0.0/code.zip)")
 	daemonInitCmd.Flags().StringVar(&daemonRuntime, "runtime", "", "Runtime for entrypoint (e.g., python3.11)")
 	daemonInitCmd.Flags().StringVar(&daemonEntrypoint, "entrypoint", "", "Entrypoint file (e.g., main.py)")
+	daemonInitCmd.Flags().StringVar(&daemonQueryEntrypoint, "query-entrypoint", "", "Query entrypoint file for realtime bots (e.g., query.py)")
 	daemonInitCmd.MarkFlagRequired("bot-id")
 
 	// Sync command flags
@@ -83,13 +86,18 @@ func init() {
 }
 
 func runDaemonInit(cmd *cobra.Command, args []string) error {
+	// Detect query mode from QUERY_PATH environment variable
+	isQuery := os.Getenv("QUERY_PATH") != ""
+
 	return daemon.Init(context.Background(), daemon.InitOptions{
-		BotID:      daemonBotID,
-		CodePath:   daemonCodePath,
-		StatePath:  daemonStatePath,
-		CodeFile:   daemonCodeFile,
-		Runtime:    daemonRuntime,
-		Entrypoint: daemonEntrypoint,
+		BotID:           daemonBotID,
+		CodePath:        daemonCodePath,
+		StatePath:       daemonStatePath,
+		CodeFile:        daemonCodeFile,
+		Runtime:         daemonRuntime,
+		Entrypoint:      daemonEntrypoint,
+		QueryEntrypoint: daemonQueryEntrypoint,
+		IsQuery:         isQuery,
 	})
 }
 

@@ -35,6 +35,8 @@ type GeneratorOptions struct {
 	Entrypoint string
 	// WorkDir is the working directory (default: "/bot")
 	WorkDir string
+	// IsQuery indicates this is a query execution (uses simplified entrypoint)
+	IsQuery bool
 }
 
 // K8s-specific entrypoint templates that read config from environment variables
@@ -181,7 +183,11 @@ func GenerateEntrypoint(runtime string, opts GeneratorOptions) (string, error) {
 
 	switch runtime {
 	case "python3.11":
-		data.ScriptContent = PythonBotEntrypoint
+		if opts.IsQuery {
+			data.ScriptContent = PythonQueryEntrypoint
+		} else {
+			data.ScriptContent = PythonBotEntrypoint
+		}
 		selectedTemplate = k8sPythonEntrypoint
 
 	case "nodejs20":

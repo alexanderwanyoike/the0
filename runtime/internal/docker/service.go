@@ -42,9 +42,6 @@ type BotService struct {
 	// NATS subscriber for persisting bot events to MongoDB
 	subscriber *botnatssubscriber.NATSSubscriber
 
-	// Query server for executing queries against bots
-	queryServer *QueryServer
-
 	// Lifecycle
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -109,28 +106,6 @@ func (s *BotService) Run(ctx context.Context) error {
 	}
 	s.runner = runner
 	defer s.runner.Close()
-
-	// Initialize QueryHandler and QueryServer
-	queryHandler := NewQueryHandler(QueryHandlerConfig{
-		Runner: s.runner,
-		Logger: s.logger,
-	})
-	s.queryServer = NewQueryServer(QueryServerConfig{
-		Port:        9477,
-		Handler:     queryHandler,
-		BotResolver: s,
-		Logger:      s.logger,
-	})
-	if err := s.queryServer.Start(); err != nil {
-		s.logger.Error("Failed to start query server: %v", err)
-		// Non-fatal - continue without query server
-	} else {
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			s.queryServer.Stop(shutdownCtx)
-		}()
-	}
 
 	// Initialize NATS subscriber (optional - degrades gracefully)
 	if s.config.NATSUrl != "" {
