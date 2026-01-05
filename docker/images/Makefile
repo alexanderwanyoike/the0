@@ -1,63 +1,42 @@
-# Build all the0 runtime images
-# Each image includes the daemon binary for state/log synchronization
+# Build the0 runtime image
+# The universal 'runtime' image contains all language runtimes
 
 REGISTRY ?= the0
 VERSION ?= latest
 
-# All runtime images to build
-RUNTIMES = python311 nodejs20 rust-stable dotnet8 gcc13 scala3 ghc96
-
 # Build context is the repository root (to access runtime/ source)
 BUILD_CONTEXT = ../..
 
-.PHONY: all build-all push-all clean list test minikube-build-all
+.PHONY: all build push clean list test minikube
 
-all: build-all
+all: build
 
-# Build all images locally (for Docker Compose)
-build-all:
-	@for runtime in $(RUNTIMES); do \
-		echo "Building $(REGISTRY)/$$runtime:$(VERSION)..."; \
-		docker build -t $(REGISTRY)/$$runtime:$(VERSION) -f $$runtime/Dockerfile $(BUILD_CONTEXT); \
-	done
+# Build the universal runtime image
+build:
+	@echo "Building $(REGISTRY)/runtime:$(VERSION)..."
+	docker build -t $(REGISTRY)/runtime:$(VERSION) -f runtime/Dockerfile $(BUILD_CONTEXT)
 
-# Build a single image: make python311
-python311 nodejs20 rust-stable dotnet8 gcc13 scala3 ghc96:
-	docker build -t $(REGISTRY)/$@:$(VERSION) -f $@/Dockerfile $(BUILD_CONTEXT)
+# Alias for build
+runtime: build
 
-# Push all images to registry
-push-all:
-	@for runtime in $(RUNTIMES); do \
-		echo "Pushing $(REGISTRY)/$$runtime:$(VERSION)..."; \
-		docker push $(REGISTRY)/$$runtime:$(VERSION); \
-	done
+# Push runtime image to registry
+push: build
+	@echo "Pushing $(REGISTRY)/runtime:$(VERSION)..."
+	docker push $(REGISTRY)/runtime:$(VERSION)
 
-# Verify images exist
+# Verify image exists
 list:
-	@for runtime in $(RUNTIMES); do \
-		echo "$(REGISTRY)/$$runtime:$(VERSION)"; \
-	done
+	@echo "$(REGISTRY)/runtime:$(VERSION)"
 
-# Test that runtime binary works in each image
-test:
-	@for runtime in $(RUNTIMES); do \
-		echo "Testing $(REGISTRY)/$$runtime:$(VERSION)..."; \
-		docker run --rm $(REGISTRY)/$$runtime:$(VERSION) /app/runtime version || exit 1; \
-	done
+# Test that runtime binary works in the image
+test: build
+	@echo "Testing $(REGISTRY)/runtime:$(VERSION)..."
+	docker run --rm $(REGISTRY)/runtime:$(VERSION) /app/runtime version
 
 clean:
-	@for runtime in $(RUNTIMES); do \
-		docker rmi $(REGISTRY)/$$runtime:$(VERSION) 2>/dev/null || true; \
-	done
+	docker rmi $(REGISTRY)/runtime:$(VERSION) 2>/dev/null || true
 
-# Build images directly into minikube's cache (no registry needed)
-minikube-build-all:
-	@echo "Building images directly into minikube..."
-	@for runtime in $(RUNTIMES); do \
-		echo "Building $(REGISTRY)/$$runtime:$(VERSION) in minikube..."; \
-		minikube image build -t $(REGISTRY)/$$runtime:$(VERSION) -f $$runtime/Dockerfile $(BUILD_CONTEXT); \
-	done
-
-# Build a single image in minikube: make minikube-python311
-minikube-%:
-	minikube image build -t $(REGISTRY)/$*:$(VERSION) -f $*/Dockerfile $(BUILD_CONTEXT)
+# Build runtime image in minikube
+minikube:
+	@echo "Building $(REGISTRY)/runtime:$(VERSION) in minikube..."
+	minikube image build -t $(REGISTRY)/runtime:$(VERSION) -f runtime/Dockerfile $(BUILD_CONTEXT)

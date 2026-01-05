@@ -28,18 +28,18 @@ The platform consists of the following services:
 - Docker Compose 2.0+
 - At least 4GB RAM available for containers
 
-### 1. Build Runtime Images
+### 1. Build Runtime Image
 
-Before starting services, you need to build the runtime images used for bot execution:
+Before starting services, you need to build the universal runtime image used for bot execution:
 
 ```bash
 cd docker
 make build-images
 ```
 
-This builds `the0/python311`, `the0/nodejs20`, `the0/rust-stable`, etc. These images contain the daemon binary for state/log synchronization.
+This builds `the0/runtime:latest` - a single universal image containing all language runtimes (Python 3.11, Node.js 20, .NET 8, Rust, C++, Scala, Haskell). The image includes the `runtime execute` command for bot execution and `daemon sync` for state/log synchronization.
 
-**Note:** `make up` automatically builds these images, but you can build them separately if needed.
+**Note:** `make up` automatically builds this image, but you can build it separately if needed.
 
 ### 2. Start All Services
 
