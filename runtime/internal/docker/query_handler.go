@@ -2,40 +2,22 @@
 package docker
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"runtime/internal/model"
-	"runtime/internal/util"
 	"time"
+
+	"runtime/internal/model"
+	"runtime/internal/query"
+	"runtime/internal/util"
 )
-
-// QueryRequest represents a query to execute against a bot.
-type QueryRequest struct {
-	BotID      string                 `json:"bot_id"`
-	QueryPath  string                 `json:"query_path"`
-	Params     map[string]interface{} `json:"params,omitempty"`
-	TimeoutSec int                    `json:"timeout_sec,omitempty"` // Default: 30 seconds
-}
-
-// QueryResponse represents the result of a query execution.
-type QueryResponse struct {
-	Status    string          `json:"status"`              // "ok" or "error"
-	Data      json.RawMessage `json:"data,omitempty"`      // Query result data
-	Error     string          `json:"error,omitempty"`     // Error message if status is "error"
-	Duration  time.Duration   `json:"duration"`            // Execution time
-	Timestamp time.Time       `json:"timestamp"`           // When the query was executed
-}
 
 // QueryHandler executes queries against bot containers.
 // For scheduled bots, it spawns ephemeral containers with QUERY_PATH set.
 // For realtime bots, it proxies to the bot's query HTTP server on port 9476.
 type QueryHandler struct {
-	runner DockerRunner
-	logger util.Logger
+	runner           DockerRunner
+	realtimeExecutor *query.RealtimeExecutor
+	logger           util.Logger
 }
 
 // QueryHandlerConfig contains configuration for the QueryHandler.
@@ -50,8 +32,9 @@ func NewQueryHandler(config QueryHandlerConfig) *QueryHandler {
 		config.Logger = &util.DefaultLogger{}
 	}
 	return &QueryHandler{
-		runner: config.Runner,
-		logger: config.Logger,
+		runner:           config.Runner,
+		realtimeExecutor: query.NewRealtimeExecutor(query.DefaultQueryPort, config.Logger),
+		logger:           config.Logger,
 	}
 }
 
@@ -59,12 +42,12 @@ func NewQueryHandler(config QueryHandlerConfig) *QueryHandler {
 // For scheduled bots: Spawns an ephemeral container with QUERY_PATH and QUERY_PARAMS set.
 // For realtime bots: Proxies the request to the bot's query HTTP server.
 // containerID is required for realtime bots (empty string for scheduled bots).
-func (h *QueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, executable model.Executable, containerID string) (*QueryResponse, error) {
+func (h *QueryHandler) ExecuteQuery(ctx context.Context, req query.Request, executable model.Executable, containerID string) (*query.Response, error) {
 	start := time.Now()
 
 	// Set defaults
 	if req.TimeoutSec <= 0 {
-		req.TimeoutSec = 30
+		req.TimeoutSec = query.DefaultTimeout
 	}
 
 	// Create timeout context
@@ -73,7 +56,7 @@ func (h *QueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, execu
 
 	// For realtime bots, proxy to the running container's query server
 	if executable.IsLongRunning {
-		return h.executeRealtimeQuery(queryCtx, req, executable, containerID, start)
+		return h.executeRealtimeQuery(queryCtx, req, containerID, start)
 	}
 
 	// For scheduled bots, spawn an ephemeral container
@@ -81,7 +64,7 @@ func (h *QueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, execu
 }
 
 // executeScheduledQuery spawns an ephemeral container to execute the query.
-func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req QueryRequest, executable model.Executable, start time.Time) (*QueryResponse, error) {
+func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Request, executable model.Executable, start time.Time) (*query.Response, error) {
 	// Configure executable for query mode
 	queryExecutable := executable
 	queryExecutable.Entrypoint = "query"
@@ -106,140 +89,28 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req QueryReque
 	// Execute the container
 	result, err := h.runner.StartContainer(ctx, queryExecutable)
 	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to execute query container: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, err
+		return query.ErrorResponse(fmt.Sprintf("failed to execute query container: %v", err), start), err
 	}
 
-	// Parse the result from the result file (result.ResultFileContents)
-	response := &QueryResponse{
-		Duration:  time.Since(start),
-		Timestamp: time.Now(),
-	}
-
-	// The query result should be in result.json file
+	// Parse the result from the result file
 	var resultData []byte
 	if len(result.ResultFileContents) > 0 {
 		resultData = result.ResultFileContents
 	} else {
-		// Fallback to stdout if no result file (shouldn't happen with proper SDK)
+		// Fallback to stdout if no result file
 		resultData = []byte(result.Output)
 	}
 
-	var output struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
-	}
-
-	if err := json.Unmarshal(resultData, &output); err != nil {
-		response.Status = "error"
-		response.Error = fmt.Sprintf("failed to parse query response: %v (result: %s)", err, string(resultData))
-		return response, nil
-	}
-
-	response.Status = output.Status
-	response.Data = output.Data
-	response.Error = output.Error
-
-	return response, nil
+	return query.ParseQueryOutput(resultData, start), nil
 }
 
 // executeRealtimeQuery proxies the query to the bot's HTTP server.
-func (h *QueryHandler) executeRealtimeQuery(ctx context.Context, req QueryRequest, executable model.Executable, containerID string, start time.Time) (*QueryResponse, error) {
-	h.logger.Info("Executing realtime query: bot=%s path=%s container=%s", req.BotID, req.QueryPath, containerID)
-
+func (h *QueryHandler) executeRealtimeQuery(ctx context.Context, req query.Request, containerID string, start time.Time) (*query.Response, error) {
 	// Get the container's IP address
 	containerIP, err := h.runner.GetContainerIP(ctx, containerID)
 	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to get container IP: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
+		return query.ErrorResponse(fmt.Sprintf("failed to get container IP: %v", err), start), nil
 	}
 
-	// Build the request URL (SDK query server runs on port 9476)
-	url := fmt.Sprintf("http://%s:9476%s", containerIP, req.QueryPath)
-
-	// Prepare request body with params
-	var reqBody io.Reader
-	if len(req.Params) > 0 {
-		paramsJSON, err := json.Marshal(req.Params)
-		if err != nil {
-			return &QueryResponse{
-				Status:    "error",
-				Error:     fmt.Sprintf("failed to marshal query params: %v", err),
-				Duration:  time.Since(start),
-				Timestamp: time.Now(),
-			}, nil
-		}
-		reqBody = bytes.NewReader(paramsJSON)
-	}
-
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reqBody)
-	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to create HTTP request: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Execute request with a short timeout
-	client := &http.Client{
-		Timeout: time.Duration(req.TimeoutSec) * time.Second,
-	}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to execute query request: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to read query response: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-
-	// Parse response JSON
-	var output struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &output); err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to parse query response: %v (body: %s)", err, string(body)),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-
-	return &QueryResponse{
-		Status:    output.Status,
-		Data:      output.Data,
-		Error:     output.Error,
-		Duration:  time.Since(start),
-		Timestamp: time.Now(),
-	}, nil
+	return h.realtimeExecutor.Execute(ctx, req, containerIP), nil
 }

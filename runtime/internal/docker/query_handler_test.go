@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime/internal/model"
+	"runtime/internal/query"
 	"runtime/internal/util"
 	"testing"
 	"time"
@@ -16,10 +17,10 @@ import (
 
 // mockDockerRunner implements DockerRunner for testing
 type mockDockerRunner struct {
-	startContainerFunc    func(ctx context.Context, exec model.Executable) (*ExecutionResult, error)
-	getContainerIPFunc    func(ctx context.Context, containerID string) (string, error)
-	stopContainerFunc     func(ctx context.Context, containerID string, exec model.Executable) error
-	getContainerLogsFunc  func(ctx context.Context, containerID string, tail int) (string, error)
+	startContainerFunc   func(ctx context.Context, exec model.Executable) (*ExecutionResult, error)
+	getContainerIPFunc   func(ctx context.Context, containerID string) (string, error)
+	stopContainerFunc    func(ctx context.Context, containerID string, exec model.Executable) error
+	getContainerLogsFunc func(ctx context.Context, containerID string, tail int) (string, error)
 }
 
 func (m *mockDockerRunner) StartContainer(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
@@ -73,7 +74,7 @@ func (m *mockDockerRunner) Close() error {
 func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 	tests := []struct {
 		name           string
-		request        QueryRequest
+		request        query.Request
 		executable     model.Executable
 		mockOutput     string
 		expectedStatus string
@@ -81,7 +82,7 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 	}{
 		{
 			name: "successful query",
-			request: QueryRequest{
+			request: query.Request{
 				BotID:     "test-bot",
 				QueryPath: "/portfolio",
 				Params:    map[string]interface{}{"symbol": "BTC"},
@@ -98,7 +99,7 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 		},
 		{
 			name: "query with error response",
-			request: QueryRequest{
+			request: query.Request{
 				BotID:     "test-bot",
 				QueryPath: "/invalid",
 			},
@@ -115,7 +116,7 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 		},
 		{
 			name: "query with default timeout",
-			request: QueryRequest{
+			request: query.Request{
 				BotID:     "test-bot",
 				QueryPath: "/status",
 			},
@@ -212,7 +213,7 @@ func TestQueryHandler_ExecuteRealtimeQuery(t *testing.T) {
 		IsLongRunning: true, // This makes it a realtime bot
 	}
 
-	request := QueryRequest{
+	request := query.Request{
 		BotID:      "test-realtime-bot",
 		QueryPath:  "/portfolio",
 		TimeoutSec: 5,
@@ -247,7 +248,7 @@ func TestQueryHandler_Timeout(t *testing.T) {
 		Logger: &util.DefaultLogger{},
 	})
 
-	request := QueryRequest{
+	request := query.Request{
 		BotID:      "test-bot",
 		QueryPath:  "/slow",
 		TimeoutSec: 1, // 1 second timeout
@@ -285,7 +286,7 @@ func TestQueryHandler_InvalidJSONResponse(t *testing.T) {
 		Logger: &util.DefaultLogger{},
 	})
 
-	request := QueryRequest{
+	request := query.Request{
 		BotID:     "test-bot",
 		QueryPath: "/test",
 	}
@@ -325,7 +326,7 @@ func TestQueryHandler_EntrypointFilesCopied(t *testing.T) {
 		Logger: &util.DefaultLogger{},
 	})
 
-	request := QueryRequest{
+	request := query.Request{
 		BotID:     "test-bot",
 		QueryPath: "/test",
 	}

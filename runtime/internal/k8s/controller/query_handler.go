@@ -4,10 +4,8 @@ package controller
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -17,35 +15,19 @@ import (
 
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/model"
+	"runtime/internal/query"
 	"runtime/internal/util"
 )
-
-// QueryRequest represents a query to execute against a bot.
-type QueryRequest struct {
-	BotID      string                 `json:"bot_id"`
-	QueryPath  string                 `json:"query_path"`
-	Params     map[string]interface{} `json:"params,omitempty"`
-	TimeoutSec int                    `json:"timeout_sec,omitempty"` // Default: 30 seconds
-}
-
-// QueryResponse represents the result of a query execution.
-type QueryResponse struct {
-	Status    string          `json:"status"`              // "ok" or "error"
-	Data      json.RawMessage `json:"data,omitempty"`      // Query result data
-	Error     string          `json:"error,omitempty"`     // Error message if status is "error"
-	Duration  time.Duration   `json:"duration"`            // Execution time
-	Timestamp time.Time       `json:"timestamp"`           // When the query was executed
-}
 
 // K8sQueryHandler executes queries against bot pods in Kubernetes.
 // For scheduled bots, it creates ephemeral Jobs with QUERY_PATH set.
 // For realtime bots, it proxies to the bot's query HTTP server on port 9476.
 type K8sQueryHandler struct {
-	clientset    *kubernetes.Clientset
-	namespace    string
-	podGenerator *podgen.PodGenerator
-	logger       util.Logger
-	queryPort    int
+	clientset        *kubernetes.Clientset
+	namespace        string
+	podGenerator     *podgen.PodGenerator
+	realtimeExecutor *query.RealtimeExecutor
+	logger           util.Logger
 }
 
 // K8sQueryHandlerConfig contains configuration for the K8sQueryHandler.
@@ -54,8 +36,6 @@ type K8sQueryHandlerConfig struct {
 	Namespace    string
 	PodGenerator *podgen.PodGenerator
 	Logger       util.Logger
-	// QueryPort is the port where bot query servers listen (default: 9476)
-	QueryPort    int
 }
 
 // NewK8sQueryHandler creates a new K8sQueryHandler instance.
@@ -66,27 +46,24 @@ func NewK8sQueryHandler(config K8sQueryHandlerConfig) *K8sQueryHandler {
 	if config.Namespace == "" {
 		config.Namespace = "the0"
 	}
-	if config.QueryPort == 0 {
-		config.QueryPort = 9476 // Default SDK query server port
-	}
 	return &K8sQueryHandler{
-		clientset:    config.Clientset,
-		namespace:    config.Namespace,
-		podGenerator: config.PodGenerator,
-		logger:       config.Logger,
-		queryPort:    config.QueryPort,
+		clientset:        config.Clientset,
+		namespace:        config.Namespace,
+		podGenerator:     config.PodGenerator,
+		realtimeExecutor: query.NewRealtimeExecutor(query.DefaultQueryPort, config.Logger),
+		logger:           config.Logger,
 	}
 }
 
 // ExecuteQuery executes a query against a bot pod.
 // For scheduled bots: Creates a Job with QUERY_PATH and QUERY_PARAMS set.
 // For realtime bots: Proxies the request to the pod's query HTTP server.
-func (h *K8sQueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, bot model.Bot, podIP string) (*QueryResponse, error) {
+func (h *K8sQueryHandler) ExecuteQuery(ctx context.Context, req query.Request, bot model.Bot, podIP string) (*query.Response, error) {
 	start := time.Now()
 
 	// Set defaults
 	if req.TimeoutSec <= 0 {
-		req.TimeoutSec = 30
+		req.TimeoutSec = query.DefaultTimeout
 	}
 
 	// Create timeout context
@@ -97,7 +74,7 @@ func (h *K8sQueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, bo
 	isRealtime := podIP != ""
 
 	if isRealtime {
-		return h.executeRealtimeQuery(queryCtx, req, podIP, start)
+		return h.realtimeExecutor.Execute(queryCtx, req, podIP), nil
 	}
 
 	// For scheduled bots, create an ephemeral Job
@@ -105,18 +82,13 @@ func (h *K8sQueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, bo
 }
 
 // executeScheduledQuery creates a Kubernetes Job to execute the query.
-func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req QueryRequest, bot model.Bot, start time.Time) (*QueryResponse, error) {
+func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.Request, bot model.Bot, start time.Time) (*query.Response, error) {
 	h.logger.Info("Executing scheduled query via K8s Job: bot=%s path=%s", req.BotID, req.QueryPath)
 
 	// Generate pod spec for the query
 	pod, err := h.podGenerator.GenerateQueryPod(bot, req.QueryPath, req.Params)
 	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to generate query pod spec: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
+		return query.ErrorResponse(fmt.Sprintf("failed to generate query pod spec: %v", err), start), nil
 	}
 
 	// Create a Job from the pod spec
@@ -151,48 +123,17 @@ func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req QueryRe
 	// Create the Job
 	createdJob, err := h.clientset.BatchV1().Jobs(h.namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to create query job: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
+		return query.ErrorResponse(fmt.Sprintf("failed to create query job: %v", err), start), nil
 	}
 
 	// Wait for Job completion
 	output, err := h.waitForJobCompletion(ctx, createdJob.Name)
 	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("query job failed: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
+		return query.ErrorResponse(fmt.Sprintf("query job failed: %v", err), start), nil
 	}
 
-	// Parse the output as JSON
-	response := &QueryResponse{
-		Duration:  time.Since(start),
-		Timestamp: time.Now(),
-	}
-
-	var queryOutput struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
-	}
-
-	if err := json.Unmarshal([]byte(output), &queryOutput); err != nil {
-		response.Status = "error"
-		response.Error = fmt.Sprintf("failed to parse query response: %v (output: %s)", err, output)
-		return response, nil
-	}
-
-	response.Status = queryOutput.Status
-	response.Data = queryOutput.Data
-	response.Error = queryOutput.Error
-
-	return response, nil
+	// Parse the output as JSON using shared parser
+	return query.ParseQueryOutput([]byte(output), start), nil
 }
 
 // waitForJobCompletion waits for a Job to complete and returns its output.
@@ -259,89 +200,4 @@ func (h *K8sQueryHandler) getJobPodLogs(ctx context.Context, jobName string) (st
 	}
 
 	return buf.String(), nil
-}
-
-// executeRealtimeQuery proxies the query to the bot pod's HTTP server.
-func (h *K8sQueryHandler) executeRealtimeQuery(ctx context.Context, req QueryRequest, podIP string, start time.Time) (*QueryResponse, error) {
-	h.logger.Info("Executing realtime query via pod IP: bot=%s path=%s ip=%s", req.BotID, req.QueryPath, podIP)
-
-	// Build the request URL
-	url := fmt.Sprintf("http://%s:%d%s", podIP, h.queryPort, req.QueryPath)
-
-	// Prepare request body with params
-	var reqBody io.Reader
-	if len(req.Params) > 0 {
-		paramsJSON, err := json.Marshal(req.Params)
-		if err != nil {
-			return &QueryResponse{
-				Status:    "error",
-				Error:     fmt.Sprintf("failed to marshal query params: %v", err),
-				Duration:  time.Since(start),
-				Timestamp: time.Now(),
-			}, nil
-		}
-		reqBody = bytes.NewReader(paramsJSON)
-	}
-
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reqBody)
-	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to create HTTP request: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Execute request
-	client := &http.Client{
-		Timeout: time.Duration(req.TimeoutSec) * time.Second,
-	}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to execute query request: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to read query response: %v", err),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-
-	// Parse response JSON
-	var output struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &output); err != nil {
-		return &QueryResponse{
-			Status:    "error",
-			Error:     fmt.Sprintf("failed to parse query response: %v (body: %s)", err, string(body)),
-			Duration:  time.Since(start),
-			Timestamp: time.Now(),
-		}, nil
-	}
-
-	return &QueryResponse{
-		Status:    output.Status,
-		Data:      output.Data,
-		Error:     output.Error,
-		Duration:  time.Since(start),
-		Timestamp: time.Now(),
-	}, nil
 }

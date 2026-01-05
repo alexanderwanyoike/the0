@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime/internal/model"
+	"runtime/internal/query"
 	"runtime/internal/util"
 	"testing"
 	"time"
@@ -49,23 +50,6 @@ func (m *mockBotResolver) addBot(bot *model.Bot, containerID string) {
 	}
 }
 
-// mockQueryHandler implements a simple query handler for testing
-type mockQueryHandler struct {
-	executeFunc func(ctx context.Context, req QueryRequest, exec model.Executable, containerID string) (*QueryResponse, error)
-}
-
-func (m *mockQueryHandler) ExecuteQuery(ctx context.Context, req QueryRequest, exec model.Executable, containerID string) (*QueryResponse, error) {
-	if m.executeFunc != nil {
-		return m.executeFunc(ctx, req, exec, containerID)
-	}
-	return &QueryResponse{
-		Status:    "ok",
-		Data:      json.RawMessage(`{"test":true}`),
-		Duration:  100 * time.Millisecond,
-		Timestamp: time.Now(),
-	}, nil
-}
-
 func TestQueryServer_HandleQuery_Success(t *testing.T) {
 	resolver := newMockBotResolver()
 	resolver.addBot(&model.Bot{
@@ -92,8 +76,6 @@ func TestQueryServer_HandleQuery_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	// We need to test the handler directly since we can't easily inject the mock handler
-	// Let's create a proper test setup
 	realHandler := NewQueryHandler(QueryHandlerConfig{
 		Runner: &mockDockerRunner{
 			startContainerFunc: func(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
@@ -113,13 +95,13 @@ func TestQueryServer_HandleQuery_Success(t *testing.T) {
 		Logger:      &util.DefaultLogger{},
 	})
 
-	// Test the handler directly
-	realServer.handleQuery(w, req)
+	// Test via the wrapped server's internal server
+	realServer.server.HandleQuery(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result QueryResponse
+	var result query.Response
 	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", result.Status)
@@ -150,12 +132,12 @@ func TestQueryServer_HandleQuery_BotNotFound(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	server.handleQuery(w, req)
+	server.server.HandleQuery(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
-	var result QueryResponse
+	var result query.Response
 	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 	assert.Equal(t, "error", result.Status)
@@ -186,12 +168,12 @@ func TestQueryServer_HandleQuery_MissingBotID(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	server.handleQuery(w, req)
+	server.server.HandleQuery(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	var result QueryResponse
+	var result query.Response
 	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 	assert.Equal(t, "error", result.Status)
@@ -222,12 +204,12 @@ func TestQueryServer_HandleQuery_MissingQueryPath(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	server.handleQuery(w, req)
+	server.server.HandleQuery(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	var result QueryResponse
+	var result query.Response
 	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 	assert.Equal(t, "error", result.Status)
@@ -251,7 +233,7 @@ func TestQueryServer_HandleQuery_InvalidMethod(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/query", nil)
 	w := httptest.NewRecorder()
 
-	server.handleQuery(w, req)
+	server.server.HandleQuery(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
@@ -274,7 +256,7 @@ func TestQueryServer_HandleHealth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
 
-	server.handleHealth(w, req)
+	server.server.HandleHealth(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -303,12 +285,12 @@ func TestQueryServer_HandleQuery_InvalidJSON(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	server.handleQuery(w, req)
+	server.server.HandleQuery(w, req)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	var result QueryResponse
+	var result query.Response
 	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 	assert.Equal(t, "error", result.Status)
@@ -316,19 +298,6 @@ func TestQueryServer_HandleQuery_InvalidJSON(t *testing.T) {
 }
 
 func TestQueryServer_BotToExecutable(t *testing.T) {
-	resolver := newMockBotResolver()
-	handler := NewQueryHandler(QueryHandlerConfig{
-		Runner: &mockDockerRunner{},
-		Logger: &util.DefaultLogger{},
-	})
-
-	server := NewQueryServer(QueryServerConfig{
-		Port:        9477,
-		Handler:     handler,
-		BotResolver: resolver,
-		Logger:      &util.DefaultLogger{},
-	})
-
 	// Bot with query entrypoint
 	botWithQuery := &model.Bot{
 		ID: "test-bot",
@@ -346,7 +315,7 @@ func TestQueryServer_BotToExecutable(t *testing.T) {
 	}
 
 	// Test scheduled bot (not running)
-	exec := server.botToExecutable(botWithQuery, false, "")
+	exec := botToExecutable(botWithQuery, false, "")
 	require.NotNil(t, exec)
 	assert.Equal(t, "test-bot", exec.ID)
 	assert.Equal(t, "python3.11", exec.Runtime)
@@ -358,7 +327,7 @@ func TestQueryServer_BotToExecutable(t *testing.T) {
 	assert.False(t, exec.PersistResults)
 
 	// Test realtime bot (running)
-	exec = server.botToExecutable(botWithQuery, true, "container-123")
+	exec = botToExecutable(botWithQuery, true, "container-123")
 	require.NotNil(t, exec)
 	assert.True(t, exec.IsLongRunning)
 
@@ -373,7 +342,7 @@ func TestQueryServer_BotToExecutable(t *testing.T) {
 			FilePath: "no-query/v1.0.0/code.zip",
 		},
 	}
-	exec = server.botToExecutable(botWithoutQuery, false, "")
+	exec = botToExecutable(botWithoutQuery, false, "")
 	assert.Nil(t, exec)
 }
 
