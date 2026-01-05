@@ -1,29 +1,26 @@
 // Package daemon provides bot container lifecycle management for both Docker and K8s.
 // The daemon runs as init container/entrypoint prefix (for setup) and sidecar/background
 // process (for periodic state and log synchronization).
+//
+// Note: Entrypoint generation has been removed - the `runtime execute` command now handles
+// execution directly using language-specific wrappers built into the universal runtime image.
 package daemon
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"runtime/internal/entrypoints"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
 // InitOptions configures the init command.
 type InitOptions struct {
-	BotID           string
-	CodePath        string // Where to extract code (default: /bot)
-	StatePath       string // Where to extract state (default: /state)
-	CodeFile        string // MinIO object path for code (e.g., "my-bot/v1.0.0/code.zip")
-	Runtime         string // Runtime for entrypoint generation (e.g., "python3.11")
-	Entrypoint      string // Entrypoint file (e.g., "main.py")
-	QueryEntrypoint string // Query entrypoint file (e.g., "query.py") - generates query-entrypoint.sh
-	IsQuery         bool   // True if this is a query execution (uses simplified entrypoint)
+	BotID     string
+	CodePath  string // Where to extract code (default: /bot)
+	StatePath string // Where to extract state (default: /state)
+	CodeFile  string // MinIO object path for code (e.g., "my-bot/v1.0.0/code.zip")
 }
 
 // Init downloads bot code and state, preparing the container for execution.
@@ -61,49 +58,9 @@ func Init(ctx context.Context, opts InitOptions) error {
 		}
 	}
 
-	// Generate entrypoint script if runtime and entrypoint are specified
-	if opts.Runtime != "" && opts.Entrypoint != "" {
-		entryPointType := "bot"
-		if opts.IsQuery {
-			entryPointType = "query"
-		}
-		logger.Info("Generating entrypoint script", "runtime", opts.Runtime, "entrypoint", opts.Entrypoint, "type", entryPointType)
-		script, err := entrypoints.GenerateEntrypoint(opts.Runtime, entrypoints.GeneratorOptions{
-			EntryPointType: entryPointType,
-			Entrypoint:     opts.Entrypoint,
-			WorkDir:        opts.CodePath,
-			IsQuery:        opts.IsQuery,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to generate entrypoint: %w", err)
-		}
-
-		scriptPath := filepath.Join(opts.CodePath, "entrypoint.sh")
-		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
-			return fmt.Errorf("failed to write entrypoint script: %w", err)
-		}
-		logger.Info("Created entrypoint script", "path", scriptPath)
-	}
-
-	// Generate query entrypoint script if query entrypoint is specified (for realtime bots)
-	if opts.Runtime != "" && opts.QueryEntrypoint != "" {
-		logger.Info("Generating query entrypoint script", "runtime", opts.Runtime, "entrypoint", opts.QueryEntrypoint)
-		script, err := entrypoints.GenerateEntrypoint(opts.Runtime, entrypoints.GeneratorOptions{
-			EntryPointType: "query",
-			Entrypoint:     opts.QueryEntrypoint,
-			WorkDir:        opts.CodePath,
-			IsQuery:        true, // Query mode for server startup
-		})
-		if err != nil {
-			return fmt.Errorf("failed to generate query entrypoint: %w", err)
-		}
-
-		scriptPath := filepath.Join(opts.CodePath, "query-entrypoint.sh")
-		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
-			return fmt.Errorf("failed to write query entrypoint script: %w", err)
-		}
-		logger.Info("Created query entrypoint script", "path", scriptPath)
-	}
+	// Note: Entrypoint generation has been removed.
+	// The `runtime execute` command now handles execution directly using
+	// language-specific wrappers built into the universal runtime image.
 
 	// Download state
 	logger.Info("Downloading state", "bot_id", opts.BotID)

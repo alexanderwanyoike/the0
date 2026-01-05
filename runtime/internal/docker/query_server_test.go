@@ -73,7 +73,7 @@ func TestQueryServer_HandleQuery_Success(t *testing.T) {
 		CustomBotVersion: model.CustomBotVersion{
 			Config: model.APIBotConfig{
 				Runtime:     "python3.11",
-				Entrypoints: map[string]string{"bot": "main.py"},
+				Entrypoints: map[string]string{"bot": "main.py", "query": "query.py"},
 			},
 			FilePath: "test-bot/code.zip",
 		},
@@ -329,12 +329,13 @@ func TestQueryServer_BotToExecutable(t *testing.T) {
 		Logger:      &util.DefaultLogger{},
 	})
 
-	bot := &model.Bot{
+	// Bot with query entrypoint
+	botWithQuery := &model.Bot{
 		ID: "test-bot",
 		CustomBotVersion: model.CustomBotVersion{
 			Config: model.APIBotConfig{
 				Runtime:     "python3.11",
-				Entrypoints: map[string]string{"bot": "main.py"},
+				Entrypoints: map[string]string{"bot": "main.py", "query": "query.py"},
 			},
 			FilePath: "test-bot/v1.0.0/code.zip",
 		},
@@ -345,19 +346,35 @@ func TestQueryServer_BotToExecutable(t *testing.T) {
 	}
 
 	// Test scheduled bot (not running)
-	exec := server.botToExecutable(bot, false, "")
+	exec := server.botToExecutable(botWithQuery, false, "")
+	require.NotNil(t, exec)
 	assert.Equal(t, "test-bot", exec.ID)
 	assert.Equal(t, "python3.11", exec.Runtime)
 	assert.Equal(t, "query", exec.Entrypoint)
 	assert.Equal(t, "main.py", exec.EntrypointFiles["bot"])
-	assert.Equal(t, "main.py", exec.EntrypointFiles["query"])
+	assert.Equal(t, "query.py", exec.EntrypointFiles["query"])
 	assert.Equal(t, "test-bot/v1.0.0/code.zip", exec.FilePath)
 	assert.False(t, exec.IsLongRunning)
 	assert.False(t, exec.PersistResults)
 
 	// Test realtime bot (running)
-	exec = server.botToExecutable(bot, true, "container-123")
+	exec = server.botToExecutable(botWithQuery, true, "container-123")
+	require.NotNil(t, exec)
 	assert.True(t, exec.IsLongRunning)
+
+	// Bot without query entrypoint should return nil
+	botWithoutQuery := &model.Bot{
+		ID: "no-query-bot",
+		CustomBotVersion: model.CustomBotVersion{
+			Config: model.APIBotConfig{
+				Runtime:     "python3.11",
+				Entrypoints: map[string]string{"bot": "main.py"},
+			},
+			FilePath: "no-query/v1.0.0/code.zip",
+		},
+	}
+	exec = server.botToExecutable(botWithoutQuery, false, "")
+	assert.Nil(t, exec)
 }
 
 func TestQueryServer_StartStop(t *testing.T) {
