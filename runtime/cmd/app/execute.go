@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -39,6 +40,7 @@ type ExecuteConfig struct {
 	QueryEntrypoint string // For realtime bots with query server
 	QueryPath       string // For ephemeral query execution
 	QueryParams     string // JSON query parameters
+	QueryResultKey  string // MinIO key for storing query result (K8s mode)
 
 	// Paths
 	CodePath  string
@@ -107,6 +109,7 @@ func loadExecuteConfig() (*ExecuteConfig, error) {
 		QueryEntrypoint: os.Getenv("QUERY_ENTRYPOINT"),
 		QueryPath:       os.Getenv("QUERY_PATH"),
 		QueryParams:     os.Getenv("QUERY_PARAMS"),
+		QueryResultKey:  os.Getenv("QUERY_RESULT_KEY"),
 		CodePath:        getEnv("CODE_PATH", "/bot"),
 		StatePath:       getEnv("STATE_PATH", "/state"),
 		LogsPath:        getEnv("LOGS_PATH", "/var/the0/logs"),
@@ -210,6 +213,12 @@ func runBot(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 		logger.Info("No existing state or download failed: %v", err)
 	}
 
+	// Step 2.5: Ensure logs directory exists
+	if err := os.MkdirAll(cfg.LogsPath, 0755); err != nil {
+		logger.Info("Failed to create logs directory: %v", err)
+		// Continue anyway - logs may not work but bot should run
+	}
+
 	// Step 3: Start sync subprocess (unless skipped for K8s)
 	if !executeSkipSync {
 		var err error
@@ -295,8 +304,45 @@ func runEphemeralQuery(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 	}
 
 	exitCode := executeQueryProcess(ctx, cfg, entrypoint, logger)
+	logger.Info("Query process completed with exit code: %d", exitCode)
+
+	// If QUERY_RESULT_KEY is set (K8s mode), upload result to MinIO
+	if cfg.QueryResultKey != "" {
+		logger.Info("Uploading query result to MinIO key: %s", cfg.QueryResultKey)
+		if err := uploadQueryResult(ctx, cfg, logger); err != nil {
+			logger.Info("Failed to upload query result: %v", err)
+			// Don't fail the whole query if upload fails
+		}
+	}
 
 	return exitCode
+}
+
+// uploadQueryResult uploads the query result file to MinIO.
+func uploadQueryResult(ctx context.Context, cfg *ExecuteConfig, logger *util.DefaultLogger) error {
+	resultPath := "/query/result.json"
+	data, err := os.ReadFile(resultPath)
+	if err != nil {
+		return fmt.Errorf("failed to read result file: %w", err)
+	}
+
+	storageCfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load storage config: %w", err)
+	}
+
+	minioClient, err := storage.NewMinioClient(storageCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create MinIO client: %w", err)
+	}
+
+	resultManager := storage.NewQueryResultManager(minioClient, storageCfg, logger)
+	if err := resultManager.Upload(ctx, cfg.QueryResultKey, data); err != nil {
+		return fmt.Errorf("failed to upload result: %w", err)
+	}
+
+	logger.Info("Uploaded query result to MinIO: %s", cfg.QueryResultKey)
+	return nil
 }
 
 // runQueryServerOnly runs only the query server (for K8s sidecar mode).
@@ -434,14 +480,43 @@ func startQueryServerProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*e
 
 // executeBotProcess executes the main bot process.
 func executeBotProcess(ctx context.Context, cfg *ExecuteConfig, logger *util.DefaultLogger) int {
-	return executeProcess(ctx, cfg, cfg.Entrypoint, logger)
+	// Set up log file for persistence (in addition to stdout/stderr)
+	logFile := setupLogFile(cfg.LogsPath, logger)
+	if logFile != nil {
+		defer logFile.Close()
+	}
+
+	return executeProcessWithLogFile(ctx, cfg, cfg.Entrypoint, logger, logFile)
+}
+
+// setupLogFile creates a log file for bot output persistence.
+func setupLogFile(logsPath string, logger *util.DefaultLogger) *os.File {
+	logFilePath := filepath.Join(logsPath, "bot.log")
+	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		logger.Info("Failed to create log file: %v", err)
+		return nil
+	}
+	return file
 }
 
 // executeProcess executes a process with the given entrypoint.
 func executeProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger) int {
+	return executeProcessWithLogFile(ctx, cfg, entrypoint, logger, nil)
+}
+
+// executeProcessWithLogFile executes a process, optionally writing output to a log file.
+func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
 	cmd := buildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	// Set up output: both stdout and optionally log file
+	if logFile != nil {
+		cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+		cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 	cmd.Env = buildBotEnv(cfg)
 
 	logger.Info("Executing: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
@@ -531,15 +606,26 @@ func buildBotCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 func buildBotEnv(cfg *ExecuteConfig) []string {
 	env := os.Environ()
 
+	// Determine STATE_DIR: use existing env var if set, otherwise derive from StatePath
+	stateDir := os.Getenv("STATE_DIR")
+	if stateDir == "" {
+		// Default to .the0-state subdirectory within StatePath
+		stateDir = filepath.Join(cfg.StatePath, ".the0-state")
+	}
+
 	// Add/override bot-specific environment variables
 	env = append(env,
 		"BOT_ID="+cfg.BotID,
 		"BOT_CONFIG="+cfg.BotConfig,
-		"STATE_DIR="+cfg.StatePath,
+		"STATE_DIR="+stateDir,
 		"CODE_MOUNT_DIR="+cfg.CodePath,
 		"SCRIPT_PATH="+cfg.Entrypoint, // Used by Python/Node.js wrappers
 		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
 	)
+
+	// Add PYTHONPATH for vendor directory (SDK and dependencies)
+	vendorDir := filepath.Join(cfg.CodePath, "vendor")
+	env = append(env, "PYTHONPATH="+vendorDir+":"+cfg.CodePath)
 
 	// Add query-specific env vars if applicable
 	if cfg.QueryPath != "" {
