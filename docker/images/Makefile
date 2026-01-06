@@ -4,8 +4,8 @@
 REGISTRY ?= the0
 VERSION ?= latest
 
-# Build context is the repository root (to access runtime/ source)
-BUILD_CONTEXT = ../..
+# Build context is the runtime directory (self-contained with Dockerfile)
+BUILD_CONTEXT = ../../runtime
 
 .PHONY: all build push clean list test minikube
 
@@ -14,7 +14,7 @@ all: build
 # Build the universal runtime image
 build:
 	@echo "Building $(REGISTRY)/runtime:$(VERSION)..."
-	docker build -t $(REGISTRY)/runtime:$(VERSION) -f runtime/Dockerfile $(BUILD_CONTEXT)
+	docker build -t $(REGISTRY)/runtime:$(VERSION) $(BUILD_CONTEXT)
 
 # Alias for build
 runtime: build
@@ -39,4 +39,4 @@ clean:
 # Build runtime image in minikube
 minikube:
 	@echo "Building $(REGISTRY)/runtime:$(VERSION) in minikube..."
-	minikube image build -t $(REGISTRY)/runtime:$(VERSION) -f runtime/Dockerfile $(BUILD_CONTEXT)
+	minikube image build -t $(REGISTRY)/runtime:$(VERSION) $(BUILD_CONTEXT)
