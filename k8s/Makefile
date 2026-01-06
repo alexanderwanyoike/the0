@@ -180,7 +180,7 @@ enable-registry: ## Enable minikube registry addon for bot images
 .PHONY: build-runtime
 build-runtime: ## Build runtime image locally
 	@echo "🔨 Building runtime image..."
-	@cd .. && docker build -t the0/runtime:latest -f docker/images/runtime/Dockerfile .
+	@cd .. && docker build -t the0/runtime:latest runtime/
 	@echo "✅ Runtime image built: the0/runtime:latest"
 
 .PHONY: update-runtime
