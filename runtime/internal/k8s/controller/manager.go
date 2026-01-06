@@ -14,6 +14,7 @@ import (
 
 	"runtime/internal/constants"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
@@ -165,22 +166,38 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	})
 
+	// Create MinIO client for query result storage
+	storageCfg := &storage.Config{
+		Endpoint:          config.MinIOEndpoint,
+		AccessKey:         config.MinIOAccessKey,
+		SecretKey:         config.MinIOSecretKey,
+		UseSSL:            config.MinIOUseSSL,
+		QueryResultBucket: "query-results",
+	}
+	minioClient, err := storage.NewMinioClient(storageCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
+	}
+
 	// Create query handler
 	queryHandler := NewK8sQueryHandler(K8sQueryHandlerConfig{
-		Clientset:    clientset,
-		Namespace:    config.Namespace,
-		PodGenerator: podGenerator,
-		Logger:       logger,
+		Clientset:     clientset,
+		Namespace:     config.Namespace,
+		PodGenerator:  podGenerator,
+		MinioClient:   minioClient,
+		StorageConfig: storageCfg,
+		Logger:        logger,
 	})
 
 	// Create query server
 	queryServer := NewK8sQueryServer(K8sQueryServerConfig{
-		Port:      9477,
-		Handler:   queryHandler,
-		BotRepo:   botRepo,
-		Clientset: clientset,
-		Namespace: config.Namespace,
-		Logger:    logger,
+		Port:         9477,
+		Handler:      queryHandler,
+		BotRepo:      botRepo,
+		ScheduleRepo: scheduleRepo,
+		Clientset:    clientset,
+		Namespace:    config.Namespace,
+		Logger:       logger,
 	})
 
 	return &Manager{

@@ -13,15 +13,17 @@ import (
 
 // MultiBotResolver resolves bots from both realtime (bot_runner) and scheduled (bot_scheduler) collections.
 type MultiBotResolver struct {
-	mongoClient *mongo.Client
-	runner      DockerRunner
+	mongoClient  *mongo.Client
+	runner       DockerRunner
+	scheduledIDs map[string]bool // Track which bot IDs are scheduled (not realtime)
 }
 
 // NewMultiBotResolver creates a resolver that can look up bots from either collection.
 func NewMultiBotResolver(mongoClient *mongo.Client, runner DockerRunner) *MultiBotResolver {
 	return &MultiBotResolver{
-		mongoClient: mongoClient,
-		runner:      runner,
+		mongoClient:  mongoClient,
+		runner:       runner,
+		scheduledIDs: make(map[string]bool),
 	}
 }
 
@@ -31,12 +33,16 @@ func (r *MultiBotResolver) GetBot(ctx context.Context, botID string) (*model.Bot
 	// Try realtime bots first
 	bot, err := r.getBotFromCollection(ctx, constants.BOT_RUNNER_DB_NAME, constants.BOT_RUNNER_COLLECTION, botID)
 	if err == nil {
+		// Mark as NOT scheduled (realtime bot)
+		delete(r.scheduledIDs, botID)
 		return bot, nil
 	}
 
 	// Try scheduled bots
 	schedule, err := r.getScheduleFromCollection(ctx, constants.BOT_SCHEDULER_DB_NAME, constants.BOT_SCHEDULE_COLLECTION, botID)
 	if err == nil {
+		// Mark as scheduled - these should never use realtime query mode
+		r.scheduledIDs[botID] = true
 		// Convert BotSchedule to Bot for query execution
 		return r.scheduleToBot(schedule), nil
 	}
@@ -45,13 +51,19 @@ func (r *MultiBotResolver) GetBot(ctx context.Context, botID string) (*model.Bot
 }
 
 // GetContainerID returns the container ID for a running realtime bot.
-// Scheduled bots don't have persistent containers.
+// Scheduled bots don't have persistent containers - always returns empty for them.
 func (r *MultiBotResolver) GetContainerID(ctx context.Context, botID string) (string, bool) {
+	// Scheduled bots should NEVER use realtime query mode
+	// They spawn ephemeral containers, so we should not check for running containers
+	if r.scheduledIDs[botID] {
+		return "", false
+	}
+
 	if r.runner == nil {
 		return "", false
 	}
 
-	// Check running containers for this bot
+	// Check running containers for this bot (realtime bots only)
 	containers, err := r.runner.ListManagedContainers(ctx, -1)
 	if err != nil {
 		return "", false

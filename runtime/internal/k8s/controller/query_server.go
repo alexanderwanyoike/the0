@@ -27,48 +27,81 @@ type K8sQueryServer struct {
 
 // K8sQueryServerConfig contains configuration for the K8sQueryServer.
 type K8sQueryServerConfig struct {
-	Port      int
-	Handler   *K8sQueryHandler
-	BotRepo   BotRepository
-	Clientset *kubernetes.Clientset
-	Namespace string
-	Logger    util.Logger
+	Port         int
+	Handler      *K8sQueryHandler
+	BotRepo      BotRepository
+	ScheduleRepo BotScheduleRepository
+	Clientset    *kubernetes.Clientset
+	Namespace    string
+	Logger       util.Logger
 }
 
 // k8sQueryExecutor adapts K8sQueryHandler to the query.Executor interface.
 type k8sQueryExecutor struct {
-	handler   *K8sQueryHandler
-	botRepo   BotRepository
-	clientset *kubernetes.Clientset
-	namespace string
-	logger    util.Logger
+	handler      *K8sQueryHandler
+	botRepo      BotRepository
+	scheduleRepo BotScheduleRepository
+	clientset    *kubernetes.Clientset
+	namespace    string
+	logger       util.Logger
 }
 
 func (e *k8sQueryExecutor) ExecuteQuery(ctx context.Context, req query.Request, targetIP string) *query.Response {
-	// Get bot from repository
+	// Try realtime bots first
 	bots, err := e.botRepo.FindAllEnabled(ctx)
 	if err != nil {
-		return &query.Response{Status: "error", Error: fmt.Sprintf("failed to query bots: %v", err)}
-	}
-
-	// Find the specific bot
-	var bot *model.Bot
-	for i := range bots {
-		if bots[i].ID == req.BotID {
-			bot = &bots[i]
-			break
+		e.logger.Error("Failed to query realtime bots: %v", err)
+	} else {
+		for i := range bots {
+			if bots[i].ID == req.BotID {
+				// Found realtime bot - get pod IP and execute
+				podIP := e.getBotPodIP(ctx, req.BotID)
+				resp, _ := e.handler.ExecuteQuery(ctx, req, bots[i], podIP)
+				return resp
+			}
 		}
 	}
 
-	if bot == nil {
-		return &query.Response{Status: "error", Error: fmt.Sprintf("bot not found: %s", req.BotID)}
+	// Try scheduled bots
+	if e.scheduleRepo != nil {
+		schedules, err := e.scheduleRepo.FindAllEnabled(ctx)
+		if err != nil {
+			e.logger.Error("Failed to query scheduled bots: %v", err)
+		} else {
+			for i := range schedules {
+				if schedules[i].ID == req.BotID {
+					// Found scheduled bot - convert to Bot model and execute (no pod IP)
+					bot := scheduleToBot(schedules[i])
+					resp, _ := e.handler.ExecuteQuery(ctx, req, bot, "")
+					return resp
+				}
+			}
+		}
 	}
 
-	// Get pod IP for realtime bots
-	podIP := e.getBotPodIP(ctx, req.BotID)
+	return &query.Response{Status: "error", Error: fmt.Sprintf("bot not found: %s", req.BotID)}
+}
 
-	resp, _ := e.handler.ExecuteQuery(ctx, req, *bot, podIP)
-	return resp
+// scheduleToBot converts a BotSchedule to a Bot model for query execution.
+func scheduleToBot(schedule model.BotSchedule) model.Bot {
+	enabled := true
+	if schedule.Enabled != nil {
+		enabled = *schedule.Enabled
+	}
+	return model.Bot{
+		ID:     schedule.ID,
+		Config: schedule.Config,
+		CustomBotVersion: model.CustomBotVersion{
+			Version:  schedule.CustomBotVersion.Version,
+			FilePath: schedule.CustomBotVersion.FilePath,
+			Config: model.APIBotConfig{
+				Name:        schedule.CustomBotVersion.Config.Name,
+				Runtime:     schedule.CustomBotVersion.Config.Runtime,
+				Entrypoints: schedule.CustomBotVersion.Config.Entrypoints,
+			},
+		},
+		Enabled: &enabled,
+	}
 }
 
 func (e *k8sQueryExecutor) getBotPodIP(ctx context.Context, botID string) string {
@@ -88,28 +121,48 @@ func (e *k8sQueryExecutor) getBotPodIP(ctx context.Context, botID string) string
 	return ""
 }
 
-// k8sBotResolver adapts BotRepository to the query.BotResolver interface.
+// k8sBotResolver adapts BotRepository and BotScheduleRepository to the query.BotResolver interface.
 type k8sBotResolver struct {
-	botRepo BotRepository
+	botRepo      BotRepository
+	scheduleRepo BotScheduleRepository
 }
 
 func (r *k8sBotResolver) ResolveBot(ctx context.Context, botID string) (string, error) {
+	// Try realtime bots first
 	bots, err := r.botRepo.FindAllEnabled(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to query bots: %v", err)
+	if err == nil {
+		for _, bot := range bots {
+			if bot.ID == botID {
+				// Check if bot has query entrypoint
+				if bot.CustomBotVersion.Config.Entrypoints == nil {
+					return "", fmt.Errorf("bot %s does not have entrypoints configured", botID)
+				}
+				if _, hasQuery := bot.CustomBotVersion.Config.Entrypoints["query"]; !hasQuery {
+					return "", fmt.Errorf("bot %s does not have a query entrypoint", botID)
+				}
+				// Return empty - executor will handle pod IP lookup
+				return "", nil
+			}
+		}
 	}
 
-	for _, bot := range bots {
-		if bot.ID == botID {
-			// Check if bot has query entrypoint
-			if bot.CustomBotVersion.Config.Entrypoints == nil {
-				return "", fmt.Errorf("bot %s does not have entrypoints configured", botID)
+	// Try scheduled bots
+	if r.scheduleRepo != nil {
+		schedules, err := r.scheduleRepo.FindAllEnabled(ctx)
+		if err == nil {
+			for _, schedule := range schedules {
+				if schedule.ID == botID {
+					// Check if schedule has query entrypoint
+					if schedule.CustomBotVersion.Config.Entrypoints == nil {
+						return "", fmt.Errorf("bot %s does not have entrypoints configured", botID)
+					}
+					if _, hasQuery := schedule.CustomBotVersion.Config.Entrypoints["query"]; !hasQuery {
+						return "", fmt.Errorf("bot %s does not have a query entrypoint", botID)
+					}
+					// Return empty - executor will handle scheduled query execution
+					return "", nil
+				}
 			}
-			if _, hasQuery := bot.CustomBotVersion.Config.Entrypoints["query"]; !hasQuery {
-				return "", fmt.Errorf("bot %s does not have a query entrypoint", botID)
-			}
-			// Return empty - executor will handle pod IP lookup
-			return "", nil
 		}
 	}
 
@@ -126,15 +179,17 @@ func NewK8sQueryServer(config K8sQueryServerConfig) *K8sQueryServer {
 	}
 
 	executor := &k8sQueryExecutor{
-		handler:   config.Handler,
-		botRepo:   config.BotRepo,
-		clientset: config.Clientset,
-		namespace: config.Namespace,
-		logger:    config.Logger,
+		handler:      config.Handler,
+		botRepo:      config.BotRepo,
+		scheduleRepo: config.ScheduleRepo,
+		clientset:    config.Clientset,
+		namespace:    config.Namespace,
+		logger:       config.Logger,
 	}
 
 	resolver := &k8sBotResolver{
-		botRepo: config.BotRepo,
+		botRepo:      config.BotRepo,
+		scheduleRepo: config.ScheduleRepo,
 	}
 
 	server := query.NewServer(query.ServerConfig{

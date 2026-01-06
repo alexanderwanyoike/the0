@@ -173,10 +173,15 @@ func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
 	// Scheduled bots should not restart
 	assert.Equal(t, corev1.RestartPolicyNever, podSpec.RestartPolicy)
 
-	// Should have only 2 containers: bot + sync (no query-server)
-	require.Len(t, podSpec.Containers, 2)
+	// Scheduled bots should have only 1 container - no sidecars
+	// Sync runs inline as part of the execute command
+	require.Len(t, podSpec.Containers, 1)
 	assert.Equal(t, "bot", podSpec.Containers[0].Name)
-	assert.Equal(t, "sync", podSpec.Containers[1].Name)
+
+	// Bot should use inline sync (no --skip-sync flag)
+	botCommand := podSpec.Containers[0].Command
+	assert.Equal(t, []string{"/app/runtime", "execute", "--skip-query-server"}, botCommand)
+	assert.NotContains(t, botCommand, "--skip-sync") // Sync runs inline for scheduled bots
 
 	// Bot should have BOT_TYPE=scheduled
 	botEnvMap := make(map[string]string)
@@ -184,11 +189,6 @@ func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
 		botEnvMap[env.Name] = env.Value
 	}
 	assert.Equal(t, "scheduled", botEnvMap["BOT_TYPE"])
-
-	// Sync sidecar should have --watch-done flag
-	syncArgs := podSpec.Containers[1].Args
-	assert.Contains(t, syncArgs, "--watch-done")
-	assert.Contains(t, syncArgs, "/var/the0/done")
 }
 
 func TestPodGenerator_GenerateQueryPod(t *testing.T) {

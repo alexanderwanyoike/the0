@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/minio/minio-go/v7"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +17,7 @@ import (
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/model"
 	"runtime/internal/query"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
@@ -27,6 +29,7 @@ type K8sQueryHandler struct {
 	namespace        string
 	podGenerator     *podgen.PodGenerator
 	realtimeExecutor *query.RealtimeExecutor
+	resultManager    storage.QueryResultManager
 	logger           util.Logger
 }
 
@@ -35,6 +38,8 @@ type K8sQueryHandlerConfig struct {
 	Clientset    *kubernetes.Clientset
 	Namespace    string
 	PodGenerator *podgen.PodGenerator
+	MinioClient  *minio.Client
+	StorageConfig *storage.Config
 	Logger       util.Logger
 }
 
@@ -51,6 +56,7 @@ func NewK8sQueryHandler(config K8sQueryHandlerConfig) *K8sQueryHandler {
 		namespace:        config.Namespace,
 		podGenerator:     config.PodGenerator,
 		realtimeExecutor: query.NewRealtimeExecutor(query.DefaultQueryPort, config.Logger),
+		resultManager:    storage.NewQueryResultManager(config.MinioClient, config.StorageConfig, config.Logger),
 		logger:           config.Logger,
 	}
 }
@@ -85,10 +91,22 @@ func (h *K8sQueryHandler) ExecuteQuery(ctx context.Context, req query.Request, b
 func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.Request, bot model.Bot, start time.Time) (*query.Response, error) {
 	h.logger.Info("Executing scheduled query via K8s Job: bot=%s path=%s", req.BotID, req.QueryPath)
 
+	// Generate a unique key for storing the result in MinIO
+	resultKey := fmt.Sprintf("%s/%d/result.json", bot.ID, time.Now().UnixNano())
+
 	// Generate pod spec for the query
 	pod, err := h.podGenerator.GenerateQueryPod(bot, req.QueryPath, req.Params)
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to generate query pod spec: %v", err), start), nil
+	}
+
+	// Add QUERY_RESULT_KEY env var to the bot container
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "bot" {
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
+				corev1.EnvVar{Name: "QUERY_RESULT_KEY", Value: resultKey})
+			break
+		}
 	}
 
 	// Create a Job from the pod spec
@@ -126,8 +144,8 @@ func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.R
 		return query.ErrorResponse(fmt.Sprintf("failed to create query job: %v", err), start), nil
 	}
 
-	// Wait for Job completion
-	output, err := h.waitForJobCompletion(ctx, createdJob.Name)
+	// Wait for Job completion and get result from MinIO
+	output, err := h.waitForJobCompletion(ctx, createdJob.Name, resultKey)
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("query job failed: %v", err), start), nil
 	}
@@ -136,8 +154,8 @@ func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.R
 	return query.ParseQueryOutput([]byte(output), start), nil
 }
 
-// waitForJobCompletion waits for a Job to complete and returns its output.
-func (h *K8sQueryHandler) waitForJobCompletion(ctx context.Context, jobName string) (string, error) {
+// waitForJobCompletion waits for a Job to complete and returns the query result from MinIO.
+func (h *K8sQueryHandler) waitForJobCompletion(ctx context.Context, jobName, resultKey string) (string, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -153,8 +171,8 @@ func (h *K8sQueryHandler) waitForJobCompletion(ctx context.Context, jobName stri
 
 			// Check if job completed
 			if job.Status.Succeeded > 0 {
-				// Get pod logs
-				return h.getJobPodLogs(ctx, jobName)
+				// Read the result from MinIO
+				return h.getQueryResult(ctx, jobName, resultKey)
 			}
 
 			// Check if job failed
@@ -167,7 +185,25 @@ func (h *K8sQueryHandler) waitForJobCompletion(ctx context.Context, jobName stri
 	}
 }
 
-// getJobPodLogs retrieves logs from the pod created by a Job.
+// getQueryResult downloads the query result from MinIO and deletes it.
+func (h *K8sQueryHandler) getQueryResult(ctx context.Context, jobName, resultKey string) (string, error) {
+	// Download result from MinIO
+	data, err := h.resultManager.Download(ctx, resultKey)
+	if err != nil {
+		// Fallback to logs for debugging
+		logs, _ := h.getJobPodLogs(ctx, jobName)
+		return "", fmt.Errorf("failed to download result from MinIO: %v\nLogs: %s", err, logs)
+	}
+
+	// Delete the result from MinIO (cleanup)
+	if delErr := h.resultManager.Delete(ctx, resultKey); delErr != nil {
+		h.logger.Info("Warning: failed to delete query result from MinIO: %v", delErr)
+	}
+
+	return string(data), nil
+}
+
+// getJobPodLogs retrieves logs from the pod created by a Job (fallback for errors).
 func (h *K8sQueryHandler) getJobPodLogs(ctx context.Context, jobName string) (string, error) {
 	// List pods with job-name label
 	pods, err := h.clientset.CoreV1().Pods(h.namespace).List(ctx, metav1.ListOptions{

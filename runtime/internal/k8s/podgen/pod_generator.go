@@ -136,7 +136,8 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 }
 
 // GenerateScheduledPodSpec creates a Pod spec for scheduled bots (CronJobs).
-// Scheduled bots run once per trigger with sync sidecar that watches for completion.
+// Scheduled bots run once per trigger as a single container - no sidecars.
+// Sync (state/log upload) runs as a process within the container after bot execution.
 // No query server sidecar - queries are executed ephemerally.
 func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec, error) {
 	// Extract and validate required configuration
@@ -151,11 +152,13 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 		return nil, fmt.Errorf("failed to get Docker image: %w", err)
 	}
 
-	// Build the pod for scheduled execution
+	// Build the pod for scheduled execution - NO sidecars
+	// Scheduled bots run sync as part of the execute command, not as a sidecar
 	builder := NewPodBuilder(fmt.Sprintf("bot-%s", bot.ID), g.config.Namespace).
 		WithImage(image).
 		WithImagePullPolicy(g.config.RuntimeImagePullPolicy).
 		WithRestartPolicy(corev1.RestartPolicyNever). // Scheduled bots don't restart
+		WithInlineSync().                             // Run sync inline, not as sidecar
 		WithLabels(map[string]string{
 			LabelBotID:            bot.ID,
 			LabelCustomBotID:      botConfig.customBotID,
@@ -169,10 +172,8 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
 		WithBotType("scheduled").
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
-		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
-		WithSyncSidecar(g.config.RuntimeImage, bot.ID, true) // watchDone=true for scheduled
-
-	// Note: No query sidecar for scheduled bots - queries are ephemeral
+		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
+	// Note: No query sidecar - queries are ephemeral
 
 	return builder.BuildSpec()
 }

@@ -438,7 +438,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "custom-bots", cfg.CodeBucket)
 	assert.Equal(t, "bot-state", cfg.StateBucket)
 	assert.Equal(t, "bot-logs", cfg.LogsBucket)
-	assert.Equal(t, "backtest-results", cfg.ResultBucket)
+	assert.Equal(t, "query-results", cfg.QueryResultBucket)
 	assert.Equal(t, int64(8*1024*1024*1024), cfg.MaxStateSizeBytes)
 	assert.Equal(t, int64(10*1024*1024), cfg.MaxStateFileSizeBytes)
 }

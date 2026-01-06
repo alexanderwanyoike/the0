@@ -128,6 +128,11 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Normalize query path to ensure leading slash
+	if req.QueryPath[0] != '/' {
+		req.QueryPath = "/" + req.QueryPath
+	}
+
 	// Resolve the bot
 	targetIP, err := s.resolver.ResolveBot(r.Context(), req.BotID)
 	if err != nil {

@@ -105,6 +105,14 @@ func (b *PodBuilder) WithRestartPolicy(policy corev1.RestartPolicy) *PodBuilder 
 	return b
 }
 
+// WithInlineSync configures the bot to run sync inline (not as a sidecar).
+// Use this for scheduled bots where sync runs as a process after bot execution.
+func (b *PodBuilder) WithInlineSync() *PodBuilder {
+	// Remove --skip-sync from command so sync runs inline
+	b.botCommand = []string{"/app/runtime", "execute", "--skip-query-server"}
+	return b
+}
+
 // WithEnv adds environment variables to the bot container.
 func (b *PodBuilder) WithEnv(envVars ...corev1.EnvVar) *PodBuilder {
 	b.botEnv = append(b.botEnv, envVars...)
@@ -150,6 +158,8 @@ func (b *PodBuilder) WithBotConfig(botID, codeFile, runtime, entrypoint string, 
 		corev1.EnvVar{Name: "CODE_PATH", Value: "/bot"},
 		corev1.EnvVar{Name: "STATE_PATH", Value: "/state"},
 		corev1.EnvVar{Name: "LOGS_PATH", Value: "/var/the0/logs"},
+		// STATE_DIR points to the SDK-managed state directory inside /state
+		corev1.EnvVar{Name: "STATE_DIR", Value: "/state/.the0-state"},
 	)
 	return b
 }
