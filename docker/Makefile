@@ -13,7 +13,7 @@ help: ## Show this help message
 up: ## Start production environment (rebuilds images if needed)
 	@echo "Starting the0 production environment..."
 	@echo "Building runtime image (for bot execution)..."
-	@$(MAKE) -s -C images build 2>/dev/null || (echo "Note: Runtime image build failed - bots may not start until image is built"; echo "Run 'make build-images' to build it manually")
+	@docker build -t the0/runtime:latest ../runtime 2>/dev/null || (echo "Note: Runtime image build failed - bots may not start until image is built"; echo "Run 'make build-images' to build it manually")
 	@echo "Building service images..."
 	docker compose build
 	@echo "Starting services..."
@@ -34,7 +34,7 @@ restart: ## Restart all services with latest code
 	@echo "Stopping services..."
 	docker compose down
 	@echo "Building runtime image..."
-	@$(MAKE) -s -C images build 2>/dev/null || echo "Runtime image build skipped"
+	@docker build -t the0/runtime:latest ../runtime 2>/dev/null || echo "Runtime image build skipped"
 	@echo "Building service images..."
 	docker compose build
 	@echo "Starting services..."
@@ -94,7 +94,6 @@ docs-build: ## Rebuild and start docs service
 # Runtime image (for bot execution)
 build-images: ## Build the0 universal runtime image locally
 	@echo "Building the0 runtime image..."
-	$(MAKE) -C images build
+	docker build -t the0/runtime:latest ../runtime
 	@echo ""
-	@echo "Runtime image built:"
-	@$(MAKE) -s -C images list
+	@echo "Runtime image built: the0/runtime:latest"
