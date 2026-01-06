@@ -120,6 +120,9 @@ the0Api:
     FRONTEND_URL: "http://the0.local:30001"
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"
+
+    # Bot query service (K8s bot-controller)
+    RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
   resources:
     requests:
       memory: 512Mi
