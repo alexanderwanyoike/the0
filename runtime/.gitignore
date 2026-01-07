@@ -4,4 +4,5 @@ bad-bot/
 CHANGE.md
 PR_MESSAGE.md
 build/
-notes/
+notes/coverage*.out
+*.out
