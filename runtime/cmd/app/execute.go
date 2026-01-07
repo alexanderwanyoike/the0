@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"runtime/internal/constants"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
@@ -88,6 +89,20 @@ var (
 	executeSkipQueryServer bool
 )
 
+// ExecuteDependencies holds injectable dependencies for testing
+type ExecuteDependencies struct {
+	ProcessExecutor ProcessExecutor
+	FileWriter      FileWriter
+}
+
+// newDefaultDependencies creates production dependencies
+func newDefaultDependencies() ExecuteDependencies {
+	return ExecuteDependencies{
+		ProcessExecutor: &defaultProcessExecutor{},
+		FileWriter:      &defaultFileWriter{},
+	}
+}
+
 func init() {
 	executeCmd.Flags().StringVar(&executeQueryPath, "query", "", "Execute a query (ephemeral mode) with the given path")
 	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
@@ -109,9 +124,9 @@ func loadExecuteConfig() (*ExecuteConfig, error) {
 		QueryPath:       os.Getenv("QUERY_PATH"),
 		QueryParams:     os.Getenv("QUERY_PARAMS"),
 		QueryResultKey:  os.Getenv("QUERY_RESULT_KEY"),
-		CodePath:        getEnv("CODE_PATH", "/bot"),
-		StatePath:       getEnv("STATE_PATH", "/state"),
-		LogsPath:        getEnv("LOGS_PATH", "/var/the0/logs"),
+		CodePath:        getEnv("CODE_PATH", constants.DefaultCodePath),
+		StatePath:       getEnv("STATE_PATH", constants.DefaultStatePath),
+		LogsPath:        getEnv("LOGS_PATH", constants.DefaultLogsPath),
 		IsScheduled:     os.Getenv("IS_SCHEDULED") == "true",
 	}
 
@@ -259,7 +274,7 @@ func runBot(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 
 	// Step 6: Write done file for scheduled bots
 	if cfg.IsScheduled {
-		doneFile := "/var/the0/done"
+		doneFile := constants.DefaultDoneFilePath
 		if err := os.WriteFile(doneFile, []byte(fmt.Sprintf("%d", exitCode)), 0644); err != nil {
 			logger.Info("Failed to write done file: %v", err)
 		}
@@ -443,7 +458,7 @@ func startSyncProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd
 	}
 
 	if cfg.IsScheduled {
-		args = append(args, "--watch-done", "/var/the0/done")
+		args = append(args, "--watch-done", constants.DefaultDoneFilePath)
 	}
 
 	cmd := exec.Command("/app/runtime", args...)
@@ -490,22 +505,32 @@ func executeBotProcess(ctx context.Context, cfg *ExecuteConfig, logger *util.Def
 
 // setupLogFile creates a log file for bot output persistence.
 func setupLogFile(logsPath string, logger *util.DefaultLogger) *os.File {
+	return setupLogFileWithDeps(logsPath, logger, newDefaultDependencies())
+}
+
+// setupLogFileWithDeps creates a log file using injectable dependencies.
+func setupLogFileWithDeps(logsPath string, logger *util.DefaultLogger, deps ExecuteDependencies) *os.File {
 	logFilePath := filepath.Join(logsPath, "bot.log")
-	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := deps.FileWriter.Create(logFilePath)
 	if err != nil {
 		logger.Info("Failed to create log file: %v", err)
 		return nil
 	}
-	return file
-}
-
-// executeProcess executes a process with the given entrypoint.
-func executeProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger) int {
-	return executeProcessWithLogFile(ctx, cfg, entrypoint, logger, nil)
+	// Type assert to *os.File for compatibility
+	if osFile, ok := file.(*os.File); ok {
+		return osFile
+	}
+	logger.Info("FileWriter.Create() did not return *os.File")
+	return nil
 }
 
 // executeProcessWithLogFile executes a process, optionally writing output to a log file.
 func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
+	return executeProcessWithDeps(ctx, cfg, entrypoint, logger, logFile, newDefaultDependencies())
+}
+
+// executeProcessWithDeps executes a process with injectable dependencies for testing.
+func executeProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps ExecuteDependencies) int {
 	cmd := BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 
 	// Set up output: both stdout and optionally log file
@@ -520,8 +545,8 @@ func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoi
 
 	logger.Info("Executing: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
-	// Run with context for cancellation support
-	if err := cmd.Start(); err != nil {
+	// Run with context for cancellation support using injected dependency
+	if err := deps.ProcessExecutor.Start(cmd); err != nil {
 		logger.Info("Failed to start process: %v", err)
 		return 1
 	}
@@ -529,15 +554,13 @@ func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoi
 	// Wait for process or context cancellation
 	done := make(chan error, 1)
 	go func() {
-		done <- cmd.Wait()
+		done <- deps.ProcessExecutor.Wait(cmd)
 	}()
 
 	select {
 	case <-ctx.Done():
 		logger.Info("Context cancelled, terminating process")
-		cmd.Process.Signal(syscall.SIGTERM)
-		time.Sleep(5 * time.Second)
-		cmd.Process.Kill()
+		deps.ProcessExecutor.Kill(cmd)
 		return 1
 	case err := <-done:
 		if err != nil {
@@ -554,6 +577,11 @@ func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoi
 // executeQueryProcess executes a query process directly (no wrapper).
 // Queries use the SDK's query.run() which handles everything internally.
 func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger) int {
+	return executeQueryProcessWithDeps(ctx, cfg, entrypoint, logger, newDefaultDependencies())
+}
+
+// executeQueryProcessWithDeps executes a query process with injectable dependencies.
+func executeQueryProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, deps ExecuteDependencies) int {
 	cmd := BuildQueryCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -561,8 +589,8 @@ func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint str
 
 	logger.Info("Executing query: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
-	// Run with context for cancellation support
-	if err := cmd.Start(); err != nil {
+	// Run with context for cancellation support using injected dependency
+	if err := deps.ProcessExecutor.Start(cmd); err != nil {
 		logger.Info("Failed to start query process: %v", err)
 		return 1
 	}
@@ -570,15 +598,13 @@ func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint str
 	// Wait for process or context cancellation
 	done := make(chan error, 1)
 	go func() {
-		done <- cmd.Wait()
+		done <- deps.ProcessExecutor.Wait(cmd)
 	}()
 
 	select {
 	case <-ctx.Done():
 		logger.Info("Context cancelled, terminating query process")
-		cmd.Process.Signal(syscall.SIGTERM)
-		time.Sleep(5 * time.Second)
-		cmd.Process.Kill()
+		deps.ProcessExecutor.Kill(cmd)
 		return 1
 	case err := <-done:
 		if err != nil {
