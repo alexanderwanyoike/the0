@@ -207,7 +207,7 @@ func (s *BotService) reconcile() {
 	start := time.Now()
 	s.logger.Info("Starting reconciliation cycle")
 
-	// Step 1: Get desired state from database (all enabled bots, no segment filter)
+	// Step 1: Get desired state from database (all enabled bots)
 	desiredBots, err := s.getDesiredBots(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get desired bots: %v", err)
@@ -216,7 +216,7 @@ func (s *BotService) reconcile() {
 	s.logger.Info("Found %d desired bots", len(desiredBots))
 
 	// Step 2: Get ALL containers including crashed/exited ones
-	allContainers, err := s.runner.ListAllManagedContainers(ctx, -1)
+	allContainers, err := s.runner.ListAllManagedContainers(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get all containers: %v", err)
 		return
@@ -246,7 +246,7 @@ func (s *BotService) reconcile() {
 func (s *BotService) getDesiredBots(ctx context.Context) ([]model.Bot, error) {
 	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
 
-	// Query for enabled bots (no segment filter)
+	// Query for enabled bots
 	// Check both root level "enabled" field and nested "config.enabled" field
 	filter := bson.M{
 		"$and": []bson.M{
@@ -466,7 +466,7 @@ func (s *BotService) toExecutable(bot model.Bot) model.Executable {
 		FilePath:        bot.CustomBotVersion.FilePath,
 		IsLongRunning:   true,
 		PersistResults:  false,
-		Segment:         -1, // No segment in simplified mode
+		Segment:         -1,
 	}
 }
 

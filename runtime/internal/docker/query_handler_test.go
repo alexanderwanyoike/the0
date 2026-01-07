@@ -41,11 +41,11 @@ func (m *mockDockerRunner) GetContainerStatus(ctx context.Context, containerID s
 	return &ContainerStatus{Status: "running"}, nil
 }
 
-func (m *mockDockerRunner) ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+func (m *mockDockerRunner) ListManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	return nil, nil
 }
 
-func (m *mockDockerRunner) ListAllManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+func (m *mockDockerRunner) ListAllManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	return nil, nil
 }
 
