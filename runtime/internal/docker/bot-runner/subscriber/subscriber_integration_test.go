@@ -3,6 +3,7 @@ package natssubscriber
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"runtime/internal/model"
@@ -13,6 +14,26 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// waitFor polls the condition function until it returns true or timeout is reached
+func waitFor(timeout time.Duration, condition func() bool) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		if condition() {
+			return nil
+		}
+
+		select {
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return errors.New("timeout waiting for condition")
+			}
+		}
+	}
+}
 
 // TestSubscriber_BotCreated_PersistsToMongo verifies that a bot.created event
 // results in a bot being inserted into MongoDB with proper partition assignment
@@ -80,10 +101,11 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for subscriber to process
-	time.Sleep(200 * time.Millisecond)
+	collection := db.Collection(collectionName)
+	err = WaitForDocument(collection, bson.M{"id": "test-bot-123"}, 5*time.Second)
+	require.NoError(t, err, "Document should appear within 5 seconds")
 
 	// Verify bot exists in MongoDB
-	collection := db.Collection(collectionName)
 	var result model.Bot
 	err = collection.FindOne(ctx, bson.M{"id": "test-bot-123"}).Decode(&result)
 	require.NoError(t, err)
@@ -159,10 +181,12 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
 
-	time.Sleep(300 * time.Millisecond)
+	// Wait for bot to be created (only once despite duplicate events)
+	collection := db.Collection(collectionName)
+	err = WaitForDocument(collection, bson.M{"id": "duplicate-bot"}, 5*time.Second)
+	require.NoError(t, err, "Duplicate bot should appear within 5 seconds")
 
 	// Verify only one bot exists
-	collection := db.Collection(collectionName)
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "duplicate-bot"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), count, "Should only have one bot, not duplicates")
@@ -250,7 +274,18 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotUpdated, payload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for bot to be updated (check for new symbol value)
+	err = WaitFor(func() bool {
+		var result model.Bot
+		err := collection.FindOne(ctx, bson.M{"id": "update-test-bot"}).Decode(&result)
+		if err != nil {
+			return false
+		}
+		// Check if the update was applied (symbol changed from ETH/USD to BTC/USD)
+		symbol, ok := result.Config["symbol"].(string)
+		return ok && symbol == "BTC/USD"
+	}, 5*time.Second, 50*time.Millisecond)
+	require.NoError(t, err, "Bot should be updated within 5 seconds")
 
 	// Verify bot was updated
 	var result model.Bot
@@ -316,14 +351,13 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotUpdated, payload)
 	require.NoError(t, err)
 
-	// Wait longer as it needs to create partition and upsert bot
-	time.Sleep(600 * time.Millisecond)
-
-	// Verify bot was created with partition assignment
+	// Wait for bot to be created with partition assignment
 	collection := db.Collection(collectionName)
 	var result model.Bot
-	err = collection.FindOne(ctx, bson.M{"id": "new-bot-from-update"}).Decode(&result)
-	require.NoError(t, err)
+	err = waitFor(5*time.Second, func() bool {
+		return collection.FindOne(ctx, bson.M{"id": "new-bot-from-update"}).Decode(&result) == nil
+	})
+	require.NoError(t, err, "Bot should be created within 5 seconds")
 	assert.Equal(t, "from update", result.Config["created"])
 	assert.True(t, result.SegmentId > 0, "Should have partition assigned")
 }
@@ -517,10 +551,12 @@ func TestSubscriber_WrappedEventFormat(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for subscriber to process
+	collection := db.Collection(collectionName)
+	err = WaitForDocument(collection, bson.M{"id": "wrapped-bot"}, 5*time.Second)
+	require.NoError(t, err, "Wrapped bot document should appear within 5 seconds")
 
 	// Verify bot was created from wrapped format
-	collection := db.Collection(collectionName)
 	var result model.Bot
 	err = collection.FindOne(ctx, bson.M{"id": "wrapped-bot"}).Decode(&result)
 	require.NoError(t, err)
@@ -642,8 +678,13 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 		sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
 	}
 
-	// Wait longer to ensure all messages are processed
-	time.Sleep(500 * time.Millisecond)
+	// Wait for all 5 messages to be processed (longer timeout for resource contention)
+	collection := db.Collection(collectionName)
+	err = waitFor(20*time.Second, func() bool {
+		count, _ := collection.CountDocuments(ctx, bson.M{})
+		return count == 5
+	})
+	require.NoError(t, err, "All 5 messages should be processed within 20 seconds")
 
 	// Graceful shutdown
 	err = subscriber.Stop()
@@ -657,7 +698,6 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// "after-shutdown" should not exist because subscriber was stopped
-	collection := db.Collection(collectionName)
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), count, "Message after shutdown should not be processed")

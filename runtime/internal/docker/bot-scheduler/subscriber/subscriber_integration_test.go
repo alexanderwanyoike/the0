@@ -3,6 +3,7 @@ package subscriber
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"runtime/internal/model"
@@ -13,6 +14,26 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// waitFor polls the condition function until it returns true or timeout is reached
+func waitFor(timeout time.Duration, condition func() bool) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		if condition() {
+			return nil
+		}
+
+		select {
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return errors.New("timeout waiting for condition")
+			}
+		}
+	}
+}
 
 // TestSubscriber_BotScheduleCreated_PersistsToMongo verifies that a bot-schedule.created event
 // results in a bot schedule being inserted into MongoDB with proper partition assignment
@@ -80,14 +101,13 @@ func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
 	require.NoError(t, err)
 
-	// Wait for subscriber to process
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify bot schedule exists in MongoDB
+	// Wait for document to appear in MongoDB
 	collection := db.Collection(collectionName)
 	var result model.BotSchedule
-	err = collection.FindOne(ctx, bson.M{"id": "test-schedule-123"}).Decode(&result)
-	require.NoError(t, err)
+	err = waitFor(5*time.Second, func() bool {
+		return collection.FindOne(ctx, bson.M{"id": "test-schedule-123"}).Decode(&result) == nil
+	})
+	require.NoError(t, err, "Document should appear within 5 seconds")
 
 	assert.Equal(t, "test-schedule-123", result.ID)
 	assert.Equal(t, "ETH/USD", result.Config["symbol"])
@@ -307,13 +327,14 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotScheduleUpdated, payload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify schedule was created with partition assignment
+	// Wait for document to appear in MongoDB
 	collection := db.Collection(collectionName)
 	var result model.BotSchedule
-	err = collection.FindOne(ctx, bson.M{"id": "new-schedule-from-update"}).Decode(&result)
-	require.NoError(t, err)
+
+	err = waitFor(5*time.Second, func() bool {
+		return collection.FindOne(ctx, bson.M{"id": "new-schedule-from-update"}).Decode(&result) == nil
+	})
+	require.NoError(t, err, "Document should appear within 5 seconds")
 	assert.Equal(t, "from update", result.Config["created"])
 	assert.True(t, result.SegmentId > 0, "Should have partition assigned")
 }
