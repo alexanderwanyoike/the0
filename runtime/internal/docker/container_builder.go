@@ -104,7 +104,6 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 	b.config.Labels["runtime.id"] = executable.ID
 	b.config.Labels["runtime.entrypoint"] = entrypointFile
 	b.config.Labels["runtime.managed"] = "true"
-	b.config.Labels["runtime.segment"] = fmt.Sprintf("%d", executable.Segment)
 
 	return b
 }

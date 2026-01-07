@@ -172,7 +172,6 @@ func TestContainerBuilder_WithExecutable(t *testing.T) {
 	assert.Equal(t, "bot-123", cfg.Labels["runtime.id"])
 	assert.Equal(t, "main.py", cfg.Labels["runtime.entrypoint"])
 	assert.Equal(t, "true", cfg.Labels["runtime.managed"])
-	assert.Equal(t, "5", cfg.Labels["runtime.segment"])
 }
 
 func TestContainerBuilder_WithExecutable_MarshalError(t *testing.T) {

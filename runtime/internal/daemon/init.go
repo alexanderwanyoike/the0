@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"runtime/internal/constants"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
@@ -43,10 +44,10 @@ func Init(ctx context.Context, opts InitOptions) error {
 
 	// Set defaults
 	if opts.CodePath == "" {
-		opts.CodePath = "/bot"
+		opts.CodePath = constants.DefaultCodePath
 	}
 	if opts.StatePath == "" {
-		opts.StatePath = "/state"
+		opts.StatePath = constants.DefaultStatePath
 	}
 
 	// Download and extract code

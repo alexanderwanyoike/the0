@@ -94,7 +94,7 @@ func (m *MockDockerRunner) GetContainerStatus(ctx context.Context, containerID s
 	}, nil
 }
 
-func (m *MockDockerRunner) ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+func (m *MockDockerRunner) ListManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -107,7 +107,7 @@ func (m *MockDockerRunner) ListManagedContainers(ctx context.Context, segment in
 	return result, nil
 }
 
-func (m *MockDockerRunner) ListAllManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+func (m *MockDockerRunner) ListAllManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

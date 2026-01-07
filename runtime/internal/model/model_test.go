@@ -6,11 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Helper function to create a boolean pointer
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 // ===== Bot.IsEnabled Tests =====
 
 func TestBot_IsEnabled_RootLevelTrue(t *testing.T) {

@@ -8,13 +8,28 @@ import (
 	"strconv"
 )
 
+// ConfigLoader is an interface for loading configuration.
+// This allows tests to provide mock configurations without setting environment variables.
+type ConfigLoader interface {
+	LoadConfig() (*DockerRunnerConfig, error)
+}
+
+// EnvConfigLoader loads configuration from environment variables.
+type EnvConfigLoader struct{}
+
+// LoadConfig implements ConfigLoader interface.
+func (e *EnvConfigLoader) LoadConfig() (*DockerRunnerConfig, error) {
+	return LoadConfigFromEnv()
+}
+
 // DockerRunnerConfig holds all configuration needed to run containers
 // including MinIO credentials, resource limits, and directory paths.
 type DockerRunnerConfig struct {
-	MinIOEndpoint         string // MinIO server endpoint (e.g., "localhost:9000")
-	MinIOAccessKeyID      string // MinIO access key
-	MinIOSecretAccessKey  string // MinIO secret key
-	MinIOUseSSL           bool   // Whether to use SSL/TLS for MinIO connections
+	MinIOEndpoint          string // MinIO server endpoint for runner's client (e.g., "localhost:9000")
+	MinIOContainerEndpoint string // MinIO endpoint for containers (e.g., "host.docker.internal:9000"). If empty, uses MinIOEndpoint.
+	MinIOAccessKeyID       string // MinIO access key
+	MinIOSecretAccessKey   string // MinIO secret key
+	MinIOUseSSL            bool   // Whether to use SSL/TLS for MinIO connections
 	MinIOCodeBucket       string // Bucket containing bot code archives
 	MinioResultsBucket    string // Bucket for storing backtest results
 	MinioLogsBucket       string // Bucket for storing logs
@@ -26,6 +41,15 @@ type DockerRunnerConfig struct {
 	CPUShares             int64  // CPU shares allocated to containers
 	DevRuntimePath        string // Optional: host path to runtime binary for dev mode
 	DockerNetwork         string // Docker network to connect containers to (e.g., "the0-oss-network")
+}
+
+// GetContainerEndpoint returns the MinIO endpoint for containers.
+// If MinIOContainerEndpoint is set, it's used; otherwise falls back to MinIOEndpoint.
+func (c *DockerRunnerConfig) GetContainerEndpoint() string {
+	if c.MinIOContainerEndpoint != "" {
+		return c.MinIOContainerEndpoint
+	}
+	return c.MinIOEndpoint
 }
 
 // LoadConfigFromEnv loads configuration from environment variables.
@@ -84,9 +108,13 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	// Optional: Docker network for bot containers
 	dockerNetwork := os.Getenv("DOCKER_NETWORK")
 
+	// Optional: Container-specific MinIO endpoint (e.g., host.docker.internal:9000)
+	containerEndpoint := os.Getenv("MINIO_CONTAINER_ENDPOINT")
+
 	return &DockerRunnerConfig{
-		MinIOEndpoint:         endpoint,
-		MinIOAccessKeyID:      accessKey,
+		MinIOEndpoint:          endpoint,
+		MinIOContainerEndpoint: containerEndpoint,
+		MinIOAccessKeyID:       accessKey,
 		MinIOSecretAccessKey:  secretKey,
 		MinIOUseSSL:           useSSL,
 		MinIOCodeBucket:       codeBucket,

@@ -381,7 +381,7 @@ func (s *ScheduleService) toExecutable(schedule model.BotSchedule) model.Executa
 		FilePath:        schedule.CustomBotVersion.FilePath,
 		IsLongRunning:   false, // Scheduled bots run once and exit
 		PersistResults:  true,  // Persist results to MinIO
-		Segment:         -1,    // No segment in simplified mode
+		Segment:         -1,
 	}
 }
 

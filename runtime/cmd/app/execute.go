@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"runtime/internal/constants"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
@@ -89,6 +89,20 @@ var (
 	executeSkipQueryServer bool
 )
 
+// ExecuteDependencies holds injectable dependencies for testing
+type ExecuteDependencies struct {
+	ProcessExecutor ProcessExecutor
+	FileWriter      FileWriter
+}
+
+// newDefaultDependencies creates production dependencies
+func newDefaultDependencies() ExecuteDependencies {
+	return ExecuteDependencies{
+		ProcessExecutor: &defaultProcessExecutor{},
+		FileWriter:      &defaultFileWriter{},
+	}
+}
+
 func init() {
 	executeCmd.Flags().StringVar(&executeQueryPath, "query", "", "Execute a query (ephemeral mode) with the given path")
 	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
@@ -110,9 +124,9 @@ func loadExecuteConfig() (*ExecuteConfig, error) {
 		QueryPath:       os.Getenv("QUERY_PATH"),
 		QueryParams:     os.Getenv("QUERY_PARAMS"),
 		QueryResultKey:  os.Getenv("QUERY_RESULT_KEY"),
-		CodePath:        getEnv("CODE_PATH", "/bot"),
-		StatePath:       getEnv("STATE_PATH", "/state"),
-		LogsPath:        getEnv("LOGS_PATH", "/var/the0/logs"),
+		CodePath:        getEnv("CODE_PATH", constants.DefaultCodePath),
+		StatePath:       getEnv("STATE_PATH", constants.DefaultStatePath),
+		LogsPath:        getEnv("LOGS_PATH", constants.DefaultLogsPath),
 		IsScheduled:     os.Getenv("IS_SCHEDULED") == "true",
 	}
 
@@ -260,7 +274,7 @@ func runBot(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 
 	// Step 6: Write done file for scheduled bots
 	if cfg.IsScheduled {
-		doneFile := "/var/the0/done"
+		doneFile := constants.DefaultDoneFilePath
 		if err := os.WriteFile(doneFile, []byte(fmt.Sprintf("%d", exitCode)), 0644); err != nil {
 			logger.Info("Failed to write done file: %v", err)
 		}
@@ -444,7 +458,7 @@ func startSyncProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd
 	}
 
 	if cfg.IsScheduled {
-		args = append(args, "--watch-done", "/var/the0/done")
+		args = append(args, "--watch-done", constants.DefaultDoneFilePath)
 	}
 
 	cmd := exec.Command("/app/runtime", args...)
@@ -464,10 +478,10 @@ func startSyncProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd
 // startQueryServerProcess starts the query server as a subprocess.
 // Query servers run directly without wrappers - the SDK handles everything.
 func startQueryServerProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd, error) {
-	cmd := buildQueryCommand(cfg.Runtime, cfg.QueryEntrypoint, cfg.CodePath)
+	cmd := BuildQueryCommand(cfg.Runtime, cfg.QueryEntrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = buildBotEnv(cfg)
+	cmd.Env = BuildBotEnv(cfg)
 
 	logger.Info("Starting query server subprocess: %s %s", cfg.Runtime, cfg.QueryEntrypoint)
 	if err := cmd.Start(); err != nil {
@@ -491,23 +505,33 @@ func executeBotProcess(ctx context.Context, cfg *ExecuteConfig, logger *util.Def
 
 // setupLogFile creates a log file for bot output persistence.
 func setupLogFile(logsPath string, logger *util.DefaultLogger) *os.File {
+	return setupLogFileWithDeps(logsPath, logger, newDefaultDependencies())
+}
+
+// setupLogFileWithDeps creates a log file using injectable dependencies.
+func setupLogFileWithDeps(logsPath string, logger *util.DefaultLogger, deps ExecuteDependencies) *os.File {
 	logFilePath := filepath.Join(logsPath, "bot.log")
-	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := deps.FileWriter.Create(logFilePath)
 	if err != nil {
 		logger.Info("Failed to create log file: %v", err)
 		return nil
 	}
-	return file
-}
-
-// executeProcess executes a process with the given entrypoint.
-func executeProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger) int {
-	return executeProcessWithLogFile(ctx, cfg, entrypoint, logger, nil)
+	// Type assert to *os.File for compatibility
+	if osFile, ok := file.(*os.File); ok {
+		return osFile
+	}
+	logger.Info("FileWriter.Create() did not return *os.File")
+	return nil
 }
 
 // executeProcessWithLogFile executes a process, optionally writing output to a log file.
 func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
-	cmd := buildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+	return executeProcessWithDeps(ctx, cfg, entrypoint, logger, logFile, newDefaultDependencies())
+}
+
+// executeProcessWithDeps executes a process with injectable dependencies for testing.
+func executeProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps ExecuteDependencies) int {
+	cmd := BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 
 	// Set up output: both stdout and optionally log file
 	if logFile != nil {
@@ -517,12 +541,12 @@ func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoi
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	cmd.Env = buildBotEnv(cfg)
+	cmd.Env = BuildBotEnv(cfg)
 
 	logger.Info("Executing: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
-	// Run with context for cancellation support
-	if err := cmd.Start(); err != nil {
+	// Run with context for cancellation support using injected dependency
+	if err := deps.ProcessExecutor.Start(cmd); err != nil {
 		logger.Info("Failed to start process: %v", err)
 		return 1
 	}
@@ -530,15 +554,13 @@ func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoi
 	// Wait for process or context cancellation
 	done := make(chan error, 1)
 	go func() {
-		done <- cmd.Wait()
+		done <- deps.ProcessExecutor.Wait(cmd)
 	}()
 
 	select {
 	case <-ctx.Done():
 		logger.Info("Context cancelled, terminating process")
-		cmd.Process.Signal(syscall.SIGTERM)
-		time.Sleep(5 * time.Second)
-		cmd.Process.Kill()
+		deps.ProcessExecutor.Kill(cmd)
 		return 1
 	case err := <-done:
 		if err != nil {
@@ -552,116 +574,23 @@ func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoi
 	}
 }
 
-// buildBotCommand creates an exec.Cmd for the given runtime and entrypoint.
-// For Python and Node.js, uses wrapper scripts that handle signal management,
-// config parsing, and result writing.
-func buildBotCommand(runtime, entrypoint, workDir string) *exec.Cmd {
-	var cmd *exec.Cmd
-
-	switch runtime {
-	case "python3.11":
-		// Use the Python wrapper script which handles:
-		// - Signal management (SIGTERM/SIGINT)
-		// - Config parsing from BOT_CONFIG env var
-		// - Result file writing
-		// - Python path setup
-		// The wrapper reads SCRIPT_PATH env var for the actual entrypoint
-		cmd = exec.Command("python3", "/app/wrappers/python_bot.py")
-	case "nodejs20":
-		// Use the Node.js wrapper script which handles:
-		// - AbortController for cancellation
-		// - Signal handling
-		// - Config parsing
-		// - Result file writing
-		// The wrapper reads SCRIPT_PATH env var for the actual entrypoint
-		cmd = exec.Command("node", "/app/wrappers/node_bot.js")
-	case "dotnet8":
-		// For .NET, entrypoint is either a .dll or project path
-		if filepath.Ext(entrypoint) == ".dll" {
-			cmd = exec.Command("dotnet", entrypoint)
-		} else {
-			cmd = exec.Command("dotnet", "run", "--project", entrypoint)
-		}
-	case "rust-stable", "gcc13", "cpp-gcc13":
-		// Compiled binaries - make sure it's executable
-		binPath := filepath.Join(workDir, entrypoint)
-		cmd = exec.Command(binPath)
-	case "ghc96":
-		// Haskell compiled binary
-		binPath := filepath.Join(workDir, entrypoint)
-		cmd = exec.Command(binPath)
-	case "scala3":
-		// Scala runs as JAR with Java
-		cmd = exec.Command("java", "-jar", entrypoint)
-	default:
-		// Default: try to run as executable
-		cmd = exec.Command(entrypoint)
-	}
-
-	cmd.Dir = workDir
-	return cmd
-}
-
-// buildBotEnv creates the environment for bot execution.
-func buildBotEnv(cfg *ExecuteConfig) []string {
-	env := os.Environ()
-
-	// Determine STATE_DIR: use existing env var if set, otherwise derive from StatePath
-	stateDir := os.Getenv("STATE_DIR")
-	if stateDir == "" {
-		// Default to .the0-state subdirectory within StatePath
-		stateDir = filepath.Join(cfg.StatePath, ".the0-state")
-	}
-
-	// Add/override bot-specific environment variables
-	env = append(env,
-		"BOT_ID="+cfg.BotID,
-		"BOT_CONFIG="+cfg.BotConfig,
-		"STATE_DIR="+stateDir,
-		"CODE_MOUNT_DIR="+cfg.CodePath,
-		"SCRIPT_PATH="+cfg.Entrypoint, // Used by Python/Node.js wrappers
-		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
-	)
-
-	// Add PYTHONPATH for vendor directory (SDK and dependencies)
-	vendorDir := filepath.Join(cfg.CodePath, "vendor")
-	env = append(env, "PYTHONPATH="+vendorDir+":"+cfg.CodePath)
-
-	// Add query-specific env vars if applicable
-	if cfg.QueryPath != "" {
-		env = append(env, "QUERY_PATH="+cfg.QueryPath)
-		// Parse and add query params as individual env vars or as JSON
-		if cfg.QueryParams != "" {
-			env = append(env, "QUERY_PARAMS="+cfg.QueryParams)
-			// Also try to parse and flatten query params
-			var params map[string]interface{}
-			if err := json.Unmarshal([]byte(cfg.QueryParams), &params); err == nil {
-				for k, v := range params {
-					env = append(env, fmt.Sprintf("QUERY_PARAM_%s=%v", k, v))
-				}
-			}
-		}
-	}
-
-	if cfg.BotType != "" {
-		env = append(env, "BOT_TYPE="+cfg.BotType)
-	}
-
-	return env
-}
-
 // executeQueryProcess executes a query process directly (no wrapper).
 // Queries use the SDK's query.run() which handles everything internally.
 func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger) int {
-	cmd := buildQueryCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+	return executeQueryProcessWithDeps(ctx, cfg, entrypoint, logger, newDefaultDependencies())
+}
+
+// executeQueryProcessWithDeps executes a query process with injectable dependencies.
+func executeQueryProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, deps ExecuteDependencies) int {
+	cmd := BuildQueryCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = buildBotEnv(cfg)
+	cmd.Env = BuildBotEnv(cfg)
 
 	logger.Info("Executing query: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
-	// Run with context for cancellation support
-	if err := cmd.Start(); err != nil {
+	// Run with context for cancellation support using injected dependency
+	if err := deps.ProcessExecutor.Start(cmd); err != nil {
 		logger.Info("Failed to start query process: %v", err)
 		return 1
 	}
@@ -669,15 +598,13 @@ func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint str
 	// Wait for process or context cancellation
 	done := make(chan error, 1)
 	go func() {
-		done <- cmd.Wait()
+		done <- deps.ProcessExecutor.Wait(cmd)
 	}()
 
 	select {
 	case <-ctx.Done():
 		logger.Info("Context cancelled, terminating query process")
-		cmd.Process.Signal(syscall.SIGTERM)
-		time.Sleep(5 * time.Second)
-		cmd.Process.Kill()
+		deps.ProcessExecutor.Kill(cmd)
 		return 1
 	case err := <-done:
 		if err != nil {
@@ -689,39 +616,4 @@ func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint str
 		}
 		return 0
 	}
-}
-
-// buildQueryCommand creates an exec.Cmd for query execution.
-// Queries run directly without wrappers - the SDK handles everything.
-func buildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
-	var cmd *exec.Cmd
-
-	switch runtime {
-	case "python3.11":
-		// Run query script directly - it uses the SDK's query.run()
-		cmd = exec.Command("python3", entrypoint)
-	case "nodejs20":
-		// Run query script directly
-		cmd = exec.Command("node", entrypoint)
-	case "dotnet8":
-		// For .NET, entrypoint is either a .dll or project path
-		if filepath.Ext(entrypoint) == ".dll" {
-			cmd = exec.Command("dotnet", entrypoint)
-		} else {
-			cmd = exec.Command("dotnet", "run", "--project", entrypoint)
-		}
-	case "rust-stable", "gcc13", "cpp-gcc13", "ghc96":
-		// Compiled binaries
-		binPath := filepath.Join(workDir, entrypoint)
-		cmd = exec.Command(binPath)
-	case "scala3":
-		// Scala runs as JAR with Java
-		cmd = exec.Command("java", "-jar", entrypoint)
-	default:
-		// Default: try to run as executable
-		cmd = exec.Command(entrypoint)
-	}
-
-	cmd.Dir = workDir
-	return cmd
 }
