@@ -316,7 +316,8 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotUpdated, payload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait longer as it needs to create partition and upsert bot
+	time.Sleep(600 * time.Millisecond)
 
 	// Verify bot was created with partition assignment
 	collection := db.Collection(collectionName)

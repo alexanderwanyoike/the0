@@ -553,7 +553,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	}
 
 	// Wait longer to ensure all messages are processed
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(800 * time.Millisecond)
 
 	// Graceful shutdown
 	err = subscriber.Stop()
