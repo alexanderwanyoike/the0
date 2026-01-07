@@ -17,10 +17,10 @@ type Config struct {
 	UseSSL    bool
 
 	// Buckets
-	CodeBucket   string // Bot code archives
-	StateBucket  string // Bot persistent state
-	LogsBucket   string // Bot logs
-	ResultBucket string // Backtest results
+	CodeBucket        string // Bot code archives
+	StateBucket       string // Bot persistent state
+	LogsBucket        string // Bot logs
+	QueryResultBucket string // Ephemeral query results
 
 	// State limits
 	MaxStateSizeBytes     int64 // Maximum total state folder size (default: 8GB)
@@ -33,7 +33,7 @@ func DefaultConfig() *Config {
 		CodeBucket:            "custom-bots",
 		StateBucket:           "bot-state",
 		LogsBucket:            "bot-logs",
-		ResultBucket:          "backtest-results",
+		QueryResultBucket:     "query-results",
 		MaxStateSizeBytes:     8 * 1024 * 1024 * 1024, // 8GB
 		MaxStateFileSizeBytes: 10 * 1024 * 1024,       // 10MB
 	}
@@ -71,8 +71,8 @@ func LoadConfigFromEnv() (*Config, error) {
 	if bucket := os.Getenv("MINIO_LOGS_BUCKET"); bucket != "" {
 		cfg.LogsBucket = bucket
 	}
-	if bucket := os.Getenv("MINIO_RESULTS_BUCKET"); bucket != "" {
-		cfg.ResultBucket = bucket
+	if bucket := os.Getenv("MINIO_QUERY_RESULTS_BUCKET"); bucket != "" {
+		cfg.QueryResultBucket = bucket
 	}
 
 	if sizeStr := os.Getenv("MAX_STATE_SIZE_MB"); sizeStr != "" {

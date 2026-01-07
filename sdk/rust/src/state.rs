@@ -49,6 +49,8 @@ pub enum StateError {
     Io(io::Error),
     /// JSON serialization/deserialization error
     Json(serde_json::Error),
+    /// Attempted to modify state in query mode
+    ReadOnly(String),
 }
 
 impl std::fmt::Display for StateError {
@@ -57,6 +59,7 @@ impl std::fmt::Display for StateError {
             StateError::InvalidKey(msg) => write!(f, "Invalid state key: {}", msg),
             StateError::Io(e) => write!(f, "IO error: {}", e),
             StateError::Json(e) => write!(f, "JSON error: {}", e),
+            StateError::ReadOnly(msg) => write!(f, "Read-only state: {}", msg),
         }
     }
 }
@@ -103,6 +106,24 @@ fn validate_key(key: &str) -> Result<(), StateError> {
     if key.contains('/') || key.contains('\\') || key.contains("..") {
         return Err(StateError::InvalidKey(
             "State key cannot contain path separators or '..'".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Check if currently running in query mode (read-only).
+fn is_query_mode() -> bool {
+    env::var("QUERY_PATH").is_ok()
+}
+
+/// Check if write operations are allowed.
+/// Returns an error if in query mode.
+fn check_write_allowed() -> Result<(), StateError> {
+    if is_query_mode() {
+        return Err(StateError::ReadOnly(
+            "State modifications are not allowed during query execution. \
+             Queries are read-only. Use state::get() to read state values."
+                .to_string(),
         ));
     }
     Ok(())
@@ -158,11 +179,16 @@ pub fn get_or<T: DeserializeOwned>(key: &str, default: T) -> T {
 /// Set a value in persistent state.
 ///
 /// The value must be serializable to JSON.
+/// Note: This function will return an error if called during query execution.
 ///
 /// # Arguments
 ///
 /// * `key` - The state key (alphanumeric, hyphens, underscores)
 /// * `value` - The value to store (must be Serialize)
+///
+/// # Errors
+///
+/// Returns `StateError::ReadOnly` if called during query execution (queries are read-only).
 ///
 /// # Example
 ///
@@ -173,6 +199,7 @@ pub fn get_or<T: DeserializeOwned>(key: &str, default: T) -> T {
 /// state::set("last_prices", &vec![45000.5, 45100.0]).expect("Failed to save state");
 /// ```
 pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
+    check_write_allowed()?;
     validate_key(key)?;
     let state_dir = get_state_dir();
     fs::create_dir_all(&state_dir)?;
@@ -184,6 +211,8 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 
 /// Delete a key from persistent state.
 ///
+/// Note: This function will return false if called during query execution.
+///
 /// # Arguments
 ///
 /// * `key` - The state key to delete
@@ -191,6 +220,7 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 /// # Returns
 ///
 /// `true` if the key existed and was deleted, `false` otherwise.
+/// Also returns `false` if in query mode (queries are read-only).
 ///
 /// # Example
 ///
@@ -202,6 +232,9 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 /// }
 /// ```
 pub fn delete(key: &str) -> bool {
+    if check_write_allowed().is_err() {
+        return false;
+    }
     if validate_key(key).is_err() {
         return false;
     }
@@ -248,6 +281,11 @@ pub fn list() -> Vec<String> {
 /// Clear all state.
 ///
 /// Removes all stored state keys.
+/// Note: This function will return an error if called during query execution.
+///
+/// # Errors
+///
+/// Returns `StateError::ReadOnly` if called during query execution (queries are read-only).
 ///
 /// # Example
 ///
@@ -258,6 +296,7 @@ pub fn list() -> Vec<String> {
 /// println!("All state cleared");
 /// ```
 pub fn clear() -> Result<(), StateError> {
+    check_write_allowed()?;
     let state_dir = get_state_dir();
     let entries = match fs::read_dir(&state_dir) {
         Ok(entries) => entries,

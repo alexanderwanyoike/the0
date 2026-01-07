@@ -8,11 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="The0.Sdk" Version="0.2.0" />
+    <PackageReference Include="The0.Sdk" Version="0.3.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Program_raw.cs" />
+    <Compile Remove="Query.cs" />
     <None Include="Program_raw.cs" />
   </ItemGroup>
 

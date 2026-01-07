@@ -1,27 +1,26 @@
 // Package daemon provides bot container lifecycle management for both Docker and K8s.
 // The daemon runs as init container/entrypoint prefix (for setup) and sidecar/background
 // process (for periodic state and log synchronization).
+//
+// Note: Entrypoint generation has been removed - the `runtime execute` command now handles
+// execution directly using language-specific wrappers built into the universal runtime image.
 package daemon
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"runtime/internal/entrypoints"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
 // InitOptions configures the init command.
 type InitOptions struct {
-	BotID      string
-	CodePath   string // Where to extract code (default: /bot)
-	StatePath  string // Where to extract state (default: /state)
-	CodeFile   string // MinIO object path for code (e.g., "my-bot/v1.0.0/code.zip")
-	Runtime    string // Runtime for entrypoint generation (e.g., "python3.11")
-	Entrypoint string // Entrypoint file (e.g., "main.py")
+	BotID     string
+	CodePath  string // Where to extract code (default: /bot)
+	StatePath string // Where to extract state (default: /state)
+	CodeFile  string // MinIO object path for code (e.g., "my-bot/v1.0.0/code.zip")
 }
 
 // Init downloads bot code and state, preparing the container for execution.
@@ -59,24 +58,9 @@ func Init(ctx context.Context, opts InitOptions) error {
 		}
 	}
 
-	// Generate entrypoint script if runtime and entrypoint are specified
-	if opts.Runtime != "" && opts.Entrypoint != "" {
-		logger.Info("Generating entrypoint script", "runtime", opts.Runtime, "entrypoint", opts.Entrypoint)
-		script, err := entrypoints.GenerateEntrypoint(opts.Runtime, entrypoints.GeneratorOptions{
-			EntryPointType: "bot",
-			Entrypoint:     opts.Entrypoint,
-			WorkDir:        opts.CodePath,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to generate entrypoint: %w", err)
-		}
-
-		scriptPath := filepath.Join(opts.CodePath, "entrypoint.sh")
-		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
-			return fmt.Errorf("failed to write entrypoint script: %w", err)
-		}
-		logger.Info("Created entrypoint script", "path", scriptPath)
-	}
+	// Note: Entrypoint generation has been removed.
+	// The `runtime execute` command now handles execution directly using
+	// language-specific wrappers built into the universal runtime image.
 
 	// Download state
 	logger.Info("Downloading state", "bot_id", opts.BotID)

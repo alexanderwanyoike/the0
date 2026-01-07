@@ -98,7 +98,7 @@ spec:
         - name: bot-controller
           image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          command: ["./runtime", "controller"]
+          command: ["/app/runtime", "controller"]
           args:
             - "--namespace={{ .Release.Namespace }}"
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
@@ -117,6 +117,13 @@ spec:
               value: {{ .Values.botController.minio.bucket | quote }}
             # User-defined environment variables (supports value or valueFrom)
             {{- toYaml .Values.botController.env | nindent 12 }}
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+            - name: query
+              containerPort: 9477
+              protocol: TCP
           # Health probes for proper lifecycle management
           livenessProbe:
             httpGet:
@@ -143,4 +150,30 @@ spec:
                 - ALL
           resources:
             {{- toYaml .Values.botController.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+# Service for query endpoint
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "the0.fullname" . }}-bot-controller
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-controller
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9477
+      targetPort: query
+      protocol: TCP
+      name: query
+  selector:
+    {{- include "the0.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: bot-controller
 {{- end }}

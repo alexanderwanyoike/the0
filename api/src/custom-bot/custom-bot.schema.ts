@@ -53,6 +53,10 @@ export const customBotConfigSchema = {
           type: "string",
           // Allow various file extensions and paths for compiled languages
         },
+        query: {
+          type: "string",
+          // Optional query entrypoint for bot queries
+        },
       },
       additionalProperties: false,
     },

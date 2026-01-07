@@ -5,28 +5,39 @@ package runtime
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
-// runtimeImages maps runtime identifiers to their Docker images.
-// These images include the the0 daemon binary for state/log synchronization.
-// Build with: cd docker/images && make build-all
-var runtimeImages = map[string]string{
-	"python3.11":  "the0/python311:latest",
-	"nodejs20":    "the0/nodejs20:latest",
-	"rust-stable": "the0/rust-stable:latest",
-	"dotnet8":     "the0/dotnet8:latest",
-	"gcc13":       "the0/gcc13:latest",
-	"cpp-gcc13":   "the0/gcc13:latest", // Alias for gcc13
-	"scala3":      "the0/scala3:latest",
-	"ghc96":       "the0/ghc96:latest",
+// UniversalRuntimeImage is the single Docker image that contains all language runtimes.
+// Build with: cd docker/images && make runtime
+const UniversalRuntimeImage = "the0/runtime:latest"
+
+// supportedRuntimes lists all valid runtime identifiers.
+// All runtimes use the universal image (the0/runtime:latest).
+var supportedRuntimes = map[string]bool{
+	"python3.11":  true,
+	"nodejs20":    true,
+	"rust-stable": true,
+	"dotnet8":     true,
+	"gcc13":       true,
+	"cpp-gcc13":   true, // Alias for gcc13
+	"scala3":      true,
+	"ghc96":       true,
 }
 
 // GetDockerImage returns the Docker image for the given runtime.
+// All runtimes use the universal image (the0/runtime:latest) which contains all language runtimes.
 // Returns an error if the runtime is not supported.
 func GetDockerImage(runtime string) (string, error) {
-	if image, ok := runtimeImages[runtime]; ok {
-		return image, nil
+	if !supportedRuntimes[runtime] {
+		return "", fmt.Errorf("unsupported runtime: %q (supported: %s)", runtime, strings.Join(SupportedRuntimes(), ", "))
 	}
-	return "", fmt.Errorf("unsupported runtime: %q (supported: %s)", runtime, strings.Join(SupportedRuntimes(), ", "))
+
+	// Allow override via environment variable (useful for development/testing)
+	if override := os.Getenv("RUNTIME_IMAGE"); override != "" {
+		return override, nil
+	}
+
+	return UniversalRuntimeImage, nil
 }

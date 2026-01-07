@@ -21,6 +21,9 @@ var daemonInitCmd = &cobra.Command{
 	Long: `Downloads bot code and state from MinIO to prepare the container environment.
 Used as init container (K8s) or entrypoint prefix (Docker).
 
+Note: Entrypoint generation has been removed. The 'runtime execute' command
+now handles execution directly using language-specific wrappers.
+
 Required environment variables:
   MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 
@@ -53,8 +56,6 @@ var (
 	daemonStatePath    string
 	daemonLogsPath     string
 	daemonCodeFile     string
-	daemonRuntime      string
-	daemonEntrypoint   string
 	daemonSyncInterval time.Duration
 	daemonWatchDone    string
 )
@@ -65,8 +66,6 @@ func init() {
 	daemonInitCmd.Flags().StringVar(&daemonCodePath, "code-path", "/bot", "Path to extract code")
 	daemonInitCmd.Flags().StringVar(&daemonStatePath, "state-path", "/state", "Path for state directory")
 	daemonInitCmd.Flags().StringVar(&daemonCodeFile, "code-file", "", "MinIO object path for code (e.g., my-bot/v1.0.0/code.zip)")
-	daemonInitCmd.Flags().StringVar(&daemonRuntime, "runtime", "", "Runtime for entrypoint (e.g., python3.11)")
-	daemonInitCmd.Flags().StringVar(&daemonEntrypoint, "entrypoint", "", "Entrypoint file (e.g., main.py)")
 	daemonInitCmd.MarkFlagRequired("bot-id")
 
 	// Sync command flags
@@ -84,12 +83,10 @@ func init() {
 
 func runDaemonInit(cmd *cobra.Command, args []string) error {
 	return daemon.Init(context.Background(), daemon.InitOptions{
-		BotID:      daemonBotID,
-		CodePath:   daemonCodePath,
-		StatePath:  daemonStatePath,
-		CodeFile:   daemonCodeFile,
-		Runtime:    daemonRuntime,
-		Entrypoint: daemonEntrypoint,
+		BotID:     daemonBotID,
+		CodePath:  daemonCodePath,
+		StatePath: daemonStatePath,
+		CodeFile:  daemonCodeFile,
 	})
 }
 

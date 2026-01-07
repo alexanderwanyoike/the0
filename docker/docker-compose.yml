@@ -124,6 +124,9 @@ services:
       # Bot API configuration (used by frontend API routes)
       BOT_API_URL: http://the0-api:3000
 
+      # Runtime query server URL (standalone query-server service)
+      RUNTIME_QUERY_URL: http://query-server:9477
+
     ports:
       - "3000:3000"
     depends_on:
@@ -258,6 +261,57 @@ services:
     networks:
       - the0-network
     command: ["./runtime", "bot-scheduler"]
+
+  # Query Server Service (Go - standalone query execution)
+  query-server:
+    build:
+      context: ../runtime
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    pull_policy: always
+    environment:
+      # MongoDB configuration
+      MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
+
+      # MinIO configuration
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: the0admin
+      MINIO_SECRET_KEY: the0password
+      MINIO_USE_SSL: "false"
+      MINIO_CODE_BUCKET: custom-bots
+
+      # Docker configuration
+      DOCKER_TEMP_DIR: /tmp/query-server
+      TEMP_DIR: /tmp/query-server
+      DOCKER_NETWORK: the0-oss-network
+
+      # Query server port
+      QUERY_SERVER_PORT: "9477"
+
+    ports:
+      - "9477:9477"  # Query server endpoint
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/query-server:/tmp/query-server
+    privileged: true
+    sysctls:
+      - net.ipv4.ip_forward=1
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9477/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - the0-network
+    command: ["./runtime", "query-server"]
 
   the0-frontend:
     build:

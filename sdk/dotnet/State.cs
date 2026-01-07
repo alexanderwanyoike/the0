@@ -3,6 +3,14 @@ using System.Text.Json;
 namespace The0;
 
 /// <summary>
+/// Error thrown when attempting to modify state during query execution.
+/// </summary>
+public class ReadOnlyStateError : Exception
+{
+    public ReadOnlyStateError(string message) : base(message) { }
+}
+
+/// <summary>
 /// Persistent state management for bots across executions.
 /// State is automatically synced to MinIO storage between bot runs.
 /// </summary>
@@ -33,6 +41,26 @@ public static class State
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };
+
+    /// <summary>
+    /// Check if currently running in query mode (read-only).
+    /// </summary>
+    private static bool IsQueryMode() =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("QUERY_PATH"));
+
+    /// <summary>
+    /// Check if write operations are allowed.
+    /// Throws ReadOnlyStateError if in query mode.
+    /// </summary>
+    private static void CheckWriteAllowed()
+    {
+        if (IsQueryMode())
+        {
+            throw new ReadOnlyStateError(
+                "State modifications are not allowed during query execution. " +
+                "Queries are read-only. Use State.Get() to read state values.");
+        }
+    }
 
     /// <summary>
     /// Get the path to the state directory.
@@ -97,10 +125,12 @@ public static class State
     /// <summary>
     /// Set a value in persistent state.
     /// The value must be JSON serializable.
+    /// Note: This method will throw ReadOnlyStateError if called during query execution.
     /// </summary>
     /// <typeparam name="T">The type of value to store</typeparam>
     /// <param name="key">The state key (alphanumeric, hyphens, underscores)</param>
     /// <param name="value">The value to store (must be JSON serializable)</param>
+    /// <exception cref="ReadOnlyStateError">Thrown if called during query execution (queries are read-only)</exception>
     /// <example>
     /// <code>
     /// State.Set("portfolio", new { AAPL = 100, GOOGL = 50 });
@@ -110,6 +140,7 @@ public static class State
     /// </example>
     public static void Set<T>(string key, T value)
     {
+        CheckWriteAllowed();
         ValidateKey(key);
         Directory.CreateDirectory(StateDir);
         var filepath = GetKeyPath(key);
@@ -119,9 +150,11 @@ public static class State
 
     /// <summary>
     /// Delete a key from persistent state.
+    /// Note: This method will throw ReadOnlyStateError if called during query execution.
     /// </summary>
     /// <param name="key">The state key to delete</param>
     /// <returns>True if the key existed and was deleted, false otherwise</returns>
+    /// <exception cref="ReadOnlyStateError">Thrown if called during query execution (queries are read-only)</exception>
     /// <example>
     /// <code>
     /// if (State.Delete("old_data"))
@@ -132,6 +165,7 @@ public static class State
     /// </example>
     public static bool Delete(string key)
     {
+        CheckWriteAllowed();
         ValidateKey(key);
         var filepath = GetKeyPath(key);
         if (!File.Exists(filepath))
@@ -168,7 +202,9 @@ public static class State
     /// <summary>
     /// Clear all state.
     /// Removes all stored state keys.
+    /// Note: This method will throw ReadOnlyStateError if called during query execution.
     /// </summary>
+    /// <exception cref="ReadOnlyStateError">Thrown if called during query execution (queries are read-only)</exception>
     /// <example>
     /// <code>
     /// State.Clear();
@@ -177,6 +213,7 @@ public static class State
     /// </example>
     public static void Clear()
     {
+        CheckWriteAllowed();
         try
         {
             var files = Directory.GetFiles(StateDir, "*.json");

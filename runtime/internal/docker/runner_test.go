@@ -263,10 +263,11 @@ func loadRealTestBotFile(t *testing.T, filename string) []byte {
 
 // MinIO test server management using testcontainers
 type MinIOTestServer struct {
-	container testcontainers.Container
-	endpoint  string
-	accessKey string
-	secretKey string
+	container         testcontainers.Container
+	endpoint          string // For host-side access (test code)
+	containerEndpoint string // For container access (via host.docker.internal)
+	accessKey         string
+	secretKey         string
 }
 
 func (m *MinIOTestServer) Close() {
@@ -315,17 +316,23 @@ func startMinIOTestServerForPackage() *MinIOTestServer {
 
 	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
 
+	// For containers to reach the host, we use host.docker.internal (enabled via --add-host).
+	// The runner sets MINIO_ENDPOINT which gets passed to containers as an environment variable.
+	containerEndpoint := fmt.Sprintf("host.docker.internal:%s", port.Port())
+
 	// Set environment variables for the docker runner
-	os.Setenv("MINIO_ENDPOINT", endpoint)
+	// Containers will use host.docker.internal to reach MinIO on the host
+	os.Setenv("MINIO_ENDPOINT", containerEndpoint)
 	os.Setenv("MINIO_ACCESS_KEY", accessKey)
 	os.Setenv("MINIO_SECRET_KEY", secretKey)
 	os.Setenv("MINIO_SSL", "false")
 
 	return &MinIOTestServer{
-		container: container,
-		endpoint:  endpoint,
-		accessKey: accessKey,
-		secretKey: secretKey,
+		container:         container,
+		endpoint:          endpoint,          // For host-side access (test code)
+		containerEndpoint: containerEndpoint, // For container access (env vars)
+		accessKey:         accessKey,
+		secretKey:         secretKey,
 	}
 }
 

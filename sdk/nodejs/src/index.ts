@@ -316,6 +316,10 @@ export function sleep(ms: number): Promise<void> {
 import * as state from './state';
 export { state };
 
+// Export query module as namespace
+import * as query from './query';
+export { query };
+
 // Default export for convenience
 export default {
   parse,
@@ -326,4 +330,5 @@ export default {
   log,
   sleep,
   state,
+  query,
 };

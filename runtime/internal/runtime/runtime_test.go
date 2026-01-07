@@ -7,26 +7,23 @@ import (
 )
 
 func TestGetDockerImage(t *testing.T) {
-	// Test valid runtimes - using the0 custom images with daemon baked in
-	validTests := []struct {
-		runtime  string
-		expected string
-	}{
-		{"python3.11", "the0/python311:latest"},
-		{"nodejs20", "the0/nodejs20:latest"},
-		{"rust-stable", "the0/rust-stable:latest"},
-		{"dotnet8", "the0/dotnet8:latest"},
-		{"gcc13", "the0/gcc13:latest"},
-		{"cpp-gcc13", "the0/gcc13:latest"},
-		{"scala3", "the0/scala3:latest"},
-		{"ghc96", "the0/ghc96:latest"},
+	// All valid runtimes now return the universal runtime image
+	validRuntimes := []string{
+		"python3.11",
+		"nodejs20",
+		"rust-stable",
+		"dotnet8",
+		"gcc13",
+		"cpp-gcc13",
+		"scala3",
+		"ghc96",
 	}
 
-	for _, tt := range validTests {
-		t.Run(tt.runtime, func(t *testing.T) {
-			result, err := GetDockerImage(tt.runtime)
+	for _, rt := range validRuntimes {
+		t.Run(rt, func(t *testing.T) {
+			result, err := GetDockerImage(rt)
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, UniversalRuntimeImage, result)
 		})
 	}
 

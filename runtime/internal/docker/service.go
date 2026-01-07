@@ -539,6 +539,31 @@ func (s *BotService) GetStatus() map[string]interface{} {
 	return metrics
 }
 
+// GetBot retrieves a bot by ID from MongoDB (implements BotResolver interface)
+func (s *BotService) GetBot(ctx context.Context, botID string) (*model.Bot, error) {
+	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
+
+	var bot model.Bot
+	err := collection.FindOne(ctx, bson.M{"_id": botID}).Decode(&bot)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("bot not found: %s", botID)
+		}
+		return nil, fmt.Errorf("failed to get bot: %w", err)
+	}
+
+	return &bot, nil
+}
+
+// GetContainerID returns the container ID for a running bot (implements BotResolver interface)
+func (s *BotService) GetContainerID(ctx context.Context, botID string) (string, bool) {
+	runningBot, ok := s.state.GetRunningBot(botID)
+	if !ok {
+		return "", false
+	}
+	return runningBot.ContainerID, true
+}
+
 // DefaultBotServiceConfig returns a BotServiceConfig with environment defaults
 func DefaultBotServiceConfig() BotServiceConfig {
 	return BotServiceConfig{

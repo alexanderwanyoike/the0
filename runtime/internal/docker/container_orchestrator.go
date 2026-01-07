@@ -84,6 +84,9 @@ type ContainerOrchestrator interface {
 
 	// Remove removes a container (for cleaning up crashed containers).
 	Remove(ctx context.Context, containerID string) error
+
+	// GetContainerIP returns the IP address of a running container.
+	GetContainerIP(ctx context.Context, containerID string) (string, error)
 }
 
 // dockerOrchestrator is the concrete implementation of ContainerOrchestrator.
@@ -388,4 +391,28 @@ func (r *dockerOrchestrator) Remove(ctx context.Context, containerID string) err
 	return r.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force: true,
 	})
+}
+
+func (r *dockerOrchestrator) GetContainerIP(ctx context.Context, containerID string) (string, error) {
+	inspect, err := r.dockerClient.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container %s: %w", containerID, err)
+	}
+
+	// Try to get IP from the default bridge network first
+	if inspect.NetworkSettings != nil {
+		// Check for IP in the default network settings
+		if inspect.NetworkSettings.IPAddress != "" {
+			return inspect.NetworkSettings.IPAddress, nil
+		}
+
+		// Check in named networks
+		for _, network := range inspect.NetworkSettings.Networks {
+			if network.IPAddress != "" {
+				return network.IPAddress, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no IP address found for container %s", containerID)
 }

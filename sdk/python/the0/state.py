@@ -29,6 +29,26 @@ import json
 from typing import Any, List, Optional
 
 
+class ReadOnlyStateError(Exception):
+    """Raised when attempting to modify state during query execution."""
+
+    pass
+
+
+def _is_query_mode() -> bool:
+    """Check if currently running in query mode (read-only)."""
+    return os.environ.get("QUERY_PATH") is not None
+
+
+def _check_write_allowed() -> None:
+    """Raise error if state modification is not allowed (query mode)."""
+    if _is_query_mode():
+        raise ReadOnlyStateError(
+            "State modifications are not allowed during query execution. "
+            "Queries are read-only. Use state.get() to read state values."
+        )
+
+
 def _get_state_dir() -> str:
     """Get the path to the state directory."""
     state_dir = os.environ.get("STATE_DIR")
@@ -84,16 +104,21 @@ def set(key: str, value: Any) -> None:
     Set a value in persistent state.
 
     The value must be JSON serializable.
+    Note: This function will raise ReadOnlyStateError if called during query execution.
 
     Args:
         key: The state key (alphanumeric, hyphens, underscores)
         value: The value to store (must be JSON serializable)
+
+    Raises:
+        ReadOnlyStateError: If called during query execution (queries are read-only)
 
     Example:
         state.set("portfolio", {"AAPL": 100, "GOOGL": 50})
         state.set("trade_count", 42)
         state.set("last_prices", [45000.5, 45100.0, 45050.25])
     """
+    _check_write_allowed()
     _validate_key(key)
     state_dir = _get_state_dir()
     os.makedirs(state_dir, exist_ok=True)
@@ -106,16 +131,22 @@ def delete(key: str) -> bool:
     """
     Delete a key from persistent state.
 
+    Note: This function will raise ReadOnlyStateError if called during query execution.
+
     Args:
         key: The state key to delete
 
     Returns:
         True if the key existed and was deleted, False otherwise
 
+    Raises:
+        ReadOnlyStateError: If called during query execution (queries are read-only)
+
     Example:
         if state.delete("old_data"):
             print("Cleaned up old data")
     """
+    _check_write_allowed()
     _validate_key(key)
     filepath = _get_key_path(key)
     try:
@@ -149,11 +180,16 @@ def clear() -> None:
     Clear all state.
 
     Removes all stored state keys.
+    Note: This function will raise ReadOnlyStateError if called during query execution.
+
+    Raises:
+        ReadOnlyStateError: If called during query execution (queries are read-only)
 
     Example:
         state.clear()
         print("All state cleared")
     """
+    _check_write_allowed()
     state_dir = _get_state_dir()
     try:
         for filename in os.listdir(state_dir):

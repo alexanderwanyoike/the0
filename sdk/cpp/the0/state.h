@@ -57,6 +57,35 @@ public:
 };
 
 /**
+ * Exception thrown when attempting to modify state during query execution.
+ */
+class ReadOnlyStateError : public std::runtime_error {
+public:
+    explicit ReadOnlyStateError(const std::string& msg)
+        : std::runtime_error(msg) {}
+};
+
+/**
+ * Check if currently running in query mode (read-only).
+ */
+inline bool is_query_mode() {
+    const char* path = std::getenv("QUERY_PATH");
+    return path != nullptr && path[0] != '\0';
+}
+
+/**
+ * Check if write operations are allowed.
+ * Throws ReadOnlyStateError if in query mode.
+ */
+inline void check_write_allowed() {
+    if (is_query_mode()) {
+        throw ReadOnlyStateError(
+            "State modifications are not allowed during query execution. "
+            "Queries are read-only. Use state::get() to read state values.");
+    }
+}
+
+/**
  * Get the path to the state directory.
  */
 inline std::string get_state_dir() {
@@ -128,14 +157,18 @@ inline json get_or(const std::string& key, const json& default_value) {
 /**
  * Set a value in persistent state.
  *
+ * Note: This function will throw ReadOnlyStateError if called during query execution.
+ *
  * @param key The state key (alphanumeric, hyphens, underscores)
  * @param value The JSON value to store
+ * @throws ReadOnlyStateError if called during query execution (queries are read-only)
  *
  * @example
  *   the0::state::set("portfolio", {{"AAPL", 100}, {"GOOGL", 50}});
  *   the0::state::set("trade_count", 42);
  */
 inline void set(const std::string& key, const json& value) {
+    check_write_allowed();
     validate_key(key);
     std::string state_dir = get_state_dir();
     fs::create_directories(state_dir);
@@ -151,8 +184,11 @@ inline void set(const std::string& key, const json& value) {
  * Delete a key from persistent state.
  * Note: Named 'remove' since 'delete' is a C++ reserved word.
  *
+ * Note: This function will throw ReadOnlyStateError if called during query execution.
+ *
  * @param key The state key to delete
  * @return True if the key existed and was deleted, false otherwise
+ * @throws ReadOnlyStateError if called during query execution (queries are read-only)
  *
  * @example
  *   if (the0::state::remove("old_data")) {
@@ -160,6 +196,7 @@ inline void set(const std::string& key, const json& value) {
  *   }
  */
 inline bool remove(const std::string& key) {
+    check_write_allowed();
     validate_key(key);
     std::string filepath = get_key_path(key);
     std::error_code ec;
@@ -196,11 +233,16 @@ inline std::vector<std::string> list() {
  * Clear all state.
  * Removes all stored state keys.
  *
+ * Note: This function will throw ReadOnlyStateError if called during query execution.
+ *
+ * @throws ReadOnlyStateError if called during query execution (queries are read-only)
+ *
  * @example
  *   the0::state::clear();
  *   std::cerr << "All state cleared" << std::endl;
  */
 inline void clear() {
+    check_write_allowed();
     std::string state_dir = get_state_dir();
 
     std::error_code ec;

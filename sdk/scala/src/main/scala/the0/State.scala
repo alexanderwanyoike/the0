@@ -5,6 +5,11 @@ import scala.io.Source
 import scala.util.{Try, Using}
 
 /**
+ * Error thrown when attempting to modify state during query execution.
+ */
+class ReadOnlyStateError(message: String) extends RuntimeException(message)
+
+/**
  * Persistent state management for bots across executions.
  * State is automatically synced to MinIO storage between bot runs.
  *
@@ -57,6 +62,24 @@ object State {
   }
 
   /**
+   * Check if currently running in query mode (read-only).
+   */
+  private def isQueryMode: Boolean =
+    sys.env.get("QUERY_PATH").exists(_.nonEmpty)
+
+  /**
+   * Check if write operations are allowed.
+   * Throws ReadOnlyStateError if in query mode.
+   */
+  private def checkWriteAllowed(): Unit = {
+    if (isQueryMode) {
+      throw new ReadOnlyStateError(
+        "State modifications are not allowed during query execution. " +
+        "Queries are read-only. Use State.get() to read state values.")
+    }
+  }
+
+  /**
    * Get a value from persistent state.
    *
    * @param key The state key (alphanumeric, hyphens, underscores)
@@ -97,8 +120,11 @@ object State {
   /**
    * Set a value in persistent state.
    *
+   * Note: This method will throw ReadOnlyStateError if called during query execution.
+   *
    * @param key The state key (alphanumeric, hyphens, underscores)
    * @param json The JSON string to store
+   * @throws ReadOnlyStateError if called during query execution (queries are read-only)
    *
    * Example:
    * {{{
@@ -107,6 +133,7 @@ object State {
    * }}}
    */
   def set(key: String, json: String): Unit = {
+    checkWriteAllowed()
     validateKey(key)
     val dir = new File(stateDir)
     if (!dir.exists()) {
@@ -124,8 +151,11 @@ object State {
   /**
    * Delete a key from persistent state.
    *
+   * Note: This method will throw ReadOnlyStateError if called during query execution.
+   *
    * @param key The state key to delete
    * @return true if the key existed and was deleted, false otherwise
+   * @throws ReadOnlyStateError if called during query execution (queries are read-only)
    *
    * Example:
    * {{{
@@ -135,6 +165,7 @@ object State {
    * }}}
    */
   def delete(key: String): Boolean = {
+    checkWriteAllowed()
     validateKey(key)
     val filepath = keyPath(key)
     val file = new File(filepath)
@@ -168,6 +199,10 @@ object State {
    * Clear all state.
    * Removes all stored state keys.
    *
+   * Note: This method will throw ReadOnlyStateError if called during query execution.
+   *
+   * @throws ReadOnlyStateError if called during query execution (queries are read-only)
+   *
    * Example:
    * {{{
    * State.clear()
@@ -175,6 +210,7 @@ object State {
    * }}}
    */
   def clear(): Unit = {
+    checkWriteAllowed()
     val dir = new File(stateDir)
     if (dir.exists()) {
       dir.listFiles()

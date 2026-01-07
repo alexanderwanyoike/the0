@@ -50,6 +50,9 @@ var (
 	// Runtime image for init containers and sidecars
 	runtimeImage           string
 	runtimeImagePullPolicy string
+
+	// Query server flags
+	queryServerPort int
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -101,6 +104,17 @@ with RUNTIME_MODE=controller environment variable set.`,
 	},
 }
 
+// Query Server Command - standalone query execution service
+var queryServerCmd = &cobra.Command{
+	Use:   "query-server",
+	Short: "Run standalone query execution server",
+	Long: `Runs a standalone HTTP server for executing queries against bots.
+Supports both realtime and scheduled bots by querying both MongoDB collections.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runQueryServer()
+	},
+}
+
 // Version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -134,6 +148,10 @@ func main() {
 	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
 	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
 	rootCmd.AddCommand(controllerCmd)
+
+	// Query server command with flags
+	queryServerCmd.Flags().IntVar(&queryServerPort, "port", getEnvInt("QUERY_SERVER_PORT", 9477), "Port for query server")
+	rootCmd.AddCommand(queryServerCmd)
 
 	rootCmd.AddCommand(versionCmd)
 
@@ -375,6 +393,75 @@ func runController() {
 	util.LogMaster("Controllers stopped")
 }
 
+// runQueryServer runs the standalone query server
+func runQueryServer() {
+	util.LogMaster("Starting query server...")
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
+	util.LogMaster("Port: %d", queryServerPort)
+
+	// Create MongoDB client
+	mongoClient, err := createMongoClient(mongoUri)
+	if err != nil {
+		util.LogMaster("Failed to create MongoDB client: %v", err)
+		os.Exit(1)
+	}
+	defer mongoClient.Disconnect(context.Background())
+
+	// Create DockerRunner for query execution
+	runner, err := dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
+		Logger: &util.DefaultLogger{},
+	})
+	if err != nil {
+		util.LogMaster("Failed to create Docker runner: %v", err)
+		os.Exit(1)
+	}
+
+	// Create multi-collection bot resolver
+	resolver := dockerrunner.NewMultiBotResolver(mongoClient, runner)
+
+	// Create query handler
+	handler := dockerrunner.NewQueryHandler(dockerrunner.QueryHandlerConfig{
+		Runner: runner,
+		Logger: &util.DefaultLogger{},
+	})
+
+	// Create and start query server
+	server := dockerrunner.NewQueryServer(dockerrunner.QueryServerConfig{
+		Port:        queryServerPort,
+		Handler:     handler,
+		BotResolver: resolver,
+		Logger:      &util.DefaultLogger{},
+	})
+
+	if err := server.Start(); err != nil {
+		util.LogMaster("Failed to start query server: %v", err)
+		os.Exit(1)
+	}
+
+	util.LogMaster("Query server started on port %d", queryServerPort)
+
+	// Setup signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		util.LogMaster("Received interrupt signal, shutting down...")
+		cancel()
+	}()
+
+	// Wait for shutdown
+	<-ctx.Done()
+
+	// Graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	server.Stop(shutdownCtx)
+	runner.Close()
+
+	util.LogMaster("Query server stopped")
+}
+
 // Utility functions
 func getEnv(key string, defaultValue string) string {
 	value, exists := os.LookupEnv(key)
@@ -382,6 +469,19 @@ func getEnv(key string, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return defaultValue
+	}
+	var result int
+	_, err := fmt.Sscanf(value, "%d", &result)
+	if err != nil {
+		return defaultValue
+	}
+	return result
 }
 
 func createMongoClient(mongoUri string) (*mongo.Client, error) {

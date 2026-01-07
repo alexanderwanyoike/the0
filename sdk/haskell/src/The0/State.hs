@@ -38,15 +38,41 @@ module The0.State
     , list
     , clear
     , exists
+    , ReadOnlyStateError(..)
     ) where
 
-import Control.Exception (catch, SomeException)
+import Control.Exception (Exception, catch, throwIO, SomeException)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeExtension, dropExtension)
+
+-- | Error thrown when attempting to modify state during query execution.
+newtype ReadOnlyStateError = ReadOnlyStateError String
+    deriving (Show, Eq)
+
+instance Exception ReadOnlyStateError
+
+-- | Check if currently running in query mode (read-only).
+isQueryMode :: IO Bool
+isQueryMode = do
+    mPath <- lookupEnv "QUERY_PATH"
+    return $ case mPath of
+        Just path | not (null path) -> True
+        _ -> False
+
+-- | Check if write operations are allowed.
+-- Throws ReadOnlyStateError if in query mode.
+checkWriteAllowed :: IO ()
+checkWriteAllowed = do
+    queryMode <- isQueryMode
+    if queryMode
+        then throwIO $ ReadOnlyStateError
+            "State modifications are not allowed during query execution. \
+            \Queries are read-only. Use State.get to read state values."
+        else return ()
 
 -- | Get the path to the state directory.
 getStateDir :: IO FilePath
@@ -93,12 +119,15 @@ get key = do
 --
 -- The value must be serializable to JSON.
 --
+-- Note: This function will throw 'ReadOnlyStateError' if called during query execution.
+--
 -- @
 -- State.set "portfolio" (object ["AAPL" .= (100 :: Int)])
 -- State.set "trade_count" (42 :: Int)
 -- @
 set :: ToJSON a => String -> a -> IO ()
 set key value = do
+    checkWriteAllowed
     validateKey key
     stateDir <- getStateDir
     createDirectoryIfMissing True stateDir
@@ -109,12 +138,15 @@ set key value = do
 --
 -- Returns 'True' if the key existed and was deleted, 'False' otherwise.
 --
+-- Note: This function will throw 'ReadOnlyStateError' if called during query execution.
+--
 -- @
 -- deleted <- State.delete "old_data"
 -- when deleted $ putStrLn "Cleaned up old data"
 -- @
 delete :: String -> IO Bool
 delete key = do
+    checkWriteAllowed
     validateKey key
     filepath <- getKeyPath key
     exists' <- doesFileExist filepath
@@ -146,12 +178,15 @@ list = do
 --
 -- Removes all stored state keys.
 --
+-- Note: This function will throw 'ReadOnlyStateError' if called during query execution.
+--
 -- @
 -- State.clear
 -- putStrLn "All state cleared"
 -- @
 clear :: IO ()
 clear = do
+    checkWriteAllowed
     stateDir <- getStateDir
     files <- listDirectory stateDir `catch` handleListError
     mapM_ removeJsonFile files

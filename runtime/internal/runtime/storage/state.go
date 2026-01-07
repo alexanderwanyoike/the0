@@ -102,7 +102,9 @@ func (m *stateManager) DownloadState(ctx context.Context, botID string, destDir 
 	_, err = object.Stat()
 	if err != nil {
 		errResponse := minio.ToErrorResponse(err)
-		if errResponse.Code == "NoSuchKey" {
+		// NoSuchKey = state object doesn't exist, NoSuchBucket = bucket doesn't exist yet
+		// Both are valid first-run scenarios
+		if errResponse.Code == "NoSuchKey" || errResponse.Code == "NoSuchBucket" {
 			m.logger.Info("No existing state (first run)", "bot_id", botID)
 			return nil
 		}

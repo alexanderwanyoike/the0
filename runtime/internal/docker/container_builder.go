@@ -121,6 +121,18 @@ func (b *ContainerBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string
 	return b
 }
 
+// DaemonConfig holds configuration for daemon init/sync.
+type DaemonConfig struct {
+	BotID           string
+	CodeFile        string
+	Runtime         string
+	Entrypoint      string
+	QueryEntrypoint string // Optional: query entrypoint for realtime bots
+	Config          string
+	IsScheduled     bool
+	BotType         string // "realtime" or "scheduled"
+}
+
 // WithDaemonConfig adds bot-specific config for daemon init/sync.
 // This enables the daemon subprocess approach where the container handles
 // its own code download, state sync, and log collection.
@@ -136,6 +148,29 @@ func (b *ContainerBuilder) WithDaemonConfig(botID, codeFile, runtime, entrypoint
 	return b
 }
 
+// WithDaemonConfigFull adds bot-specific config for daemon init/sync with all options.
+func (b *ContainerBuilder) WithDaemonConfigFull(cfg DaemonConfig) *ContainerBuilder {
+	b.config.Env = append(b.config.Env,
+		fmt.Sprintf("BOT_ID=%s", cfg.BotID),
+		fmt.Sprintf("CODE_FILE=%s", cfg.CodeFile),
+		fmt.Sprintf("RUNTIME=%s", cfg.Runtime),
+		fmt.Sprintf("ENTRYPOINT=%s", cfg.Entrypoint),
+		fmt.Sprintf("BOT_CONFIG=%s", cfg.Config),
+		fmt.Sprintf("IS_SCHEDULED=%t", cfg.IsScheduled),
+	)
+	if cfg.QueryEntrypoint != "" {
+		b.config.Env = append(b.config.Env,
+			fmt.Sprintf("QUERY_ENTRYPOINT=%s", cfg.QueryEntrypoint),
+		)
+	}
+	if cfg.BotType != "" {
+		b.config.Env = append(b.config.Env,
+			fmt.Sprintf("BOT_TYPE=%s", cfg.BotType),
+		)
+	}
+	return b
+}
+
 // WithDevRuntime mounts the runtime binary from the host for development.
 // Allows testing daemon changes without rebuilding images.
 func (b *ContainerBuilder) WithDevRuntime(hostPath string) *ContainerBuilder {
@@ -143,6 +178,31 @@ func (b *ContainerBuilder) WithDevRuntime(hostPath string) *ContainerBuilder {
 		b.hostConfig.Binds = append(b.hostConfig.Binds,
 			fmt.Sprintf("%s:/app/runtime:ro", hostPath))
 	}
+	return b
+}
+
+// WithQueryConfig configures the container for query execution mode.
+// Sets QUERY_PATH and QUERY_PARAMS environment variables that the SDK
+// uses to detect query mode and execute the appropriate handler.
+func (b *ContainerBuilder) WithQueryConfig(queryPath string, queryParams string) *ContainerBuilder {
+	if queryPath != "" {
+		b.config.Env = append(b.config.Env,
+			fmt.Sprintf("QUERY_PATH=%s", queryPath),
+		)
+		if queryParams != "" {
+			b.config.Env = append(b.config.Env,
+				fmt.Sprintf("QUERY_PARAMS=%s", queryParams),
+			)
+		}
+	}
+	return b
+}
+
+// WithExtraHosts adds extra host-to-IP mappings to the container.
+// Use "host.docker.internal:host-gateway" to allow containers to reach
+// the Docker host on Linux systems.
+func (b *ContainerBuilder) WithExtraHosts(hosts ...string) *ContainerBuilder {
+	b.hostConfig.ExtraHosts = append(b.hostConfig.ExtraHosts, hosts...)
 	return b
 }
 
