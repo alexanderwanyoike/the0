@@ -105,11 +105,10 @@ func (s *StateSyncer) hashDirectory() (string, error) {
 		if err != nil {
 			return "", err
 		}
+		defer f.Close()
 		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
 			return "", err
 		}
-		f.Close()
 
 		// Include mod time for quick change detection
 		info, _ := os.Stat(file)

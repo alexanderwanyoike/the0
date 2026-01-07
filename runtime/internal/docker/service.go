@@ -201,7 +201,7 @@ func (s *BotService) runReconciliationLoop() {
 
 // reconcile performs the core reconciliation between desired and actual state
 func (s *BotService) reconcile() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
 	start := time.Now()
@@ -247,10 +247,21 @@ func (s *BotService) getDesiredBots(ctx context.Context) ([]model.Bot, error) {
 	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
 
 	// Query for enabled bots (no segment filter)
+	// Check both root level "enabled" field and nested "config.enabled" field
 	filter := bson.M{
-		"$or": []bson.M{
-			{"config.enabled": bson.M{"$ne": false}},     // explicitly not disabled
-			{"config.enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"enabled": bson.M{"$ne": false}},     // root level not disabled
+					{"enabled": bson.M{"$exists": false}}, // root level field missing = enabled by default
+				},
+			},
+			{
+				"$or": []bson.M{
+					{"config.enabled": bson.M{"$ne": false}},     // config level not disabled
+					{"config.enabled": bson.M{"$exists": false}}, // config level field missing = enabled by default
+				},
+			},
 		},
 	}
 

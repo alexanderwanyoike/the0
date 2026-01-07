@@ -221,7 +221,7 @@ func (s *ScheduleService) runScheduleLoop() {
 
 // checkAndExecuteSchedules finds due schedules and executes them
 func (s *ScheduleService) checkAndExecuteSchedules() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Minute)
 	defer cancel()
 
 	now := time.Now()
@@ -268,11 +268,22 @@ func (s *ScheduleService) getDueSchedules(ctx context.Context, now time.Time) ([
 	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
 
 	// Query for enabled schedules with next_execution_time <= now
+	// Check both root level "enabled" field and nested "config.enabled" field
 	filter := bson.M{
 		"next_execution_time": bson.M{"$lte": now.Unix()},
-		"$or": []bson.M{
-			{"config.enabled": bson.M{"$ne": false}},
-			{"config.enabled": bson.M{"$exists": false}},
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"enabled": bson.M{"$ne": false}},     // root level not disabled
+					{"enabled": bson.M{"$exists": false}}, // root level field missing = enabled by default
+				},
+			},
+			{
+				"$or": []bson.M{
+					{"config.enabled": bson.M{"$ne": false}},     // config level not disabled
+					{"config.enabled": bson.M{"$exists": false}}, // config level field missing = enabled by default
+				},
+			},
 		},
 	}
 
