@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"runtime/internal/constants"
 	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
@@ -35,10 +36,10 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 
 	// Set defaults
 	if opts.StatePath == "" {
-		opts.StatePath = "/state"
+		opts.StatePath = constants.DefaultStatePath
 	}
 	if opts.LogsPath == "" {
-		opts.LogsPath = "/var/the0/logs"
+		opts.LogsPath = constants.DefaultLogsPath
 	}
 	if opts.Interval == 0 {
 		opts.Interval = 60 * time.Second
