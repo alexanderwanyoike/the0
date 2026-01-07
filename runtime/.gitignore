@@ -6,3 +6,4 @@ PR_MESSAGE.md
 build/
 notes/coverage*.out
 *.out
+/app
