@@ -36,6 +36,9 @@ jobs:
       working-directory: ./runtime
       run: go mod download
 
+    - name: Build runtime image for integration tests
+      run: docker build -t the0/runtime:latest ./runtime
+
     - name: Run tests
       working-directory: ./runtime
       run: go test -p 1 ./...
