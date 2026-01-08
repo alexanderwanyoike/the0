@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // BuildBotCommand creates an exec.Cmd for the given runtime and entrypoint.
@@ -48,7 +49,15 @@ func BuildBotCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 		cmd = exec.Command(binPath)
 	case "scala3":
 		// Scala runs as JAR with Java
-		cmd = exec.Command("java", "-jar", entrypoint)
+		// Support jar:MainClass syntax for specifying alternate main class
+		if idx := strings.LastIndex(entrypoint, ":"); idx > 0 && !strings.HasPrefix(entrypoint[idx:], ":\\") {
+			// Has main class override (e.g., "app.jar:com.example.Main")
+			jarPath := entrypoint[:idx]
+			mainClass := entrypoint[idx+1:]
+			cmd = exec.Command("java", "-cp", jarPath, mainClass)
+		} else {
+			cmd = exec.Command("java", "-jar", entrypoint)
+		}
 	default:
 		// Default: try to run as executable
 		cmd = exec.Command(entrypoint)
@@ -83,7 +92,15 @@ func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 		cmd = exec.Command(binPath)
 	case "scala3":
 		// Scala runs as JAR with Java
-		cmd = exec.Command("java", "-jar", entrypoint)
+		// Support jar:MainClass syntax for specifying alternate main class
+		if idx := strings.LastIndex(entrypoint, ":"); idx > 0 && !strings.HasPrefix(entrypoint[idx:], ":\\") {
+			// Has main class override (e.g., "app.jar:com.example.Main")
+			jarPath := entrypoint[:idx]
+			mainClass := entrypoint[idx+1:]
+			cmd = exec.Command("java", "-cp", jarPath, mainClass)
+		} else {
+			cmd = exec.Command("java", "-jar", entrypoint)
+		}
 	default:
 		// Default: try to run as executable
 		cmd = exec.Command(entrypoint)

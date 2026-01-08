@@ -108,6 +108,14 @@ func TestBuildBotCommand_AllRuntimes(t *testing.T) {
 			expectedArgs: []string{"java", "-jar", "app.jar"},
 			expectedDir:  constants.TestBotDir,
 		},
+		{
+			name:         "scala3 with main class",
+			runtime:      "scala3",
+			entrypoint:   "target/app.jar:com.example.QueryMain",
+			workDir:      constants.TestBotDir,
+			expectedArgs: []string{"java", "-cp", "target/app.jar", "com.example.QueryMain"},
+			expectedDir:  constants.TestBotDir,
+		},
 	}
 
 	for _, tt := range tests {
@@ -133,6 +141,20 @@ func TestBuildQueryCommand_Node(t *testing.T) {
 
 	assert.Equal(t, "node", cmd.Args[0])
 	assert.Contains(t, cmd.Args, "query.js")
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+func TestBuildQueryCommand_Scala(t *testing.T) {
+	// Simple JAR entrypoint
+	cmd := BuildQueryCommand("scala3", "app.jar", constants.TestBotDir)
+	assert.Equal(t, []string{"java", "-jar", "app.jar"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+func TestBuildQueryCommand_ScalaWithMainClass(t *testing.T) {
+	// JAR with main class override (jar:MainClass syntax)
+	cmd := BuildQueryCommand("scala3", "target/app.jar:QueryMain", constants.TestBotDir)
+	assert.Equal(t, []string{"java", "-cp", "target/app.jar", "QueryMain"}, cmd.Args)
 	assert.Equal(t, constants.TestBotDir, cmd.Dir)
 }
 
