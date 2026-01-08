@@ -99,6 +99,7 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 
 	err = sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	// Wait for subscriber to process
 	collection := db.Collection(collectionName)
@@ -178,8 +179,10 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 
 	// Publish twice
 	sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
+	sharedInfra.natsConn.Flush()
 	time.Sleep(100 * time.Millisecond)
 	sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
+	sharedInfra.natsConn.Flush()
 
 	// Wait for bot to be created (only once despite duplicate events)
 	collection := db.Collection(collectionName)
@@ -273,6 +276,7 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	payload, _ := json.Marshal(updatedMessage)
 	err = sharedInfra.natsConn.Publish(SubjectBotUpdated, payload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	// Wait for bot to be updated (check for new symbol value)
 	err = WaitFor(func() bool {
@@ -350,6 +354,7 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	payload, _ := json.Marshal(updatedMessage)
 	err = sharedInfra.natsConn.Publish(SubjectBotUpdated, payload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	// Wait for bot to be created with partition assignment
 	collection := db.Collection(collectionName)
@@ -427,6 +432,7 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	payload, _ := json.Marshal(deleteMessage)
 	err = sharedInfra.natsConn.Publish(SubjectBotDeleted, payload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -482,6 +488,7 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 
 	err = sharedInfra.natsConn.Publish(SubjectBotDeleted, payload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -550,6 +557,7 @@ func TestSubscriber_WrappedEventFormat(t *testing.T) {
 	payload, _ := json.Marshal(wrappedEvent)
 	err = sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	// Wait for subscriber to process
 	collection := db.Collection(collectionName)
@@ -596,10 +604,14 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	err = subscriber.Start(ctx)
 	require.NoError(t, err)
 
+	// Small delay to ensure subscriber is fully ready
+	time.Sleep(100 * time.Millisecond)
+
 	// Publish invalid JSON
 	invalidPayload := []byte(`{invalid json}`)
 	err = sharedInfra.natsConn.Publish(SubjectBotCreated, invalidPayload)
 	require.NoError(t, err)
+	sharedInfra.natsConn.Flush()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -619,6 +631,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	}
 	validPayload, _ := json.Marshal(validMessage)
 	sharedInfra.natsConn.Publish(SubjectBotCreated, validPayload)
+	sharedInfra.natsConn.Flush()
 
 	time.Sleep(200 * time.Millisecond)
 
@@ -659,6 +672,9 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	err = subscriber.Start(ctx)
 	require.NoError(t, err)
 
+	// Small delay to ensure subscriber is fully ready
+	time.Sleep(100 * time.Millisecond)
+
 	// Publish some events
 	for i := 0; i < 5; i++ {
 		msg := BotMessage{
@@ -677,11 +693,14 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 		payload, _ := json.Marshal(msg)
 		sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
 	}
+	// Flush to ensure all messages are delivered
+	sharedInfra.natsConn.Flush()
 
 	// Wait for all 5 messages to be processed (longer timeout for resource contention)
+	// Filter by ID prefix to avoid counting messages from other tests
 	collection := db.Collection(collectionName)
 	err = waitFor(20*time.Second, func() bool {
-		count, _ := collection.CountDocuments(ctx, bson.M{})
+		count, _ := collection.CountDocuments(ctx, bson.M{"id": bson.M{"$regex": "^shutdown-bot-"}})
 		return count == 5
 	})
 	require.NoError(t, err, "All 5 messages should be processed within 20 seconds")
@@ -703,7 +722,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	assert.Equal(t, int64(0), count, "Message after shutdown should not be processed")
 
 	// But the 5 messages before shutdown should exist
-	totalCount, err := collection.CountDocuments(ctx, bson.M{})
+	totalCount, err := collection.CountDocuments(ctx, bson.M{"id": bson.M{"$regex": "^shutdown-bot-"}})
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), totalCount, "Messages before shutdown should be processed")
 }
