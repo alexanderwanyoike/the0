@@ -996,3 +996,301 @@ func BenchmarkHashMap(b *testing.B) {
 		_ = service.hashMap(testMap)
 	}
 }
+
+// ===== Edge Case Tests =====
+
+// Test startBot with error status from runner
+func TestStartBot_ErrorStatus(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	mockRunner.shouldFailStart = true
+	service.runner = mockRunner
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+
+	// Initial failed restarts count
+	initialMetrics := service.state.GetMetrics()
+	initialFailedRestarts := initialMetrics["failed_restarts"].(int)
+
+	// Start bot (async)
+	service.startBot(service.ctx, "bot1", bot)
+
+	// Wait for async completion
+	require.Eventually(t, func() bool {
+		return mockRunner.WasStarted("bot1")
+	}, 100*time.Millisecond, 10*time.Millisecond)
+
+	// Wait for failure to be recorded
+	require.Eventually(t, func() bool {
+		metrics := service.state.GetMetrics()
+		return metrics["failed_restarts"].(int) > initialFailedRestarts
+	}, 100*time.Millisecond, 10*time.Millisecond, "failed_restarts should increment")
+
+	// Bot should not be in running state
+	_, ok := service.state.GetRunningBot("bot1")
+	assert.False(t, ok, "bot should not be in running state after failure")
+}
+
+// Test stopBot failure and state revert
+func TestStopBot_FailureRevertsState(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	mockRunner.shouldFailStop = true
+	service.runner = mockRunner
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+
+	// Add bot to state
+	service.state.SetRunningBot(&RunningBot{
+		BotID:       "bot1",
+		ContainerID: "container1",
+		Status:      "running",
+		Bot:         bot,
+	})
+
+	// Attempt to stop (should fail)
+	err = service.stopBot(service.ctx, "bot1", "container1")
+	assert.Error(t, err, "stopBot should return error")
+
+	// Verify state was reverted to "running" (not "stopping")
+	runningBot, ok := service.state.GetRunningBot("bot1")
+	assert.True(t, ok, "bot should still be in state")
+	assert.Equal(t, "running", runningBot.Status, "status should be reverted to running")
+}
+
+// Test stopBot for untracked container
+func TestStopBot_UntrackedContainer(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Don't add bot to state, just try to stop
+	err = service.stopBot(service.ctx, "unknown-bot", "unknown-container")
+
+	// Should not error, just stop the container
+	assert.NoError(t, err)
+	assert.True(t, mockRunner.WasStopped("unknown-container"))
+}
+
+// Test reconciliation with crashed containers
+func TestReconcile_CrashedContainers(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Add a crashed container to the mock
+	mockRunner.AddCrashedContainer("bot1", "crashed-container-1", 1)
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	service.state.SetRunningBot(&RunningBot{
+		BotID:       "bot1",
+		ContainerID: "crashed-container-1",
+		Status:      "running",
+		Bot:         bot,
+	})
+
+	// Get all containers including crashed ones
+	allContainers, _ := mockRunner.ListAllManagedContainers(service.ctx)
+
+	// Verify crashed container is in the list
+	var crashedFound bool
+	for _, c := range allContainers {
+		if c.Status == "exited" {
+			crashedFound = true
+		}
+	}
+	assert.True(t, crashedFound, "should have crashed container")
+}
+
+// Test GetContainerID for running bot
+func TestBotService_GetContainerID(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	t.Run("existing bot", func(t *testing.T) {
+		service.state.SetRunningBot(&RunningBot{
+			BotID:       "bot1",
+			ContainerID: "container123",
+			Status:      "running",
+		})
+
+		containerID, ok := service.GetContainerID(service.ctx, "bot1")
+		assert.True(t, ok)
+		assert.Equal(t, "container123", containerID)
+	})
+
+	t.Run("non-existing bot", func(t *testing.T) {
+		containerID, ok := service.GetContainerID(service.ctx, "non-existent")
+		assert.False(t, ok)
+		assert.Empty(t, containerID)
+	})
+}
+
+// Test reconciliation with empty desired and empty actual
+func TestPerformReconciliation_EmptyStates(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Both empty
+	service.performReconciliation(service.ctx, []model.Bot{}, []*ContainerInfo{})
+
+	// Should complete without any operations
+	assert.Equal(t, 0, mockRunner.GetStartCallCount())
+	assert.Equal(t, 0, mockRunner.GetStopCallCount())
+}
+
+// Test stopBot marks state as "stopping" during operation
+func TestStopBot_TransitionToStoppingState(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	// Use a mock that captures state during stop
+	stateCaptures := make(chan string, 1)
+	mockRunner := &stateCapturingRunner{
+		MockDockerRunner: NewMockDockerRunner(),
+		onStop: func(containerID string) {
+			// Capture state during stop operation
+			bot, ok := service.state.GetRunningBot("bot1")
+			if ok {
+				stateCaptures <- bot.Status
+			}
+		},
+	}
+	service.runner = mockRunner
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	service.state.SetRunningBot(&RunningBot{
+		BotID:       "bot1",
+		ContainerID: "container1",
+		Status:      "running",
+		Bot:         bot,
+	})
+
+	err = service.stopBot(service.ctx, "bot1", "container1")
+	assert.NoError(t, err)
+
+	// Check that state was "stopping" during the operation
+	select {
+	case status := <-stateCaptures:
+		assert.Equal(t, "stopping", status, "status should be 'stopping' during stop operation")
+	default:
+		t.Error("state capture callback was not called")
+	}
+
+	// After successful stop, bot should be removed from state
+	_, ok := service.state.GetRunningBot("bot1")
+	assert.False(t, ok, "bot should be removed after successful stop")
+}
+
+// Test multiple concurrent startBot calls
+func TestStartBot_ConcurrentCalls(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Start multiple bots concurrently
+	bots := []model.Bot{
+		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true),
+		createTestBot("bot2", map[string]interface{}{"symbol": "ETH"}, true),
+		createTestBot("bot3", map[string]interface{}{"symbol": "SOL"}, true),
+	}
+
+	for _, bot := range bots {
+		service.startBot(service.ctx, bot.ID, bot)
+	}
+
+	// Wait for all to complete
+	require.Eventually(t, func() bool {
+		return mockRunner.GetStartCallCount() == 3
+	}, 200*time.Millisecond, 10*time.Millisecond, "all bots should be started")
+
+	// Verify all bots were started
+	assert.True(t, mockRunner.WasStarted("bot1"))
+	assert.True(t, mockRunner.WasStarted("bot2"))
+	assert.True(t, mockRunner.WasStarted("bot3"))
+}
+
+// Test service defaults reconcile interval
+func TestNewBotService_DefaultsReconcileInterval(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	assert.Equal(t, 30*time.Second, service.config.ReconcileInterval)
+}
+
+// Test custom reconcile interval
+func TestNewBotService_CustomReconcileInterval(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI:          "mongodb://localhost:27017",
+		ReconcileInterval: 60 * time.Second,
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	assert.Equal(t, 60*time.Second, service.config.ReconcileInterval)
+}
+
+// Test nil logger defaults to DefaultLogger
+func TestNewBotService_NilLogger(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+		Logger:   nil,
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	assert.NotNil(t, service.logger)
+}
+
+// Helper: stateCapturingRunner wraps MockDockerRunner to capture state during operations
+type stateCapturingRunner struct {
+	*MockDockerRunner
+	onStop func(containerID string)
+}
+
+func (r *stateCapturingRunner) StopContainer(ctx context.Context, containerID string, executable model.Executable) error {
+	if r.onStop != nil {
+		r.onStop(containerID)
+	}
+	return r.MockDockerRunner.StopContainer(ctx, containerID, executable)
+}
