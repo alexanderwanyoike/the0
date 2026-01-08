@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: 'the0',
   description: 'Open-source algorithmic trading platform documentation',
 
@@ -163,4 +164,4 @@ export default defineConfig({
   sitemap: {
     hostname: 'https://docs.the0.dev'
   }
-})
+}))
