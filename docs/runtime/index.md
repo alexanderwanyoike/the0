@@ -61,8 +61,8 @@ The runtime provides a query API for reading computed data from bots without mod
 flowchart LR
     API["Query Request"] --> Router["Query Router"]
     Router -->|Realtime Bot| Proxy["HTTP Proxy"]
-    Router -->|Scheduled Bot| Ephemeral["Ephemeral Container"]
-    Proxy --> Container["Running Container:9476"]
+    Router -->|Scheduled Bot| Ephemeral["Ephemeral Query Container"]
+    Proxy --> Container["Running Container :9476"]
     Ephemeral --> Result["JSON Result"]
     Container --> Result
 ```

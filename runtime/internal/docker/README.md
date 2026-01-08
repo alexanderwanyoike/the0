@@ -23,14 +23,18 @@ flowchart LR
 
     subgraph Container["Bot Container"]
         Execute["runtime execute"]
-        Sync["daemon sync"]
-        QueryPort[":9476 (if query configured)"]
+        Sync["daemon sync<br/>(subprocess)"]
+        QuerySvc["query server<br/>(subprocess :9476)"]
+    end
+
+    subgraph Ephemeral["Ephemeral Query Container"]
+        EphBot["runtime execute<br/>(query mode)"]
     end
 
     Docker --> Container
     Sync --> MinIO[(MinIO)]
-    QS -.->|realtime| QueryPort
-    QS -.->|scheduled| Docker
+    QS -.->|realtime| QuerySvc
+    QS -.->|scheduled| Ephemeral
 ```
 
 ## How It Works

@@ -50,15 +50,20 @@ flowchart LR
     QS <--> MongoDB
     Runner & Scheduler --> Docker["Docker Engine"]
 
-    subgraph Containers["Bot Containers"]
+    subgraph Container["Bot Container"]
         Bot["runtime execute"]
-        QueryPort[":9476 (if query configured)"]
+        Sync["daemon sync<br/>(subprocess)"]
+        QuerySvc["query server<br/>(subprocess :9476)"]
     end
 
-    Docker --> Containers
-    Containers --> MinIO[(MinIO)]
-    QS -.->|realtime| QueryPort
-    QS -.->|scheduled| Docker
+    subgraph Ephemeral["Ephemeral Query Container"]
+        EphBot["runtime execute<br/>(query mode)"]
+    end
+
+    Docker --> Container
+    Sync --> MinIO[(MinIO)]
+    QS -.->|realtime| QuerySvc
+    QS -.->|scheduled| Ephemeral
 ```
 
 The services query MongoDB for desired state and reconcile with Docker. When a bot should be running, the service starts a container. The `runtime execute` command handles the rest - downloading code/state from MinIO, starting subprocesses, and running the bot.
