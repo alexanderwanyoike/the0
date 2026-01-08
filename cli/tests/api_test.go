@@ -689,14 +689,14 @@ func TestAPIClient_ExecuteBotQuery(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"success": false, "message": "Query handler threw an exception"}`,
 			expectedError: true,
-			errorContains: "query failed",
+			errorContains: "Query handler threw an exception",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				expectedPath := "/bot/" + tt.botID + "/query"
+				expectedPath := "/query/" + tt.botID
 				if r.URL.Path != expectedPath {
 					t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
 				}

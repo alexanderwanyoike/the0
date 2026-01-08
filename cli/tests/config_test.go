@@ -49,7 +49,8 @@ func TestValidateBotConfig(t *testing.T) {
 				Description: "Test bot description",
 				Runtime:     "", // Optional for scheduled bots
 				Entrypoints: struct {
-					Bot string `yaml:"bot" json:"bot"`
+					Bot   string `yaml:"bot" json:"bot"`
+					Query string `yaml:"query,omitempty" json:"query,omitempty"`
 				}{
 					Bot: "main.py",
 				},
@@ -114,7 +115,8 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test bot description",
 				Entrypoints: struct {
-					Bot string `yaml:"bot" json:"bot"`
+					Bot   string `yaml:"bot" json:"bot"`
+					Query string `yaml:"query,omitempty" json:"query,omitempty"`
 				}{
 					Bot: "missing-main.py",
 				},
@@ -172,7 +174,8 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test realtime bot",
 				Entrypoints: struct {
-					Bot string `yaml:"bot" json:"bot"`
+					Bot   string `yaml:"bot" json:"bot"`
+					Query string `yaml:"query,omitempty" json:"query,omitempty"`
 				}{
 					Bot: "main.py",
 				},
@@ -196,7 +199,8 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test realtime bot",
 				Entrypoints: struct {
-					Bot string `yaml:"bot" json:"bot"`
+					Bot   string `yaml:"bot" json:"bot"`
+					Query string `yaml:"query,omitempty" json:"query,omitempty"`
 				}{
 					Bot: "main.py",
 				},
@@ -221,7 +225,8 @@ func TestValidateBotConfig(t *testing.T) {
 				Author:      "test-author",
 				Description: "Test scheduled bot",
 				Entrypoints: struct {
-					Bot string `yaml:"bot" json:"bot"`
+					Bot   string `yaml:"bot" json:"bot"`
+					Query string `yaml:"query,omitempty" json:"query,omitempty"`
 				}{
 					Bot: "main.py",
 				},
