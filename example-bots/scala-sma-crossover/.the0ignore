@@ -1,0 +1,31 @@
+# Scala/SBT build artifacts - keep only assembly JAR
+target/bg-jobs/
+target/global-logging/
+target/streams/
+target/task-temp-directory/
+target/scala-3.3.1/classes/
+target/scala-3.3.1/update/
+target/scala-3.3.1/zinc/
+target/scala-3.3.1/*.jar
+!target/scala-3.3.1/sma-bot-assembly-*.jar
+
+# SBT project files not needed at runtime
+project/target/
+project/build.properties
+project/plugins.sbt
+
+# Source files not needed at runtime (compiled to JAR)
+src/
+
+# Build config not needed at runtime
+build.sbt
+
+# Frontend - only keep dist/
+frontend/node_modules/
+frontend/index.tsx
+frontend/package.json
+frontend/package-lock.json
+frontend/tsconfig.json
+
+# Documentation
+README.md
