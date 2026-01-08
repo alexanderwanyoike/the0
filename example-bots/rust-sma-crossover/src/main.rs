@@ -120,11 +120,13 @@ fn main() {
         // Persist state every 10 iterations
         iteration += 1;
         if iteration % 10 == 0 {
-            let _ = state::set("bot_state", &PersistedState {
+            if let Err(e) = state::set("bot_state", &PersistedState {
                 prev_short_sma: bot_state.prev_short_sma,
                 prev_long_sma: bot_state.prev_long_sma,
                 signal_count: bot_state.signal_count,
-            });
+            }) {
+                error!(error = %e, "Failed to persist bot state");
+            }
         }
 
         thread::sleep(Duration::from_millis(update_interval_ms));
@@ -183,8 +185,7 @@ fn fetch_and_process(
     if let (Some(prev_short), Some(prev_long)) = (state.prev_short_sma, state.prev_long_sma) {
         if let Some(signal) = check_crossover(prev_short, prev_long, short_sma, long_sma) {
             state.signal_count += 1;
-            let confidence = (short_sma - long_sma).abs() / long_sma * 100.0;
-            let confidence = confidence.min(0.95);
+            let confidence = ((short_sma - long_sma).abs() / long_sma).min(0.95);
 
             input::metric("signal", &json!({
                 "type": signal,

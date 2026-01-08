@@ -33,6 +33,7 @@ class SmaBot
     private static double? _prevShortSma = null;
     private static double? _prevLongSma = null;
     private static long _signalCount = 0;
+    private static int _iteration = 0;
 
     static async Task Main(string[] args)
     {
@@ -108,7 +109,7 @@ class SmaBot
                     if (signal != null)
                     {
                         _signalCount++;
-                        var confidence = Math.Min(Math.Abs(shortSma - longSma) / longSma * 100, 0.95);
+                        var confidence = Math.Min(Math.Abs(shortSma - longSma) / longSma, 0.95);
                         Input.Metric("signal", new
                         {
                             type = signal,
@@ -126,8 +127,8 @@ class SmaBot
                 _prevLongSma = longSma;
 
                 // Persist state every 10 iterations
-                iteration++;
-                if (iteration % 10 == 0)
+                _iteration++;
+                if (_iteration % 10 == 0)
                 {
                     State.Set("bot_state", new PersistedState(_prevShortSma, _prevLongSma, _signalCount));
                 }
@@ -140,8 +141,6 @@ class SmaBot
             await Task.Delay(updateIntervalMs);
         }
     }
-
-    private static int iteration = 0;
 
     static async Task<List<double>> FetchYahooFinanceData(HttpClient client, string symbol)
     {
