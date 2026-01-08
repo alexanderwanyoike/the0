@@ -529,16 +529,16 @@ func TestIntegration_RealDocker_RustBot(t *testing.T) {
 	require.Equal(t, "success", result.Status, "Rust bot should complete successfully")
 	require.Equal(t, 0, result.ExitCode, "Rust bot should exit with code 0")
 
-	// Verify JSON output
+	// Verify JSON output - look for bot output line (contains "status"), not daemon logs
 	lines := strings.Split(result.Output, "\n")
 	var jsonLine string
 	for _, line := range lines {
-		if strings.HasPrefix(line, "{") {
+		if strings.HasPrefix(line, "{") && strings.Contains(line, `"status":`) {
 			jsonLine = line
 			break
 		}
 	}
-	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+	require.NotEmpty(t, jsonLine, "Should find JSON result with status in output")
 
 	var botResult map[string]any
 	err = json.Unmarshal([]byte(jsonLine), &botResult)
@@ -677,16 +677,16 @@ func TestIntegration_RealDocker_CppBot(t *testing.T) {
 	require.Equal(t, "success", result.Status, "C++ bot should complete successfully")
 	require.Equal(t, 0, result.ExitCode, "C++ bot should exit with code 0")
 
-	// Verify JSON output
+	// Verify JSON output - look for bot output line (contains "status"), not daemon logs
 	lines := strings.Split(result.Output, "\n")
 	var jsonLine string
 	for _, line := range lines {
-		if strings.HasPrefix(line, "{") {
+		if strings.HasPrefix(line, "{") && strings.Contains(line, `"status":`) {
 			jsonLine = line
 			break
 		}
 	}
-	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+	require.NotEmpty(t, jsonLine, "Should find JSON result with status in output")
 
 	var botResult map[string]any
 	err = json.Unmarshal([]byte(jsonLine), &botResult)
