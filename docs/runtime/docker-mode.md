@@ -1,6 +1,11 @@
+---
+title: "Docker Mode"
+description: "Running bots with Docker - recommended for local development and small deployments"
+---
+
 # Docker Mode
 
-The Docker mode provides single-process services for running bots in containers. This is the recommended deployment for local development and small-to-medium deployments.
+Docker mode provides single-process services for running bots in containers. This is the recommended deployment for local development and small-to-medium deployments (up to ~1000 bots per host).
 
 ## Architecture
 
@@ -37,6 +42,14 @@ flowchart LR
     QS -.->|scheduled| Ephemeral
 ```
 
+## Services
+
+**bot-runner** manages live trading bots - containers that run continuously until stopped. The service monitors container health and restarts failed containers through the reconciliation loop.
+
+**bot-scheduler** manages cron-based scheduled bots. It evaluates cron expressions to determine when bots should run, then starts containers that execute once and terminate.
+
+**query-server** handles query requests on port 9477. For realtime bots, it proxies to the container's query server on port 9476. For scheduled bots, it spawns ephemeral containers.
+
 ## How It Works
 
 ### The Reconciliation Loop
@@ -47,7 +60,7 @@ NATS integration is optional but recommended. Without NATS, changes only take ef
 
 ### Container Execution
 
-When a container starts, it runs `runtime execute` which handles everything. First, it downloads the bot code and any existing state from MinIO. Then it starts `daemon sync` as a subprocess for state/log persistence. For realtime bots with a query entrypoint, it also starts a query server subprocess on port 9476. Finally, it executes the bot process directly.
+When a container starts, it runs `runtime execute` which handles everything:
 
 ```mermaid
 flowchart TD
@@ -73,21 +86,7 @@ The daemon sync process periodically (every 60s) computes a hash of the state di
 
 For scheduled bots, the daemon also watches for a "done" file. When the bot completes and writes its exit code to this file, the daemon performs a final sync and then exits, allowing the container to terminate cleanly.
 
-## Services
-
-**BotService** manages live trading bots - containers that run continuously until stopped. The service monitors container health and restarts failed containers through the reconciliation loop.
-
-**ScheduleService** manages cron-based scheduled bots. It evaluates cron expressions to determine when bots should run, then starts containers that execute once and terminate.
-
-## Simplification from Previous Architecture
-
-The previous architecture had multiple components in the runner: CodeManager for downloading code, ScriptManager for generating entrypoints, LogCollector for streaming logs, StateManager for persistence, and StateCollector for background sync. Each component added complexity and the Docker and K8s implementations diverged.
-
-The current architecture consolidates all of this into the `runtime execute` command which handles code download, state management, and subprocess orchestration. In Docker mode, `execute` spawns `daemon sync` as a subprocess. In K8s mode, these run as separate containers. The runner is now just container lifecycle management - about 40% less code with better separation of concerns.
-
 ## Query Execution
-
-Docker mode supports querying bots for computed data without affecting state.
 
 ### Realtime Bot Queries
 
@@ -118,3 +117,42 @@ The services maintain in-memory state to track running containers:
 - **Statuses**: "starting", "running", "stopping", "failed"
 
 This enables the reconciliation loop to compare desired state (MongoDB) with actual state (running containers) and take corrective action.
+
+## Quick Start
+
+Using Docker Compose:
+
+```bash
+cd docker
+make up
+```
+
+This starts all services including bot-runner, bot-scheduler, and query-server. Runtime images are built automatically.
+
+## Environment Variables
+
+### Required
+
+```bash
+MONGO_URI=mongodb://localhost:27017    # MongoDB connection
+MINIO_ENDPOINT=localhost:9000          # MinIO endpoint
+MINIO_ACCESS_KEY=the0admin             # MinIO access key
+MINIO_SECRET_KEY=the0password          # MinIO secret key
+```
+
+### Optional
+
+```bash
+NATS_URL=nats://localhost:4222         # NATS for real-time events
+```
+
+## Capacity
+
+| Metric | Single Process |
+|--------|----------------|
+| Bots managed | 10,000+ |
+| Memory overhead | ~100MB for 1000 bots |
+| Goroutines | 1 per bot + collectors |
+| Docker limit | ~1000 containers/host |
+
+**If you need more than 1000 bots: use [Kubernetes mode](./kubernetes-mode).**

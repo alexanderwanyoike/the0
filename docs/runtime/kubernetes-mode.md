@@ -1,6 +1,11 @@
+---
+title: "Kubernetes Mode"
+description: "Running bots at scale with Kubernetes - recommended for production deployments"
+---
+
 # Kubernetes Mode
 
-The Kubernetes mode provides a controller-based deployment for running bots at scale. Each bot becomes its own Pod, leveraging Kubernetes for scheduling, health checks, and automatic restarts.
+Kubernetes mode provides a controller-based deployment for running bots at scale. Each bot becomes its own Pod, leveraging Kubernetes for scheduling, health checks, and automatic restarts.
 
 Use Kubernetes mode when running more than ~1000 bots per host, when high availability is required, or when you need K8s-native observability and management.
 
@@ -28,8 +33,12 @@ flowchart LR
     end
 
     BC --> RealtimePod
-    SC --> CronJobs["CronJobs"]
-    CronJobs --> ScheduledPods["Scheduled Pods"]
+    SC --> CronJobs["CronJobs"] --> ScheduledPod
+
+    subgraph ScheduledPod["Scheduled Pod"]
+        BotS["bot + sync"]
+    end
+
     SyncC --> MinIO[(MinIO)]
     QS -.->|realtime| QueryC
     QS -.->|scheduled| QueryJob["Query Job"] --> MinIO
@@ -93,15 +102,17 @@ These Pods use `RestartPolicy: Never` since completion is expected. The single c
 
 Both modes use the same underlying commands (`runtime execute` and `daemon sync`) with the same logic. The difference is in how they're orchestrated:
 
-**Docker mode**: `runtime execute` runs everything within a single container. It downloads code/state, spawns `daemon sync` and optionally query server as subprocesses, and executes the bot. Signal handlers ensure cleanup on exit.
+| Aspect | Docker Mode | K8s Realtime | K8s Scheduled |
+|--------|-------------|--------------|---------------|
+| Orchestrator | BotService/ScheduleService | Bot Controller | Schedule Controller |
+| Sync | Subprocess | Sidecar | Subprocess |
+| Query Server | Subprocess | Sidecar | N/A (ephemeral) |
+| Restart | Service reconciliation | K8s restart policy | Job recreation |
+| Observability | Container logs | Per-container logs | Job logs |
 
-**K8s realtime bots**: Use sidecars instead of subprocesses. The bot container runs `runtime execute --skip-sync --skip-query-server`. Separate sidecar containers run `daemon sync` and the query server. This provides better observability - you can see the status of each container independently and view their logs separately.
-
-**K8s scheduled bots**: Run as single containers, same as Docker mode. The `runtime execute --skip-query-server` command spawns a sync subprocess that runs alongside the bot and does a final upload when the bot completes.
+**K8s realtime bots** provide better observability - you can see the status of each container independently and view their logs separately.
 
 ## Query Execution
-
-Kubernetes mode supports querying bots for computed data without affecting state.
 
 ### Realtime Bot Queries
 
@@ -122,3 +133,52 @@ For scheduled bots, queries create ephemeral K8s Jobs:
 4. Job pod runs, writes result to MinIO
 5. Handler downloads result from MinIO
 6. Job auto-cleans up (~1-3s latency)
+
+## Quick Start
+
+For local development with Minikube:
+
+```bash
+cd k8s
+make minikube-up
+```
+
+This starts Minikube with the controller and all dependencies.
+
+## Environment Variables
+
+### Required
+
+```bash
+NAMESPACE=the0                         # K8s namespace
+MONGO_URI=mongodb://localhost:27017    # MongoDB connection
+MINIO_ENDPOINT=minio:9000              # MinIO endpoint (in-cluster)
+MINIO_ACCESS_KEY=the0admin
+MINIO_SECRET_KEY=the0password
+MINIO_BUCKET=the0-custom-bots
+```
+
+### Optional
+
+```bash
+NATS_URL=nats://localhost:4222         # NATS for real-time events
+RECONCILE_INTERVAL=30s                 # Controller reconciliation interval
+```
+
+## CLI Commands
+
+```bash
+# Start Kubernetes controller
+./runtime controller --namespace the0 --reconcile-interval 30s
+```
+
+## When to Use Kubernetes Mode
+
+Choose Kubernetes mode when you need:
+
+- **Scale**: More than 1000 bots
+- **High Availability**: Automatic pod rescheduling on node failure
+- **Observability**: K8s-native monitoring, logging, and metrics
+- **Resource Management**: Fine-grained CPU/memory limits per bot
+- **Multi-tenancy**: Namespace isolation
+- **Rolling Updates**: Zero-downtime runtime updates

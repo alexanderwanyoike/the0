@@ -101,6 +101,15 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Runtime',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/runtime/' },
+          { text: 'Docker Mode', link: '/runtime/docker-mode' },
+          { text: 'Kubernetes Mode', link: '/runtime/kubernetes-mode' },
+        ]
+      },
+      {
         text: 'Platform Deployment',
         collapsed: false,
         items: [
