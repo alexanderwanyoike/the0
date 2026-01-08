@@ -3,7 +3,7 @@
 
 name: rust-sma-crossover
 description: "SMA crossover strategy bot using Rust with Yahoo Finance data"
-version: 1.2.0
+version: 1.2.3
 author: "the0"
 type: realtime
 runtime: rust-stable

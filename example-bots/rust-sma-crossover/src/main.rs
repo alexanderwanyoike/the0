@@ -70,6 +70,20 @@ struct PersistedState {
     signal_count: u64,
 }
 
+// Last run timestamp structure
+#[derive(Deserialize, serde::Serialize)]
+struct LastRun {
+    timestamp: u64,
+}
+
+fn current_timestamp() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap();
+    duration.as_secs() * 1000 + duration.subsec_millis() as u64
+}
+
 fn main() {
     // Initialize tracing for structured logging
     tracing_subscriber::fmt()
@@ -79,6 +93,11 @@ fn main() {
 
     // Get configuration using the0 SDK
     let (bot_id, config) = input::parse().expect("Failed to parse bot configuration");
+    if let Err(e) = state::set("last_run", & LastRun {
+        timestamp: current_timestamp(),
+    }) {
+        error!(error = %e, "Failed to save last run timestamp");
+    }
 
     // Extract configuration with defaults
     let symbol = config["symbol"].as_str().unwrap_or("AAPL");
