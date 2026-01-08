@@ -198,7 +198,7 @@ processData config persistedState = do
           -- Emit signal if crossover detected
           case crossoverSignal of
             Just signalType -> do
-              let confidence = min (abs (shortSma - longSma) / longSma * 100) 0.95
+              let confidence = min (abs (shortSma - longSma) / longSma) 0.95
                   direction = if signalType == "BUY" then "above" else "below"
               Input.metric "signal" $ object
                 [ fromText "type" .= signalType

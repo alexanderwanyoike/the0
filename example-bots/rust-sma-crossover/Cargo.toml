@@ -4,6 +4,14 @@ version = "1.0.0"
 edition = "2021"
 description = "SMA Crossover trading bot using Rust"
 
+[[bin]]
+name = "sma-bot"
+path = "src/main.rs"
+
+[[bin]]
+name = "sma-query"
+path = "src/bin/query.rs"
+
 [dependencies]
 # the0 SDK for bot development
 the0-sdk = "0.2.0"

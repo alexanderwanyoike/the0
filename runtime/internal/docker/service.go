@@ -228,7 +228,9 @@ func (s *BotService) reconcile() {
 		if container.Status == "exited" {
 			s.logger.Error("Bot %s crashed with exit code %d", container.ID, container.ExitCode)
 			// Capture crash logs and cleanup the container
-			s.runner.HandleCrashedContainer(ctx, container)
+			if _, err := s.runner.HandleCrashedContainer(ctx, container); err != nil {
+				s.logger.Error("Failed to handle crashed container %s: %v", container.ID, err)
+			}
 		} else if container.Status == "running" {
 			runningContainers = append(runningContainers, container)
 		}

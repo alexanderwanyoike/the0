@@ -10,6 +10,7 @@ runtime: gcc13
 
 entrypoints:
   bot: build/sma_bot
+  query: build/sma_query
 
 schema:
   bot: bot-schema.json

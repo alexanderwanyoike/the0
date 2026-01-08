@@ -200,7 +200,7 @@ int main() {
 
                 if (signal.has_value()) {
                     state.signalCount++;
-                    double confidence = std::min(std::abs(shortSma - longSma) / longSma * 100.0, 0.95);
+                    double confidence = std::min(std::abs(shortSma - longSma) / longSma, 0.95);
                     std::string direction = signal.value() == "BUY" ? "above" : "below";
 
                     the0::metric("signal", {

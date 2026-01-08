@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: 'the0',
   description: 'Open-source algorithmic trading platform documentation',
 
@@ -86,6 +87,7 @@ export default defineConfig({
           { text: 'Configuration', link: '/custom-bot-development/configuration' },
           { text: 'Bot Types', link: '/custom-bot-development/bot-types' },
           { text: 'State (Persistence)', link: '/custom-bot-development/state' },
+          { text: 'Query Handlers', link: '/custom-bot-development/queries' },
           { text: 'Custom Frontends', link: '/custom-bot-development/custom-frontends' },
           { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },
@@ -162,4 +164,4 @@ export default defineConfig({
   sitemap: {
     hostname: 'https://docs.the0.dev'
   }
-})
+}))

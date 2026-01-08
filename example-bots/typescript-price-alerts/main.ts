@@ -148,10 +148,14 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     // Save state before exit
-    state.set<PersistedState>("bot_state", {
-      priceHistory: botState.priceHistory,
-      alertCount: botState.alertCount,
-    });
+    try {
+      state.set<PersistedState>("bot_state", {
+        priceHistory: botState.priceHistory,
+        alertCount: botState.alertCount,
+      });
+    } catch (stateErr) {
+      logger.error({ error: stateErr }, "Failed to persist state on exit");
+    }
 
     if ((err as Error).message === "SIGTERM") {
       logger.info({ botId: id, alertCount: botState.alertCount }, "Bot stopped");
@@ -279,7 +283,7 @@ function generateSignal(
 
   if (Math.abs(maDiff) > 0.001) {
     const direction = maDiff > 0 ? "long" : "short";
-    const confidence = Math.min(Math.abs(maDiff) * 100, 0.95);
+    const confidence = Math.min(Math.abs(maDiff), 0.95);
 
     return {
       symbol,

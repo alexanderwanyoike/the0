@@ -10,6 +10,7 @@ runtime: nodejs20
 
 entrypoints:
   bot: main.js
+  query: query.js
 
 schema:
   bot: bot-schema.json

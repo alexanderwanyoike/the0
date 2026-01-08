@@ -10,6 +10,7 @@ runtime: ghc96
 
 entrypoints:
   bot: dist-newstyle/build/x86_64-linux/ghc-9.6.7/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
+  query: dist-newstyle/build/x86_64-linux/ghc-9.6.7/sma-bot-1.0.0/x/sma-query/opt/build/sma-query/sma-query
 
 schema:
   bot: bot-schema.json

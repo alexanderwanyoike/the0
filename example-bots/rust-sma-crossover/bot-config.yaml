@@ -10,6 +10,7 @@ runtime: rust-stable
 
 entrypoints:
   bot: target/release/sma-bot
+  query: target/release/sma-query
 
 schema:
   bot: bot-schema.json

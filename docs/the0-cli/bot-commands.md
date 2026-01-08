@@ -98,14 +98,14 @@ the0 bot logs <bot_id>
 - `--limit <n>` - Maximum entries to return (1-1000, default 100)
 - `-w, --watch` - Stream logs in real-time (polls every 5 seconds)
 
-**Date filtering:**
+**Date filtering** (format: `YYYYMMDD` or `YYYYMMDD-YYYYMMDD`):
 
 ```bash
 # Logs from a specific date
-the0 bot logs <bot_id> 2025-01-15
+the0 bot logs <bot_id> 20250115
 
 # Logs from a date range
-the0 bot logs <bot_id> 2025-01-15:2025-01-20
+the0 bot logs <bot_id> 20250115-20250120
 ```
 
 **Examples:**
@@ -118,8 +118,103 @@ the0 bot logs abc123 --limit 50
 the0 bot logs abc123 -w
 
 # Logs from today with limit
-the0 bot logs abc123 2025-01-15 --limit 200
+the0 bot logs abc123 20250115 --limit 200
 ```
+
+## Enable / Disable
+
+Start or stop a bot instance without deleting it:
+
+```bash
+# Enable a stopped bot
+the0 bot enable <bot_id>
+
+# Disable a running bot
+the0 bot disable <bot_id>
+```
+
+## State
+
+Manage persistent bot state. State is automatically synced between the bot container and cloud storage.
+
+### List State Keys
+
+List all state keys stored by a bot:
+
+```bash
+the0 bot state list <bot_id>
+```
+
+Output shows key names and sizes in a table format.
+
+### Get State Value
+
+Retrieve the value of a specific state key:
+
+```bash
+the0 bot state get <bot_id> <key>
+```
+
+Returns the state value as formatted JSON.
+
+### Delete State Key
+
+Delete a specific state key:
+
+```bash
+the0 bot state delete <bot_id> <key>
+```
+
+### Clear All State
+
+Delete all persistent state for a bot:
+
+```bash
+the0 bot state clear <bot_id>
+```
+
+The CLI prompts for confirmation. Use `-y` or `--yes` to skip:
+
+```bash
+the0 bot state clear abc123 -y
+```
+
+## Query
+
+Execute queries against running or scheduled bots. Queries provide read-only access to bot data.
+
+```bash
+the0 bot query <bot_id> <path> [options]
+```
+
+**Options:**
+
+- `--params, -p <json>` - Query parameters as JSON object
+- `--timeout, -t <seconds>` - Query timeout (default: 30)
+- `--raw, -r` - Output raw JSON without formatting
+
+**Examples:**
+
+```bash
+# Basic query
+the0 bot query abc123 /status
+
+# Query with parameters
+the0 bot query abc123 /signals --params '{"limit": 5}'
+
+# Query with timeout for slow scheduled bots
+the0 bot query abc123 /portfolio --timeout 60
+
+# Raw output for scripting
+the0 bot query abc123 /history --raw | jq '.data[0]'
+```
+
+**Latency notes:**
+
+- **Realtime bots**: Queries are proxied to the running container (~10-50ms)
+- **Scheduled bots**: Queries spawn ephemeral containers (~1-3s startup)
+
+See [Query Handlers](/custom-bot-development/queries) for implementing query endpoints in your bots.
 
 ## Cron Schedule Format
 
