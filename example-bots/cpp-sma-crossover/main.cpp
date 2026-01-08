@@ -128,6 +128,10 @@ int main() {
     int shortPeriod = config.value("short_period", 5);
     int longPeriod = config.value("long_period", 20);
     int updateIntervalMs = config.value("update_interval_ms", 60000);
+    // Save state for the last date we processed
+    the0::state::set("last_run", {
+        {"timestamp", the0::current_timestamp()}
+    });
 
     // Load persistent state from previous runs
     auto persisted = the0::state::get("bot_state");
