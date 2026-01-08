@@ -743,7 +743,6 @@ config_*
 		"config_prod.yaml",       // Negation pattern
 		"test_runner.py",         // Should not match tests/ pattern
 		"vendor/lib.py",          // Vendor is always included
-		"build/output/bot.exe",   // build/ is protected for compiled languages
 	}
 
 	for _, expectedFile := range expectedFiles {
@@ -764,7 +763,7 @@ config_*
 		"docs/api/api.md",          // docs/**/*.md
 		"cache/temp.dat",           // cache/
 		"config_dev.yaml",          // config_*
-		// Note: build/output/bot.exe is now INCLUDED (build/ is protected for compiled languages)
+		"build/output/bot.exe",     // build/ is in default ignore patterns
 	}
 
 	for _, excludedFile := range excludedFiles {
