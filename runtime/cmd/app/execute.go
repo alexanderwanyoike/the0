@@ -144,19 +144,38 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	// Cleanup function
 	cleanup := func() {
 		logger.Info("Cleaning up child processes...")
+		// Send SIGTERM first for graceful shutdown
 		if syncCmd != nil && syncCmd.Process != nil {
-			syncCmd.Process.Signal(syscall.SIGTERM)
+			if err := syncCmd.Process.Signal(syscall.SIGTERM); err != nil {
+				// "process already finished" is expected if it exited naturally
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to send SIGTERM to sync process: %v", err)
+				}
+			}
 		}
 		if queryCmd != nil && queryCmd.Process != nil {
-			queryCmd.Process.Signal(syscall.SIGTERM)
+			if err := queryCmd.Process.Signal(syscall.SIGTERM); err != nil {
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to send SIGTERM to query process: %v", err)
+				}
+			}
 		}
 		// Give processes time to clean up
 		time.Sleep(3 * time.Second)
+		// Force kill if still running
 		if syncCmd != nil && syncCmd.Process != nil {
-			syncCmd.Process.Kill()
+			if err := syncCmd.Process.Kill(); err != nil {
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to kill sync process: %v", err)
+				}
+			}
 		}
 		if queryCmd != nil && queryCmd.Process != nil {
-			queryCmd.Process.Kill()
+			if err := queryCmd.Process.Kill(); err != nil {
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to kill query process: %v", err)
+				}
+			}
 		}
 	}
 
