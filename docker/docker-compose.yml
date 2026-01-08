@@ -202,7 +202,7 @@ services:
       start_period: 60s
     networks:
       - the0-network
-    command: ["./runtime", "bot-runner"]
+    command: ["/app/runtime", "bot-runner"]
 
   # Bot Scheduler Service (Go - single-process scheduled bot execution)
   bot-scheduler:
@@ -260,7 +260,7 @@ services:
       start_period: 60s
     networks:
       - the0-network
-    command: ["./runtime", "bot-scheduler"]
+    command: ["/app/runtime", "bot-scheduler"]
 
   # Query Server Service (Go - standalone query execution)
   query-server:
@@ -311,7 +311,7 @@ services:
       start_period: 30s
     networks:
       - the0-network
-    command: ["./runtime", "query-server"]
+    command: ["/app/runtime", "query-server"]
 
   the0-frontend:
     build:
