@@ -401,3 +401,293 @@ func TestBotController_Start_Stop(t *testing.T) {
 	assert.GreaterOrEqual(t, mockRepo.Called, 1)
 }
 
+func TestBotController_DoubleStart(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{},
+	}
+	mockK8s := &MockK8sClient{}
+
+	config := testControllerConfig()
+	config.ReconcileInterval = 1 * time.Second
+
+	controller := NewBotController(
+		config,
+		mockRepo,
+		mockK8s,
+	)
+
+	ctx := context.Background()
+
+	// Start controller in goroutine
+	go controller.Start(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	// Try to start again
+	err := controller.Start(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already running")
+
+	controller.Stop()
+}
+
+func TestBotController_StopWhenNotRunning(t *testing.T) {
+	mockRepo := &MockBotRepository{}
+	mockK8s := &MockK8sClient{}
+
+	controller := NewBotController(
+		testControllerConfig(),
+		mockRepo,
+		mockK8s,
+	)
+
+	// Stop without starting - should not panic
+	controller.Stop()
+	controller.Stop() // Double stop should also be safe
+}
+
+func TestBotController_ContextCancellation(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{},
+	}
+	mockK8s := &MockK8sClient{}
+
+	config := testControllerConfig()
+	config.ReconcileInterval = 1 * time.Second
+
+	controller := NewBotController(
+		config,
+		mockRepo,
+		mockK8s,
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		done <- controller.Start(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel() // Cancel context instead of calling Stop()
+
+	select {
+	case err := <-done:
+		assert.Equal(t, context.Canceled, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("controller did not stop after context cancellation")
+	}
+}
+
+// ---- isPodHealthy Tests ----
+
+func TestIsPodHealthy(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    corev1.PodPhase
+		expected bool
+	}{
+		{"Running pod is healthy", corev1.PodRunning, true},
+		{"Pending pod is healthy", corev1.PodPending, true},
+		{"Succeeded pod is unhealthy", corev1.PodSucceeded, false},
+		{"Failed pod is unhealthy", corev1.PodFailed, false},
+		{"Unknown pod is unhealthy", corev1.PodUnknown, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: tt.phase,
+				},
+			}
+			result := isPodHealthy(pod)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// ---- Mock Client Error Tests ----
+
+func TestMockK8sClient_ListError(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{
+			createTestBot("bot-1", "test-bot", "1.0.0", "python3.11"),
+		},
+	}
+	mockK8s := &MockK8sClient{
+		ListError: errors.New("connection refused"),
+	}
+
+	controller := NewBotController(
+		testControllerConfig(),
+		mockRepo,
+		mockK8s,
+	)
+
+	err := controller.Reconcile(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "connection refused")
+}
+
+func TestMockK8sClient_CreateError(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{
+			createTestBot("bot-1", "test-bot", "1.0.0", "python3.11"),
+		},
+	}
+	mockK8s := &MockK8sClient{
+		Pods:        []corev1.Pod{}, // No existing pods
+		CreateError: errors.New("quota exceeded"),
+	}
+
+	controller := NewBotController(
+		testControllerConfig(),
+		mockRepo,
+		mockK8s,
+	)
+
+	// Reconcile should not fail - just log the error
+	err := controller.Reconcile(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, mockK8s.CreateCalled)
+}
+
+func TestMockK8sClient_DeleteError(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{}, // No desired bots
+	}
+	mockK8s := &MockK8sClient{
+		Pods: []corev1.Pod{
+			createTestPod("orphan-bot", corev1.PodRunning),
+		},
+		DeleteError: errors.New("forbidden"),
+	}
+
+	controller := NewBotController(
+		testControllerConfig(),
+		mockRepo,
+		mockK8s,
+	)
+
+	// Reconcile should not fail - just log the error
+	err := controller.Reconcile(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, mockK8s.DeleteCalled)
+}
+
+// ---- Config Defaults Tests ----
+
+func TestNewBotController_Defaults(t *testing.T) {
+	mockRepo := &MockBotRepository{}
+	mockK8s := &MockK8sClient{}
+
+	controller := NewBotController(
+		BotControllerConfig{}, // Empty config
+		mockRepo,
+		mockK8s,
+	)
+
+	assert.Equal(t, "the0", controller.config.Namespace)
+	assert.Equal(t, 30*time.Second, controller.config.ReconcileInterval)
+	assert.Equal(t, "the0-bot-controller", controller.config.ControllerName)
+}
+
+func TestNewBotController_CustomConfig(t *testing.T) {
+	mockRepo := &MockBotRepository{}
+	mockK8s := &MockK8sClient{}
+
+	controller := NewBotController(
+		BotControllerConfig{
+			Namespace:         "custom-ns",
+			ReconcileInterval: 60 * time.Second,
+			ControllerName:    "custom-controller",
+		},
+		mockRepo,
+		mockK8s,
+	)
+
+	assert.Equal(t, "custom-ns", controller.config.Namespace)
+	assert.Equal(t, 60*time.Second, controller.config.ReconcileInterval)
+	assert.Equal(t, "custom-controller", controller.config.ControllerName)
+}
+
+// ---- Multiple Bots Tests ----
+
+func TestBotController_Reconcile_MultipleBots(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{
+			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
+			createTestBot("bot-2", "sma-crossover", "2.0.0", "nodejs20"),
+			createTestBot("bot-3", "rsi-tracker", "1.0.0", "python3.11"),
+		},
+	}
+	mockK8s := &MockK8sClient{
+		Pods: []corev1.Pod{}, // No existing pods
+	}
+
+	controller := NewBotController(
+		testControllerConfig(),
+		mockRepo,
+		mockK8s,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, mockK8s.CreateCalled)
+	assert.Len(t, mockK8s.CreatedPods, 3)
+}
+
+func TestBotController_Reconcile_MixedStates(t *testing.T) {
+	bot1 := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
+	bot2 := createTestBot("bot-2", "sma-crossover", "1.0.0", "python3.11")
+
+	// Generate pod for bot2 with correct hash
+	generator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
+		Namespace:      "the0",
+		ControllerName: "the0-bot-controller",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
+	})
+	expectedPod2, _ := generator.GeneratePod(bot2)
+
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{bot1, bot2},
+	}
+	mockK8s := &MockK8sClient{
+		Pods: []corev1.Pod{
+			// bot1 doesn't have a pod (will be created)
+			// bot2 has a healthy matching pod (no action)
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      expectedPod2.Name,
+					Namespace: expectedPod2.Namespace,
+					Labels:    expectedPod2.Labels,
+					Annotations: map[string]string{
+						podgen.AnnotationConfigHash: expectedPod2.Annotations[podgen.AnnotationConfigHash],
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+				},
+			},
+			// orphan pod (will be deleted)
+			createTestPod("orphan-bot", corev1.PodRunning),
+		},
+	}
+
+	controller := NewBotController(
+		testControllerConfig(),
+		mockRepo,
+		mockK8s,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockK8s.CreateCalled, "should create pod for bot-1")
+	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete orphan pod")
+}
+

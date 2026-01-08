@@ -11,6 +11,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+
+	"runtime/internal/util"
 )
 
 type MinIOLogger interface {
@@ -25,6 +27,7 @@ type minIOLogger struct {
 	resultsBucket string
 	mutexes       map[string]*sync.Mutex // Per-bot mutexes to prevent concurrent writes
 	mutexesMu     sync.RWMutex           // Protects the mutexes map
+	logger        util.Logger
 }
 
 type MinioLoggerOptions struct {
@@ -34,6 +37,7 @@ type MinioLoggerOptions struct {
 	AccessKey     string
 	SecretKey     string
 	UseSSL        bool
+	Logger        util.Logger // Optional logger, defaults to NopLogger
 }
 
 func NewMinIOLogger(
@@ -103,12 +107,19 @@ func NewMinIOLogger(
 		}
 	}
 
+	// Default to NopLogger if no logger provided
+	logger := options.Logger
+	if logger == nil {
+		logger = &util.NopLogger{}
+	}
+
 	return &minIOLogger{
 		client:        client,
 		logsBucket:    options.LogsBucket,
 		resultsBucket: options.ResultsBucket,
 		mutexes:       make(map[string]*sync.Mutex),
 		mutexesMu:     sync.RWMutex{},
+		logger:        logger,
 	}, nil
 }
 
@@ -151,38 +162,38 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	// Generate file path: logs/{bot_id}/{YYYYMMDD}.log
 	timestamp := time.Now().Format("20060102") // YYYYMMDD format
 	objectPath := fmt.Sprintf("logs/%s/%s.log", id, timestamp)
-	fmt.Printf("DEBUG: Attempting to append logs to MinIO path: %s, bucket: %s\n", objectPath, m.logsBucket)
+	m.logger.Debug("Attempting to append logs to MinIO", "path", objectPath, "bucket", m.logsBucket)
 
 	// Read existing content if file exists
 	var existingContent []byte
 	obj, err := m.client.GetObject(ctx, m.logsBucket, objectPath, minio.GetObjectOptions{})
 	if err != nil {
 		// Check if error is NoSuchKey (file doesn't exist) using string contains
-		fmt.Printf("DEBUG: GetObject error: %v\n", err)
+		m.logger.Debug("GetObject error", "error", err.Error())
 		if strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "The specified key does not exist") {
-			fmt.Printf("DEBUG: File doesn't exist, will create new one\n")
+			m.logger.Debug("File doesn't exist, will create new one")
 			// File doesn't exist, that's okay - we'll create it
 		} else {
 			return fmt.Errorf("failed to read existing log file: %v", err)
 		}
 	} else {
-		fmt.Printf("DEBUG: GetObject succeeded, reading content\n")
+		m.logger.Debug("GetObject succeeded, reading content")
 		existingContent, err = io.ReadAll(obj)
 		obj.Close()
 		if err != nil {
 			// Check if this is also a NoSuchKey error (race condition)
-			fmt.Printf("DEBUG: ReadAll error: %v\n", err)
+			m.logger.Debug("ReadAll error", "error", err.Error())
 			if strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "The specified key does not exist") {
 				// File was deleted between GetObject and ReadAll, treat as if file doesn't exist
-				fmt.Printf("DEBUG: ReadAll NoSuchKey, treating as empty file\n")
+				m.logger.Debug("ReadAll NoSuchKey, treating as empty file")
 				existingContent = []byte{}
 			} else {
 				// For any other ReadAll error, treat as empty file and continue
-				fmt.Printf("DEBUG: ReadAll error, treating as empty file and continuing\n")
+				m.logger.Debug("ReadAll error, treating as empty file and continuing")
 				existingContent = []byte{}
 			}
 		} else {
-			fmt.Printf("DEBUG: Successfully read %d bytes of existing content\n", len(existingContent))
+			m.logger.Debug("Successfully read existing content", "bytes", len(existingContent))
 		}
 	}
 
@@ -197,16 +208,16 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 
 	// Write the combined content back to MinIO
 	reader := bytes.NewReader(buffer.Bytes())
-	fmt.Printf("DEBUG: Writing %d bytes to MinIO\n", buffer.Len())
+	m.logger.Debug("Writing bytes to MinIO", "bytes", buffer.Len())
 	_, err = m.client.PutObject(ctx, m.logsBucket, objectPath, reader, int64(buffer.Len()), minio.PutObjectOptions{
 		ContentType: "text/plain",
 	})
 	if err != nil {
-		fmt.Printf("DEBUG: PutObject failed: %v\n", err)
+		m.logger.Debug("PutObject failed", "error", err.Error())
 		return fmt.Errorf("failed to write logs to MinIO: %v", err)
 	}
 
-	fmt.Printf("DEBUG: Successfully wrote logs to MinIO path: %s\n", objectPath)
+	m.logger.Debug("Successfully wrote logs to MinIO", "path", objectPath)
 	return nil
 }
 

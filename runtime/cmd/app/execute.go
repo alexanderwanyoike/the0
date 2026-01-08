@@ -14,42 +14,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"runtime/internal/constants"
-	"runtime/internal/runtime/storage"
+	"runtime/internal/execute"
 	"runtime/internal/util"
 )
-
-// ExecuteConfig holds configuration loaded from environment variables.
-type ExecuteConfig struct {
-	// Bot identification
-	BotID string
-
-	// Code location in MinIO
-	CodeFile string
-
-	// Runtime and entrypoint
-	Runtime    string
-	Entrypoint string
-
-	// Bot configuration (JSON string)
-	BotConfig string
-
-	// Bot type: "realtime" or "scheduled"
-	BotType string
-
-	// Query settings
-	QueryEntrypoint string // For realtime bots with query server
-	QueryPath       string // For ephemeral query execution
-	QueryParams     string // JSON query parameters
-	QueryResultKey  string // MinIO key for storing query result (K8s mode)
-
-	// Paths
-	CodePath  string
-	StatePath string
-	LogsPath  string
-
-	// Scheduled bot flag
-	IsScheduled bool
-}
 
 var executeCmd = &cobra.Command{
 	Use:   "execute",
@@ -89,20 +56,6 @@ var (
 	executeSkipQueryServer bool
 )
 
-// ExecuteDependencies holds injectable dependencies for testing
-type ExecuteDependencies struct {
-	ProcessExecutor ProcessExecutor
-	FileWriter      FileWriter
-}
-
-// newDefaultDependencies creates production dependencies
-func newDefaultDependencies() ExecuteDependencies {
-	return ExecuteDependencies{
-		ProcessExecutor: &defaultProcessExecutor{},
-		FileWriter:      &defaultFileWriter{},
-	}
-}
-
 func init() {
 	executeCmd.Flags().StringVar(&executeQueryPath, "query", "", "Execute a query (ephemeral mode) with the given path")
 	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
@@ -112,8 +65,8 @@ func init() {
 }
 
 // loadExecuteConfig loads configuration from environment variables.
-func loadExecuteConfig() (*ExecuteConfig, error) {
-	cfg := &ExecuteConfig{
+func loadExecuteConfig() (*execute.Config, error) {
+	cfg := &execute.Config{
 		BotID:           os.Getenv("BOT_ID"),
 		CodeFile:        os.Getenv("CODE_FILE"),
 		Runtime:         os.Getenv("RUNTIME"),
@@ -177,7 +130,7 @@ func runExecute() int {
 }
 
 // runBot executes a bot with optional sync and query server subprocesses.
-func runBot(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
+func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -191,19 +144,38 @@ func runBot(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 	// Cleanup function
 	cleanup := func() {
 		logger.Info("Cleaning up child processes...")
+		// Send SIGTERM first for graceful shutdown
 		if syncCmd != nil && syncCmd.Process != nil {
-			syncCmd.Process.Signal(syscall.SIGTERM)
+			if err := syncCmd.Process.Signal(syscall.SIGTERM); err != nil {
+				// "process already finished" is expected if it exited naturally
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to send SIGTERM to sync process: %v", err)
+				}
+			}
 		}
 		if queryCmd != nil && queryCmd.Process != nil {
-			queryCmd.Process.Signal(syscall.SIGTERM)
+			if err := queryCmd.Process.Signal(syscall.SIGTERM); err != nil {
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to send SIGTERM to query process: %v", err)
+				}
+			}
 		}
 		// Give processes time to clean up
 		time.Sleep(3 * time.Second)
+		// Force kill if still running
 		if syncCmd != nil && syncCmd.Process != nil {
-			syncCmd.Process.Kill()
+			if err := syncCmd.Process.Kill(); err != nil {
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to kill sync process: %v", err)
+				}
+			}
 		}
 		if queryCmd != nil && queryCmd.Process != nil {
-			queryCmd.Process.Kill()
+			if err := queryCmd.Process.Kill(); err != nil {
+				if err.Error() != "os: process already finished" {
+					logger.Info("Failed to kill query process: %v", err)
+				}
+			}
 		}
 	}
 
@@ -288,7 +260,7 @@ func runBot(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 
 // runEphemeralQuery runs a single query and exits.
 // Queries run directly without wrappers - the SDK's query.run() handles everything.
-func runEphemeralQuery(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
+func runEphemeralQuery(cfg *execute.Config, logger *util.DefaultLogger) int {
 	ctx := context.Background()
 
 	logger.Info("Running ephemeral query: %s", cfg.QueryPath)
@@ -333,35 +305,14 @@ func runEphemeralQuery(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 }
 
 // uploadQueryResult uploads the query result file to MinIO.
-func uploadQueryResult(ctx context.Context, cfg *ExecuteConfig, logger *util.DefaultLogger) error {
-	resultPath := "/query/result.json"
-	data, err := os.ReadFile(resultPath)
-	if err != nil {
-		return fmt.Errorf("failed to read result file: %w", err)
-	}
-
-	storageCfg, err := storage.LoadConfigFromEnv()
-	if err != nil {
-		return fmt.Errorf("failed to load storage config: %w", err)
-	}
-
-	minioClient, err := storage.NewMinioClient(storageCfg)
-	if err != nil {
-		return fmt.Errorf("failed to create MinIO client: %w", err)
-	}
-
-	resultManager := storage.NewQueryResultManager(minioClient, storageCfg, logger)
-	if err := resultManager.Upload(ctx, cfg.QueryResultKey, data); err != nil {
-		return fmt.Errorf("failed to upload result: %w", err)
-	}
-
-	logger.Info("Uploaded query result to MinIO: %s", cfg.QueryResultKey)
-	return nil
+func uploadQueryResult(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+	storage := execute.NewStorageOperations(logger)
+	return storage.UploadQueryResult(ctx, cfg.QueryResultKey, "/query/result.json")
 }
 
 // runQueryServerOnly runs only the query server (for K8s sidecar mode).
 // Query servers run directly without wrappers - the SDK handles everything.
-func runQueryServerOnly(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
+func runQueryServerOnly(cfg *execute.Config, logger *util.DefaultLogger) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -398,58 +349,19 @@ func runQueryServerOnly(cfg *ExecuteConfig, logger *util.DefaultLogger) int {
 }
 
 // downloadCode downloads and extracts bot code from MinIO.
-func downloadCode(ctx context.Context, cfg *ExecuteConfig, logger *util.DefaultLogger) error {
-	if cfg.CodeFile == "" {
-		logger.Info("CODE_FILE not set, skipping code download")
-		return nil
-	}
-
-	logger.Info("Downloading code: %s", cfg.CodeFile)
-
-	storageCfg, err := storage.LoadConfigFromEnv()
-	if err != nil {
-		return fmt.Errorf("failed to load storage config: %w", err)
-	}
-
-	minioClient, err := storage.NewMinioClient(storageCfg)
-	if err != nil {
-		return fmt.Errorf("failed to create MinIO client: %w", err)
-	}
-
-	codeManager := storage.NewCodeManager(minioClient, storageCfg, logger)
-	if err := codeManager.DownloadAndExtract(ctx, cfg.CodeFile, cfg.CodePath); err != nil {
-		return fmt.Errorf("failed to download code: %w", err)
-	}
-
-	logger.Info("Code downloaded to %s", cfg.CodePath)
-	return nil
+func downloadCode(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+	storage := execute.NewStorageOperations(logger)
+	return storage.DownloadCode(ctx, cfg.CodeFile, cfg.CodePath)
 }
 
 // downloadState downloads bot state from MinIO.
-func downloadState(ctx context.Context, cfg *ExecuteConfig, logger *util.DefaultLogger) error {
-	logger.Info("Downloading state for bot: %s", cfg.BotID)
-
-	storageCfg, err := storage.LoadConfigFromEnv()
-	if err != nil {
-		return fmt.Errorf("failed to load storage config: %w", err)
-	}
-
-	minioClient, err := storage.NewMinioClient(storageCfg)
-	if err != nil {
-		return fmt.Errorf("failed to create MinIO client: %w", err)
-	}
-
-	stateManager := storage.NewStateManager(minioClient, storageCfg, logger)
-	if err := stateManager.DownloadState(ctx, cfg.BotID, cfg.StatePath); err != nil {
-		return fmt.Errorf("failed to download state: %w", err)
-	}
-
-	logger.Info("State downloaded to %s", cfg.StatePath)
-	return nil
+func downloadState(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+	storage := execute.NewStorageOperations(logger)
+	return storage.DownloadState(ctx, cfg.BotID, cfg.StatePath)
 }
 
 // startSyncProcess starts the daemon sync as a subprocess.
-func startSyncProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd, error) {
+func startSyncProcess(cfg *execute.Config, logger *util.DefaultLogger) (*exec.Cmd, error) {
 	args := []string{
 		"daemon", "sync",
 		"--bot-id", cfg.BotID,
@@ -477,11 +389,11 @@ func startSyncProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd
 
 // startQueryServerProcess starts the query server as a subprocess.
 // Query servers run directly without wrappers - the SDK handles everything.
-func startQueryServerProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*exec.Cmd, error) {
-	cmd := BuildQueryCommand(cfg.Runtime, cfg.QueryEntrypoint, cfg.CodePath)
+func startQueryServerProcess(cfg *execute.Config, logger *util.DefaultLogger) (*exec.Cmd, error) {
+	cmd := execute.BuildQueryCommand(cfg.Runtime, cfg.QueryEntrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = BuildBotEnv(cfg)
+	cmd.Env = execute.BuildBotEnv(cfg)
 
 	logger.Info("Starting query server subprocess: %s %s", cfg.Runtime, cfg.QueryEntrypoint)
 	if err := cmd.Start(); err != nil {
@@ -493,7 +405,7 @@ func startQueryServerProcess(cfg *ExecuteConfig, logger *util.DefaultLogger) (*e
 }
 
 // executeBotProcess executes the main bot process.
-func executeBotProcess(ctx context.Context, cfg *ExecuteConfig, logger *util.DefaultLogger) int {
+func executeBotProcess(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) int {
 	// Set up log file for persistence (in addition to stdout/stderr)
 	logFile := setupLogFile(cfg.LogsPath, logger)
 	if logFile != nil {
@@ -505,11 +417,11 @@ func executeBotProcess(ctx context.Context, cfg *ExecuteConfig, logger *util.Def
 
 // setupLogFile creates a log file for bot output persistence.
 func setupLogFile(logsPath string, logger *util.DefaultLogger) *os.File {
-	return setupLogFileWithDeps(logsPath, logger, newDefaultDependencies())
+	return setupLogFileWithDeps(logsPath, logger, execute.NewDefaultDependencies())
 }
 
 // setupLogFileWithDeps creates a log file using injectable dependencies.
-func setupLogFileWithDeps(logsPath string, logger *util.DefaultLogger, deps ExecuteDependencies) *os.File {
+func setupLogFileWithDeps(logsPath string, logger *util.DefaultLogger, deps execute.Dependencies) *os.File {
 	logFilePath := filepath.Join(logsPath, "bot.log")
 	file, err := deps.FileWriter.Create(logFilePath)
 	if err != nil {
@@ -525,13 +437,13 @@ func setupLogFileWithDeps(logsPath string, logger *util.DefaultLogger, deps Exec
 }
 
 // executeProcessWithLogFile executes a process, optionally writing output to a log file.
-func executeProcessWithLogFile(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
-	return executeProcessWithDeps(ctx, cfg, entrypoint, logger, logFile, newDefaultDependencies())
+func executeProcessWithLogFile(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
+	return executeProcessWithDeps(ctx, cfg, entrypoint, logger, logFile, execute.NewDefaultDependencies())
 }
 
 // executeProcessWithDeps executes a process with injectable dependencies for testing.
-func executeProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps ExecuteDependencies) int {
-	cmd := BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps execute.Dependencies) int {
+	cmd := execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 
 	// Set up output: both stdout and optionally log file
 	if logFile != nil {
@@ -541,7 +453,7 @@ func executeProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint 
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	cmd.Env = BuildBotEnv(cfg)
+	cmd.Env = execute.BuildBotEnv(cfg)
 
 	logger.Info("Executing: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
@@ -576,16 +488,16 @@ func executeProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint 
 
 // executeQueryProcess executes a query process directly (no wrapper).
 // Queries use the SDK's query.run() which handles everything internally.
-func executeQueryProcess(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger) int {
-	return executeQueryProcessWithDeps(ctx, cfg, entrypoint, logger, newDefaultDependencies())
+func executeQueryProcess(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger) int {
+	return executeQueryProcessWithDeps(ctx, cfg, entrypoint, logger, execute.NewDefaultDependencies())
 }
 
 // executeQueryProcessWithDeps executes a query process with injectable dependencies.
-func executeQueryProcessWithDeps(ctx context.Context, cfg *ExecuteConfig, entrypoint string, logger *util.DefaultLogger, deps ExecuteDependencies) int {
-	cmd := BuildQueryCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+func executeQueryProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, deps execute.Dependencies) int {
+	cmd := execute.BuildQueryCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = BuildBotEnv(cfg)
+	cmd.Env = execute.BuildBotEnv(cfg)
 
 	logger.Info("Executing query: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 

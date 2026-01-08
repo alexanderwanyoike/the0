@@ -1,4 +1,4 @@
-package main
+package execute
 
 import (
 	"testing"
@@ -7,8 +7,8 @@ import (
 	"runtime/internal/constants"
 )
 
-func TestExecuteConfigBuilder_Defaults(t *testing.T) {
-	cfg := NewExecuteConfigBuilder().Build()
+func TestConfigBuilder_Defaults(t *testing.T) {
+	cfg := NewConfigBuilder().Build()
 
 	assert.Equal(t, "test-bot", cfg.BotID)
 	assert.Equal(t, "python3.11", cfg.Runtime)
@@ -19,8 +19,8 @@ func TestExecuteConfigBuilder_Defaults(t *testing.T) {
 	assert.False(t, cfg.IsScheduled)
 }
 
-func TestExecuteConfigBuilder_WithAllFields(t *testing.T) {
-	cfg := NewExecuteConfigBuilder().
+func TestConfigBuilder_WithAllFields(t *testing.T) {
+	cfg := NewConfigBuilder().
 		WithBotID("custom-bot").
 		WithRuntime("nodejs20").
 		WithEntrypoint("index.js").
@@ -53,9 +53,9 @@ func TestExecuteConfigBuilder_WithAllFields(t *testing.T) {
 	assert.True(t, cfg.IsScheduled)
 }
 
-func TestExecuteConfigBuilder_ChainedCalls(t *testing.T) {
+func TestConfigBuilder_ChainedCalls(t *testing.T) {
 	// Test that builder pattern allows chaining
-	cfg := NewExecuteConfigBuilder().
+	cfg := NewConfigBuilder().
 		WithBotID("bot-1").
 		WithRuntime("python3.11").
 		WithEntrypoint("bot.py").
@@ -66,9 +66,9 @@ func TestExecuteConfigBuilder_ChainedCalls(t *testing.T) {
 	assert.Equal(t, "bot.py", cfg.Entrypoint)
 }
 
-func TestExecuteConfigBuilder_PartialConfiguration(t *testing.T) {
+func TestConfigBuilder_PartialConfiguration(t *testing.T) {
 	// Test building with only some fields set
-	cfg := NewExecuteConfigBuilder().
+	cfg := NewConfigBuilder().
 		WithBotID("partial-bot").
 		WithCodePath("/custom/path").
 		Build()

@@ -35,6 +35,18 @@ func waitFor(timeout time.Duration, condition func() bool) error {
 	}
 }
 
+// startSubscriberAndWait starts the subscriber and waits for it to be fully connected.
+// This prevents race conditions where messages are published before the subscription is established.
+func startSubscriberAndWait(ctx context.Context, subscriber *NATSSubscriber) error {
+	if err := subscriber.Start(ctx); err != nil {
+		return err
+	}
+	// Wait for subscriptions to be ready (prevents race condition)
+	return waitFor(2*time.Second, func() bool {
+		return subscriber.IsReady()
+	})
+}
+
 // TestSubscriber_BotScheduleCreated_PersistsToMongo verifies that a bot-schedule.created event
 // results in a bot schedule being inserted into MongoDB with proper partition assignment
 func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
@@ -69,7 +81,7 @@ func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
 	defer subscriber.Stop()
 
 	// Start subscriber
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Create bot schedule message
@@ -154,7 +166,7 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	require.NoError(t, err)
 	defer subscriber.Stop()
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	scheduleEvent := BotScheduleEvent{
@@ -221,7 +233,7 @@ func TestSubscriber_BotScheduleUpdated_UpdatesMongo(t *testing.T) {
 	require.NoError(t, err)
 	defer subscriber.Stop()
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Insert initial bot schedule
@@ -306,7 +318,7 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 	require.NoError(t, err)
 	defer subscriber.Stop()
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Publish bot-schedule.updated for non-existent schedule
@@ -368,7 +380,7 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 	require.NoError(t, err)
 	defer subscriber.Stop()
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Insert schedule to delete
@@ -442,7 +454,7 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	require.NoError(t, err)
 	defer subscriber.Stop()
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Publish delete for non-existent schedule
@@ -490,7 +502,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	require.NoError(t, err)
 	defer subscriber.Stop()
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Publish invalid JSON
@@ -552,7 +564,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	subscriber, err := NewNATSSubscriber(ctx, opts)
 	require.NoError(t, err)
 
-	err = subscriber.Start(ctx)
+	err = startSubscriberAndWait(ctx, subscriber)
 	require.NoError(t, err)
 
 	// Publish some events
