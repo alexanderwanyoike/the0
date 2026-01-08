@@ -1,0 +1,35 @@
+# Haskell build artifacts - keep only compiled binaries
+dist-newstyle/build/*/ghc-*/sma-bot-*/build/
+dist-newstyle/build/*/ghc-*/sma-bot-*/setup/
+dist-newstyle/build/*/ghc-*/sma-bot-*/cache/
+dist-newstyle/build/*/ghc-*/sma-bot-*/package.conf.inplace
+dist-newstyle/build/*/ghc-*/sma-bot-*/dyn_o/
+dist-newstyle/build/*/ghc-*/sma-bot-*/o/
+dist-newstyle/build/*/ghc-*/sma-bot-*/c/
+dist-newstyle/build/*/ghc-*/sma-bot-*/l/
+dist-newstyle/build/*/ghc-*/sma-bot-*/lib/
+dist-newstyle/cache/
+dist-newstyle/packagedb/
+dist-newstyle/tmp/
+dist-newstyle/sdist/
+
+# Keep only binaries in x/ directories:
+# dist-newstyle/build/*/ghc-*/sma-bot-*/x/sma-bot/opt/build/sma-bot/sma-bot
+# dist-newstyle/build/*/ghc-*/sma-bot-*/x/sma-query/opt/build/sma-query/sma-query
+
+# Source files not needed at runtime
+app/
+
+# Cabal files not needed at runtime
+cabal.project
+sma-bot.cabal
+
+# Frontend - only keep dist/
+frontend/node_modules/
+frontend/index.tsx
+frontend/package.json
+frontend/package-lock.json
+frontend/tsconfig.json
+
+# Documentation
+README.md

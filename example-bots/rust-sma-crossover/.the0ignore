@@ -1,0 +1,31 @@
+# Rust build artifacts - only keep release binaries
+target/debug/
+target/release/build/
+target/release/deps/
+target/release/examples/
+target/release/incremental/
+target/release/.fingerprint/
+target/release/.cargo-lock
+target/.rustc_info.json
+target/CACHEDIR.TAG
+
+# Keep only the actual binaries:
+# target/release/sma-bot
+# target/release/sma-query
+
+# Source not needed at runtime (binaries are pre-compiled)
+src/
+
+# Cargo files not needed at runtime
+Cargo.lock
+Cargo.toml
+
+# Frontend - only keep dist/
+frontend/node_modules/
+frontend/index.tsx
+frontend/package.json
+frontend/package-lock.json
+frontend/tsconfig.json
+
+# Documentation
+README.md
