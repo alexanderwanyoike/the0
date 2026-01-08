@@ -14,7 +14,7 @@ path = "src/bin/query.rs"
 
 [dependencies]
 # the0 SDK for bot development
-the0-sdk = "0.2.0"
+the0-sdk = "0.3.0"
 
 # HTTP client and JSON
 reqwest = { version = "0.11", features = ["blocking", "json"] }
