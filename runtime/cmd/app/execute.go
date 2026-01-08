@@ -193,6 +193,12 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 		return 1
 	}
 
+	// Step 1.5: Ensure binaries are executable for compiled runtimes
+	if err := execute.EnsureExecutable(cfg); err != nil {
+		logger.Info("Warning: failed to set execute permissions: %v", err)
+		// Continue anyway - may work if permissions are already set
+	}
+
 	// Step 2: Download state
 	if err := downloadState(ctx, cfg, logger); err != nil {
 		// State may not exist on first run - log but continue

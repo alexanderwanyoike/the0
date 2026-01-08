@@ -155,3 +155,36 @@ func ParseQueryParams(queryParams string) (map[string]interface{}, error) {
 
 	return params, nil
 }
+
+// EnsureExecutable sets execute permissions on binary files for compiled runtimes.
+// ZIP files often don't preserve Unix execute permissions, so we need to set them manually.
+func EnsureExecutable(cfg *Config) error {
+	// Only needed for compiled runtimes
+	compiledRuntimes := map[string]bool{
+		"gcc13":       true,
+		"cpp-gcc13":   true,
+		"rust-stable": true,
+		"ghc96":       true,
+	}
+
+	if !compiledRuntimes[cfg.Runtime] {
+		return nil
+	}
+
+	// Make the main entrypoint executable
+	entrypointPath := filepath.Join(cfg.CodePath, cfg.Entrypoint)
+	if err := os.Chmod(entrypointPath, 0755); err != nil {
+		return fmt.Errorf("failed to chmod entrypoint %s: %w", entrypointPath, err)
+	}
+
+	// Also make query entrypoint executable if present
+	if cfg.QueryEntrypoint != "" {
+		queryPath := filepath.Join(cfg.CodePath, cfg.QueryEntrypoint)
+		if err := os.Chmod(queryPath, 0755); err != nil {
+			// Query entrypoint may not exist, log but don't fail
+			return nil
+		}
+	}
+
+	return nil
+}

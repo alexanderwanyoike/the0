@@ -281,3 +281,137 @@ func TestParseQueryParams_ComplexTypes(t *testing.T) {
 	assert.NotNil(t, params["nested"])
 	assert.NotNil(t, params["array"])
 }
+
+func TestEnsureExecutable_CompiledRuntimes(t *testing.T) {
+	compiledRuntimes := []string{"gcc13", "cpp-gcc13", "rust-stable", "ghc96"}
+
+	for _, runtime := range compiledRuntimes {
+		t.Run(runtime, func(t *testing.T) {
+			// Create temp directory and file
+			tmpDir := t.TempDir()
+			entrypoint := "bot"
+			filePath := tmpDir + "/" + entrypoint
+
+			// Create file without execute permission
+			err := os.WriteFile(filePath, []byte("#!/bin/bash\necho hello"), 0644)
+			require.NoError(t, err)
+
+			cfg := &Config{
+				Runtime:    runtime,
+				CodePath:   tmpDir,
+				Entrypoint: entrypoint,
+			}
+
+			// Ensure executable
+			err = EnsureExecutable(cfg)
+			require.NoError(t, err)
+
+			// Verify permissions
+			info, err := os.Stat(filePath)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0755), info.Mode().Perm(), "Expected 0755 permissions")
+		})
+	}
+}
+
+func TestEnsureExecutable_NonCompiledRuntimes(t *testing.T) {
+	nonCompiledRuntimes := []string{"python3.11", "nodejs20", "dotnet8", "scala3"}
+
+	for _, runtime := range nonCompiledRuntimes {
+		t.Run(runtime, func(t *testing.T) {
+			// Create temp directory and file
+			tmpDir := t.TempDir()
+			entrypoint := "main.py"
+			filePath := tmpDir + "/" + entrypoint
+
+			// Create file without execute permission
+			err := os.WriteFile(filePath, []byte("print('hello')"), 0644)
+			require.NoError(t, err)
+
+			cfg := &Config{
+				Runtime:    runtime,
+				CodePath:   tmpDir,
+				Entrypoint: entrypoint,
+			}
+
+			// Ensure executable should do nothing
+			err = EnsureExecutable(cfg)
+			require.NoError(t, err)
+
+			// Verify permissions unchanged
+			info, err := os.Stat(filePath)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0644), info.Mode().Perm(), "Permissions should not change for non-compiled runtimes")
+		})
+	}
+}
+
+func TestEnsureExecutable_WithQueryEntrypoint(t *testing.T) {
+	tmpDir := t.TempDir()
+	entrypoint := "bot"
+	queryEntrypoint := "query_bot"
+
+	// Create both files
+	err := os.WriteFile(tmpDir+"/"+entrypoint, []byte("#!/bin/bash"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(tmpDir+"/"+queryEntrypoint, []byte("#!/bin/bash"), 0644)
+	require.NoError(t, err)
+
+	cfg := &Config{
+		Runtime:         "gcc13",
+		CodePath:        tmpDir,
+		Entrypoint:      entrypoint,
+		QueryEntrypoint: queryEntrypoint,
+	}
+
+	err = EnsureExecutable(cfg)
+	require.NoError(t, err)
+
+	// Verify both files are executable
+	info, err := os.Stat(tmpDir + "/" + entrypoint)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), info.Mode().Perm())
+
+	info, err = os.Stat(tmpDir + "/" + queryEntrypoint)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), info.Mode().Perm())
+}
+
+func TestEnsureExecutable_MissingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &Config{
+		Runtime:    "gcc13",
+		CodePath:   tmpDir,
+		Entrypoint: "nonexistent",
+	}
+
+	err := EnsureExecutable(cfg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to chmod entrypoint")
+}
+
+func TestEnsureExecutable_MissingQueryEntrypoint(t *testing.T) {
+	tmpDir := t.TempDir()
+	entrypoint := "bot"
+
+	// Create main entrypoint only
+	err := os.WriteFile(tmpDir+"/"+entrypoint, []byte("#!/bin/bash"), 0644)
+	require.NoError(t, err)
+
+	cfg := &Config{
+		Runtime:         "gcc13",
+		CodePath:        tmpDir,
+		Entrypoint:      entrypoint,
+		QueryEntrypoint: "nonexistent_query",
+	}
+
+	// Should not fail even if query entrypoint doesn't exist
+	err = EnsureExecutable(cfg)
+	require.NoError(t, err)
+
+	// Main entrypoint should still be executable
+	info, err := os.Stat(tmpDir + "/" + entrypoint)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), info.Mode().Perm())
+}
