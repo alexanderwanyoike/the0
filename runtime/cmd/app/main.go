@@ -173,6 +173,10 @@ func runBotService() {
 	}
 	util.LogMaster("Reconcile interval: %v", botRunnerReconcileInterval)
 
+	// Start health server for container health checks
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
 	// Create bot service
 	service, err := dockerrunner.NewBotService(dockerrunner.BotServiceConfig{
 		MongoURI:          mongoUri,
@@ -187,6 +191,9 @@ func runBotService() {
 		os.Exit(1)
 	}
 
+	// Mark as ready once service is created
+	healthServer.SetReady(true)
+
 	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 1)
@@ -194,6 +201,7 @@ func runBotService() {
 	go func() {
 		<-ch
 		util.LogMaster("Received interrupt signal, shutting down...")
+		healthServer.SetReady(false)
 		cancel()
 	}()
 
@@ -202,6 +210,11 @@ func runBotService() {
 		util.LogMaster("Bot service error: %v", err)
 		os.Exit(1)
 	}
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
 
 	util.LogMaster("Bot service stopped")
 }
@@ -219,6 +232,10 @@ func runScheduleService() {
 		os.Exit(1)
 	}
 
+	// Start health server for container health checks
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
 	// Create schedule service
 	service, err := dockerrunner.NewScheduleService(dockerrunner.ScheduleServiceConfig{
 		MongoURI:      mongoUri,
@@ -233,6 +250,9 @@ func runScheduleService() {
 		os.Exit(1)
 	}
 
+	// Mark as ready once service is created
+	healthServer.SetReady(true)
+
 	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 1)
@@ -240,6 +260,7 @@ func runScheduleService() {
 	go func() {
 		<-ch
 		util.LogMaster("Received interrupt signal, shutting down...")
+		healthServer.SetReady(false)
 		cancel()
 	}()
 
@@ -248,6 +269,11 @@ func runScheduleService() {
 		util.LogMaster("Schedule service error: %v", err)
 		os.Exit(1)
 	}
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
 
 	util.LogMaster("Schedule service stopped")
 }
