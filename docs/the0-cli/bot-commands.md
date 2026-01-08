@@ -121,6 +121,86 @@ the0 bot logs abc123 -w
 the0 bot logs abc123 2025-01-15 --limit 200
 ```
 
+## State
+
+Manage persistent bot state. State is automatically synced between the bot container and cloud storage.
+
+### List State Keys
+
+List all state keys stored by a bot:
+
+```bash
+the0 bot state list <bot_id>
+```
+
+**Example output:**
+
+```
+Keys for bot abc123:
+  bot_state
+  price_history
+  portfolio
+```
+
+### Get State Value
+
+Retrieve the value of a specific state key:
+
+```bash
+the0 bot state get <bot_id> <key>
+```
+
+**Options:**
+
+- `--raw, -r` - Output raw JSON without formatting
+
+**Examples:**
+
+```bash
+# Get formatted state
+the0 bot state get abc123 bot_state
+
+# Get raw JSON for piping to other tools
+the0 bot state get abc123 portfolio --raw | jq '.positions'
+```
+
+## Query
+
+Execute queries against running or scheduled bots. Queries provide read-only access to bot data.
+
+```bash
+the0 bot query <bot_id> <path> [options]
+```
+
+**Options:**
+
+- `--params, -p <json>` - Query parameters as JSON object
+- `--timeout, -t <seconds>` - Query timeout (default: 30)
+- `--raw, -r` - Output raw JSON without formatting
+
+**Examples:**
+
+```bash
+# Basic query
+the0 bot query abc123 /status
+
+# Query with parameters
+the0 bot query abc123 /signals --params '{"limit": 5}'
+
+# Query with timeout for slow scheduled bots
+the0 bot query abc123 /portfolio --timeout 60
+
+# Raw output for scripting
+the0 bot query abc123 /history --raw | jq '.data[0]'
+```
+
+**Latency notes:**
+
+- **Realtime bots**: Queries are proxied to the running container (~10-50ms)
+- **Scheduled bots**: Queries spawn ephemeral containers (~1-3s startup)
+
+See [Query Handlers](/custom-bot-development/queries) for implementing query endpoints in your bots.
+
 ## Cron Schedule Format
 
 Scheduled bots use standard cron expressions:
