@@ -45,6 +45,11 @@ object Main:
     val longPeriod = config.hcursor.get[Int]("long_period").getOrElse(20)
     val updateIntervalMs = config.hcursor.get[Int]("update_interval_ms").getOrElse(60000)
 
+    // Set a last_run timestamp state
+    State.set("last_run", Json.obj(
+      "timestamp" -> Json.fromLong(System.currentTimeMillis())
+    ).noSpaces)
+
     // Load persistent state from previous runs
     val persisted = State.get("bot_state").flatMap(parse(_).toOption)
     var botState = persisted match
