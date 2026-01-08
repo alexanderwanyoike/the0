@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,8 +11,8 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/model"
 )
 
 // MockBotScheduleRepository is a mock implementation of BotScheduleRepository.
@@ -461,4 +462,304 @@ func TestMustParseQuantityWithDefault(t *testing.T) {
 			assert.Equal(t, tt.expectValue, result.String())
 		})
 	}
+}
+
+// ---- Additional Coverage Tests ----
+
+func TestBotScheduleController_StopWhenNotRunning(t *testing.T) {
+	mockRepo := &MockBotScheduleRepository{}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{},
+		mockRepo,
+		mockCronClient,
+	)
+
+	// Stop without starting - should not panic
+	controller.Stop()
+	controller.Stop() // Double stop should also be safe
+}
+
+func TestBotScheduleController_ContextCancellation(t *testing.T) {
+	mockRepo := &MockBotScheduleRepository{}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{
+			ReconcileInterval: 1 * time.Second,
+		},
+		mockRepo,
+		mockCronClient,
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		done <- controller.Start(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel() // Cancel context instead of calling Stop()
+
+	select {
+	case err := <-done:
+		assert.Equal(t, context.Canceled, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("controller did not stop after context cancellation")
+	}
+}
+
+func TestBotScheduleController_Reconcile_RepoError(t *testing.T) {
+	mockRepo := &MockBotScheduleRepository{
+		Error: errors.New("database connection lost"),
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database connection lost")
+	assert.Equal(t, 0, mockCronClient.ListCalled, "should not query K8s on repo error")
+}
+
+func TestBotScheduleController_Reconcile_K8sListError(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{schedule},
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+	mockCronClient.ListError = errors.New("k8s API error")
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "k8s API error")
+}
+
+func TestBotScheduleController_Reconcile_CreateError(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{schedule},
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+	mockCronClient.CreateError = errors.New("quota exceeded")
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	// Reconcile should not fail - just log the error
+	err := controller.Reconcile(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, mockCronClient.CreateCalled)
+}
+
+func TestBotScheduleController_Reconcile_UpdateError(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 10 * * *")
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{schedule},
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "schedule-schedule-1",
+			Namespace: "the0",
+			Labels: map[string]string{
+				LabelScheduleID: "schedule-1",
+			},
+			Annotations: map[string]string{
+				AnnotationScheduleHash: "old-hash-value",
+			},
+		},
+	}
+	mockCronClient.UpdateError = errors.New("conflict")
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	// Reconcile should not fail - just log the error
+	err := controller.Reconcile(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, mockCronClient.UpdateCalled)
+}
+
+func TestBotScheduleController_Reconcile_DeleteError(t *testing.T) {
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{}, // No schedules
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+	mockCronClient.CronJobs["the0/schedule-orphan"] = &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "schedule-orphan",
+			Namespace: "the0",
+			Labels: map[string]string{
+				LabelScheduleID: "orphan",
+			},
+		},
+	}
+	mockCronClient.DeleteError = errors.New("forbidden")
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	// Reconcile should not fail - just log the error
+	err := controller.Reconcile(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, mockCronClient.DeleteCalled)
+}
+
+func TestExtractScheduleID_NilLabels(t *testing.T) {
+	cronJob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "test-cronjob",
+			Labels: nil, // No labels
+		},
+	}
+
+	result := extractScheduleID(cronJob)
+	assert.Equal(t, "", result)
+}
+
+func TestExtractScheduleID_MissingLabel(t *testing.T) {
+	cronJob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cronjob",
+			Labels: map[string]string{
+				"other-label": "value",
+			},
+		},
+	}
+
+	result := extractScheduleID(cronJob)
+	assert.Equal(t, "", result)
+}
+
+func TestExtractScheduleID_WithLabel(t *testing.T) {
+	cronJob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cronjob",
+			Labels: map[string]string{
+				LabelScheduleID: "my-schedule-id",
+			},
+		},
+	}
+
+	result := extractScheduleID(cronJob)
+	assert.Equal(t, "my-schedule-id", result)
+}
+
+func TestBotScheduleController_MultipleSchedules(t *testing.T) {
+	schedules := []model.BotSchedule{
+		createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *"),
+		createTestSchedule("schedule-2", "weekly-summary", "1.0.0", "nodejs20", "0 0 * * 0"),
+		createTestSchedule("schedule-3", "hourly-check", "2.0.0", "python3.11", "0 * * * *"),
+	}
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: schedules,
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, mockCronClient.CreateCalled)
+	assert.Len(t, mockCronClient.CronJobs, 3)
+}
+
+func TestScheduleToBot_NilEnabled(t *testing.T) {
+	mockRepo := &MockBotScheduleRepository{}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{},
+		mockRepo,
+		mockCronClient,
+	)
+
+	schedule := model.BotSchedule{
+		ID:      "schedule-1",
+		Enabled: nil, // nil Enabled
+		CustomBotVersion: model.CustomBotVersion{
+			Version: "1.0.0",
+			Config: model.APIBotConfig{
+				Name:    "test-bot",
+				Runtime: "python3.11",
+			},
+		},
+	}
+
+	bot := controller.scheduleToBot(schedule)
+	assert.True(t, *bot.Enabled, "should default to enabled=true when nil")
+}
+
+func TestMockK8sCronJobClient_Errors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ListError", func(t *testing.T) {
+		mock := NewMockK8sCronJobClient()
+		mock.ListError = errors.New("list error")
+
+		_, err := mock.ListCronJobs(ctx, "test")
+		assert.Error(t, err)
+		assert.Equal(t, "list error", err.Error())
+	})
+
+	t.Run("CreateError", func(t *testing.T) {
+		mock := NewMockK8sCronJobClient()
+		mock.CreateError = errors.New("create error")
+
+		err := mock.CreateCronJob(ctx, &batchv1.CronJob{})
+		assert.Error(t, err)
+		assert.Equal(t, "create error", err.Error())
+	})
+
+	t.Run("UpdateError", func(t *testing.T) {
+		mock := NewMockK8sCronJobClient()
+		mock.UpdateError = errors.New("update error")
+
+		err := mock.UpdateCronJob(ctx, &batchv1.CronJob{})
+		assert.Error(t, err)
+		assert.Equal(t, "update error", err.Error())
+	})
+
+	t.Run("DeleteError", func(t *testing.T) {
+		mock := NewMockK8sCronJobClient()
+		mock.DeleteError = errors.New("delete error")
+
+		err := mock.DeleteCronJob(ctx, "ns", "name")
+		assert.Error(t, err)
+		assert.Equal(t, "delete error", err.Error())
+	})
 }

@@ -41,11 +41,11 @@ type DockerRunner interface {
 	// GetContainerStatus returns the current status of a container.
 	GetContainerStatus(ctx context.Context, containerID string) (*ContainerStatus, error)
 
-	// ListManagedContainers returns all containers managed by this runner for a given segment.
-	ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
+	// ListManagedContainers returns all running containers managed by this runner.
+	ListManagedContainers(ctx context.Context) ([]*ContainerInfo, error)
 
-	// ListAllManagedContainers returns ALL containers (including exited/crashed) for a segment.
-	ListAllManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
+	// ListAllManagedContainers returns ALL containers (including exited/crashed).
+	ListAllManagedContainers(ctx context.Context) ([]*ContainerInfo, error)
 
 	// HandleCrashedContainer captures logs from a crashed container and cleans it up.
 	// Returns the crash logs that were captured.
@@ -108,7 +108,9 @@ type dockerRunner struct {
 
 // DockerRunnerOptions contains configuration options for creating a DockerRunner.
 type DockerRunnerOptions struct {
-	Logger util.Logger // Optional logger, defaults to util.DefaultLogger if nil
+	Logger       util.Logger   // Optional logger, defaults to util.DefaultLogger if nil
+	ConfigLoader ConfigLoader  // Optional config loader, defaults to EnvConfigLoader if nil
+	Config       *DockerRunnerConfig // Optional pre-loaded config, takes precedence over ConfigLoader
 }
 
 // NewDockerRunner creates a new DockerRunner instance.
@@ -121,9 +123,20 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 	}
 
 	// Load configuration (contains MinIO creds that will be passed to containers)
-	config, err := LoadConfigFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
+	var config *DockerRunnerConfig
+	if options.Config != nil {
+		// Use provided config
+		config = options.Config
+	} else {
+		// Use config loader (default to environment)
+		loader := options.ConfigLoader
+		if loader == nil {
+			loader = &EnvConfigLoader{}
+		}
+		config, err = loader.LoadConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %v", err)
+		}
 	}
 
 	// Create MinIO client (only used for storing analysis results)
@@ -230,7 +243,7 @@ func (r *dockerRunner) buildContainerConfig(
 		WithExecutable(executable).
 		WithNetwork(r.config.DockerNetwork).
 		WithMinIOConfig(
-			r.config.MinIOEndpoint,
+			r.config.GetContainerEndpoint(), // Use container-accessible endpoint
 			r.config.MinIOAccessKeyID,
 			r.config.MinIOSecretAccessKey,
 			r.config.MinIOUseSSL,
@@ -369,25 +382,17 @@ func (r *dockerRunner) StopContainer(
 	return nil
 }
 
-// ListManagedContainers returns information about managed containers for the specified segment.
-// Use segment=-1 to list all managed containers regardless of segment.
-func (r *dockerRunner) ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+// ListManagedContainers returns all running containers managed by this runner.
+func (r *dockerRunner) ListManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	filter := filters.NewArgs()
 	filter.Add("label", "runtime.managed=true")
-	// Only filter by segment if a specific segment is requested (-1 means all segments)
-	if segment >= 0 {
-		filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
-	}
 	return r.orchestrator.ListContainer(ctx, filter)
 }
 
 // ListAllManagedContainers returns ALL containers including exited/crashed ones.
-func (r *dockerRunner) ListAllManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+func (r *dockerRunner) ListAllManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	filter := filters.NewArgs()
 	filter.Add("label", "runtime.managed=true")
-	if segment >= 0 {
-		filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
-	}
 	return r.orchestrator.ListAllContainers(ctx, filter)
 }
 

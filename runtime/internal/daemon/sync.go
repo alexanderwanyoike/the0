@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"runtime/internal/constants"
 	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
@@ -31,14 +32,14 @@ type SyncOptions struct {
 // If opts.WatchDone is set, exits when done file appears (for scheduled bots).
 // Otherwise runs indefinitely as a sidecar container.
 func Sync(ctx context.Context, opts SyncOptions) error {
-	logger := &util.DefaultLogger{}
+	var logger util.Logger = util.NewLogger()
 
 	// Set defaults
 	if opts.StatePath == "" {
-		opts.StatePath = "/state"
+		opts.StatePath = constants.DefaultStatePath
 	}
 	if opts.LogsPath == "" {
-		opts.LogsPath = "/var/the0/logs"
+		opts.LogsPath = constants.DefaultLogsPath
 	}
 	if opts.Interval == 0 {
 		opts.Interval = 60 * time.Second

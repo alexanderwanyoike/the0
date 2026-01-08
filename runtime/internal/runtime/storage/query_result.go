@@ -30,7 +30,10 @@ type queryResultManager struct {
 
 // NewQueryResultManager creates a new QueryResultManager.
 func NewQueryResultManager(minioClient *minio.Client, cfg *Config, logger Logger) QueryResultManager {
-	bucket := cfg.QueryResultBucket
+	bucket := ""
+	if cfg != nil {
+		bucket = cfg.QueryResultBucket
+	}
 	if bucket == "" {
 		bucket = "query-results"
 	}

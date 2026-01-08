@@ -106,6 +106,7 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -173,6 +174,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -219,7 +221,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	assert.Equal(t, "running", status.Status)
 
 	// Test ListManagedContainers
-	containers, err := runner.ListManagedContainers(ctx, testSegment)
+	containers, err := runner.ListManagedContainers(ctx)
 	require.NoError(t, err)
 	if len(containers) == 0 {
 		t.Logf("Warning: No managed containers found, this might be expected for long-running containers")
@@ -241,7 +243,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	// Verify container is stopped
 	time.Sleep(1 * time.Second)
-	finalContainers, err := runner.ListManagedContainers(ctx, testSegment)
+	finalContainers, err := runner.ListManagedContainers(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, finalContainers, "Container should be removed from managed list")
 }
@@ -268,6 +270,29 @@ type MinIOTestServer struct {
 	containerEndpoint string // For container access (via host.docker.internal)
 	accessKey         string
 	secretKey         string
+}
+
+// GetTestConfig returns a DockerRunnerConfig for testing with this MinIO server.
+// Uses endpoint for the runner's MinIO client (host-accessible), and
+// containerEndpoint for containers (via host.docker.internal).
+func (m *MinIOTestServer) GetTestConfig() *DockerRunnerConfig {
+	return &DockerRunnerConfig{
+		MinIOEndpoint:          m.endpoint,          // Host-accessible endpoint for runner's MinIO client
+		MinIOContainerEndpoint: m.containerEndpoint, // Container-accessible endpoint for bot containers
+		MinIOAccessKeyID:       m.accessKey,
+		MinIOSecretAccessKey:   m.secretKey,
+		MinIOUseSSL:            false,
+		MinIOCodeBucket:        "custom-bots",
+		MinioResultsBucket:     "backtests",
+		MinioLogsBucket:        "bot-logs",
+		MinioStateBucket:       "bot-state",
+		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB
+		MaxStateFileSizeBytes:  10 * 1024 * 1024,       // 10MB
+		TempDir:                "/tmp",
+		MemoryLimitMB:          512 * 1024 * 1024, // 512MB
+		CPUShares:              512,
+		DockerNetwork:          "",
+	}
 }
 
 func (m *MinIOTestServer) Close() {
@@ -378,6 +403,7 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -453,6 +479,7 @@ func TestIntegration_RealDocker_RustBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -600,6 +627,7 @@ func TestIntegration_RealDocker_CppBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -748,6 +776,7 @@ func TestIntegration_RealDocker_ScalaBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"runtime/internal/constants"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
@@ -26,7 +27,7 @@ type InitOptions struct {
 // Init downloads bot code and state, preparing the container for execution.
 // Runs as init container (K8s) or entrypoint prefix (Docker) before the bot starts.
 func Init(ctx context.Context, opts InitOptions) error {
-	logger := &util.DefaultLogger{}
+	var logger util.Logger = util.NewLogger()
 	logger.Info("Daemon init starting", "bot_id", opts.BotID)
 
 	// Load config
@@ -43,10 +44,10 @@ func Init(ctx context.Context, opts InitOptions) error {
 
 	// Set defaults
 	if opts.CodePath == "" {
-		opts.CodePath = "/bot"
+		opts.CodePath = constants.DefaultCodePath
 	}
 	if opts.StatePath == "" {
-		opts.StatePath = "/state"
+		opts.StatePath = constants.DefaultStatePath
 	}
 
 	// Download and extract code

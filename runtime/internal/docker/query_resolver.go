@@ -64,7 +64,7 @@ func (r *MultiBotResolver) GetContainerID(ctx context.Context, botID string) (st
 	}
 
 	// Check running containers for this bot (realtime bots only)
-	containers, err := r.runner.ListManagedContainers(ctx, -1)
+	containers, err := r.runner.ListManagedContainers(ctx)
 	if err != nil {
 		return "", false
 	}
