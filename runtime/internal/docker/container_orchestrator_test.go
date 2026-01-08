@@ -16,6 +16,7 @@ type testLogger struct{}
 func (l *testLogger) Info(msg string, args ...interface{})  {}
 func (l *testLogger) Error(msg string, args ...interface{}) {}
 func (l *testLogger) Debug(msg string, args ...interface{}) {}
+func (l *testLogger) Warn(msg string, args ...interface{})  {}
 
 // Note on Testing Strategy:
 //

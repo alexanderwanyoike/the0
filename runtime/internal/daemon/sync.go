@@ -32,7 +32,7 @@ type SyncOptions struct {
 // If opts.WatchDone is set, exits when done file appears (for scheduled bots).
 // Otherwise runs indefinitely as a sidecar container.
 func Sync(ctx context.Context, opts SyncOptions) error {
-	logger := &util.DefaultLogger{}
+	var logger util.Logger = util.NewLogger()
 
 	// Set defaults
 	if opts.StatePath == "" {

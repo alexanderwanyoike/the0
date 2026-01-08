@@ -106,6 +106,12 @@ func (l *testDaemonLogger) Debug(msg string, args ...interface{}) {
 	}
 }
 
+func (l *testDaemonLogger) Warn(msg string, args ...interface{}) {
+	if l.t != nil {
+		l.t.Logf("WARN: "+msg, args...)
+	}
+}
+
 // TestInit_Integration tests the Init function with real MinIO
 func TestInit_Integration(t *testing.T) {
 	if testing.Short() {
