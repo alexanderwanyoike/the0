@@ -4,32 +4,33 @@ The Docker mode provides single-process services for running bots in containers.
 
 ## Architecture
 
-Docker mode uses a **daemon subprocess architecture** where each bot container is self-managing. The runtime services (bot-runner and bot-scheduler) only handle container lifecycle - starting, stopping, and restarting containers. All the complexity of code download, state persistence, and log streaming is delegated to a daemon process running inside each container.
+Docker mode uses a **unified execute architecture** where each bot container is self-managing. The runtime services (bot-runner and bot-scheduler) only handle container lifecycle - starting, stopping, and restarting containers. All the complexity of code download, state persistence, and log streaming is delegated to the `runtime execute` command running inside each container.
 
 ```mermaid
-flowchart TB
-    NATS["NATS Events"] --> Service
+flowchart LR
+    NATS["NATS Events"] --> BotSvc & SchedSvc
+    HTTP["HTTP :9477"] --> QS
 
-    subgraph Service["BotService / ScheduleService"]
-        Reconcile["Reconciliation Loop"]
+    subgraph Services
+        BotSvc["BotService"]
+        SchedSvc["ScheduleService"]
+        QS["query-server"]
     end
 
-    Service <--> MongoDB[(MongoDB)]
-    Service --> Docker["Docker Engine"]
+    BotSvc & SchedSvc <--> MongoDB[(MongoDB)]
+    QS <--> MongoDB
+    BotSvc & SchedSvc --> Docker["Docker Engine"]
 
     subgraph Container["Bot Container"]
-        Bootstrap["bootstrap.sh"]
-        DaemonInit["daemon init"]
-        DaemonSync["daemon sync"]
-        BotProcess["Bot Process"]
-
-        Bootstrap --> DaemonInit
-        DaemonInit --> DaemonSync
-        DaemonInit --> BotProcess
+        Execute["runtime execute"]
+        Sync["daemon sync"]
+        QueryPort[":9476 (if query configured)"]
     end
 
     Docker --> Container
-    DaemonSync --> MinIO[(MinIO)]
+    Sync --> MinIO[(MinIO)]
+    QS -.->|realtime| QueryPort
+    QS -.->|scheduled| Docker
 ```
 
 ## How It Works
@@ -40,22 +41,23 @@ Both BotService and ScheduleService use a reconciliation pattern. Every 30 secon
 
 NATS integration is optional but recommended. Without NATS, changes only take effect at the next reconciliation interval. With NATS, the service receives events immediately and can act on them right away.
 
-### Container Bootstrap
+### Container Execution
 
-When a container starts, it runs `bootstrap.sh` which orchestrates the daemon. First, `daemon init` downloads the bot code and any existing state from MinIO, then generates a runtime-specific entrypoint script. Next, `daemon sync` starts in the background, watching for state file changes and periodically uploading logs. Finally, the actual bot process runs.
+When a container starts, it runs `runtime execute` which handles everything. First, it downloads the bot code and any existing state from MinIO. Then it starts `daemon sync` as a subprocess for state/log persistence. For realtime bots with a query entrypoint, it also starts a query server subprocess on port 9476. Finally, it executes the bot process directly.
 
 ```mermaid
 flowchart TD
-    A[Container Start] --> B[bootstrap.sh]
-    B --> C[daemon init]
-    C --> D[Download code from MinIO]
-    D --> E[Download state from MinIO]
-    E --> F[Generate entrypoint.sh]
-    F --> G[Start daemon sync in background]
-    G --> H[Run bot entrypoint]
+    A[Container Start] --> B[runtime execute]
+    B --> C[Download code from MinIO]
+    C --> D[Download state from MinIO]
+    D --> E[Start daemon sync subprocess]
+    E --> F{Query entrypoint?}
+    F -->|Yes| G[Start query server subprocess]
+    F -->|No| H[Execute bot process]
+    G --> H
     H --> I{Bot exits?}
     I -->|Scheduled| J[Write done file]
-    I -->|Crash| K[Trap cleanup]
+    I -->|Crash| K[Signal cleanup]
     J --> L[Final sync]
     K --> L
     L --> M[Container exits]
@@ -63,18 +65,52 @@ flowchart TD
 
 ### State Persistence
 
-The daemon sync process watches `/state/state.json` using filesystem notifications. When the bot writes state, the daemon detects the change and uploads it to MinIO. This happens with a small debounce to avoid excessive uploads during rapid writes. Logs are synced periodically rather than on every write.
+The daemon sync process periodically (every 60s) computes a hash of the state directory and uploads changes to MinIO when detected. Logs are also synced periodically.
 
 For scheduled bots, the daemon also watches for a "done" file. When the bot completes and writes its exit code to this file, the daemon performs a final sync and then exits, allowing the container to terminate cleanly.
 
 ## Services
 
-**BotService** manages live trading bots - containers that run continuously until stopped. These use `RestartPolicy: Always` so Docker automatically restarts them if they crash.
+**BotService** manages live trading bots - containers that run continuously until stopped. The service monitors container health and restarts failed containers through the reconciliation loop.
 
-**ScheduleService** manages cron-based scheduled bots. It evaluates cron expressions to determine when bots should run, then starts containers that execute once and terminate. These use `RestartPolicy: Never` since completion is expected.
+**ScheduleService** manages cron-based scheduled bots. It evaluates cron expressions to determine when bots should run, then starts containers that execute once and terminate.
 
 ## Simplification from Previous Architecture
 
 The previous architecture had multiple components in the runner: CodeManager for downloading code, ScriptManager for generating entrypoints, LogCollector for streaming logs, StateManager for persistence, and StateCollector for background sync. Each component added complexity and the Docker and K8s implementations diverged.
 
-The daemon approach consolidates all of this into two commands (`daemon init` and `daemon sync`) that run identically in both Docker and K8s modes. The runner is now just container lifecycle management - about 40% less code with better separation of concerns.
+The current architecture consolidates all of this into the `runtime execute` command which handles code download, state management, and subprocess orchestration. In Docker mode, `execute` spawns `daemon sync` as a subprocess. In K8s mode, these run as separate containers. The runner is now just container lifecycle management - about 40% less code with better separation of concerns.
+
+## Query Execution
+
+Docker mode supports querying bots for computed data without affecting state.
+
+### Realtime Bot Queries
+
+For running bots with a query entrypoint, `runtime execute` starts a query server subprocess on port 9476. Queries are proxied to this server:
+
+1. QueryServer (port 9477) receives HTTP request
+2. QueryResolver finds the bot and its container
+3. QueryHandler proxies to container IP:9476 (the query server subprocess)
+4. Response returned (~10-50ms latency)
+
+### Scheduled Bot Queries
+
+For scheduled bots (not currently running), queries spawn ephemeral containers:
+
+1. QueryServer receives request
+2. QueryResolver finds the bot configuration
+3. QueryHandler builds executable with `QUERY_PATH` and `QUERY_PARAMS` env vars
+4. DockerRunner starts ephemeral container
+5. Container runs query mode, returns JSON result
+6. Container terminates (~1-3s latency)
+
+## Service State
+
+The services maintain in-memory state to track running containers:
+
+- **RunningBot**: Tracks each bot's container ID, status, start time, and restart count
+- **ServiceState**: Thread-safe map of botID → RunningBot with metrics
+- **Statuses**: "starting", "running", "stopping", "failed"
+
+This enables the reconciliation loop to compare desired state (MongoDB) with actual state (running containers) and take corrective action.
