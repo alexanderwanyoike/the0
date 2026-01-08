@@ -58,8 +58,14 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 
 	currentSize := info.Size()
 
+	// Handle log rotation/truncation: if file is smaller than last offset, reset
+	if currentSize < l.lastOffset {
+		l.logger.Info("Log file truncated/rotated, resetting offset", "old_offset", l.lastOffset, "new_size", currentSize)
+		l.lastOffset = 0
+	}
+
 	// No new content
-	if currentSize <= l.lastOffset {
+	if currentSize == l.lastOffset {
 		return false
 	}
 

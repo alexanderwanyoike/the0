@@ -152,12 +152,12 @@ delete key = do
     exists' <- doesFileExist filepath
     if exists'
         then do
-            removeFile filepath `catch` handleError
-            return True
+            success <- (removeFile filepath >> return True) `catch` handleError
+            return success
         else return False
   where
-    handleError :: SomeException -> IO ()
-    handleError _ = return ()
+    handleError :: SomeException -> IO Bool
+    handleError _ = return False
 
 -- | List all keys in persistent state.
 --

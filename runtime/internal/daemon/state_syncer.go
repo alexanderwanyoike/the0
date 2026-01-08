@@ -97,7 +97,11 @@ func (s *StateSyncer) hashDirectory() (string, error) {
 	h := sha256.New()
 	for _, file := range files {
 		// Include relative path in hash
-		relPath, _ := filepath.Rel(s.statePath, file)
+		relPath, err := filepath.Rel(s.statePath, file)
+		if err != nil {
+			s.logger.Info("Failed to compute relative path", "file", file, "error", err.Error())
+			return "", err
+		}
 		h.Write([]byte(relPath))
 
 		// Include file content

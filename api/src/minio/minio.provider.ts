@@ -23,8 +23,13 @@ export const MinioClientProvider: Provider = {
       throw new Error("MINIO_SECRET_KEY is required but not configured");
     }
 
-    const port = parseInt(configService.get<string>("MINIO_PORT") || "9000");
-    const useSSL = configService.get<string>("MINIO_USE_SSL") === "true";
+    const portStr = configService.get<string>("MINIO_PORT") || "9000";
+    const port = parseInt(portStr, 10);
+    if (isNaN(port)) {
+      throw new Error(`MINIO_PORT must be a valid number, got: ${portStr}`);
+    }
+    const sslValue = configService.get<string>("MINIO_USE_SSL")?.toLowerCase();
+    const useSSL = sslValue === "true" || sslValue === "1";
 
     return new Minio.Client({
       endPoint: endpoint,

@@ -188,10 +188,11 @@ object State {
     if (!dir.exists()) {
       Seq.empty
     } else {
-      dir.listFiles()
-        .filter(_.getName.endsWith(".json"))
-        .map(f => f.getName.stripSuffix(".json"))
-        .toSeq
+      Option(dir.listFiles())
+        .map(_.filter(_.getName.endsWith(".json"))
+          .map(f => f.getName.stripSuffix(".json"))
+          .toSeq)
+        .getOrElse(Seq.empty)
     }
   }
 
@@ -213,9 +214,10 @@ object State {
     checkWriteAllowed()
     val dir = new File(stateDir)
     if (dir.exists()) {
-      dir.listFiles()
-        .filter(_.getName.endsWith(".json"))
-        .foreach(_.delete())
+      Option(dir.listFiles()).foreach(
+        _.filter(_.getName.endsWith(".json"))
+          .foreach(_.delete())
+      )
     }
   }
 
