@@ -1,4 +1,4 @@
-package main
+package execute
 
 import (
 	"encoding/json"
@@ -94,7 +94,7 @@ func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 }
 
 // BuildBotEnv creates the environment for bot execution.
-func BuildBotEnv(cfg *ExecuteConfig) []string {
+func BuildBotEnv(cfg *Config) []string {
 	env := os.Environ()
 
 	// Determine STATE_DIR: use existing env var if set, otherwise derive from StatePath
