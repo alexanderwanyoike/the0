@@ -165,8 +165,12 @@ func (b *PodBuilder) WithBotConfig(botID, codeFile, runtime, entrypoint string, 
 }
 
 // WithBotType sets the bot type (realtime or scheduled).
+// For scheduled bots, also sets IS_SCHEDULED=true to enable done file mechanism.
 func (b *PodBuilder) WithBotType(botType string) *PodBuilder {
 	b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "BOT_TYPE", Value: botType})
+	if botType == "scheduled" {
+		b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "IS_SCHEDULED", Value: "true"})
+	}
 	return b
 }
 
