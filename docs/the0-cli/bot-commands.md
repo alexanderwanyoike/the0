@@ -98,14 +98,14 @@ the0 bot logs <bot_id>
 - `--limit <n>` - Maximum entries to return (1-1000, default 100)
 - `-w, --watch` - Stream logs in real-time (polls every 5 seconds)
 
-**Date filtering:**
+**Date filtering** (format: `YYYYMMDD` or `YYYYMMDD-YYYYMMDD`):
 
 ```bash
 # Logs from a specific date
-the0 bot logs <bot_id> 2025-01-15
+the0 bot logs <bot_id> 20250115
 
 # Logs from a date range
-the0 bot logs <bot_id> 2025-01-15:2025-01-20
+the0 bot logs <bot_id> 20250115-20250120
 ```
 
 **Examples:**
@@ -118,7 +118,19 @@ the0 bot logs abc123 --limit 50
 the0 bot logs abc123 -w
 
 # Logs from today with limit
-the0 bot logs abc123 2025-01-15 --limit 200
+the0 bot logs abc123 20250115 --limit 200
+```
+
+## Enable / Disable
+
+Start or stop a bot instance without deleting it:
+
+```bash
+# Enable a stopped bot
+the0 bot enable <bot_id>
+
+# Disable a running bot
+the0 bot disable <bot_id>
 ```
 
 ## State
@@ -133,14 +145,7 @@ List all state keys stored by a bot:
 the0 bot state list <bot_id>
 ```
 
-**Example output:**
-
-```
-Keys for bot abc123:
-  bot_state
-  price_history
-  portfolio
-```
+Output shows key names and sizes in a table format.
 
 ### Get State Value
 
@@ -150,18 +155,28 @@ Retrieve the value of a specific state key:
 the0 bot state get <bot_id> <key>
 ```
 
-**Options:**
+Returns the state value as formatted JSON.
 
-- `--raw, -r` - Output raw JSON without formatting
+### Delete State Key
 
-**Examples:**
+Delete a specific state key:
 
 ```bash
-# Get formatted state
-the0 bot state get abc123 bot_state
+the0 bot state delete <bot_id> <key>
+```
 
-# Get raw JSON for piping to other tools
-the0 bot state get abc123 portfolio --raw | jq '.positions'
+### Clear All State
+
+Delete all persistent state for a bot:
+
+```bash
+the0 bot state clear <bot_id>
+```
+
+The CLI prompts for confirmation. Use `-y` or `--yes` to skip:
+
+```bash
+the0 bot state clear abc123 -y
 ```
 
 ## Query
