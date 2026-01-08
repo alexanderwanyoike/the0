@@ -195,7 +195,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -253,7 +253,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -304,7 +304,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9477/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9477/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -367,7 +367,7 @@ services:
       - "3002:80"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
