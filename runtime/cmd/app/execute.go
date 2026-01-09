@@ -329,9 +329,9 @@ func runQueryServerOnly(cfg *execute.Config, logger *util.DefaultLogger) int {
 		cancel()
 	}()
 
-	// Download code (may already be available via shared volume)
-	if err := downloadCode(ctx, cfg, logger); err != nil {
-		logger.Info("Failed to download code: %v", err)
+	// Get code: wait for shared volume or download
+	if err := ensureCode(ctx, cfg, logger); err != nil {
+		logger.Info("Failed to get code: %v", err)
 		return 1
 	}
 
@@ -347,6 +347,35 @@ func runQueryServerOnly(cfg *execute.Config, logger *util.DefaultLogger) int {
 	}
 
 	return executeQueryProcess(ctx, cfg, cfg.QueryEntrypoint, logger)
+}
+
+// codeWaitTimeout is how long to wait for code on a shared volume before falling back to download.
+const codeWaitTimeout = 60 * time.Second
+
+// ensureCode waits for code to appear on a shared volume (K8s sidecar mode) or downloads it.
+// In K8s, the bot container extracts code to a shared volume. The query-server waits for
+// the entrypoint file to appear rather than re-extracting (which causes "text file busy").
+func ensureCode(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+	// If we have a query entrypoint, wait for it to appear on the shared volume
+	if cfg.QueryEntrypoint != "" {
+		entrypointPath := filepath.Join(cfg.CodePath, cfg.QueryEntrypoint)
+		deadline := time.Now().Add(codeWaitTimeout)
+
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(entrypointPath); err == nil {
+				logger.Info("Code available at %s", cfg.CodePath)
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(1 * time.Second):
+			}
+		}
+		logger.Info("Code not found after %v, downloading", codeWaitTimeout)
+	}
+
+	return downloadCode(ctx, cfg, logger)
 }
 
 // downloadCode downloads and extracts bot code from MinIO.
