@@ -1,6 +1,6 @@
 {
   "name": "@alexanderwanyoike/the0-node",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "the0 SDK for Node.js/TypeScript trading bots",
   "repository": {
     "type": "git",
