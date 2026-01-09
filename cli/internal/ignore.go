@@ -71,6 +71,9 @@ func (p *IgnoreParser) LoadIgnoreFile(path string) error {
 
 // AddDefaultPatterns adds default ignore patterns
 func (p *IgnoreParser) AddDefaultPatterns() {
+	// Note: build/ and dist/ are NOT included by default because they often contain
+	// compiled binaries needed for deployment (C++, Rust, Scala, etc.).
+	// Projects can add them to .the0ignore if they want to exclude them.
 	defaults := []string{
 		"*.log", "*.tmp", "*.temp",
 		"test/", "tests/", "__tests__/",
@@ -78,7 +81,6 @@ func (p *IgnoreParser) AddDefaultPatterns() {
 		"*.pyc", "*.pyo",
 		"__pycache__/",
 		".git/",
-		"build/", "dist/",
 	}
 
 	for _, pattern := range defaults {

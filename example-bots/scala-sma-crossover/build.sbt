@@ -12,7 +12,7 @@ credentials += Credentials(
 )
 
 libraryDependencies ++= Seq(
-  "dev.the0" %% "the0-sdk" % "0.3.0",
+  "dev.the0" %% "the0-sdk" % "0.3.3",
   "com.softwaremill.sttp.client3" %% "core" % "3.9.0",
   "io.circe" %% "circe-core" % "0.14.6",
   "io.circe" %% "circe-parser" % "0.14.6",

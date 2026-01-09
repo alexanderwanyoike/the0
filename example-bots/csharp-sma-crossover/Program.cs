@@ -33,7 +33,6 @@ class SmaBot
     private static double? _prevShortSma = null;
     private static double? _prevLongSma = null;
     private static long _signalCount = 0;
-    private static int _iteration = 0;
 
     static async Task Main(string[] args)
     {
@@ -126,12 +125,8 @@ class SmaBot
                 _prevShortSma = shortSma;
                 _prevLongSma = longSma;
 
-                // Persist state every 10 iterations
-                _iteration++;
-                if (_iteration % 10 == 0)
-                {
-                    State.Set("bot_state", new PersistedState(_prevShortSma, _prevLongSma, _signalCount));
-                }
+                // Persist state every iteration for reliable state tracking
+                State.Set("bot_state", new PersistedState(_prevShortSma, _prevLongSma, _signalCount));
             }
             catch (Exception ex)
             {

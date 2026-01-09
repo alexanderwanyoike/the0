@@ -126,8 +126,9 @@ func TestIgnoreParser_DefaultPatterns(t *testing.T) {
 		{"compiled.pyo", false, true, "*.pyo should be ignored by default"},
 		{"__pycache__", true, true, "__pycache__/ should be ignored by default"},
 		{".git", true, true, ".git/ should be ignored by default"},
-		{"build", true, true, "build/ should be ignored (from default patterns)"},
-		{"dist", true, true, "dist/ should be ignored by default"},
+		// Note: build/ and dist/ are NOT in default patterns to support compiled languages
+		{"build", true, false, "build/ should NOT be ignored by default (compiled languages need it)"},
+		{"dist", true, false, "dist/ should NOT be ignored by default (compiled languages need it)"},
 		{"main.py", false, false, "main.py should not be ignored"},
 		{"src", true, false, "src/ should not be ignored"},
 	}
@@ -177,7 +178,7 @@ config_*
 		{"data_backup", false, true, "*_backup pattern"},
 		{"config_prod", false, true, "config_* pattern"},
 		{"src/temp.tmp", false, true, "**/*.tmp pattern"},
-		{"build/test_cache", true, true, "build/ and *_cache/ patterns both apply"},
+		{"build/test_cache", true, true, "*_cache/ pattern matches"},
 		{"main.py", false, false, "should not match any pattern"},
 		{"test.py", false, false, "should not match test_*.py"},
 		{"backup", false, false, "should not match *_backup"},
@@ -321,7 +322,7 @@ test/`
 	}{
 		{"app.log", false, true, "custom *.log pattern"},
 		{"test", true, true, "custom test/ pattern"},
-		{"build", true, true, "build/ should be ignored (from default patterns)"},
+		{"build", true, false, "build/ should NOT be ignored (not in default patterns)"},
 		{"main.py", false, false, "should not be ignored"},
 		{"vendor", true, false, "vendor should never be ignored"},
 		{"node_modules", true, false, "node_modules should never be ignored"},
@@ -356,7 +357,7 @@ func TestCreateIgnoreParserForDir_NoIgnoreFile(t *testing.T) {
 		expected bool
 		desc     string
 	}{
-		{"build", true, true, "build/ should be ignored (from default patterns)"},
+		{"build", true, false, "build/ should NOT be ignored (not in default patterns)"},
 		{"__pycache__", true, true, "default __pycache__/ pattern"},
 		{"app.log", false, true, "default *.log pattern"},
 		{"main.py", false, false, "should not be ignored"},
