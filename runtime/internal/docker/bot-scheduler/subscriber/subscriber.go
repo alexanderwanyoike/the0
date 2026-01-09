@@ -188,6 +188,11 @@ func (s *NATSSubscriber) Start(ctx context.Context) error {
 		}
 	}
 
+	// Flush to ensure subscriptions are active on server before returning
+	if err := s.natsConn.Flush(); err != nil {
+		return fmt.Errorf("failed to flush NATS connection: %v", err)
+	}
+
 	s.logger.Info("NATS Subscriber started successfully")
 	return nil
 }
