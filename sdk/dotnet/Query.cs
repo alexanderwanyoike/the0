@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -157,7 +158,25 @@ public static class Query
     }
 
     /// <summary>
-    /// Execute single query and output JSON to stdout.
+    /// Write query result to /query/result.json file (matches Python SDK behavior).
+    /// This avoids stdout pollution from runtime logs mixing with query results.
+    /// </summary>
+    private static void WriteResult(object result)
+    {
+        const string resultPath = "/query/result.json";
+        try
+        {
+            Directory.CreateDirectory("/query");
+            File.WriteAllText(resultPath, JsonSerializer.Serialize(result));
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"RESULT_ERROR: Failed to write result file: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Execute single query and write result to /query/result.json.
     /// </summary>
     private static void RunEphemeral(string queryPath)
     {
@@ -181,7 +200,7 @@ public static class Query
                 error = $"No handler for path: {queryPath}",
                 available = _handlers.Keys.ToList()
             };
-            Console.WriteLine(JsonSerializer.Serialize(result));
+            WriteResult(result);
             Environment.Exit(1);
             return;
         }
@@ -190,11 +209,11 @@ public static class Query
         {
             var request = new QueryRequest(queryPath, _currentParams);
             var data = handler(request);
-            Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", data }));
+            WriteResult(new { status = "ok", data });
         }
         catch (Exception e)
         {
-            Console.WriteLine(JsonSerializer.Serialize(new { status = "error", error = e.Message }));
+            WriteResult(new { status = "error", error = e.Message });
             Environment.Exit(1);
         }
     }

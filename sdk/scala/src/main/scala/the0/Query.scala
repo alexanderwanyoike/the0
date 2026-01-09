@@ -1,7 +1,8 @@
 package the0
 
-import java.io.{BufferedReader, InputStreamReader, PrintWriter}
+import java.io.{BufferedReader, File, InputStreamReader, PrintWriter}
 import java.net.{ServerSocket, Socket, URLDecoder}
+import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 import scala.util.{Try, Using}
 
@@ -152,7 +153,22 @@ object Query {
   }
 
   /**
-   * Execute single query and output JSON to stdout.
+   * Write query result to /query/result.json file (matches Python SDK behavior).
+   * This avoids stdout pollution from runtime logs mixing with query results.
+   */
+  private def writeResult(json: String): Unit = {
+    val resultPath = Paths.get("/query/result.json")
+    try {
+      Files.createDirectories(resultPath.getParent)
+      Files.writeString(resultPath, json)
+    } catch {
+      case e: Exception =>
+        System.err.println(s"RESULT_ERROR: Failed to write result file: ${e.getMessage}")
+    }
+  }
+
+  /**
+   * Execute single query and write result to /query/result.json.
    */
   private def runEphemeral(queryPath: String): Unit = {
     // Parse parameters from environment
@@ -163,18 +179,18 @@ object Query {
     handlers.get(queryPath) match {
       case None =>
         val available = handlers.keys.toSeq.map(p => s""""$p"""").mkString(",")
-        println(s"""{"status": "error", "error": "No handler for path: $queryPath", "available": [$available]}""")
+        writeResult(s"""{"status": "error", "error": "No handler for path: $queryPath", "available": [$available]}""")
         sys.exit(1)
 
       case Some(fn) =>
         try {
           val req = Request(queryPath, currentParams)
           val data = fn(req)
-          println(s"""{"status": "ok", "data": $data}""")
+          writeResult(s"""{"status": "ok", "data": $data}""")
         } catch {
           case e: Exception =>
             val escaped = escapeJson(e.getMessage)
-            println(s"""{"status": "error", "error": "$escaped"}""")
+            writeResult(s"""{"status": "error", "error": "$escaped"}""")
             sys.exit(1)
         }
     }

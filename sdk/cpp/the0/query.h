@@ -32,6 +32,8 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -265,7 +267,27 @@ inline void run() {
 }
 
 /**
- * Execute single query and output JSON to stdout.
+ * Write query result to /query/result.json file (matches Python SDK behavior).
+ * This avoids stdout pollution from runtime logs mixing with query results.
+ */
+inline void write_result(const json& result) {
+    const std::string result_path = "/query/result.json";
+    try {
+        std::filesystem::create_directories("/query");
+        std::ofstream file(result_path);
+        if (file.is_open()) {
+            file << result.dump();
+            file.close();
+        } else {
+            std::cerr << "RESULT_ERROR: Failed to open result file for writing" << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "RESULT_ERROR: Failed to write result file: " << e.what() << std::endl;
+    }
+}
+
+/**
+ * Execute single query and write result to /query/result.json.
  */
 inline void run_ephemeral(const std::string& query_path) {
     // Parse parameters from environment
@@ -294,7 +316,7 @@ inline void run_ephemeral(const std::string& query_path) {
             {"error", "No handler for path: " + query_path},
             {"available", available}
         };
-        std::cout << result.dump() << std::endl;
+        write_result(result);
         std::exit(1);
     }
 
@@ -302,10 +324,10 @@ inline void run_ephemeral(const std::string& query_path) {
         Request req(query_path, get_current_params());
         json data = it->second(req);
         json result = {{"status", "ok"}, {"data", data}};
-        std::cout << result.dump() << std::endl;
+        write_result(result);
     } catch (const std::exception& e) {
         json result = {{"status", "error"}, {"error", e.what()}};
-        std::cout << result.dump() << std::endl;
+        write_result(result);
         std::exit(1);
     }
 }

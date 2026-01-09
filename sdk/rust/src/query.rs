@@ -34,6 +34,7 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
@@ -199,7 +200,20 @@ pub fn run() {
     }
 }
 
-/// Execute a single query and output JSON to stdout.
+/// Write query result to /query/result.json file (matches Python SDK behavior).
+/// This avoids stdout pollution from runtime logs mixing with query results.
+fn write_result(result: Value) {
+    let result_path = "/query/result.json";
+    if let Err(e) = fs::create_dir_all("/query") {
+        eprintln!("RESULT_ERROR: Failed to create /query directory: {}", e);
+        return;
+    }
+    if let Err(e) = fs::write(result_path, result.to_string()) {
+        eprintln!("RESULT_ERROR: Failed to write result file: {}", e);
+    }
+}
+
+/// Execute a single query and write result to /query/result.json.
 fn run_ephemeral(query_path: &str) {
     // Parse parameters from environment
     let params_str = env::var("QUERY_PARAMS").unwrap_or_else(|_| "{}".to_string());
@@ -228,7 +242,7 @@ fn run_ephemeral(query_path: &str) {
 
     match result {
         Some(data) => {
-            println!("{}", json!({"status": "ok", "data": data}));
+            write_result(json!({"status": "ok", "data": data}));
         }
         None => {
             let handlers = HANDLERS.lock().unwrap();
@@ -236,14 +250,11 @@ fn run_ephemeral(query_path: &str) {
                 .as_ref()
                 .map(|h| h.keys().cloned().collect())
                 .unwrap_or_default();
-            println!(
-                "{}",
-                json!({
-                    "status": "error",
-                    "error": format!("No handler for path: {}", query_path),
-                    "available": available
-                })
-            );
+            write_result(json!({
+                "status": "error",
+                "error": format!("No handler for path: {}", query_path),
+                "available": available
+            }));
             std::process::exit(1);
         }
     }

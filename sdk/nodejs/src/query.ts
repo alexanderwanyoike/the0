@@ -23,7 +23,9 @@
  * query.run();
  */
 
+import * as fs from "fs";
 import * as http from "http";
+import * as path from "path";
 import { URL } from "url";
 
 /**
@@ -180,7 +182,21 @@ export async function run(): Promise<void> {
 }
 
 /**
- * Execute a single query and output JSON to stdout.
+ * Write query result to /query/result.json file (matches Python SDK behavior).
+ * This avoids stdout pollution from runtime logs mixing with query results.
+ */
+function writeResult(result: unknown): void {
+  const resultPath = "/query/result.json";
+  try {
+    fs.mkdirSync("/query", { recursive: true });
+    fs.writeFileSync(resultPath, JSON.stringify(result));
+  } catch (e) {
+    console.error(`RESULT_ERROR: Failed to write result file: ${e}`);
+  }
+}
+
+/**
+ * Execute a single query and write result to /query/result.json.
  */
 async function runEphemeral(queryPath: string): Promise<void> {
   // Parse parameters from environment
@@ -194,24 +210,20 @@ async function runEphemeral(queryPath: string): Promise<void> {
   // Find handler
   const fn = handlers.get(queryPath);
   if (!fn) {
-    console.log(
-      JSON.stringify({
-        status: "error",
-        error: `No handler for path: ${queryPath}`,
-        available: Array.from(handlers.keys()),
-      })
-    );
+    writeResult({
+      status: "error",
+      error: `No handler for path: ${queryPath}`,
+      available: Array.from(handlers.keys()),
+    });
     process.exit(1);
   }
 
   try {
     const req = createRequest(queryPath, currentParams);
     const result = await fn(req);
-    console.log(JSON.stringify({ status: "ok", data: result }));
+    writeResult({ status: "ok", data: result });
   } catch (e) {
-    console.log(
-      JSON.stringify({ status: "error", error: String(e) })
-    );
+    writeResult({ status: "error", error: String(e) });
     process.exit(1);
   }
 }
