@@ -178,17 +178,14 @@ enable-registry: ## Enable minikube registry addon for bot images
 
 # Runtime image management
 .PHONY: build-runtime
-build-runtime: ## Build runtime image locally
+build-runtime: ## Build runtime image in minikube environment
 	@echo "🔨 Building runtime image..."
-	@cd .. && docker build -t the0/runtime:latest runtime/
-	@echo "✅ Runtime image built: the0/runtime:latest"
+	@eval $$(minikube docker-env) && docker build -t runtime:latest ../runtime
+	@echo "✅ Runtime image built: runtime:latest"
 
 .PHONY: update-runtime
-update-runtime: build-runtime ## Build and load runtime image into minikube
-	@echo "📦 Loading runtime image into minikube..."
-	@minikube image load the0/runtime:latest
-	@minikube image tag the0/runtime:latest runtime:latest
-	@echo "✅ Runtime image loaded into minikube"
+update-runtime: build-runtime ## Build runtime image in minikube (alias for build-runtime)
+	@echo "✅ Runtime image updated in minikube"
 
 .PHONY: restart-controller
 restart-controller: ## Restart the bot controller deployment
