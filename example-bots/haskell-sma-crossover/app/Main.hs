@@ -30,7 +30,7 @@ and exits with a result.
 module Main where
 
 import Network.HTTP.Simple
-import Data.Aeson (FromJSON, ToJSON, Value(..), decode, encode, object, withObject, (.=), (.:?), (.!=))
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), decode, encode, object, withObject, (.=), (.:?), (.!=))
 import Data.Aeson.Key (fromText)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
@@ -38,6 +38,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import Data.Maybe (fromMaybe, catMaybes)
+import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics
 import Text.Printf (printf)
 
@@ -79,6 +80,25 @@ instance ToJSON PersistedState where
 
 defaultState :: PersistedState
 defaultState = PersistedState Nothing Nothing 0
+
+-- Persisted state for last run timestamp
+data LastRunState = LastRunState
+  { lrsTimestamp :: Integer
+  } deriving (Show, Generic)
+
+instance FromJSON LastRunState where
+  parseJSON = withObject "LastRunState" $ \v -> LastRunState
+    <$> v .:? "timestamp" .!= 0
+
+instance ToJSON LastRunState where
+  toJSON s = object
+    [ fromText "timestamp" .= lrsTimestamp s
+    ]
+
+-- Default last run state
+defaultLastRunState :: LastRunState
+defaultLastRunState = LastRunState 0
+
 
 -- Yahoo Finance response structure
 data YahooResponse = YahooResponse
@@ -122,23 +142,29 @@ main = do
           Object _ -> decode (encode configVal)
           _ -> Nothing
 
+  -- Set a last_run timestamp state
+  currentTime <- round <$> getPOSIXTime
+  let lastRunState = LastRunState currentTime
+  State.set "last_run" lastRunState
+
+
   -- Load persistent state from previous runs
   persistedState <- fromMaybe defaultState <$> State.get "bot_state"
 
-  Input.log $ "Bot " ++ botId ++ " started - " ++ cfgSymbol config ++
-              " SMA(" ++ show (cfgShortPeriod config) ++ "/" ++
-              show (cfgLongPeriod config) ++ ") - loaded " ++
-              show (psSignalCount persistedState) ++ " signals"
+  Input.logInfo ("Bot " ++ botId ++ " started - " ++ cfgSymbol config ++
+                 " SMA(" ++ show (cfgShortPeriod config) ++ "/" ++
+                 show (cfgLongPeriod config) ++ ") - loaded " ++
+                 show (psSignalCount persistedState) ++ " signals") Nothing
 
   -- Fetch and process data
   processResult <- processData config persistedState
 
   case processResult of
     Left err -> do
-      Input.log $ "Error: " ++ err
+      Input.logError ("Error: " ++ err) Nothing
       Input.error err
     Right msg -> do
-      Input.log $ "Completed: " ++ msg
+      Input.logInfo ("Completed: " ++ msg) Nothing
       Input.success msg
 
 -- | Process market data and generate signals
@@ -155,8 +181,8 @@ processData config persistedState = do
 
       if length prices < longPeriod
         then do
-          Input.log $ "Insufficient data: " ++ show (length prices) ++
-                      "/" ++ show longPeriod ++ " required for " ++ symbol
+          Input.logWarn ("Insufficient data: " ++ show (length prices) ++
+                         "/" ++ show longPeriod ++ " required for " ++ symbol) Nothing
           return $ Left "Insufficient data for analysis"
         else do
           -- Get current price
