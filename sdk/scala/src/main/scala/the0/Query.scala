@@ -225,33 +225,31 @@ object Query {
       val writer = new PrintWriter(s.getOutputStream, true)
 
       // Read request line
-      val requestLine = reader.readLine()
-      if (requestLine == null) return
+      Option(reader.readLine()).foreach { requestLine =>
+        val parts = requestLine.split(" ")
+        if (parts.length < 2) {
+          sendResponse(writer, 400, """{"status": "error", "error": "Invalid request"}""")
+        } else {
+          val pathWithQuery = parts(1)
+          val (path, params) = parsePathAndQuery(pathWithQuery)
+          currentParams = params
 
-      val parts = requestLine.split(" ")
-      if (parts.length < 2) {
-        sendResponse(writer, 400, """{"status": "error", "error": "Invalid request"}""")
-        return
-      }
+          // Find and execute handler
+          handlers.get(path) match {
+            case None =>
+              sendResponse(writer, 404, s"""{"status": "error", "error": "No handler for path: $path"}""")
 
-      val pathWithQuery = parts(1)
-      val (path, params) = parsePathAndQuery(pathWithQuery)
-      currentParams = params
-
-      // Find and execute handler
-      handlers.get(path) match {
-        case None =>
-          sendResponse(writer, 404, s"""{"status": "error", "error": "No handler for path: $path"}""")
-
-        case Some(fn) =>
-          try {
-            val req = Request(path, params)
-            val data = fn(req)
-            sendResponse(writer, 200, s"""{"status": "ok", "data": $data}""")
-          } catch {
-            case e: Exception =>
-              sendResponse(writer, 500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
+            case Some(fn) =>
+              try {
+                val req = Request(path, params)
+                val data = fn(req)
+                sendResponse(writer, 200, s"""{"status": "ok", "data": $data}""")
+              } catch {
+                case e: Exception =>
+                  sendResponse(writer, 500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
+              }
           }
+        }
       }
     }
   }
