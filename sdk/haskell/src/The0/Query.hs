@@ -60,6 +60,7 @@ import Network.HTTP.Types (urlDecode)
 import Network.Socket
 import Network.Socket.ByteString (recv, sendAll)
 import qualified Data.ByteString.Char8 as BS
+import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
@@ -162,7 +163,17 @@ run = do
         (_, Just "realtime") -> runServer
         _ -> runEphemeral "/info"
 
--- | Execute single query and output JSON to stdout.
+-- | Write query result to /query/result.json file (matches Python SDK behavior).
+-- This avoids stdout pollution from runtime logs mixing with query results.
+writeResult :: Value -> IO ()
+writeResult result = do
+    let resultPath = "/query/result.json"
+    createDirectoryIfMissing True "/query"
+    BL.writeFile resultPath (encode result)
+        `catch` \(e :: SomeException) ->
+            hPutStrLn stderr $ "RESULT_ERROR: Failed to write result file: " ++ show e
+
+-- | Execute single query and write result to /query/result.json.
 runEphemeral :: String -> IO ()
 runEphemeral queryPath = do
     -- Parse parameters from environment
@@ -181,7 +192,7 @@ runEphemeral queryPath = do
     case Map.lookup queryPath handlers of
         Nothing -> do
             let available = Map.keys handlers
-            putStrLn $ BL.unpack $ encode $ object
+            writeResult $ object
                 [ "status" .= ("error" :: String)
                 , "error" .= ("No handler for path: " ++ queryPath)
                 , "available" .= available
@@ -193,13 +204,13 @@ runEphemeral queryPath = do
             result <- (Right <$> fn req) `catch` handleError
             case result of
                 Left err -> do
-                    putStrLn $ BL.unpack $ encode $ object
+                    writeResult $ object
                         [ "status" .= ("error" :: String)
                         , "error" .= err
                         ]
                     exitWith (ExitFailure 1)
                 Right val ->
-                    putStrLn $ BL.unpack $ encode $ object
+                    writeResult $ object
                         [ "status" .= ("ok" :: String)
                         , "data" .= val
                         ]
