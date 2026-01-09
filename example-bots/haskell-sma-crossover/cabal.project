@@ -1,9 +1,9 @@
 packages: .
 
 -- the0 SDK from GitHub
--- Using release/v1.3.0 branch commit (SDK v0.1.4.0)
+-- Using release/v1.3.0 branch commit (SDK v0.1.5.0)
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
-    tag: 50b734eb5c720246bb1684247c14b340b823db5d
+    tag: 415258aa4c9a3bb3e6f067928583f0c1f0abc1c3
     subdir: sdk/haskell
