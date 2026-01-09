@@ -10,7 +10,7 @@ import (
 	"runtime/internal/model"
 )
 
-func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
+func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
 		Namespace:      "the0",
 		ControllerName: "the0-bot-controller",
@@ -18,6 +18,7 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 		MinIOAccessKey: "access-key",
 		MinIOSecretKey: "secret-key",
 		MinIOBucket:    "custom-bots",
+		RuntimeImage:   "the0/runtime:latest",
 	})
 
 	bot := model.Bot{
@@ -57,44 +58,274 @@ func TestPodGenerator_GeneratePod_BasicBot(t *testing.T) {
 	// Check annotations
 	assert.NotEmpty(t, pod.Annotations[AnnotationConfigHash])
 
-	// Check init containers (download and extract code from MinIO)
-	require.Len(t, pod.Spec.InitContainers, 2)
-	downloadContainer := pod.Spec.InitContainers[0]
-	assert.Equal(t, "download-code", downloadContainer.Name)
-	assert.Equal(t, "minio/mc:RELEASE.2024-11-17T19-35-25Z", downloadContainer.Image)
-	extractContainer := pod.Spec.InitContainers[1]
-	assert.Equal(t, "extract-code", extractContainer.Name)
-	assert.Equal(t, "busybox:1.36.1", extractContainer.Image)
+	// Check sync sidecar is in InitContainers (native sidecar K8s 1.28+)
+	require.Len(t, pod.Spec.InitContainers, 1)
+	syncContainer := pod.Spec.InitContainers[0]
+	assert.Equal(t, "sync", syncContainer.Name)
+	assert.Equal(t, "the0/runtime:latest", syncContainer.Image)
+	assert.Equal(t, []string{"/app/runtime", "daemon", "sync"}, syncContainer.Command)
+	assert.NotNil(t, syncContainer.RestartPolicy, "native sidecar should have restartPolicy")
+	assert.Equal(t, corev1.ContainerRestartPolicyAlways, *syncContainer.RestartPolicy)
+	assert.NotNil(t, syncContainer.StartupProbe, "native sidecar should have startup probe")
+	assert.Equal(t, "/readyz", syncContainer.StartupProbe.HTTPGet.Path)
 
-	// Check main container
+	// Check containers (bot only, no query sidecar since no query entrypoint)
 	require.Len(t, pod.Spec.Containers, 1)
-	container := pod.Spec.Containers[0]
-	assert.Equal(t, "bot", container.Name)
-	assert.Equal(t, "python:3.11-slim", container.Image) // base image
-	assert.Equal(t, []string{"/bin/bash", "/bot/entrypoint.sh"}, container.Command)
-	assert.Equal(t, "/bot", container.WorkingDir)
+
+	// Bot container
+	botContainer := pod.Spec.Containers[0]
+	assert.Equal(t, "bot", botContainer.Name)
+	assert.Equal(t, "the0/runtime:latest", botContainer.Image)
+	assert.Equal(t, []string{"/app/runtime", "execute", "--skip-sync", "--skip-query-server"}, botContainer.Command)
+	assert.Equal(t, "/bot", botContainer.WorkingDir)
 
 	// Check env vars
 	envMap := make(map[string]string)
-	for _, env := range container.Env {
+	for _, env := range botContainer.Env {
 		envMap[env.Name] = env.Value
 	}
 	assert.Equal(t, "test-bot-123", envMap["BOT_ID"])
+	assert.Equal(t, "main.py", envMap["ENTRYPOINT"])
+	assert.Equal(t, "python3.11", envMap["RUNTIME"])
+	assert.Equal(t, "realtime", envMap["BOT_TYPE"])
+	assert.Empty(t, envMap["IS_SCHEDULED"], "realtime bots should not have IS_SCHEDULED set")
 	assert.Contains(t, envMap["BOT_CONFIG"], "BTC/USD")
-	assert.Equal(t, "/bot", envMap["CODE_MOUNT_DIR"])
 
 	// Check resources
-	assert.Equal(t, DefaultMemoryLimit, container.Resources.Limits.Memory().String())
-	assert.Equal(t, DefaultCPULimit, container.Resources.Limits.Cpu().String())
+	assert.Equal(t, DefaultMemoryLimit, botContainer.Resources.Limits.Memory().String())
+	assert.Equal(t, DefaultCPULimit, botContainer.Resources.Limits.Cpu().String())
 
-	// Check volume
-	require.Len(t, pod.Spec.Volumes, 1)
+	// Check volumes
+	require.Len(t, pod.Spec.Volumes, 3)
 	assert.Equal(t, "bot-code", pod.Spec.Volumes[0].Name)
+	assert.Equal(t, "bot-state", pod.Spec.Volumes[1].Name)
+	assert.Equal(t, "the0", pod.Spec.Volumes[2].Name)
 }
 
-func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
+func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
 	generator := NewPodGenerator(PodGeneratorConfig{
 		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+	})
+
+	bot := model.Bot{
+		ID:     "query-bot",
+		Config: map[string]interface{}{},
+		CustomBotVersion: model.CustomBotVersion{
+			Version: "1.0.0",
+			Config: model.APIBotConfig{
+				Name:    "bot-with-query",
+				Runtime: "python3.11",
+				Entrypoints: map[string]string{
+					"bot":   "main.py",
+					"query": "query.py",
+				},
+			},
+			FilePath: "bot-with-query/1.0.0",
+		},
+	}
+
+	pod, err := generator.GeneratePod(bot)
+	require.NoError(t, err)
+
+	// Sync sidecar should be in InitContainers (native sidecar)
+	require.Len(t, pod.Spec.InitContainers, 1)
+	assert.Equal(t, "sync", pod.Spec.InitContainers[0].Name)
+
+	// Should have 2 containers: bot + query-server
+	require.Len(t, pod.Spec.Containers, 2)
+	assert.Equal(t, "bot", pod.Spec.Containers[0].Name)
+	assert.Equal(t, "query-server", pod.Spec.Containers[1].Name)
+
+	// Query server should have correct command
+	queryContainer := pod.Spec.Containers[1]
+	assert.Equal(t, []string{"/app/runtime", "execute", "--query-server-only"}, queryContainer.Command)
+}
+
+func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+	})
+
+	bot := model.Bot{
+		ID:     "scheduled-bot",
+		Config: map[string]interface{}{},
+		CustomBotVersion: model.CustomBotVersion{
+			Version: "1.0.0",
+			Config: model.APIBotConfig{
+				Name:    "daily-report",
+				Runtime: "nodejs20",
+				Entrypoints: map[string]string{
+					"bot":   "index.js",
+					"query": "query.js", // Even with query entrypoint, scheduled bots don't get query sidecar
+				},
+			},
+			FilePath: "daily-report/1.0.0",
+		},
+	}
+
+	podSpec, err := generator.GenerateScheduledPodSpec(bot)
+	require.NoError(t, err)
+
+	// Scheduled bots should not restart
+	assert.Equal(t, corev1.RestartPolicyNever, podSpec.RestartPolicy)
+
+	// Scheduled bots should have only 1 container - no sidecars
+	// Sync runs inline as part of the execute command
+	require.Len(t, podSpec.Containers, 1)
+	assert.Equal(t, "bot", podSpec.Containers[0].Name)
+
+	// Bot should use inline sync (no --skip-sync flag)
+	botCommand := podSpec.Containers[0].Command
+	assert.Equal(t, []string{"/app/runtime", "execute", "--skip-query-server"}, botCommand)
+	assert.NotContains(t, botCommand, "--skip-sync") // Sync runs inline for scheduled bots
+
+	// Bot should have BOT_TYPE=scheduled and IS_SCHEDULED=true
+	botEnvMap := make(map[string]string)
+	for _, env := range podSpec.Containers[0].Env {
+		botEnvMap[env.Name] = env.Value
+	}
+	assert.Equal(t, "scheduled", botEnvMap["BOT_TYPE"])
+	assert.Equal(t, "true", botEnvMap["IS_SCHEDULED"], "scheduled bots must set IS_SCHEDULED=true for done file mechanism")
+}
+
+func TestPodGenerator_GenerateQueryPod(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+	})
+
+	bot := model.Bot{
+		ID:     "query-target",
+		Config: map[string]interface{}{},
+		CustomBotVersion: model.CustomBotVersion{
+			Version: "1.0.0",
+			Config: model.APIBotConfig{
+				Name:    "bot",
+				Runtime: "python3.11",
+				Entrypoints: map[string]string{
+					"bot":   "main.py",
+					"query": "query.py",
+				},
+			},
+			FilePath: "bot/1.0.0",
+		},
+	}
+
+	pod, err := generator.GenerateQueryPod(bot, "/status", map[string]interface{}{"key": "value"})
+	require.NoError(t, err)
+
+	// Query pods should not restart
+	assert.Equal(t, corev1.RestartPolicyNever, pod.Spec.RestartPolicy)
+
+	// Should have only 1 container: bot (no sidecars)
+	require.Len(t, pod.Spec.Containers, 1)
+	assert.Equal(t, "bot", pod.Spec.Containers[0].Name)
+
+	// Should have QUERY_PATH and QUERY_PARAMS env vars
+	envMap := make(map[string]string)
+	for _, env := range pod.Spec.Containers[0].Env {
+		envMap[env.Name] = env.Value
+	}
+	assert.Equal(t, "/status", envMap["QUERY_PATH"])
+	assert.Contains(t, envMap["QUERY_PARAMS"], "key")
+
+	// Should use query entrypoint when available
+	assert.Equal(t, "query.py", envMap["ENTRYPOINT"])
+}
+
+func TestPodGenerator_ValidationErrors(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+	})
+
+	tests := []struct {
+		name        string
+		bot         model.Bot
+		errContains string
+	}{
+		{
+			name: "missing runtime",
+			bot: model.Bot{
+				ID: "test",
+				CustomBotVersion: model.CustomBotVersion{
+					FilePath: "test/1.0.0",
+					Config: model.APIBotConfig{
+						Entrypoints: map[string]string{"bot": "main.py"},
+					},
+				},
+			},
+			errContains: "runtime is required",
+		},
+		{
+			name: "missing entrypoint",
+			bot: model.Bot{
+				ID: "test",
+				CustomBotVersion: model.CustomBotVersion{
+					FilePath: "test/1.0.0",
+					Config: model.APIBotConfig{
+						Runtime: "python3.11",
+					},
+				},
+			},
+			errContains: "entrypoint is required",
+		},
+		{
+			name: "missing file path",
+			bot: model.Bot{
+				ID: "test",
+				CustomBotVersion: model.CustomBotVersion{
+					Config: model.APIBotConfig{
+						Runtime:     "python3.11",
+						Entrypoints: map[string]string{"bot": "main.py"},
+					},
+				},
+			},
+			errContains: "file path is required",
+		},
+		{
+			name: "invalid file path (command injection)",
+			bot: model.Bot{
+				ID: "test",
+				CustomBotVersion: model.CustomBotVersion{
+					FilePath: "test; rm -rf /",
+					Config: model.APIBotConfig{
+						Runtime:     "python3.11",
+						Entrypoints: map[string]string{"bot": "main.py"},
+					},
+				},
+			},
+			errContains: "invalid file path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := generator.GeneratePod(tt.bot)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
+}
+
+func TestPodGenerator_CustomResources(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
 		MinIOEndpoint:  "minio:9000",
 		MinIOAccessKey: "key",
 		MinIOSecretKey: "secret",
@@ -110,10 +341,12 @@ func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
 			"cpu_request":    "200m",
 		},
 		CustomBotVersion: model.CustomBotVersion{
-			Version: "2.0.0",
+			Version:  "1.0.0",
+			FilePath: "test/1.0.0",
 			Config: model.APIBotConfig{
-				Name:    "heavy-bot",
-				Runtime: "nodejs20",
+				Name:        "heavy-bot",
+				Runtime:     "nodejs20",
+				Entrypoints: map[string]string{"bot": "index.js"},
 			},
 		},
 	}
@@ -126,89 +359,6 @@ func TestPodGenerator_GeneratePod_CustomResources(t *testing.T) {
 	assert.Equal(t, "1", container.Resources.Limits.Cpu().String())
 	assert.Equal(t, "256Mi", container.Resources.Requests.Memory().String())
 	assert.Equal(t, "200m", container.Resources.Requests.Cpu().String())
-}
-
-func TestPodGenerator_GeneratePod_NodeJSRuntime(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-	})
-
-	bot := model.Bot{
-		ID:     "nodejs-bot",
-		Config: map[string]interface{}{},
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "1.0.0",
-			Config: model.APIBotConfig{
-				Name:    "js-trader",
-				Runtime: "nodejs20",
-			},
-		},
-	}
-
-	pod, err := generator.GeneratePod(bot)
-	require.NoError(t, err)
-
-	assert.Equal(t, "nodejs20", pod.Labels[LabelRuntime])
-	assert.Equal(t, "node:20-alpine", pod.Spec.Containers[0].Image)
-	// Alpine images use /bin/sh, not /bin/bash
-	assert.Equal(t, []string{"/bin/sh", "/bot/entrypoint.sh"}, pod.Spec.Containers[0].Command)
-}
-
-func TestPodGenerator_GeneratePod_RustRuntime(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-	})
-
-	bot := model.Bot{
-		ID:     "rust-bot",
-		Config: map[string]interface{}{},
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "1.0.0",
-			Config: model.APIBotConfig{
-				Name:    "rust-trader",
-				Runtime: "rust-stable",
-			},
-		},
-	}
-
-	pod, err := generator.GeneratePod(bot)
-	require.NoError(t, err)
-
-	assert.Equal(t, "rust-stable", pod.Labels[LabelRuntime])
-	assert.Equal(t, "rust:1.83-slim", pod.Spec.Containers[0].Image)
-}
-
-func TestPodGenerator_DefaultConfig(t *testing.T) {
-	// Test that default namespace and controller name are set
-	generator := NewPodGenerator(PodGeneratorConfig{
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-	})
-
-	bot := model.Bot{
-		ID: "default-test",
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "1.0.0",
-			Config: model.APIBotConfig{
-				Name:    "test",
-				Runtime: "python3.11",
-			},
-		},
-	}
-
-	pod, err := generator.GeneratePod(bot)
-	require.NoError(t, err)
-
-	assert.Equal(t, "the0", pod.Namespace)
-	assert.Equal(t, "the0-bot-controller", pod.Labels[LabelManagedBy])
 }
 
 func TestGeneratePodName(t *testing.T) {
@@ -276,15 +426,16 @@ func TestConfigChanged(t *testing.T) {
 			"key": "value1",
 		},
 		CustomBotVersion: model.CustomBotVersion{
-			Version: "1.0.0",
+			Version:  "1.0.0",
+			FilePath: "test/1.0.0",
 			Config: model.APIBotConfig{
-				Name:    "test",
-				Runtime: "python3.11",
+				Name:        "test",
+				Runtime:     "python3.11",
+				Entrypoints: map[string]string{"bot": "main.py"},
 			},
 		},
 	}
 
-	// Generate initial pod
 	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
@@ -323,7 +474,6 @@ func TestSanitizeLabelValue(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			result := sanitizeLabelValue(tt.input)
 			assert.Equal(t, tt.expected, result)
-			// Verify result is valid label value
 			assert.LessOrEqual(t, len(result), 63)
 		})
 	}
@@ -409,61 +559,6 @@ func TestValidateMinIOPath(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-		})
-	}
-}
-
-func TestPodGenerator_GeneratePod_CommandInjection(t *testing.T) {
-	generator := NewPodGenerator(PodGeneratorConfig{
-		Namespace:      "the0",
-		MinIOEndpoint:  "minio:9000",
-		MinIOAccessKey: "key",
-		MinIOSecretKey: "secret",
-		MinIOBucket:    "bots",
-	})
-
-	// Test that malicious filePath is rejected
-	bot := model.Bot{
-		ID:     "test-bot",
-		Config: map[string]interface{}{},
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "1.0.0",
-			Config: model.APIBotConfig{
-				Name:    "test",
-				Runtime: "python3.11",
-			},
-			FilePath: "mybot; rm -rf /", // Injection attempt
-		},
-	}
-
-	_, err := generator.GeneratePod(bot)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid file path")
-}
-
-func TestGetShellForImage(t *testing.T) {
-	tests := []struct {
-		image    string
-		expected string
-	}{
-		// Alpine images use /bin/sh
-		{"node:20-alpine", "/bin/sh"},
-		{"python:3.11-alpine", "/bin/sh"},
-		{"some-alpine-image", "/bin/sh"},
-
-		// Non-Alpine images use /bin/bash
-		{"python:3.11-slim", "/bin/bash"},
-		{"rust:1.83-slim", "/bin/bash"},
-		{"gcc:13", "/bin/bash"},
-		{"mcr.microsoft.com/dotnet/runtime:8.0", "/bin/bash"},
-		{"haskell:9.6-slim", "/bin/bash"},
-		{"eclipse-temurin:21-jre", "/bin/bash"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.image, func(t *testing.T) {
-			result := getShellForImage(tt.image)
-			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

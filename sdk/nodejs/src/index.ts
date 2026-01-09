@@ -312,6 +312,14 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Export state module as namespace
+import * as state from './state';
+export { state };
+
+// Export query module as namespace
+import * as query from './query';
+export { query };
+
 // Default export for convenience
 export default {
   parse,
@@ -321,4 +329,6 @@ export default {
   metric,
   log,
   sleep,
+  state,
+  query,
 };

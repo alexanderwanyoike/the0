@@ -5,7 +5,7 @@
  */
 
 #include <doctest/doctest.h>
-#include "../the0.h"
+#include <the0/the0.h>
 #include "helpers/test_helpers.hpp"
 
 using namespace the0_test;

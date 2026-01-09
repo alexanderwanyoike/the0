@@ -55,6 +55,17 @@ The `make minikube-up` command will check for these tools and provide install li
 - 20GB+ disk space
 - Docker driver (recommended)
 
+### Runtime Images
+
+Bot execution requires runtime images (`the0/python311`, `the0/nodejs20`, etc.) to be available. For minikube:
+
+```bash
+cd docker/images
+make minikube-build-all
+```
+
+This builds the images directly into minikube's cache - no registry required.
+
 **Don't have these installed?** Run `make minikube-up` anyway - it will tell you exactly what to install!
 
 ## Project Structure
@@ -107,7 +118,18 @@ k8s/
 Deploy with NodePort services for easy access:
 
 ```bash
-# Single command - builds images and deploys
+# Build runtime images into minikube (required for bot execution)
+cd docker/images
+make minikube-build-all
+
+# Then deploy
+cd ../../k8s
+make minikube-up
+```
+
+Or if `make minikube-up` handles image building automatically, just run:
+
+```bash
 make minikube-up
 ```
 

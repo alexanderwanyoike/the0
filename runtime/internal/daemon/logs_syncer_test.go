@@ -1,0 +1,194 @@
+package daemon
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"runtime/internal/util"
+)
+
+// MockMinIOLogger implements miniologger.MinIOLogger for testing.
+type MockMinIOLogger struct {
+	AppendCalls []struct {
+		BotID   string
+		Content string
+	}
+	StoreFinalCalls []struct {
+		BotID   string
+		Content string
+	}
+	AppendError     error
+	StoreFinalError error
+	CloseError      error
+	CloseCalled     bool
+}
+
+func (m *MockMinIOLogger) AppendBotLogs(ctx context.Context, botID, content string) error {
+	m.AppendCalls = append(m.AppendCalls, struct {
+		BotID   string
+		Content string
+	}{BotID: botID, Content: content})
+	return m.AppendError
+}
+
+func (m *MockMinIOLogger) StoreFinalLogs(ctx context.Context, botID, content string) error {
+	m.StoreFinalCalls = append(m.StoreFinalCalls, struct {
+		BotID   string
+		Content string
+	}{BotID: botID, Content: content})
+	return m.StoreFinalError
+}
+
+func (m *MockMinIOLogger) Close() error {
+	m.CloseCalled = true
+	return m.CloseError
+}
+
+func TestNewLogsSyncer_NilUploader(t *testing.T) {
+	syncer := NewLogsSyncer("bot-1", "/logs", nil, &util.DefaultLogger{})
+	assert.Nil(t, syncer, "should return nil when uploader is nil")
+}
+
+func TestNewLogsSyncer_ValidUploader(t *testing.T) {
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, &util.DefaultLogger{})
+
+	require.NotNil(t, syncer)
+	assert.Equal(t, "bot-1", syncer.botID)
+	assert.Equal(t, "/logs", syncer.logsPath)
+}
+
+func TestLogsSyncer_Sync_NoLogFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	mockUploader := &MockMinIOLogger{}
+
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	synced := syncer.Sync(context.Background())
+
+	assert.False(t, synced, "should return false when log file doesn't exist")
+	assert.Empty(t, mockUploader.AppendCalls, "should not call uploader when no log file")
+}
+
+func TestLogsSyncer_Sync_EmptyLogFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	// Create empty log file
+	require.NoError(t, os.WriteFile(logFile, []byte{}, 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	synced := syncer.Sync(context.Background())
+
+	assert.False(t, synced, "should return false for empty log file")
+	assert.Empty(t, mockUploader.AppendCalls, "should not call uploader for empty log file")
+}
+
+func TestLogsSyncer_Sync_FirstSync(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	// Create log file with content
+	content := "2024-01-01 10:00:00 Bot started\n2024-01-01 10:00:01 Processing...\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	synced := syncer.Sync(context.Background())
+
+	assert.True(t, synced, "should return true when logs are synced")
+	require.Len(t, mockUploader.AppendCalls, 1)
+	assert.Equal(t, "bot-1", mockUploader.AppendCalls[0].BotID)
+	assert.Equal(t, content, mockUploader.AppendCalls[0].Content)
+}
+
+func TestLogsSyncer_Sync_IncrementalSync(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	// Create initial log file
+	initial := "Line 1\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(initial), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+
+	// First sync
+	synced := syncer.Sync(context.Background())
+	assert.True(t, synced)
+	require.Len(t, mockUploader.AppendCalls, 1)
+	assert.Equal(t, initial, mockUploader.AppendCalls[0].Content)
+
+	// Append more content
+	additional := "Line 2\nLine 3\n"
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	_, err = f.WriteString(additional)
+	require.NoError(t, err)
+	f.Close()
+
+	// Second sync should only get new content
+	synced = syncer.Sync(context.Background())
+	assert.True(t, synced)
+	require.Len(t, mockUploader.AppendCalls, 2)
+	assert.Equal(t, additional, mockUploader.AppendCalls[1].Content)
+}
+
+func TestLogsSyncer_Sync_NoNewContent(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	content := "Line 1\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+
+	// First sync
+	syncer.Sync(context.Background())
+	require.Len(t, mockUploader.AppendCalls, 1)
+
+	// Second sync with no changes
+	synced := syncer.Sync(context.Background())
+	assert.False(t, synced, "should return false when no new content")
+	assert.Len(t, mockUploader.AppendCalls, 1, "should not call uploader when no new content")
+}
+
+func TestLogsSyncer_Sync_UploadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	require.NoError(t, os.WriteFile(logFile, []byte("content\n"), 0644))
+
+	mockUploader := &MockMinIOLogger{
+		AppendError: assert.AnError,
+	}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+
+	synced := syncer.Sync(context.Background())
+	assert.False(t, synced, "should return false on upload error")
+}
+
+func TestLogsSyncer_Close(t *testing.T) {
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, &util.DefaultLogger{})
+
+	err := syncer.Close()
+	require.NoError(t, err)
+	assert.True(t, mockUploader.CloseCalled)
+}
+
+func TestLogsSyncer_Close_WithError(t *testing.T) {
+	mockUploader := &MockMinIOLogger{
+		CloseError: assert.AnError,
+	}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, &util.DefaultLogger{})
+
+	err := syncer.Close()
+	assert.Error(t, err)
+}

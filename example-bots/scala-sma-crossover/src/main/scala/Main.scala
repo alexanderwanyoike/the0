@@ -9,21 +9,27 @@
  * - Calculating Simple Moving Averages (SMA) functionally
  * - Detecting SMA crossovers for trading signals
  * - Structured metric emission for dashboard visualization
+ * - Persistent state for SMA values across restarts
  *
  * Metrics emitted:
  * - price: Current stock price with change percentage
  * - sma: Short and long SMA values
  * - signal: BUY/SELL signals when crossover detected
+ *
+ * State Usage:
+ * - Persists previous SMA values for crossover detection across restarts
+ * - Tracks total signal count for monitoring
  */
 
 import sttp.client3._
 import io.circe._
 import io.circe.parser._
-import the0.Input
+import the0.{Input, State}
 
 case class BotState(
   prevShortSma: Option[Double] = None,
-  prevLongSma: Option[Double] = None
+  prevLongSma: Option[Double] = None,
+  signalCount: Long = 0
 )
 
 object Main:
@@ -39,15 +45,41 @@ object Main:
     val longPeriod = config.hcursor.get[Int]("long_period").getOrElse(20)
     val updateIntervalMs = config.hcursor.get[Int]("update_interval_ms").getOrElse(60000)
 
-    Input.log(s"Bot $botId started - $symbol SMA($shortPeriod/$longPeriod)")
+    // Set a last_run timestamp state
+    State.set("last_run", Json.obj(
+      "timestamp" -> Json.fromLong(System.currentTimeMillis())
+    ).noSpaces)
+
+    // Load persistent state from previous runs
+    val persisted = State.get("bot_state").flatMap(parse(_).toOption)
+    var botState = persisted match
+      case Some(json) =>
+        val cursor = json.hcursor
+        BotState(
+          prevShortSma = cursor.get[Double]("prev_short_sma").toOption.filter(_ != 0.0),
+          prevLongSma = cursor.get[Double]("prev_long_sma").toOption.filter(_ != 0.0),
+          signalCount = cursor.get[Long]("signal_count").getOrElse(0L)
+        )
+      case None => BotState()
+
+    Input.log(s"Bot $botId started - $symbol SMA($shortPeriod/$longPeriod) - loaded ${botState.signalCount} signals")
 
     val backend = HttpClientSyncBackend()
-    var state = BotState()
 
     // Main loop
+    var iteration = 0
     while true do
       try
-        state = processUpdate(backend, symbol, shortPeriod, longPeriod, state)
+        botState = processUpdate(backend, symbol, shortPeriod, longPeriod, botState)
+
+        // Persist state every 10 iterations
+        iteration += 1
+        if iteration % 10 == 0 then
+          State.set("bot_state", Json.obj(
+            "prev_short_sma" -> Json.fromDoubleOrNull(botState.prevShortSma.getOrElse(0.0)),
+            "prev_long_sma" -> Json.fromDoubleOrNull(botState.prevLongSma.getOrElse(0.0)),
+            "signal_count" -> Json.fromLong(botState.signalCount)
+          ).noSpaces)
       catch
         case e: Exception =>
           Input.log(s"Error: ${e.getMessage}")
@@ -94,10 +126,12 @@ object Main:
     ).noSpaces)
 
     // Check for crossover signal
+    var newSignalCount = state.signalCount
     (state.prevShortSma, state.prevLongSma) match
       case (Some(prevShort), Some(prevLong)) =>
         checkCrossover(prevShort, prevLong, shortSma, longSma).foreach { signal =>
-          val confidence = math.min(math.abs(shortSma - longSma) / longSma * 100, 0.95)
+          newSignalCount += 1
+          val confidence = math.min(math.abs(shortSma - longSma) / longSma, 0.95)
           val direction = if signal == "BUY" then "above" else "below"
 
           Input.metric("signal", Json.obj(
@@ -105,6 +139,7 @@ object Main:
             "symbol" -> Json.fromString(symbol),
             "price" -> Json.fromDoubleOrNull(roundTo(currentPrice, 2)),
             "confidence" -> Json.fromDoubleOrNull(roundTo(confidence, 2)),
+            "total_signals" -> Json.fromLong(newSignalCount),
             "reason" -> Json.fromString(s"SMA$shortPeriod crossed $direction SMA$longPeriod")
           ).noSpaces)
         }
@@ -113,7 +148,8 @@ object Main:
     // Update state
     state.copy(
       prevShortSma = Some(shortSma),
-      prevLongSma = Some(longSma)
+      prevLongSma = Some(longSma),
+      signalCount = newSignalCount
     )
 
   def fetchYahooFinance(backend: SttpBackend[Identity, Any], symbol: String): Vector[Double] =

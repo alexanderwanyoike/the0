@@ -9,14 +9,19 @@
  * - Calculating Simple Moving Averages (SMA)
  * - Detecting SMA crossovers for trading signals
  * - Structured metric emission for dashboard visualization
+ * - Persistent state for SMA values across restarts
  *
  * Metrics emitted:
  * - price: Current stock price with change percentage
  * - sma: Short and long SMA values
  * - signal: BUY/SELL signals when crossover detected
+ *
+ * State Usage:
+ * - Persists previous SMA values for crossover detection across restarts
+ * - Tracks total signal count for monitoring
  */
 
-use the0_sdk::input;
+use the0_sdk::{input, state};
 use serde::Deserialize;
 use serde_json::json;
 use std::thread;
@@ -50,10 +55,33 @@ struct Quote {
     close: Vec<Option<f64>>,
 }
 
-// Bot state
+// Bot state (in-memory)
 struct BotState {
     prev_short_sma: Option<f64>,
     prev_long_sma: Option<f64>,
+    signal_count: u64,
+}
+
+// Persistent state (saved to disk)
+#[derive(Deserialize, serde::Serialize, Default)]
+struct PersistedState {
+    prev_short_sma: Option<f64>,
+    prev_long_sma: Option<f64>,
+    signal_count: u64,
+}
+
+// Last run timestamp structure
+#[derive(Deserialize, serde::Serialize)]
+struct LastRun {
+    timestamp: u64,
+}
+
+fn current_timestamp() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap();
+    duration.as_secs() * 1000 + duration.subsec_millis() as u64
 }
 
 fn main() {
@@ -65,6 +93,11 @@ fn main() {
 
     // Get configuration using the0 SDK
     let (bot_id, config) = input::parse().expect("Failed to parse bot configuration");
+    if let Err(e) = state::set("last_run", & LastRun {
+        timestamp: current_timestamp(),
+    }) {
+        error!(error = %e, "Failed to save last run timestamp");
+    }
 
     // Extract configuration with defaults
     let symbol = config["symbol"].as_str().unwrap_or("AAPL");
@@ -72,23 +105,47 @@ fn main() {
     let long_period = config["long_period"].as_i64().unwrap_or(20) as usize;
     let update_interval_ms = config["update_interval_ms"].as_i64().unwrap_or(60000) as u64;
 
-    info!(bot_id = %bot_id, symbol = %symbol, short_period, long_period, "Bot started");
+    // Load persistent state from previous runs
+    let persisted: PersistedState = state::get("bot_state").unwrap_or_default();
+
+    info!(
+        bot_id = %bot_id,
+        symbol = %symbol,
+        short_period,
+        long_period,
+        loaded_signals = persisted.signal_count,
+        "Bot started"
+    );
 
     let client = reqwest::blocking::Client::builder()
         .user_agent("the0-sma-bot/1.0")
         .build()
         .expect("Failed to create HTTP client");
 
-    let mut state = BotState {
-        prev_short_sma: None,
-        prev_long_sma: None,
+    let mut bot_state = BotState {
+        prev_short_sma: persisted.prev_short_sma,
+        prev_long_sma: persisted.prev_long_sma,
+        signal_count: persisted.signal_count,
     };
 
     // Main loop
+    let mut iteration = 0u64;
     loop {
-        match fetch_and_process(&client, symbol, short_period, long_period, &mut state) {
+        match fetch_and_process(&client, symbol, short_period, long_period, &mut bot_state) {
             Ok(_) => {}
             Err(e) => error!(error = %e, "Processing error"),
+        }
+
+        // Persist state every 10 iterations
+        iteration += 1;
+        if iteration % 10 == 0 {
+            if let Err(e) = state::set("bot_state", &PersistedState {
+                prev_short_sma: bot_state.prev_short_sma,
+                prev_long_sma: bot_state.prev_long_sma,
+                signal_count: bot_state.signal_count,
+            }) {
+                error!(error = %e, "Failed to persist bot state");
+            }
         }
 
         thread::sleep(Duration::from_millis(update_interval_ms));
@@ -146,14 +203,15 @@ fn fetch_and_process(
     // Check for crossover signal
     if let (Some(prev_short), Some(prev_long)) = (state.prev_short_sma, state.prev_long_sma) {
         if let Some(signal) = check_crossover(prev_short, prev_long, short_sma, long_sma) {
-            let confidence = (short_sma - long_sma).abs() / long_sma * 100.0;
-            let confidence = confidence.min(0.95);
+            state.signal_count += 1;
+            let confidence = ((short_sma - long_sma).abs() / long_sma).min(0.95);
 
             input::metric("signal", &json!({
                 "type": signal,
                 "symbol": symbol,
                 "price": round(current_price, 2),
                 "confidence": round(confidence, 2),
+                "total_signals": state.signal_count,
                 "reason": format!("SMA{} crossed {} SMA{}",
                     short_period,
                     if signal == "BUY" { "above" } else { "below" },

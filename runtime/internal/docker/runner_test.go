@@ -90,154 +90,9 @@ func cleanupSegmentContainers(t *testing.T, segment int32) {
 	}
 }
 
-// Integration tests that verify the dynamic entrypoint functionality
-// These tests focus on the core entrypoint script generation
-
-func TestIntegration_EntrypointScriptGeneration_Bot(t *testing.T) {
-	tempDir := t.TempDir()
-	logger := &util.DefaultLogger{}
-
-	scriptManager := NewScriptManager(logger)
-
-	executable := model.Executable{
-		ID:         "test-bot",
-		Runtime:    "python3.11",
-		Entrypoint: "bot",
-		EntrypointFiles: map[string]string{
-			"bot": "main.py",
-		},
-		Config: map[string]any{
-			"test_param": "bot_value",
-		},
-	}
-
-	// Create bot directory
-	botDir := filepath.Join(tempDir, executable.ID)
-	err := os.MkdirAll(botDir, 0755)
-	require.NoError(t, err)
-
-	// Generate entrypoint script
-	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
-	require.NoError(t, err)
-	assert.NotEmpty(t, scriptPath)
-
-	// Read and verify script content
-	content, err := os.ReadFile(scriptPath)
-	require.NoError(t, err)
-	scriptContent := string(content)
-
-	// Verify the script sets ENTRYPOINT_TYPE environment variable correctly
-	assert.Contains(t, scriptContent, `export ENTRYPOINT_TYPE="bot"`)
-
-	// Verify the Python entrypoint script is embedded
-	assert.Contains(t, scriptContent, "ENTRYPOINT_TYPE", "Script should contain ENTRYPOINT_TYPE handling")
-
-	// Verify bot ID and config are properly set
-	assert.Contains(t, scriptContent, executable.ID)
-	assert.Contains(t, scriptContent, "test_param")
-
-	// Clean up
-	os.RemoveAll(botDir)
-}
-
-func TestIntegration_EntrypointScriptGeneration_NodeJS(t *testing.T) {
-	tempDir := t.TempDir()
-	logger := &util.DefaultLogger{}
-
-	scriptManager := NewScriptManager(logger)
-
-	executable := model.Executable{
-		ID:         "test-nodejs-bot",
-		Runtime:    "nodejs20",
-		Entrypoint: "bot",
-		EntrypointFiles: map[string]string{
-			"bot": "main.js",
-		},
-		Config: map[string]any{
-			"test_param": "nodejs_value",
-		},
-	}
-
-	// Create bot directory
-	botDir := filepath.Join(tempDir, executable.ID)
-	err := os.MkdirAll(botDir, 0755)
-	require.NoError(t, err)
-
-	// Generate entrypoint script
-	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
-	require.NoError(t, err)
-	assert.NotEmpty(t, scriptPath)
-
-	// Read and verify script content
-	content, err := os.ReadFile(scriptPath)
-	require.NoError(t, err)
-	scriptContent := string(content)
-
-	// Verify the script sets ENTRYPOINT_TYPE environment variable correctly
-	assert.Contains(t, scriptContent, `export ENTRYPOINT_TYPE="bot"`)
-
-	// Verify the Node.js entrypoint script is embedded
-	assert.Contains(t, scriptContent, "ENTRYPOINT_TYPE", "Script should contain ENTRYPOINT_TYPE handling")
-
-	// Verify bot ID and config are properly set
-	assert.Contains(t, scriptContent, executable.ID)
-	assert.Contains(t, scriptContent, "test_param")
-
-	// Verify Node.js specific script path (without .js extension)
-	assert.Contains(t, scriptContent, "main") // Script path should be "main" not "main.js"
-}
-
-func TestIntegration_EntrypointScriptGeneration_Rust(t *testing.T) {
-	tempDir := t.TempDir()
-	logger := &util.DefaultLogger{}
-
-	scriptManager := NewScriptManager(logger)
-
-	executable := model.Executable{
-		ID:         "test-rust-bot",
-		Runtime:    "rust-stable",
-		Entrypoint: "bot",
-		EntrypointFiles: map[string]string{
-			"bot": "target/release/my-bot",
-		},
-		Config: map[string]any{
-			"symbol": "BTC/USDT",
-			"amount": 100,
-		},
-	}
-
-	// Create bot directory
-	botDir := filepath.Join(tempDir, executable.ID)
-	err := os.MkdirAll(botDir, 0755)
-	require.NoError(t, err)
-
-	// Generate entrypoint script
-	scriptPath, err := scriptManager.Create(context.Background(), executable, botDir)
-	require.NoError(t, err)
-	assert.NotEmpty(t, scriptPath)
-
-	// Read and verify script content
-	content, err := os.ReadFile(scriptPath)
-	require.NoError(t, err)
-	scriptContent := string(content)
-
-	// Verify the script is a bash script
-	assert.Contains(t, scriptContent, "#!/bin/bash")
-
-	// Verify Rust-specific content (uses ScriptPath directly from bot-config.yaml)
-	assert.Contains(t, scriptContent, "target/release/my-bot", "Should use exact binary path from ScriptPath")
-	assert.Contains(t, scriptContent, "BINARY=", "Should set BINARY variable")
-	assert.Contains(t, scriptContent, "BOT_ID", "Should set BOT_ID environment variable")
-	assert.Contains(t, scriptContent, "BOT_CONFIG", "Should set BOT_CONFIG environment variable")
-
-	// Verify bot ID is in the script
-	assert.Contains(t, scriptContent, executable.ID)
-
-	// Verify the entrypoint executes the binary (no compilation at runtime)
-	assert.Contains(t, scriptContent, "exec", "Should exec the binary")
-	assert.NotContains(t, scriptContent, "cargo build", "Should NOT compile at runtime (CLI does this)")
-	assert.NotContains(t, scriptContent, "find", "Should NOT use find - uses ScriptPath directly")
-}
+// NOTE: Old entrypoint script generation tests removed.
+// With daemon approach, entrypoint scripts are generated by entrypoints.GenerateEntrypoint
+// and baked into container images. Tests are in internal/entrypoints package.
 
 func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 	if testing.Short() {
@@ -251,6 +106,7 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -318,6 +174,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -364,7 +221,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 	assert.Equal(t, "running", status.Status)
 
 	// Test ListManagedContainers
-	containers, err := runner.ListManagedContainers(ctx, testSegment)
+	containers, err := runner.ListManagedContainers(ctx)
 	require.NoError(t, err)
 	if len(containers) == 0 {
 		t.Logf("Warning: No managed containers found, this might be expected for long-running containers")
@@ -386,7 +243,7 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	// Verify container is stopped
 	time.Sleep(1 * time.Second)
-	finalContainers, err := runner.ListManagedContainers(ctx, testSegment)
+	finalContainers, err := runner.ListManagedContainers(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, finalContainers, "Container should be removed from managed list")
 }
@@ -408,10 +265,34 @@ func loadRealTestBotFile(t *testing.T, filename string) []byte {
 
 // MinIO test server management using testcontainers
 type MinIOTestServer struct {
-	container testcontainers.Container
-	endpoint  string
-	accessKey string
-	secretKey string
+	container         testcontainers.Container
+	endpoint          string // For host-side access (test code)
+	containerEndpoint string // For container access (via host.docker.internal)
+	accessKey         string
+	secretKey         string
+}
+
+// GetTestConfig returns a DockerRunnerConfig for testing with this MinIO server.
+// Uses endpoint for the runner's MinIO client (host-accessible), and
+// containerEndpoint for containers (via host.docker.internal).
+func (m *MinIOTestServer) GetTestConfig() *DockerRunnerConfig {
+	return &DockerRunnerConfig{
+		MinIOEndpoint:          m.endpoint,          // Host-accessible endpoint for runner's MinIO client
+		MinIOContainerEndpoint: m.containerEndpoint, // Container-accessible endpoint for bot containers
+		MinIOAccessKeyID:       m.accessKey,
+		MinIOSecretAccessKey:   m.secretKey,
+		MinIOUseSSL:            false,
+		MinIOCodeBucket:        "custom-bots",
+		MinioResultsBucket:     "backtests",
+		MinioLogsBucket:        "bot-logs",
+		MinioStateBucket:       "bot-state",
+		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB
+		MaxStateFileSizeBytes:  10 * 1024 * 1024,       // 10MB
+		TempDir:                "/tmp",
+		MemoryLimitMB:          512 * 1024 * 1024, // 512MB
+		CPUShares:              512,
+		DockerNetwork:          "",
+	}
 }
 
 func (m *MinIOTestServer) Close() {
@@ -460,17 +341,23 @@ func startMinIOTestServerForPackage() *MinIOTestServer {
 
 	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
 
+	// For containers to reach the host, we use host.docker.internal (enabled via --add-host).
+	// The runner sets MINIO_ENDPOINT which gets passed to containers as an environment variable.
+	containerEndpoint := fmt.Sprintf("host.docker.internal:%s", port.Port())
+
 	// Set environment variables for the docker runner
-	os.Setenv("MINIO_ENDPOINT", endpoint)
+	// Containers will use host.docker.internal to reach MinIO on the host
+	os.Setenv("MINIO_ENDPOINT", containerEndpoint)
 	os.Setenv("MINIO_ACCESS_KEY", accessKey)
 	os.Setenv("MINIO_SECRET_KEY", secretKey)
 	os.Setenv("MINIO_SSL", "false")
 
 	return &MinIOTestServer{
-		container: container,
-		endpoint:  endpoint,
-		accessKey: accessKey,
-		secretKey: secretKey,
+		container:         container,
+		endpoint:          endpoint,          // For host-side access (test code)
+		containerEndpoint: containerEndpoint, // For container access (env vars)
+		accessKey:         accessKey,
+		secretKey:         secretKey,
 	}
 }
 
@@ -516,6 +403,7 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -591,6 +479,7 @@ func TestIntegration_RealDocker_RustBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -640,16 +529,16 @@ func TestIntegration_RealDocker_RustBot(t *testing.T) {
 	require.Equal(t, "success", result.Status, "Rust bot should complete successfully")
 	require.Equal(t, 0, result.ExitCode, "Rust bot should exit with code 0")
 
-	// Verify JSON output
+	// Verify JSON output - look for bot output line (contains "status"), not daemon logs
 	lines := strings.Split(result.Output, "\n")
 	var jsonLine string
 	for _, line := range lines {
-		if strings.HasPrefix(line, "{") {
+		if strings.HasPrefix(line, "{") && strings.Contains(line, `"status":`) {
 			jsonLine = line
 			break
 		}
 	}
-	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+	require.NotEmpty(t, jsonLine, "Should find JSON result with status in output")
 
 	var botResult map[string]any
 	err = json.Unmarshal([]byte(jsonLine), &botResult)
@@ -738,6 +627,7 @@ func TestIntegration_RealDocker_CppBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()
@@ -787,16 +677,16 @@ func TestIntegration_RealDocker_CppBot(t *testing.T) {
 	require.Equal(t, "success", result.Status, "C++ bot should complete successfully")
 	require.Equal(t, 0, result.ExitCode, "C++ bot should exit with code 0")
 
-	// Verify JSON output
+	// Verify JSON output - look for bot output line (contains "status"), not daemon logs
 	lines := strings.Split(result.Output, "\n")
 	var jsonLine string
 	for _, line := range lines {
-		if strings.HasPrefix(line, "{") {
+		if strings.HasPrefix(line, "{") && strings.Contains(line, `"status":`) {
 			jsonLine = line
 			break
 		}
 	}
-	require.NotEmpty(t, jsonLine, "Should find JSON result in output")
+	require.NotEmpty(t, jsonLine, "Should find JSON result with status in output")
 
 	var botResult map[string]any
 	err = json.Unmarshal([]byte(jsonLine), &botResult)
@@ -886,6 +776,7 @@ func TestIntegration_RealDocker_ScalaBot(t *testing.T) {
 
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
+		Config: sharedMinIOServer.GetTestConfig(),
 	})
 	require.NoError(t, err)
 	defer runner.Close()

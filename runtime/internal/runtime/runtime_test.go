@@ -7,26 +7,23 @@ import (
 )
 
 func TestGetDockerImage(t *testing.T) {
-	// Test valid runtimes
-	validTests := []struct {
-		runtime  string
-		expected string
-	}{
-		{"python3.11", "python:3.11-slim"},
-		{"nodejs20", "node:20-alpine"},
-		{"rust-stable", "rust:1.83-slim"},
-		{"dotnet8", "mcr.microsoft.com/dotnet/runtime:8.0"},
-		{"gcc13", "gcc:13"},
-		{"cpp-gcc13", "gcc:13"},
-		{"scala3", "eclipse-temurin:21-jre"},
-		{"ghc96", "haskell:9.6-slim"},
+	// All valid runtimes now return the universal runtime image
+	validRuntimes := []string{
+		"python3.11",
+		"nodejs20",
+		"rust-stable",
+		"dotnet8",
+		"gcc13",
+		"cpp-gcc13",
+		"scala3",
+		"ghc96",
 	}
 
-	for _, tt := range validTests {
-		t.Run(tt.runtime, func(t *testing.T) {
-			result, err := GetDockerImage(tt.runtime)
+	for _, rt := range validRuntimes {
+		t.Run(rt, func(t *testing.T) {
+			result, err := GetDockerImage(rt)
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, UniversalRuntimeImage, result)
 		})
 	}
 

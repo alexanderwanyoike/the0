@@ -3,13 +3,14 @@
 
 name: haskell-sma-crossover
 description: "SMA crossover strategy bot using Haskell with Yahoo Finance data"
-version: 1.0.9
+version: 1.3.3
 author: "the0"
 type: scheduled
 runtime: ghc96
 
 entrypoints:
-  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.7/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
+  bot: bin/sma-bot
+  query: bin/sma-query
 
 schema:
   bot: bot-schema.json

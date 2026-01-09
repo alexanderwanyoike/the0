@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -302,6 +303,9 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 	// Prepare entrypoints
 	entrypoints := map[string]any{
 		"bot": config.Entrypoints.Bot,
+	}
+	if config.Entrypoints.Query != "" {
+		entrypoints["query"] = config.Entrypoints.Query
 	}
 
 	// Prepare schema
@@ -868,4 +872,286 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 	}
 
 	return uploadResponse.FilePath, nil
+}
+
+// BotStateKey represents a single state key with metadata
+type BotStateKey struct {
+	Key  string `json:"key"`
+	Size int64  `json:"size"`
+}
+
+// BotStateListResponse represents the response from listing state keys
+type BotStateListResponse struct {
+	Success bool          `json:"success"`
+	Data    []BotStateKey `json:"data"`
+	Message string        `json:"message"`
+}
+
+// BotStateValueResponse represents the response from getting a state value
+type BotStateValueResponse struct {
+	Success bool   `json:"success"`
+	Data    any    `json:"data"`
+	Message string `json:"message"`
+}
+
+// BotStateDeleteResponse represents the response from deleting a state key
+type BotStateDeleteResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Deleted bool `json:"deleted"`
+	} `json:"data"`
+	Message string `json:"message"`
+}
+
+// BotStateClearResponse represents the response from clearing all state
+type BotStateClearResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Cleared bool `json:"cleared"`
+	} `json:"data"`
+	Message string `json:"message"`
+}
+
+// ListBotState lists all state keys for a bot
+func (c *APIClient) ListBotState(auth *Auth, botID string) ([]BotStateKey, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/bots/%s/state", c.BaseURL, botID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("bot not found: %s", botID)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to list state (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var response BotStateListResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return response.Data, nil
+}
+
+// GetBotStateKey gets a specific state value for a bot
+func (c *APIClient) GetBotStateKey(auth *Auth, botID string, key string) (any, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/bots/%s/state/%s", c.BaseURL, botID, key), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("bot or state key not found")
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get state key (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var response BotStateValueResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return response.Data, nil
+}
+
+// DeleteBotStateKey deletes a specific state key for a bot
+func (c *APIClient) DeleteBotStateKey(auth *Auth, botID string, key string) (bool, error) {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bots/%s/state/%s", c.BaseURL, botID, key), nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return false, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return false, fmt.Errorf("bot not found: %s", botID)
+	}
+
+	if resp.StatusCode == 409 {
+		return false, fmt.Errorf("concurrent modification - state was modified by another operation")
+	}
+
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("failed to delete state key (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var response BotStateDeleteResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return false, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return response.Data.Deleted, nil
+}
+
+// ClearBotState clears all state for a bot
+func (c *APIClient) ClearBotState(auth *Auth, botID string) (bool, error) {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bots/%s/state", c.BaseURL, botID), nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return false, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return false, fmt.Errorf("bot not found: %s", botID)
+	}
+
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("failed to clear state (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var response BotStateClearResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return false, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return response.Data.Cleared, nil
+}
+
+// BotQueryRequest represents a request to execute a query against a bot
+type BotQueryRequest struct {
+	QueryPath  string         `json:"query_path"`
+	Params     map[string]any `json:"params,omitempty"`
+	TimeoutSec int            `json:"timeout_sec,omitempty"`
+}
+
+// BotQueryResponse represents the response from a bot query
+type BotQueryResponse struct {
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// ExecuteBotQuery executes a query against a bot's query handlers
+func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryRequest) (*BotQueryResponse, error) {
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/query/%s", c.BaseURL, botID), bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Use longer timeout for query execution
+	client := &http.Client{
+		Timeout: time.Duration(request.TimeoutSec+10) * time.Second, // Add buffer for network
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("bot not found: %s", botID)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Try to extract a cleaner error message from the response
+		var errorResp struct {
+			Message string `json:"message"`
+			Data    struct {
+				Error string `json:"error"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &errorResp); err == nil {
+			// Try to extract nested error from the message (query error response)
+			if errorResp.Message != "" {
+				// Check if message contains JSON with status/error
+				var nestedError struct {
+					Status string `json:"status"`
+					Error  string `json:"error"`
+				}
+				// The message often contains "Query failed: {json}"
+				if idx := strings.Index(errorResp.Message, "{"); idx >= 0 {
+					jsonPart := errorResp.Message[idx:]
+					if endIdx := strings.LastIndex(jsonPart, "}"); endIdx >= 0 {
+						if err := json.Unmarshal([]byte(jsonPart[:endIdx+1]), &nestedError); err == nil && nestedError.Error != "" {
+							return nil, fmt.Errorf("%s", nestedError.Error)
+						}
+					}
+				}
+				return nil, fmt.Errorf("%s", errorResp.Message)
+			}
+			if errorResp.Data.Error != "" {
+				return nil, fmt.Errorf("%s", errorResp.Data.Error)
+			}
+		}
+		return nil, fmt.Errorf("query failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var response BotQueryResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	return &response, nil
 }

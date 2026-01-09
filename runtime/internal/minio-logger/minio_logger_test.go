@@ -49,7 +49,31 @@ func setupMinIOTestContainer(t *testing.T) (testcontainers.Container, string, st
 
 	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
 
+	// Wait for MinIO to be fully initialized for bucket operations
+	// The health endpoint may return OK before bucket operations are ready
+	waitForMinIOReady(t, endpoint, accessKey, secretKey)
+
 	return container, endpoint, accessKey, secretKey
+}
+
+// waitForMinIOReady waits until MinIO is ready for bucket operations
+func waitForMinIOReady(t *testing.T, endpoint, accessKey, secretKey string) {
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: false,
+	})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		_, err := client.ListBuckets(ctx)
+		if err == nil {
+			return // MinIO is ready
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("MinIO did not become ready after %d retries", maxRetries)
 }
 
 func TestNewMinIOLogger(t *testing.T) {

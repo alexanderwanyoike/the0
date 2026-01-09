@@ -182,8 +182,9 @@ func (b *DotnetBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command - restore from nuget.org and publish
-	buildCmd := `dotnet publish -c Release -o /project/bin/Release/net8.0/publish 2>&1`
+	// Build command - publish each .csproj to its own temp dir, then merge outputs
+	// This avoids dotnet publish cleaning the shared output directory on each run
+	buildCmd := `mkdir -p /project/bin/Release/net8.0/publish && for PROJ in *.csproj; do [ -f "$PROJ" ] && PNAME=$(basename "$PROJ" .csproj) && dotnet publish "$PROJ" -c Release -o "/tmp/$PNAME-publish" 2>&1 && cp -r "/tmp/$PNAME-publish/"* /project/bin/Release/net8.0/publish/ || exit 1; done`
 
 	config := &container.Config{
 		Image: dotnetSdkImage,

@@ -54,6 +54,12 @@ type BotControllerConfig struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+
+	// RuntimeImage for init containers and sidecars
+	RuntimeImage string
+
+	// RuntimeImagePullPolicy for init/sidecar containers
+	RuntimeImagePullPolicy string
 }
 
 // BotController reconciles bot state between MongoDB and Kubernetes.
@@ -89,13 +95,15 @@ func NewBotController(
 	}
 
 	podGenConfig := podgen.PodGeneratorConfig{
-		Namespace:      config.Namespace,
-		ControllerName: config.ControllerName,
-		MinIOEndpoint:  config.MinIOEndpoint,
-		MinIOAccessKey: config.MinIOAccessKey,
-		MinIOSecretKey: config.MinIOSecretKey,
-		MinIOBucket:    config.MinIOBucket,
-		MinIOUseSSL:    config.MinIOUseSSL,
+		Namespace:              config.Namespace,
+		ControllerName:         config.ControllerName,
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	}
 
 	return &BotController{

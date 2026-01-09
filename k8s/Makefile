@@ -176,6 +176,33 @@ enable-registry: ## Enable minikube registry addon for bot images
 	@echo "✅ Registry enabled at localhost:5000"
 	@echo "💡 Images can be pushed to localhost:5000/image:tag"
 
+# Runtime image management
+.PHONY: build-runtime
+build-runtime: ## Build runtime image in minikube environment
+	@echo "🔨 Building runtime image..."
+	@eval $$(minikube docker-env) && docker build -t runtime:latest ../runtime
+	@echo "✅ Runtime image built: runtime:latest"
+
+.PHONY: update-runtime
+update-runtime: build-runtime ## Build runtime image in minikube (alias for build-runtime)
+	@echo "✅ Runtime image updated in minikube"
+
+.PHONY: restart-controller
+restart-controller: ## Restart the bot controller deployment
+	@echo "🔄 Restarting bot controller..."
+	@kubectl rollout restart deployment $(RELEASE_NAME)-bot-controller -n $(NAMESPACE)
+	@kubectl rollout status deployment $(RELEASE_NAME)-bot-controller -n $(NAMESPACE) --timeout=120s
+	@echo "✅ Bot controller restarted"
+
+.PHONY: reload-controller
+reload-controller: update-runtime restart-controller ## Rebuild runtime, load to minikube, and restart controller
+
+.PHONY: upgrade
+upgrade: ## Upgrade helm release with current values
+	@echo "🚀 Upgrading helm release..."
+	@helm upgrade $(RELEASE_NAME) $(CHART_PATH) -n $(NAMESPACE) --reuse-values
+	@echo "✅ Helm release upgraded"
+
 .PHONY: logs-controller
 logs-controller: check-deps ## Show controller logs
 	@kubectl logs -n $(NAMESPACE) -l app.kubernetes.io/component=bot-controller --tail=100 -f

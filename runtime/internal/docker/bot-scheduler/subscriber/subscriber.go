@@ -188,6 +188,11 @@ func (s *NATSSubscriber) Start(ctx context.Context) error {
 		}
 	}
 
+	// Flush to ensure subscriptions are active on server before returning
+	if err := s.natsConn.Flush(); err != nil {
+		return fmt.Errorf("failed to flush NATS connection: %v", err)
+	}
+
 	s.logger.Info("NATS Subscriber started successfully")
 	return nil
 }
@@ -230,6 +235,20 @@ func (s *NATSSubscriber) setupSubscription(ctx context.Context, subject string) 
 	s.logger.Info("Subscribed to subject", "subject", subject, "queue_group", queueGroup)
 
 	return nil
+}
+
+// IsReady returns true if the subscriber has active subscriptions.
+// This can be used to verify the subscriber is ready to receive messages.
+func (s *NATSSubscriber) IsReady() bool {
+	if len(s.subscriptions) == 0 {
+		return false
+	}
+	for _, sub := range s.subscriptions {
+		if !sub.IsValid() {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *NATSSubscriber) Stop() error {
@@ -349,11 +368,6 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error 
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
 
-	// Skip UUID validation to allow any bot schedule ID format
-	// if !util.ValidateUUID(message.ID) {
-	//	return fmt.Errorf("invalid bot schedule ID: %s", message.ID)
-	// }
-
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
 	filter := bson.M{"id": message.ID}
 	count, err := collection.CountDocuments(ctx, filter)
@@ -380,11 +394,6 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error 
 	if err != nil {
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
-
-	// Skip UUID validation to allow any bot schedule ID format
-	// if !util.ValidateUUID(message.ID) {
-	//	return fmt.Errorf("invalid bot schedule ID: %s", message.ID)
-	// }
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
 	filter := bson.M{"id": message.ID}
@@ -445,11 +454,6 @@ func (s *NATSSubscriber) handleDelete(ctx context.Context, msg *nats.Msg) error 
 	if err != nil {
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
-
-	// Skip UUID validation to allow any bot schedule ID format
-	// if !util.ValidateUUID(message.ID) {
-	//	return fmt.Errorf("invalid bot schedule ID: %s", message.ID)
-	// }
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
 	filter := bson.M{"id": message.ID}

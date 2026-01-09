@@ -3,13 +3,14 @@
 
 name: portfolio-tracker
 description: "Simulates portfolio tracking with value history and trade execution"
-version: 1.0.18
+version: 1.5.3
 author: "the0"
 type: scheduled
 runtime: python3.11
 
 entrypoints:
   bot: main.py
+  query: query.py
 
 schema:
   bot: bot-schema.json

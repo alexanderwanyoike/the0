@@ -1,8 +1,9 @@
-# Build artifacts (except final binary which is needed)
+# Build artifacts (keep binaries sma_bot and sma_query)
 build/CMakeCache.txt
 build/CMakeFiles/
 build/cmake_install.cmake
 build/Makefile
+build/_deps/
 
 # IDE
 .vscode/

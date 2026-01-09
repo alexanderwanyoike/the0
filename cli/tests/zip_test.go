@@ -743,7 +743,6 @@ config_*
 		"config_prod.yaml",       // Negation pattern
 		"test_runner.py",         // Should not match tests/ pattern
 		"vendor/lib.py",          // Vendor is always included
-		"build/output/bot.exe",   // build/ is protected for compiled languages
 	}
 
 	for _, expectedFile := range expectedFiles {
@@ -764,7 +763,7 @@ config_*
 		"docs/api/api.md",          // docs/**/*.md
 		"cache/temp.dat",           // cache/
 		"config_dev.yaml",          // config_*
-		// Note: build/output/bot.exe is now INCLUDED (build/ is protected for compiled languages)
+		"build/output/bot.exe",     // build/ is in default ignore patterns
 	}
 
 	for _, excludedFile := range excludedFiles {
@@ -774,6 +773,72 @@ config_*
 	}
 
 	t.Logf("Complex ignore patterns ZIP created successfully with %d files", len(zipFiles))
+}
+
+func TestCreateBotZipPreservesExecutablePermissions(t *testing.T) {
+	// Test that executable file permissions are preserved in ZIP
+	tempDir, err := os.MkdirTemp("", "exec-perm-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create bin directory with executable files
+	binDir := filepath.Join(tempDir, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatalf("Failed to create bin dir: %v", err)
+	}
+
+	// Create executable files (simulating compiled binaries)
+	execFiles := []string{"my-bot", "my-query"}
+	for _, name := range execFiles {
+		filePath := filepath.Join(binDir, name)
+		if err := os.WriteFile(filePath, []byte("#!/bin/bash\necho hello"), 0755); err != nil {
+			t.Fatalf("Failed to create executable %s: %v", name, err)
+		}
+	}
+
+	// Create non-executable file for comparison
+	nonExecPath := filepath.Join(tempDir, "config.yaml")
+	if err := os.WriteFile(nonExecPath, []byte("key: value"), 0644); err != nil {
+		t.Fatalf("Failed to create config file: %v", err)
+	}
+
+	// Create ZIP
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+	os.Chdir(tempDir)
+
+	zipPath, err := internal.CreateBotZipFromDir(tempDir)
+	if err != nil {
+		t.Fatalf("CreateBotZipFromDir() error = %v", err)
+	}
+	defer os.Remove(zipPath)
+
+	// Verify ZIP contents and permissions
+	zipReader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatalf("Failed to open ZIP: %v", err)
+	}
+	defer zipReader.Close()
+
+	for _, file := range zipReader.File {
+		mode := file.Mode()
+		isExecutable := mode&0111 != 0
+
+		switch file.Name {
+		case "bin/my-bot", "bin/my-query":
+			if !isExecutable {
+				t.Errorf("Expected %s to have executable permission, got mode %s", file.Name, mode)
+			}
+			t.Logf("%s: mode=%s executable=%v", file.Name, mode, isExecutable)
+		case "config.yaml":
+			if isExecutable {
+				t.Errorf("Expected %s to NOT have executable permission, got mode %s", file.Name, mode)
+			}
+			t.Logf("%s: mode=%s executable=%v", file.Name, mode, isExecutable)
+		}
+	}
 }
 
 func TestCreateBotZipIgnoreFileIncluded(t *testing.T) {

@@ -8,8 +8,13 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"runtime/internal/constants"
+	"runtime/internal/k8s/podgen"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
@@ -28,12 +33,19 @@ type ManagerConfig struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
+	// RuntimeImage for init containers and sidecars in bot pods
+	RuntimeImage string
+
+	// RuntimeImagePullPolicy for init/sidecar containers (default: IfNotPresent)
+	RuntimeImagePullPolicy string
+
 	// Logger for the manager (optional)
 	Logger util.Logger
 }
 
 // Manager coordinates multiple K8s controllers and their dependencies.
-// It manages the lifecycle of bot controller, schedule controller, and log collector.
+// It manages the lifecycle of bot controller, schedule controller, and query server.
+// Log collection is handled by the daemon sidecar in each pod.
 type Manager struct {
 	config ManagerConfig
 	logger util.Logger
@@ -41,7 +53,9 @@ type Manager struct {
 	// Controllers
 	botController      *BotController
 	scheduleController *BotScheduleController
-	logCollector       *K8sLogCollector
+
+	// Query server
+	queryServer *K8sQueryServer
 
 	// State
 	mu      sync.Mutex
@@ -81,14 +95,16 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	// Create bot controller
 	botCtrl := NewBotController(
 		BotControllerConfig{
-			Namespace:         config.Namespace,
-			ReconcileInterval: config.ReconcileInterval,
-			ControllerName:    botControllerName,
-			MinIOEndpoint:     config.MinIOEndpoint,
-			MinIOAccessKey:    config.MinIOAccessKey,
-			MinIOSecretKey:    config.MinIOSecretKey,
-			MinIOBucket:       config.MinIOBucket,
-			MinIOUseSSL:       config.MinIOUseSSL,
+			Namespace:              config.Namespace,
+			ReconcileInterval:      config.ReconcileInterval,
+			ControllerName:         botControllerName,
+			MinIOEndpoint:          config.MinIOEndpoint,
+			MinIOAccessKey:         config.MinIOAccessKey,
+			MinIOSecretKey:         config.MinIOSecretKey,
+			MinIOBucket:            config.MinIOBucket,
+			MinIOUseSSL:            config.MinIOUseSSL,
+			RuntimeImage:           config.RuntimeImage,
+			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
 		botRepo,
 		podClient,
@@ -111,38 +127,85 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	// Create schedule controller
 	scheduleCtrl := NewBotScheduleController(
 		BotScheduleControllerConfig{
-			Namespace:         config.Namespace,
-			ReconcileInterval: config.ReconcileInterval,
-			ControllerName:    scheduleControllerName,
-			MinIOEndpoint:     config.MinIOEndpoint,
-			MinIOAccessKey:    config.MinIOAccessKey,
-			MinIOSecretKey:    config.MinIOSecretKey,
-			MinIOBucket:       config.MinIOBucket,
+			Namespace:              config.Namespace,
+			ReconcileInterval:      config.ReconcileInterval,
+			ControllerName:         scheduleControllerName,
+			MinIOEndpoint:          config.MinIOEndpoint,
+			MinIOAccessKey:         config.MinIOAccessKey,
+			MinIOSecretKey:         config.MinIOSecretKey,
+			MinIOBucket:            config.MinIOBucket,
+			MinIOUseSSL:            config.MinIOUseSSL,
+			RuntimeImage:           config.RuntimeImage,
+			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
 		scheduleRepo,
 		cronClient,
 	)
 
-	// Create log collector (optional - logs warning if fails)
-	var logCollector *K8sLogCollector
-	logCollector, err = NewK8sLogCollector(context.Background(), K8sLogCollectorConfig{
-		Namespace:      config.Namespace,
-		Interval:       30 * time.Second,
-		MinIOEndpoint:  config.MinIOEndpoint,
-		MinIOAccessKey: config.MinIOAccessKey,
-		MinIOSecretKey: config.MinIOSecretKey,
-		MinIOUseSSL:    config.MinIOUseSSL,
-	}, logger)
+	// Create K8s clientset for query server
+	k8sConfig, err := rest.InClusterConfig()
 	if err != nil {
-		logger.Info("WARNING: Failed to create log collector, logs will not be collected from bot pods", "error", err.Error())
+		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
 	}
+
+	clientset, err := kubernetes.NewForConfig(k8sConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create clientset: %w", err)
+	}
+
+	// Create pod generator for query handler
+	podGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
+		Namespace:              config.Namespace,
+		ControllerName:         "the0-query-handler",
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
+	})
+
+	// Create MinIO client for query result storage
+	storageCfg := &storage.Config{
+		Endpoint:          config.MinIOEndpoint,
+		AccessKey:         config.MinIOAccessKey,
+		SecretKey:         config.MinIOSecretKey,
+		UseSSL:            config.MinIOUseSSL,
+		QueryResultBucket: "query-results",
+	}
+	minioClient, err := storage.NewMinioClient(storageCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MinIO client: %w", err)
+	}
+
+	// Create query handler
+	queryHandler := NewK8sQueryHandler(K8sQueryHandlerConfig{
+		Clientset:     clientset,
+		Namespace:     config.Namespace,
+		PodGenerator:  podGenerator,
+		MinioClient:   minioClient,
+		StorageConfig: storageCfg,
+		Logger:        logger,
+	})
+
+	// Create query server
+	queryServer := NewK8sQueryServer(K8sQueryServerConfig{
+		Port:         9477,
+		Handler:      queryHandler,
+		BotRepo:      botRepo,
+		ScheduleRepo: scheduleRepo,
+		Clientset:    clientset,
+		Namespace:    config.Namespace,
+		Logger:       logger,
+	})
 
 	return &Manager{
 		config:             config,
 		logger:             logger,
 		botController:      botCtrl,
 		scheduleController: scheduleCtrl,
-		logCollector:       logCollector,
+		queryServer:        queryServer,
 		stopCh:             make(chan struct{}),
 	}, nil
 }
@@ -161,10 +224,11 @@ func (m *Manager) Start(ctx context.Context) (<-chan struct{}, error) {
 
 	m.logger.Info("Starting controller manager")
 
-	// Start log collector if available
-	if m.logCollector != nil {
-		m.logCollector.Start()
-		m.logger.Info("Log collector started - collecting logs every 30s")
+	// Start query server
+	if m.queryServer != nil {
+		if err := m.queryServer.Start(); err != nil {
+			m.logger.Error("Failed to start query server", "error", err.Error())
+		}
 	}
 
 	// Channel to signal when controllers are ready
@@ -246,8 +310,13 @@ func (m *Manager) Stop() {
 	m.botController.Stop()
 	m.scheduleController.Stop()
 
-	if m.logCollector != nil {
-		m.logCollector.Stop()
+	// Stop query server
+	if m.queryServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := m.queryServer.Stop(ctx); err != nil {
+			m.logger.Error("Failed to stop query server", "error", err.Error())
+		}
 	}
 
 	m.running = false

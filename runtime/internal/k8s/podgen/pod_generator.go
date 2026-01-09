@@ -4,18 +4,14 @@ package podgen
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/model"
-	"runtime/internal/entrypoints"
 	runtimepkg "runtime/internal/runtime"
 )
 
@@ -40,7 +36,6 @@ const (
 )
 
 // Resource defaults are defined in runtime/internal/runtime/resources.go
-// Re-exported here for backward compatibility
 const (
 	DefaultMemoryLimit   = runtimepkg.DefaultMemoryLimit
 	DefaultCPULimit      = runtimepkg.DefaultCPULimit
@@ -57,11 +52,18 @@ type PodGeneratorConfig struct {
 	ControllerName string
 
 	// MinIO configuration for downloading bot code
-	MinIOEndpoint   string
-	MinIOAccessKey  string
-	MinIOSecretKey  string
-	MinIOBucket     string
-	MinIOUseSSL     bool
+	MinIOEndpoint    string
+	MinIOAccessKey   string
+	MinIOSecretKey   string
+	MinIOBucket      string
+	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
+	MinIOUseSSL      bool
+
+	// RuntimeImage is the image for init and sidecar containers (e.g., "the0/runtime:latest")
+	RuntimeImage string
+
+	// RuntimeImagePullPolicy for init and sidecar containers (default: IfNotPresent)
+	RuntimeImagePullPolicy corev1.PullPolicy
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -77,157 +79,200 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	if config.Namespace == "" {
 		config.Namespace = "the0"
 	}
+	if config.MinIOStateBucket == "" {
+		config.MinIOStateBucket = "bot-state"
+	}
+	if config.RuntimeImage == "" {
+		config.RuntimeImage = "runtime:latest"
+	}
+	if config.RuntimeImagePullPolicy == "" {
+		config.RuntimeImagePullPolicy = corev1.PullIfNotPresent
+	}
 	return &PodGenerator{config: config}
 }
 
-// GeneratePod creates a Kubernetes Pod spec for the given bot.
-// Uses base images with an init container to download code from MinIO.
+// GeneratePod creates a Kubernetes Pod spec for a realtime bot.
+// Realtime bots run continuously with sync sidecar and optional query server sidecar.
 func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
-	// Marshal config to JSON for BOT_CONFIG env var
-	configJSON, err := json.Marshal(bot.Config)
+	// Extract and validate required configuration
+	botConfig, err := g.extractBotConfig(bot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal bot config: %w", err)
+		return nil, err
 	}
 
-	// Compute config hash for change detection
-	configHash := computeConfigHash(bot)
-
-	// Get resource limits from config or use defaults
-	memoryLimit, cpuLimit := g.getResourceLimits(bot)
-	memoryRequest, cpuRequest := g.getResourceRequests(bot)
-
-	// Get custom bot ID from file path or generate one
-	customBotID := extractCustomBotID(bot)
-
-	// Safely extract version and runtime with defaults
-	version := bot.CustomBotVersion.Version
-	runtime := bot.CustomBotVersion.Config.Runtime
-	filePath := bot.CustomBotVersion.FilePath
-	entrypoint := g.getEntrypoint(bot)
-
-	// Validate filePath and bucket to prevent command injection
-	if err := validateMinIOPath(filePath); err != nil {
-		return nil, fmt.Errorf("invalid file path: %w", err)
-	}
-	if err := validateMinIOPath(g.config.MinIOBucket); err != nil {
-		return nil, fmt.Errorf("invalid bucket name: %w", err)
-	}
-
-	// Get base image for the runtime (using shared runtime package)
-	baseImage, err := runtimepkg.GetDockerImage(runtime)
+	// Get the runtime image
+	image, err := runtimepkg.GetDockerImage(botConfig.runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker image: %w", err)
 	}
 
-	// Build MinIO endpoint URL
-	minioURL := g.getMinIOURL()
+	// Build the pod using the fluent builder
+	builder := NewPodBuilder(fmt.Sprintf("bot-%s", bot.ID), g.config.Namespace).
+		WithImage(image).
+		WithImagePullPolicy(g.config.RuntimeImagePullPolicy).
+		WithLabels(map[string]string{
+			LabelBotID:            bot.ID,
+			LabelCustomBotID:      botConfig.customBotID,
+			LabelCustomBotVersion: botConfig.version,
+			LabelRuntime:          botConfig.runtime,
+			LabelManagedBy:        g.config.ControllerName,
+		}).
+		WithAnnotations(map[string]string{
+			AnnotationConfigHash: computeConfigHash(bot),
+		}).
+		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
+		WithBotType("realtime").
+		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
+		WithSyncSidecar(g.config.RuntimeImage, bot.ID, false)
 
-	// Generate entrypoint script using shared entrypoints package
-	entrypointScript, err := entrypoints.GenerateK8sEntrypoint(runtime, entrypoints.GeneratorOptions{
-		EntryPointType: "bot",
-		Entrypoint:     entrypoint,
-		WorkDir:        "/bot",
-	})
+	// Add query entrypoint if configured
+	if botConfig.queryEntrypoint != "" {
+		builder.WithQueryEntrypoint(botConfig.queryEntrypoint).
+			WithQuerySidecar(image)
+	}
+
+	return builder.Build()
+}
+
+// GenerateScheduledPodSpec creates a Pod spec for scheduled bots (CronJobs).
+// Scheduled bots run once per trigger as a single container - no sidecars.
+// Sync (state/log upload) runs as a process within the container after bot execution.
+// No query server sidecar - queries are executed ephemerally.
+func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec, error) {
+	// Extract and validate required configuration
+	botConfig, err := g.extractBotConfig(bot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate entrypoint script: %w", err)
+		return nil, err
 	}
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("bot-%s", bot.ID),
-			Namespace: g.config.Namespace,
-			Labels: map[string]string{
-				LabelBotID:            bot.ID,
-				LabelCustomBotID:      customBotID,
-				LabelCustomBotVersion: version,
-				LabelRuntime:          runtime,
-				LabelManagedBy:        g.config.ControllerName,
-			},
-			Annotations: map[string]string{
-				AnnotationConfigHash: configHash,
-			},
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			InitContainers: []corev1.Container{
-				{
-					Name:    "download-code",
-					Image:   "minio/mc:RELEASE.2024-11-17T19-35-25Z",
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{
-						fmt.Sprintf(`
-set -e
-mc alias set minio %s $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
-mc cp minio/%s/%s /bot/code.zip
-ls -la /bot/
-`, minioURL, g.config.MinIOBucket, filePath),
-					},
-					Env: []corev1.EnvVar{
-						{Name: "MINIO_ACCESS_KEY", Value: g.config.MinIOAccessKey},
-						{Name: "MINIO_SECRET_KEY", Value: g.config.MinIOSecretKey},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "bot-code", MountPath: "/bot"},
-					},
-				},
-				{
-					Name:    "extract-code",
-					Image:   "busybox:1.36.1",
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{
-						fmt.Sprintf(`
-set -e
-cd /bot
-unzip -o code.zip
-rm code.zip
-echo '%s' | base64 -d > /bot/entrypoint.sh
-chmod +x /bot/entrypoint.sh
-ls -la /bot/
-`, base64.StdEncoding.EncodeToString([]byte(entrypointScript))),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "bot-code", MountPath: "/bot"},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:       "bot",
-					Image:      baseImage,
-					Command:    []string{getShellForImage(baseImage), "/bot/entrypoint.sh"},
-					WorkingDir: "/bot",
-					Env: []corev1.EnvVar{
-						{Name: "BOT_ID", Value: bot.ID},
-						{Name: "BOT_CONFIG", Value: string(configJSON)},
-						{Name: "CODE_MOUNT_DIR", Value: "/bot"},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{Name: "bot-code", MountPath: "/bot"},
-					},
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: parseResourceOrDefault(memoryLimit, DefaultMemoryLimit),
-							corev1.ResourceCPU:    parseResourceOrDefault(cpuLimit, DefaultCPULimit),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: parseResourceOrDefault(memoryRequest, DefaultMemoryRequest),
-							corev1.ResourceCPU:    parseResourceOrDefault(cpuRequest, DefaultCPURequest),
-						},
-					},
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "bot-code",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
-			},
-		},
+	// Get the runtime image
+	image, err := runtimepkg.GetDockerImage(botConfig.runtime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Docker image: %w", err)
 	}
 
-	return pod, nil
+	// Build the pod for scheduled execution - NO sidecars
+	// Scheduled bots run sync as part of the execute command, not as a sidecar
+	builder := NewPodBuilder(fmt.Sprintf("bot-%s", bot.ID), g.config.Namespace).
+		WithImage(image).
+		WithImagePullPolicy(g.config.RuntimeImagePullPolicy).
+		WithRestartPolicy(corev1.RestartPolicyNever). // Scheduled bots don't restart
+		WithInlineSync().                             // Run sync inline, not as sidecar
+		WithLabels(map[string]string{
+			LabelBotID:            bot.ID,
+			LabelCustomBotID:      botConfig.customBotID,
+			LabelCustomBotVersion: botConfig.version,
+			LabelRuntime:          botConfig.runtime,
+			LabelManagedBy:        g.config.ControllerName,
+		}).
+		WithAnnotations(map[string]string{
+			AnnotationConfigHash: computeConfigHash(bot),
+		}).
+		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
+		WithBotType("scheduled").
+		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
+	// Note: No query sidecar - queries are ephemeral
+
+	return builder.BuildSpec()
+}
+
+// GenerateQueryPod creates a Pod spec for executing a query against a bot.
+// Query pods run once without sidecars.
+func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryParams map[string]interface{}) (*corev1.Pod, error) {
+	// Extract and validate required configuration
+	botConfig, err := g.extractBotConfig(bot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the runtime image
+	image, err := runtimepkg.GetDockerImage(botConfig.runtime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Docker image: %w", err)
+	}
+
+	// Use query entrypoint if available, otherwise fall back to bot entrypoint
+	entrypoint := botConfig.entrypoint
+	if botConfig.queryEntrypoint != "" {
+		entrypoint = botConfig.queryEntrypoint
+	}
+
+	// Build the pod for query execution
+	builder := NewPodBuilder(fmt.Sprintf("query-%s", bot.ID), g.config.Namespace).
+		WithImage(image).
+		WithImagePullPolicy(g.config.RuntimeImagePullPolicy).
+		WithLabels(map[string]string{
+			LabelBotID:            bot.ID,
+			LabelCustomBotID:      botConfig.customBotID,
+			LabelCustomBotVersion: botConfig.version,
+			LabelRuntime:          botConfig.runtime,
+			LabelManagedBy:        g.config.ControllerName,
+		}).
+		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, entrypoint, bot.Config).
+		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
+		ForQuery(queryPath, queryParams)
+
+	return builder.Build()
+}
+
+// botConfig holds extracted and validated bot configuration.
+type botConfig struct {
+	version         string
+	runtime         string
+	filePath        string
+	entrypoint      string
+	queryEntrypoint string
+	customBotID     string
+	memoryLimit     string
+	cpuLimit        string
+	memoryRequest   string
+	cpuRequest      string
+}
+
+// extractBotConfig extracts and validates configuration from a Bot model.
+func (g *PodGenerator) extractBotConfig(bot model.Bot) (*botConfig, error) {
+	cfg := &botConfig{
+		version:  bot.CustomBotVersion.Version,
+		runtime:  bot.CustomBotVersion.Config.Runtime,
+		filePath: bot.CustomBotVersion.FilePath,
+	}
+
+	// Extract entrypoint
+	if bot.CustomBotVersion.Config.Entrypoints != nil {
+		cfg.entrypoint = bot.CustomBotVersion.Config.Entrypoints["bot"]
+		cfg.queryEntrypoint = bot.CustomBotVersion.Config.Entrypoints["query"]
+	}
+
+	// Validate required fields
+	if cfg.runtime == "" {
+		return nil, fmt.Errorf("bot %s: runtime is required", bot.ID)
+	}
+	if cfg.entrypoint == "" {
+		return nil, fmt.Errorf("bot %s: entrypoint is required (missing entrypoints.bot in config)", bot.ID)
+	}
+	if cfg.filePath == "" {
+		return nil, fmt.Errorf("bot %s: file path is required", bot.ID)
+	}
+
+	// Validate paths for command injection
+	if err := validateMinIOPath(cfg.filePath); err != nil {
+		return nil, fmt.Errorf("bot %s: invalid file path: %w", bot.ID, err)
+	}
+	if err := validateMinIOPath(bot.ID); err != nil {
+		return nil, fmt.Errorf("bot %s: invalid bot ID: %w", bot.ID, err)
+	}
+
+	// Extract custom bot ID
+	cfg.customBotID = extractCustomBotID(bot)
+
+	// Extract resource limits with defaults
+	cfg.memoryLimit, cfg.cpuLimit = g.getResourceLimits(bot)
+	cfg.memoryRequest, cfg.cpuRequest = g.getResourceRequests(bot)
+
+	return cfg, nil
 }
 
 // GeneratePodName generates the pod name for a given bot ID.
@@ -297,7 +342,6 @@ func (g *PodGenerator) getResourceRequests(bot model.Bot) (memory, cpu string) {
 }
 
 // parseResourceOrDefault parses a resource quantity string, returning a default if invalid.
-// This prevents panics from invalid user input.
 func parseResourceOrDefault(value, defaultValue string) resource.Quantity {
 	q, err := resource.ParseQuantity(value)
 	if err != nil {
@@ -307,7 +351,6 @@ func parseResourceOrDefault(value, defaultValue string) resource.Quantity {
 }
 
 // computeConfigHash creates a hash of the bot config for change detection.
-// Uses SHA256 hash of the JSON-serialized config data.
 func computeConfigHash(bot model.Bot) string {
 	data := struct {
 		Config           map[string]interface{}
@@ -321,24 +364,18 @@ func computeConfigHash(bot model.Bot) string {
 
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		// Return a deterministic fallback hash based on bot ID to avoid false positives
 		return fmt.Sprintf("err-%s", bot.ID[:min(8, len(bot.ID))])
 	}
 
-	// Use SHA256 for proper content-based hash
 	hash := sha256.Sum256(jsonBytes)
-	// Take first 16 chars of hex-encoded hash (64 bits - good enough for change detection)
 	return hex.EncodeToString(hash[:])[:16]
 }
 
-// extractCustomBotID extracts a custom bot ID from the bot's file path or config.
+// extractCustomBotID extracts a custom bot ID from the bot's config or ID.
 func extractCustomBotID(bot model.Bot) string {
-	// Try to extract from custom bot config name
 	if bot.CustomBotVersion.Config.Name != "" {
 		return sanitizeLabelValue(bot.CustomBotVersion.Config.Name)
 	}
-
-	// Fallback to using bot ID prefix
 	if len(bot.ID) > 8 {
 		return bot.ID[:8]
 	}
@@ -346,8 +383,6 @@ func extractCustomBotID(bot model.Bot) string {
 }
 
 // sanitizeLabelValue ensures a string is valid as a Kubernetes label value.
-// Label values must be 63 characters or less, begin and end with alphanumeric,
-// and contain only alphanumerics, dashes, underscores, and dots.
 func sanitizeLabelValue(s string) string {
 	result := make([]byte, 0, len(s))
 	for _, c := range s {
@@ -358,22 +393,17 @@ func sanitizeLabelValue(s string) string {
 		}
 	}
 
-	// Truncate to 63 characters
 	if len(result) > 63 {
 		result = result[:63]
 	}
 
-	// Trim leading non-alphanumeric characters
 	for len(result) > 0 && !isAlphanumeric(result[0]) {
 		result = result[1:]
 	}
-
-	// Trim trailing non-alphanumeric characters
 	for len(result) > 0 && !isAlphanumeric(result[len(result)-1]) {
 		result = result[:len(result)-1]
 	}
 
-	// Ensure not empty
 	if len(result) == 0 {
 		return "bot"
 	}
@@ -381,54 +411,12 @@ func sanitizeLabelValue(s string) string {
 	return string(result)
 }
 
-// isAlphanumeric returns true if the byte is a letter or digit.
 func isAlphanumeric(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
 }
 
-// getMinIOURL builds the MinIO endpoint URL with protocol.
-func (g *PodGenerator) getMinIOURL() string {
-	endpoint := g.config.MinIOEndpoint
-	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
-		return endpoint
-	}
-	if g.config.MinIOUseSSL {
-		return "https://" + endpoint
-	}
-	return "http://" + endpoint
-}
-
-// getEntrypoint extracts the bot entrypoint from the config.
-func (g *PodGenerator) getEntrypoint(bot model.Bot) string {
-	if bot.CustomBotVersion.Config.Entrypoints != nil {
-		if entry, ok := bot.CustomBotVersion.Config.Entrypoints["bot"]; ok {
-			return entry
-		}
-	}
-	// Default entrypoints based on runtime
-	switch bot.CustomBotVersion.Config.Runtime {
-	case "python3.11":
-		return "main.py"
-	case "nodejs20":
-		return "index.js"
-	default:
-		return "main"
-	}
-}
-
-// getShellForImage returns the appropriate shell for the given image.
-// Alpine-based images use /bin/sh, others use /bin/bash.
-func getShellForImage(imageName string) string {
-	if strings.Contains(imageName, "alpine") {
-		return "/bin/sh"
-	}
-	return "/bin/bash"
-}
-
 // validateMinIOPath ensures a MinIO path doesn't contain shell metacharacters.
-// Returns an error if the path contains potentially dangerous characters.
 func validateMinIOPath(path string) error {
-	// Allow only safe characters in MinIO paths
 	for _, c := range path {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
 			continue
@@ -437,7 +425,7 @@ func validateMinIOPath(path string) error {
 		case '/', '-', '_', '.':
 			continue
 		default:
-			return fmt.Errorf("invalid character '%c' in MinIO path", c)
+			return fmt.Errorf("invalid character '%c' in path", c)
 		}
 	}
 	return nil

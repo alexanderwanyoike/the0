@@ -9,21 +9,30 @@
  * - Calculating Simple Moving Averages (SMA)
  * - Detecting SMA crossovers for trading signals
  * - Structured metric emission for dashboard visualization
+ * - Persistent state for SMA values across restarts
  *
  * Metrics emitted:
  * - price: Current stock price with change percentage
  * - sma: Short and long SMA values
  * - signal: BUY/SELL signals when crossover detected
+ *
+ * State Usage:
+ * - Persists previous SMA values for crossover detection across restarts
+ * - Tracks total signal count for monitoring
  */
 
 using System.Text.Json.Nodes;
 using The0;
+
+// Persistent state structure
+record PersistedState(double? PrevShortSma, double? PrevLongSma, long SignalCount);
 
 class SmaBot
 {
     // Previous SMA values for crossover detection
     private static double? _prevShortSma = null;
     private static double? _prevLongSma = null;
+    private static long _signalCount = 0;
 
     static async Task Main(string[] args)
     {
@@ -36,7 +45,16 @@ class SmaBot
         var longPeriod = config?["long_period"]?.GetValue<int>() ?? 20;
         var updateIntervalMs = config?["update_interval_ms"]?.GetValue<int>() ?? 60000;
 
-        Input.Log($"Bot {botId} started - {symbol} SMA({shortPeriod}/{longPeriod})");
+        // Load persistent state from previous runs
+        var persisted = State.Get<PersistedState>("bot_state");
+        if (persisted != null)
+        {
+            _prevShortSma = persisted.PrevShortSma;
+            _prevLongSma = persisted.PrevLongSma;
+            _signalCount = persisted.SignalCount;
+        }
+
+        Input.Log($"Bot {botId} started - {symbol} SMA({shortPeriod}/{longPeriod}) - loaded {_signalCount} signals");
 
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Add("User-Agent", "the0-sma-bot/1.0");
@@ -89,13 +107,15 @@ class SmaBot
                     var signal = CheckCrossover(_prevShortSma.Value, _prevLongSma.Value, shortSma, longSma);
                     if (signal != null)
                     {
-                        var confidence = Math.Min(Math.Abs(shortSma - longSma) / longSma * 100, 0.95);
+                        _signalCount++;
+                        var confidence = Math.Min(Math.Abs(shortSma - longSma) / longSma, 0.95);
                         Input.Metric("signal", new
                         {
                             type = signal,
                             symbol,
                             price = Math.Round(currentPrice, 2),
                             confidence = Math.Round(confidence, 2),
+                            total_signals = _signalCount,
                             reason = $"SMA{shortPeriod} crossed {(signal == "BUY" ? "above" : "below")} SMA{longPeriod}"
                         });
                     }
@@ -104,6 +124,9 @@ class SmaBot
                 // Update previous SMA values
                 _prevShortSma = shortSma;
                 _prevLongSma = longSma;
+
+                // Persist state every iteration for reliable state tracking
+                State.Set("bot_state", new PersistedState(_prevShortSma, _prevLongSma, _signalCount));
             }
             catch (Exception ex)
             {

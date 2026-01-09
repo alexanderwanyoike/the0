@@ -1,0 +1,27 @@
+# Haskell SMA Bot - keep only bin/ and frontend/dist/
+
+# Exclude entire dist-newstyle (binaries now copied to bin/)
+dist-newstyle/
+
+# Source files (not needed at runtime)
+app/
+
+# Cabal/Stack build files
+cabal.project
+sma-bot.cabal
+*.hi
+*.o
+*.dyn_hi
+*.dyn_o
+
+# Frontend dev files (keep only dist/)
+frontend/node_modules/
+frontend/src/
+frontend/index.tsx
+frontend/package.json
+frontend/package-lock.json
+frontend/tsconfig.json
+frontend/vite.config.ts
+
+# Docs
+README.md

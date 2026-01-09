@@ -6,16 +6,26 @@
 //!
 //! ```rust,no_run
 //! use the0_sdk::input;
+//! use the0_sdk::state;
 //!
 //! fn main() {
 //!     let (bot_id, config) = input::parse().expect("Failed to parse bot config");
 //!     println!("Bot {} starting with config: {:?}", bot_id, config);
 //!
+//!     // Load persistent state
+//!     let trade_count: i32 = state::get_or("trade_count", 0);
+//!
 //!     // Your trading logic here
+//!
+//!     // Save state
+//!     state::set("trade_count", &(trade_count + 1)).ok();
 //!
 //!     input::success("Bot executed successfully");
 //! }
 //! ```
+
+pub mod query;
+pub mod state;
 
 use serde_json::Value;
 use std::collections::HashMap;

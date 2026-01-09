@@ -53,7 +53,7 @@ dist/`
 		{"test", true, true, "test/ directory should be ignored"},
 		{"test/file.py", false, true, "files in test/ should be ignored"},
 		{"src/module.pyc", false, true, "**/*.pyc should be ignored"},
-		{"build", true, false, "build/ directory should not be ignored (protected for compiled languages)"},
+		{"build", true, true, "build/ directory should be ignored (from default patterns)"},
 		{"main.py", false, false, "main.py should not be ignored"},
 		{".DS_Store", false, true, ".DS_Store should be ignored"},
 	}
@@ -126,8 +126,9 @@ func TestIgnoreParser_DefaultPatterns(t *testing.T) {
 		{"compiled.pyo", false, true, "*.pyo should be ignored by default"},
 		{"__pycache__", true, true, "__pycache__/ should be ignored by default"},
 		{".git", true, true, ".git/ should be ignored by default"},
-		{"build", true, false, "build/ should not be ignored (protected for compiled languages)"},
-		{"dist", true, true, "dist/ should be ignored by default"},
+		// Note: build/ and dist/ are NOT in default patterns to support compiled languages
+		{"build", true, false, "build/ should NOT be ignored by default (compiled languages need it)"},
+		{"dist", true, false, "dist/ should NOT be ignored by default (compiled languages need it)"},
 		{"main.py", false, false, "main.py should not be ignored"},
 		{"src", true, false, "src/ should not be ignored"},
 	}
@@ -177,7 +178,7 @@ config_*
 		{"data_backup", false, true, "*_backup pattern"},
 		{"config_prod", false, true, "config_* pattern"},
 		{"src/temp.tmp", false, true, "**/*.tmp pattern"},
-		{"build/test_cache", true, false, "build/ is protected, so cache pattern doesn't apply"},
+		{"build/test_cache", true, true, "*_cache/ pattern matches"},
 		{"main.py", false, false, "should not match any pattern"},
 		{"test.py", false, false, "should not match test_*.py"},
 		{"backup", false, false, "should not match *_backup"},
@@ -271,11 +272,11 @@ docs/**/*.md
 		desc     string
 	}{
 		{"cache", true, true, "**/cache/ should match cache dir"},
-		{"build/cache", true, false, "build/ is protected, so cache pattern doesn't apply"},
+		{"build/cache", true, true, "**/cache/ pattern applies to build/cache"},
 		{"src/deep/cache", true, true, "**/cache/ should match deeply nested cache dir"},
 		{"app.log", false, true, "**/*.log should match top-level log"},
 		{"src/app.log", false, true, "**/*.log should match nested log"},
-		{"build/debug/app.log", false, false, "build/ is protected, so log pattern doesn't apply"},
+		{"build/debug/app.log", false, true, "**/*.log pattern applies to build/debug/app.log"},
 		{"docs/api/readme.md", false, true, "docs/**/*.md should match"},
 		{"docs/guide/install.md", false, true, "docs/**/*.md should match nested"},
 		{"src/readme.md", false, false, "docs/**/*.md should not match outside docs"},
@@ -321,7 +322,7 @@ test/`
 	}{
 		{"app.log", false, true, "custom *.log pattern"},
 		{"test", true, true, "custom test/ pattern"},
-		{"build", true, false, "build/ should not be ignored (protected for compiled languages)"},
+		{"build", true, false, "build/ should NOT be ignored (not in default patterns)"},
 		{"main.py", false, false, "should not be ignored"},
 		{"vendor", true, false, "vendor should never be ignored"},
 		{"node_modules", true, false, "node_modules should never be ignored"},
@@ -356,7 +357,7 @@ func TestCreateIgnoreParserForDir_NoIgnoreFile(t *testing.T) {
 		expected bool
 		desc     string
 	}{
-		{"build", true, false, "build/ should not be ignored (protected for compiled languages)"},
+		{"build", true, false, "build/ should NOT be ignored (not in default patterns)"},
 		{"__pycache__", true, true, "default __pycache__/ pattern"},
 		{"app.log", false, true, "default *.log pattern"},
 		{"main.py", false, false, "should not be ignored"},

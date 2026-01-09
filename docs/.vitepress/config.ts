@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: 'the0',
   description: 'Open-source algorithmic trading platform documentation',
 
@@ -85,6 +86,8 @@ export default defineConfig({
           { text: 'Development Overview', link: '/custom-bot-development/overview' },
           { text: 'Configuration', link: '/custom-bot-development/configuration' },
           { text: 'Bot Types', link: '/custom-bot-development/bot-types' },
+          { text: 'State (Persistence)', link: '/custom-bot-development/state' },
+          { text: 'Query Handlers', link: '/custom-bot-development/queries' },
           { text: 'Custom Frontends', link: '/custom-bot-development/custom-frontends' },
           { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },
@@ -97,6 +100,15 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/integrations/' },
           { text: 'MCP Server', link: '/integrations/mcp' },
+        ]
+      },
+      {
+        text: 'Runtime',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/runtime/' },
+          { text: 'Docker Mode', link: '/runtime/docker-mode' },
+          { text: 'Kubernetes Mode', link: '/runtime/kubernetes-mode' },
         ]
       },
       {
@@ -152,4 +164,4 @@ export default defineConfig({
   sitemap: {
     hostname: 'https://docs.the0.dev'
   }
-})
+}))

@@ -201,13 +201,13 @@ func (s *BotService) runReconciliationLoop() {
 
 // reconcile performs the core reconciliation between desired and actual state
 func (s *BotService) reconcile() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 
 	start := time.Now()
 	s.logger.Info("Starting reconciliation cycle")
 
-	// Step 1: Get desired state from database (all enabled bots, no segment filter)
+	// Step 1: Get desired state from database (all enabled bots)
 	desiredBots, err := s.getDesiredBots(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get desired bots: %v", err)
@@ -215,17 +215,30 @@ func (s *BotService) reconcile() {
 	}
 	s.logger.Info("Found %d desired bots", len(desiredBots))
 
-	// Step 2: Get actual running containers from Docker
-	// Use segment -1 to get ALL containers (no segment filtering)
-	actualContainers, err := s.runner.ListManagedContainers(ctx, -1)
+	// Step 2: Get ALL containers including crashed/exited ones
+	allContainers, err := s.runner.ListAllManagedContainers(ctx)
 	if err != nil {
-		s.logger.Error("Failed to get actual containers: %v", err)
+		s.logger.Error("Failed to get all containers: %v", err)
 		return
 	}
-	s.logger.Info("Found %d actual containers", len(actualContainers))
 
-	// Step 3: Reconcile state
-	s.performReconciliation(ctx, desiredBots, actualContainers)
+	// Step 3: Handle crashed containers - capture logs before cleanup
+	var runningContainers []*ContainerInfo
+	for _, container := range allContainers {
+		if container.Status == "exited" {
+			s.logger.Error("Bot %s crashed with exit code %d", container.ID, container.ExitCode)
+			// Capture crash logs and cleanup the container
+			if _, err := s.runner.HandleCrashedContainer(ctx, container); err != nil {
+				s.logger.Error("Failed to handle crashed container %s: %v", container.ID, err)
+			}
+		} else if container.Status == "running" {
+			runningContainers = append(runningContainers, container)
+		}
+	}
+	s.logger.Info("Found %d actual containers", len(runningContainers))
+
+	// Step 4: Reconcile state with running containers only
+	s.performReconciliation(ctx, desiredBots, runningContainers)
 	s.state.UpdateReconcileMetrics()
 
 	s.logger.Info("Reconciliation completed in %v", time.Since(start))
@@ -235,11 +248,22 @@ func (s *BotService) reconcile() {
 func (s *BotService) getDesiredBots(ctx context.Context) ([]model.Bot, error) {
 	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
 
-	// Query for enabled bots (no segment filter)
+	// Query for enabled bots
+	// Check both root level "enabled" field and nested "config.enabled" field
 	filter := bson.M{
-		"$or": []bson.M{
-			{"config.enabled": bson.M{"$ne": false}},     // explicitly not disabled
-			{"config.enabled": bson.M{"$exists": false}}, // enabled field missing = enabled by default
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"enabled": bson.M{"$ne": false}},     // root level not disabled
+					{"enabled": bson.M{"$exists": false}}, // root level field missing = enabled by default
+				},
+			},
+			{
+				"$or": []bson.M{
+					{"config.enabled": bson.M{"$ne": false}},     // config level not disabled
+					{"config.enabled": bson.M{"$exists": false}}, // config level field missing = enabled by default
+				},
+			},
 		},
 	}
 
@@ -444,7 +468,7 @@ func (s *BotService) toExecutable(bot model.Bot) model.Executable {
 		FilePath:        bot.CustomBotVersion.FilePath,
 		IsLongRunning:   true,
 		PersistResults:  false,
-		Segment:         -1, // No segment in simplified mode
+		Segment:         -1,
 	}
 }
 
@@ -526,6 +550,31 @@ func (s *BotService) GetStatus() map[string]interface{} {
 	metrics := s.state.GetMetrics()
 	metrics["nats_connected"] = s.subscriber != nil
 	return metrics
+}
+
+// GetBot retrieves a bot by ID from MongoDB (implements BotResolver interface)
+func (s *BotService) GetBot(ctx context.Context, botID string) (*model.Bot, error) {
+	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
+
+	var bot model.Bot
+	err := collection.FindOne(ctx, bson.M{"_id": botID}).Decode(&bot)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("bot not found: %s", botID)
+		}
+		return nil, fmt.Errorf("failed to get bot: %w", err)
+	}
+
+	return &bot, nil
+}
+
+// GetContainerID returns the container ID for a running bot (implements BotResolver interface)
+func (s *BotService) GetContainerID(ctx context.Context, botID string) (string, bool) {
+	runningBot, ok := s.state.GetRunningBot(botID)
+	if !ok {
+		return "", false
+	}
+	return runningBot.ContainerID, true
 }
 
 // DefaultBotServiceConfig returns a BotServiceConfig with environment defaults

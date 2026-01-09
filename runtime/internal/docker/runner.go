@@ -5,15 +5,11 @@ package docker
 import (
 	"bytes"
 	"context"
-	_ "embed"
+	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/model"
 	runtimepkg "runtime/internal/runtime"
 	"runtime/internal/util"
-	"strings"
 	"sync"
 	"time"
 
@@ -45,11 +41,21 @@ type DockerRunner interface {
 	// GetContainerStatus returns the current status of a container.
 	GetContainerStatus(ctx context.Context, containerID string) (*ContainerStatus, error)
 
-	// ListManagedContainers returns all containers managed by this runner for a given segment.
-	ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error)
+	// ListManagedContainers returns all running containers managed by this runner.
+	ListManagedContainers(ctx context.Context) ([]*ContainerInfo, error)
+
+	// ListAllManagedContainers returns ALL containers (including exited/crashed).
+	ListAllManagedContainers(ctx context.Context) ([]*ContainerInfo, error)
+
+	// HandleCrashedContainer captures logs from a crashed container and cleans it up.
+	// Returns the crash logs that were captured.
+	HandleCrashedContainer(ctx context.Context, containerInfo *ContainerInfo) (string, error)
 
 	// GetContainerLogs retrieves the last N lines of logs from a container.
 	GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error)
+
+	// GetContainerIP returns the IP address of a running container.
+	GetContainerIP(ctx context.Context, containerID string) (string, error)
 
 	// Close shuts down the runner and cleans up all managed resources.
 	Close() error
@@ -73,26 +79,23 @@ type ExecutionResult struct {
 
 // ContainerInfo represents information about a managed container.
 type ContainerInfo struct {
-	ContainerID string            `json:"container_id"` // Docker container ID
-	ID          string            `json:"id"`           // Bot/backtest ID
-	Entrypoint  string            `json:"entrypoint"`   // Entrypoint script filename (e.g., "main.py")
-	Status      string            `json:"status"`       // Container status
-	StartedAt   string            `json:"started_at"`   // RFC3339 timestamp
+	ContainerID string            `json:"container_id"`          // Docker container ID
+	ID          string            `json:"id"`                    // Bot/backtest ID
+	Entrypoint  string            `json:"entrypoint"`            // Entrypoint script filename (e.g., "main.py")
+	Status      string            `json:"status"`                // Container status
+	ExitCode    int               `json:"exit_code"`             // Exit code (for crashed containers)
+	Error       string            `json:"error,omitempty"`       // Error message from container
+	StartedAt   string            `json:"started_at"`            // RFC3339 timestamp
+	FinishedAt  string            `json:"finished_at,omitempty"` // RFC3339 timestamp (for exited containers)
 	Labels      map[string]string `json:"labels,omitempty"`
-	BotDir      string            `json:"bot_dir,omitempty"`    // Host directory path for cleanup
-	LastLogTime time.Time         `json:"last_log_time"`        // Last log collection timestamp
-	LogsSince   string            `json:"logs_since,omitempty"` // RFC3339Nano for incremental logs
 }
 
 // dockerRunner is the concrete implementation of DockerRunner interface.
-// It delegates responsibilities to specialized components for better separation of concerns.
+// Uses the daemon subprocess approach where containers handle their own
+// code download, state sync, and log collection via /app/runtime daemon.
 type dockerRunner struct {
 	// Component dependencies
-	orchestrator  ContainerOrchestrator // Handles Docker operations
-	codeManager   CodeManager           // Handles code download/extraction
-	scriptManager ScriptManager         // Handles entrypoint script generation
-	logCollector  LogCollector          // Background log collection for long-running containers
-	minioLogger   miniologger.MinIOLogger
+	orchestrator ContainerOrchestrator // Handles Docker operations
 
 	// Configuration
 	resultsBucket     string
@@ -101,16 +104,17 @@ type dockerRunner struct {
 	logger            util.Logger
 	managedContainers map[string]*ContainerInfo // Tracks active containers
 	containersMutex   sync.RWMutex              // Protects managedContainers map
-
 }
 
 // DockerRunnerOptions contains configuration options for creating a DockerRunner.
 type DockerRunnerOptions struct {
-	Logger util.Logger // Optional logger, defaults to util.DefaultLogger if nil
+	Logger       util.Logger   // Optional logger, defaults to util.DefaultLogger if nil
+	ConfigLoader ConfigLoader  // Optional config loader, defaults to EnvConfigLoader if nil
+	Config       *DockerRunnerConfig // Optional pre-loaded config, takes precedence over ConfigLoader
 }
 
-// NewDockerRunner creates a new DockerRunner instance with all required components initialized.
-// It loads configuration from environment variables and starts background services like log collection.
+// NewDockerRunner creates a new DockerRunner instance.
+// Uses the daemon subprocess approach - containers handle their own code/state/logs.
 func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 	// Create Docker client
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -118,12 +122,24 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
-	// Create MinIO client
-	config, err := LoadConfigFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load MinIO config: %v", err)
+	// Load configuration (contains MinIO creds that will be passed to containers)
+	var config *DockerRunnerConfig
+	if options.Config != nil {
+		// Use provided config
+		config = options.Config
+	} else {
+		// Use config loader (default to environment)
+		loader := options.ConfigLoader
+		if loader == nil {
+			loader = &EnvConfigLoader{}
+		}
+		config, err = loader.LoadConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %v", err)
+		}
 	}
 
+	// Create MinIO client (only used for storing analysis results)
 	minioClient, err := minio.New(config.MinIOEndpoint, &minio.Options{
 		Creds: credentials.NewStaticV4(
 			config.MinIOAccessKeyID,
@@ -141,41 +157,13 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 		logger = &util.DefaultLogger{}
 	}
 
-	// Ensure temp directory exists
-	if err := os.MkdirAll(config.TempDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create temp directory: %v", err)
-	}
-
-	// Create MinIO logger for bot logs
-	minioLogger, err := miniologger.NewMinIOLogger(context.Background(), miniologger.MinioLoggerOptions{
-		Endpoint:      config.MinIOEndpoint,
-		AccessKey:     config.MinIOAccessKeyID,
-		SecretKey:     config.MinIOSecretAccessKey,
-		UseSSL:        config.MinIOUseSSL,
-		LogsBucket:    config.MinioLogsBucket,
-		ResultsBucket: config.MinioResultsBucket,
-	})
-	if err != nil {
-		logger.Info("Warning: Failed to create MinIO logger, bot logs will not be persisted", "error", err.Error())
-		// Continue without MinIO logging rather than failing completely
-	}
-
 	runner := &dockerRunner{
-		codeManager:   NewMinioCodeManager(minioClient, config, logger),
-		scriptManager: NewScriptManager(logger),
-		orchestrator:  NewDockerOrchestrator(dockerClient, logger),
-		minioLogger:   minioLogger,
-
+		orchestrator:      NewDockerOrchestrator(dockerClient, logger),
 		minioClient:       minioClient,
 		logger:            logger,
 		managedContainers: make(map[string]*ContainerInfo),
 		resultsBucket:     config.MinioResultsBucket,
 		config:            config,
-	}
-
-	if runner.minioLogger != nil {
-		runner.logCollector = runner.initializeLogCollector()
-		runner.logCollector.Start()
 	}
 
 	return runner, nil
@@ -189,75 +177,9 @@ func (r *dockerRunner) getDockerImage(runtime string) (string, error) {
 	return runtimepkg.GetDockerImage(runtime)
 }
 
-func removeDir(dir string) error {
-	// Fix permissions to ensure we can delete the directory
-	if err := fixDirectoryPermissions(dir); err != nil {
-		return fmt.Errorf("failed to fix directory permissions: %v", err)
-	}
-	if err := os.RemoveAll(dir); err != nil {
-		return fmt.Errorf("failed to remove directory: %v", err)
-	}
-	return nil
-}
-
-// fixDirectoryPermissions fixes permissions on a directory to allow cleanup
-// This is needed in case the container created files with different permissions
-func fixDirectoryPermissions(dir string) error {
-	// Check if directory exists before attempting to fix permissions
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return nil // Directory already cleaned up, nothing to fix
-	}
-
-	// Make all files and directories readable/writable by owner
-	// Ignore permission errors since we can't always change root-owned files
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Continue walking, ignore errors
-		}
-		// Set permissions to 755 for directories, 644 for files
-		if info.IsDir() {
-			os.Chmod(path, 0755) // Ignore error
-		} else {
-			os.Chmod(path, 0644) // Ignore error
-		}
-		return nil // Always continue walking
-	})
-	return nil // Don't return permission errors
-}
-
-func (r *dockerRunner) initializeLogCollector() LogCollector {
-	getContainersFunc := func() []*ContainerInfo {
-		r.containersMutex.RLock()
-		defer r.containersMutex.RUnlock()
-
-		containers := make([]*ContainerInfo, 0, len(r.managedContainers))
-		for _, container := range r.managedContainers {
-			containers = append(containers, container)
-		}
-
-		return containers
-	}
-
-	return NewLogCollector(
-		30*time.Second,
-		r.orchestrator,
-		r.minioLogger,
-		r.logger,
-		getContainersFunc,
-	)
-}
-
 func (r *dockerRunner) Close() error {
 	r.logger.Info("Shutting down Docker runner, cleaning up managed containers")
-
-	if r.logCollector != nil {
-		r.logCollector.Stop()
-	}
 	r.cleanupManagedContainers()
-	if r.minioLogger != nil {
-		r.minioLogger.Close()
-	}
-
 	return nil
 }
 
@@ -295,36 +217,84 @@ func (r *dockerRunner) cleanupManagedContainers() {
 	r.logger.Info("Completed cleanup of managed containers")
 }
 
-// buildContainerConfig constructs Docker container configuration using the builder pattern.
-// It determines the appropriate shell, sets up volume mounts, and applies resource limits.
+// buildContainerConfig constructs Docker container configuration using the daemon approach.
+// The container's bootstrap script handles code download, state sync, and log collection.
+// MinIO credentials and daemon config are passed via environment variables.
 func (r *dockerRunner) buildContainerConfig(
 	executable model.Executable,
-	botDir, imageName string,
+	imageName string,
 ) (*container.Config, *container.HostConfig) {
-	// Determine shell based on image (Alpine uses /bin/sh, others use /bin/bash)
-	shell := "/bin/bash"
-	if strings.Contains(imageName, "alpine") {
-		shell = "/bin/sh"
+	// Serialize config to JSON for passing to container
+	configJSON := "{}"
+	if executable.Config != nil {
+		if data, err := json.Marshal(executable.Config); err == nil {
+			configJSON = string(data)
+		}
 	}
+
+	// Determine bot type and query entrypoint
+	botType := "scheduled"
+	if executable.IsLongRunning {
+		botType = "realtime"
+	}
+	queryEntrypoint := executable.EntrypointFiles["query"] // May be empty
 
 	builder := NewContainerBuilder(imageName).
 		WithExecutable(executable).
-		WithCommand(shell, fmt.Sprintf("/%s/entrypoint.sh", executable.Entrypoint)).
-		WithBinds(fmt.Sprintf("%s:/%s", botDir, executable.Entrypoint)).
+		WithNetwork(r.config.DockerNetwork).
+		WithMinIOConfig(
+			r.config.GetContainerEndpoint(), // Use container-accessible endpoint
+			r.config.MinIOAccessKeyID,
+			r.config.MinIOSecretAccessKey,
+			r.config.MinIOUseSSL,
+		).
+		WithDaemonConfigFull(DaemonConfig{
+			BotID:           executable.ID,
+			CodeFile:        executable.FilePath, // Path to code.zip in MinIO
+			Runtime:         executable.Runtime,
+			Entrypoint:      executable.EntrypointFiles[executable.Entrypoint],
+			QueryEntrypoint: queryEntrypoint,
+			Config:          configJSON,
+			IsScheduled:     !executable.IsLongRunning,
+			BotType:         botType,
+		}).
 		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
 
-	// Long-running containers auto-remove on exit, terminating containers need manual cleanup
-	if executable.IsLongRunning {
-		builder = builder.WithAutoRemove(true)
-	} else {
-		builder = builder.WithAutoRemove(false)
+	// Add query config if this is a query execution
+	if executable.QueryPath != "" {
+		queryParamsJSON := "{}"
+		if executable.QueryParams != nil {
+			if data, err := json.Marshal(executable.QueryParams); err == nil {
+				queryParamsJSON = string(data)
+			}
+		}
+		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", queryParamsJSON)
+		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
 	}
+
+	// Dev mode: mount runtime binary from host for faster iteration
+	if r.config.DevRuntimePath != "" {
+		builder = builder.WithDevRuntime(r.config.DevRuntimePath)
+	}
+
+	// Long-running containers should NOT auto-remove on exit so we can capture crash logs.
+	// Terminating containers that need result files also shouldn't auto-remove (race condition).
+	// Only enable auto-remove for terminating containers that don't need result extraction.
+	if executable.IsLongRunning || executable.ResultFilePath != "" {
+		builder = builder.WithAutoRemove(false) // Keep container for log/result capture
+	} else {
+		builder = builder.WithAutoRemove(true) // Run-to-completion cleans up automatically
+	}
+
+	// Enable host.docker.internal on Linux for containers to reach the Docker host.
+	// This is needed for containers to access services running on the host (e.g., MinIO in tests).
+	builder = builder.WithExtraHosts("host.docker.internal:host-gateway")
 
 	return builder.Build()
 }
 
 // StartContainer starts a container based on the executable configuration.
-// The execution flow is: validate -> download code -> pull image -> generate script -> start container.
+// The container's daemon handles code download, state sync, and log collection internally.
 // Returns immediately for long-running containers, waits for completion for terminating containers.
 func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Executable) (*ExecutionResult, error) {
 	startTime := time.Now()
@@ -338,26 +308,14 @@ func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Exec
 			Duration: time.Since(startTime),
 		}, nil
 	}
-	util.LogWorker("Starting long-running bot container - bot_id: %s, entrypoint: %s", executable.ID, entrypointFile)
+	util.LogWorker("Starting container - bot_id: %s, entrypoint: %s", executable.ID, entrypointFile)
 
 	// Validate runtime
 	if !r.isValidRuntime(executable.Runtime) {
 		return &ExecutionResult{
 			Status:   "error",
 			Message:  fmt.Sprintf("Unsupported runtime: %s", executable.Runtime),
-			Error:    fmt.Sprintf("Runtime %s is not supported. Supported runtimes: python3.11, nodejs20", executable.Runtime),
-			ExitCode: 1,
-			Duration: time.Since(startTime),
-		}, nil
-	}
-
-	// Download and extract bot code
-	botDir, err := r.codeManager.FetchAndExtract(ctx, executable)
-	if err != nil {
-		return &ExecutionResult{
-			Status:   "error",
-			Message:  "Failed to download bot code",
-			Error:    err.Error(),
+			Error:    fmt.Sprintf("Runtime %s is not supported", executable.Runtime),
 			ExitCode: 1,
 			Duration: time.Since(startTime),
 		}, nil
@@ -384,29 +342,18 @@ func (r *dockerRunner) StartContainer(ctx context.Context, executable model.Exec
 		}, nil
 	}
 
-	// Create entrypoint script
-	_, err = r.scriptManager.Create(ctx, executable, botDir)
-	if err != nil {
-		return &ExecutionResult{
-			Status:   "error",
-			Message:  "Failed to create entrypoint script",
-			Error:    err.Error(),
-			ExitCode: 1,
-			Duration: time.Since(startTime),
-		}, nil
-	}
+	config, hostConfig := r.buildContainerConfig(executable, imageName)
 
-	config, hostConfig := r.buildContainerConfig(executable, botDir, imageName)
-
-	// Create and start container for long-running mode
+	// Create and start container
 	if executable.IsLongRunning {
-		return r.startLongRunningContainer(ctx, executable, config, hostConfig, botDir, startTime)
-	} else {
-		return r.startTerminatingContainer(ctx, executable, config, hostConfig, botDir, startTime)
+		return r.startLongRunningContainer(ctx, executable, config, hostConfig, startTime)
 	}
+	return r.startTerminatingContainer(ctx, executable, config, hostConfig, startTime)
 }
 
-// StopContainer stops a specific container
+// StopContainer stops a specific container.
+// State sync and log collection are handled by the daemon inside the container.
+// The graceful shutdown gives the daemon time to complete final sync before exit.
 func (r *dockerRunner) StopContainer(
 	ctx context.Context,
 	containerID string,
@@ -414,45 +361,69 @@ func (r *dockerRunner) StopContainer(
 ) error {
 	r.logger.Info("Stopping container", "container_id", containerID, "bot_id", executable.ID)
 
-	info := r.removeManagedContainer(containerID)
-	if info == nil {
-		r.logger.Info("Container not found in managed list, may have already been removed", "container_id", containerID)
-	}
+	r.removeManagedContainer(containerID)
 
+	// Stop container gracefully - daemon's cleanup trap will sync state/logs
 	if err := r.orchestrator.Stop(ctx, containerID, 30*time.Second); err != nil {
 		r.logger.Info("Failed to stop container", "container_id", containerID, "error", err.Error())
 	}
 
+	// Copy analysis result if configured
 	if executable.PersistResults {
-		resultPath := fmt.Sprintf("/%s/result.json", executable.Entrypoint)
+		resultPath := "/bot/result.json"
 		contents, err := r.orchestrator.CopyFromContainer(ctx, containerID, resultPath)
 		if err == nil {
-			err := r.StoreAnalysisResult(ctx, executable.ID, contents)
-			if err != nil {
+			if err := r.StoreAnalysisResult(ctx, executable.ID, contents); err != nil {
 				r.logger.Info("Failed to store analysis result to MinIO", "bot_id", executable.ID, "error", err.Error())
 			}
-		}
-	}
-
-	if info != nil && info.BotDir != "" {
-		if err := removeDir(info.BotDir); err != nil {
-			r.logger.Info("Failed to clean up bot directory", "bot_dir", info.BotDir, "error", err.Error())
 		}
 	}
 
 	return nil
 }
 
-// ListManagedContainers returns information about managed containers for the specified segment.
-// Use segment=-1 to list all managed containers regardless of segment.
-func (r *dockerRunner) ListManagedContainers(ctx context.Context, segment int32) ([]*ContainerInfo, error) {
+// ListManagedContainers returns all running containers managed by this runner.
+func (r *dockerRunner) ListManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
 	filter := filters.NewArgs()
 	filter.Add("label", "runtime.managed=true")
-	// Only filter by segment if a specific segment is requested (-1 means all segments)
-	if segment >= 0 {
-		filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
-	}
 	return r.orchestrator.ListContainer(ctx, filter)
+}
+
+// ListAllManagedContainers returns ALL containers including exited/crashed ones.
+func (r *dockerRunner) ListAllManagedContainers(ctx context.Context) ([]*ContainerInfo, error) {
+	filter := filters.NewArgs()
+	filter.Add("label", "runtime.managed=true")
+	return r.orchestrator.ListAllContainers(ctx, filter)
+}
+
+// HandleCrashedContainer cleans up a crashed container.
+// Logs and state sync are handled by the daemon inside the container.
+// Returns crash info for the caller.
+func (r *dockerRunner) HandleCrashedContainer(ctx context.Context, containerInfo *ContainerInfo) (string, error) {
+	r.logger.Info("Handling crashed container",
+		"container_id", containerInfo.ContainerID,
+		"bot_id", containerInfo.ID,
+		"exit_code", containerInfo.ExitCode)
+
+	// Format crash info for the caller
+	crashInfo := fmt.Sprintf(`{"level":"error","message":"Bot crashed with exit code %d","exit_code":%d,"timestamp":"%s","bot_id":"%s","container_id":"%s"}`,
+		containerInfo.ExitCode,
+		containerInfo.ExitCode,
+		time.Now().UTC().Format(time.RFC3339),
+		containerInfo.ID,
+		containerInfo.ContainerID)
+
+	// Remove the crashed container
+	if err := r.orchestrator.Remove(ctx, containerInfo.ContainerID); err != nil {
+		r.logger.Error("Failed to remove crashed container",
+			"container_id", containerInfo.ContainerID,
+			"error", err.Error())
+	}
+
+	// Remove from managed containers list
+	r.removeManagedContainer(containerInfo.ContainerID)
+
+	return crashInfo, nil
 }
 
 // startLongRunningContainer creates and starts a container for long-running mode
@@ -461,15 +432,10 @@ func (r *dockerRunner) startLongRunningContainer(
 	exec model.Executable,
 	config *container.Config,
 	hostConfig *container.HostConfig,
-	botDir string,
 	startTime time.Time,
 ) (*ExecutionResult, error) {
 	containerID, err := r.orchestrator.CreateAndStart(ctx, config, hostConfig)
 	if err != nil {
-		if rmErr := removeDir(botDir); rmErr != nil {
-			r.logger.Info("Failed to clean up bot directory after container start failure", "bot_dir", botDir, "error", err.Error())
-		}
-
 		return &ExecutionResult{
 			Status:   "error",
 			Message:  "Failed to create/start container",
@@ -479,8 +445,8 @@ func (r *dockerRunner) startLongRunningContainer(
 		}, nil
 	}
 
-	// If successful, track the container
-	r.addManagedContainer(containerID, exec, botDir, config)
+	// Track the container
+	r.addManagedContainer(containerID, exec, config)
 	r.logger.Info("Started long-running container", "container_id", containerID, "bot_id", exec.ID)
 
 	return &ExecutionResult{
@@ -493,19 +459,20 @@ func (r *dockerRunner) startLongRunningContainer(
 	}, nil
 }
 
+// startTerminatingContainer runs a container to completion for scheduled/backtest jobs.
+// The daemon inside the container handles code download, state sync, and log collection.
 func (r *dockerRunner) startTerminatingContainer(
 	ctx context.Context,
 	exec model.Executable,
 	config *container.Config,
 	hostConfig *container.HostConfig,
-	botDir string,
 	startTime time.Time,
 ) (*ExecutionResult, error) {
-	// Add logging for debugging short-lived containers
-	defer os.RemoveAll(botDir) // Ensure bot directory is cleaned up
-
-	// Always try to read result file - bots write their result to this file
-	resultFilePath := fmt.Sprintf("/%s/result.json", exec.Entrypoint)
+	// Result file path inside container (can be customized for queries)
+	resultFilePath := "/bot/result.json"
+	if exec.ResultFilePath != "" {
+		resultFilePath = exec.ResultFilePath
+	}
 
 	runResult, err := r.orchestrator.RunAndWait(ctx, config, hostConfig, resultFilePath)
 	if err != nil {
@@ -518,20 +485,11 @@ func (r *dockerRunner) startTerminatingContainer(
 		}, nil
 	}
 
-	// Store result to MinIO if we have result file contents and PersistResults is true
+	// Store result to MinIO if configured
 	if exec.PersistResults && len(runResult.ResultFileContents) > 0 {
 		if err := r.StoreAnalysisResult(ctx, exec.ID, runResult.ResultFileContents); err != nil {
 			r.logger.Info("Failed to store analysis result to MinIO", "bot_id", exec.ID, "error", err.Error())
-			// Continue even if storing analysis fails
 		}
-	}
-
-	// Terminating containers store logs after completion they do not use background log collection
-	// since they run quickly and we want all logs immediately after completion
-	// They are not part of the managedContainers map since they are short-lived
-	logs := runResult.Logs
-	if len(logs) > 0 && r.logCollector != nil {
-		r.logCollector.StoreLogs(exec.ID, logs)
 	}
 
 	// Determine output based on result file and exit code
@@ -540,9 +498,7 @@ func (r *dockerRunner) startTerminatingContainer(
 	var errorMessage string
 
 	if len(runResult.ResultFileContents) > 0 {
-		// Result file exists - use its contents as the output
 		output = string(runResult.ResultFileContents)
-		// Parse status from result file if possible, otherwise infer from exit code
 		if runResult.ExitCode == 0 {
 			finalStatus = "success"
 		} else {
@@ -550,7 +506,6 @@ func (r *dockerRunner) startTerminatingContainer(
 			errorMessage = fmt.Sprintf("Container exited with code %d", runResult.ExitCode)
 		}
 	} else {
-		// No result file - use stdout/stderr logs as output if available
 		if runResult.ExitCode == 0 {
 			finalStatus = "success"
 			if runResult.Logs != "" {
@@ -587,23 +542,18 @@ func (r *dockerRunner) GetContainerStatus(ctx context.Context, containerID strin
 func (r *dockerRunner) addManagedContainer(
 	containerID string,
 	exec model.Executable,
-	botDir string,
 	config *container.Config,
 ) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
-	startTime := time.Now()
 	containerInfo := &ContainerInfo{
 		ContainerID: containerID,
 		ID:          exec.ID,
 		Entrypoint:  exec.Entrypoint,
 		Status:      "running",
-		StartedAt:   startTime.Format(time.RFC3339),
+		StartedAt:   time.Now().Format(time.RFC3339),
 		Labels:      config.Labels,
-		BotDir:      botDir, // Store for cleanup when container is stopped
-		LastLogTime: startTime,
-		LogsSince:   startTime.Format(time.RFC3339Nano), // Initialize for incremental log collection
 	}
 
 	r.managedContainers[containerID] = containerInfo
@@ -645,4 +595,8 @@ func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, re
 
 func (r *dockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
 	return r.orchestrator.GetLogs(ctx, containerID, tail)
+}
+
+func (r *dockerRunner) GetContainerIP(ctx context.Context, containerID string) (string, error) {
+	return r.orchestrator.GetContainerIP(ctx, containerID)
 }

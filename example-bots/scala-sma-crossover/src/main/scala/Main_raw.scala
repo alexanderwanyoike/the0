@@ -108,7 +108,7 @@ object Main:
     (state.prevShortSma, state.prevLongSma) match
       case (Some(prevShort), Some(prevLong)) =>
         checkCrossover(prevShort, prevLong, shortSma, longSma).foreach { signal =>
-          val confidence = math.min(math.abs(shortSma - longSma) / longSma * 100, 0.95)
+          val confidence = math.min(math.abs(shortSma - longSma) / longSma, 0.95)
           val direction = if signal == "BUY" then "above" else "below"
 
           emitMetric("signal", Json.obj(

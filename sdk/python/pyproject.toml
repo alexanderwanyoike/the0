@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "the0-sdk"
-version = "0.1.1"
+version = "0.3.1"
 description = "SDK for building trading bots on the0 platform"
 readme = "README.md"
 license = {text = "Apache-2.0"}
