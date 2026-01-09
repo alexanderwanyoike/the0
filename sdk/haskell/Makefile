@@ -1,4 +1,4 @@
-.PHONY: build test clean
+.PHONY: build test clean sdist
 
 build:
 	cabal build
@@ -9,3 +9,6 @@ test:
 clean:
 	cabal clean
 	rm -rf dist-newstyle
+
+sdist:
+	cabal sdist
