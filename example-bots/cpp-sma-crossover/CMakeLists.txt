@@ -27,11 +27,10 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(json)
 
-# Fetch the0 SDK
-# TODO: Switch back to v1.3.0 tag when release merged
+# Fetch the0 SDK (v1.3.0)
 FetchContent_Declare(the0
     GIT_REPOSITORY https://github.com/alexanderwanyoike/the0.git
-    GIT_TAG release/v1.3.0
+    GIT_TAG v1.3.0
     SOURCE_SUBDIR sdk/cpp
 )
 FetchContent_MakeAvailable(the0)
