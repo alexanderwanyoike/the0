@@ -196,14 +196,26 @@ func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 cabal update
 cabal build --enable-optimization=2
 
-# Create bin directory and copy all executables
+# Create bin directory
 mkdir -p bin
-for exe in $(cabal list-bin all 2>/dev/null || cabal list-bin 2>/dev/null | head -20); do
-    if [ -f "$exe" ] && [ -x "$exe" ]; then
-        cp "$exe" bin/
-        echo "Copied $(basename $exe) to bin/"
-    fi
+
+# Find and copy all executables from opt/build directories
+# These are the optimized binaries built by cabal
+find dist-newstyle -path "*/opt/build/*/*" -type f -executable 2>/dev/null | while read exe; do
+    name=$(basename "$exe")
+    # Skip autogen files and other non-binary files
+    case "$name" in
+        *.hi|*.o|*.dyn_*|Paths_*) continue ;;
+    esac
+    cp "$exe" bin/
+    echo "Copied $name to bin/"
 done
+
+# Verify at least one binary was copied
+if [ -z "$(ls -A bin/ 2>/dev/null)" ]; then
+    echo "Warning: No executables found in dist-newstyle opt/build directories"
+    exit 1
+fi
 `
 
 	config := &container.Config{
