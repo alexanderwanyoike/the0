@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -75,76 +73,59 @@ func (b *HaskellBuilder) Build(vm *VendorManager) error {
 	}
 	defer vm.cleanupContainer(containerID)
 
-	// Verify binary was created
-	binaryPath := b.FindBinary(vm.projectPath)
-	if binaryPath == "" {
-		return fmt.Errorf("haskell build did not produce a binary in dist-newstyle/")
+	// Verify binaries were created in bin/
+	binaries := b.FindAllBinaries(vm.projectPath)
+	if len(binaries) == 0 {
+		return fmt.Errorf("haskell build did not produce any binaries in bin/")
 	}
 
-	// Get binary info
-	binaryInfo, err := os.Stat(binaryPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat binary: %v", err)
+	// Report all built binaries
+	for _, binaryPath := range binaries {
+		binaryInfo, err := os.Stat(binaryPath)
+		if err != nil {
+			continue
+		}
+		sizeStr := vm.formatFileSize(binaryInfo.Size())
+		green.Printf("v Haskell binary built: %s (%s)\n", filepath.Base(binaryPath), sizeStr)
 	}
-
-	sizeStr := vm.formatFileSize(binaryInfo.Size())
-	green.Printf("v Haskell binary built: %s (%s)\n", filepath.Base(binaryPath), sizeStr)
 	return nil
 }
 
-// FindBinary finds the built binary in dist-newstyle/.
-// Cabal builds to: dist-newstyle/build/[arch]/ghc-[version]/[pkg-name]-[version]/x/[exe-name]/build/[exe-name]/[exe-name]
+// FindBinary finds the first built binary in bin/.
+// After build, binaries are copied to bin/ for simplified paths.
 func (b *HaskellBuilder) FindBinary(projectPath string) string {
-	distDir := filepath.Join(projectPath, "dist-newstyle")
+	binaries := b.FindAllBinaries(projectPath)
+	if len(binaries) > 0 {
+		return binaries[0]
+	}
+	return ""
+}
 
-	if _, err := os.Stat(distDir); os.IsNotExist(err) {
-		return ""
+// FindAllBinaries finds all built binaries in bin/.
+func (b *HaskellBuilder) FindAllBinaries(projectPath string) []string {
+	binDir := filepath.Join(projectPath, "bin")
+
+	entries, err := os.ReadDir(binDir)
+	if err != nil {
+		return nil
 	}
 
-	var foundBinary string
-
-	// Walk dist-newstyle looking for executables
-	filepath.WalkDir(distDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || foundBinary != "" {
-			return err
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		// Skip non-executable files by extension
-		name := d.Name()
-		if strings.HasSuffix(name, ".hi") ||
-			strings.HasSuffix(name, ".o") ||
-			strings.HasSuffix(name, ".dyn_hi") ||
-			strings.HasSuffix(name, ".dyn_o") ||
-			strings.HasSuffix(name, ".a") ||
-			strings.HasSuffix(name, ".so") ||
-			strings.HasSuffix(name, ".conf") ||
-			strings.HasSuffix(name, ".cache") ||
-			strings.Contains(path, "/setup/") {
-			return nil
+	var binaries []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
 		}
 
 		// Check if it's executable
-		info, err := d.Info()
+		info, err := entry.Info()
 		if err != nil {
-			return nil
+			continue
 		}
-
 		if info.Mode()&0111 != 0 {
-			// Verify it's in a build directory (executable should be in x/[name]/build/[name]/)
-			if strings.Contains(path, "/x/") && strings.Contains(path, "/build/") {
-				foundBinary = path
-				return filepath.SkipDir
-			}
+			binaries = append(binaries, filepath.Join(binDir, entry.Name()))
 		}
-
-		return nil
-	})
-
-	return foundBinary
+	}
+	return binaries
 }
 
 // pullImage pulls the Haskell image if it doesn't exist locally.
@@ -208,8 +189,22 @@ func (b *HaskellBuilder) runBuildContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Build command
-	buildCmd := "cabal update && cabal build --enable-optimization=2 2>&1"
+	// Build command: build with optimizations, then copy all executables to bin/
+	// This provides simple, predictable paths like bin/my-bot instead of
+	// dist-newstyle/build/x86_64-linux/ghc-9.6.7/pkg-1.0.0/x/my-bot/opt/build/my-bot/my-bot
+	buildCmd := `set -e
+cabal update
+cabal build --enable-optimization=2
+
+# Create bin directory and copy all executables
+mkdir -p bin
+for exe in $(cabal list-bin all 2>/dev/null || cabal list-bin 2>/dev/null | head -20); do
+    if [ -f "$exe" ] && [ -x "$exe" ]; then
+        cp "$exe" bin/
+        echo "Copied $(basename $exe) to bin/"
+    fi
+done
+`
 
 	config := &container.Config{
 		Image: haskellImage,

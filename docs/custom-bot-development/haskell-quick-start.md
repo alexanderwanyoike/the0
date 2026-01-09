@@ -25,7 +25,7 @@ make install
 the0 auth login
 ```
 
-You'll also need GHC 9.6+ and Cabal installed locally for building. Use [ghcup](https://www.haskell.org/ghcup/) for the recommended installation method.
+You'll also need Docker installed - the CLI uses Docker for building Haskell projects with the correct GHC version. Optionally, install GHC 9.6+ and Cabal locally for development using [ghcup](https://www.haskell.org/ghcup/).
 
 ## Project Structure
 
@@ -47,10 +47,11 @@ sma-bot/
 │   └── Main.hs              # Bot entry point
 ├── bot-config.yaml          # Bot metadata and runtime settings
 ├── bot-schema.json          # Configuration schema for users
-└── dist-newstyle/build/...  # Compiled binary (after cabal build)
+└── bin/                     # Compiled binaries (created by the0 build)
+    └── sma-bot              # Your executable
 ```
 
-The entry point in `bot-config.yaml` must point to the compiled binary. You compile locally before deploying.
+The CLI automatically builds your Haskell project and copies executables to a simple `bin/` directory.
 
 ## Defining Bot Metadata
 
@@ -65,7 +66,7 @@ type: scheduled
 runtime: ghc96
 
 entrypoints:
-  bot: dist-newstyle/build/x86_64-linux/ghc-9.6.7/sma-bot-1.0.0/x/sma-bot/opt/build/sma-bot/sma-bot
+  bot: bin/sma-bot
 
 schema:
   bot: bot-schema.json
@@ -78,7 +79,7 @@ metadata:
   complexity: intermediate
 ```
 
-The `entrypoints.bot` field points to the compiled binary. Use `cabal list-bin sma-bot` after building to find the exact path.
+The `entrypoints.bot` field points to the compiled binary in `bin/`. The CLI automatically copies built executables there during the build process.
 
 ## Defining Configuration Schema
 
@@ -359,19 +360,22 @@ result $ object
 
 ## Building
 
-Build with Cabal:
+The CLI handles building automatically during deployment, but you can also build manually:
 
 ```bash
-cabal build
+# Build and copy binaries to bin/
+cabal build --enable-optimization=2
+mkdir -p bin
+cp $(cabal list-bin sma-bot) bin/
 ```
 
-Find the binary path:
+Or let the CLI handle everything:
 
 ```bash
-cabal list-bin sma-bot
+the0 custom-bot deploy
 ```
 
-Update `bot-config.yaml` with the exact path printed by that command.
+The CLI builds your project with optimizations and copies all executables to `bin/` automatically.
 
 ## Testing Locally
 

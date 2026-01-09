@@ -1,30 +1,27 @@
-# Haskell - only keep compiled binaries and frontend dist
-# Binaries: dist-newstyle/build/*/ghc-*/sma-bot-*/x/*/opt/build/*/*
+# Haskell SMA Bot - keep only bin/ and frontend/dist/
 
-# Exclude entire dist-newstyle except x/ directories with binaries
-dist-newstyle/src/
-dist-newstyle/cache/
-dist-newstyle/packagedb/
-dist-newstyle/tmp/
-dist-newstyle/sdist/
-dist-newstyle/build/*/*/*/*/build/
-dist-newstyle/build/*/*/*/*/setup/
-dist-newstyle/build/*/*/*/*/cache/
-dist-newstyle/build/*/*/*/*/package.conf.inplace
+# Exclude entire dist-newstyle (binaries now copied to bin/)
+dist-newstyle/
 
-# Source files
+# Source files (not needed at runtime)
 app/
 
-# Cabal files
+# Cabal/Stack build files
 cabal.project
 sma-bot.cabal
+*.hi
+*.o
+*.dyn_hi
+*.dyn_o
 
-# Frontend dev files
+# Frontend dev files (keep only dist/)
 frontend/node_modules/
+frontend/src/
 frontend/index.tsx
 frontend/package.json
 frontend/package-lock.json
 frontend/tsconfig.json
+frontend/vite.config.ts
 
 # Docs
 README.md
