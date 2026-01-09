@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"runtime/internal/constants"
+	"runtime/internal/daemon"
 	"runtime/internal/execute"
 	"runtime/internal/util"
 )
@@ -138,39 +139,27 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
-	// Track child processes for cleanup
-	var syncCmd, queryCmd *exec.Cmd
+	// Track child processes and sync runner for cleanup
+	var queryCmd *exec.Cmd
+	var syncRunner *daemon.SyncRunner
 
 	// Cleanup function
 	cleanup := func() {
-		logger.Info("Cleaning up child processes...")
-		// Send SIGTERM first for graceful shutdown
-		if syncCmd != nil && syncCmd.Process != nil {
-			if err := syncCmd.Process.Signal(syscall.SIGTERM); err != nil {
-				// "process already finished" is expected if it exited naturally
-				if err.Error() != "os: process already finished" {
-					logger.Info("Failed to send SIGTERM to sync process: %v", err)
-				}
-			}
+		logger.Info("Cleaning up...")
+		// Stop sync runner (performs final sync)
+		if syncRunner != nil {
+			syncRunner.Stop()
 		}
+		// Send SIGTERM to query server for graceful shutdown
 		if queryCmd != nil && queryCmd.Process != nil {
 			if err := queryCmd.Process.Signal(syscall.SIGTERM); err != nil {
 				if err.Error() != "os: process already finished" {
 					logger.Info("Failed to send SIGTERM to query process: %v", err)
 				}
 			}
-		}
-		// Give processes time to clean up
-		time.Sleep(3 * time.Second)
-		// Force kill if still running
-		if syncCmd != nil && syncCmd.Process != nil {
-			if err := syncCmd.Process.Kill(); err != nil {
-				if err.Error() != "os: process already finished" {
-					logger.Info("Failed to kill sync process: %v", err)
-				}
-			}
-		}
-		if queryCmd != nil && queryCmd.Process != nil {
+			// Give process time to clean up
+			time.Sleep(1 * time.Second)
+			// Force kill if still running
 			if err := queryCmd.Process.Kill(); err != nil {
 				if err.Error() != "os: process already finished" {
 					logger.Info("Failed to kill query process: %v", err)
@@ -211,22 +200,28 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 		// Continue anyway - logs may not work but bot should run
 	}
 
-	// Step 3: Start sync subprocess (unless skipped for K8s)
+	// Step 3: Start sync runner in-process (unless skipped for K8s)
 	if !executeSkipSync {
-		var err error
-		syncCmd, err = startSyncProcess(cfg, logger)
-		if err != nil {
-			logger.Info("Failed to start sync process: %v", err)
-			return 1
+		syncRunner = daemon.NewSyncRunner(daemon.SyncOptions{
+			BotID:     cfg.BotID,
+			StatePath: cfg.StatePath,
+			LogsPath:  cfg.LogsPath,
+			WatchDone: func() string {
+				if cfg.IsScheduled {
+					return constants.DefaultDoneFilePath
+				}
+				return ""
+			}(),
+		}, logger)
+		syncRunner.Start()
+		// Wait for sync runner to initialize (with timeout)
+		if err := syncRunner.WaitReady(10 * time.Second); err != nil {
+			logger.Info("Sync runner failed to initialize: %v", err)
+			// Continue anyway - bot should run even if sync fails
 		}
-		defer func() {
-			if syncCmd.Process != nil {
-				syncCmd.Process.Signal(syscall.SIGTERM)
-				syncCmd.Wait()
-			}
-		}()
+		defer syncRunner.Stop()
 	} else {
-		logger.Info("Skipping sync subprocess (--skip-sync flag set)")
+		logger.Info("Skipping sync (--skip-sync flag set)")
 	}
 
 	// Step 4: Start query server subprocess (for realtime bots, unless skipped)
@@ -258,7 +253,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 		}
 	}
 
-	// Step 7: Cleanup
+	// Step 7: Cleanup (sync runner performs final sync)
 	cleanup()
 
 	return exitCode
@@ -364,33 +359,6 @@ func downloadCode(ctx context.Context, cfg *execute.Config, logger *util.Default
 func downloadState(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
 	storage := execute.NewStorageOperations(logger)
 	return storage.DownloadState(ctx, cfg.BotID, cfg.StatePath)
-}
-
-// startSyncProcess starts the daemon sync as a subprocess.
-func startSyncProcess(cfg *execute.Config, logger *util.DefaultLogger) (*exec.Cmd, error) {
-	args := []string{
-		"daemon", "sync",
-		"--bot-id", cfg.BotID,
-		"--state-path", cfg.StatePath,
-		"--logs-path", cfg.LogsPath,
-	}
-
-	if cfg.IsScheduled {
-		args = append(args, "--watch-done", constants.DefaultDoneFilePath)
-	}
-
-	cmd := exec.Command("/app/runtime", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-
-	logger.Info("Starting sync subprocess: %v", args)
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start sync: %w", err)
-	}
-
-	logger.Info("Sync subprocess started (PID: %d)", cmd.Process.Pid)
-	return cmd, nil
 }
 
 // startQueryServerProcess starts the query server as a subprocess.

@@ -58,11 +58,19 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	// Check annotations
 	assert.NotEmpty(t, pod.Annotations[AnnotationConfigHash])
 
-	// Check no init container (execute command handles init)
-	assert.Len(t, pod.Spec.InitContainers, 0)
+	// Check sync sidecar is in InitContainers (native sidecar K8s 1.28+)
+	require.Len(t, pod.Spec.InitContainers, 1)
+	syncContainer := pod.Spec.InitContainers[0]
+	assert.Equal(t, "sync", syncContainer.Name)
+	assert.Equal(t, "the0/runtime:latest", syncContainer.Image)
+	assert.Equal(t, []string{"/app/runtime", "daemon", "sync"}, syncContainer.Command)
+	assert.NotNil(t, syncContainer.RestartPolicy, "native sidecar should have restartPolicy")
+	assert.Equal(t, corev1.ContainerRestartPolicyAlways, *syncContainer.RestartPolicy)
+	assert.NotNil(t, syncContainer.StartupProbe, "native sidecar should have startup probe")
+	assert.Equal(t, "/readyz", syncContainer.StartupProbe.HTTPGet.Path)
 
-	// Check containers (bot + sync sidecar, no query sidecar since no query entrypoint)
-	require.Len(t, pod.Spec.Containers, 2)
+	// Check containers (bot only, no query sidecar since no query entrypoint)
+	require.Len(t, pod.Spec.Containers, 1)
 
 	// Bot container
 	botContainer := pod.Spec.Containers[0]
@@ -86,12 +94,6 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	// Check resources
 	assert.Equal(t, DefaultMemoryLimit, botContainer.Resources.Limits.Memory().String())
 	assert.Equal(t, DefaultCPULimit, botContainer.Resources.Limits.Cpu().String())
-
-	// Sync sidecar
-	syncContainer := pod.Spec.Containers[1]
-	assert.Equal(t, "sync", syncContainer.Name)
-	assert.Equal(t, "the0/runtime:latest", syncContainer.Image)
-	assert.Equal(t, []string{"/app/runtime", "daemon", "sync"}, syncContainer.Command)
 
 	// Check volumes
 	require.Len(t, pod.Spec.Volumes, 3)
@@ -130,14 +132,17 @@ func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
 	pod, err := generator.GeneratePod(bot)
 	require.NoError(t, err)
 
-	// Should have 3 containers: bot + sync + query-server
-	require.Len(t, pod.Spec.Containers, 3)
+	// Sync sidecar should be in InitContainers (native sidecar)
+	require.Len(t, pod.Spec.InitContainers, 1)
+	assert.Equal(t, "sync", pod.Spec.InitContainers[0].Name)
+
+	// Should have 2 containers: bot + query-server
+	require.Len(t, pod.Spec.Containers, 2)
 	assert.Equal(t, "bot", pod.Spec.Containers[0].Name)
-	assert.Equal(t, "sync", pod.Spec.Containers[1].Name)
-	assert.Equal(t, "query-server", pod.Spec.Containers[2].Name)
+	assert.Equal(t, "query-server", pod.Spec.Containers[1].Name)
 
 	// Query server should have correct command
-	queryContainer := pod.Spec.Containers[2]
+	queryContainer := pod.Spec.Containers[1]
 	assert.Equal(t, []string{"/app/runtime", "execute", "--query-server-only"}, queryContainer.Command)
 }
 

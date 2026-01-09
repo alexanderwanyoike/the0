@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // PodBuilder provides a fluent interface for building Kubernetes Pod specs.
@@ -208,16 +209,27 @@ func (b *PodBuilder) WithResources(memoryLimit, cpuLimit, memoryRequest, cpuRequ
 	return b
 }
 
-// WithSyncSidecar adds the sync sidecar container.
+// SyncSidecarReadinessPort is the port used for sync sidecar readiness probes.
+const SyncSidecarReadinessPort = 8079
+
+// WithSyncSidecar adds the sync sidecar as a native K8s sidecar container (K8s 1.28+).
+// Native sidecars are init containers with restartPolicy: Always that:
+// - Start before the main container
+// - Must pass startup probe before main container starts
+// - Keep running alongside main container
 func (b *PodBuilder) WithSyncSidecar(image string, botID string, watchDone bool) *PodBuilder {
 	args := []string{
 		"--bot-id", botID,
 		"--state-path", "/state",
 		"--logs-path", "/var/the0/logs",
+		"--readiness-port", fmt.Sprintf("%d", SyncSidecarReadinessPort),
 	}
 	if watchDone {
 		args = append(args, "--watch-done", "/var/the0/done")
 	}
+
+	// Native sidecar uses restartPolicy on the container (K8s 1.28+)
+	restartPolicyAlways := corev1.ContainerRestartPolicyAlways
 
 	b.syncSidecar = &corev1.Container{
 		Name:            "sync",
@@ -229,6 +241,20 @@ func (b *PodBuilder) WithSyncSidecar(image string, botID string, watchDone bool)
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "bot-state", MountPath: "/state"},
 			{Name: "the0", MountPath: "/var/the0"},
+		},
+		// Native sidecar: restartPolicy on container makes it run alongside main container
+		RestartPolicy: &restartPolicyAlways,
+		// Startup probe ensures main container waits for sync to be ready
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/readyz",
+					Port: intstr.FromInt(SyncSidecarReadinessPort),
+				},
+			},
+			InitialDelaySeconds: 0,
+			PeriodSeconds:       1,
+			FailureThreshold:    30, // 30 seconds max to become ready
 		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -333,9 +359,14 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 		},
 	}
 
+	// Native sidecars (K8s 1.28+) go in initContainers with restartPolicy: Always
+	// This ensures they start before the main container and keep running
+	var initContainers []corev1.Container
 	if b.syncSidecar != nil {
-		containers = append(containers, *b.syncSidecar)
+		initContainers = append(initContainers, *b.syncSidecar)
 	}
+
+	// Query sidecar runs as a regular container (not native sidecar)
 	if b.querySidecar != nil {
 		containers = append(containers, *b.querySidecar)
 	}
@@ -348,9 +379,10 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 			Annotations: b.annotations,
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy: b.restartPolicy,
-			Containers:    containers,
-			Volumes:       b.volumes,
+			RestartPolicy:  b.restartPolicy,
+			InitContainers: initContainers,
+			Containers:     containers,
+			Volumes:        b.volumes,
 		},
 	}, nil
 }

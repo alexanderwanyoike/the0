@@ -51,13 +51,14 @@ Optional environment variables:
 }
 
 var (
-	daemonBotID        string
-	daemonCodePath     string
-	daemonStatePath    string
-	daemonLogsPath     string
-	daemonCodeFile     string
-	daemonSyncInterval time.Duration
-	daemonWatchDone    string
+	daemonBotID         string
+	daemonCodePath      string
+	daemonStatePath     string
+	daemonLogsPath      string
+	daemonCodeFile      string
+	daemonSyncInterval  time.Duration
+	daemonWatchDone     string
+	daemonReadinessPort int
 )
 
 func init() {
@@ -74,6 +75,7 @@ func init() {
 	daemonSyncCmd.Flags().StringVar(&daemonLogsPath, "logs-path", "/var/the0/logs", "Path for logs directory")
 	daemonSyncCmd.Flags().DurationVar(&daemonSyncInterval, "interval", 60*time.Second, "Sync interval")
 	daemonSyncCmd.Flags().StringVar(&daemonWatchDone, "watch-done", "", "Watch for done file and exit when it appears (for scheduled bots)")
+	daemonSyncCmd.Flags().IntVar(&daemonReadinessPort, "readiness-port", 0, "Port for health/readiness HTTP server (K8s sidecar mode)")
 	daemonSyncCmd.MarkFlagRequired("bot-id")
 
 	daemonCmd.AddCommand(daemonInitCmd)
@@ -92,10 +94,11 @@ func runDaemonInit(cmd *cobra.Command, args []string) error {
 
 func runDaemonSync(cmd *cobra.Command, args []string) error {
 	return daemon.Sync(context.Background(), daemon.SyncOptions{
-		BotID:     daemonBotID,
-		StatePath: daemonStatePath,
-		LogsPath:  daemonLogsPath,
-		Interval:  daemonSyncInterval,
-		WatchDone: daemonWatchDone,
+		BotID:         daemonBotID,
+		StatePath:     daemonStatePath,
+		LogsPath:      daemonLogsPath,
+		Interval:      daemonSyncInterval,
+		WatchDone:     daemonWatchDone,
+		ReadinessPort: daemonReadinessPort,
 	})
 }

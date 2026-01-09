@@ -129,6 +129,51 @@ func TestExecuteProcessWithDeps_StartFails(t *testing.T) {
 	assert.False(t, mockProc.waited)
 }
 
+func TestExecuteProcessWithDeps_StartFails_WritesToLogFile(t *testing.T) {
+	// Create a temporary log file
+	tmpDir := t.TempDir()
+	logFilePath := filepath.Join(tmpDir, "bot.log")
+	logFile, err := os.Create(logFilePath)
+	require.NoError(t, err)
+	defer logFile.Close()
+
+	mockProc := &mockProcessExecutor{
+		startErr: errors.New("fork/exec /bot/nonexistent: no such file or directory"),
+	}
+	mockFile := &mockFileWriter{}
+	deps := execute.Dependencies{
+		ProcessExecutor: mockProc,
+		FileWriter:      mockFile,
+	}
+
+	cfg := &execute.Config{
+		BotID:      "test-bot",
+		Runtime:    "haskell9.8",
+		Entrypoint: "bot",
+		CodePath:   constants.TestBotDir,
+	}
+	logger := &util.DefaultLogger{}
+	ctx := context.Background()
+
+	// Pass the real log file
+	exitCode := executeProcessWithDeps(ctx, cfg, "bot", logger, logFile, deps)
+
+	assert.Equal(t, 1, exitCode)
+	assert.True(t, mockProc.started)
+	assert.False(t, mockProc.waited)
+
+	// Verify the error was written to the log file
+	logFile.Close()
+	content, err := os.ReadFile(logFilePath)
+	require.NoError(t, err)
+
+	// Check that the error message is in the log file
+	logContent := string(content)
+	assert.Contains(t, logContent, "Failed to start process")
+	assert.Contains(t, logContent, "no such file or directory")
+	assert.Contains(t, logContent, `"level":"error"`)
+}
+
 func TestExecuteProcessWithDeps_WaitFails(t *testing.T) {
 	mockProc := &mockProcessExecutor{
 		waitErr: &exec.ExitError{},
