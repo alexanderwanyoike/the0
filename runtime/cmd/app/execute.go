@@ -466,6 +466,11 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 	// Run with context for cancellation support using injected dependency
 	if err := deps.ProcessExecutor.Start(cmd); err != nil {
 		logger.Info("Failed to start process: %v", err)
+		// Write error to log file so it persists to MinIO
+		if logFile != nil {
+			logFile.WriteString(fmt.Sprintf(`{"level":"error","message":"Failed to start process: %v","timestamp":"%s"}`+"\n",
+				err, time.Now().UTC().Format(time.RFC3339)))
+		}
 		return 1
 	}
 
