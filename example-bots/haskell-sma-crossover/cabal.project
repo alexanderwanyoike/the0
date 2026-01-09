@@ -1,8 +1,9 @@
 packages: .
 
 -- the0 SDK from GitHub
+-- TODO: Update to v1.3.0 tag after release is merged
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
-    tag: v1.3.0
+    tag: 51d2a43ec11cb7e461fcbc6cbc12dabb6104dd37
     subdir: sdk/haskell
