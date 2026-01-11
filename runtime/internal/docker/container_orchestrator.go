@@ -159,13 +159,15 @@ func (r *dockerOrchestrator) RunAndWait(
 	}
 
 	defer func() {
+		// Skip manual removal if AutoRemove is enabled - Docker handles cleanup
+		if hostConfig.AutoRemove {
+			return
+		}
 		// Ensure container is removed in case of early return
 		if err := r.dockerClient.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{
 			Force: true,
-		}); err != nil {
+		}); err != nil && !client.IsErrNotFound(err) {
 			r.logger.Info("Warning: Failed to remove container", "container_id", resp.ID, "error", err.Error())
-		} else {
-			r.logger.Info("Container removed successfully", "container_id", resp.ID)
 		}
 	}()
 
