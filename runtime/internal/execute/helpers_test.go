@@ -172,7 +172,7 @@ func TestBuildBotEnv_BasicFields(t *testing.T) {
 	// Check that required environment variables are set
 	assert.Contains(t, env, "BOT_ID=test-bot")
 	assert.Contains(t, env, "BOT_CONFIG={\"key\":\"value\"}")
-	assert.Contains(t, env, "CODE_MOUNT_DIR=/bot")
+	assert.Contains(t, env, "CODE_MOUNT_DIR=bot")
 	assert.Contains(t, env, "SCRIPT_PATH=main.py")
 	assert.Contains(t, env, "ENTRYPOINT_TYPE=bot")
 }
