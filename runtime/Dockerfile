@@ -6,7 +6,7 @@
 # Base: Ubuntu 24.04 (GCC 13 / GLIBCXX_3.4.32+ for C++ binary compatibility)
 #
 # Supported runtimes:
-#   - python3.11: Python 3.12 (compatible with 3.11 bots)
+#   - python3.11: Python 3.11 (from deadsnakes PPA)
 #   - nodejs20: Node.js 20 LTS
 #   - dotnet8: .NET 8 runtime
 #   - scala3: Scala 3 (via Java 17 JRE)
@@ -37,13 +37,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 3.12 (Ubuntu 24.04 default) - symlinked as python3.11 for compatibility
+# Python 3.11 from deadsnakes PPA (required for ABI compatibility with vendored packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-venv \
-    python3-pip \
+    software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    python3.11-distutils \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3 /usr/bin/python
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
 
 # Node.js 20 LTS
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
