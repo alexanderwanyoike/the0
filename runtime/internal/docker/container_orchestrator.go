@@ -194,7 +194,7 @@ func (r *dockerOrchestrator) RunAndWait(
 		if resultFilePath != "" {
 			resultFileContents, err = r.CopyFromContainer(ctx, resp.ID, resultFilePath)
 			if err != nil {
-				r.logger.Info("Warning: Failed to store analysis", "error", err.Error())
+				r.logger.Info("Result file not found or container already cleaned up", "path", resultFilePath, "error", err.Error())
 			}
 		}
 

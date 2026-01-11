@@ -324,7 +324,6 @@ func TestQueryServer_BotToExecutable(t *testing.T) {
 	assert.Equal(t, "query.py", exec.EntrypointFiles["query"])
 	assert.Equal(t, "test-bot/v1.0.0/code.zip", exec.FilePath)
 	assert.False(t, exec.IsLongRunning)
-	assert.False(t, exec.PersistResults)
 
 	// Test realtime bot (running)
 	exec = botToExecutable(botWithQuery, true, "container-123")

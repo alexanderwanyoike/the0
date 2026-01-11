@@ -8,7 +8,6 @@ type Executable struct {
 	Config          map[string]interface{}
 	FilePath        string
 	IsLongRunning   bool
-	PersistResults  bool
 	Segment         int32 // Worker segment for container labeling
 
 	// Query execution fields (used when Entrypoint == "query")

@@ -102,7 +102,6 @@ func TestScheduleService_ToExecutable(t *testing.T) {
 	assert.Equal(t, "bot", executable.Entrypoint)
 	assert.Equal(t, "bots/scheduled-bot.zip", executable.FilePath)
 	assert.False(t, executable.IsLongRunning) // Scheduled bots run once
-	assert.True(t, executable.PersistResults)  // Results should be persisted
 	assert.Equal(t, int32(-1), executable.Segment)
 	assert.Equal(t, "BTC/USD", executable.Config["symbol"])
 }
@@ -460,7 +459,6 @@ func TestScheduleService_ToExecutable_DifferentRuntimes(t *testing.T) {
 
 			assert.Equal(t, tt.runtime, executable.Runtime)
 			assert.False(t, executable.IsLongRunning)
-			assert.True(t, executable.PersistResults)
 		})
 	}
 }

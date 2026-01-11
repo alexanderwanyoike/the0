@@ -148,6 +148,5 @@ func botToExecutable(bot *model.Bot, isRunning bool, containerID string) *model.
 		Config:          bot.Config,
 		FilePath:        bot.CustomBotVersion.FilePath,
 		IsLongRunning:   isRunning,
-		PersistResults:  false,
 	}
 }

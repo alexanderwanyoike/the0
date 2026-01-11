@@ -467,7 +467,6 @@ func (s *BotService) toExecutable(bot model.Bot) model.Executable {
 		Config:          bot.Config,
 		FilePath:        bot.CustomBotVersion.FilePath,
 		IsLongRunning:   true,
-		PersistResults:  false,
 		Segment:         -1,
 	}
 }

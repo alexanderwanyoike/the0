@@ -3,7 +3,6 @@
 package docker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,8 +15,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 // DockerRunner is the main interface for managing Docker-based bot/backtest execution.
@@ -98,9 +95,7 @@ type dockerRunner struct {
 	orchestrator ContainerOrchestrator // Handles Docker operations
 
 	// Configuration
-	resultsBucket     string
 	config            *DockerRunnerConfig
-	minioClient       *minio.Client
 	logger            util.Logger
 	managedContainers map[string]*ContainerInfo // Tracks active containers
 	containersMutex   sync.RWMutex              // Protects managedContainers map
@@ -139,19 +134,6 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 		}
 	}
 
-	// Create MinIO client (only used for storing analysis results)
-	minioClient, err := minio.New(config.MinIOEndpoint, &minio.Options{
-		Creds: credentials.NewStaticV4(
-			config.MinIOAccessKeyID,
-			config.MinIOSecretAccessKey,
-			"",
-		),
-		Secure: config.MinIOUseSSL,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MinIO client: %v", err)
-	}
-
 	logger := options.Logger
 	if logger == nil {
 		logger = &util.DefaultLogger{}
@@ -159,10 +141,8 @@ func NewDockerRunner(options DockerRunnerOptions) (*dockerRunner, error) {
 
 	runner := &dockerRunner{
 		orchestrator:      NewDockerOrchestrator(dockerClient, logger),
-		minioClient:       minioClient,
 		logger:            logger,
 		managedContainers: make(map[string]*ContainerInfo),
-		resultsBucket:     config.MinioResultsBucket,
 		config:            config,
 	}
 
@@ -368,17 +348,6 @@ func (r *dockerRunner) StopContainer(
 		r.logger.Info("Failed to stop container", "container_id", containerID, "error", err.Error())
 	}
 
-	// Copy analysis result if configured
-	if executable.PersistResults {
-		resultPath := "/bot/result.json"
-		contents, err := r.orchestrator.CopyFromContainer(ctx, containerID, resultPath)
-		if err == nil {
-			if err := r.StoreAnalysisResult(ctx, executable.ID, contents); err != nil {
-				r.logger.Info("Failed to store analysis result to MinIO", "bot_id", executable.ID, "error", err.Error())
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -485,13 +454,6 @@ func (r *dockerRunner) startTerminatingContainer(
 		}, nil
 	}
 
-	// Store result to MinIO if configured
-	if exec.PersistResults && len(runResult.ResultFileContents) > 0 {
-		if err := r.StoreAnalysisResult(ctx, exec.ID, runResult.ResultFileContents); err != nil {
-			r.logger.Info("Failed to store analysis result to MinIO", "bot_id", exec.ID, "error", err.Error())
-		}
-	}
-
 	// Determine output based on result file and exit code
 	var output string
 	var finalStatus string
@@ -573,24 +535,6 @@ func (r *dockerRunner) removeManagedContainer(containerID string) *ContainerInfo
 	delete(r.managedContainers, containerID)
 	r.logger.Info("Removed managed container", "container_id", containerID, "bot_id", info.ID)
 	return info
-}
-
-// StoreAnalysisResult stores the analysis result as JSON at {bot_id}/analysis.json in the bots bucket
-func (r *dockerRunner) StoreAnalysisResult(ctx context.Context, botID string, result []byte) error {
-	// Generate file path: {bot_id}/analysis.json
-	objectName := fmt.Sprintf("%s/analysis.json", botID)
-
-	// Write JSON to MinIO
-	reader := bytes.NewReader(result)
-	r.logger.Info("Storing analysis result to MinIO", "bot_id", botID, "object", objectName, "bucket", r.resultsBucket)
-	_, err := r.minioClient.PutObject(ctx, r.resultsBucket, objectName, reader, int64(len(result)), minio.PutObjectOptions{
-		ContentType: "application/json",
-	})
-	if err != nil {
-		return fmt.Errorf("failed to write analysis result to MinIO: %v", err)
-	}
-
-	return nil
 }
 
 func (r *dockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
