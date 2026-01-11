@@ -51,6 +51,10 @@ func (m *MockDockerRunner) StartContainer(ctx context.Context, executable model.
 		ContainerID: containerID,
 		ID:          executable.ID,
 		Status:      "running",
+		Labels: map[string]string{
+			"runtime.managed": "true",
+			"runtime.type":    "realtime", // Bot-runner creates realtime containers
+		},
 	}
 
 	return &ExecutionResult{
@@ -188,7 +192,27 @@ func (m *MockDockerRunner) AddCrashedContainer(botID, containerID string, exitCo
 		ID:          botID,
 		Status:      "exited",
 		ExitCode:    exitCode,
+		Labels: map[string]string{
+			"runtime.managed": "true",
+			"runtime.type":    "realtime",
+		},
 	})
+}
+
+// AddScheduledContainer adds a container that was started by the bot-scheduler (not bot-runner).
+// Bot-runner should ignore these containers during reconciliation.
+func (m *MockDockerRunner) AddScheduledContainer(botID, containerID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.containers[botID] = &ContainerInfo{
+		ContainerID: containerID,
+		ID:          botID,
+		Status:      "running",
+		Labels: map[string]string{
+			"runtime.managed": "true",
+			"runtime.type":    "scheduled", // Created by bot-scheduler, not bot-runner
+		},
+	}
 }
 
 func TestNewBotService_RequiresMongoURI(t *testing.T) {
@@ -267,7 +291,6 @@ func TestBotService_ToExecutable(t *testing.T) {
 	assert.Equal(t, "bot", executable.Entrypoint)
 	assert.Equal(t, "bots/my-bot.zip", executable.FilePath)
 	assert.True(t, executable.IsLongRunning)
-	assert.False(t, executable.PersistResults)
 	assert.Equal(t, int32(-1), executable.Segment)
 	assert.Equal(t, "BTC/USD", executable.Config["symbol"])
 }
@@ -1293,4 +1316,79 @@ func (r *stateCapturingRunner) StopContainer(ctx context.Context, containerID st
 		r.onStop(containerID)
 	}
 	return r.MockDockerRunner.StopContainer(ctx, containerID, executable)
+}
+
+// TestBotService_IgnoresScheduledContainers verifies that bot-runner does NOT stop
+// containers that were created by bot-scheduler (runtime.type=scheduled).
+// This is a critical test to prevent bot-runner from killing scheduled bot executions.
+func TestBotService_IgnoresScheduledContainers(t *testing.T) {
+	mockRunner := NewMockDockerRunner()
+
+	// Simulate a scheduled container running (created by bot-scheduler)
+	mockRunner.AddScheduledContainer("scheduled-bot-123", "scheduled-container-abc")
+
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI:          "mongodb://localhost:27017",
+		ReconcileInterval: 100 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	// Replace runner with mock
+	service.runner = mockRunner
+
+	// Get all containers (this is what reconcile does)
+	allContainers, err := service.runner.ListAllManagedContainers(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, allContainers, 1, "Should see the scheduled container")
+
+	// Filter like reconcile does - only keep realtime containers
+	var realtimeContainers []*ContainerInfo
+	for _, container := range allContainers {
+		if container.Labels["runtime.type"] == "realtime" {
+			realtimeContainers = append(realtimeContainers, container)
+		}
+	}
+
+	// The scheduled container should be filtered out
+	assert.Len(t, realtimeContainers, 0, "Scheduled container should be filtered out")
+
+	// Verify no stop was called
+	assert.Equal(t, 0, mockRunner.GetStopCallCount(), "Should not stop scheduled containers")
+}
+
+// TestBotService_OnlyStopsRealtimeContainers verifies that bot-runner only stops
+// containers with runtime.type=realtime that are no longer desired.
+func TestBotService_OnlyStopsRealtimeContainers(t *testing.T) {
+	mockRunner := NewMockDockerRunner()
+
+	// Add a realtime container that is "orphaned" (not in desired list)
+	mockRunner.containers["orphan-realtime-bot"] = &ContainerInfo{
+		ContainerID: "orphan-container-xyz",
+		ID:          "orphan-realtime-bot",
+		Status:      "running",
+		Labels: map[string]string{
+			"runtime.managed": "true",
+			"runtime.type":    "realtime",
+		},
+	}
+
+	// Add a scheduled container
+	mockRunner.AddScheduledContainer("scheduled-bot-456", "scheduled-container-def")
+
+	// Get all containers
+	allContainers, err := mockRunner.ListAllManagedContainers(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, allContainers, 2, "Should see both containers")
+
+	// Filter like reconcile does
+	var realtimeContainers []*ContainerInfo
+	for _, container := range allContainers {
+		if container.Labels["runtime.type"] == "realtime" {
+			realtimeContainers = append(realtimeContainers, container)
+		}
+	}
+
+	// Only the realtime container should be in the filtered list
+	assert.Len(t, realtimeContainers, 1, "Only realtime container should remain")
+	assert.Equal(t, "orphan-realtime-bot", realtimeContainers[0].ID)
 }

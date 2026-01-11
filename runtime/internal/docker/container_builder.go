@@ -166,6 +166,8 @@ func (b *ContainerBuilder) WithDaemonConfigFull(cfg DaemonConfig) *ContainerBuil
 		b.config.Env = append(b.config.Env,
 			fmt.Sprintf("BOT_TYPE=%s", cfg.BotType),
 		)
+		// Add label so services can filter containers by type
+		b.config.Labels["runtime.type"] = cfg.BotType
 	}
 	return b
 }

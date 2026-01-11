@@ -28,7 +28,6 @@ func (m *MockConfigLoader) LoadConfig() (*DockerRunnerConfig, error) {
 		MinIOSecretAccessKey:   "minioadmin",
 		MinIOUseSSL:            false,
 		MinIOCodeBucket:        "custom-bots",
-		MinioResultsBucket:     "backtests",
 		MinioLogsBucket:        "bot-logs",
 		MinioStateBucket:       "bot-state",
 		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB
@@ -49,7 +48,6 @@ func NewMockConfig() *DockerRunnerConfig {
 		MinIOSecretAccessKey:   "minioadmin",
 		MinIOUseSSL:            false,
 		MinIOCodeBucket:        "custom-bots",
-		MinioResultsBucket:     "backtests",
 		MinioLogsBucket:        "bot-logs",
 		MinioStateBucket:       "bot-state",
 		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB

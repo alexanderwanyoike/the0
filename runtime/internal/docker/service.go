@@ -222,9 +222,15 @@ func (s *BotService) reconcile() {
 		return
 	}
 
-	// Step 3: Handle crashed containers - capture logs before cleanup
+	// Step 3: Filter to only realtime containers and handle crashed ones
+	// Bot-runner only manages realtime bots, not scheduled bots
 	var runningContainers []*ContainerInfo
 	for _, container := range allContainers {
+		// Skip containers that aren't realtime bots (e.g., scheduled bot containers)
+		if container.Labels["runtime.type"] != "realtime" {
+			continue
+		}
+
 		if container.Status == "exited" {
 			s.logger.Error("Bot %s crashed with exit code %d", container.ID, container.ExitCode)
 			// Capture crash logs and cleanup the container
@@ -467,7 +473,6 @@ func (s *BotService) toExecutable(bot model.Bot) model.Executable {
 		Config:          bot.Config,
 		FilePath:        bot.CustomBotVersion.FilePath,
 		IsLongRunning:   true,
-		PersistResults:  false,
 		Segment:         -1,
 	}
 }

@@ -30,17 +30,16 @@ type DockerRunnerConfig struct {
 	MinIOAccessKeyID       string // MinIO access key
 	MinIOSecretAccessKey   string // MinIO secret key
 	MinIOUseSSL            bool   // Whether to use SSL/TLS for MinIO connections
-	MinIOCodeBucket       string // Bucket containing bot code archives
-	MinioResultsBucket    string // Bucket for storing backtest results
-	MinioLogsBucket       string // Bucket for storing logs
-	MinioStateBucket      string // Bucket for storing persistent bot state
-	MaxStateSizeBytes     int64  // Maximum total size of bot state folder (default: 8GB)
-	MaxStateFileSizeBytes int64  // Maximum size of individual state file (default: 10MB)
-	TempDir               string // Temporary directory for extracted bot code
-	MemoryLimitMB         int64  // Memory limit in bytes for containers
-	CPUShares             int64  // CPU shares allocated to containers
-	DevRuntimePath        string // Optional: host path to runtime binary for dev mode
-	DockerNetwork         string // Docker network to connect containers to (e.g., "the0-oss-network")
+	MinIOCodeBucket        string // Bucket containing bot code archives
+	MinioLogsBucket        string // Bucket for storing logs
+	MinioStateBucket       string // Bucket for storing persistent bot state
+	MaxStateSizeBytes      int64  // Maximum total size of bot state folder (default: 8GB)
+	MaxStateFileSizeBytes  int64  // Maximum size of individual state file (default: 10MB)
+	TempDir                string // Temporary directory for extracted bot code
+	MemoryLimitMB          int64  // Memory limit in bytes for containers
+	CPUShares              int64  // CPU shares allocated to containers
+	DevRuntimePath         string // Optional: host path to runtime binary for dev mode
+	DockerNetwork          string // Docker network to connect containers to (e.g., "the0-oss-network")
 }
 
 // GetContainerEndpoint returns the MinIO endpoint for containers.
@@ -54,7 +53,7 @@ func (c *DockerRunnerConfig) GetContainerEndpoint() string {
 
 // LoadConfigFromEnv loads configuration from environment variables.
 // Required env vars: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
-// Optional env vars: MINIO_SSL, MINIO_BACKTESTS_BUCKET, TEMP_DIR, MINIO_CODE_BUCKET,
+// Optional env vars: MINIO_SSL, TEMP_DIR, MINIO_CODE_BUCKET,
 // MINIO_STATE_BUCKET, MINIO_LOGS_BUCKET, BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES,
 // MAX_STATE_SIZE_MB (default: 8192 = 8GB), MAX_STATE_FILE_SIZE_MB (default: 10),
 // DEV_RUNTIME_PATH (optional: host path to runtime binary for dev mode),
@@ -76,11 +75,6 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	}
 
 	useSSL := os.Getenv("MINIO_SSL") == "true"
-
-	resultsBucket := os.Getenv("MINIO_BACKTESTS_BUCKET")
-	if resultsBucket == "" {
-		resultsBucket = "backtests"
-	}
 
 	logsBucket := os.Getenv("MINIO_LOGS_BUCKET")
 	if logsBucket == "" {
@@ -115,19 +109,18 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		MinIOEndpoint:          endpoint,
 		MinIOContainerEndpoint: containerEndpoint,
 		MinIOAccessKeyID:       accessKey,
-		MinIOSecretAccessKey:  secretKey,
-		MinIOUseSSL:           useSSL,
-		MinIOCodeBucket:       codeBucket,
-		MinioResultsBucket:    resultsBucket,
-		MinioLogsBucket:       logsBucket,
-		MinioStateBucket:      stateBucket,
-		MaxStateSizeBytes:     getMaxStateSize(),
-		MaxStateFileSizeBytes: getMaxStateFileSize(),
-		TempDir:               tempDir,
-		MemoryLimitMB:         getMemoryLimit(),
-		CPUShares:             getCPUShares(),
-		DevRuntimePath:        devRuntimePath,
-		DockerNetwork:         dockerNetwork,
+		MinIOSecretAccessKey:   secretKey,
+		MinIOUseSSL:            useSSL,
+		MinIOCodeBucket:        codeBucket,
+		MinioLogsBucket:        logsBucket,
+		MinioStateBucket:       stateBucket,
+		MaxStateSizeBytes:      getMaxStateSize(),
+		MaxStateFileSizeBytes:  getMaxStateFileSize(),
+		TempDir:                tempDir,
+		MemoryLimitMB:          getMemoryLimit(),
+		CPUShares:              getCPUShares(),
+		DevRuntimePath:         devRuntimePath,
+		DockerNetwork:          dockerNetwork,
 	}, nil
 }
 

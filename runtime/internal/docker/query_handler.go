@@ -71,7 +71,6 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	queryExecutable.QueryPath = req.QueryPath
 	queryExecutable.QueryParams = req.Params
 	queryExecutable.IsLongRunning = false
-	queryExecutable.PersistResults = false
 	queryExecutable.ResultFilePath = "/query/result.json"
 
 	// Add query entrypoint file if not present

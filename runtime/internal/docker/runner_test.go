@@ -122,9 +122,8 @@ func TestIntegration_RealDocker_NodeJSBot(t *testing.T) {
 		Config: map[string]any{
 			"test_param": "real_nodejs_value",
 		},
-		FilePath:       "real-nodejs-bot.zip",
-		IsLongRunning:  false, // Test terminating container
-		PersistResults: false, // Bots don't produce result files
+		FilePath:      "real-nodejs-bot.zip",
+		IsLongRunning: false, // Test terminating container
 	}
 
 	// Use real Node.js test bot file
@@ -192,10 +191,9 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 		Config: map[string]any{
 			"test_param": "real_bot_value",
 		},
-		FilePath:       "real-test-bot.zip",
-		IsLongRunning:  true,  // Test long-running container
-		PersistResults: false, // Bots don't produce result files
-		Segment:        testSegment,
+		FilePath:      "real-test-bot.zip",
+		IsLongRunning: true, // Test long-running container
+		Segment:       testSegment,
 	}
 
 	// Create a real ZIP file with bot code and upload to MinIO
@@ -283,7 +281,6 @@ func (m *MinIOTestServer) GetTestConfig() *DockerRunnerConfig {
 		MinIOSecretAccessKey:   m.secretKey,
 		MinIOUseSSL:            false,
 		MinIOCodeBucket:        "custom-bots",
-		MinioResultsBucket:     "backtests",
 		MinioLogsBucket:        "bot-logs",
 		MinioStateBucket:       "bot-state",
 		MaxStateSizeBytes:      8 * 1024 * 1024 * 1024, // 8GB
@@ -418,10 +415,9 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 		Config: map[string]any{
 			"test_param": "real_python_value",
 		},
-		FilePath:       "real-python-bot.zip",
-		IsLongRunning:  true,  // Change to true for bot entrypoint
-		PersistResults: false, // Bots don't produce result files
-		Segment:        2,     // Unique segment to avoid interference with other tests
+		FilePath:      "real-python-bot.zip",
+		IsLongRunning: true, // Change to true for bot entrypoint
+		Segment:       2,    // Unique segment to avoid interference with other tests
 	}
 
 	pyZipData := loadRealTestBotFile(t, "py-test-bot.zip")
@@ -507,9 +503,8 @@ func TestIntegration_RealDocker_RustBot(t *testing.T) {
 			"symbol": "BTC/USDT",
 			"amount": 100,
 		},
-		FilePath:       "real-rust-bot.zip",
-		IsLongRunning:  false,
-		PersistResults: false,
+		FilePath:      "real-rust-bot.zip",
+		IsLongRunning: false,
 	}
 
 	uploadToMinIO(t, minioServer, executable.FilePath, rustZipData)
@@ -655,9 +650,8 @@ func TestIntegration_RealDocker_CppBot(t *testing.T) {
 			"symbol": "BTC/USDT",
 			"amount": 100,
 		},
-		FilePath:       "real-cpp-bot.zip",
-		IsLongRunning:  false,
-		PersistResults: false,
+		FilePath:      "real-cpp-bot.zip",
+		IsLongRunning: false,
 	}
 
 	uploadToMinIO(t, minioServer, executable.FilePath, cppZipData)
@@ -804,9 +798,8 @@ func TestIntegration_RealDocker_ScalaBot(t *testing.T) {
 			"symbol": "BTC/USDT",
 			"amount": 100,
 		},
-		FilePath:       "real-scala-bot.zip",
-		IsLongRunning:  false,
-		PersistResults: false,
+		FilePath:      "real-scala-bot.zip",
+		IsLongRunning: false,
 	}
 
 	uploadToMinIO(t, minioServer, executable.FilePath, scalaZipData)
