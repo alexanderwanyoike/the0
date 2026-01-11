@@ -9,8 +9,10 @@ import (
 	"the0/internal/logger"
 )
 
+// Version is the current version of the CLI
+const VERSION = "1.3.1"
+
 var (
-	VERSION = "0.0.0-dev" // Default for development, overridden by CI via ldflags
 	verbose bool
 )
 

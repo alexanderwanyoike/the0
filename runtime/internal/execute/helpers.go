@@ -121,19 +121,15 @@ func BuildBotEnv(cfg *Config) []string {
 		stateDir = filepath.Join(cfg.StatePath, ".the0-state")
 	}
 
-	// Add/override bot-specific environment variables
+	codeMountDir := strings.TrimPrefix(cfg.CodePath, "/")
 	env = append(env,
 		"BOT_ID="+cfg.BotID,
 		"BOT_CONFIG="+cfg.BotConfig,
 		"STATE_DIR="+stateDir,
-		"CODE_MOUNT_DIR="+cfg.CodePath,
+		"CODE_MOUNT_DIR="+codeMountDir,
 		"SCRIPT_PATH="+cfg.Entrypoint, // Used by Python/Node.js wrappers
 		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
 	)
-
-	// Add PYTHONPATH for vendor directory (SDK and dependencies)
-	vendorDir := filepath.Join(cfg.CodePath, "vendor")
-	env = append(env, "PYTHONPATH="+vendorDir+":"+cfg.CodePath)
 
 	// Add query-specific env vars if applicable
 	if cfg.QueryPath != "" {
