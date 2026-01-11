@@ -354,9 +354,6 @@ func (s *ScheduleService) executeSchedule(ctx context.Context, schedule model.Bo
 		// Still update next execution time to avoid retrying immediately
 	} else if result.Status == "error" {
 		s.logger.Error("Schedule %s completed with error: %s", schedule.ID, result.Error)
-		if result.Output != "" {
-			s.logger.Error("Schedule %s output: %s", schedule.ID, result.Output)
-		}
 		s.state.mu.Lock()
 		s.state.failedCount++
 		s.state.mu.Unlock()
