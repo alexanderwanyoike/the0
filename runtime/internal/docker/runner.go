@@ -437,11 +437,8 @@ func (r *dockerRunner) startTerminatingContainer(
 	hostConfig *container.HostConfig,
 	startTime time.Time,
 ) (*ExecutionResult, error) {
-	// Result file path inside container (can be customized for queries)
-	resultFilePath := "/bot/result.json"
-	if exec.ResultFilePath != "" {
-		resultFilePath = exec.ResultFilePath
-	}
+	// Result file path inside container (only set for queries, empty for scheduled bots)
+	resultFilePath := exec.ResultFilePath
 
 	runResult, err := r.orchestrator.RunAndWait(ctx, config, hostConfig, resultFilePath)
 	if err != nil {
