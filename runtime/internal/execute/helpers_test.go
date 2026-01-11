@@ -2,7 +2,6 @@ package execute
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -206,27 +205,6 @@ func TestBuildBotEnv_StateDirDefault(t *testing.T) {
 
 	// Should default to StatePath/.the0-state
 	assert.Contains(t, env, "STATE_DIR=/state/.the0-state")
-}
-
-func TestBuildBotEnv_PythonPath(t *testing.T) {
-	cfg := &Config{
-		BotID:    "test-bot",
-		CodePath: constants.TestBotDir,
-	}
-
-	env := BuildBotEnv(cfg)
-
-	// Check PYTHONPATH includes vendor directory
-	foundPythonPath := false
-	for _, e := range env {
-		if strings.HasPrefix(e, "PYTHONPATH=") {
-			assert.Contains(t, e, "/bot/vendor")
-			assert.Contains(t, e, constants.TestBotDir)
-			foundPythonPath = true
-			break
-		}
-	}
-	assert.True(t, foundPythonPath, "PYTHONPATH not found in environment")
 }
 
 func TestBuildBotEnv_QueryPath(t *testing.T) {

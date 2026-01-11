@@ -131,10 +131,6 @@ func BuildBotEnv(cfg *Config) []string {
 		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
 	)
 
-	// Add PYTHONPATH for vendor directory (SDK and dependencies)
-	vendorDir := filepath.Join(cfg.CodePath, "vendor")
-	env = append(env, "PYTHONPATH="+vendorDir+":"+cfg.CodePath)
-
 	// Add query-specific env vars if applicable
 	if cfg.QueryPath != "" {
 		env = append(env, "QUERY_PATH="+cfg.QueryPath)
