@@ -84,7 +84,15 @@ Cloud deployments will be available in the future.
 
 ## CLI Installation
 
-The the0 CLI tool provides a local development interface for managing your bots. 
+The the0 CLI tool provides a local development interface for managing your bots.
+
+### Quick Install (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
+```
+
+This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`.
 
 ### Install from Source
 
