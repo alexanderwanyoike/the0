@@ -63,11 +63,12 @@ Create the name of the service account to use
 
 {{/*
 Percent-encode special characters for URI userinfo (RFC 3986 Section 3.2.1).
-Encodes %, @, and : — the characters that break user:password@host parsing.
+Encodes characters that are not allowed unescaped in userinfo: %, space, /, ?,
+#, [, ], @, and :. The % replacement MUST come first to avoid double-encoding.
 Do NOT use Sprig's urlquery here: it is query-string encoding (spaces become +).
 */}}
 {{- define "the0.encodeUserinfo" -}}
-{{- . | replace "%" "%25" | replace "@" "%40" | replace ":" "%3A" -}}
+{{- . | replace "%" "%25" | replace " " "%20" | replace "/" "%2F" | replace "?" "%3F" | replace "#" "%23" | replace "[" "%5B" | replace "]" "%5D" | replace "@" "%40" | replace ":" "%3A" -}}
 {{- end -}}
 
 {{/*
