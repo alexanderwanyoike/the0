@@ -37,7 +37,5 @@ annotations:
       image: ghcr.io/alexanderwanyoike/the0/api:0.1.0
     - name: frontend
       image: ghcr.io/alexanderwanyoike/the0/frontend:0.1.0
-    - name: bot-runner
-      image: ghcr.io/alexanderwanyoike/the0/bot-runner:0.1.0
-    - name: bot-scheduler
-      image: ghcr.io/alexanderwanyoike/the0/bot-scheduler:0.1.0
+    - name: runtime
+      image: ghcr.io/alexanderwanyoike/the0/runtime:0.1.0
