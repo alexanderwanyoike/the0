@@ -19,23 +19,23 @@ import (
 func TestCheckLatestRelease(t *testing.T) {
 	tests := []struct {
 		name          string
-		releases      []map[string]interface{}
+		releases      []map[string]any
 		expectedTag   string
 		expectedError bool
 		errorContains string
 	}{
 		{
 			name: "finds CLI release",
-			releases: []map[string]interface{}{
+			releases: []map[string]any{
 				{
 					"tag_name": "runtime/v2.0.0",
 					"name":     "Runtime v2.0.0",
-					"assets":   []map[string]interface{}{},
+					"assets":   []map[string]any{},
 				},
 				{
 					"tag_name": "cli/v1.4.0",
 					"name":     "CLI v1.4.0",
-					"assets": []map[string]interface{}{
+					"assets": []map[string]any{
 						{"name": "the0-linux-amd64", "browser_download_url": "https://example.com/the0-linux-amd64"},
 					},
 				},
@@ -44,16 +44,16 @@ func TestCheckLatestRelease(t *testing.T) {
 		},
 		{
 			name: "skips non-CLI releases",
-			releases: []map[string]interface{}{
+			releases: []map[string]any{
 				{
 					"tag_name": "api/v3.0.0",
 					"name":     "API v3.0.0",
-					"assets":   []map[string]interface{}{},
+					"assets":   []map[string]any{},
 				},
 				{
 					"tag_name": "frontend/v2.0.0",
 					"name":     "Frontend v2.0.0",
-					"assets":   []map[string]interface{}{},
+					"assets":   []map[string]any{},
 				},
 			},
 			expectedError: true,
@@ -61,22 +61,22 @@ func TestCheckLatestRelease(t *testing.T) {
 		},
 		{
 			name:          "empty releases",
-			releases:      []map[string]interface{}{},
+			releases:      []map[string]any{},
 			expectedError: true,
 			errorContains: "no CLI releases found",
 		},
 		{
 			name: "returns first CLI release (most recent)",
-			releases: []map[string]interface{}{
+			releases: []map[string]any{
 				{
 					"tag_name": "cli/v1.5.0",
 					"name":     "CLI v1.5.0",
-					"assets":   []map[string]interface{}{},
+					"assets":   []map[string]any{},
 				},
 				{
 					"tag_name": "cli/v1.4.0",
 					"name":     "CLI v1.4.0",
-					"assets":   []map[string]interface{}{},
+					"assets":   []map[string]any{},
 				},
 			},
 			expectedTag: "cli/v1.5.0",
