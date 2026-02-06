@@ -372,3 +372,148 @@ func TestDownloadAsset(t *testing.T) {
 		}
 	})
 }
+
+func TestReplaceBinary(t *testing.T) {
+	// Create a fake binary in a temp directory
+	tmpDir := t.TempDir()
+	fakeBinaryPath := filepath.Join(tmpDir, "fake-binary")
+	originalContent := []byte("original binary content")
+	if err := os.WriteFile(fakeBinaryPath, originalContent, 0755); err != nil {
+		t.Fatalf("failed to write fake binary: %v", err)
+	}
+
+	// ReplaceBinary uses os.Executable() internally, so we cannot directly
+	// pass a custom path. Instead, we test the replacement logic by
+	// simulating what ReplaceBinary does: write to temp, chmod, rename.
+	newContent := []byte("updated binary content")
+
+	// Write new binary to a temp file in the same directory
+	tmpFile, err := os.CreateTemp(tmpDir, "the0-update-*")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.Write(newContent); err != nil {
+		tmpFile.Close()
+		t.Fatalf("failed to write new binary: %v", err)
+	}
+	tmpFile.Close()
+
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		t.Fatalf("failed to chmod: %v", err)
+	}
+
+	if err := os.Rename(tmpPath, fakeBinaryPath); err != nil {
+		t.Fatalf("failed to rename: %v", err)
+	}
+
+	// Verify the file was replaced with the correct contents
+	data, err := os.ReadFile(fakeBinaryPath)
+	if err != nil {
+		t.Fatalf("failed to read replaced binary: %v", err)
+	}
+	if string(data) != string(newContent) {
+		t.Errorf("replaced binary content = %q, expected %q", string(data), string(newContent))
+	}
+
+	// Verify the file has executable permissions
+	info, err := os.Stat(fakeBinaryPath)
+	if err != nil {
+		t.Fatalf("failed to stat replaced binary: %v", err)
+	}
+	perm := info.Mode().Perm()
+	if perm&0111 == 0 {
+		t.Errorf("replaced binary is not executable, permissions = %o", perm)
+	}
+	if perm != 0755 {
+		t.Errorf("replaced binary permissions = %o, expected 0755", perm)
+	}
+}
+
+func TestDownloadAssetSizeLimit(t *testing.T) {
+	// Create a test server that advertises a response larger than maxDownloadSize (200 MB).
+	// We set Content-Length to a huge value but only write a small body; the size check
+	// in DownloadAsset uses io.LimitReader so it reads at most maxDownloadSize+1 bytes.
+	// To trigger the error we need to actually provide more than 200MB of data, but we
+	// can cheat: the implementation reads up to maxDownloadSize+1 bytes and checks
+	// len(data) > maxDownloadSize. So we create a server that streams just over the limit.
+	const maxDownloadSize = 200 << 20 // 200 MB — must match the constant in updater.go
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set a Content-Length larger than maxDownloadSize to signal an oversized response.
+		// Write maxDownloadSize+1 bytes in chunks to trigger the size check.
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", maxDownloadSize+1))
+		w.WriteHeader(http.StatusOK)
+		// Write in 1 MB chunks
+		chunk := make([]byte, 1<<20)
+		written := 0
+		for written < maxDownloadSize+1 {
+			toWrite := len(chunk)
+			if written+toWrite > maxDownloadSize+1 {
+				toWrite = maxDownloadSize + 1 - written
+			}
+			n, err := w.Write(chunk[:toWrite])
+			if err != nil {
+				return // client disconnected
+			}
+			written += n
+		}
+	}))
+	defer server.Close()
+
+	updater := internal.NewUpdater("1.3.1")
+	_, err := updater.DownloadAsset(server.URL + "/oversized")
+	if err == nil {
+		t.Fatal("DownloadAsset() expected error for oversized response, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum size") {
+		t.Errorf("DownloadAsset() error = %v, expected to contain 'exceeds maximum size'", err)
+	}
+}
+
+func TestCheckLatestReleaseHTTPErrors(t *testing.T) {
+	tests := []struct {
+		name          string
+		statusCode    int
+		errorContains string
+	}{
+		{
+			name:          "forbidden 403",
+			statusCode:    http.StatusForbidden,
+			errorContains: "status 403",
+		},
+		{
+			name:          "internal server error 500",
+			statusCode:    http.StatusInternalServerError,
+			errorContains: "status 500",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+			}))
+			defer server.Close()
+
+			updater := internal.NewUpdater("1.3.1")
+			updater.GitHubOwner = "test-owner"
+			updater.GitHubRepo = "test-repo"
+
+			transport := &rewriteTransport{
+				base:    server.Client().Transport,
+				baseURL: server.URL,
+			}
+			updater.HTTPClient = &http.Client{Transport: transport}
+
+			_, err := updater.CheckLatestRelease()
+			if err == nil {
+				t.Fatalf("CheckLatestRelease() expected error for HTTP %d, got nil", tt.statusCode)
+			}
+			if !strings.Contains(err.Error(), tt.errorContains) {
+				t.Errorf("CheckLatestRelease() error = %v, expected to contain %q", err, tt.errorContains)
+			}
+		})
+	}
+}

@@ -60,7 +60,7 @@ func NewUpdater(currentVersion string) *Updater {
 
 // CheckLatestRelease fetches GitHub releases and returns the latest CLI release.
 func (u *Updater) CheckLatestRelease() (*GitHubRelease, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=20", GitHubAPIBase, u.GitHubOwner, u.GitHubRepo)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=100", GitHubAPIBase, u.GitHubOwner, u.GitHubRepo)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
