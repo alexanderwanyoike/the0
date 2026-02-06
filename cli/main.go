@@ -44,6 +44,7 @@ the0 CLI - Terminal-based trading bot management`,
 	rootCmd.AddCommand(cmd.NewCustomBotCmd())
 	rootCmd.AddCommand(cmd.NewBotCmd())
 	rootCmd.AddCommand(cmd.NewAuthCmd())
+	rootCmd.AddCommand(cmd.NewLocalCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

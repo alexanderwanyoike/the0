@@ -1,0 +1,78 @@
+services:
+  # Development override for frontend with hot reloading
+  the0-frontend:
+    image: node:20-alpine
+    user: "1000:1000"
+    working_dir: /app
+    volumes:
+      - {{REPO_PATH}}/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      NODE_ENV: development
+      WATCHPACK_POLLING: true
+      CHOKIDAR_USEPOLLING: true
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      BOT_API_URL: http://the0-api:3000
+      NEXT_PUBLIC_DOCS_URL: http://localhost:3002
+      CLI_DOWNLOAD_BASE_URL: https://github.com/your-org/the0-oss/releases/download
+      CLI_INSTALL_BASE_URL: http://localhost:3001
+      NEXT_PUBLIC_CLI_INSTALL_BASE_URL: http://localhost:3001
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      NEXT_PUBLIC_APP_NAME: "the0"
+      NEXT_PUBLIC_APP_VERSION: "1.0.0"
+      NEXT_BASE_URL: http://localhost:3001
+    ports:
+      - "3001:3000"
+    command: sh -c "rm -rf .next && yarn install && yarn dev"
+    depends_on:
+      - the0-api
+    networks:
+      - the0-network
+
+  # Development override for API with hot reloading
+  the0-api:
+    image: node:20-alpine
+    user: "1000:1000"
+    working_dir: /app
+    volumes:
+      - {{REPO_PATH}}/api:/app
+      - api_node_modules:/app/node_modules
+    extra_hosts:
+      - "localhost:host-gateway"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss?sslmode=disable
+      DATABASE_TYPE: postgres
+      NATS_URL: nats://nats:4222
+      NATS_SUBJECT_PREFIX: the0
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: the0admin
+      MINIO_SECRET_KEY: the0password
+      FRONTEND_URL: http://localhost:3001
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      JWT_EXPIRES_IN: 24h
+      STORAGE_PATH: /app/uploads/custom-bots
+      CUSTOM_BOTS_BUCKET: custom-bots
+      LOG_BUCKET: bot-logs
+      BACKTEST_BUCKET: backtests
+      BOT_API_URL: http://the0-api:3000
+      PORT: 3000
+      API_BASE_URL: http://localhost:3000
+      MIGRATIONS_PATH: /app/src/database/migrations
+    ports:
+      - "3000:3000"
+    command: sh -c "rm -rf dist && yarn install && yarn start:dev"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - the0-network
+
+volumes:
+  frontend_node_modules:
+  api_node_modules:
