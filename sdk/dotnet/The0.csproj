@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Package metadata -->
+    <PackageId>The0.Sdk</PackageId>
+    <Version>0.3.2</Version>
+    <Authors>alexanderwanyoike</Authors>
+    <Company>the0</Company>
+    <Description>the0 SDK for C#/.NET trading bots - configuration parsing, metric emission, and structured logging</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/alexanderwanyoike/the0</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/alexanderwanyoike/the0.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryDirectory>sdk/dotnet</RepositoryDirectory>
+    <PackageTags>the0;trading;bot;algorithmic-trading;sdk;dotnet;csharp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- GitHub Packages publishing -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="9.0.1" />
+  </ItemGroup>
+
+  <!-- Exclude test files from main project -->
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

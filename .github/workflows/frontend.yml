@@ -3,14 +3,16 @@ name: Frontend Service
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -35,10 +37,9 @@ jobs:
       working-directory: ./frontend
       run: yarn install --frozen-lockfile
 
-    # TODO: Re-enable tests once they are fixed
-    # - name: Run tests
-    #   working-directory: ./frontend
-    #   run: yarn test
+    - name: Run tests
+      working-directory: ./frontend
+      run: yarn test --passWithNoTests
 
     - name: Build application
       working-directory: ./frontend
@@ -47,8 +48,8 @@ jobs:
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
     permissions:
       contents: read
       packages: write
@@ -73,10 +74,10 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5

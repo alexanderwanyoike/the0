@@ -55,8 +55,6 @@ export async function DELETE(
       const token = req.headers.get("Authorization");
       const { id } = await params;
 
-      console.log("🗑️ Frontend DELETE handler called for API key ID:", id);
-
       const response = await fetch(
         `${process.env.BOT_API_URL}/api-keys/${id}`,
         {

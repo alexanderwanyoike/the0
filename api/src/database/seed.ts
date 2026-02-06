@@ -2,12 +2,15 @@ import { getDatabase, getDatabaseConfig } from "./connection";
 import { usersTable, usersTableSqlite } from "./schema/users";
 import { hash } from "bcrypt";
 import { createId } from "@paralleldrive/cuid2";
+import pino from "pino";
+
+const logger = pino({ name: "seed" });
 
 async function seedDatabase() {
   const config = getDatabaseConfig();
   const db = getDatabase();
 
-  console.log(`Seeding ${config.type} database...`);
+  logger.info({ dbType: config.type }, "Seeding database");
 
   try {
     // Create default admin user
@@ -30,10 +33,10 @@ async function seedDatabase() {
       await db.insert(usersTable).values(adminUser).onConflictDoNothing();
     }
 
-    console.log("✅ Admin user created: admin@the0.local / admin123");
-    console.log("✅ Database seeding completed successfully");
+    logger.info("Admin user created: admin@the0.local / admin123");
+    logger.info("Database seeding completed successfully");
   } catch (error) {
-    console.error("❌ Database seeding failed:", error);
+    logger.error({ err: error }, "Database seeding failed");
     process.exit(1);
   }
 }
@@ -42,11 +45,11 @@ async function seedDatabase() {
 if (require.main === module) {
   seedDatabase()
     .then(() => {
-      console.log("🎉 Database seeding completed");
+      logger.info("Database seeding completed");
       process.exit(0);
     })
     .catch((error) => {
-      console.error("❌ Seeding script failed:", error);
+      logger.error({ err: error }, "Seeding script failed");
       process.exit(1);
     });
 }

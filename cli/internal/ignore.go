@@ -71,6 +71,9 @@ func (p *IgnoreParser) LoadIgnoreFile(path string) error {
 
 // AddDefaultPatterns adds default ignore patterns
 func (p *IgnoreParser) AddDefaultPatterns() {
+	// Note: build/ and dist/ are NOT included by default because they often contain
+	// compiled binaries needed for deployment (C++, Rust, Scala, etc.).
+	// Projects can add them to .the0ignore if they want to exclude them.
 	defaults := []string{
 		"*.log", "*.tmp", "*.temp",
 		"test/", "tests/", "__tests__/",
@@ -78,7 +81,6 @@ func (p *IgnoreParser) AddDefaultPatterns() {
 		"*.pyc", "*.pyo",
 		"__pycache__/",
 		".git/",
-		"build/", "dist/",
 	}
 
 	for _, pattern := range defaults {
@@ -97,10 +99,17 @@ func (p *IgnoreParser) AddDefaultPatterns() {
 
 // IsIgnored checks if a file path should be ignored
 func (p *IgnoreParser) IsIgnored(relPath string, isDir bool) bool {
-	// Never ignore vendor or node_modules directories (they are explicitly protected)
-	if relPath == "vendor" || relPath == "node_modules" ||
-		strings.HasPrefix(relPath, "vendor/") || strings.HasPrefix(relPath, "node_modules/") {
-		return false
+	// Never ignore these protected directories (they are needed for deployment)
+	// - vendor/node_modules: dependencies (Python/Node packages)
+	// - frontend/dist: built frontend assets
+	// Note: build/, target/, bin/, dist-newstyle/ are NOT protected because they
+	// often contain large build artifacts. Users should use .the0ignore to exclude
+	// unwanted files and only include the final binaries.
+	protectedDirs := []string{"vendor", "node_modules", "frontend/dist"}
+	for _, dir := range protectedDirs {
+		if relPath == dir || strings.HasPrefix(relPath, dir+"/") {
+			return false
+		}
 	}
 
 	ignored := false

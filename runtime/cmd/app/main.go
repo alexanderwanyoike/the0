@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -13,135 +13,147 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 
-	backtestRunner "runtime/internal/backtest-runner/server"
-	botRunner "runtime/internal/bot-runner/server"
-	botScheduler "runtime/internal/bot-scheduler/server"
+	dockerrunner "runtime/internal/docker"
+	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
+	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
 	"runtime/internal/constants"
+	"runtime/internal/k8s/controller"
+	"runtime/internal/k8s/detect"
+	"runtime/internal/k8s/health"
 	"runtime/internal/util"
 )
 
+// Version is the current version of the runtime
+const Version = "1.3.2"
+
 var (
 	// Global flags
-	maxSegment uint
-	mode       string
-	mongoUri   string
-	workerId   string
+	mongoUri string
+	natsUrl  string
+
+	// Bot Runner flags
+	botRunnerReconcileInterval time.Duration
+
+	// Bot Scheduler flags
+	botSchedulerCheckInterval time.Duration
+
+	// Controller-specific flags
+	controllerNamespace         string
+	controllerReconcileInterval time.Duration
+
+	// MinIO flags for bot code download
+	minioEndpoint  string
+	minioAccessKey string
+	minioSecretKey string
+	minioBucket    string
+
+	// Runtime image for init containers and sidecars
+	runtimeImage           string
+	runtimeImagePullPolicy string
+
+	// Query server flags
+	queryServerPort int
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "the0-runtime",
-	Short: "Unified runtime for bot-runner, backtest-runner, and bot-scheduler",
-	Long: `the0-runtime is a unified executable that provides command-based service selection 
-for bot execution, backtest processing, and scheduled bot management.
+	Short: "Unified runtime for bot-runner and bot-scheduler",
+	Long: `the0-runtime is a unified executable that provides command-based service selection
+for bot execution and scheduled bot management.
 
 Examples:
-  the0-runtime bot-runner master
-  the0-runtime bot-runner worker
-  the0-runtime backtest-runner master --max-segment=16
-  the0-runtime backtest-runner worker
-  the0-runtime backtest-runner standalone --node=master --max-segment=16
-  the0-runtime bot-scheduler master
-  the0-runtime bot-scheduler worker`,
+  the0-runtime bot-runner
+  the0-runtime bot-scheduler
+  the0-runtime controller`,
 }
 
-// Bot Runner Commands
+// Bot Runner Command - simplified single-process service
 var botRunnerCmd = &cobra.Command{
 	Use:   "bot-runner",
 	Short: "Run bot execution service",
-	Long:  `Manages live bot execution with master-worker architecture`,
-}
-
-var botRunnerMasterCmd = &cobra.Command{
-	Use:   "master",
-	Short: "Run bot-runner in master mode",
+	Long: `Manages live bot execution as a single-process service.
+Connects to MongoDB for bot state and optionally to NATS for real-time events.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		runBotRunnerMaster()
+		runBotService()
 	},
 }
 
-var botRunnerWorkerCmd = &cobra.Command{
-	Use:   "worker",
-	Short: "Run bot-runner in worker mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		runBotRunnerWorker()
-	},
-}
-
-// Backtest Runner Commands
-var backtestRunnerCmd = &cobra.Command{
-	Use:   "backtest-runner",
-	Short: "Run backtest processing service",
-	Long:  `Manages backtest execution with leader election and standalone/cluster modes`,
-}
-
-var backtestRunnerMasterCmd = &cobra.Command{
-	Use:   "master",
-	Short: "Run backtest-runner in master mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		runBacktestRunnerMaster()
-	},
-}
-
-var backtestRunnerWorkerCmd = &cobra.Command{
-	Use:   "worker",
-	Short: "Run backtest-runner in worker mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		runBacktestRunnerWorker()
-	},
-}
-
-var backtestRunnerStandaloneCmd = &cobra.Command{
-	Use:   "standalone",
-	Short: "Run backtest-runner in standalone mode",
-	Run: func(cmd *cobra.Command, args []string) {
-		nodeType, _ := cmd.Flags().GetString("node")
-		runBacktestRunnerStandalone(nodeType)
-	},
-}
-
-// Bot Scheduler Commands
+// Bot Scheduler Command - simplified single-process service
 var botSchedulerCmd = &cobra.Command{
 	Use:   "bot-scheduler",
 	Short: "Run scheduled bot management service",
-	Long:  `Manages scheduled bot execution with cron-based scheduling`,
-}
-
-var botSchedulerMasterCmd = &cobra.Command{
-	Use:   "master",
-	Short: "Run bot-scheduler in master mode",
+	Long:  `Manages scheduled bot execution with cron-based scheduling as a single-process service.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		runBotSchedulerMaster()
+		runScheduleService()
 	},
 }
 
-var botSchedulerWorkerCmd = &cobra.Command{
-	Use:   "worker",
-	Short: "Run bot-scheduler in worker mode",
+// Controller Command (Kubernetes-native mode)
+var controllerCmd = &cobra.Command{
+	Use:   "controller",
+	Short: "Run Kubernetes-native bot controller",
+	Long: `Runs the bot controller in Kubernetes-native mode.
+Each bot becomes its own Pod managed by this controller.
+The controller reads desired state from MongoDB and reconciles with K8s.
+
+This mode should only be used when running inside a Kubernetes cluster
+with RUNTIME_MODE=controller environment variable set.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		runBotSchedulerWorker()
+		runController()
+	},
+}
+
+// Query Server Command - standalone query execution service
+var queryServerCmd = &cobra.Command{
+	Use:   "query-server",
+	Short: "Run standalone query execution server",
+	Long: `Runs a standalone HTTP server for executing queries against bots.
+Supports both realtime and scheduled bots by querying both MongoDB collections.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runQueryServer()
+	},
+}
+
+// Version command
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version number",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("the0-runtime version %s\n", Version)
 	},
 }
 
 func main() {
 	// Add persistent flags
-	rootCmd.PersistentFlags().UintVar(&maxSegment, "max-segment", 16, "Max segment for master node")
-	rootCmd.PersistentFlags().StringVar(&mode, "mode", "cluster", "Mode to run the application in (standalone or cluster)")
 	rootCmd.PersistentFlags().StringVar(&mongoUri, "mongo-uri", getEnv("MONGO_URI", "mongodb://localhost:27017"), "MongoDB connection URI")
-	rootCmd.PersistentFlags().StringVar(&workerId, "worker-id", getEnv("WORKER_ID", generateWorkerID()), "Unique worker ID")
+	rootCmd.PersistentFlags().StringVar(&natsUrl, "nats-url", getEnv("NATS_URL", ""), "NATS connection URL (optional)")
 
-	// Add service-specific flags
-	backtestRunnerStandaloneCmd.Flags().String("node", "master", "Node type to run (master or worker)")
-
-	// Build command tree
+	// Bot Runner command with flags
+	botRunnerCmd.Flags().DurationVar(&botRunnerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile bot state")
 	rootCmd.AddCommand(botRunnerCmd)
-	botRunnerCmd.AddCommand(botRunnerMasterCmd, botRunnerWorkerCmd)
 
-	rootCmd.AddCommand(backtestRunnerCmd)
-	backtestRunnerCmd.AddCommand(backtestRunnerMasterCmd, backtestRunnerWorkerCmd, backtestRunnerStandaloneCmd)
-
+	// Bot Scheduler command with flags
+	botSchedulerCmd.Flags().DurationVar(&botSchedulerCheckInterval, "check-interval", 10*time.Second, "How often to check for due schedules")
 	rootCmd.AddCommand(botSchedulerCmd)
-	botSchedulerCmd.AddCommand(botSchedulerMasterCmd, botSchedulerWorkerCmd)
+
+	// Controller command with flags
+	controllerCmd.Flags().StringVar(&controllerNamespace, "namespace", getEnv("NAMESPACE", "the0"), "Kubernetes namespace for bot pods")
+	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
+	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
+	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", "the0-custom-bots"), "MinIO bucket for bot code")
+	controllerCmd.Flags().StringVar(&runtimeImage, "runtime-image", getEnv("RUNTIME_IMAGE", "runtime:latest"), "Runtime image for init containers and sidecars")
+	controllerCmd.Flags().StringVar(&runtimeImagePullPolicy, "runtime-image-pull-policy", getEnv("RUNTIME_IMAGE_PULL_POLICY", "IfNotPresent"), "Image pull policy for runtime init/sidecar (Never, IfNotPresent, Always)")
+	// MinIO credentials read from environment only (not CLI flags) for security
+	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
+	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
+	rootCmd.AddCommand(controllerCmd)
+
+	// Query server command with flags
+	queryServerCmd.Flags().IntVar(&queryServerPort, "port", getEnvInt("QUERY_SERVER_PORT", 9477), "Port for query server")
+	rootCmd.AddCommand(queryServerCmd)
+
+	rootCmd.AddCommand(versionCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
@@ -150,259 +162,330 @@ func main() {
 	}
 }
 
-// Bot Runner Implementation
-func runBotRunnerMaster() {
-	util.LogMaster("Starting bot-runner master...")
-	util.LogMaster("Database: %s, Collection: %s", constants.BOT_RUNNER_DB_NAME, constants.BOT_RUNNER_COLLECTION)
+// runBotService runs the simplified bot service
+func runBotService() {
+	util.LogMaster("Starting bot-runner service...")
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
+	if natsUrl != "" {
+		util.LogMaster("NATS: %s", maskCredentialsInURL(natsUrl))
+	} else {
+		util.LogMaster("NATS: disabled (poll-only mode)")
+	}
+	util.LogMaster("Reconcile interval: %v", botRunnerReconcileInterval)
+
+	// Start health server for container health checks
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
+	// Create bot service
+	service, err := dockerrunner.NewBotService(dockerrunner.BotServiceConfig{
+		MongoURI:          mongoUri,
+		NATSUrl:           natsUrl,
+		Logger:            &util.DefaultLogger{},
+		DBName:            constants.BOT_RUNNER_DB_NAME,
+		Collection:        constants.BOT_RUNNER_COLLECTION,
+		ReconcileInterval: botRunnerReconcileInterval,
+	})
+	if err != nil {
+		util.LogMaster("Failed to create bot service: %v", err)
+		os.Exit(1)
+	}
+
+	// Mark as ready once service is created
+	healthServer.SetReady(true)
+
+	// Setup signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		util.LogMaster("Received interrupt signal, shutting down...")
+		healthServer.SetReady(false)
+		cancel()
+	}()
+
+	// Run the service (blocks until shutdown)
+	if err := service.Run(ctx); err != nil {
+		util.LogMaster("Bot service error: %v", err)
+		os.Exit(1)
+	}
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
+
+	util.LogMaster("Bot service stopped")
+}
+
+// runScheduleService runs the simplified schedule service
+func runScheduleService() {
+	util.LogMaster("Starting bot-scheduler service...")
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
+	util.LogMaster("NATS: %s", maskCredentialsInURL(natsUrl))
+	util.LogMaster("Check interval: %v", botSchedulerCheckInterval)
+
+	// Validate NATS URL (required for schedule service)
+	if natsUrl == "" {
+		util.LogMaster("ERROR: NATS_URL is required for bot-scheduler")
+		os.Exit(1)
+	}
+
+	// Start health server for container health checks
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
+	// Create schedule service
+	service, err := dockerrunner.NewScheduleService(dockerrunner.ScheduleServiceConfig{
+		MongoURI:      mongoUri,
+		NATSUrl:       natsUrl,
+		Logger:        &util.DefaultLogger{},
+		DBName:        constants.BOT_SCHEDULER_DB_NAME,
+		Collection:    constants.BOT_SCHEDULE_COLLECTION,
+		CheckInterval: botSchedulerCheckInterval,
+	})
+	if err != nil {
+		util.LogMaster("Failed to create schedule service: %v", err)
+		os.Exit(1)
+	}
+
+	// Mark as ready once service is created
+	healthServer.SetReady(true)
+
+	// Setup signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		util.LogMaster("Received interrupt signal, shutting down...")
+		healthServer.SetReady(false)
+		cancel()
+	}()
+
+	// Run the service (blocks until shutdown)
+	if err := service.Run(ctx); err != nil {
+		util.LogMaster("Schedule service error: %v", err)
+		os.Exit(1)
+	}
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
+
+	util.LogMaster("Schedule service stopped")
+}
+
+// Controller Implementation (Kubernetes-native mode)
+func runController() {
+	util.LogMaster("Starting Kubernetes-native bot controller...")
+	util.LogMaster("Runtime mode: %s", detect.DetectRuntimeMode())
+	util.LogMaster("Namespace: %s", controllerNamespace)
+	util.LogMaster("Reconcile interval: %v", controllerReconcileInterval)
+
+	// Validate MinIO credentials (required for downloading bot code)
+	if minioAccessKey == "" || minioSecretKey == "" {
+		util.LogMaster("ERROR: MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY) are required")
+		os.Exit(1)
+	}
+	if minioEndpoint == "" {
+		util.LogMaster("ERROR: MINIO_ENDPOINT is required")
+		os.Exit(1)
+	}
+
+	// Start health server for K8s probes
+	healthServer := health.NewServer(8080)
+	healthServer.Start()
+
+	// Check if we're in the right environment
+	if !detect.IsKubernetesEnvironment() {
+		util.LogMaster("WARNING: Not running in Kubernetes environment. Controller may not work correctly.")
+	}
+
+	// Create MongoDB client
+	mongoClient, err := createMongoClient(mongoUri)
+	if err != nil {
+		util.LogMaster("Failed to create MongoDB client: %v", err)
+		os.Exit(1)
+	}
+	defer mongoClient.Disconnect(context.Background())
+
+	// Start NATS subscribers to sync bots and schedules from API to MongoDB
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Use global natsUrl (already set via CLI flag or env var)
+	if natsUrl == "" {
+		util.LogMaster("WARNING: NATS_URL not set, bots/schedules won't be synced from API")
+	} else {
+		// Bot NATS subscriber
+		botSubscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
+			NATSUrl:            natsUrl,
+			DBName:             constants.BOT_RUNNER_DB_NAME,
+			CollectionName:     constants.BOT_RUNNER_COLLECTION,
+			MaxBotPerPartition: 100,
+			MaxRetries:         3,
+			Logger:             &util.DefaultLogger{},
+		})
+		if err != nil {
+			util.LogMaster("Failed to create bot NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		if err := botSubscriber.Start(ctx); err != nil {
+			util.LogMaster("Failed to start bot NATS subscriber: %v", err)
+			os.Exit(1)
+		}
+		defer botSubscriber.Stop()
+		util.LogMaster("Bot NATS subscriber started - listening for bot events")
+
+		// Schedule NATS subscriber
+		scheduleSubscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
+			NATSUrl:                    natsUrl,
+			DBName:                     constants.BOT_SCHEDULER_DB_NAME,
+			CollectionName:             constants.BOT_SCHEDULE_COLLECTION,
+			MaxBotSchedulePerPartition: 100,
+			MaxRetries:                 3,
+			Logger:                     &util.DefaultLogger{},
+		})
+		if err != nil {
+			util.LogMaster("Failed to create schedule NATS subscriber: %v", err)
+			botSubscriber.Stop() // Clean up before exit
+			os.Exit(1)
+		}
+		if err := scheduleSubscriber.Start(ctx); err != nil {
+			util.LogMaster("Failed to start schedule NATS subscriber: %v", err)
+			botSubscriber.Stop() // Clean up before exit
+			os.Exit(1)
+		}
+		defer scheduleSubscriber.Stop()
+		util.LogMaster("Schedule NATS subscriber started - listening for schedule events")
+	}
+
+	// Create controller manager
+	manager, err := controller.NewManager(mongoClient, controller.ManagerConfig{
+		Namespace:              controllerNamespace,
+		ReconcileInterval:      controllerReconcileInterval,
+		MinIOEndpoint:          minioEndpoint,
+		MinIOAccessKey:         minioAccessKey,
+		MinIOSecretKey:         minioSecretKey,
+		MinIOBucket:            minioBucket,
+		RuntimeImage:           runtimeImage,
+		RuntimeImagePullPolicy: runtimeImagePullPolicy,
+		Logger:                 &util.DefaultLogger{},
+	})
+	if err != nil {
+		util.LogMaster("Failed to create controller manager: %v", err)
+		util.LogMaster("Make sure the controller is running inside a Kubernetes cluster with proper RBAC.")
+		os.Exit(1)
+	}
 
 	// Setup signal handling
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-ch
-		util.LogMaster("Received interrupt signal, shutting down bot-runner master...")
-		os.Exit(0)
+		util.LogMaster("Received interrupt signal, shutting down controllers...")
+		healthServer.SetReady(false)
+		manager.Stop()
+		cancel()
 	}()
 
-	// Create master with proper configuration
-	address := fmt.Sprintf(":%d", constants.BOT_RUNNER_PORT)
-	master := botRunner.NewMaster(
-		mongoUri,
-		constants.BOT_RUNNER_DB_NAME,
-		constants.BOT_RUNNER_COLLECTION,
-		address,
-	)
+	// Start controllers and wait for readiness
+	readyCh, err := manager.Start(ctx)
+	if err != nil {
+		util.LogMaster("Failed to start controller manager: %v", err)
+		os.Exit(1)
+	}
 
-	util.LogMaster("Bot-runner master listening on %s", address)
-	master.Start()
+	// Wait for controllers to be ready, then mark health server as ready
+	go func() {
+		select {
+		case <-readyCh:
+			healthServer.SetReady(true)
+		case <-ctx.Done():
+		}
+	}()
+
+	// Wait for context cancellation (signal handler)
+	<-ctx.Done()
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	healthServer.Stop(shutdownCtx)
+
+	util.LogMaster("Controllers stopped")
 }
 
-func runBotRunnerWorker() {
-	util.LogWorker("Starting bot-runner worker...")
-	util.LogWorker("Worker ID: %s", workerId)
-	util.LogWorker("Database: %s, Collection: %s", constants.BOT_RUNNER_DB_NAME, constants.BOT_RUNNER_COLLECTION)
-
-	// Get master service address from environment
-	masterService := getEnv("MASTER_SERVICE", "bot-runner-master")
-	masterAddress := fmt.Sprintf("%s:%d", masterService, constants.BOT_RUNNER_PORT)
+// runQueryServer runs the standalone query server
+func runQueryServer() {
+	util.LogMaster("Starting query server...")
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
+	util.LogMaster("Port: %d", queryServerPort)
 
 	// Create MongoDB client
 	mongoClient, err := createMongoClient(mongoUri)
 	if err != nil {
-		util.LogWorker("Failed to create MongoDB client: %v", err)
+		util.LogMaster("Failed to create MongoDB client: %v", err)
 		os.Exit(1)
 	}
 	defer mongoClient.Disconnect(context.Background())
 
-	// Create worker with proper configuration
-	ctx := context.Background()
-	worker, err := botRunner.NewWorker(
-		ctx,
-		workerId,
-		mongoUri,
-		constants.BOT_RUNNER_DB_NAME,
-		constants.BOT_RUNNER_COLLECTION,
-		masterAddress,
-		&botRunner.WorkerDockerRunnerFactory{},
-		&botRunner.WorkerSubscriberFactory{},
-		mongoClient,
-	)
+	// Create DockerRunner for query execution
+	runner, err := dockerrunner.NewDockerRunner(dockerrunner.DockerRunnerOptions{
+		Logger: &util.DefaultLogger{},
+	})
 	if err != nil {
-		util.LogWorker("Failed to create bot-runner worker: %v", err)
+		util.LogMaster("Failed to create Docker runner: %v", err)
 		os.Exit(1)
 	}
 
-	// Setup signal handling to gracefully shut down worker
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-ch
-		util.LogWorker("Received interrupt signal, shutting down bot-runner worker...")
-		worker.Stop() // Graceful shutdown
-	}()
+	// Create multi-collection bot resolver
+	resolver := dockerrunner.NewMultiBotResolver(mongoClient, runner)
 
-	worker.Start() // This blocks until shutdown
-	util.LogWorker("Bot-runner worker stopped")
-}
+	// Create query handler
+	handler := dockerrunner.NewQueryHandler(dockerrunner.QueryHandlerConfig{
+		Runner: runner,
+		Logger: &util.DefaultLogger{},
+	})
 
-// Backtest Runner Implementation
-func runBacktestRunnerMaster() {
-	util.LogMaster("Starting backtest-runner master...")
-	util.LogMaster("Database: %s, Collection: %s", constants.BACKTEST_RUNNER_DB_NAME, constants.BACKTEST_COLLECTION)
+	// Create and start query server
+	server := dockerrunner.NewQueryServer(dockerrunner.QueryServerConfig{
+		Port:        queryServerPort,
+		Handler:     handler,
+		BotResolver: resolver,
+		Logger:      &util.DefaultLogger{},
+	})
 
-	if mode == "standalone" {
-		runBacktestRunnerStandalone("master")
-		return
+	if err := server.Start(); err != nil {
+		util.LogMaster("Failed to start query server: %v", err)
+		os.Exit(1)
 	}
-	runBacktestRunnerCluster()
-}
 
-func runBacktestRunnerWorker() {
-	util.LogWorker("Starting backtest-runner worker...")
-	util.LogWorker("Worker ID: %s", workerId)
-	util.LogWorker("Database: %s, Collection: %s", constants.BACKTEST_RUNNER_DB_NAME, constants.BACKTEST_COLLECTION)
-
-	if mode == "standalone" {
-		runBacktestRunnerStandalone("worker")
-		return
-	}
-	runBacktestRunnerCluster()
-}
-
-func runBacktestRunnerStandalone(nodeType string) {
-	switch nodeType {
-	case "master":
-		// Create master with proper configuration
-		address := fmt.Sprintf(":%d", constants.BACKTEST_RUNNER_PORT)
-		master := backtestRunner.NewMaster(
-			mongoUri,
-			constants.BACKTEST_RUNNER_DB_NAME,
-			constants.BACKTEST_COLLECTION,
-			address,
-		)
-		util.LogMaster("Backtest-runner master listening on %s", address)
-		master.Start()
-	case "worker":
-		// Get master service address from environment
-		masterHost := getEnv("MASTER_HOST", "localhost")
-		masterAddress := fmt.Sprintf("%s:%d", masterHost, constants.BACKTEST_RUNNER_PORT)
-
-		// Create MongoDB client
-		mongoClient, err := createMongoClient(mongoUri)
-		if err != nil {
-			util.LogWorker("Failed to create MongoDB client: %v", err)
-			os.Exit(1)
-		}
-		defer mongoClient.Disconnect(context.Background())
-
-		// Get batch configuration from environment
-		batchSize, _ := strconv.Atoi(getEnv("BATCH_SIZE", "5"))
-		batchTimeoutSec, _ := strconv.Atoi(getEnv("BATCH_TIMEOUT", "300"))
-		batchIntervalSec, _ := strconv.Atoi(getEnv("BATCH_INTERVAL", "10"))
-
-		options := backtestRunner.BacktestWorkerOptions{
-			BatchSize:     batchSize,
-			BatchTimeout:  time.Duration(batchTimeoutSec) * time.Second,
-			BatchInterval: time.Duration(batchIntervalSec) * time.Second,
-		}
-
-		// Create worker with proper configuration
-		ctx := context.Background()
-		worker, err := backtestRunner.NewWorker(
-			ctx,
-			workerId,
-			mongoUri,
-			constants.BACKTEST_RUNNER_DB_NAME,
-			constants.BACKTEST_COLLECTION,
-			masterAddress,
-			&backtestRunner.WorkerDockerRunnerFactory{},
-			&backtestRunner.WorkerSubscriberFactory{},
-			mongoClient,
-			options,
-		)
-		if err != nil {
-			util.LogWorker("Failed to create backtest-runner worker: %v", err)
-			os.Exit(1)
-		}
-
-		// Setup signal handling
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-		go func() {
-			<-ch
-			fmt.Println("Backtest worker shutting down...")
-			worker.Stop()
-		}()
-
-		worker.Start()
-	default:
-		panic(fmt.Sprintf("Unknown node type: %s", nodeType))
-	}
-}
-
-func runBacktestRunnerCluster() {
-	// TODO: Implement cluster mode with proper leader election
-	// This needs to be updated to work with the new architecture
-
-	// For now, we'll run in standalone mode until cluster mode is implemented
-	util.LogMaster("Cluster mode not yet implemented with new architecture")
-	util.LogMaster("Falling back to standalone mode...")
-	runBacktestRunnerStandalone("master")
-}
-
-// Bot Scheduler Implementation
-func runBotSchedulerMaster() {
-	util.LogMaster("Starting bot-scheduler master...")
-	util.LogMaster("Database: %s, Collection: %s", constants.BOT_SCHEDULER_DB_NAME, constants.BOT_SCHEDULE_COLLECTION)
+	util.LogMaster("Query server started on port %d", queryServerPort)
 
 	// Setup signal handling
+	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-ch
-		util.LogMaster("Received interrupt signal, shutting down bot-scheduler master...")
-		os.Exit(0)
+		util.LogMaster("Received interrupt signal, shutting down...")
+		cancel()
 	}()
 
-	// Create master with proper configuration
-	address := fmt.Sprintf(":%d", constants.BOT_SCHEDULER_PORT)
-	master := botScheduler.NewMaster(
-		mongoUri,
-		constants.BOT_SCHEDULER_DB_NAME,
-		constants.BOT_SCHEDULE_COLLECTION,
-		address,
-	)
+	// Wait for shutdown
+	<-ctx.Done()
 
-	util.LogMaster("Bot-scheduler master listening on %s", address)
-	master.Start()
-}
+	// Graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	server.Stop(shutdownCtx)
+	runner.Close()
 
-func runBotSchedulerWorker() {
-	util.LogWorker("Starting bot-scheduler worker...")
-	util.LogWorker("Worker ID: %s", workerId)
-	util.LogWorker("Database: %s, Collection: %s", constants.BOT_SCHEDULER_DB_NAME, constants.BOT_SCHEDULE_COLLECTION)
-
-	// Get master service address from environment
-	masterService := getEnv("MASTER_SERVICE", "bot-scheduler-master")
-	masterAddress := fmt.Sprintf("%s:%d", masterService, constants.BOT_SCHEDULER_PORT)
-
-	// Create MongoDB client
-	mongoClient, err := createMongoClient(mongoUri)
-	if err != nil {
-		util.LogWorker("Failed to create MongoDB client: %v", err)
-		os.Exit(1)
-	}
-	defer mongoClient.Disconnect(context.Background())
-
-	// Create worker with proper configuration
-	ctx := context.Background()
-	worker, err := botScheduler.NewWorker(
-		ctx,
-		workerId,
-		mongoUri,
-		constants.BOT_SCHEDULER_DB_NAME,
-		constants.BOT_SCHEDULE_COLLECTION,
-		masterAddress,
-		&botScheduler.ScheduledBotDockerRunnerFactory{},
-		&botScheduler.ScheduledBotSubscriberFactory{},
-		mongoClient,
-	)
-	if err != nil {
-		util.LogWorker("Failed to create bot-scheduler worker: %v", err)
-		os.Exit(1)
-	}
-
-	// Setup signal handling to gracefully shut down worker
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-ch
-		util.LogWorker("Received interrupt signal, shutting down bot-scheduler worker...")
-		worker.Stop() // Graceful shutdown
-	}()
-
-	worker.Start() // This blocks until shutdown
-	util.LogWorker("Bot-scheduler worker stopped")
+	util.LogMaster("Query server stopped")
 }
 
 // Utility functions
@@ -414,12 +497,17 @@ func getEnv(key string, defaultValue string) string {
 	return value
 }
 
-func generateWorkerID() string {
-	hostname, _ := os.Hostname()
-	if hostname == "" {
-		hostname = "unknown"
+func getEnvInt(key string, defaultValue int) int {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return defaultValue
 	}
-	return fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	var result int
+	_, err := fmt.Sscanf(value, "%d", &result)
+	if err != nil {
+		return defaultValue
+	}
+	return result
 }
 
 func createMongoClient(mongoUri string) (*mongo.Client, error) {
@@ -438,4 +526,23 @@ func createMongoClient(mongoUri string) (*mongo.Client, error) {
 	}
 
 	return mongoClient, nil
+}
+
+// maskCredentialsInURL masks password in a connection URL for safe logging.
+// Example: mongodb://user:secret@host:27017 -> mongodb://user:***@host:27017
+func maskCredentialsInURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		// If parsing fails, return a masked placeholder to be safe
+		return "***"
+	}
+
+	if parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			username := parsed.User.Username()
+			parsed.User = url.UserPassword(username, "***")
+		}
+	}
+
+	return parsed.String()
 }

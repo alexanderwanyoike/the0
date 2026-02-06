@@ -120,6 +120,9 @@ the0Api:
     FRONTEND_URL: "http://the0.local:30001"
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"
+
+    # Bot query service (K8s bot-controller)
+    RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
   resources:
     requests:
       memory: 512Mi
@@ -143,7 +146,7 @@ the0Frontend:
   env:
     # Frontend configuration (using NodePort URLs)
     # Note: NEXT_PUBLIC_API_URL and NEXT_PUBLIC_DOCS_URL are set via build args in Makefile
-    # Note: BOT_API_URL and AI_AGENT_API_URL are dynamically constructed in the template
+    # Note: BOT_API_URL is dynamically constructed in the template
     NEXT_PUBLIC_APP_NAME: "the0"
     NEXT_PUBLIC_APP_VERSION: "1.0.0"
     NEXT_BASE_URL: "http://the0.local:30001"
@@ -168,7 +171,7 @@ the0Docs:
   # image:
   #   repository: the0org/the0-docs
   #   tag: latest
-  port: 3000
+  port: 80  # nginx serves on port 80
   env:
     # Documentation configuration
     NEXT_PUBLIC_APP_NAME: "the0"
@@ -182,302 +185,55 @@ the0Docs:
       memory: 256Mi
       cpu: 200m
 
-botRunner:
-  enabled: true
-  # Local image (default)
-  image:
-    repository: runtime
-    tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/runtime
-  #   tag: latest
-  master:
-    replicas: 1
-    port: 8080
-    grpcPort: 50051
-    env:
-      # MongoDB configuration
-      MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: "the0-minio:9000"
-      MINIO_ACCESS_KEY: "the0admin"
-      MINIO_SECRET_KEY: "the0password"
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: "bot-logs"
-      MINIO_CODE_BUCKET: "custom-bots"
-      MINIO_REGION: "us-east-1"
-      
-      # Worker ID
-      WORKER_ID: "bot-runner-master-1"
-      
-      # Partition configuration
-      MAX_BOTS_PER_PARTITION: "10"
-    resources:
-      requests:
-        memory: 256Mi
-        cpu: 100m
-      limits:
-        memory: 512Mi
-        cpu: 500m
-  worker:
-    replicas: 4
-    privileged: true
-    env:
-      # MongoDB configuration
-      MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-      
-      # NATS configuration
-      NATS_URL: "nats://the0-nats:4222"
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: "the0-minio:9000"
-      MINIO_ACCESS_KEY: "the0admin"
-      MINIO_SECRET_KEY: "the0password"
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: "bot-logs"
-      MINIO_CODE_BUCKET: "custom-bots"
-      MINIO_REGION: "us-east-1"
-      
-      # Worker configuration
-      MASTER_SERVICE: "the0-bot-runner-master"
-      
-      # Partition configuration
-      MAX_BOTS_PER_PARTITION: "10"
-      
-      # Docker configuration
-      DOCKER_TEMP_DIR: "/tmp/bot-runner"
-      TEMP_DIR: "/tmp/bot-runner"
-      DOCKER_LOG_DIR: "/var/log/bot-runner"
-    volumes:
-      - name: docker-sock
-        mountPath: /var/run/docker.sock
-        hostPath: /var/run/docker.sock
-      - name: tmp-runtime
-        mountPath: /tmp/runtime
-        hostPath: /tmp/runtime
-      - name: tmp-bot-runner
-        mountPath: /tmp/bot-runner
-        hostPath: /tmp/bot-runner
-    resources:
-      requests:
-        memory: 512Mi
-        cpu: 200m
-      limits:
-        memory: 1Gi
-        cpu: 1000m
-
-backtestRunner:
-  enabled: true
-  # Local image (default)
-  image:
-    repository: runtime
-    tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/runtime
-  #   tag: latest
-  master:
-    replicas: 1
-    port: 8080
-    grpcPort: 50052
-    env:
-      # MongoDB configuration
-      MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-      
-      # NATS configuration
-      NATS_URL: "nats://the0-nats:4222"
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: "the0-minio:9000"
-      MINIO_ACCESS_KEY: "the0admin"
-      MINIO_SECRET_KEY: "the0password"
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: "logs"
-      MINIO_CODE_BUCKET: "custom-bots"
-      MINIO_BACKTESTS_BUCKET: "backtests"
-      MINIO_REGION: "us-east-1"
-      
-      # Worker ID
-      WORKER_ID: "backtest-runner-master-1"
-      
-      # Partition configuration
-      MAX_BACKTESTS_PER_PARTITION: "10"
-    resources:
-      requests:
-        memory: 256Mi
-        cpu: 100m
-      limits:
-        memory: 512Mi
-        cpu: 500m
-  worker:
-    replicas: 4
-    privileged: true
-    env:
-      # MongoDB configuration
-      MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-      
-      # NATS configuration
-      NATS_URL: "nats://the0-nats:4222"
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: "the0-minio:9000"
-      MINIO_ACCESS_KEY: "the0admin"
-      MINIO_SECRET_KEY: "the0password"
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: "backtest-logs"
-      MINIO_CODE_BUCKET: "custom-bots"
-      MINIO_BACKTESTS_BUCKET: "backtests"
-      MINIO_REGION: "us-east-1"
-      
-      # Worker configuration
-      MASTER_HOST: "the0-backtest-runner-master"
-      
-      # Batch configuration
-      BATCH_SIZE: "5"
-      BATCH_TIMEOUT: "300"
-      BATCH_INTERVAL: "10"
-      
-      # Partition configuration
-      MAX_BACKTESTS_PER_PARTITION: "10"
-      
-      # Docker configuration
-      DOCKER_TEMP_DIR: "/tmp/backtest-runner"
-      TEMP_DIR: "/tmp/backtest-runner"
-      DOCKER_LOG_DIR: "/var/log/backtest-runner"
-    volumes:
-      - name: docker-sock
-        mountPath: /var/run/docker.sock
-        hostPath: /var/run/docker.sock
-      - name: tmp-runtime
-        mountPath: /tmp/runtime
-        hostPath: /tmp/runtime
-      - name: tmp-backtest-runner
-        mountPath: /tmp/backtest-runner
-        hostPath: /tmp/backtest-runner
-    resources:
-      requests:
-        memory: 512Mi
-        cpu: 200m
-      limits:
-        memory: 1Gi
-        cpu: 1000m
-
-botScheduler:
-  enabled: true
-  # Local image (default)
-  image:
-    repository: runtime
-    tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/runtime
-  #   tag: latest
-  master:
-    replicas: 1
-    port: 8080
-    grpcPort: 50053
-    env:
-      # MongoDB configuration
-      MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: "the0-minio:9000"
-      MINIO_ACCESS_KEY: "the0admin"
-      MINIO_SECRET_KEY: "the0password"
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: "bot-logs"
-      MINIO_CODE_BUCKET: "custom-bots"
-      
-      # Worker ID
-      WORKER_ID: "bot-scheduler-master-1"
-      
-      # Partition configuration
-      MAX_BOT_SCHEDULE_PER_PARTITION: "10"
-    resources:
-      requests:
-        memory: 256Mi
-        cpu: 100m
-      limits:
-        memory: 512Mi
-        cpu: 500m
-  worker:
-    replicas: 4
-    privileged: true
-    env:
-      # MongoDB configuration
-      MONGO_URI: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-      
-      # NATS configuration
-      NATS_URL: "nats://the0-nats:4222"
-      
-      # MinIO configuration
-      MINIO_ENDPOINT: "the0-minio:9000"
-      MINIO_ACCESS_KEY: "the0admin"
-      MINIO_SECRET_KEY: "the0password"
-      MINIO_USE_SSL: "false"
-      MINIO_LOGS_BUCKET: "bot-logs"
-      MINIO_CODE_BUCKET: "custom-bots"
-      
-      # Worker configuration
-      MASTER_SERVICE: "the0-bot-scheduler-master"
-      
-      # Partition configuration
-      MAX_BOT_SCHEDULE_PER_PARTITION: "10"
-      
-      # Docker configuration
-      DOCKER_TEMP_DIR: "/tmp/bot-scheduler"
-      TEMP_DIR: "/tmp/bot-scheduler"
-      DOCKER_LOG_DIR: "/var/log/bot-scheduler"
-      BOT_MEMORY_LIMIT_MB: "512"
-      BOT_CPU_SHARES: "512"
-    volumes:
-      - name: docker-sock
-        mountPath: /var/run/docker.sock
-        hostPath: /var/run/docker.sock
-      - name: tmp-runtime
-        mountPath: /tmp/runtime
-        hostPath: /tmp/runtime
-      - name: tmp-bot-scheduler
-        mountPath: /tmp/bot-scheduler
-        hostPath: /tmp/bot-scheduler
-    resources:
-      requests:
-        memory: 512Mi
-        cpu: 200m
-      limits:
-        memory: 1Gi
-        cpu: 1000m
-
-the0Analyzer:
+# Kubernetes-Native Bot Controller
+# Manages bot Pods and CronJobs directly - no Docker-in-Docker needed
+botController:
   enabled: true
   replicas: 1
-  # Local image (default)
   image:
-    repository: the0-analyzer
+    repository: runtime
     tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/the0-analyzer
-  #   tag: latest
+  # Runtime image for init containers and sidecars in bot pods
+  runtimeImage: "runtime:latest"
+  # Image pull policy for runtime image (Never for local minikube, Always for production)
+  runtimeImagePullPolicy: "Never"
+  # How often to reconcile state with MongoDB
+  reconcileInterval: "30s"
+  # Environment variables for the controller
+  # Each entry supports standard K8s env syntax: value, valueFrom, secretKeyRef, etc.
+  # For production, use secretKeyRef to reference Sealed Secrets
   env:
-    # NATS configuration
-    NATS_URL: "nats://the0-nats:4222"
-    
-    # MinIO configuration
-    MINIO_ENDPOINT: "the0-minio:9000"
-    MINIO_ACCESS_KEY: "the0admin"
-    MINIO_SECRET_KEY: "the0password"
-    MINIO_USE_SSL: "false"
-    CUSTOM_BOTS_BUCKET: "custom-bots"
-    
-    # Database configuration
-    DATABASE_URL: "postgresql://the0:the0_password@the0-postgres:5432/the0_oss?sslmode=disable"
-    
-    # Analyzer configuration
-    PYTHONPATH: "/app"
-    PYTHONUNBUFFERED: "1"
+    # MongoDB connection string
+    - name: MONGO_URI
+      value: "mongodb://root:the0_mongo_password@the0-mongo:27017"
+    # NATS connection for syncing bots from API
+    - name: NATS_URL
+      value: "nats://the0-nats:4222"
+    # MinIO credentials for image builder
+    - name: MINIO_ACCESS_KEY
+      value: "the0admin"
+    - name: MINIO_SECRET_KEY
+      value: "the0password"
+    # Example: Using secretKeyRef for production (uncomment and modify):
+    # - name: MONGO_URI
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: the0-secrets  # Your Sealed Secret name
+    #       key: MONGO_URI
+    # - name: MINIO_ACCESS_KEY
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: the0-secrets
+    #       key: MINIO_ACCESS_KEY
+    # - name: MINIO_SECRET_KEY
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: the0-secrets
+    #       key: MINIO_SECRET_KEY
+  # MinIO configuration for bot code storage
+  minio:
+    endpoint: "the0-minio:9000"
+    bucket: "custom-bots"
   resources:
     requests:
       memory: 256Mi
@@ -485,49 +241,6 @@ the0Analyzer:
     limits:
       memory: 512Mi
       cpu: 500m
-
-the0AiAgent:
-  enabled: true
-  replicas: 1
-  # Local image (default)
-  image:
-    repository: the0-ai-agent
-    tag: latest
-  # DockerHub image (uncomment for production)
-  # image:
-  #   repository: the0org/the0-ai-agent
-  #   tag: latest
-  port: 8000
-  env:
-    # Database configuration
-    DATABASE_URL: "postgresql://the0:the0_password@the0-postgres:5432/the0_oss?sslmode=disable"
-
-    # NATS configuration
-    NATS_URL: "nats://the0-nats:4222"
-
-    # MinIO configuration
-    MINIO_ENDPOINT: "the0-minio:9000"
-    MINIO_ACCESS_KEY: "the0admin"
-    MINIO_SECRET_KEY: "the0password"
-    MINIO_USE_SSL: "false"
-    CUSTOM_BOTS_BUCKET: "custom-bots"
-    AI_ARTIFACTS_BUCKET: "ai-artifacts"`
-
-    # Documentation API configuration
-    DOCS_ENDPOINT: "http://the0-docs:3000"
-    USER_DOCS_URL: "http://localhost:3002"
-
-
-    # Service configuration
-    PYTHONPATH: "/app"
-    PYTHONUNBUFFERED: "1"
-  resources:
-    requests:
-      memory: 512Mi
-      cpu: 200m
-    limits:
-      memory: 1Gi
-      cpu: 1000m
 
 # Service configuration
 service:
@@ -541,10 +254,9 @@ externalServices:
   enabled: true
   nodePort:
     frontend: 30001  # the0.local:30001
-    api: 30000       # api.the0.local:30000  
+    api: 30000       # api.the0.local:30000
     minio: 30002     # minio.the0.local:30002
     docs: 30004      # docs.the0.local:30004
-    aiAgent: 30003   # ai-agent.the0.local:30003
 
 # Minikube configuration  
 minikube:

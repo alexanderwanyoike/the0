@@ -3,3 +3,4 @@ node_modules
 package-lock.json
 .env
 .idea/
+PR_MESSAGE.md

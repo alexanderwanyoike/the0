@@ -3,12 +3,16 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { BotModule } from "./bot/bot.module";
 import { AuthModule } from "./auth/auth.module";
-import { BacktestModule } from "./backtest/backtest.module";
 import { ConfigModule } from "@nestjs/config";
 import { CustomBotModule } from "./custom-bot/custom-bot.module";
 import { ApiKeyModule } from "./api-key/api-key.module";
 import { LogsModule } from "./logs/logs.module";
 import { NatsModule } from "./nats/nats.module";
+import { LoggerModule } from "./logger/logger.module";
+import { McpModule } from "./mcp/mcp.module";
+import { BotStateModule } from "./bot-state/bot-state.module";
+import { BotQueryModule } from "./bot-query/bot-query.module";
+import { MinioModule } from "./minio";
 import configuration from "./config/configuration";
 
 @Module({
@@ -17,13 +21,17 @@ import configuration from "./config/configuration";
       load: [configuration],
       isGlobal: true,
     }),
+    MinioModule,
+    LoggerModule,
     BotModule,
     AuthModule,
-    BacktestModule,
     CustomBotModule,
     ApiKeyModule,
     LogsModule,
     NatsModule,
+    McpModule,
+    BotStateModule,
+    BotQueryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

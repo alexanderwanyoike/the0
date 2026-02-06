@@ -1,12 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import React from "react";
-import {
-  STATUS_CONFIG,
-  THREAT_COLORS,
-} from "@/components/custom-bots/constants";
+import { STATUS_CONFIG } from "@/components/custom-bots/constants";
 
 export const StatusHeader = ({ bot }: any) => {
-  const config = STATUS_CONFIG[bot.status];
+  const config = STATUS_CONFIG[bot.status] || STATUS_CONFIG.active;
   const Icon = config.icon;
 
   return (
@@ -17,21 +14,9 @@ export const StatusHeader = ({ bot }: any) => {
       <div className="flex-1">
         <div className="flex items-center gap-3 mb-2">
           <h2 className="text-xl font-semibold">{config.text}</h2>
-          <Badge className={config.color}>{bot.status.replace("_", " ")}</Badge>
+          <Badge className={config.color}>{bot.status}</Badge>
         </div>
         <p className="text-muted-foreground">{config.description}</p>
-
-        {bot.review?.threatSummary?.threatLevel && (
-          <div className="flex items-center gap-2 mt-3">
-            <span className="text-sm font-medium">Threat Level:</span>
-            <Badge
-              variant="outline"
-              className={`${THREAT_COLORS[bot.review?.threatSummary?.threatLevel]} border-current`}
-            >
-              {bot.review?.threatSummary?.threatLevel.toUpperCase()}
-            </Badge>
-          </div>
-        )}
       </div>
     </div>
   );

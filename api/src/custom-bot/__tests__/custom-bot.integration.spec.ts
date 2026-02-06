@@ -12,8 +12,6 @@ import {
 } from "@/custom-bot/custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NatsService } from "@/nats/nats.service";
-import { CustomBotEventsService } from "../custom-bot-events.service";
-// Removed StripeConnectService - not needed in OSS version
 
 // Mock database and storage
 jest.mock("@/database/connection");
@@ -23,7 +21,6 @@ describe("Custom Bot API Integration Tests", () => {
   let app: INestApplication;
   let repository: jest.Mocked<CustomBotRepository>;
   let storageService: jest.Mocked<StorageService>;
-  // Removed StripeConnectService - not needed in OSS version
 
   const validConfig: CustomBotConfig = {
     name: "integration-test-bot",
@@ -34,11 +31,9 @@ describe("Custom Bot API Integration Tests", () => {
     runtime: "python3.11",
     entrypoints: {
       bot: "main.py",
-      backtest: "backtest.py",
     },
     schema: {
       bot: { type: "object" },
-      backtest: { type: "object" },
     },
     readme:
       "This is a comprehensive readme for integration testing that meets all requirements.",
@@ -71,7 +66,7 @@ describe("Custom Bot API Integration Tests", () => {
             name: "mock-bot",
             version: "1.0.0",
             userId: "test-user-123",
-            status: "pending_review",
+            status: "active",
             createdAt: new Date(),
             updatedAt: new Date(),
           }),
@@ -96,6 +91,8 @@ describe("Custom Bot API Integration Tests", () => {
         deleteBotFile: jest.fn().mockResolvedValue(Ok(null)),
         getFileMetadata: jest.fn().mockResolvedValue(Ok({})),
         validateZipFile: jest.fn().mockResolvedValue(Ok(true)),
+        extractAndStoreFrontend: jest.fn().mockResolvedValue(Ok(null)),
+        getFrontendBundle: jest.fn().mockResolvedValue(Ok(null)),
       })
       .overrideProvider(NatsService)
       .useValue({
@@ -107,13 +104,6 @@ describe("Custom Bot API Integration Tests", () => {
         onModuleInit: jest.fn(() => Promise.resolve()),
         onModuleDestroy: jest.fn(() => Promise.resolve()),
       })
-      .overrideProvider(CustomBotEventsService)
-      .useValue({
-        onModuleInit: jest.fn(() => Promise.resolve()),
-        onModuleDestroy: jest.fn(() => Promise.resolve()),
-        setupEventListeners: jest.fn(() => Promise.resolve()),
-      })
-      // Removed StripeConnectService override - not needed in OSS version
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -147,7 +137,7 @@ describe("Custom Bot API Integration Tests", () => {
         config: validConfig,
         filePath,
         userId: "test-user-123",
-        status: "pending_review",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -175,7 +165,7 @@ describe("Custom Bot API Integration Tests", () => {
       expect(storageService.fileExists).toHaveBeenCalledWith(filePath);
       expect(storageService.validateZipStructure).toHaveBeenCalledWith(
         filePath,
-        ["main.py", "backtest.py"],
+        ["main.py"],
       );
     });
 
@@ -345,7 +335,7 @@ describe("Custom Bot API Integration Tests", () => {
         config: validConfig,
         filePath: "gs://test-bucket/old-file.zip",
         userId: "test-user-123",
-        status: "approved",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -432,7 +422,7 @@ describe("Custom Bot API Integration Tests", () => {
         config: validConfig,
         filePath: "gs://test-bucket/old-file.zip",
         userId: "test-user-123",
-        status: "approved",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -466,7 +456,7 @@ describe("Custom Bot API Integration Tests", () => {
         config: validConfig,
         filePath: "gs://test-bucket/old-file.zip",
         userId: "test-user-123",
-        status: "approved",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -503,8 +493,8 @@ describe("Custom Bot API Integration Tests", () => {
             filePath: "gs://bucket/v1.1.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
-            status: "approved",
-            marketplace: null,
+            status: "active",
+
             userId: "test-user-123",
             id: "bot-id",
           },
@@ -514,8 +504,8 @@ describe("Custom Bot API Integration Tests", () => {
             filePath: "gs://bucket/v1.0.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
-            status: "approved",
-            marketplace: null,
+            status: "active",
+
             userId: "test-user-123",
             id: "bot-id",
           },
@@ -558,7 +548,7 @@ describe("Custom Bot API Integration Tests", () => {
         version: "1.0.0",
         config: validConfig,
         filePath: "gs://test-bucket/file.zip",
-        status: "approved",
+        status: "active",
         userId: "test-user-123",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -600,8 +590,8 @@ describe("Custom Bot API Integration Tests", () => {
         type: "scheduled",
         runtime: "python3.11",
         author: "E2E Test",
-        entrypoints: { bot: "main.py", backtest: "backtest.py" },
-        schema: { bot: {}, backtest: {} },
+        entrypoints: { bot: "main.py" },
+        schema: { bot: {} },
         readme:
           "E2E test bot readme with sufficient length for validation requirements.",
       };
@@ -614,7 +604,7 @@ describe("Custom Bot API Integration Tests", () => {
         name: botName,
         version: "1.0.0",
         config: createConfig,
-        status: "pending_review",
+        status: "active",
         filePath: "gs://test-bucket/e2e-v1.zip",
         userId: "test-user-123",
         createdAt: new Date(),
@@ -654,7 +644,7 @@ describe("Custom Bot API Integration Tests", () => {
           name: botName,
           version: "1.0.0",
           config: createConfig,
-          status: "approved",
+          status: "active",
           filePath: "gs://test-bucket/e2e-v1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
@@ -669,7 +659,7 @@ describe("Custom Bot API Integration Tests", () => {
           name: botName,
           version: "1.1.0",
           config: updateConfig,
-          status: "pending_review",
+          status: "active",
           filePath: "gs://test-bucket/e2e-v1.1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
@@ -682,7 +672,7 @@ describe("Custom Bot API Integration Tests", () => {
           name: botName,
           version: "1.1.0",
           config: updateConfig,
-          status: "pending_review",
+          status: "active",
           filePath: "gs://test-bucket/e2e-v1.1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
@@ -713,8 +703,8 @@ describe("Custom Bot API Integration Tests", () => {
               filePath: "gs://test-bucket/e2e-v1.1.zip",
               createdAt: new Date(),
               updatedAt: new Date(),
-              status: "approved",
-              marketplace: null,
+              status: "active",
+
               userId: "test-user-123",
               id: "bot-id",
             },
@@ -724,8 +714,8 @@ describe("Custom Bot API Integration Tests", () => {
               filePath: "gs://test-bucket/e2e-v1.zip",
               createdAt: new Date(),
               updatedAt: new Date(),
-              status: "approved",
-              marketplace: null,
+              status: "active",
+
               userId: "test-user-123",
               id: "bot-id",
             },
@@ -750,7 +740,7 @@ describe("Custom Bot API Integration Tests", () => {
           name: botName,
           version: "1.0.0",
           config: createConfig,
-          status: "approved",
+          status: "active",
           filePath: "gs://test-bucket/e2e-v1.zip",
           userId: "test-user-123",
           createdAt: new Date(),

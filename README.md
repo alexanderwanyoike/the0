@@ -2,40 +2,45 @@
 
 <div align="center">
 
-**🚀 An Open-Source Algorithmic Trading Platform**
+**Open-Source Algorithmic Trading Platform**
 
-*Create, deploy, and manage trading bots with ease*
+*Production-grade bot execution engine for quantitative trading*
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-Soon-FFA500?logo=kubernetes)](https://kubernetes.io/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python)](https://www.python.org/)
-[![JavaScript](https://img.shields.io/badge/JavaScript-Node.js%2020+-F7DF1E?logo=javascript)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Rust](https://img.shields.io/badge/Rust-stable-DEA584?logo=rust)](https://www.rust-lang.org/)
+[![C++](https://img.shields.io/badge/C++-17-00599C?logo=cplusplus)](https://isocpp.org/)
+[![C#](https://img.shields.io/badge/C%23-.NET%208-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![Scala](https://img.shields.io/badge/Scala-3-DC322F?logo=scala)](https://www.scala-lang.org/)
+[![Haskell](https://img.shields.io/badge/Haskell-GHC%209.6-5D4F85?logo=haskell)](https://www.haskell.org/)
 
 </div>
 
 ---
 
-## 🎯 What is the0?
+## What is the0?
 
-**the0** is a open source algorithmic trading platform that empowers developers and traders to create, deploy, and manage trading bots across multiple markets. Whether you're building a simple Dollar Cost Averaging (DCA) strategy or complex multi-asset arbitrage algorithms, the0 provides the infrastructure and tools you need.
+**the0** is an open-source algorithmic trading execution engine that provides production-grade infrastructure for deploying and managing trading bots across multiple markets. Build strategies in your preferred language—Python, TypeScript, Rust, C++, C#, Scala, or Haskell—then deploy them to a self-hosted execution engine with real-time monitoring and custom React dashboards.
 
-> ⚠️ **Early Development**: the0 is currently in active development and not yet production ready. We're building towards a stable release and currently at beta - contributions and feedback are welcome!
+> **Status**: Beta - Active development. Not production-ready. Contributions and feedback welcome.
 
-### ✨ Key Features
+### Key Features
 
-- 🤖 **Custom Bot Development** - Build bots in Python or JavaScript with any libraries you prefer
-- 📊 **Advanced Backtesting** - Test strategies with historical data before going live
-- ⚡ **Real-time Execution** - Deploy scheduled or continuous trading bots
-- 🐳 **Docker Ready** - Easy deployment with Docker Compose
-- 📈 **Analytics Dashboard** - Monitor performance and track metrics
-- 🌐 **Exchange Agnostic** - Design your bots to work with any trading platform
+- **Multi-Language Support** - Build bots in Python, TypeScript, Rust, C++, C#, Scala, or Haskell
+- **Custom Frontends** - Create React dashboards tailored to your trading strategies
+- **Real-time Execution** - Deploy scheduled or continuous trading bots with isolated execution
+- **Self-Hosted** - Full control over your infrastructure and data
+- **Docker Ready** - Streamlined deployment with Docker Compose
+- **CLI-First Workflow** - Efficient bot management via command-line interface
+- **Exchange Agnostic** - Design your bots to work with any trading platform
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-Get the0 running locally in under 5 minutes:
+Deploy the0 locally:
 
 ### Prerequisites
 
@@ -77,7 +82,7 @@ Cloud deployments will be available in the future.
 
 ---
 
-## 🛠️ CLI Installation
+## CLI Installation
 
 The the0 CLI tool provides a local development interface for managing your bots. 
 
@@ -134,9 +139,65 @@ For more CLI commands and usage, see the CLI documentation.
 
 ---
 
-## 🏗️ Architecture
+## MCP Server (Claude Code Integration)
 
-the0 is built as a microservices platform that enables algorithmic trading bot development and execution:
+the0 includes a built-in MCP (Model Context Protocol) server that enables AI assistants like Claude Code to interact directly with the platform. This allows you to manage bots, view logs, and deploy configurations using natural language.
+
+### Configure Claude Code
+
+**Option 1: CLI Command**
+
+```bash
+claude mcp add the0 --transport http http://localhost:3000/mcp
+```
+
+**Option 2: Configuration File**
+
+Add to your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "the0": {
+      "url": "http://localhost:3000/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+| Category | Tool | Description |
+|----------|------|-------------|
+| **Auth** | `auth_status` | Check API key validity |
+| **Bot Instance** | `bot_list` | List deployed bots |
+| | `bot_get` | Get bot details |
+| | `bot_deploy` | Deploy a new bot |
+| | `bot_update` | Update bot configuration |
+| | `bot_delete` | Delete a bot |
+| **Logs** | `logs_get` | Get execution logs |
+| | `logs_summary` | Get log statistics |
+| **Custom Bot** | `custom_bot_list` | List available custom bots |
+| | `custom_bot_get` | Get custom bot details |
+| | `custom_bot_schema` | Get configuration schema |
+
+### Example Usage
+
+Once configured, ask Claude Code:
+
+- *"List my deployed bots"*
+- *"Show me the logs for my trading bot"*
+- *"What custom bots are available?"*
+- *"Deploy a new scheduled bot with this configuration"*
+
+**Note:** MCP tools require authentication via API key. Generate one from the web dashboard or CLI.
+
+---
+
+## Architecture
+
+the0 is built as a microservices execution engine that enables algorithmic trading bot deployment and management:
 
 ```mermaid
 graph TB
@@ -157,15 +218,9 @@ graph TB
         
         subgraph "Runtime Services"
             BR[⚡ Bot Runner<br/>Go, gRPC<br/>Real-time execution]
-            BT[📈 Backtest Runner<br/>Go, gRPC<br/>Historical testing]
             BS[⏰ Bot Scheduler<br/>Go, gRPC<br/>Cron execution]
         end
-        
-        subgraph "Supporting Services"
-            SA[🔍 Security Analyzer<br/>Python, YARA<br/>Code analysis]
-            AI[🤖 AI Assistant<br/>Python, FastAPI<br/>Development helper]
-        end
-        
+
         subgraph "Data Layer"
             PG[(🐘 PostgreSQL<br/>Users, bots, auth)]
             MONGO[(🍃 MongoDB<br/>Runtime state, logs)]
@@ -191,31 +246,24 @@ graph TB
     
     %% Runtime services
     NATS -->|Events| BR
-    NATS -->|Events| BT  
     NATS -->|Events| BS
-    NATS -->|Events| SA
-    
+
     BR -->|State| MONGO
-    BT -->|Jobs| MONGO
     BS -->|Schedules| MONGO
-    
+
     BR -->|Logs| MINIO
-    BT -->|Results| MINIO
-    SA -->|Analysis| MINIO
     
     %% Styling
     classDef userClass fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
     classDef clientClass fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
     classDef apiClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef runtimeClass fill:#fff8e1,stroke:#f57c00,stroke-width:2px
-    classDef serviceClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     classDef dataClass fill:#e0f2f1,stroke:#00695c,stroke-width:2px
-    
+
     class DEV,TRADER userClass
     class WEB,CLI clientClass
     class API apiClass
-    class BR,BT,BS runtimeClass
-    class SA,AI serviceClass
+    class BR,BS runtimeClass
     class PG,MONGO,NATS,MINIO dataClass
 ```
 
@@ -229,36 +277,49 @@ graph TB
 
 **⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
 - **Bot Runner**: Real-time trading bot execution
-- **Backtest Runner**: Historical strategy validation  
 - **Bot Scheduler**: Cron-based scheduled execution
-
-**🔍 Security Analyzer** - Python service with YARA rules for automated security analysis of user-submitted bot code
-
-**🤖 AI Assistant** - Standalone service providing AI-powered bot development assistance and code generation. Standalone application for now, but will be integrated into the frontend in the future.
 
 **💾 Data Architecture** - Multi-database approach:
 - **PostgreSQL**: User accounts, bot definitions, authentication
 - **MongoDB**: Runtime state, job queues, execution logs
-- **MinIO**: Bot code storage, logs, backtest results
+- **MinIO**: Bot code storage and logs
 - **NATS JetStream**: Event streaming and service coordination
 
 ### Key Benefits
 
-- **🔒 Isolated**: Each bot runs in isolation with basic security checks
-- **⚡ Fast**: Real-time execution with live market data
-- **📈 Scalable**: Automatically handles multiple bots and users
+- **Isolated**: Each bot runs in isolation with resource management
+- **Fast**: Real-time execution with live market data
+- **Scalable**: Handles multiple bots and users across distributed infrastructure
 
 ---
 
-## 🤖 Bot Development
+## Bot Development
 
-### Framework Agnostic Approach
+### Supported Languages
 
-the0 doesn't lock you into specific libraries or frameworks. Create bots using:
+Build trading bots in any of these languages with official SDK support:
 
-- **Python 3.11+** with any PyPI packages (pandas, numpy, ccxt, etc.)
-- **JavaScript/Node.js 20+** with any npm packages
-- **Open Standards**: YAML configuration, JSON Schema validation
+| Language | SDK | Documentation | Package Registry |
+|----------|-----|---------------|------------------|
+| **Python** | [sdk/python](sdk/python) | [Quick Start](docs/custom-bot-development/python-quick-start.md) | [PyPI](https://pypi.org/project/the0-sdk/) |
+| **TypeScript/Node.js** | [sdk/nodejs](sdk/nodejs) | [Quick Start](docs/custom-bot-development/nodejs-quick-start.md) | [npm](https://www.npmjs.com/package/@alexanderwanyoike/the0-node) |
+| **Rust** | [sdk/rust](sdk/rust) | [Quick Start](docs/custom-bot-development/rust-quick-start.md) | [crates.io](https://crates.io/crates/the0-sdk) |
+| **C++** | [sdk/cpp](sdk/cpp) | [Quick Start](docs/custom-bot-development/cpp-quick-start.md) | Header-only (FetchContent) |
+| **C#** | [sdk/dotnet](sdk/dotnet) | [Quick Start](docs/custom-bot-development/csharp-quick-start.md) | [NuGet](https://www.nuget.org/packages/The0.Sdk) |
+| **Scala** | [sdk/scala](sdk/scala) | [Quick Start](docs/custom-bot-development/scala-quick-start.md) | [GitHub Packages](https://github.com/alexanderwanyoike/the0/packages) |
+| **Haskell** | [sdk/haskell](sdk/haskell) | [Quick Start](docs/custom-bot-development/haskell-quick-start.md) | Source (cabal) |
+
+### Custom Frontends
+
+Build React dashboards tailored to your trading strategies using the React SDK:
+
+| SDK | Documentation | Package |
+|-----|---------------|---------|
+| [sdk/react](sdk/react) | [Custom Frontends](docs/custom-bot-development/custom-frontends.md) | [@alexanderwanyoike/the0-react](https://www.npmjs.com/package/@alexanderwanyoike/the0-react) |
+
+### Framework Agnostic
+
+the0 doesn't lock you into specific libraries or frameworks. Use any packages from your language's ecosystem—pandas for Python, sttp for Scala, reqwest for Rust, or any other libraries you prefer.
 
 ### Example: Simple DCA Bot
 
@@ -298,12 +359,12 @@ def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
 
 ### Bot Types
 
-- **📅 Scheduled Bots** - Run on cron schedules (daily, weekly, monthly)
-- **⚡ Real-time Bots** - Continuous execution with live data feeds
+- **Scheduled Bots** - Run on cron schedules (daily, weekly, monthly)
+- **Real-time Bots** - Continuous execution with live data feeds
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 ### Getting Started
 - [Welcome to the0](/docs/welcome-to-the0.md) - Platform overview
@@ -317,72 +378,60 @@ def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
 ### Development Resources
 - [Bot Configuration](docs/custom-bot-development/configuration.md) - Configuration reference
 - [Testing & Debugging](docs/custom-bot-development/testing.md) - Development best practices
-- [Backtesting](docs/custom-bot-development/backtesting.md) - Strategy validation
 
 ---
 
-
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions from developers, traders, and AI enthusiasts! the0 is built by a community that values creativity and innovation.
 
-### 🤖 AI-Friendly Development
+### AI-Assisted Development
 
 We encourage the use of AI tools and agents in development:
 
-- ✅ **AI Assistants Welcome** - Use Claude, ChatGPT, GitHub Copilot, or any AI tools you prefer
-- ✅ **AI-Generated Code** - AI-written code is perfectly fine as long as it's well-tested
-- ✅ **Creative Solutions** - We value innovative approaches and creative problem-solving
-- ⚠️ **Quality First** - Ensure your code is properly tested, regardless of how it was created
-- ⚠️ **Context Engineering Over Vibe Coding** - Use context engineering when contributing with AI rather than "giving into the vibes"
+- **AI Assistants Welcome** - Use Claude, ChatGPT, GitHub Copilot, or any AI tools you prefer
+- **AI-Generated Code** - AI-written code is acceptable when properly tested
+- **Creative Solutions** - We value innovative approaches and problem-solving
+- **Quality First** - Ensure your code is properly tested, regardless of origin
+- **Context Engineering Over Vibe Coding** - Use context engineering when contributing with AI
 
 ### Ways to Contribute
 
-- 🐛 **Bug Reports** - Found an issue? Let us know!
-- 💡 **Feature Requests** - Have creative ideas for improvements?
-- 🔧 **Code Contributions** - Submit pull requests (AI-assisted or not!)
-- 📖 **Documentation** - Help improve our docs and examples
-- 🤖 **Bot Templates** - Share innovative trading strategies and patterns
-- 🎨 **Creative Ideas** - Think outside the box - we love unconventional approaches!
+- **Bug Reports** - Found an issue? Let us know
+- **Feature Requests** - Have ideas for improvements?
+- **Code Contributions** - Submit pull requests (AI-assisted or manual)
+- **Documentation** - Help improve our docs and examples
+- **Bot Templates** - Share innovative trading strategies and patterns
 
-### Development Philosophy
-
-- **🚀 Innovation Over Convention** - Creative solutions are encouraged
-- **🧪 Experiment Freely** - Try new approaches and share your learnings  
-- **🤝 Collaborate Openly** - Work with both humans and AI to build great software
-- **✅ Test Thoroughly** - Well-tested code is good code, regardless of its origin
-- **📚 Document Well** - Help others understand your creative solutions
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
 ### Getting Started
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-creative-idea`)
-3. Build your solution (with or without AI assistance!)
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Build your solution (with or without AI assistance)
 4. Add tests
-5. Document your approach and any AI tools used
-6. Submit a pull request with a clear description
-
-We believe the best software comes from combining human creativity with AI capabilities. Don't hesitate to experiment and push boundaries!
+5. Submit a pull request with a clear description
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🆘 Support & Community
+## Support & Community
 
-- 💬 **Discord**: [Join our community for support](https://discord.gg/g5mp57nK)
-- 📚 **Documentation**: [docs.the0.dev](https://docs.the0.dev)
-- 🐙 **GitHub Issues**: [Report bugs or request features](https://github.com/yourusername/the0/issues)
+- **Discord**: [Join our community for support](https://discord.gg/g5mp57nK)
+- **Documentation**: [docs.the0.dev](https://docs.the0.dev)
+- **GitHub Issues**: [Report bugs or request features](https://github.com/alexanderwanyoike/the0/issues)
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by AlphaNeuron**
+**Built by AlphaNeuron**
 
 [Website](https://the0.dev) • [Documentation](https://docs.the0.dev) • [Discord](https://discord.gg/g5mp57nK)
 

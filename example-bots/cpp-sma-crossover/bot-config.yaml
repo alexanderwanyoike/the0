@@ -1,0 +1,26 @@
+# SMA Crossover Bot Configuration (C++)
+# A realtime bot using Yahoo Finance for live stock data
+
+name: cpp-sma-crossover
+description: "SMA crossover strategy bot using C++ with Yahoo Finance data"
+version: 1.0.15
+author: "the0"
+type: realtime
+runtime: gcc13
+
+entrypoints:
+  bot: build/sma_bot
+  query: build/sma_query
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [trading, technical-analysis]
+  tags: [example, sma, crossover, cpp]
+  complexity: beginner

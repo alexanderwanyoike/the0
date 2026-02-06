@@ -1,0 +1,98 @@
+/**
+ * the0 Brand Colors
+ * Matching frontend globals.css exactly
+ */
+
+:root {
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Light Mode - Matching frontend :root */
+:root {
+  --vp-c-brand-1: hsl(142.8, 64.2%, 24.1%);
+  --vp-c-brand-2: hsl(142.8, 64.2%, 30%);
+  --vp-c-brand-3: hsl(142.8, 64.2%, 18%);
+  --vp-c-brand-soft: hsla(142.8, 64.2%, 24.1%, 0.14);
+
+  --vp-c-bg: hsl(142.8, 5%, 95%);
+  --vp-c-bg-soft: hsl(142.8, 5%, 90%);
+  --vp-c-bg-mute: hsl(104.8, 10%, 85%);
+  --vp-c-bg-alt: hsl(142.8, 5%, 95%);
+
+  --vp-c-text-1: hsl(142.8, 5%, 3%);
+  --vp-c-text-2: hsl(142.8, 5%, 35%);
+  --vp-c-text-3: hsl(142.8, 20%, 50%);
+
+  --vp-c-divider: hsl(142.8, 20%, 50%);
+  --vp-c-border: hsl(142.8, 20%, 50%);
+}
+
+/* Dark Mode - Matching frontend .dark exactly */
+.dark {
+  --vp-c-brand-1: hsl(142.8, 64.2%, 24.1%);
+  --vp-c-brand-2: hsl(142.8, 64.2%, 30%);
+  --vp-c-brand-3: hsl(142.8, 64.2%, 18%);
+  --vp-c-brand-soft: hsla(142.8, 64.2%, 24.1%, 0.16);
+
+  --vp-c-bg: hsl(142.8, 10%, 5%);
+  --vp-c-bg-soft: hsl(142.8, 5%, 3%);
+  --vp-c-bg-mute: hsl(104.8, 10%, 15%);
+  --vp-c-bg-alt: hsl(142.8, 10%, 5%);
+
+  --vp-c-text-1: hsl(142.8, 5%, 90%);
+  --vp-c-text-2: hsl(142.8, 5%, 60%);
+  --vp-c-text-3: hsl(142.8, 20%, 18%);
+
+  --vp-c-divider: hsl(142.8, 20%, 18%);
+  --vp-c-border: hsl(142.8, 20%, 18%);
+}
+
+/* Component Colors */
+:root {
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: var(--vp-c-white);
+  --vp-button-brand-bg: var(--vp-c-brand-1);
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: var(--vp-c-white);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: var(--vp-c-white);
+  --vp-button-brand-active-bg: var(--vp-c-brand-3);
+
+  --vp-custom-block-tip-border: var(--vp-c-brand-1);
+  --vp-custom-block-tip-text: var(--vp-c-text-1);
+  --vp-custom-block-tip-bg: var(--vp-c-brand-soft);
+}
+
+/* Sidebar - position below navbar */
+.VPSidebar {
+  background-color: var(--vp-c-bg-soft) !important;
+  top: var(--vp-nav-height) !important;
+  height: calc(100vh - var(--vp-nav-height)) !important;
+  padding-top: 0 !important;
+}
+
+.VPSidebar .nav {
+  padding-top: 16px !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--vp-c-border);
+  border-radius: 4px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-border) transparent;
+}

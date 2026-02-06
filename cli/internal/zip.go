@@ -80,8 +80,15 @@ func CreateBotZipFromDir(sourceDir string) (string, error) {
 		}
 		defer file.Close()
 
-		// Use relative path in ZIP
-		writer, err := zipWriter.Create(relPath)
+		// Create header with file info to preserve permissions
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		header.Method = zip.Deflate
+
+		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
 			return err
 		}

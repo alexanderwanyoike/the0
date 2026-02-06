@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
+import { PinoLogger } from "nestjs-pino";
 import { CustomBotRepository } from "./custom-bot.repository";
 import { StorageService } from "@/custom-bot/storage.service";
 import { validateCustomBotConfigPayload } from "./custom-bot.schema";
-import { NatsService } from "@/nats/nats.service";
 
 import {
   CustomBotConfig,
@@ -16,7 +16,7 @@ export class CustomBotService {
   constructor(
     private readonly customBotRepository: CustomBotRepository,
     private readonly storageService: StorageService,
-    private readonly natsService: NatsService,
+    private readonly logger: PinoLogger,
   ) {}
 
   async createCustomBot(
@@ -39,19 +39,11 @@ export class CustomBotService {
         return Failure(existsResult.error);
       }
 
-      if (
-        config.type === "realtime" &&
-        (!config.runtime ||
-          !["python3.11", "nodejs20"].includes(config.runtime))
-      ) {
-        return Failure(
-          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
-        );
-      }
+      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
 
-      if (config.type === "scheduled" && config.runtime !== "python3.11") {
+      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
-          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
+          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
         );
       }
 
@@ -59,22 +51,49 @@ export class CustomBotService {
         return Failure("Custom bot with this name already exists");
       }
 
+      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
+      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const requiredFiles = compiledRuntimes.includes(config.runtime)
+        ? [] // Skip entrypoint validation for compiled languages
+        : Object.values(config.entrypoints).filter(Boolean);
+
       // Validate ZIP file structure from uploaded file
       const zipValidation = await this.storageService.validateZipStructure(
         filePath,
-        Object.values(config.entrypoints).filter(Boolean),
+        requiredFiles,
       );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
 
+      // Extract frontend bundle if present (do this before creating bot record)
+      const frontendResult = await this.storageService.extractAndStoreFrontend(
+        filePath,
+        userId,
+        config.name,
+        config.version,
+      );
+
+      // Update config with hasFrontend flag
+      const finalConfig = {
+        ...config,
+        hasFrontend: frontendResult.success && frontendResult.data !== null,
+      };
+
+      if (frontendResult.success && frontendResult.data) {
+        this.logger.info(
+          { botName: config.name, frontendPath: frontendResult.data },
+          "Frontend bundle extracted for bot",
+        );
+      }
+
       // Create the bot
       const botData: Partial<CustomBot> = {
-        name: config.name,
-        version: config.version,
-        config,
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: "active",
       };
 
       const result = await this.customBotRepository.createNewGlobalVersion(
@@ -82,49 +101,16 @@ export class CustomBotService {
         botData,
       );
 
-      // Refetch the created bot
       if (!result.success) {
         return Failure(result.error);
       }
 
-      const createdBotResult =
-        await this.customBotRepository.getSpecificGlobalVersion(
-          config.name,
-          config.version,
-        );
-
-      // Publish custom-bot.submitted event for 0vers33r analysis
-      if (createdBotResult.success) {
-        const customBotSubmittedEvent = {
-          type: "custom-bot.submitted",
-          botId: createdBotResult.data.id,
-          name: config.name,
-          userId: userId,
-          filePath: filePath,
-          config: config,
-          timestamp: new Date().toISOString(),
-        };
-
-        const publishResult = await this.natsService.publish(
-          "custom-bot.submitted",
-          customBotSubmittedEvent,
-        );
-
-        if (!publishResult.success) {
-          console.error(
-            "Failed to publish custom-bot.submitted event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
-          );
-        }
-      }
-
-      return createdBotResult;
+      return await this.customBotRepository.getSpecificGlobalVersion(
+        config.name,
+        config.version,
+      );
     } catch (error: any) {
-      console.log("Error creating custom bot:", error);
+      this.logger.error({ err: error }, "Error creating custom bot");
       return Failure(`Failed to create custom bot: ${error.message}`);
     }
   }
@@ -147,19 +133,11 @@ export class CustomBotService {
         return Failure("Bot name in config must match the URL parameter");
       }
 
-      if (
-        config.type === "realtime" &&
-        (!config.runtime ||
-          !["python3.11", "nodejs20"].includes(config.runtime))
-      ) {
-        return Failure(
-          "Realtime bots must specify a valid runtime (python3.11 or nodejs20)",
-        );
-      }
+      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
 
-      if (config.type === "scheduled" && config.runtime !== "python3.11") {
+      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
-          "Scheduled bots must use python3.11 runtime (nodejs20 is not supported for scheduled bots)",
+          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
         );
       }
 
@@ -216,22 +194,49 @@ export class CustomBotService {
         return Failure(`Version ${config.version} already exists for this bot`);
       }
 
+      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
+      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const requiredFiles = compiledRuntimes.includes(config.runtime)
+        ? [] // Skip entrypoint validation for compiled languages
+        : Object.values(config.entrypoints).filter(Boolean);
+
       // Validate ZIP file structure from uploaded file
       const zipValidation = await this.storageService.validateZipStructure(
         filePath,
-        Object.values(config.entrypoints).filter(Boolean),
+        requiredFiles,
       );
       if (!zipValidation.success) {
         return Failure(`ZIP validation failed: ${zipValidation.error}`);
       }
 
+      // Extract frontend bundle if present
+      const frontendResult = await this.storageService.extractAndStoreFrontend(
+        filePath,
+        userId,
+        config.name,
+        config.version,
+      );
+
+      // Update config with hasFrontend flag
+      const finalConfig = {
+        ...config,
+        hasFrontend: frontendResult.success && frontendResult.data !== null,
+      };
+
+      if (frontendResult.success && frontendResult.data) {
+        this.logger.info(
+          { botName: config.name, frontendPath: frontendResult.data },
+          "Frontend bundle extracted for bot update",
+        );
+      }
+
       // Create new version
       const botData: Partial<CustomBot> = {
-        name: config.name,
-        version: config.version,
-        config,
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
         filePath: filePath,
-        status: "pending_review", // Default status
+        status: "active",
       };
 
       const customBot = await this.customBotRepository.createNewGlobalVersion(
@@ -243,43 +248,12 @@ export class CustomBotService {
         return Failure(customBot.error);
       }
 
-      const createdBotResult =
-        await this.customBotRepository.getSpecificGlobalVersion(
-          config.name,
-          config.version,
-        );
-
-      if (createdBotResult.success) {
-        const customBotSubmittedEvent = {
-          type: "custom-bot.submitted",
-          botId: createdBotResult.data.id,
-          name: config.name,
-          userId: userId,
-          filePath: filePath,
-          config: config,
-          timestamp: new Date().toISOString(),
-        };
-
-        const publishResult = await this.natsService.publish(
-          "custom-bot.submitted",
-          customBotSubmittedEvent,
-        );
-
-        if (!publishResult.success) {
-          console.error(
-            "Failed to publish custom-bot.submitted event:",
-            publishResult.error,
-          );
-        } else {
-          console.log(
-            `📤 Published custom-bot.submitted event for bot ${createdBotResult.data.id}`,
-          );
-        }
-      }
-
-      return createdBotResult;
+      return await this.customBotRepository.getSpecificGlobalVersion(
+        config.name,
+        config.version,
+      );
     } catch (error: any) {
-      console.log("Error updating custom bot:", error);
+      this.logger.error({ err: error }, "Error updating custom bot");
       return Failure(`Failed to update custom bot: ${error.message}`);
     }
   }
@@ -296,7 +270,7 @@ export class CustomBotService {
 
       return result;
     } catch (error: any) {
-      console.log("Error getting user custom bots:", error);
+      this.logger.error({ err: error }, "Error getting user custom bots");
       return Failure(`Failed to get user custom bots: ${error.message}`);
     }
   }
@@ -334,5 +308,21 @@ export class CustomBotService {
       name,
       version,
     );
+  }
+
+  async getGlobalLatestVersion(
+    name: string,
+  ): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.getGlobalLatestVersion(name);
+  }
+
+  async getAllGlobalCustomBots(): Promise<
+    Result<CustomBotWithVersions[], string>
+  > {
+    return await this.customBotRepository.getAllGlobalCustomBots();
+  }
+
+  async getById(id: string): Promise<Result<CustomBot, string>> {
+    return await this.customBotRepository.findOneById(id);
   }
 }

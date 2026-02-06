@@ -15,6 +15,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"the0/internal"
+	"the0/internal/logger"
 )
 
 func NewBotCmd() *cobra.Command {
@@ -29,6 +30,10 @@ func NewBotCmd() *cobra.Command {
 	cmd.AddCommand(NewBotUpdateCmd())
 	cmd.AddCommand(NewBotDeleteCmd())
 	cmd.AddCommand(NewBotLogsCmd())
+	cmd.AddCommand(NewBotEnableCmd())
+	cmd.AddCommand(NewBotDisableCmd())
+	cmd.AddCommand(NewBotStateCmd())
+	cmd.AddCommand(NewBotQueryCmd())
 	return cmd
 }
 
@@ -62,13 +67,21 @@ func NewBotUpdateCmd() *cobra.Command {
 }
 
 func NewBotDeleteCmd() *cobra.Command {
-	return &cobra.Command{
+	var skipConfirm bool
+
+	cmd := &cobra.Command{
 		Use:   "delete <bot_id>",
 		Short: "Delete a bot instance",
-		Long:  "Delete a deployed bot (requires confirmation)",
+		Long:  "Delete a deployed bot (requires confirmation unless -y is provided)",
 		Args:  cobra.ExactArgs(1),
-		Run:   deleteBotInstance,
+		Run: func(cmd *cobra.Command, args []string) {
+			deleteBotInstance(cmd, args, skipConfirm)
+		},
 	}
+
+	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompt")
+
+	return cmd
 }
 
 func NewBotLogsCmd() *cobra.Command {
@@ -91,50 +104,129 @@ func NewBotLogsCmd() *cobra.Command {
 	return cmd
 }
 
-func deployBotInstance(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
+func NewBotEnableCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "enable <bot_id>",
+		Short: "Enable a bot instance",
+		Long:  "Enable a stopped bot instance to start running",
+		Args:  cobra.ExactArgs(1),
+		Run:   enableBotInstance,
+	}
+}
 
+func NewBotDisableCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "disable <bot_id>",
+		Short: "Disable a bot instance",
+		Long:  "Disable a running bot instance to stop it",
+		Args:  cobra.ExactArgs(1),
+		Run:   disableBotInstance,
+	}
+}
+
+func NewBotStateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "state",
+		Short: "Manage bot persistent state",
+		Long:  "List, get, delete, or clear persistent state for a bot",
+	}
+
+	cmd.AddCommand(NewBotStateListCmd())
+	cmd.AddCommand(NewBotStateGetCmd())
+	cmd.AddCommand(NewBotStateDeleteCmd())
+	cmd.AddCommand(NewBotStateClearCmd())
+	return cmd
+}
+
+func NewBotStateListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list <bot_id>",
+		Short: "List all state keys for a bot",
+		Long:  "List all persistent state keys stored for a bot",
+		Args:  cobra.ExactArgs(1),
+		Run:   listBotState,
+	}
+}
+
+func NewBotStateGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <bot_id> <key>",
+		Short: "Get a state value",
+		Long:  "Get a specific state value by key for a bot",
+		Args:  cobra.ExactArgs(2),
+		Run:   getBotStateKey,
+	}
+}
+
+func NewBotStateDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <bot_id> <key>",
+		Short: "Delete a state key",
+		Long:  "Delete a specific state key for a bot",
+		Args:  cobra.ExactArgs(2),
+		Run:   deleteBotStateKey,
+	}
+}
+
+func NewBotStateClearCmd() *cobra.Command {
+	var skipConfirm bool
+
+	cmd := &cobra.Command{
+		Use:   "clear <bot_id>",
+		Short: "Clear all state for a bot",
+		Long:  "Delete all persistent state for a bot (requires confirmation unless -y is provided)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			clearBotState(cmd, args, skipConfirm)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompt")
+	return cmd
+}
+
+func deployBotInstance(cmd *cobra.Command, args []string) {
 	configPath := args[0]
 
-	blue.Println("Injecting bot into the trading grid...")
-	fmt.Printf("Config: %s\n", configPath)
+	logger.StartSpinner("Deploying bot")
+	logger.Verbose("Config file: %s", configPath)
 
 	// Load and parse config.json
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
-		red.Fprintf(os.Stderr, "Failed to read config file: %v\n", err)
+		logger.StopSpinnerWithError("Failed to read config file")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
 	var config map[string]interface{}
 	if err := json.Unmarshal(configData, &config); err != nil {
-		red.Fprintf(os.Stderr, "Invalid JSON in config file: %v\n", err)
+		logger.StopSpinnerWithError("Invalid JSON in config file")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
-
-	green.Println("✓ Config loaded")
 
 	// Extract bot name from config
 	var botName string
 	if nameVal, ok := config["name"].(string); ok {
 		botName = nameVal
 	} else {
-		red.Fprintf(os.Stderr, "Bot name not found in config file. Please add a 'name' field to your config.json\n")
+		logger.StopSpinnerWithError("Bot name not found")
+		logger.Error("Please add a 'name' field to your config.json")
 		os.Exit(1)
 	}
 
-	fmt.Printf("Bot: %s\n", botName)
+	logger.UpdateSpinner("Authenticating")
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	green.Println("✓ Authenticated")
+	logger.UpdateSpinner("Creating bot instance")
 
 	// Deploy bot
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
@@ -147,42 +239,41 @@ func deployBotInstance(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue.Println("Access denied. Reconnecting to the grid...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry deployment
 			bot, err = apiClient.DeployBotInstance(auth, request)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Deployment failed: %v\n", err)
+				logger.StopSpinnerWithError("Deployment failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Deployment failed: %v\n", err)
+			logger.StopSpinnerWithError("Deployment failed")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
 
-	green.Println("Bot deployed to the0 ⚡")
-	fmt.Printf("ID: %s\n", bot.ID)
-	fmt.Printf("Name: %s\n", bot.Name)
-	green.Println("Ready to trade 📈")
+	logger.StopSpinnerWithSuccess("Bot deployed successfully ⚡")
+	logger.Print("  ID: %s", bot.ID)
+	logger.Print("  Name: %s", bot.Name)
 }
 
 func listBotInstances(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-
-	blue.Println("Scanning the grid for active bots...")
+	logger.StartSpinner("Fetching bots")
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
@@ -192,27 +283,33 @@ func listBotInstances(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue.Println("Access denied. Reconnecting to the grid...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry listing
 			bots, err = apiClient.ListBots(auth)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Scan failed: %v\n", err)
+				logger.StopSpinnerWithError("Failed to fetch bots")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Scan failed: %v\n", err)
+			logger.StopSpinnerWithError("Failed to fetch bots")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
 
+	logger.StopSpinner()
+
 	if len(bots) == 0 {
-		blue.Println("No bots in the grid. Time to deploy your first trading bot 🤖")
+		logger.Info("No bots found")
+		logger.Print("Deploy your first bot with 'the0 bot deploy <config.json>'")
 		return
 	}
 
@@ -254,55 +351,54 @@ func listBotInstances(cmd *cobra.Command, args []string) {
 		table.Append(bot.ID, bot.Name, botType, botVersion, schedule, createdStr, updatedStr)
 	}
 
-	green.Printf("Found %d active bot(s) ⚡\n\n", len(bots))
+	logger.Success("Found %d bot(s)", len(bots))
+	logger.Newline()
 	if err := table.Render(); err != nil {
-		red.Fprintf(os.Stderr, "Failed to render table: %v\n", err)
+		logger.Error("Failed to render table: %v", err)
 		os.Exit(1)
 	}
-	green.Println("\nBots locked and loaded. Ready to dominate the markets 📈")
 }
 
 func updateBotInstance(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-
 	botID := args[0]
 	configPath := args[1]
 
-	blue.Println("Updating bot...")
-	fmt.Printf("Bot ID: %s\n", botID)
-	fmt.Printf("Config: %s\n", configPath)
+	logger.StartSpinner("Updating bot")
+	logger.Verbose("Bot ID: %s", botID)
+	logger.Verbose("Config file: %s", configPath)
 
 	// Load and parse config.json
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
-		red.Fprintf(os.Stderr, "Failed to read config file: %v\n", err)
+		logger.StopSpinnerWithError("Failed to read config file")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
 	var configMap map[string]interface{}
 	if err := json.Unmarshal(configData, &configMap); err != nil {
-		red.Fprintf(os.Stderr, "Invalid JSON in config file: %v\n", err)
+		logger.StopSpinnerWithError("Invalid JSON in config file")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
-	green.Println("✓ Config loaded")
+	logger.UpdateSpinner("Authenticating")
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
-
-	green.Println("✓ Connected to the0")
 
 	// Extract name from config (optional)
 	var botName string
 	if nameVal, ok := configMap["name"].(string); ok {
 		botName = nameVal
 	}
+
+	logger.UpdateSpinner("Applying configuration")
 
 	// Update bot
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
@@ -315,65 +411,63 @@ func updateBotInstance(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue.Println("Access denied. Reconnecting to the grid...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry update
 			err = apiClient.UpdateBotInstance(auth, botID, request)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Update failed: %v\n", err)
+				logger.StopSpinnerWithError("Update failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Update failed: %v\n", err)
+			logger.StopSpinnerWithError("Update failed")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
 
-	green.Println("Bot updated ⚡")
-	fmt.Printf("Bot ID: %s\n", botID)
-	green.Println("Bot configuration updated and active")
+	logger.StopSpinnerWithSuccess("Bot updated successfully")
+	logger.Print("  ID: %s", botID)
 }
 
-func deleteBotInstance(cmd *cobra.Command, args []string) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-	yellow := color.New(color.FgYellow)
-
+func deleteBotInstance(cmd *cobra.Command, args []string, skipConfirm bool) {
 	botID := args[0]
 
-	yellow.Printf("⚠️ Are you sure you want to delete bot '%s'?\n", botID)
-	yellow.Println("This action cannot be undone")
-	fmt.Print("Type 'yes' to confirm: ")
+	if !skipConfirm {
+		logger.Warning("Are you sure you want to delete bot '%s'?", botID)
+		logger.Print("This action cannot be undone")
+		logger.Printf("Type 'yes' to confirm: ")
 
-	reader := bufio.NewReader(os.Stdin)
-	confirmation, err := reader.ReadString('\n')
-	if err != nil {
-		red.Fprintf(os.Stderr, "Failed to read confirmation: %v\n", err)
-		os.Exit(1)
+		reader := bufio.NewReader(os.Stdin)
+		confirmation, err := reader.ReadString('\n')
+		if err != nil {
+			logger.Error("Failed to read confirmation: %v", err)
+			os.Exit(1)
+		}
+
+		confirmation = strings.TrimSpace(strings.ToLower(confirmation))
+		if confirmation != "yes" {
+			logger.Info("Deletion cancelled")
+			return
+		}
 	}
 
-	confirmation = strings.TrimSpace(strings.ToLower(confirmation))
-	if confirmation != "yes" {
-		blue.Println("Deletion cancelled. Bot remains active 📈")
-		return
-	}
-
-	blue.Println("🗑️ Starting bot deletion process...")
+	logger.StartSpinner("Deleting bot")
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
-
-	green.Println("✓ Connected to the0")
 
 	// Delete bot
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
@@ -381,35 +475,366 @@ func deleteBotInstance(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue.Println("Access denied. Reconnecting to the grid...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry deletion
 			err = apiClient.DeleteBotInstance(auth, botID)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Deletion failed: %v\n", err)
+				logger.StopSpinnerWithError("Deletion failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Deletion failed: %v\n", err)
+			logger.StopSpinnerWithError("Deletion failed")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
 
-	green.Println("Bot terminated 💀")
-	fmt.Printf("Bot ID: %s\n", botID)
-	green.Println("Bot purged from the grid")
+	logger.StopSpinnerWithSuccess("Bot deleted successfully")
+	logger.Print("  ID: %s", botID)
+}
+
+func enableBotInstance(cmd *cobra.Command, args []string) {
+	setBotEnabled(args[0], true)
+}
+
+func disableBotInstance(cmd *cobra.Command, args []string) {
+	setBotEnabled(args[0], false)
+}
+
+func setBotEnabled(botID string, enabled bool) {
+	action := "Enabling"
+	if !enabled {
+		action = "Disabling"
+	}
+
+	logger.StartSpinner(action + " bot")
+	logger.Verbose("Bot ID: %s", botID)
+
+	// Get auth token
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+
+	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+
+	// First, fetch the bot to get its current config
+	logger.UpdateSpinner("Fetching bot configuration")
+	bot, err := apiClient.FindBotByNameOrID(auth, botID)
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+			bot, err = apiClient.FindBotByNameOrID(auth, botID)
+			if err != nil {
+				logger.StopSpinnerWithError("Failed to fetch bot")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Failed to fetch bot")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	// Update config with enabled status
+	if bot.Config == nil {
+		bot.Config = make(map[string]any)
+	}
+	bot.Config["enabled"] = enabled
+
+	logger.UpdateSpinner("Updating bot status")
+
+	// Update the bot
+	request := &internal.BotUpdateRequest{
+		Name:   bot.Name,
+		Config: bot.Config,
+	}
+
+	err = apiClient.UpdateBotInstance(auth, bot.ID, request)
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+			err = apiClient.UpdateBotInstance(auth, bot.ID, request)
+			if err != nil {
+				logger.StopSpinnerWithError("Update failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Update failed")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	status := "enabled"
+	if !enabled {
+		status = "disabled"
+	}
+	logger.StopSpinnerWithSuccess("Bot " + status + " successfully")
+	logger.Print("  ID: %s", bot.ID)
+	logger.Print("  Name: %s", bot.Name)
+}
+
+func listBotState(cmd *cobra.Command, args []string) {
+	botID := args[0]
+
+	logger.StartSpinner("Fetching state keys")
+	logger.Verbose("Bot ID: %s", botID)
+
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+
+	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	keys, err := apiClient.ListBotState(auth, botID)
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+			keys, err = apiClient.ListBotState(auth, botID)
+			if err != nil {
+				logger.StopSpinnerWithError("Failed to list state")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Failed to list state")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	logger.StopSpinner()
+
+	if len(keys) == 0 {
+		logger.Info("No state keys found for bot %s", botID)
+		return
+	}
+
+	// Create table
+	table := tablewriter.NewWriter(os.Stdout)
+	table.Header("Key", "Size")
+
+	for _, key := range keys {
+		sizeStr := formatBytes(key.Size)
+		table.Append(key.Key, sizeStr)
+	}
+
+	logger.Success("Found %d state key(s)", len(keys))
+	logger.Newline()
+	if err := table.Render(); err != nil {
+		logger.Error("Failed to render table: %v", err)
+		os.Exit(1)
+	}
+}
+
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func getBotStateKey(cmd *cobra.Command, args []string) {
+	botID := args[0]
+	key := args[1]
+
+	logger.StartSpinner("Fetching state value")
+	logger.Verbose("Bot ID: %s, Key: %s", botID, key)
+
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+
+	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	value, err := apiClient.GetBotStateKey(auth, botID, key)
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+			value, err = apiClient.GetBotStateKey(auth, botID, key)
+			if err != nil {
+				logger.StopSpinnerWithError("Failed to get state key")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Failed to get state key")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	logger.StopSpinner()
+
+	// Pretty print JSON
+	jsonBytes, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		logger.Error("Failed to format value: %v", err)
+		os.Exit(1)
+	}
+
+	fmt.Println(string(jsonBytes))
+}
+
+func deleteBotStateKey(cmd *cobra.Command, args []string) {
+	botID := args[0]
+	key := args[1]
+
+	logger.StartSpinner("Deleting state key")
+	logger.Verbose("Bot ID: %s, Key: %s", botID, key)
+
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+
+	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	deleted, err := apiClient.DeleteBotStateKey(auth, botID, key)
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+			deleted, err = apiClient.DeleteBotStateKey(auth, botID, key)
+			if err != nil {
+				logger.StopSpinnerWithError("Failed to delete state key")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Failed to delete state key")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	if deleted {
+		logger.StopSpinnerWithSuccess("State key deleted successfully")
+		logger.Print("  Key: %s", key)
+	} else {
+		logger.StopSpinner()
+		logger.Info("State key '%s' not found", key)
+	}
+}
+
+func clearBotState(cmd *cobra.Command, args []string, skipConfirm bool) {
+	botID := args[0]
+
+	if !skipConfirm {
+		logger.Warning("Are you sure you want to clear all state for bot '%s'?", botID)
+		logger.Print("This action cannot be undone")
+		logger.Printf("Type 'yes' to confirm: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		confirmation, err := reader.ReadString('\n')
+		if err != nil {
+			logger.Error("Failed to read confirmation: %v", err)
+			os.Exit(1)
+		}
+
+		confirmation = strings.TrimSpace(strings.ToLower(confirmation))
+		if confirmation != "yes" {
+			logger.Info("Operation cancelled")
+			return
+		}
+	}
+
+	logger.StartSpinner("Clearing bot state")
+	logger.Verbose("Bot ID: %s", botID)
+
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+
+	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	cleared, err := apiClient.ClearBotState(auth, botID)
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+			cleared, err = apiClient.ClearBotState(auth, botID)
+			if err != nil {
+				logger.StopSpinnerWithError("Failed to clear state")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Failed to clear state")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	if cleared {
+		logger.StopSpinnerWithSuccess("Bot state cleared successfully")
+	} else {
+		logger.StopSpinner()
+		logger.Info("No state to clear for bot %s", botID)
+	}
 }
 
 func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
-	red := color.New(color.FgRed)
-	blue := color.New(color.FgBlue)
-	yellow := color.New(color.FgYellow)
-
 	botID := args[0]
 	var dateParam string
 
@@ -417,7 +842,7 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 	if len(args) > 1 {
 		dateParam = args[1]
 		if err := validateDateParam(dateParam); err != nil {
-			red.Fprintf(os.Stderr, "Invalid date format: %v\n", err)
+			logger.Error("Invalid date format: %v", err)
 			os.Exit(1)
 		}
 	} else {
@@ -427,25 +852,25 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 
 	// Validate limit
 	if limit < 1 || limit > 1000 {
-		red.Fprintf(os.Stderr, "Limit must be between 1 and 1000\n")
+		logger.Error("Limit must be between 1 and 1000")
 		os.Exit(1)
 	}
 
-	blue.Printf("⚡ Accessing bot logs from the grid: %s\n", botID)
-	if watchMode {
-		yellow.Println("👁️ Watch mode active - monitoring live log stream (press Ctrl+C to stop)")
-	}
+	logger.StartSpinner("Fetching logs for bot: " + botID)
 
 	// Get auth token
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
-		red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
 
 	if watchMode {
+		logger.StopSpinner()
+		logger.Info("Watching logs (Ctrl+C to stop)")
 		watchBotLogs(apiClient, auth, botID, dateParam, limit)
 	} else {
 		displayBotLogs(apiClient, auth, botID, dateParam, limit)
@@ -486,9 +911,6 @@ func validateDateParam(dateParam string) error {
 }
 
 func displayBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dateParam string, limit int) {
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-
 	// Build parameters
 	params := &internal.LogsParams{
 		Limit: limit,
@@ -505,41 +927,42 @@ func displayBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, d
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
-			blue := color.New(color.FgBlue)
-			blue.Println("Access denied. Reconnecting to the grid...")
+			logger.UpdateSpinner("Session expired. Re-authenticating")
 			auth, err = internal.PromptForNewAPIKey()
 			if err != nil {
-				red.Fprintf(os.Stderr, "Authentication failed: %v\n", err)
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 
 			// Retry fetching logs
 			logs, err = apiClient.GetBotLogs(auth, botID, params)
 			if err != nil {
-				red.Fprintf(os.Stderr, "Failed to fetch logs: %v\n", err)
+				logger.StopSpinnerWithError("Failed to fetch logs")
+				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			red.Fprintf(os.Stderr, "Failed to fetch logs: %v\n", err)
+			logger.StopSpinnerWithError("Failed to fetch logs")
+			logger.Error("%v", err)
 			os.Exit(1)
 		}
 	}
 
+	logger.StopSpinner()
+
 	if len(logs) == 0 {
-		blue := color.New(color.FgBlue)
-		blue.Println("🔍 No logs found in the grid for the specified criteria")
+		logger.Info("No logs found for the specified criteria")
 		return
 	}
 
 	// Display logs
 	displayLogEntries(logs)
-	green.Printf("\n✓ Bot log entries retrieved from the grid: %d\n", len(logs))
+	logger.Newline()
+	logger.Success("Retrieved %d log entries", len(logs))
 }
 
 func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dateParam string, limit int) {
-	red := color.New(color.FgRed)
-	yellow := color.New(color.FgYellow)
-
 	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -564,7 +987,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 	// Fetch initial logs
 	logs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
 	if err != nil {
-		red.Fprintf(os.Stderr, "Failed to fetch logs: %v\n", err)
+		logger.Error("Failed to fetch logs: %v", err)
 		os.Exit(1)
 	}
 
@@ -580,18 +1003,19 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 		}
 	}
 
-	yellow.Println("\n⚡ Live log monitoring active - streaming from the grid... (press Ctrl+C to disconnect)")
+	logger.Newline()
 
 	for {
 		select {
 		case <-sigChan:
-			yellow.Println("\n🔌 Stopping live log stream monitor...")
+			logger.Newline()
+			logger.Info("Stopped watching logs")
 			return
 		case <-ticker.C:
 			// Fetch new logs since last timestamp
 			newLogs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
 			if err != nil {
-				red.Printf("Error fetching logs: %v\n", err)
+				logger.Error("Error fetching logs: %v", err)
 				continue
 			}
 

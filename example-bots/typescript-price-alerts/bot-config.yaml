@@ -1,0 +1,26 @@
+# Price Alerts Bot Configuration
+# A realtime bot that monitors prices and emits alerts
+
+name: price-alerts
+description: "Monitors simulated prices and emits alerts when thresholds are crossed"
+version: 1.1.2
+author: "the0"
+type: realtime
+runtime: nodejs20
+
+entrypoints:
+  bot: main.js
+  query: query.js
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+# Enable custom frontend dashboard
+hasFrontend: true
+
+metadata:
+  categories: [alerts, monitoring]
+  tags: [example, beginner, realtime]
+  complexity: beginner

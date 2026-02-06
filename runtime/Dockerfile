@@ -1,64 +1,104 @@
-# Use the official Golang image as the base image
-FROM golang:tip-alpine as builder
+# Universal the0 runtime image with all language runtimes
+# Used for bot execution in both Docker and K8s modes
+#
+# Build: docker build -t the0/runtime:latest runtime/
+#
+# Base: Ubuntu 24.04 (GCC 13 / GLIBCXX_3.4.32+ for C++ binary compatibility)
+#
+# Supported runtimes:
+#   - python3.11: Python 3.11 (from deadsnakes PPA)
+#   - nodejs20: Node.js 20 LTS
+#   - dotnet8: .NET 8 runtime
+#   - scala3: Scala 3 (via Java 17 JRE)
+#   - rust-stable: Pre-compiled Rust binaries
+#   - gcc13: Pre-compiled C++ binaries (requires GCC 13+ libstdc++)
+#   - ghc96: Pre-compiled Haskell binaries
 
-RUN apk --no-cache add make
-
-RUN apk --no-cache add protobuf protobuf-dev
-
-WORKDIR /app
-
+# Stage 1: Build the runtime binary from Go source
+FROM golang:1.24-alpine AS runtime-builder
+RUN apk --no-cache add make git
+WORKDIR /build
 COPY go.mod go.sum ./
-
 RUN go mod download
-
 COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o runtime ./cmd/app
 
-RUN make go-build
+# Stage 2: Universal runtime image with all language support
+# Ubuntu 24.04 provides GCC 13 / libstdc++ with GLIBCXX_3.4.32+ for C++ binaries
+FROM ubuntu:24.04
 
-# Use Docker-in-Docker image which includes both Docker daemon and client
-FROM alpine:latest
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Update package repository and install Docker
-RUN apk update && \
-    apk add --no-cache \
-    docker \
-    docker-compose \
-    docker-cli-compose \
-    iptables-legacy \
-    iproute2
+# Install base dependencies and utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install necessary packages for the application
-RUN apk --no-cache add ca-certificates
+# Python 3.11 from deadsnakes PPA (required for ABI compatibility with vendored packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    python3.11-distutils \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
 
-# Create a non-root user with docker group access
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser && \
-    addgroup appuser docker
+# Node.js 20 LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g npm@latest
 
-# Create necessary directories with proper permissions
-RUN mkdir -p /app /tmp/runtime && \
-    chown -R appuser:appuser /app /tmp/runtime
+# .NET 8 Runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dotnet-runtime-8.0 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory inside the container
-WORKDIR /app
+# Java 17 JRE (for Scala JARs)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-17-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 8080
+# Runtime libraries for compiled languages (Rust, C++, Haskell)
+# These are needed to run pre-compiled binaries
+# Ubuntu 24.04 includes GCC 13's libstdc++ with GLIBCXX_3.4.32+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libstdc++6 \
+    libgmp10 \
+    libffi8 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 
-# Expose gRPC port
-EXPOSE 50051
+# Copy the runtime binary from builder
+COPY --from=runtime-builder /build/runtime /app/runtime
+RUN chmod 755 /app/runtime
 
-# Copy the built binary from the builder stage
-COPY --from=builder /app/build/runtime .
+# Copy wrapper scripts for Python and Node.js
+# These handle signal management, config parsing, and result writing
+COPY wrappers/ /app/wrappers/
+RUN chmod 755 /app/wrappers/*.py /app/wrappers/*.js
 
-# Ensure the binary is executable
-RUN chmod +x ./runtime
+# Create required directories
+# /bot - Bot code (downloaded from MinIO)
+# /state - Bot persistent state (synced to MinIO)
+# /query - Query results (for ephemeral queries)
+# /var/the0/logs - Bot logs (synced to MinIO)
+RUN mkdir -p /bot /state /query /var/the0/logs
 
-# Note: Running as root is required for dockerd to function properly
-# The Kubernetes security context provides the necessary isolation
-USER root
+# Set working directory to bot code location
+WORKDIR /bot
 
-# Set entrypoint to handle Docker daemon startup if needed
-ENTRYPOINT ["/bin/sh", "-c", "if [ ! -S /var/run/docker.sock ]; then /usr/bin/dockerd --iptables=false --ip6tables=false --bridge=none -D & sleep 5 && docker info; fi && exec \"$@\"", "--"]
-
-# Default command (can be overridden in docker-compose)
-CMD ["./runtime", "--help"]
+# The execute command handles everything:
+# - Downloads code from MinIO
+# - Downloads state from MinIO
+# - Starts sync subprocess (Docker mode)
+# - Starts query server subprocess (if realtime bot)
+# - Executes the bot
+# - Handles cleanup and signal forwarding
+CMD ["/app/runtime", "execute"]

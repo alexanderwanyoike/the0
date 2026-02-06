@@ -1,0 +1,152 @@
+# Example Bots with Custom Frontends
+
+This directory contains example bots demonstrating how to build custom trading bots with React dashboards using the `@the0/react` SDK.
+
+## Examples
+
+### Original Examples (Mock Data)
+
+| Example | Type | Runtime | Description |
+|---------|------|---------|-------------|
+| [python-portfolio-tracker](./python-portfolio-tracker/) | Scheduled | Python 3.11 | Simulates portfolio tracking with value history and trades |
+| [typescript-price-alerts](./typescript-price-alerts/) | Realtime | Node.js 20 | Monitors prices and emits alerts/signals |
+
+### SMA Crossover Strategy (Yahoo Finance Data)
+
+These examples implement the same Simple Moving Average (SMA) crossover trading strategy across different languages, using real market data from Yahoo Finance:
+
+| Example | Type | Runtime | Description |
+|---------|------|---------|-------------|
+| [csharp-sma-crossover](./csharp-sma-crossover/) | Realtime | .NET 8 | SMA crossover using C# with System.Text.Json |
+| [rust-sma-crossover](./rust-sma-crossover/) | Realtime | Rust | SMA crossover using Rust with reqwest/serde |
+| [cpp-sma-crossover](./cpp-sma-crossover/) | Realtime | GCC 13 | SMA crossover using C++ with libcurl/nlohmann-json |
+| [scala-sma-crossover](./scala-sma-crossover/) | Realtime | Scala 3 | SMA crossover using Scala with sttp/circe |
+| [haskell-sma-crossover](./haskell-sma-crossover/) | Scheduled | GHC 9.6 | SMA crossover using Haskell with http-conduit/aeson |
+
+#### SMA Crossover Strategy Overview
+
+The SMA crossover strategy monitors two moving averages:
+- **Short SMA (5-day)**: Fast-moving average for recent price trends
+- **Long SMA (20-day)**: Slow-moving average for overall trend
+
+**Trading Signals:**
+- **BUY (Golden Cross)**: When short SMA crosses above long SMA
+- **SELL (Death Cross)**: When short SMA crosses below long SMA
+
+All SMA bots emit the same metric types:
+- `price`: Current stock price with change percentage
+- `sma`: Short and long SMA values
+- `signal`: BUY/SELL signals with confidence score
+
+## Key Concepts
+
+### Structured Metric Emission
+
+Bots emit metrics via structured JSON logging with a `_metric` field:
+
+**Python (structlog):**
+```python
+logger.info("portfolio_snapshot",
+    _metric="portfolio_value",
+    value=10500.00,
+    change_pct=2.5
+)
+```
+
+**TypeScript (pino):**
+```typescript
+logger.info({
+    _metric: "price",
+    symbol: "BTC/USD",
+    value: 45000.00
+}, "price_update");
+```
+
+### Custom Frontends
+
+Each bot can include a `frontend/` directory with a React dashboard:
+
+```
+my-bot/
+├── bot-config.yaml       # Must have hasFrontend: true
+├── main.py
+└── frontend/
+    ├── package.json
+    ├── index.tsx         # Default export: React component
+    └── dist/
+        └── bundle.js     # Built ESM bundle
+```
+
+The frontend uses the `@the0/react` SDK to access bot events:
+
+```tsx
+import { useThe0Events } from '@the0/react';
+
+export default function Dashboard() {
+  const { events, utils, loading } = useThe0Events();
+
+  const trades = utils.filterByType('trade');
+  const latestValue = utils.latest('portfolio_value');
+
+  return (/* your dashboard */);
+}
+```
+
+## SDK Utilities
+
+The `useThe0Events()` hook provides:
+
+| Method | Description |
+|--------|-------------|
+| `utils.filterByType(type)` | Get all events of a metric type |
+| `utils.latest(type)` | Get the most recent event of a type |
+| `utils.since(duration)` | Get events from last `'1h'`, `'24h'`, `'7d'`, etc. |
+| `utils.between(start, end)` | Get events between two dates |
+| `utils.metrics()` | Get only metric events (not logs) |
+| `utils.logs()` | Get only log events |
+| `utils.groupByRun()` | Group events by execution run (for scheduled bots) |
+| `utils.extractTimeSeries(type, key)` | Extract `{ timestamp, value }[]` for charting |
+
+## Building Frontends
+
+Each frontend has a build script using esbuild:
+
+```bash
+cd example-bots/python-portfolio-tracker/frontend
+yarn install
+yarn build
+```
+
+The bundle must:
+- Be ESM format
+- Export a default React component
+- Externalize `react` and `react-dom`
+
+## Deploying
+
+```bash
+cd example-bots/python-portfolio-tracker
+the0 custom-bot deploy
+```
+
+The CLI automatically:
+1. Detects `frontend/dist/bundle.js`
+2. Packages everything into a ZIP
+3. Uploads to the platform
+
+## SDK Installation
+
+The examples use `@the0/react` from GitHub Packages:
+
+```json
+{
+  "dependencies": {
+    "@the0/react": "^0.1.0"
+  }
+}
+```
+
+Configure `.npmrc` for GitHub Packages:
+```
+@the0:registry=https://npm.pkg.github.com
+```

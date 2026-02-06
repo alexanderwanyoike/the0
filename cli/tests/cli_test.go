@@ -335,3 +335,225 @@ func TestBotCommand_HasLogsSubcommand(t *testing.T) {
 		t.Error("Expected bot command to have 'logs' subcommand")
 	}
 }
+
+func TestBotDeleteCommand_Arguments(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "correct single argument",
+			args:        []string{"bot_123"},
+			expectError: false,
+		},
+		{
+			name:        "no arguments",
+			args:        []string{},
+			expectError: true,
+			errorMsg:    "accepts 1 arg(s), received 0",
+		},
+		{
+			name:        "too many arguments",
+			args:        []string{"bot_123", "extra"},
+			expectError: true,
+			errorMsg:    "accepts 1 arg(s), received 2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := cmd.NewBotDeleteCmd()
+
+			err := cmd.Args(cmd, tt.args)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got nil")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error to contain '%s', got: %s", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestBotDeleteCommand_Usage(t *testing.T) {
+	cmd := cmd.NewBotDeleteCmd()
+
+	expectedUsage := "delete <bot_id>"
+	if cmd.Use != expectedUsage {
+		t.Errorf("Expected usage '%s', got '%s'", expectedUsage, cmd.Use)
+	}
+
+	expectedShort := "Delete a bot instance"
+	if cmd.Short != expectedShort {
+		t.Errorf("Expected short description '%s', got '%s'", expectedShort, cmd.Short)
+	}
+}
+
+func TestBotDeleteCommand_YesFlag(t *testing.T) {
+	cmd := cmd.NewBotDeleteCmd()
+
+	// Test that yes flag exists
+	yesFlag := cmd.Flag("yes")
+	if yesFlag == nil {
+		t.Error("Expected command to have 'yes' flag")
+	} else {
+		if yesFlag.Shorthand != "y" {
+			t.Errorf("Expected yes flag shorthand 'y', got '%s'", yesFlag.Shorthand)
+		}
+		if yesFlag.DefValue != "false" {
+			t.Errorf("Expected yes flag default value 'false', got '%s'", yesFlag.DefValue)
+		}
+	}
+}
+
+func TestBotCommand_HasDeleteSubcommand(t *testing.T) {
+	cmd := cmd.NewBotCmd()
+
+	subcommands := cmd.Commands()
+
+	var hasDelete bool
+	for _, subcmd := range subcommands {
+		if subcmd.Name() == "delete" {
+			hasDelete = true
+		}
+	}
+
+	if !hasDelete {
+		t.Error("Expected bot command to have 'delete' subcommand")
+	}
+}
+
+func TestBotQueryCommand_Arguments(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "correct two arguments",
+			args:        []string{"bot-123", "/portfolio"},
+			expectError: false,
+		},
+		{
+			name:        "no arguments",
+			args:        []string{},
+			expectError: true,
+			errorMsg:    "accepts 2 arg(s), received 0",
+		},
+		{
+			name:        "only one argument",
+			args:        []string{"bot-123"},
+			expectError: true,
+			errorMsg:    "accepts 2 arg(s), received 1",
+		},
+		{
+			name:        "too many arguments",
+			args:        []string{"bot-123", "/portfolio", "extra"},
+			expectError: true,
+			errorMsg:    "accepts 2 arg(s), received 3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := cmd.NewBotQueryCmd()
+
+			err := cmd.Args(cmd, tt.args)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got nil")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error to contain '%s', got: %s", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestBotQueryCommand_Usage(t *testing.T) {
+	cmd := cmd.NewBotQueryCmd()
+
+	expectedUsage := "query <bot_id> <query_path>"
+	if cmd.Use != expectedUsage {
+		t.Errorf("Expected usage '%s', got '%s'", expectedUsage, cmd.Use)
+	}
+
+	expectedShort := "Execute a query against a bot"
+	if cmd.Short != expectedShort {
+		t.Errorf("Expected short description '%s', got '%s'", expectedShort, cmd.Short)
+	}
+}
+
+func TestBotQueryCommand_Flags(t *testing.T) {
+	cmd := cmd.NewBotQueryCmd()
+
+	// Test that params flag exists
+	paramsFlag := cmd.Flag("params")
+	if paramsFlag == nil {
+		t.Error("Expected command to have 'params' flag")
+	} else {
+		if paramsFlag.Shorthand != "p" {
+			t.Errorf("Expected params flag shorthand 'p', got '%s'", paramsFlag.Shorthand)
+		}
+		if paramsFlag.DefValue != "{}" {
+			t.Errorf("Expected params flag default value '{}', got '%s'", paramsFlag.DefValue)
+		}
+	}
+
+	// Test that timeout flag exists
+	timeoutFlag := cmd.Flag("timeout")
+	if timeoutFlag == nil {
+		t.Error("Expected command to have 'timeout' flag")
+	} else {
+		if timeoutFlag.Shorthand != "t" {
+			t.Errorf("Expected timeout flag shorthand 't', got '%s'", timeoutFlag.Shorthand)
+		}
+		if timeoutFlag.DefValue != "30" {
+			t.Errorf("Expected timeout flag default value '30', got '%s'", timeoutFlag.DefValue)
+		}
+	}
+
+	// Test that raw flag exists
+	rawFlag := cmd.Flag("raw")
+	if rawFlag == nil {
+		t.Error("Expected command to have 'raw' flag")
+	} else {
+		if rawFlag.Shorthand != "r" {
+			t.Errorf("Expected raw flag shorthand 'r', got '%s'", rawFlag.Shorthand)
+		}
+		if rawFlag.DefValue != "false" {
+			t.Errorf("Expected raw flag default value 'false', got '%s'", rawFlag.DefValue)
+		}
+	}
+}
+
+func TestBotCommand_HasQuerySubcommand(t *testing.T) {
+	cmd := cmd.NewBotCmd()
+
+	subcommands := cmd.Commands()
+
+	var hasQuery bool
+	for _, subcmd := range subcommands {
+		if subcmd.Name() == "query" {
+			hasQuery = true
+		}
+	}
+
+	if !hasQuery {
+		t.Error("Expected bot command to have 'query' subcommand")
+	}
+}

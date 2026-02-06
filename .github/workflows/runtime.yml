@@ -3,14 +3,16 @@ name: Runtime Service
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
     paths:
       - 'runtime/**'
       - '.github/workflows/runtime.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'runtime/**'
       - '.github/workflows/runtime.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -30,24 +32,12 @@ jobs:
         go-version: '1.24.1'
         cache-dependency-path: runtime/go.sum
 
-    - name: Install protobuf compiler
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler
-
-    - name: Install protobuf Go plugins
-      working-directory: ./runtime
-      run: |
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
     - name: Download dependencies
       working-directory: ./runtime
       run: go mod download
 
-    - name: Generate protobuf files
-      working-directory: ./runtime
-      run: make build-proto
+    - name: Build runtime image for integration tests
+      run: docker build -t the0/runtime:latest ./runtime
 
     - name: Run tests
       working-directory: ./runtime
@@ -56,8 +46,8 @@ jobs:
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
     permissions:
       contents: read
       packages: write
@@ -82,10 +72,10 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5

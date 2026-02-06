@@ -9,10 +9,8 @@ import {
   Bot,
   Calendar,
   ChevronRight,
-  Clock,
   Eye,
   GitBranch,
-  Share2,
   User,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -21,27 +19,16 @@ import React from "react";
 import {
   BOT_TYPE_COLORS,
   STATUS_CONFIG,
-  THREAT_COLORS,
 } from "@/components/custom-bots/constants";
 import { StatusBadge } from "@/components/custom-bots/status-badge";
 
 export const BotCard = ({ bot, onClick }: any) => {
   // Get latest version data since CustomBotWithVersions doesn't have direct status/config
   const latestVersion = bot.versions?.[0]; // Versions are sorted by creation date desc
-  const botStatus = latestVersion?.status || "pending_review";
+  const botStatus = latestVersion?.status || "active";
   const botConfig = latestVersion?.config;
 
-  const config = STATUS_CONFIG[botStatus] || {
-    color: "bg-gray-100 text-gray-800 border-gray-200",
-    icon: Clock,
-    text: "Unknown Status",
-    description: "Status not recognized",
-  };
-
-  // Get security info for compact display
-  const hasSecurityIssues =
-    latestVersion?.review?.issues && latestVersion.review.issues.length > 0;
-  const issueCount = latestVersion?.review?.issues?.length || 0;
+  const config = STATUS_CONFIG[botStatus] || STATUS_CONFIG.active;
 
   return (
     <Card
@@ -51,14 +38,8 @@ export const BotCard = ({ bot, onClick }: any) => {
       <CardHeader className="pb-4 space-y-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 group-hover:from-primary/20 group-hover:to-primary/30 transition-colors">
-                <Bot className="h-6 w-6 text-primary" />
-              </div>
-              {/* Status indicator dot */}
-              <div
-                className={`absolute -top-1 -right-1 h-4 w-4 rounded-full border-2 border-background ${config.color.includes("green") ? "bg-green-500" : config.color.includes("red") ? "bg-red-500" : config.color.includes("yellow") ? "bg-yellow-500" : "bg-orange-500"}`}
-              />
+            <div className="flex items-center justify-center h-12 w-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 group-hover:from-primary/20 group-hover:to-primary/30 transition-colors">
+              <Bot className="h-6 w-6 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <CardTitle className="text-xl font-semibold truncate mb-1">
@@ -82,12 +63,7 @@ export const BotCard = ({ bot, onClick }: any) => {
 
         {/* Status Badge */}
         <div className="flex items-center justify-between">
-          <StatusBadge status={botStatus} review={latestVersion?.review} />
-          {hasSecurityIssues && (
-            <Badge variant="destructive" className="text-xs">
-              {issueCount} issue{issueCount !== 1 ? "s" : ""}
-            </Badge>
-          )}
+          <StatusBadge status={botStatus} />
         </div>
       </CardHeader>
 
@@ -117,25 +93,6 @@ export const BotCard = ({ bot, onClick }: any) => {
             </span>
           </div>
         </div>
-
-        {/* Security Summary - Compact */}
-        {latestVersion?.review && botStatus !== "pending_review" && (
-          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">🕵️</span>
-              <span className="text-sm font-medium">0vers33r</span>
-              <Badge
-                variant="outline"
-                className={`text-xs ${THREAT_COLORS[latestVersion.review.threatSummary?.threatLevel] || THREAT_COLORS.medium} border-current`}
-              >
-                {latestVersion.review.threatSummary?.threatLevel || "low"}
-              </Badge>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {latestVersion.review.reviewedAt?.toLocaleDateString()}
-            </span>
-          </div>
-        )}
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-2">

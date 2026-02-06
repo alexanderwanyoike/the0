@@ -15,19 +15,12 @@ describe("Custom Bot Schema Validation", () => {
     runtime: "python3.11",
     entrypoints: {
       bot: "main.py",
-      backtest: "backtest.py",
     },
     schema: {
       bot: {
         type: "object",
         properties: {
           apiKey: { type: "string" },
-        },
-      },
-      backtest: {
-        type: "object",
-        properties: {
-          symbol: { type: "string" },
         },
       },
     },
@@ -61,7 +54,6 @@ describe("Custom Bot Schema Validation", () => {
         ...validConfig,
         entrypoints: {
           bot: "main.js",
-          backtest: "backtest.js",
         },
       };
 
@@ -247,7 +239,8 @@ describe("Custom Bot Schema Validation", () => {
       expect(result.valid).toBe(true);
     });
 
-    it("should fail scheduled bot with nodejs20 runtime", () => {
+    it("should succeed scheduled bot with nodejs20 runtime", () => {
+      // All runtimes are now valid for scheduled bots
       const scheduledConfig = {
         ...validConfig,
         type: "scheduled" as const,
@@ -255,12 +248,7 @@ describe("Custom Bot Schema Validation", () => {
       };
 
       const result = validateCustomBotConfigPayload(scheduledConfig);
-      expect(result.valid).toBe(false);
-      expect(
-        result.errors?.some((err) =>
-          err.includes("must be equal to one of the allowed values"),
-        ),
-      ).toBe(true);
+      expect(result.valid).toBe(true);
     });
 
     it("should validate realtime bot with python3.11 runtime", () => {
@@ -332,20 +320,17 @@ describe("Custom Bot Schema Validation", () => {
       ).toBe(true);
     });
 
-    it("should fail with invalid entrypoint file extension", () => {
-      const invalidConfig = {
+    it("should accept any entrypoint file extension", () => {
+      // Schema no longer enforces specific file extensions to support compiled languages
+      const configWithAnyExtension = {
         ...validConfig,
         entrypoints: {
-          bot: "main.txt", // Invalid extension
-          backtest: "backtest.py",
+          bot: "main.txt", // Any extension is now valid
         },
       };
 
-      const result = validateCustomBotConfigPayload(invalidConfig);
-      expect(result.valid).toBe(false);
-      expect(
-        result.errors?.some((err) => err.includes("must match pattern")),
-      ).toBe(true);
+      const result = validateCustomBotConfigPayload(configWithAnyExtension);
+      expect(result.valid).toBe(true);
     });
 
     it("should fail with invalid bot type", () => {
@@ -547,7 +532,6 @@ describe("Custom Bot Schema Validation", () => {
         ...validConfig,
         entrypoints: {
           bot: "main.py",
-          backtest: "backtest.py",
           extraEntry: "extra.py", // Not allowed
         },
       };
@@ -566,7 +550,6 @@ describe("Custom Bot Schema Validation", () => {
         ...validConfig,
         schema: {
           bot: {},
-          backtest: {},
           extraSchema: {}, // Not allowed
         },
       };
@@ -602,20 +585,11 @@ describe("Custom Bot Schema Validation", () => {
         runtime: "python3.11",
         entrypoints: {
           bot: "main.py",
-          backtest: "backtest.py",
         },
         schema: {
           bot: {
             type: "object",
             properties: { param1: { type: "string" } },
-          },
-          backtest: {
-            type: "object",
-            properties: {
-              startDate: { type: "string", format: "date" },
-              endDate: { type: "string", format: "date" },
-            },
-            required: ["startDate", "endDate"],
           },
         },
         readme:
@@ -626,72 +600,11 @@ describe("Custom Bot Schema Validation", () => {
       expect(result.valid).toBe(true);
     });
 
-    it("should validate with missing optional backtest entrypoint", () => {
-      const configWithoutBacktest = {
-        ...validConfig,
-        entrypoints: {
-          bot: "main.py",
-          // Missing backtest - should be allowed now
-        },
-        schema: {
-          bot: {},
-          // Missing backtest schema - should be allowed now
-        },
-      };
-
-      const result = validateCustomBotConfigPayload(configWithoutBacktest);
-      expect(result.valid).toBe(true);
-    });
-
-    it("should validate with missing optional backtest schema", () => {
-      const configWithoutBacktestSchema = {
-        ...validConfig,
-        entrypoints: {
-          bot: "main.py",
-          // No backtest entrypoint
-        },
-        schema: {
-          bot: {},
-          // No backtest schema
-        },
-      };
-
-      const result = validateCustomBotConfigPayload(
-        configWithoutBacktestSchema,
-      );
-      expect(result.valid).toBe(true);
-    });
-
-    it("should fail if backtest entrypoint is provided without backtest schema", () => {
-      const configWithBacktestButNoSchema = {
-        ...validConfig,
-        entrypoints: {
-          bot: "main.py",
-          backtest: "backtest.py", // Has backtest entrypoint
-        },
-        schema: {
-          bot: {},
-          // Missing backtest schema when backtest entrypoint is provided
-        },
-      };
-
-      const result = validateCustomBotConfigPayload(
-        configWithBacktestButNoSchema,
-      );
-      expect(result.valid).toBe(false);
-      expect(
-        result.errors?.some((err) =>
-          err.includes("must have required property 'backtest'"),
-        ),
-      ).toBe(true);
-    });
-
     it("should validate with empty schemas", () => {
       const configWithEmptySchemas = {
         ...validConfig,
         schema: {
           bot: {},
-          backtest: {},
         },
       };
 
@@ -722,16 +635,6 @@ describe("Custom Bot Schema Validation", () => {
             },
             required: ["apiKey"],
           },
-          backtest: {
-            type: "object",
-            properties: {
-              symbol: { type: "string" },
-              timeframe: { type: "string", enum: ["1m", "5m", "1h", "1d"] },
-              startDate: { type: "string", format: "date" },
-              endDate: { type: "string", format: "date" },
-            },
-            required: ["symbol", "timeframe"],
-          },
         },
       };
 
@@ -752,7 +655,6 @@ describe("Custom Bot Schema Validation", () => {
         runtime: "python3.11" as const,
         entrypoints: {
           bot: "src/arbitrage_bot.py",
-          backtest: "tests/backtest_arbitrage.py",
         },
         schema: {
           bot: {
@@ -771,14 +673,6 @@ describe("Custom Bot Schema Validation", () => {
             },
             required: ["exchanges", "minProfitThreshold"],
           },
-          backtest: {
-            type: "object",
-            properties: {
-              historicalDataSource: { type: "string" },
-              testPeriod: { type: "string" },
-              initialBalance: { type: "number", minimum: 0 },
-            },
-          },
         },
         readme: `# Arbitrage Scanner Bot
 
@@ -788,7 +682,6 @@ This bot scans multiple cryptocurrency exchanges for arbitrage opportunities and
 - Real-time price monitoring across multiple exchanges
 - Automated arbitrage detection and execution
 - Risk management with configurable thresholds
-- Comprehensive backtesting capabilities
 
 ## Configuration
 The bot requires API credentials for supported exchanges and allows customization of profit thresholds and trade limits.`,
@@ -816,7 +709,6 @@ The bot requires API credentials for supported exchanges and allows customizatio
         runtime: "python3.11" as const,
         entrypoints: {
           bot: "analytics/daily_report.py",
-          backtest: "analytics/historical_analysis.py",
         },
         schema: {
           bot: {
@@ -828,13 +720,6 @@ The bot requires API credentials for supported exchanges and allows customizatio
                 type: "string",
                 enum: ["basic", "detailed", "comprehensive"],
               },
-            },
-          },
-          backtest: {
-            type: "object",
-            properties: {
-              analysisWindow: { type: "string" },
-              includeCorrelations: { type: "boolean" },
             },
           },
         },
@@ -850,8 +735,8 @@ The bot requires API credentials for supported exchanges and allows customizatio
       expect(result.valid).toBe(true);
     });
 
-    it("should validate a bot without backtest functionality", () => {
-      const nonBacktestBotConfig = {
+    it("should validate a notification bot config", () => {
+      const notificationBotConfig = {
         name: "notification-bot",
         description: "Real-time price alert and notification bot",
         version: "1.0.0",
@@ -860,7 +745,6 @@ The bot requires API credentials for supported exchanges and allows customizatio
         runtime: "nodejs20" as const,
         entrypoints: {
           bot: "src/notification_bot.js",
-          // No backtest entrypoint - this bot doesn't support backtesting
         },
         schema: {
           bot: {
@@ -881,27 +765,23 @@ The bot requires API credentials for supported exchanges and allows customizatio
             },
             required: ["webhookUrl"],
           },
-          // No backtest schema - this bot doesn't support backtesting
         },
         readme: `# Notification Bot
 
-This bot monitors cryptocurrency prices and sends notifications when certain thresholds are reached. It's designed for real-time alerts and does not support backtesting.
+This bot monitors cryptocurrency prices and sends notifications when certain thresholds are reached.
 
 ## Features
 - Real-time price monitoring
 - Multiple notification channels
 - Customizable price thresholds
-- Webhook integration
-
-## Note
-This bot does not support backtesting as it's designed for real-time notifications only.`,
+- Webhook integration`,
         metadata: {
           categories: ["notification", "alerts"],
           tags: ["real-time", "webhook", "alerts"],
         },
       };
 
-      const result = validateCustomBotConfigPayload(nonBacktestBotConfig);
+      const result = validateCustomBotConfigPayload(notificationBotConfig);
       expect(result.valid).toBe(true);
     });
   });

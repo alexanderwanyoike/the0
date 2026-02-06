@@ -73,54 +73,6 @@ services:
     networks:
       - the0-network
 
-  # Development override for 0vers33r service with local development
-  the0-analyzer:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ../services/0vers33r:/app
-      - analyzer_venv:/app/.venv
-    environment:
-      # NATS configuration
-      NATS_URL: nats://nats:4222
-      
-      # MinIO configuration  
-      MINIO_ENDPOINT: minio:9000
-      MINIO_USE_SSL: "false"
-      MINIO_ACCESS_KEY: the0admin
-      MINIO_SECRET_KEY: the0password
-      CUSTOM_BOTS_BUCKET: custom-bots
-      
-      # PostgreSQL configuration
-      DATABASE_URL: postgresql://the0:the0_password@postgres:5432/the0_oss
-      
-      # AI Analysis configuration (optional)
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-}
-      
-      # Development configuration
-      PYTHONPATH: /app
-      PYTHONUNBUFFERED: "1"
-      LOG_LEVEL: DEBUG
-      
-    command: >
-      sh -c "
-        apt-get update && 
-        apt-get install -y gcc g++ libyara-dev pkg-config git curl &&
-        pip install -r requirements.txt &&
-        python main.py
-      "
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    networks:
-      - the0-network
-
 volumes:
   frontend_node_modules:
   api_node_modules:
-  analyzer_venv:

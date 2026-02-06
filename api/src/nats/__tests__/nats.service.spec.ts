@@ -1,6 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
+import { PinoLogger } from "nestjs-pino";
 import { NatsService } from "../nats.service";
+import { createMockLogger } from "@/test/mock-logger";
 
 // Mock NATS at the top level to avoid hoisting issues
 jest.mock("nats", () => {
@@ -69,6 +71,10 @@ describe("NatsService", () => {
               }
             }),
           },
+        },
+        {
+          provide: PinoLogger,
+          useValue: createMockLogger(),
         },
       ],
     }).compile();

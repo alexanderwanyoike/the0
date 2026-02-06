@@ -55,6 +55,17 @@ The `make minikube-up` command will check for these tools and provide install li
 - 20GB+ disk space
 - Docker driver (recommended)
 
+### Runtime Images
+
+Bot execution requires runtime images (`the0/python311`, `the0/nodejs20`, etc.) to be available. For minikube:
+
+```bash
+cd docker/images
+make minikube-build-all
+```
+
+This builds the images directly into minikube's cache - no registry required.
+
 **Don't have these installed?** Run `make minikube-up` anyway - it will tell you exactly what to install!
 
 ## Project Structure
@@ -73,7 +84,6 @@ k8s/
 │   ├── the0-frontend.yaml  # Frontend web application
 │   ├── the0-analyzer.yaml  # Security analyzer service
 │   ├── bot-runner.yaml     # Bot execution service (master + workers)
-│   ├── backtest-runner.yaml # Backtesting service (master + workers)
 │   ├── bot-scheduler.yaml  # Bot scheduling service (master + workers)
 │   ├── external-services.yaml # NodePort services for .local access
 │   ├── ingress.yaml        # Ingress configuration (optional)
@@ -94,7 +104,6 @@ k8s/
 - **the0-frontend** - Web interface (Next.js/React) - port 3000
 - **the0-analyzer** - Security analysis service (Python) - background service
 - **bot-runner** - Bot execution runtime (Go) - HTTP port 8080, gRPC port 50051
-- **backtest-runner** - Backtesting engine (Go) - HTTP port 8080, gRPC port 50052  
 - **bot-scheduler** - Bot scheduling service (Go) - HTTP port 8080, gRPC port 50053
 
 **External Access** (via NodePort):
@@ -109,7 +118,18 @@ k8s/
 Deploy with NodePort services for easy access:
 
 ```bash
-# Single command - builds images and deploys
+# Build runtime images into minikube (required for bot execution)
+cd docker/images
+make minikube-build-all
+
+# Then deploy
+cd ../../k8s
+make minikube-up
+```
+
+Or if `make minikube-up` handles image building automatically, just run:
+
+```bash
 make minikube-up
 ```
 
@@ -118,7 +138,7 @@ make minikube-up
 - API: http://api.the0.local:30000
 - MinIO Console: http://minio.the0.local:30002
 
-**Note:** Runtime services (bot-runner, backtest-runner, bot-scheduler) are internal services accessed via the API.
+**Note:** Runtime services (bot-runner, bot-scheduler) are internal services accessed via the API.
 
 The command will:
 1. Check prerequisites (minikube, docker, helm, kubectl)
@@ -358,6 +378,86 @@ kubectl run debug --image=busybox -it --rm --restart=Never -- sh
 2. **Code Changes**: Run `make minikube-restart` to rebuild and redeploy
 3. **Testing**: Use `make logs`, `make status`, and `make services` to monitor
 4. **Production**: Use `make deploy` with external infrastructure
+
+## Kubernetes-Native Controller Mode
+
+The0 supports two runtime modes for bot execution:
+
+### Docker Mode (Default)
+The traditional master-worker architecture using Docker-in-Docker:
+- Workers run bot containers inside Kubernetes pods
+- Requires privileged pods with Docker socket access
+- Good for development and testing
+
+```bash
+make minikube-up  # Uses Docker mode by default
+```
+
+### Controller Mode (Kubernetes-Native)
+A Kubernetes-native approach where the controller manages bots directly:
+- Each bot runs as its own Kubernetes Pod
+- Scheduled bots use native Kubernetes CronJobs
+- Kaniko builds bot images automatically (no Docker-in-Docker)
+- No privileged containers required
+- Better security and Kubernetes integration
+
+```bash
+make minikube-controller  # Deploys in controller mode
+```
+
+### Controller Mode Benefits
+
+| Feature | Docker Mode | Controller Mode |
+|---------|-------------|-----------------|
+| **Privileged Pods** | Required | Not required |
+| **Bot Isolation** | Docker containers | K8s Pods |
+| **Scheduled Bots** | Cron in worker | K8s CronJobs |
+| **Image Building** | Docker in worker | Kaniko Jobs |
+| **Resource Limits** | Docker limits | K8s ResourceQuota |
+| **Monitoring** | Docker logs | kubectl logs |
+| **Scaling** | Add workers | K8s handles it |
+
+### Controller Mode Commands
+
+```bash
+# Deploy in controller mode
+make minikube-controller
+
+# View controller logs
+make logs-controller
+
+# Enable registry addon (for bot images)
+make enable-registry
+```
+
+### How Controller Mode Works
+
+1. **Bot Controller** reads enabled bots from MongoDB
+2. For each bot, it ensures a matching Pod exists
+3. If the bot image doesn't exist, Kaniko builds it automatically
+4. Config changes trigger Pod recreation
+5. Deleted bots have their Pods removed
+
+**Schedule Controller** does the same for scheduled bots using CronJobs.
+
+### Configuration
+
+Enable controller mode in `values.yaml`:
+
+```yaml
+# Disable Docker mode
+botRunner:
+  enabled: false
+botScheduler:
+  enabled: false
+
+# Enable controller mode
+botController:
+  enabled: true
+  imageBuilder:
+    enabled: true
+    registry: "localhost:5000"  # Minikube registry
+```
 
 ## Comparison with Docker Compose
 

@@ -34,7 +34,7 @@ export const customBotConfigSchema = {
     },
     runtime: {
       type: "string",
-      enum: ["python3.11", "nodejs20"],
+      enum: ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"],
     },
     author: {
       type: "string",
@@ -51,11 +51,11 @@ export const customBotConfigSchema = {
       properties: {
         bot: {
           type: "string",
-          pattern: "\\.(py|js)$",
+          // Allow various file extensions and paths for compiled languages
         },
-        backtest: {
+        query: {
           type: "string",
-          pattern: "\\.(py|js)$",
+          // Optional query entrypoint for bot queries
         },
       },
       additionalProperties: false,
@@ -64,9 +64,6 @@ export const customBotConfigSchema = {
       type: "object",
       required: ["bot"],
       properties: {
-        backtest: {
-          type: "object",
-        },
         bot: {
           type: "object",
         },
@@ -114,31 +111,8 @@ export const customBotConfigSchema = {
       },
       then: {
         properties: {
-          runtime: { enum: ["python3.11"] },
+          runtime: { enum: ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"] },
         },
-      },
-    },
-    {
-      if: {
-        properties: {
-          entrypoints: {
-            type: "object",
-            properties: {
-              backtest: { type: "string" },
-            },
-            required: ["backtest"],
-          },
-        },
-        required: ["entrypoints"],
-      },
-      then: {
-        properties: {
-          schema: {
-            type: "object",
-            required: ["backtest", "bot"],
-          },
-        },
-        required: ["schema"],
       },
     },
   ],
@@ -169,18 +143,6 @@ export function validateCustomBotConfigPayload(
       return {
         valid: false,
         errors: schemaValidationResult.errors,
-      };
-    }
-  }
-
-  if (config.schema.backtest) {
-    const backtestSchemaValidationResult = validateSchema(
-      config.schema.backtest,
-    );
-    if (!backtestSchemaValidationResult.valid) {
-      return {
-        valid: false,
-        errors: backtestSchemaValidationResult.errors,
       };
     }
   }

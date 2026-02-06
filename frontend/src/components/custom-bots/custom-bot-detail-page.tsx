@@ -6,14 +6,12 @@ import { AlertTriangle, ArrowLeft, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import React from "react";
 import { StatusHeader } from "@/components/custom-bots/status-header";
-import { ScanProgress } from "@/components/custom-bots/scan-progress";
-import { SecurityReport } from "@/components/custom-bots/security-report";
 import { BotInfo } from "@/components/custom-bots/bot-info";
 import { VersionHistory } from "@/components/custom-bots/version-history";
 import { ActionButtons } from "@/components/custom-bots/action-buttons";
 import { ReadmeComponent } from "@/components/custom-bots/readme-component";
 import { LoadingState } from "@/components/custom-bots/loading-detail-state";
-import { AIReviewSection } from "@/components/custom-bots/ai-review-section";
+import { SchemaDisplay } from "@/components/custom-bots/schema-display";
 
 export const CustomBotDetailPage = ({ botName }: any) => {
   const router = useRouter();
@@ -76,8 +74,6 @@ export const CustomBotDetailPage = ({ botName }: any) => {
     config: selectedVersionData.config,
     filePath: selectedVersionData.filePath,
     createdAt: selectedVersionData.createdAt,
-    // Get review data from the version
-    review: selectedVersionData.review,
   };
 
   return (
@@ -91,7 +87,7 @@ export const CustomBotDetailPage = ({ botName }: any) => {
           <div>
             <h1 className="text-3xl font-bold">{bot.name}</h1>
             <p className="text-muted-foreground">
-              Custom Bot Security Review - Version {selectedVersion}
+              Custom Bot Details - Version {selectedVersion}
             </p>
           </div>
         </div>
@@ -111,19 +107,15 @@ export const CustomBotDetailPage = ({ botName }: any) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* AI Review Section */}
-          <AIReviewSection
-            review={currentBotView.review}
-            status={currentBotView.status}
+          {/* Schema Display Section */}
+          <SchemaDisplay
+            schema={currentBotView.config?.schema?.bot}
+            botName={bot.name}
           />
 
-          {/* README Section - Show if available in review or config */}
-          {(currentBotView.review?.readme || currentBotView.config?.readme) && (
-            <ReadmeComponent
-              readme={
-                currentBotView.review?.readme || currentBotView.config?.readme
-              }
-            />
+          {/* README Section - Show if available in config */}
+          {currentBotView.config?.readme && (
+            <ReadmeComponent readme={currentBotView.config?.readme} />
           )}
         </div>
 
@@ -138,14 +130,6 @@ export const CustomBotDetailPage = ({ botName }: any) => {
             versions={bot.versions}
             selectedVersion={selectedVersion}
             onVersionChange={handleVersionChange}
-          />
-          <ScanProgress
-            review={currentBotView.review}
-            status={currentBotView.status}
-          />
-          <SecurityReport
-            review={currentBotView.review}
-            status={currentBotView.status}
           />
         </div>
       </div>
