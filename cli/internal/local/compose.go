@@ -35,8 +35,8 @@ func NewComposeRunner() (*ComposeRunner, error) {
 	}, nil
 }
 
-// baseArgs returns the common docker compose arguments
-func (r *ComposeRunner) baseArgs() []string {
+// BaseArgs returns the common docker compose arguments
+func (r *ComposeRunner) BaseArgs() []string {
 	return []string{
 		"compose",
 		"-f", filepath.Join(r.ComposeDir, "docker-compose.yml"),
@@ -44,8 +44,8 @@ func (r *ComposeRunner) baseArgs() []string {
 	}
 }
 
-// devArgs returns docker compose arguments including the dev overlay
-func (r *ComposeRunner) devArgs() []string {
+// DevArgs returns docker compose arguments including the dev overlay
+func (r *ComposeRunner) DevArgs() []string {
 	return []string{
 		"compose",
 		"-f", filepath.Join(r.ComposeDir, "docker-compose.yml"),
@@ -56,7 +56,7 @@ func (r *ComposeRunner) devArgs() []string {
 
 // Run executes a docker compose command with stdout/stderr streaming
 func (r *ComposeRunner) Run(args ...string) error {
-	cmdArgs := append(r.baseArgs(), args...)
+	cmdArgs := append(r.BaseArgs(), args...)
 	logger.Verbose("Running: docker %s", strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command("docker", cmdArgs...)
@@ -69,7 +69,7 @@ func (r *ComposeRunner) Run(args ...string) error {
 
 // RunCapture executes a docker compose command and captures output
 func (r *ComposeRunner) RunCapture(args ...string) (string, error) {
-	cmdArgs := append(r.baseArgs(), args...)
+	cmdArgs := append(r.BaseArgs(), args...)
 	logger.Verbose("Running: docker %s", strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command("docker", cmdArgs...)
@@ -88,7 +88,7 @@ func (r *ComposeRunner) RunCapture(args ...string) (string, error) {
 
 // RunDev executes a docker compose command with the dev overlay
 func (r *ComposeRunner) RunDev(args ...string) error {
-	cmdArgs := append(r.devArgs(), args...)
+	cmdArgs := append(r.DevArgs(), args...)
 	logger.Verbose("Running: docker %s", strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command("docker", cmdArgs...)
