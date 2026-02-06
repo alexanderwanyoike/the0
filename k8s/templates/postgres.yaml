@@ -48,17 +48,17 @@ spec:
               protocol: TCP
           env:
             - name: POSTGRES_DB
-              value: "the0_oss"
+              value: {{ .Values.postgresql.database | quote }}
             - name: POSTGRES_USER
-              value: "the0"
+              value: {{ .Values.postgresql.username | quote }}
             - name: POSTGRES_PASSWORD
-              value: "the0_password"
+              value: {{ .Values.postgresql.password | quote }}
           livenessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready -U the0 -d the0_oss
+                - pg_isready -U {{ .Values.postgresql.username }} -d {{ .Values.postgresql.database }}
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -67,7 +67,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready -U the0 -d the0_oss
+                - pg_isready -U {{ .Values.postgresql.username }} -d {{ .Values.postgresql.database }}
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3

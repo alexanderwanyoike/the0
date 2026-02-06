@@ -10,6 +10,7 @@ help: ## Show this help message
 RELEASE_NAME ?= the0
 NAMESPACE ?= the0
 CHART_PATH ?= .
+VALUES ?=
 
 # Prerequisites check for general use
 .PHONY: check-deps
@@ -231,17 +232,18 @@ remove-hosts: ## Remove the0.local hostnames from /etc/hosts
 
 # Production deployment (assumes external infrastructure)
 .PHONY: deploy
-deploy: check-deps ## Deploy to production cluster with external infrastructure
+deploy: check-deps ## Deploy to production cluster (use VALUES=examples/aws-production.yaml)
 	@echo "🚀 Deploying to production cluster..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
-		--namespace $(NAMESPACE) \
-		--set postgresql.enabled=false \
-		--set mongodb.enabled=false \
-		--set nats.enabled=false \
-		--set minio.enabled=false \
-		--set minikube.enabled=false
+		--namespace $(NAMESPACE) --create-namespace \
+		$(if $(VALUES),-f $(VALUES),) \
+		--wait --timeout 5m
 	@echo "✅ Production deployment completed!"
+
+.PHONY: template
+template: ## Render templates locally (use VALUES=examples/aws-production.yaml)
+	@helm template $(RELEASE_NAME) $(CHART_PATH) $(if $(VALUES),-f $(VALUES),)
 
 # Status and logs
 .PHONY: status

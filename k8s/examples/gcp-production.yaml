@@ -1,0 +1,84 @@
+# GCP production configuration
+# Uses Cloud SQL (PostgreSQL), MongoDB Atlas, GCS-compatible storage, and managed NATS.
+
+global:
+  imagePullPolicy: Always
+
+postgresql:
+  enabled: false
+  external:
+    host: "10.0.0.3"  # Cloud SQL private IP
+    port: 5432
+    database: the0_oss
+    username: the0admin
+    password: "CHANGEME"
+    sslmode: require
+
+mongodb:
+  enabled: false
+  external:
+    connectionString: "mongodb+srv://the0admin:CHANGEME@the0-cluster.xxxxx.mongodb.net/bot_runner?retryWrites=true&w=majority"
+
+nats:
+  enabled: false
+  external:
+    host: "nats.internal.example.com"
+    port: 4222
+
+minio:
+  enabled: false
+  external:
+    endpoint: "storage.googleapis.com"
+    port: "443"
+    useSSL: "true"
+    accessKey: "GOOGXXXXXXXXXXXXXXXX"
+    secretKey: "CHANGEME"
+    region: "us-central1"
+
+the0Api:
+  replicas: 2
+  image:
+    repository: us-docker.pkg.dev/the0-prod/the0/the0-api
+    tag: latest
+  env:
+    DATABASE_TYPE: "postgres"
+    MINIO_EXTERNAL_ENDPOINT: "storage.googleapis.com/the0-assets"
+    STORAGE_PATH: "/app/uploads/custom-bots"
+    CUSTOM_BOTS_BUCKET: "the0-custom-bots"
+    LOG_BUCKET: "the0-bot-logs"
+    BACKTEST_BUCKET: "the0-backtests"
+    NODE_ENV: "production"
+    PORT: "3000"
+    API_BASE_URL: "https://api.the0.dev"
+    FRONTEND_URL: "https://app.the0.dev"
+    JWT_SECRET: "CHANGEME"
+    JWT_EXPIRES_IN: "7d"
+    RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
+
+the0Frontend:
+  replicas: 2
+  image:
+    repository: us-docker.pkg.dev/the0-prod/the0/the0-frontend
+    tag: latest
+  env:
+    NEXT_PUBLIC_APP_NAME: "the0"
+    NEXT_PUBLIC_APP_VERSION: "1.0.0"
+    NEXT_BASE_URL: "https://app.the0.dev"
+    NODE_ENV: "production"
+    JWT_SECRET: "CHANGEME"
+
+botController:
+  image:
+    repository: us-docker.pkg.dev/the0-prod/the0/runtime
+    tag: latest
+  runtimeImage: "us-docker.pkg.dev/the0-prod/the0/runtime:latest"
+  runtimeImagePullPolicy: "Always"
+
+minikube:
+  enabled: false
+
+externalServices:
+  enabled: false
+
+ingress:
+  enabled: true

@@ -1,0 +1,90 @@
+# AWS production configuration
+# Uses RDS (PostgreSQL), DocumentDB (MongoDB-compatible), S3-compatible storage, and managed NATS.
+
+global:
+  imagePullPolicy: Always
+
+postgresql:
+  enabled: false
+  external:
+    host: "the0-db.xxxxxxxxxxxx.us-east-1.rds.amazonaws.com"
+    port: 5432
+    database: the0_oss
+    username: the0admin
+    password: "CHANGEME"
+    sslmode: require
+
+mongodb:
+  enabled: false
+  external:
+    host: "the0-docdb.cluster-xxxxxxxxxxxx.us-east-1.docdb.amazonaws.com"
+    port: 27017
+    username: the0admin
+    password: "CHANGEME"
+    database: bot_runner
+    authSource: admin
+    options: "tls=true&tlsCAFile=/etc/ssl/rds-combined-ca-bundle.pem&retryWrites=false"
+
+nats:
+  enabled: false
+  external:
+    host: "nats.internal.example.com"
+    port: 4222
+
+minio:
+  enabled: false
+  external:
+    endpoint: "s3.amazonaws.com"
+    port: "443"
+    useSSL: "true"
+    accessKey: "AKIAIOSFODNN7EXAMPLE"
+    secretKey: "CHANGEME"
+    region: "us-east-1"
+
+the0Api:
+  replicas: 2
+  image:
+    repository: the0org/the0-api
+    tag: latest
+  env:
+    DATABASE_TYPE: "postgres"
+    MINIO_EXTERNAL_ENDPOINT: "the0-assets.s3.amazonaws.com"
+    STORAGE_PATH: "/app/uploads/custom-bots"
+    CUSTOM_BOTS_BUCKET: "the0-custom-bots"
+    LOG_BUCKET: "the0-bot-logs"
+    BACKTEST_BUCKET: "the0-backtests"
+    NODE_ENV: "production"
+    PORT: "3000"
+    API_BASE_URL: "https://api.the0.dev"
+    FRONTEND_URL: "https://app.the0.dev"
+    JWT_SECRET: "CHANGEME"
+    JWT_EXPIRES_IN: "7d"
+    RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
+
+the0Frontend:
+  replicas: 2
+  image:
+    repository: the0org/the0-frontend
+    tag: latest
+  env:
+    NEXT_PUBLIC_APP_NAME: "the0"
+    NEXT_PUBLIC_APP_VERSION: "1.0.0"
+    NEXT_BASE_URL: "https://app.the0.dev"
+    NODE_ENV: "production"
+    JWT_SECRET: "CHANGEME"
+
+botController:
+  image:
+    repository: the0org/runtime
+    tag: latest
+  runtimeImage: "the0org/runtime:latest"
+  runtimeImagePullPolicy: "Always"
+
+minikube:
+  enabled: false
+
+externalServices:
+  enabled: false
+
+ingress:
+  enabled: true

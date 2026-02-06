@@ -17,6 +17,10 @@ postgresql:
   enabled: true
   image: postgres:15-alpine
   port: 5432
+  database: the0_oss
+  username: the0
+  password: the0_password
+  sslmode: disable
   persistence:
     enabled: true
     size: 10Gi
@@ -27,11 +31,25 @@ postgresql:
     limits:
       memory: 512Mi
       cpu: 500m
+  external:
+    host: ""
+    port: 5432
+    database: the0_oss
+    username: ""
+    password: ""
+    sslmode: require
+    connectionString: ""  # overrides individual fields if set
+    # existingSecret:
+    #   name: ""
+    #   key: "DATABASE_URL"
 
 mongodb:
   enabled: true
   image: mongo:7-jammy
   port: 27017
+  rootUsername: root
+  rootPassword: the0_mongo_password
+  database: bot_runner
   persistence:
     enabled: true
     size: 10Gi
@@ -42,6 +60,18 @@ mongodb:
     limits:
       memory: 512Mi
       cpu: 500m
+  external:
+    host: ""
+    port: 27017
+    username: ""
+    password: ""
+    database: bot_runner
+    authSource: admin
+    options: ""
+    connectionString: ""  # overrides individual fields if set
+    # existingSecret:
+    #   name: ""
+    #   key: "MONGO_URI"
 
 nats:
   enabled: true
@@ -58,6 +88,10 @@ nats:
     limits:
       memory: 256Mi
       cpu: 200m
+  external:
+    host: ""
+    port: 4222
+    url: ""  # overrides host:port if set
 
 minio:
   enabled: true
@@ -76,6 +110,13 @@ minio:
     limits:
       memory: 512Mi
       cpu: 500m
+  external:
+    endpoint: ""
+    port: "443"
+    useSSL: "true"
+    accessKey: ""
+    secretKey: ""
+    region: ""
 
 # Application Services
 
@@ -92,36 +133,19 @@ the0Api:
   #   tag: latest
   port: 3000
   env:
-    # Database configuration
-    DATABASE_URL: "postgresql://the0:the0_password@the0-postgres:5432/the0_oss?sslmode=disable"
+    # Application configuration
     DATABASE_TYPE: "postgres"
-    
-    # NATS configuration
-    NATS_URLS: "nats://the0-nats:4222"
-    
-    # MinIO configuration
-    MINIO_ENDPOINT: "the0-minio"
     MINIO_EXTERNAL_ENDPOINT: "minio.the0.local:30002"
-    MINIO_PORT: "9000"
-    MINIO_USE_SSL: "false"
-    MINIO_ACCESS_KEY: "the0admin" 
-    MINIO_SECRET_KEY: "the0password"
-    
-    # Storage configuration
     STORAGE_PATH: "/app/uploads/custom-bots"
     CUSTOM_BOTS_BUCKET: "custom-bots"
     LOG_BUCKET: "bot-logs"
     BACKTEST_BUCKET: "backtests"
-    
-    # Application configuration
     NODE_ENV: "development"
     PORT: "3000"
     API_BASE_URL: "http://the0-api:3000"
     FRONTEND_URL: "http://the0.local:30001"
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"
-
-    # Bot query service (K8s bot-controller)
     RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
   resources:
     requests:
@@ -202,37 +226,17 @@ botController:
   # Environment variables for the controller
   # Each entry supports standard K8s env syntax: value, valueFrom, secretKeyRef, etc.
   # For production, use secretKeyRef to reference Sealed Secrets
-  env:
-    # MongoDB connection string
-    - name: MONGO_URI
-      value: "mongodb://root:the0_mongo_password@the0-mongo:27017"
-    # NATS connection for syncing bots from API
-    - name: NATS_URL
-      value: "nats://the0-nats:4222"
-    # MinIO credentials for image builder
-    - name: MINIO_ACCESS_KEY
-      value: "the0admin"
-    - name: MINIO_SECRET_KEY
-      value: "the0password"
-    # Example: Using secretKeyRef for production (uncomment and modify):
-    # - name: MONGO_URI
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: the0-secrets  # Your Sealed Secret name
-    #       key: MONGO_URI
-    # - name: MINIO_ACCESS_KEY
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: the0-secrets
-    #       key: MINIO_ACCESS_KEY
-    # - name: MINIO_SECRET_KEY
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: the0-secrets
-    #       key: MINIO_SECRET_KEY
+  # Additional environment variables (supports standard K8s env syntax)
+  # For production, use secretKeyRef to reference Sealed Secrets:
+  # env:
+  #   - name: MONGO_URI
+  #     valueFrom:
+  #       secretKeyRef:
+  #         name: the0-secrets
+  #         key: MONGO_URI
+  env: []
   # MinIO configuration for bot code storage
   minio:
-    endpoint: "the0-minio:9000"
     bucket: "custom-bots"
   resources:
     requests:
