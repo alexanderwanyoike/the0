@@ -14,10 +14,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
       with:
         go-version: '1.24.1'
         cache-dependency-path: cli/go.sum
@@ -38,14 +38,13 @@ jobs:
       working-directory: ./cli
       env:
         VERSION: ${{ steps.version.outputs.version }}
-        LDFLAGS: -ldflags="-w -s -X main.VERSION=${{ steps.version.outputs.version }}"
       run: |
         mkdir -p bin
-        CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build $LDFLAGS -o bin/the0-linux-amd64 .
-        CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build $LDFLAGS -o bin/the0-linux-arm64 .
-        CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build $LDFLAGS -o bin/the0-darwin-amd64 .
-        CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build $LDFLAGS -o bin/the0-darwin-arm64 .
-        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $LDFLAGS -o bin/the0-windows-amd64.exe .
+        CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="-w -s -X main.VERSION=${VERSION}" -o bin/the0-linux-amd64 .
+        CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="-w -s -X main.VERSION=${VERSION}" -o bin/the0-linux-arm64 .
+        CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="-w -s -X main.VERSION=${VERSION}" -o bin/the0-darwin-amd64 .
+        CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="-w -s -X main.VERSION=${VERSION}" -o bin/the0-darwin-arm64 .
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-w -s -X main.VERSION=${VERSION}" -o bin/the0-windows-amd64.exe .
 
     - name: Generate checksums
       working-directory: ./cli/bin

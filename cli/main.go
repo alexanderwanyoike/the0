@@ -63,7 +63,7 @@ func startupVersionCheck() {
 	// Skip check for update and help commands
 	if len(os.Args) > 1 {
 		sub := os.Args[1]
-		if sub == "update" || sub == "help" || sub == "--help" || sub == "-h" || sub == "--version" {
+		if sub == "update" || sub == "help" || sub == "--help" || sub == "-h" || sub == "--version" || sub == "-v" {
 			return
 		}
 	}

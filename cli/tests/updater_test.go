@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,10 +98,7 @@ func TestCheckLatestRelease(t *testing.T) {
 			updater := internal.NewUpdater("1.3.1")
 			updater.GitHubOwner = "test-owner"
 			updater.GitHubRepo = "test-repo"
-			updater.HTTPClient = server.Client()
 
-			// Override the API base by using a custom HTTP client that rewrites URLs
-			// Instead, we need to actually hit the test server. Let's use a transport.
 			transport := &rewriteTransport{
 				base:    server.Client().Transport,
 				baseURL: server.URL,
@@ -112,7 +110,7 @@ func TestCheckLatestRelease(t *testing.T) {
 			if tt.expectedError {
 				if err == nil {
 					t.Errorf("CheckLatestRelease() expected error but got nil")
-				} else if tt.errorContains != "" && !contains(err.Error(), tt.errorContains) {
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
 					t.Errorf("CheckLatestRelease() error = %v, expected to contain %v", err, tt.errorContains)
 				}
 			} else {
@@ -137,6 +135,8 @@ type rewriteTransport struct {
 }
 
 func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Clone the request before mutating to avoid modifying the caller's request
+	req = req.Clone(req.Context())
 	// Rewrite the host to our test server
 	req.URL.Scheme = "http"
 	req.URL.Host = t.baseURL[len("http://"):]
@@ -144,19 +144,6 @@ func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return t.base.RoundTrip(req)
 	}
 	return http.DefaultTransport.RoundTrip(req)
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
-}
-
-func containsStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestGetPlatformBinaryName(t *testing.T) {
@@ -246,7 +233,7 @@ func TestVerifyChecksum(t *testing.T) {
 			if tt.expectedError {
 				if err == nil {
 					t.Errorf("VerifyChecksum() expected error but got nil")
-				} else if tt.errorContains != "" && !containsStr(err.Error(), tt.errorContains) {
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
 					t.Errorf("VerifyChecksum() error = %v, expected to contain %v", err, tt.errorContains)
 				}
 			} else {
@@ -261,9 +248,7 @@ func TestVerifyChecksum(t *testing.T) {
 func TestVersionCache(t *testing.T) {
 	// Use a temp directory to avoid polluting home
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
+	t.Setenv("HOME", tmpDir)
 
 	t.Run("write and read cache", func(t *testing.T) {
 		cache := &internal.VersionCache{
@@ -293,7 +278,7 @@ func TestVersionCache(t *testing.T) {
 	})
 
 	t.Run("read nonexistent cache", func(t *testing.T) {
-		os.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", t.TempDir())
 		_, err := internal.ReadVersionCache()
 		if err == nil {
 			t.Error("ReadVersionCache() expected error for nonexistent cache")

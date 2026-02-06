@@ -7,7 +7,7 @@ LDFLAGS = -ldflags="-w -s -X main.VERSION=$(VERSION)"
 
 # Build the CLI binary
 build:
-	go build -ldflags="-X main.VERSION=$(VERSION)" -o bin/the0 .
+	go build $(LDFLAGS) -o bin/the0 .
 
 # Run tests
 test:

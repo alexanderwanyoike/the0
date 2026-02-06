@@ -112,6 +112,9 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 	logger.StopSpinnerWithSuccess(fmt.Sprintf("Downloaded %s (%.1f MB)", binaryName, float64(len(binaryData))/(1024*1024)))
 
 	// Verify checksum if available
+	if checksumAsset == nil {
+		fmt.Fprintf(os.Stderr, "Warning: no checksum file found, skipping verification\n")
+	}
 	if checksumAsset != nil {
 		logger.StartSpinner("Verifying checksum")
 

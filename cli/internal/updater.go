@@ -123,9 +123,12 @@ func (u *Updater) DownloadAsset(url string) ([]byte, error) {
 	// Safety valve: cap downloads at 200 MB to avoid unbounded memory usage
 	// if the server returns an unexpectedly large response.
 	const maxDownloadSize = 200 << 20 // 200 MB
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read download: %w", err)
+	}
+	if len(data) > maxDownloadSize {
+		return nil, fmt.Errorf("download exceeds maximum size of %d bytes", maxDownloadSize)
 	}
 
 	return data, nil
@@ -190,7 +193,18 @@ func ReplaceBinary(newBinaryData []byte) error {
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 
-	// Atomic rename
+	// On Windows, rename the old binary out of the way first since
+	// os.Rename cannot atomically replace a running executable.
+	if runtime.GOOS == "windows" {
+		oldPath := execPath + ".old"
+		_ = os.Remove(oldPath) // clean up any previous leftover
+		if err := os.Rename(execPath, oldPath); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("failed to rename old binary: %w", err)
+		}
+	}
+
+	// Atomic rename (or simple rename on Windows after moving the old binary)
 	if err := os.Rename(tmpPath, execPath); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to replace binary: %w", err)
