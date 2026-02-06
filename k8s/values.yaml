@@ -39,9 +39,7 @@ postgresql:
     password: ""
     sslmode: require
     connectionString: ""  # overrides individual fields if set
-    # existingSecret:
-    #   name: ""
-    #   key: "DATABASE_URL"
+    # TODO: Add existingSecret support for Kubernetes Secrets (e.g. Sealed Secrets)
 
 mongodb:
   enabled: true
@@ -69,9 +67,7 @@ mongodb:
     authSource: admin
     options: ""
     connectionString: ""  # overrides individual fields if set
-    # existingSecret:
-    #   name: ""
-    #   key: "MONGO_URI"
+    # TODO: Add existingSecret support for Kubernetes Secrets (e.g. Sealed Secrets)
 
 nats:
   enabled: true

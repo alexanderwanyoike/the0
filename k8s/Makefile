@@ -233,11 +233,14 @@ remove-hosts: ## Remove the0.local hostnames from /etc/hosts
 # Production deployment (assumes external infrastructure)
 .PHONY: deploy
 deploy: check-deps ## Deploy to production cluster (use VALUES=examples/aws-production.yaml)
+ifndef VALUES
+	$(error VALUES is required for production deploy. Usage: make deploy VALUES=examples/aws-production.yaml)
+endif
 	@echo "🚀 Deploying to production cluster..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) --create-namespace \
-		$(if $(VALUES),-f $(VALUES),) \
+		-f $(VALUES) \
 		--wait --timeout 5m
 	@echo "✅ Production deployment completed!"
 

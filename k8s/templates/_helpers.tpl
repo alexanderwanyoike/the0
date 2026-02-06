@@ -69,6 +69,25 @@ When false, use external.connectionString (if set) or build from external.* fiel
 */}}
 
 {{/*
+=== External Service Validation ===
+Fail early when a service is disabled but no external config is provided.
+*/}}
+{{- define "the0.validateExternalServices" -}}
+{{- if and (not .Values.postgresql.enabled) (not .Values.postgresql.external.connectionString) (not .Values.postgresql.external.host) -}}
+{{- fail "postgresql.enabled is false but no external configuration is set. Provide postgresql.external.connectionString or postgresql.external.host." -}}
+{{- end -}}
+{{- if and (not .Values.mongodb.enabled) (not .Values.mongodb.external.connectionString) (not .Values.mongodb.external.host) -}}
+{{- fail "mongodb.enabled is false but no external configuration is set. Provide mongodb.external.connectionString or mongodb.external.host." -}}
+{{- end -}}
+{{- if and (not .Values.nats.enabled) (not .Values.nats.external.url) (not .Values.nats.external.host) -}}
+{{- fail "nats.enabled is false but no external configuration is set. Provide nats.external.url or nats.external.host." -}}
+{{- end -}}
+{{- if and (not .Values.minio.enabled) (not .Values.minio.external.endpoint) -}}
+{{- fail "minio.enabled is false but no external configuration is set. Provide minio.external.endpoint." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 PostgreSQL DATABASE_URL
 */}}
 {{- define "the0.databaseUrl" -}}
