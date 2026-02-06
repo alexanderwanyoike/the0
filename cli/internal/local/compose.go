@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"the0/internal/logger"
 )
@@ -56,7 +57,7 @@ func (r *ComposeRunner) devArgs() []string {
 // Run executes a docker compose command with stdout/stderr streaming
 func (r *ComposeRunner) Run(args ...string) error {
 	cmdArgs := append(r.baseArgs(), args...)
-	logger.Verbose("Running: docker %s", joinArgs(cmdArgs))
+	logger.Verbose("Running: docker %s", strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command("docker", cmdArgs...)
 	cmd.Stdout = os.Stdout
@@ -69,7 +70,7 @@ func (r *ComposeRunner) Run(args ...string) error {
 // RunCapture executes a docker compose command and captures output
 func (r *ComposeRunner) RunCapture(args ...string) (string, error) {
 	cmdArgs := append(r.baseArgs(), args...)
-	logger.Verbose("Running: docker %s", joinArgs(cmdArgs))
+	logger.Verbose("Running: docker %s", strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command("docker", cmdArgs...)
 	cmd.Dir = r.ComposeDir
@@ -88,7 +89,7 @@ func (r *ComposeRunner) RunCapture(args ...string) (string, error) {
 // RunDev executes a docker compose command with the dev overlay
 func (r *ComposeRunner) RunDev(args ...string) error {
 	cmdArgs := append(r.devArgs(), args...)
-	logger.Verbose("Running: docker %s", joinArgs(cmdArgs))
+	logger.Verbose("Running: docker %s", strings.Join(cmdArgs, " "))
 
 	cmd := exec.Command("docker", cmdArgs...)
 	cmd.Stdout = os.Stdout
@@ -98,9 +99,9 @@ func (r *ComposeRunner) RunDev(args ...string) error {
 	return cmd.Run()
 }
 
-// Up starts all services in detached mode
+// Up starts all services in detached mode and waits for health checks
 func (r *ComposeRunner) Up() error {
-	return r.Run("up", "-d")
+	return r.Run("up", "-d", "--wait")
 }
 
 // Down stops and removes all containers
@@ -151,18 +152,7 @@ func (r *ComposeRunner) PS() (string, error) {
 	return r.RunCapture("ps", "--format", "json")
 }
 
-// UpDev starts services with the dev overlay (hot reload for frontend/api)
+// UpDev starts frontend and API with the dev overlay (hot reload)
 func (r *ComposeRunner) UpDev() error {
-	return r.RunDev("up", "-d")
-}
-
-func joinArgs(args []string) string {
-	result := ""
-	for i, a := range args {
-		if i > 0 {
-			result += " "
-		}
-		result += a
-	}
-	return result
+	return r.RunDev("up", "-d", "the0-frontend", "the0-api")
 }

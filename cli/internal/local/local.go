@@ -104,7 +104,7 @@ func ExtractComposeFiles(repoPath string, prebuilt bool) error {
 	}
 
 	// Replace placeholder in main compose file
-	composeContent := strings.ReplaceAll(string(EmbeddedComposeFile), "{{REPO_PATH}}", absPath)
+	composeContent := strings.ReplaceAll(string(embeddedComposeFile), "{{REPO_PATH}}", absPath)
 	composePath := filepath.Join(dir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
@@ -112,7 +112,7 @@ func ExtractComposeFiles(repoPath string, prebuilt bool) error {
 	logger.Verbose("Wrote %s", composePath)
 
 	// Replace placeholder in dev compose file
-	devContent := strings.ReplaceAll(string(EmbeddedComposeDevFile), "{{REPO_PATH}}", absPath)
+	devContent := strings.ReplaceAll(string(embeddedComposeDevFile), "{{REPO_PATH}}", absPath)
 	devPath := filepath.Join(dir, "docker-compose.dev.yml")
 	if err := os.WriteFile(devPath, []byte(devContent), 0644); err != nil {
 		return fmt.Errorf("failed to write docker-compose.dev.yml: %w", err)

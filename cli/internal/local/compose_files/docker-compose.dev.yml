@@ -2,7 +2,6 @@ services:
   # Development override for frontend with hot reloading
   the0-frontend:
     image: node:20-alpine
-    user: "1000:1000"
     working_dir: /app
     volumes:
       - {{REPO_PATH}}/frontend:/app
@@ -32,7 +31,6 @@ services:
   # Development override for API with hot reloading
   the0-api:
     image: node:20-alpine
-    user: "1000:1000"
     working_dir: /app
     volumes:
       - {{REPO_PATH}}/api:/app

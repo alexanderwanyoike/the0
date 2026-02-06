@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
@@ -375,7 +374,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVarP(&follow, "follow", "f", true, "Follow log output")
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
 	cmd.Flags().StringVar(&tail, "tail", "", "Number of lines to show from the end (e.g. '100')")
 
 	return cmd
@@ -403,18 +402,13 @@ are started normally.`,
 				return fmt.Errorf("repository path no longer valid: %w\nRun 'the0 local init' again", err)
 			}
 
-			// Start infrastructure first
+			// Start infrastructure first and wait for health checks
 			logger.StartSpinner("Starting infrastructure services")
-			if err := runner.Run("up", "-d", "postgres", "mongo", "nats", "minio"); err != nil {
+			if err := runner.Run("up", "-d", "--wait", "postgres", "mongo", "nats", "minio"); err != nil {
 				logger.StopSpinnerWithError("Failed to start infrastructure")
 				return err
 			}
-			logger.StopSpinnerWithSuccess("Infrastructure services started")
-
-			// Wait for infra to be healthy
-			logger.StartSpinner("Waiting for infrastructure to be ready")
-			time.Sleep(5 * time.Second)
-			logger.StopSpinnerWithSuccess("Infrastructure ready")
+			logger.StopSpinnerWithSuccess("Infrastructure services ready")
 
 			// Start runtime services (these build from source)
 			logger.StartSpinner("Building and starting runtime services")

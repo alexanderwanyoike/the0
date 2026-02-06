@@ -2,6 +2,7 @@ package local
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"the0/internal/logger"
@@ -133,10 +134,17 @@ func PrintServiceURLs() {
 
 	for _, cat := range categories {
 		logger.Printf("  %s:\n", cat.Name)
-		for _, svc := range ServiceRegistry {
+		// Collect and sort services in this category for deterministic output
+		var names []string
+		for name, svc := range ServiceRegistry {
 			if svc.Category == cat.Category {
-				logger.Printf("    %-20s %s\n", svc.FriendlyName, svc.URL)
+				names = append(names, name)
 			}
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			svc := ServiceRegistry[name]
+			logger.Printf("    %-20s %s\n", svc.FriendlyName, svc.URL)
 		}
 		logger.Newline()
 	}
