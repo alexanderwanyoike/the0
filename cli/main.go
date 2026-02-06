@@ -70,13 +70,17 @@ func startupVersionCheck() {
 
 	cache, err := internal.ReadVersionCache()
 	if err != nil {
-		// No cache — spawn background refresh for next run
+		// No cache — fire-and-forget background refresh so the next run has a
+		// cached result. The goroutine is intentionally not joined; if the
+		// process exits before the request completes, the check is simply
+		// skipped and retried on the next invocation.
 		go backgroundVersionCheck()
 		return
 	}
 
 	if internal.IsCacheStale(cache) {
-		// Stale cache — spawn background refresh for next run
+		// Stale cache — fire-and-forget background refresh (same rationale
+		// as above: best-effort, no need to block the CLI on a network call).
 		go backgroundVersionCheck()
 		return
 	}

@@ -32,7 +32,7 @@ jobs:
 
     - name: Run tests
       working-directory: ./cli
-      run: go test ./tests/...
+      run: go test ./...
 
     - name: Cross-compile binaries
       working-directory: ./cli
@@ -52,7 +52,7 @@ jobs:
       run: sha256sum the0-* > checksums.txt
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
       with:
         name: CLI v${{ steps.version.outputs.version }}
         generate_release_notes: true

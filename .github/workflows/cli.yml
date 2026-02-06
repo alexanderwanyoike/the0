@@ -34,7 +34,7 @@ jobs:
 
     - name: Run tests
       working-directory: ./cli
-      run: go test ./tests/...
+      run: go test ./...
 
     - name: Build CLI binary
       working-directory: ./cli

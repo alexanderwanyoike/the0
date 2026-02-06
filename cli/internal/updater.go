@@ -120,7 +120,10 @@ func (u *Updater) DownloadAsset(url string) ([]byte, error) {
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	// Safety valve: cap downloads at 200 MB to avoid unbounded memory usage
+	// if the server returns an unexpectedly large response.
+	const maxDownloadSize = 200 << 20 // 200 MB
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read download: %w", err)
 	}
