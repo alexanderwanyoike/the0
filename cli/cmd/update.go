@@ -113,9 +113,8 @@ func runUpdate(currentVersion string, checkOnly bool, yes bool) {
 
 	// Verify checksum if available
 	if checksumAsset == nil {
-		fmt.Fprintf(os.Stderr, "Warning: no checksum file found, skipping verification\n")
-	}
-	if checksumAsset != nil {
+		logger.Print("  Warning: no checksum file found in release, skipping integrity verification")
+	} else {
 		logger.StartSpinner("Verifying checksum")
 
 		checksumData, err := updater.DownloadAsset(checksumAsset.BrowserDownloadURL)

@@ -207,7 +207,16 @@ func ReplaceBinary(newBinaryData []byte) error {
 	// Atomic rename (or simple rename on Windows after moving the old binary)
 	if err := os.Rename(tmpPath, execPath); err != nil {
 		os.Remove(tmpPath)
+		// On Windows, try to restore the old binary so the user isn't left without a working CLI
+		if runtime.GOOS == "windows" {
+			_ = os.Rename(execPath+".old", execPath)
+		}
 		return fmt.Errorf("failed to replace binary: %w", err)
+	}
+
+	// Clean up the old binary on Windows
+	if runtime.GOOS == "windows" {
+		_ = os.Remove(execPath + ".old")
 	}
 
 	return nil
