@@ -46,6 +46,9 @@ fmt:
 verify: fmt lint test build
 	@echo "✅ All checks passed!"
 
+# Portable sha256sum (macOS ships shasum instead of sha256sum)
+SHA256SUM := $(shell command -v sha256sum 2>/dev/null || echo "shasum -a 256")
+
 # Release build with optimizations
 release:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o bin/the0-linux-amd64 .
@@ -53,5 +56,5 @@ release:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s" -o bin/the0-darwin-amd64 .
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s" -o bin/the0-darwin-arm64 .
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-w -s" -o bin/the0-windows-amd64.exe .
-	cd bin && sha256sum the0-* > checksums.txt
+	cd bin && $(SHA256SUM) the0-* > checksums.txt
 

@@ -12,6 +12,9 @@ cleanup() {
     if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
         rm -rf "$WORK_DIR"
     fi
+    if [ -n "${TMPFILE:-}" ] && [ -f "$TMPFILE" ]; then
+        rm -f "$TMPFILE"
+    fi
 }
 
 trap cleanup EXIT INT TERM
