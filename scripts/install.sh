@@ -1,11 +1,20 @@
 #!/bin/sh
 # the0 CLI installer
 # Usage: curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
-set -e
+set -eu
 
 GITHUB_REPO="alexanderwanyoike/the0"
 INSTALL_DIR="$HOME/.the0/bin"
 BINARY_NAME="the0"
+WORK_DIR=""
+
+cleanup() {
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        rm -rf "$WORK_DIR"
+    fi
+}
+
+trap cleanup EXIT INT TERM
 
 # Colors (only when outputting to a terminal)
 setup_colors() {
@@ -116,19 +125,17 @@ get_latest_version() {
 }
 
 download_binary() {
-    TMPDIR="$(mktemp -d)"
+    WORK_DIR="$(mktemp -d)"
     BINARY_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${BINARY_NAME}-${OS}-${ARCH}"
     CHECKSUMS_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/checksums.txt"
 
     info "Downloading ${BINARY_NAME}-${OS}-${ARCH}..."
-    if ! download "$BINARY_URL" "${TMPDIR}/${BINARY_NAME}"; then
-        rm -rf "$TMPDIR"
+    if ! download "$BINARY_URL" "${WORK_DIR}/${BINARY_NAME}"; then
         error "Failed to download binary from ${BINARY_URL}"
     fi
 
     info "Downloading checksums..."
-    if ! download "$CHECKSUMS_URL" "${TMPDIR}/checksums.txt"; then
-        rm -rf "$TMPDIR"
+    if ! download "$CHECKSUMS_URL" "${WORK_DIR}/checksums.txt"; then
         error "Failed to download checksums from ${CHECKSUMS_URL}"
     fi
 }
@@ -136,16 +143,14 @@ download_binary() {
 verify_checksum() {
     info "Verifying checksum..."
 
-    EXPECTED="$(grep "${BINARY_NAME}-${OS}-${ARCH}" "${TMPDIR}/checksums.txt" | awk '{print $1}')"
+    EXPECTED="$(grep "  ${BINARY_NAME}-${OS}-${ARCH}$" "${WORK_DIR}/checksums.txt" | awk '{print $1}')"
     if [ -z "$EXPECTED" ]; then
-        rm -rf "$TMPDIR"
         error "No checksum found for ${BINARY_NAME}-${OS}-${ARCH} in checksums.txt"
     fi
 
-    ACTUAL="$(cd "$TMPDIR" && $SHA_CMD "$BINARY_NAME" | awk '{print $1}')"
+    ACTUAL="$(cd "$WORK_DIR" && $SHA_CMD "$BINARY_NAME" | awk '{print $1}')"
 
     if [ "$EXPECTED" != "$ACTUAL" ]; then
-        rm -rf "$TMPDIR"
         error "Checksum verification failed (expected: ${EXPECTED}, got: ${ACTUAL})"
     fi
 
@@ -156,9 +161,8 @@ install_binary() {
     info "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
 
     mkdir -p "$INSTALL_DIR"
-    mv "${TMPDIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    mv "${WORK_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
-    rm -rf "$TMPDIR"
 
     success "Installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"
 }
@@ -199,8 +203,12 @@ setup_path() {
     fi
 
     if [ -n "$MODIFIED_FILES" ]; then
-        warn "Added ${INSTALL_DIR} to PATH in:${MODIFIED_FILES}"
+        info "Added ${INSTALL_DIR} to PATH in:${MODIFIED_FILES}"
         printf "  Run %ssource <file>%s or open a new terminal to use the0.\n" "$BOLD" "$RESET"
+    else
+        info "Could not find a shell config file to update PATH."
+        printf "  Add the following to your shell profile manually:\n"
+        printf "    %s\n" "$EXPORT_LINE"
     fi
 }
 
