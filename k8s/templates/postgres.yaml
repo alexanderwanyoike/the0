@@ -58,7 +58,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready -U {{ .Values.postgresql.username }} -d {{ .Values.postgresql.database }}
+                - pg_isready -U '{{ .Values.postgresql.username }}' -d '{{ .Values.postgresql.database }}'
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -67,7 +67,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready -U {{ .Values.postgresql.username }} -d {{ .Values.postgresql.database }}
+                - pg_isready -U '{{ .Values.postgresql.username }}' -d '{{ .Values.postgresql.database }}'
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3

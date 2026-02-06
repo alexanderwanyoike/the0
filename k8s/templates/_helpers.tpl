@@ -62,6 +62,15 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
+Percent-encode special characters for URI userinfo (RFC 3986 Section 3.2.1).
+Encodes %, @, and : — the characters that break user:password@host parsing.
+Do NOT use Sprig's urlquery here: it is query-string encoding (spaces become +).
+*/}}
+{{- define "the0.encodeUserinfo" -}}
+{{- . | replace "%" "%25" | replace "@" "%40" | replace ":" "%3A" -}}
+{{- end -}}
+
+{{/*
 === Infrastructure Connection Helpers ===
 Resolve internal vs external connection strings for each infrastructure service.
 When <service>.enabled is true, use internal cluster addresses.
@@ -92,11 +101,11 @@ PostgreSQL DATABASE_URL
 */}}
 {{- define "the0.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}
-postgresql://{{ .Values.postgresql.username }}:{{ .Values.postgresql.password }}@{{ include "the0.fullname" . }}-postgres:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}?sslmode={{ .Values.postgresql.sslmode }}
+postgresql://{{ include "the0.encodeUserinfo" .Values.postgresql.username }}:{{ include "the0.encodeUserinfo" .Values.postgresql.password }}@{{ include "the0.fullname" . }}-postgres:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}?sslmode={{ .Values.postgresql.sslmode }}
 {{- else if .Values.postgresql.external.connectionString -}}
 {{ .Values.postgresql.external.connectionString }}
 {{- else -}}
-postgresql://{{ .Values.postgresql.external.username }}:{{ .Values.postgresql.external.password }}@{{ .Values.postgresql.external.host }}:{{ .Values.postgresql.external.port }}/{{ .Values.postgresql.external.database }}?sslmode={{ .Values.postgresql.external.sslmode }}
+postgresql://{{ include "the0.encodeUserinfo" .Values.postgresql.external.username }}:{{ include "the0.encodeUserinfo" .Values.postgresql.external.password }}@{{ .Values.postgresql.external.host }}:{{ .Values.postgresql.external.port }}/{{ .Values.postgresql.external.database }}?sslmode={{ .Values.postgresql.external.sslmode }}
 {{- end -}}
 {{- end }}
 
@@ -105,11 +114,11 @@ MongoDB connection URL
 */}}
 {{- define "the0.mongoUrl" -}}
 {{- if .Values.mongodb.enabled -}}
-mongodb://{{ .Values.mongodb.rootUsername }}:{{ .Values.mongodb.rootPassword }}@{{ include "the0.fullname" . }}-mongo:{{ .Values.mongodb.port }}
+mongodb://{{ include "the0.encodeUserinfo" .Values.mongodb.rootUsername }}:{{ include "the0.encodeUserinfo" .Values.mongodb.rootPassword }}@{{ include "the0.fullname" . }}-mongo:{{ .Values.mongodb.port }}
 {{- else if .Values.mongodb.external.connectionString -}}
 {{ .Values.mongodb.external.connectionString }}
 {{- else -}}
-mongodb://{{ .Values.mongodb.external.username }}:{{ .Values.mongodb.external.password }}@{{ .Values.mongodb.external.host }}:{{ .Values.mongodb.external.port }}/{{ .Values.mongodb.external.database }}?authSource={{ .Values.mongodb.external.authSource }}{{ with .Values.mongodb.external.options }}&{{ . }}{{ end }}
+mongodb://{{ include "the0.encodeUserinfo" .Values.mongodb.external.username }}:{{ include "the0.encodeUserinfo" .Values.mongodb.external.password }}@{{ .Values.mongodb.external.host }}:{{ .Values.mongodb.external.port }}/{{ .Values.mongodb.external.database }}?authSource={{ .Values.mongodb.external.authSource }}{{ with .Values.mongodb.external.options }}&{{ . }}{{ end }}
 {{- end -}}
 {{- end }}
 

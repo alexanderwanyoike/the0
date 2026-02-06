@@ -240,13 +240,13 @@ endif
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) --create-namespace \
-		-f $(VALUES) \
+		-f "$(VALUES)" \
 		--wait --timeout 5m
 	@echo "✅ Production deployment completed!"
 
 .PHONY: template
 template: ## Render templates locally (use VALUES=examples/aws-production.yaml)
-	@helm template $(RELEASE_NAME) $(CHART_PATH) $(if $(VALUES),-f $(VALUES),)
+	@helm template $(RELEASE_NAME) $(CHART_PATH) $(if $(VALUES),-f "$(VALUES)",)
 
 # Status and logs
 .PHONY: status

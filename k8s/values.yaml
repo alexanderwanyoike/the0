@@ -108,8 +108,8 @@ minio:
       cpu: 500m
   external:
     endpoint: ""
-    port: "443"
-    useSSL: "true"
+    port: 443
+    useSSL: true
     accessKey: ""
     secretKey: ""
     region: ""
