@@ -180,6 +180,7 @@ setup_path() {
 
     EXPORT_LINE="export PATH=\"\$HOME/.the0/bin:\$PATH\""
     MODIFIED_FILES=""
+    ALREADY_CONFIGURED=""
 
     append_to_file() {
         file="$1"
@@ -188,6 +189,8 @@ setup_path() {
             if ! grep -qF '.the0/bin' "$file" 2>/dev/null; then
                 printf '\n# the0 CLI\n%s\n' "$EXPORT_LINE" >> "$file"
                 MODIFIED_FILES="${MODIFIED_FILES} ${file}"
+            else
+                ALREADY_CONFIGURED="yes"
             fi
         fi
     }
@@ -195,8 +198,8 @@ setup_path() {
     append_to_file "$HOME/.bashrc"
     append_to_file "$HOME/.zshrc"
 
-    # Fallback to .profile if neither .bashrc nor .zshrc were modified
-    if [ -z "$MODIFIED_FILES" ]; then
+    # Fallback to .profile if neither .bashrc nor .zshrc were modified or already configured
+    if [ -z "$MODIFIED_FILES" ] && [ -z "$ALREADY_CONFIGURED" ]; then
         if [ -f "$HOME/.profile" ]; then
             if ! grep -qF '.the0/bin' "$HOME/.profile" 2>/dev/null; then
                 printf '\n# the0 CLI\n%s\n' "$EXPORT_LINE" >> "$HOME/.profile"
