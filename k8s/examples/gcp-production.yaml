@@ -29,8 +29,8 @@ minio:
   enabled: false
   external:
     endpoint: "storage.googleapis.com"
-    port: "443"
-    useSSL: "true"
+    port: 443
+    useSSL: true
     accessKey: "GOOGXXXXXXXXXXXXXXXX"
     secretKey: "CHANGEME"
     region: "us-central1"

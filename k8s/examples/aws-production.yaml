@@ -35,9 +35,9 @@ minio:
   enabled: false
   external:
     endpoint: "s3.amazonaws.com"
-    port: "443"
-    useSSL: "true"
-    accessKey: "AKIAIOSFODNN7EXAMPLE"
+    port: 443
+    useSSL: true
+    accessKey: "CHANGEME"
     secretKey: "CHANGEME"
     region: "us-east-1"
 
