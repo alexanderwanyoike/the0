@@ -97,7 +97,7 @@ The the0 CLI tool provides a local development interface for managing your bots.
 curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
 ```
 
-This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`.
+This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`. Make sure `~/.the0/bin` is in your PATH.
 
 ### Install from Source
 
@@ -113,7 +113,7 @@ make install
 the0 --help
 ```
 
-The CLI will be installed to `~/bin/the0`. Make sure `~/bin` is in your PATH.
+The source build installs to `~/bin/the0`. Make sure `~/bin` is in your PATH.
 
 ### Prerequisites for CLI
 

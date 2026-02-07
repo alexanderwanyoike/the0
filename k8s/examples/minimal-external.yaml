@@ -35,8 +35,8 @@ minio:
   enabled: false
   external:
     endpoint: "your-s3-host.example.com"
-    port: "443"
-    useSSL: "true"
+    port: 443
+    useSSL: true
     accessKey: "CHANGEME"
     secretKey: "CHANGEME"
 

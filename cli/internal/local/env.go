@@ -1,6 +1,7 @@
 package local
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -43,6 +44,8 @@ func GenerateEnvFile(composeDir string) error {
 	if _, err := os.Stat(envPath); err == nil {
 		logger.Verbose("Skipping .env generation (already exists)")
 		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check env file: %w", err)
 	}
 
 	if err := os.WriteFile(envPath, []byte(defaultEnvContent), 0600); err != nil {
