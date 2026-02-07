@@ -79,7 +79,7 @@ spec:
                   name: {{ include "the0.secretName" . }}
                   key: jwt-secret
             {{- range $key, $value := .Values.the0Api.env }}
-            {{- if ne $key "JWT_SECRET" }}
+            {{- if and (ne $key "JWT_SECRET") (ne $key "DATABASE_URL") (ne $key "MINIO_ACCESS_KEY") (ne $key "MINIO_SECRET_KEY") }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
