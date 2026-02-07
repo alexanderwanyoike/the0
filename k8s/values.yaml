@@ -6,9 +6,16 @@ global:
   # Image pull policy for local development (use cached images)
   imagePullPolicy: Never
   # For production with DockerHub images, use: Always
-  
+
   # Storage class for persistent volumes (leave empty for default)
   storageClass: ""
+
+  # Provide an existing Secret name to skip auto-generation of the chart Secret.
+  # The Secret must contain these keys:
+  #   postgresql-password, mongodb-root-password, minio-access-key, minio-secret-key,
+  #   database-url, mongo-url, jwt-secret
+  # Works with Sealed Secrets, External Secrets Operator, etc.
+  existingSecret: ""
 
 # Infrastructure Services
 # Set enabled: false to use external services in production
@@ -39,7 +46,6 @@ postgresql:
     password: ""
     sslmode: require
     connectionString: ""  # overrides individual fields if set
-    # TODO: Add existingSecret support for Kubernetes Secrets (e.g. Sealed Secrets)
 
 mongodb:
   enabled: true
@@ -67,7 +73,6 @@ mongodb:
     authSource: admin
     options: ""
     connectionString: ""  # overrides individual fields if set
-    # TODO: Add existingSecret support for Kubernetes Secrets (e.g. Sealed Secrets)
 
 nats:
   enabled: true

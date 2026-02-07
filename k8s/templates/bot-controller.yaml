@@ -114,13 +114,22 @@ spec:
             - name: MINIO_BUCKET
               value: {{ .Values.botController.minio.bucket | quote }}
             - name: MONGO_URI
-              value: {{ include "the0.mongoUrl" . | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: mongo-url
             - name: NATS_URL
               value: {{ include "the0.natsUrl" . | quote }}
             - name: MINIO_ACCESS_KEY
-              value: {{ include "the0.minioAccessKey" . | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-access-key
             - name: MINIO_SECRET_KEY
-              value: {{ include "the0.minioSecretKey" . | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-secret-key
             {{- with .Values.botController.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

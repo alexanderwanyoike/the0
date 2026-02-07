@@ -52,7 +52,10 @@ spec:
             - name: POSTGRES_USER
               value: {{ .Values.postgresql.username | quote }}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.postgresql.password | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: postgresql-password
           livenessProbe:
             exec:
               command:
