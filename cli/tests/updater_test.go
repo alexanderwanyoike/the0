@@ -33,26 +33,26 @@ func TestCheckLatestRelease(t *testing.T) {
 					"assets":   []map[string]any{},
 				},
 				{
-					"tag_name": "cli/v1.4.0",
-					"name":     "CLI v1.4.0",
+					"tag_name": "v1.4.0",
+					"name":     "v1.4.0",
 					"assets": []map[string]any{
 						{"name": "the0-linux-amd64", "browser_download_url": "https://example.com/the0-linux-amd64"},
 					},
 				},
 			},
-			expectedTag: "cli/v1.4.0",
+			expectedTag: "v1.4.0",
 		},
 		{
 			name: "skips non-CLI releases",
 			releases: []map[string]any{
 				{
-					"tag_name": "api/v3.0.0",
-					"name":     "API v3.0.0",
+					"tag_name": "something-else",
+					"name":     "Something Else",
 					"assets":   []map[string]any{},
 				},
 				{
-					"tag_name": "frontend/v2.0.0",
-					"name":     "Frontend v2.0.0",
+					"tag_name": "also-not-a-release",
+					"name":     "Also Not A Release",
 					"assets":   []map[string]any{},
 				},
 			},
@@ -69,17 +69,17 @@ func TestCheckLatestRelease(t *testing.T) {
 			name: "returns first CLI release (most recent)",
 			releases: []map[string]any{
 				{
-					"tag_name": "cli/v1.5.0",
-					"name":     "CLI v1.5.0",
+					"tag_name": "v1.5.0",
+					"name":     "v1.5.0",
 					"assets":   []map[string]any{},
 				},
 				{
-					"tag_name": "cli/v1.4.0",
-					"name":     "CLI v1.4.0",
+					"tag_name": "v1.4.0",
+					"name":     "v1.4.0",
 					"assets":   []map[string]any{},
 				},
 			},
-			expectedTag: "cli/v1.5.0",
+			expectedTag: "v1.5.0",
 		},
 	}
 
@@ -164,9 +164,9 @@ func TestExtractVersionFromTag(t *testing.T) {
 		tag      string
 		expected string
 	}{
-		{"cli/v1.4.0", "1.4.0"},
-		{"cli/v2.0.0-beta.1", "2.0.0-beta.1"},
-		{"cli/v0.1.0", "0.1.0"},
+		{"v1.4.0", "1.4.0"},
+		{"v2.0.0-beta.1", "2.0.0-beta.1"},
+		{"v0.1.0", "0.1.0"},
 		{"v1.0.0", "1.0.0"},
 		{"1.0.0", "1.0.0"},
 	}
@@ -306,7 +306,7 @@ func TestVersionCache(t *testing.T) {
 
 func TestFindAssetByName(t *testing.T) {
 	release := &internal.GitHubRelease{
-		TagName: "cli/v1.4.0",
+		TagName: "v1.4.0",
 		Assets: []internal.GitHubAsset{
 			{Name: "the0-linux-amd64", BrowserDownloadURL: "https://example.com/linux-amd64"},
 			{Name: "the0-darwin-arm64", BrowserDownloadURL: "https://example.com/darwin-arm64"},

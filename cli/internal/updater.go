@@ -17,7 +17,7 @@ import (
 const (
 	GitHubOwner       = "alexanderwanyoike"
 	GitHubRepo        = "the0"
-	CLITagPrefix      = "cli/v"
+	CLITagPrefix      = "v"
 	VersionCacheFile  = ".the0/version-check.json"
 	CacheStaleDays    = 7
 	GitHubAPIBase     = "https://api.github.com"
