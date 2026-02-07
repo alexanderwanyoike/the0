@@ -44,7 +44,7 @@ minio:
 the0Api:
   replicas: 2
   image:
-    repository: the0org/the0-api
+    repository: ghcr.io/alexanderwanyoike/the0/api
   env:
     DATABASE_TYPE: "postgres"
     MINIO_EXTERNAL_ENDPOINT: "the0-assets.s3.amazonaws.com"
@@ -63,7 +63,7 @@ the0Api:
 the0Frontend:
   replicas: 2
   image:
-    repository: the0org/the0-frontend
+    repository: ghcr.io/alexanderwanyoike/the0/frontend
   env:
     NEXT_PUBLIC_APP_NAME: "the0"
     NEXT_PUBLIC_APP_VERSION: "1.0.0"
@@ -73,7 +73,7 @@ the0Frontend:
 
 botController:
   image:
-    repository: the0org/runtime
+    repository: ghcr.io/alexanderwanyoike/the0/runtime
   runtimeImagePullPolicy: "Always"
 
 minikube:

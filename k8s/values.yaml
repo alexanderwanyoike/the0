@@ -5,7 +5,7 @@
 global:
   # Image pull policy for local development (use cached images)
   imagePullPolicy: Never
-  # For production with DockerHub images, use: Always
+  # For production with GHCR images, use: Always
 
   # Storage class for persistent volumes (leave empty for default)
   storageClass: ""
@@ -129,10 +129,9 @@ the0Api:
     repository: the0-api
     # tag defaults to Chart appVersion; override for local dev:
     # tag: latest
-  # DockerHub image (uncomment for production)
+  # GHCR image (uncomment for production)
   # image:
-  #   repository: the0org/the0-api
-  #   tag: latest
+  #   repository: ghcr.io/alexanderwanyoike/the0/api
   port: 3000
   env:
     # Application configuration
@@ -165,10 +164,9 @@ the0Frontend:
     repository: the0-frontend
     # tag defaults to Chart appVersion; override for local dev:
     # tag: latest
-  # DockerHub image (uncomment for production)
+  # GHCR image (uncomment for production)
   # image:
-  #   repository: the0org/the0-frontend
-  #   tag: latest
+  #   repository: ghcr.io/alexanderwanyoike/the0/frontend
   port: 3000
   env:
     # Frontend configuration (using NodePort URLs)
@@ -195,10 +193,9 @@ the0Docs:
     repository: the0-docs
     # tag defaults to Chart appVersion; override for local dev:
     # tag: latest
-  # DockerHub image (uncomment for production)
+  # GHCR image (uncomment for production)
   # image:
-  #   repository: the0org/the0-docs
-  #   tag: latest
+  #   repository: ghcr.io/alexanderwanyoike/the0/docs
   port: 80  # nginx serves on port 80
   env:
     # Documentation configuration
