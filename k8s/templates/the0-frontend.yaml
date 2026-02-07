@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: {{ .Values.the0Frontend.image.repository }}:{{ .Values.the0Frontend.image.tag }}
+          image: {{ .Values.the0Frontend.image.repository }}:{{ .Values.the0Frontend.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http

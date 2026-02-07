@@ -39,7 +39,6 @@ the0Api:
   replicas: 2
   image:
     repository: us-docker.pkg.dev/the0-prod/the0/the0-api
-    tag: latest
   env:
     DATABASE_TYPE: "postgres"
     MINIO_EXTERNAL_ENDPOINT: "storage.googleapis.com/the0-assets"
@@ -59,7 +58,6 @@ the0Frontend:
   replicas: 2
   image:
     repository: us-docker.pkg.dev/the0-prod/the0/the0-frontend
-    tag: latest
   env:
     NEXT_PUBLIC_APP_NAME: "the0"
     NEXT_PUBLIC_APP_VERSION: "1.0.0"
@@ -70,8 +68,6 @@ the0Frontend:
 botController:
   image:
     repository: us-docker.pkg.dev/the0-prod/the0/runtime
-    tag: latest
-  runtimeImage: "us-docker.pkg.dev/the0-prod/the0/runtime:latest"
   runtimeImagePullPolicy: "Always"
 
 minikube:

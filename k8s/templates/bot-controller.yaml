@@ -96,7 +96,7 @@ spec:
       serviceAccountName: {{ include "the0.fullname" . }}-bot-controller
       containers:
         - name: bot-controller
-          image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag }}
+          image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           command: ["/app/runtime", "controller"]
           args:
@@ -104,7 +104,7 @@ spec:
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
             - "--minio-endpoint={{ include "the0.minioEndpointWithPort" . }}"
             - "--minio-bucket={{ .Values.botController.minio.bucket }}"
-            - "--runtime-image={{ .Values.botController.runtimeImage }}"
+            - "--runtime-image={{ .Values.botController.runtimeImage | default (printf "%s:%s" .Values.botController.image.repository .Chart.AppVersion) }}"
             - "--runtime-image-pull-policy={{ .Values.botController.runtimeImagePullPolicy }}"
           env:
             - name: NAMESPACE

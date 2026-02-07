@@ -127,7 +127,8 @@ the0Api:
   # Local image (default)
   image:
     repository: the0-api
-    tag: latest
+    # tag defaults to Chart appVersion; override for local dev:
+    # tag: latest
   # DockerHub image (uncomment for production)
   # image:
   #   repository: the0org/the0-api
@@ -162,7 +163,8 @@ the0Frontend:
   # Local image (default)
   image:
     repository: the0-frontend
-    tag: latest
+    # tag defaults to Chart appVersion; override for local dev:
+    # tag: latest
   # DockerHub image (uncomment for production)
   # image:
   #   repository: the0org/the0-frontend
@@ -191,7 +193,8 @@ the0Docs:
   # Local image (default)
   image:
     repository: the0-docs
-    tag: latest
+    # tag defaults to Chart appVersion; override for local dev:
+    # tag: latest
   # DockerHub image (uncomment for production)
   # image:
   #   repository: the0org/the0-docs
@@ -217,9 +220,10 @@ botController:
   replicas: 1
   image:
     repository: runtime
-    tag: latest
-  # Runtime image for init containers and sidecars in bot pods
-  runtimeImage: "runtime:latest"
+    # tag defaults to Chart appVersion; override for local dev:
+    # tag: latest
+  # runtimeImage defaults to repository:appVersion; override for local dev:
+  # runtimeImage: "runtime:latest"
   # Image pull policy for runtime image (Never for local minikube, Always for production)
   runtimeImagePullPolicy: "Never"
   # How often to reconcile state with MongoDB
