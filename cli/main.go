@@ -46,6 +46,7 @@ the0 CLI - Terminal-based trading bot management`,
 	rootCmd.AddCommand(cmd.NewCustomBotCmd())
 	rootCmd.AddCommand(cmd.NewBotCmd())
 	rootCmd.AddCommand(cmd.NewAuthCmd())
+	rootCmd.AddCommand(cmd.NewLocalCmd())
 	rootCmd.AddCommand(cmd.NewUpdateCmd(VERSION))
 
 	// Startup version check (non-blocking, cache-based)
