@@ -50,6 +50,20 @@ spec:
               containerPort: {{ .Values.the0Api.port }}
               protocol: TCP
           env:
+            - name: DATABASE_URL
+              value: {{ include "the0.databaseUrl" . | quote }}
+            - name: NATS_URLS
+              value: {{ include "the0.natsUrl" . | quote }}
+            - name: MINIO_ENDPOINT
+              value: {{ include "the0.minioEndpoint" . | quote }}
+            - name: MINIO_PORT
+              value: {{ include "the0.minioPort" . | quote }}
+            - name: MINIO_USE_SSL
+              value: {{ include "the0.minioUseSSL" . | quote }}
+            - name: MINIO_ACCESS_KEY
+              value: {{ include "the0.minioAccessKey" . | quote }}
+            - name: MINIO_SECRET_KEY
+              value: {{ include "the0.minioSecretKey" . | quote }}
             {{- range $key, $value := .Values.the0Api.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}

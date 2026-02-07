@@ -102,21 +102,28 @@ spec:
           args:
             - "--namespace={{ .Release.Namespace }}"
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
-            - "--minio-endpoint={{ .Values.botController.minio.endpoint }}"
+            - "--minio-endpoint={{ include "the0.minioEndpointWithPort" . }}"
             - "--minio-bucket={{ .Values.botController.minio.bucket }}"
             - "--runtime-image={{ .Values.botController.runtimeImage }}"
             - "--runtime-image-pull-policy={{ .Values.botController.runtimeImagePullPolicy }}"
           env:
-            # Namespace for bot pods
             - name: NAMESPACE
               value: {{ .Release.Namespace | quote }}
-            # MinIO configuration for bot code storage
             - name: MINIO_ENDPOINT
-              value: {{ .Values.botController.minio.endpoint | quote }}
+              value: {{ include "the0.minioEndpointWithPort" . | quote }}
             - name: MINIO_BUCKET
               value: {{ .Values.botController.minio.bucket | quote }}
-            # User-defined environment variables (supports value or valueFrom)
-            {{- toYaml .Values.botController.env | nindent 12 }}
+            - name: MONGO_URI
+              value: {{ include "the0.mongoUrl" . | quote }}
+            - name: NATS_URL
+              value: {{ include "the0.natsUrl" . | quote }}
+            - name: MINIO_ACCESS_KEY
+              value: {{ include "the0.minioAccessKey" . | quote }}
+            - name: MINIO_SECRET_KEY
+              value: {{ include "the0.minioSecretKey" . | quote }}
+            {{- with .Values.botController.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: health
               containerPort: 8080
