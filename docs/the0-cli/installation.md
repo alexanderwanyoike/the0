@@ -7,11 +7,25 @@ order: 1
 
 # Installation
 
-The `the0` CLI is a Go binary that can be installed from source or downloaded as a pre-built release.
+The `the0` CLI is a Go binary that can be installed with a single command or built from source.
 
 ## Prerequisites
 
 To deploy bots that use Python or Node.js dependencies, you need Docker installed and running. The CLI uses Docker to vendor dependencies in a consistent Linux environment.
+
+## Quick Install (Recommended)
+
+Install with a single command:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
+```
+
+This downloads the latest release binary, verifies its SHA256 checksum, and installs to `~/.the0/bin`. The script automatically configures your PATH.
+
+Supported platforms:
+- Linux (amd64, arm64)
+- macOS (amd64, arm64)
 
 ## Install from Source
 
@@ -33,6 +47,16 @@ export PATH="$HOME/bin:$PATH"
 ```
 
 Add this line to your shell configuration file (`~/.bashrc`, `~/.zshrc`, etc.) to make it permanent.
+
+## Updating
+
+The CLI can update itself to the latest release:
+
+```bash
+the0 update
+```
+
+This checks GitHub Releases, downloads the new binary with checksum verification, and replaces the current binary.
 
 ## Verify Installation
 

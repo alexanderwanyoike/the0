@@ -16,6 +16,7 @@ export default withMermaid(defineConfig({
     /^\/custom-bot-marketplace/,
     /^\/terminology\/marketplace/,
     /^\/terminology\/monitoring/,
+    /local-development/,
     /^http:\/\/localhost/,
   ],
 
