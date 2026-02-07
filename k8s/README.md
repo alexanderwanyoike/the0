@@ -1,8 +1,18 @@
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/helm/the0/the0)
+
 # the0 Kubernetes Deployment
 
 This directory contains Helm charts and configuration for deploying the0 platform on Kubernetes, providing the same functionality as the docker-compose setup with production-ready orchestration.
 
 ## Quick Start
+
+### Install from Helm Repository
+
+```bash
+helm repo add the0 https://alexanderwanyoike.github.io/the0
+helm repo update
+helm install the0 the0/the0 --namespace the0 --create-namespace
+```
 
 ### Minikube (Local Development)
 
