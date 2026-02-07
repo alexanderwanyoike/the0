@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -17,12 +18,14 @@ import (
 const (
 	GitHubOwner       = "alexanderwanyoike"
 	GitHubRepo        = "the0"
-	CLITagPrefix      = "v"
 	VersionCacheFile  = ".the0/version-check.json"
 	CacheStaleDays    = 7
 	GitHubAPIBase     = "https://api.github.com"
 	ChecksumsFileName = "checksums.txt"
 )
+
+// CLITagRegex matches version tags like "v1.4.0" but not arbitrary v-prefixed tags like "vscode-extension".
+var CLITagRegex = regexp.MustCompile(`^v\d`)
 
 type Updater struct {
 	CurrentVersion string
@@ -85,7 +88,7 @@ func (u *Updater) CheckLatestRelease() (*GitHubRelease, error) {
 	}
 
 	for _, release := range releases {
-		if strings.HasPrefix(release.TagName, CLITagPrefix) {
+		if CLITagRegex.MatchString(release.TagName) {
 			return &release, nil
 		}
 	}
@@ -222,11 +225,8 @@ func ReplaceBinary(newBinaryData []byte) error {
 	return nil
 }
 
-// ExtractVersionFromTag extracts the version from a tag like "cli/v1.4.0" -> "1.4.0".
+// ExtractVersionFromTag extracts the version from a tag like "v1.4.0" -> "1.4.0".
 func ExtractVersionFromTag(tag string) string {
-	if strings.HasPrefix(tag, CLITagPrefix) {
-		return strings.TrimPrefix(tag, CLITagPrefix)
-	}
 	return strings.TrimPrefix(tag, "v")
 }
 

@@ -60,6 +60,23 @@ func TestCheckLatestRelease(t *testing.T) {
 			errorContains: "no CLI releases found",
 		},
 		{
+			name: "skips non-version v-prefixed tags",
+			releases: []map[string]any{
+				{
+					"tag_name": "vscode-extension",
+					"name":     "VSCode Extension",
+					"assets":   []map[string]any{},
+				},
+				{
+					"tag_name": "vendor-update",
+					"name":     "Vendor Update",
+					"assets":   []map[string]any{},
+				},
+			},
+			expectedError: true,
+			errorContains: "no CLI releases found",
+		},
+		{
 			name:          "empty releases",
 			releases:      []map[string]any{},
 			expectedError: true,
