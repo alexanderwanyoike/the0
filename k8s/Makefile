@@ -56,8 +56,6 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		--set the0Frontend.imagePullPolicy=Never \
 		--set the0Docs.image.tag=latest \
 		--set the0Docs.imagePullPolicy=Never \
-		--set botRunner.imagePullPolicy=Never \
-		--set botScheduler.imagePullPolicy=Never \
 		--set botController.image.tag=latest \
 		--set botController.runtimeImage=runtime:latest \
 		--set minikube.enabled=true \
@@ -149,8 +147,6 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 		--set the0Frontend.imagePullPolicy=Never \
 		--set the0Docs.image.tag=latest \
 		--set the0Docs.imagePullPolicy=Never \
-		--set botRunner.enabled=false \
-		--set botScheduler.enabled=false \
 		--set botController.enabled=true \
 		--set botController.image.tag=latest \
 		--set botController.imagePullPolicy=Never \
