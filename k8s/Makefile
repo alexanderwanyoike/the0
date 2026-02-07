@@ -50,11 +50,16 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) \
 		--set global.imagePullPolicy=IfNotPresent \
+		--set the0Api.image.tag=latest \
 		--set the0Api.imagePullPolicy=Never \
+		--set the0Frontend.image.tag=latest \
 		--set the0Frontend.imagePullPolicy=Never \
+		--set the0Docs.image.tag=latest \
 		--set the0Docs.imagePullPolicy=Never \
 		--set botRunner.imagePullPolicy=Never \
 		--set botScheduler.imagePullPolicy=Never \
+		--set botController.image.tag=latest \
+		--set botController.runtimeImage=runtime:latest \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""
@@ -138,13 +143,18 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) \
 		--set global.imagePullPolicy=IfNotPresent \
+		--set the0Api.image.tag=latest \
 		--set the0Api.imagePullPolicy=Never \
+		--set the0Frontend.image.tag=latest \
 		--set the0Frontend.imagePullPolicy=Never \
+		--set the0Docs.image.tag=latest \
 		--set the0Docs.imagePullPolicy=Never \
 		--set botRunner.enabled=false \
 		--set botScheduler.enabled=false \
 		--set botController.enabled=true \
+		--set botController.image.tag=latest \
 		--set botController.imagePullPolicy=Never \
+		--set botController.runtimeImage=runtime:latest \
 		--set botController.imageBuilder.registry=localhost:5000 \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
