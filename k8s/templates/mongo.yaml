@@ -50,7 +50,10 @@ spec:
             - name: MONGO_INITDB_ROOT_USERNAME
               value: {{ .Values.mongodb.rootUsername | quote }}
             - name: MONGO_INITDB_ROOT_PASSWORD
-              value: {{ .Values.mongodb.rootPassword | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: mongodb-root-password
             - name: MONGO_INITDB_DATABASE
               value: {{ .Values.mongodb.database | quote }}
           livenessProbe:

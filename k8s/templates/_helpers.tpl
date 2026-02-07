@@ -83,11 +83,11 @@ When false, use external.connectionString (if set) or build from external.* fiel
 Fail early when a service is disabled but no external config is provided.
 */}}
 {{- define "the0.validateExternalServices" -}}
-{{- if and (not .Values.postgresql.enabled) (not .Values.postgresql.external.connectionString) (not .Values.postgresql.external.host) -}}
-{{- fail "postgresql.enabled is false but no external configuration is set. Provide postgresql.external.connectionString or postgresql.external.host." -}}
+{{- if and (not .Values.global.existingSecret) (not .Values.postgresql.enabled) (not .Values.postgresql.external.connectionString) (not .Values.postgresql.external.host) -}}
+{{- fail "postgresql.enabled is false but no external configuration is set. Provide postgresql.external.connectionString or postgresql.external.host, or set global.existingSecret." -}}
 {{- end -}}
-{{- if and (not .Values.mongodb.enabled) (not .Values.mongodb.external.connectionString) (not .Values.mongodb.external.host) -}}
-{{- fail "mongodb.enabled is false but no external configuration is set. Provide mongodb.external.connectionString or mongodb.external.host." -}}
+{{- if and (not .Values.global.existingSecret) (not .Values.mongodb.enabled) (not .Values.mongodb.external.connectionString) (not .Values.mongodb.external.host) -}}
+{{- fail "mongodb.enabled is false but no external configuration is set. Provide mongodb.external.connectionString or mongodb.external.host, or set global.existingSecret." -}}
 {{- end -}}
 {{- if and (not .Values.nats.enabled) (not .Values.nats.external.url) (not .Values.nats.external.host) -}}
 {{- fail "nats.enabled is false but no external configuration is set. Provide nats.external.url or nats.external.host." -}}
@@ -199,5 +199,16 @@ MinIO secret key
 {{ .Values.minio.secretKey }}
 {{- else -}}
 {{ .Values.minio.external.secretKey }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Secret name — returns global.existingSecret if set, otherwise the auto-generated secret name.
+*/}}
+{{- define "the0.secretName" -}}
+{{- if .Values.global.existingSecret -}}
+{{ .Values.global.existingSecret }}
+{{- else -}}
+{{ include "the0.fullname" . }}-secrets
 {{- end -}}
 {{- end }}
