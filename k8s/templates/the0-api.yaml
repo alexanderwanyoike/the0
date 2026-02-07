@@ -43,7 +43,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: {{ .Values.the0Api.image.repository }}:{{ .Values.the0Api.image.tag }}
+          image: {{ .Values.the0Api.image.repository }}:{{ .Values.the0Api.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.the0Api.imagePullPolicy | default .Values.global.imagePullPolicy }}
           ports:
             - name: http

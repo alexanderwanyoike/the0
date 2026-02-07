@@ -34,8 +34,8 @@ annotations:
       description: Initial Helm chart release
   artifacthub.io/images: |
     - name: api
-      image: ghcr.io/alexanderwanyoike/the0/api:0.1.0
+      image: ghcr.io/alexanderwanyoike/the0/api
     - name: frontend
-      image: ghcr.io/alexanderwanyoike/the0/frontend:0.1.0
+      image: ghcr.io/alexanderwanyoike/the0/frontend
     - name: runtime
-      image: ghcr.io/alexanderwanyoike/the0/runtime:0.1.0
+      image: ghcr.io/alexanderwanyoike/the0/runtime

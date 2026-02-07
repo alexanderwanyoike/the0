@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: docs
-          image: {{ .Values.the0Docs.image.repository }}:{{ .Values.the0Docs.image.tag }}
+          image: {{ .Values.the0Docs.image.repository }}:{{ .Values.the0Docs.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - name: http
