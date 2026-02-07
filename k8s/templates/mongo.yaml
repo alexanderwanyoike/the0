@@ -48,11 +48,11 @@ spec:
               protocol: TCP
           env:
             - name: MONGO_INITDB_ROOT_USERNAME
-              value: "root"
+              value: {{ .Values.mongodb.rootUsername | quote }}
             - name: MONGO_INITDB_ROOT_PASSWORD
-              value: "the0_mongo_password"
+              value: {{ .Values.mongodb.rootPassword | quote }}
             - name: MONGO_INITDB_DATABASE
-              value: "bot_runner"
+              value: {{ .Values.mongodb.database | quote }}
           livenessProbe:
             exec:
               command:
