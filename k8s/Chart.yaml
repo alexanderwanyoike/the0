@@ -3,7 +3,7 @@ name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
 version: 0.1.0
-appVersion: "1.4.0"
+appVersion: "1.5.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
