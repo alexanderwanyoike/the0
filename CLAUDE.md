@@ -82,7 +82,7 @@ the0/
 
 ```bash
 # Install the CLI
-curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
+curl -sSL https://install.the0.dev | sh
 
 # Start all services
 the0 local start
