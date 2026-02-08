@@ -19,7 +19,7 @@
 *   **API:** `api/` - NestJS backend providing REST APIs, authentication, and orchestration.
 *   **CLI:** `cli/` - Go-based command-line tool for local bot development and management.
 *   **Runtime:** `runtime/` - Go microservices (Bot Runner, Scheduler) for executing strategies.
-*   **Infrastructure:** `docker/` - Docker Compose configuration for local deployment (Postgres, Mongo, NATS, MinIO).
+*   **Infrastructure:** Local environment managed via `the0 local` CLI command (Postgres, Mongo, NATS, MinIO).
 *   **SDKs:** `sdk/` - Client libraries for supported languages.
 
 ## Architecture
@@ -38,11 +38,10 @@
 *   Python 3.11+ (for AI services)
 
 ### Quick Start (Full Platform)
-To start the entire platform locally using Docker Compose:
+To start the entire platform locally using the CLI:
 
 ```bash
-cd docker
-make up
+the0 local start
 ```
 *   **Frontend:** http://localhost:3001
 *   **API:** http://localhost:3000

@@ -149,11 +149,10 @@ The platform supports Python 3.11, Node.js 20, Rust, C++, C# (.NET 8), Scala, an
 
 ## Quick Start
 
-Using Docker Compose:
+Using the CLI:
 
 ```bash
-cd docker
-make up
+the0 local start
 ```
 
 This starts all services including bot-runner and bot-scheduler. Runtime images are built automatically.
@@ -172,7 +171,7 @@ make minikube-up
 go build -o build/runtime ./cmd/app
 
 # Build runtime images (for Docker mode)
-cd docker && make build-images
+the0 local build-images
 
 # Run tests
 go test ./...

@@ -7,14 +7,14 @@ order: 1
 
 # Docker Compose Deployment
 
-Docker Compose provides the fastest path to a running the0 platform. A single command starts all services with development-ready defaults, making it ideal for local development, evaluation, and small self-hosted deployments.
+Docker Compose provides the fastest path to a running the0 platform. The `the0` CLI manages the full stack with a single command, making it ideal for local development, evaluation, and small self-hosted deployments.
 
 ## Prerequisites
 
 Before starting, ensure your system meets these requirements:
 
-- **Docker** 20.10 or later
-- **Docker Compose** 2.0 or later (included with Docker Desktop)
+- **Docker** 20.10 or later with the **Compose** plugin (included with Docker Desktop)
+- **the0 CLI** ([install guide](/the0-cli/installation))
 - At least **4GB RAM** available for containers
 - At least **20GB disk space** for images and volumes
 
@@ -27,14 +27,17 @@ docker compose version
 
 ## Quick Start
 
-Navigate to the docker directory and start all services:
+Initialize and start all services:
 
 ```bash
-cd docker
-make up
+# Initialize (first time only — point to your repo clone)
+the0 local init --repo-path /path/to/the0
+
+# Start all services
+the0 local start
 ```
 
-The command builds all container images and starts the services. Initial startup takes several minutes as images are built. Subsequent starts are much faster.
+Initial startup takes several minutes as images are built. Subsequent starts are much faster.
 
 Once running, access the platform at:
 
@@ -75,38 +78,41 @@ The Docker Compose configuration starts these services:
 
 ## Management Commands
 
-The Makefile provides commands for common operations:
+The CLI provides commands for common operations:
 
 ```bash
 # Start all services
-make up
+the0 local start
 
 # Stop all services
-make down
+the0 local stop
 
 # Restart with fresh builds
-make restart
+the0 local restart
 
 # View logs (all services)
-make logs
+the0 local logs
 
 # View logs for specific service
-make logs service=the0-api
+the0 local logs api
+
+# Follow logs in real time
+the0 local logs -f api
+
+# Check service health
+the0 local status
 ```
 
 For development with hot reload:
 
 ```bash
-# Start with hot reload enabled
-make dev-up
-
-# Stop development environment
-make dev-down
+# Start with hot reload enabled for frontend and API
+the0 local dev
 ```
 
 ## Configuration
 
-The `docker-compose.yml` file contains all configuration. Key environment variables you may want to modify:
+The compose configuration is managed by the CLI at `~/.the0/compose/`. Key environment variables:
 
 ### Database Configuration
 
@@ -153,12 +159,12 @@ Data persists in Docker volumes:
 - `minio_data` - Object storage files
 - `bot_runner_data` / `bot_scheduler_data` - Runtime service state
 
-To reset all data:
+To reset all data and start fresh:
 
 ```bash
-make down
-docker volume rm $(docker volume ls -q | grep the0)
-make up
+the0 local uninstall
+the0 local init --repo-path /path/to/the0
+the0 local start
 ```
 
 ## Backup and Restore
@@ -167,10 +173,10 @@ make up
 
 ```bash
 # PostgreSQL backup
-docker compose exec postgres pg_dump -U the0 the0_oss > backup.sql
+docker compose -f ~/.the0/compose/docker-compose.yml exec postgres pg_dump -U the0 the0_oss > backup.sql
 
 # PostgreSQL restore
-docker compose exec -T postgres psql -U the0 the0_oss < backup.sql
+docker compose -f ~/.the0/compose/docker-compose.yml exec -T postgres psql -U the0 the0_oss < backup.sql
 ```
 
 ### Object Storage Backup
@@ -179,7 +185,7 @@ MinIO data can be backed up using the `mc` CLI or by copying the volume directly
 
 ```bash
 # Using docker cp
-docker cp $(docker compose ps -q minio):/data ./minio-backup
+docker cp $(docker compose -f ~/.the0/compose/docker-compose.yml ps -q minio):/data ./minio-backup
 ```
 
 ## Service Configuration
@@ -212,18 +218,9 @@ environment:
 Check container logs for errors:
 
 ```bash
-docker compose logs the0-api
-docker compose logs bot-runner
-docker compose logs bot-scheduler
-```
-
-### Port Conflicts
-
-If ports are already in use, modify the port mappings in `docker-compose.yml`:
-
-```yaml
-ports:
-  - "3100:3000"  # Map to different host port
+the0 local logs api
+the0 local logs bot-runner
+the0 local logs bot-scheduler
 ```
 
 ### Memory Issues
@@ -241,8 +238,7 @@ Increase Docker's memory allocation in Docker Desktop settings if containers are
 Verify database health:
 
 ```bash
-docker compose exec postgres pg_isready -U the0
-docker compose exec mongo mongosh --eval "db.runCommand('ping')"
+the0 local status
 ```
 
 ### Clean Rebuild
@@ -250,10 +246,10 @@ docker compose exec mongo mongosh --eval "db.runCommand('ping')"
 If issues persist, perform a clean rebuild:
 
 ```bash
-make down
+the0 local stop
 docker system prune -a
 docker volume prune
-make up
+the0 local start
 ```
 
 ## Production Considerations

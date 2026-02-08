@@ -120,11 +120,10 @@ This enables the reconciliation loop to compare desired state (MongoDB) with act
 
 ## Quick Start
 
-Using Docker Compose:
+Using the CLI:
 
 ```bash
-cd docker
-make up
+the0 local start
 ```
 
 This starts all services including bot-runner, bot-scheduler, and query-server. Runtime images are built automatically.
