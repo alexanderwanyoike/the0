@@ -11,8 +11,8 @@ import (
 	"the0/internal/logger"
 )
 
-// VERSION is overridden by -ldflags at build time
-var VERSION = "1.3.1"
+// VERSION is set by -ldflags at build time (see Makefile / release-cli.yml)
+var VERSION string
 
 var (
 	verbose bool
@@ -29,7 +29,6 @@ func main() {
   |_| |_||_\___| \___/
 
 the0 CLI - Terminal-based trading bot management`,
-		Version: VERSION,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			// Initialize global logger with verbose setting
 			logger.SetGlobal(logger.New(logger.Config{
@@ -37,6 +36,10 @@ the0 CLI - Terminal-based trading bot management`,
 				NoSpinner: os.Getenv("THE0_NO_SPINNER") != "",
 			}))
 		},
+	}
+
+	if VERSION != "" {
+		rootCmd.Version = VERSION
 	}
 
 	// Add global verbose flag
@@ -47,10 +50,14 @@ the0 CLI - Terminal-based trading bot management`,
 	rootCmd.AddCommand(cmd.NewBotCmd())
 	rootCmd.AddCommand(cmd.NewAuthCmd())
 	rootCmd.AddCommand(cmd.NewLocalCmd())
-	rootCmd.AddCommand(cmd.NewUpdateCmd(VERSION))
+	if VERSION != "" {
+		rootCmd.AddCommand(cmd.NewUpdateCmd(VERSION))
+	}
 
 	// Startup version check (non-blocking, cache-based)
-	startupVersionCheck()
+	if VERSION != "" {
+		startupVersionCheck()
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
