@@ -52,7 +52,7 @@ Deploy the0 locally:
 
 ```bash
 # Install the CLI
-curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
+curl -sSL https://install.the0.dev | sh
 
 # Start all services
 the0 local start
@@ -91,7 +91,7 @@ The the0 CLI tool provides a local development interface for managing your bots.
 ### Quick Install (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
+curl -sSL https://install.the0.dev | sh
 ```
 
 This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`. Make sure `~/.the0/bin` is in your PATH.
