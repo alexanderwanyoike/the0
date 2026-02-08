@@ -3,16 +3,39 @@ name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
 version: 0.1.0
-appVersion: "1.0.0"
+appVersion: "0.1.0"
+kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
   - bots
   - backtesting
   - automation
   - fintech
-home: https://github.com/your-org/the0-oss
+home: https://github.com/alexanderwanyoike/the0
 sources:
-  - https://github.com/your-org/the0-oss
+  - https://github.com/alexanderwanyoike/the0
+icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
 maintainers:
-  - name: the0 Team
-    email: team@the0.com
+  - name: Alexander Wanyoike
+    url: https://github.com/alexanderwanyoike
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/category: integration-delivery
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://docs.the0.dev
+    - name: Source
+      url: https://github.com/alexanderwanyoike/the0
+    - name: Discord
+      url: https://discord.gg/g5mp57nK
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial Helm chart release
+  artifacthub.io/images: |
+    - name: api
+      image: ghcr.io/alexanderwanyoike/the0/api
+    - name: frontend
+      image: ghcr.io/alexanderwanyoike/the0/frontend
+    - name: runtime
+      image: ghcr.io/alexanderwanyoike/the0/runtime

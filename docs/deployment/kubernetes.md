@@ -38,6 +38,18 @@ The runtime uses a **controller pattern** in Kubernetes mode: each bot becomes i
 - 100GB+ disk for persistent volumes
 - Worker nodes with Docker socket access
 
+## Install from Helm Repository
+
+The simplest way to deploy on any Kubernetes cluster:
+
+```bash
+helm repo add the0 https://alexanderwanyoike.github.io/the0
+helm repo update
+helm install the0 the0/the0 --namespace the0 --create-namespace
+```
+
+This installs the latest chart version. The chart's `appVersion` determines the default image tags, so you don't need to specify tags manually.
+
 ## Quick Start with Minikube
 
 For local development, minikube provides the simplest path to a running cluster:
@@ -81,13 +93,13 @@ For production clusters, deploy with external infrastructure:
 ```bash
 cd k8s
 
-# Deploy with default values
-make deploy
+# Deploy with a values file (required)
+make deploy VALUES=examples/aws-production.yaml
 
-# Or deploy with custom values
-helm install the0 . --namespace the0 --create-namespace \
-  --values production-values.yaml
+# Example values files are provided in k8s/examples/
 ```
+
+The `deploy` target requires a `VALUES` file to prevent accidental production deployments with default settings. See `k8s/examples/` for AWS and GCP production configurations.
 
 ### Using External Infrastructure
 
@@ -125,7 +137,10 @@ The chart is configured through `values.yaml`. Key sections:
 global:
   imagePullPolicy: Never  # Never (local), Always (registry), IfNotPresent
   storageClass: ""        # Leave empty for default, or specify class name
+  existingSecret: ""      # Name of an existing K8s Secret with credentials
 ```
+
+Set `global.existingSecret` to the name of a pre-existing Kubernetes Secret containing your database passwords, MinIO keys, and JWT secret. When set, the chart skips creating its own Secret and uses yours instead.
 
 ### Infrastructure Services
 
@@ -180,7 +195,7 @@ the0Api:
 In Kubernetes mode, the runtime runs as a controller that manages bots as Pods:
 
 ```yaml
-runtimeController:
+botController:
   enabled: true
   image:
     repository: runtime

@@ -15,6 +15,7 @@
 [![C#](https://img.shields.io/badge/C%23-.NET%208-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![Scala](https://img.shields.io/badge/Scala-3-DC322F?logo=scala)](https://www.scala-lang.org/)
 [![Haskell](https://img.shields.io/badge/Haskell-GHC%209.6-5D4F85?logo=haskell)](https://www.haskell.org/)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/helm/the0/the0)
 
 </div>
 
@@ -65,26 +66,38 @@ open http://localhost:3000  # API
 open http://localhost:9001  # MinIO Console (admin/the0password)
 ```
 
-### Option 2: Kubernetes (Minikube) (Highly Experimental)
+### Option 2: Kubernetes (Helm)
 
 ```bash
-# Navigate to k8s directory
-cd k8s
-
-# Single command deployment with local endpoints (experimental)
-make minikube-up
-make setup-hosts
-
-# Note: Kubernetes deployment is highly experimental and may not work properly
+# Install from the Helm repository
+helm repo add the0 https://alexanderwanyoike.github.io/the0
+helm repo update
+helm install the0 the0/the0 --namespace the0 --create-namespace
 ```
 
-Cloud deployments will be available in the future.
+**Local development with Minikube:**
+
+```bash
+cd k8s
+make minikube-up
+make setup-hosts
+```
+
+See [k8s/README.md](k8s/README.md) for full Kubernetes deployment documentation.
 
 ---
 
 ## CLI Installation
 
-The the0 CLI tool provides a local development interface for managing your bots. 
+The the0 CLI tool provides a local development interface for managing your bots.
+
+### Quick Install (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
+```
+
+This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`. Make sure `~/.the0/bin` is in your PATH.
 
 ### Install from Source
 
@@ -100,7 +113,7 @@ make install
 the0 --help
 ```
 
-The CLI will be installed to `~/bin/the0`. Make sure `~/bin` is in your PATH.
+The source build installs to `~/bin/the0`. Make sure `~/bin` is in your PATH.
 
 ### Prerequisites for CLI
 

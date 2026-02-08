@@ -43,16 +43,46 @@ spec:
     spec:
       containers:
         - name: api
-          image: {{ .Values.the0Api.image.repository }}:{{ .Values.the0Api.image.tag }}
+          image: {{ .Values.the0Api.image.repository }}:{{ .Values.the0Api.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.the0Api.imagePullPolicy | default .Values.global.imagePullPolicy }}
           ports:
             - name: http
               containerPort: {{ .Values.the0Api.port }}
               protocol: TCP
           env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: database-url
+            - name: NATS_URLS
+              value: {{ include "the0.natsUrl" . | quote }}
+            - name: MINIO_ENDPOINT
+              value: {{ include "the0.minioEndpoint" . | quote }}
+            - name: MINIO_PORT
+              value: {{ include "the0.minioPort" . | quote }}
+            - name: MINIO_USE_SSL
+              value: {{ include "the0.minioUseSSL" . | quote }}
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-access-key
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-secret-key
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: jwt-secret
             {{- range $key, $value := .Values.the0Api.env }}
+            {{- if and (ne $key "JWT_SECRET") (ne $key "DATABASE_URL") (ne $key "MINIO_ACCESS_KEY") (ne $key "MINIO_SECRET_KEY") }}
             - name: {{ $key }}
               value: {{ $value | quote }}
+            {{- end }}
             {{- end }}
           livenessProbe:
             httpGet:

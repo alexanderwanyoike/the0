@@ -10,6 +10,7 @@ help: ## Show this help message
 RELEASE_NAME ?= the0
 NAMESPACE ?= the0
 CHART_PATH ?= .
+VALUES ?=
 
 # Prerequisites check for general use
 .PHONY: check-deps
@@ -49,11 +50,14 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) \
 		--set global.imagePullPolicy=IfNotPresent \
+		--set the0Api.image.tag=latest \
 		--set the0Api.imagePullPolicy=Never \
+		--set the0Frontend.image.tag=latest \
 		--set the0Frontend.imagePullPolicy=Never \
+		--set the0Docs.image.tag=latest \
 		--set the0Docs.imagePullPolicy=Never \
-		--set botRunner.imagePullPolicy=Never \
-		--set botScheduler.imagePullPolicy=Never \
+		--set botController.image.tag=latest \
+		--set botController.runtimeImage=runtime:latest \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""
@@ -137,13 +141,16 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) \
 		--set global.imagePullPolicy=IfNotPresent \
+		--set the0Api.image.tag=latest \
 		--set the0Api.imagePullPolicy=Never \
+		--set the0Frontend.image.tag=latest \
 		--set the0Frontend.imagePullPolicy=Never \
+		--set the0Docs.image.tag=latest \
 		--set the0Docs.imagePullPolicy=Never \
-		--set botRunner.enabled=false \
-		--set botScheduler.enabled=false \
 		--set botController.enabled=true \
+		--set botController.image.tag=latest \
 		--set botController.imagePullPolicy=Never \
+		--set botController.runtimeImage=runtime:latest \
 		--set botController.imageBuilder.registry=localhost:5000 \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
@@ -231,17 +238,21 @@ remove-hosts: ## Remove the0.local hostnames from /etc/hosts
 
 # Production deployment (assumes external infrastructure)
 .PHONY: deploy
-deploy: check-deps ## Deploy to production cluster with external infrastructure
+deploy: check-deps ## Deploy to production cluster (use VALUES=examples/aws-production.yaml)
+ifndef VALUES
+	$(error VALUES is required for production deploy. Usage: make deploy VALUES=examples/aws-production.yaml)
+endif
 	@echo "🚀 Deploying to production cluster..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
-		--namespace $(NAMESPACE) \
-		--set postgresql.enabled=false \
-		--set mongodb.enabled=false \
-		--set nats.enabled=false \
-		--set minio.enabled=false \
-		--set minikube.enabled=false
+		--namespace $(NAMESPACE) --create-namespace \
+		-f "$(VALUES)" \
+		--wait --timeout 5m
 	@echo "✅ Production deployment completed!"
+
+.PHONY: template
+template: ## Render templates locally (use VALUES=examples/aws-production.yaml)
+	@helm template $(RELEASE_NAME) $(CHART_PATH) $(if $(VALUES),-f "$(VALUES)",)
 
 # Status and logs
 .PHONY: status

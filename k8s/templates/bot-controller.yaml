@@ -96,27 +96,43 @@ spec:
       serviceAccountName: {{ include "the0.fullname" . }}-bot-controller
       containers:
         - name: bot-controller
-          image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag }}
+          image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           command: ["/app/runtime", "controller"]
           args:
             - "--namespace={{ .Release.Namespace }}"
             - "--reconcile-interval={{ .Values.botController.reconcileInterval }}"
-            - "--minio-endpoint={{ .Values.botController.minio.endpoint }}"
+            - "--minio-endpoint={{ include "the0.minioEndpointWithPort" . }}"
             - "--minio-bucket={{ .Values.botController.minio.bucket }}"
-            - "--runtime-image={{ .Values.botController.runtimeImage }}"
+            - "--runtime-image={{ .Values.botController.runtimeImage | default (printf "%s:%s" .Values.botController.image.repository .Chart.AppVersion) }}"
             - "--runtime-image-pull-policy={{ .Values.botController.runtimeImagePullPolicy }}"
           env:
-            # Namespace for bot pods
             - name: NAMESPACE
               value: {{ .Release.Namespace | quote }}
-            # MinIO configuration for bot code storage
             - name: MINIO_ENDPOINT
-              value: {{ .Values.botController.minio.endpoint | quote }}
+              value: {{ include "the0.minioEndpointWithPort" . | quote }}
             - name: MINIO_BUCKET
               value: {{ .Values.botController.minio.bucket | quote }}
-            # User-defined environment variables (supports value or valueFrom)
-            {{- toYaml .Values.botController.env | nindent 12 }}
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: mongo-url
+            - name: NATS_URL
+              value: {{ include "the0.natsUrl" . | quote }}
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-access-key
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-secret-key
+            {{- with .Values.botController.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: health
               containerPort: 8080

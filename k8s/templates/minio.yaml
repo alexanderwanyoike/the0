@@ -61,9 +61,15 @@ spec:
               protocol: TCP
           env:
             - name: MINIO_ROOT_USER
-              value: "the0admin"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-access-key
             - name: MINIO_ROOT_PASSWORD
-              value: "the0password"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "the0.secretName" . }}
+                  key: minio-secret-key
           livenessProbe:
             httpGet:
               path: /minio/health/live

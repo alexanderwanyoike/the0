@@ -1,0 +1,47 @@
+# Minimal external services configuration
+# All infrastructure is managed outside the cluster.
+# Replace placeholder values with your actual connection details.
+
+global:
+  imagePullPolicy: Always
+
+postgresql:
+  enabled: false
+  external:
+    host: "your-postgres-host.example.com"
+    port: 5432
+    database: the0_oss
+    username: the0
+    password: "CHANGEME"
+    sslmode: require
+
+mongodb:
+  enabled: false
+  external:
+    host: "your-mongo-host.example.com"
+    port: 27017
+    username: the0
+    password: "CHANGEME"
+    database: bot_runner
+    authSource: admin
+
+nats:
+  enabled: false
+  external:
+    host: "your-nats-host.example.com"
+    port: 4222
+
+minio:
+  enabled: false
+  external:
+    endpoint: "your-s3-host.example.com"
+    port: 443
+    useSSL: true
+    accessKey: "CHANGEME"
+    secretKey: "CHANGEME"
+
+minikube:
+  enabled: false
+
+externalServices:
+  enabled: false
