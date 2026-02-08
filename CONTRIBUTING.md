@@ -42,10 +42,9 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
    cd the0
    ```
 
-2. **Start all services with Docker Compose:**
+2. **Start all services:**
    ```bash
-   cd docker
-   make up
+   the0 local up
    ```
 
 3. **Access services:**

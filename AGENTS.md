@@ -5,7 +5,6 @@
 - `frontend/`: Next.js + React dashboard UI, Tailwind styling, Jest/RTL tests.
 - `runtime/`: Go bot runner/scheduler services.
 - `cli/`: Go-based CLI tool.
-- `docker/`: Docker Compose dev/prod setup and helper `Makefile`.
 - `sdk/`: Language SDKs (python/nodejs/rust/cpp/dotnet/scala/haskell/react).
 - `docs/`: Documentation site content.
 - `database/`, `services/`, `k8s/`, `example-bots/`: supporting services, deployment, and samples.
@@ -16,8 +15,8 @@
 - Use `CLAUDE.md` and `GEMINI.md` for architecture guidance, but prioritize what the codebase currently does.
 
 ## Build, Test, and Development Commands
-- `cd docker && make up`: Start the full stack with Docker Compose.
-- `cd docker && make dev-up`: Dev stack with hot reload for API/frontend/docs.
+- `the0 local up`: Start the full stack locally.
+- `the0 local dev`: Dev stack with hot reload for API/frontend/docs.
 - `cd frontend && yarn install && yarn dev`: Run the web app locally.
 - `cd api && yarn install && yarn start:dev`: Run the API in watch mode.
 - `cd cli && make build` or `make install`: Build/install the CLI.
@@ -42,7 +41,6 @@
 - Keep PRs focused; maintainers prefer squash-and-merge for feature branches.
 
 ## Configuration & Secrets
-- Docker Compose env: start from `docker/.env.example`.
 - Frontend local env: `frontend/.env.local` (keep secrets out of Git).
 
 ## Runtime Notes (Codex)

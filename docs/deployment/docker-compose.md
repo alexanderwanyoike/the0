@@ -27,11 +27,10 @@ docker compose version
 
 ## Quick Start
 
-Navigate to the docker directory and start all services:
+Start all services using the CLI:
 
 ```bash
-cd docker
-make up
+the0 local up
 ```
 
 The command builds all container images and starts the services. Initial startup takes several minutes as images are built. Subsequent starts are much faster.
