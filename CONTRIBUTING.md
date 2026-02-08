@@ -27,7 +27,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 ### Prerequisites
 
-- **Docker** 20.10+ and **Docker Compose** 2.0+
+- **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
 - **Node.js** 20+ and **yarn** (for frontend and API development)
 - **Go** 1.21+ (for CLI and runtime services)
 - **Python** 3.11+ (for AI services)
