@@ -38,7 +38,7 @@
 *   Python 3.11+ (for AI services)
 
 ### Quick Start (Full Platform)
-To start the entire platform locally using Docker Compose:
+To start the entire platform locally using the CLI:
 
 ```bash
 the0 local up

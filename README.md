@@ -45,9 +45,8 @@ Deploy the0 locally:
 
 ### Prerequisites
 
-- **Docker** 20.10+ and **Docker Compose** 2.0+
+- **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
 - At least 4GB RAM available for containers
-- **Git** for cloning the repository
 
 ### Option 1: CLI Local Deployment (Recommended)
 
