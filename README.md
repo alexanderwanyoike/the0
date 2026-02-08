@@ -45,20 +45,17 @@ Deploy the0 locally:
 
 ### Prerequisites
 
-- **Docker** 20.10+ and **Docker Compose** 2.0+
+- **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
 - At least 4GB RAM available for containers
-- **Git** for cloning the repository
 
-### Option 1: Docker Compose Local Deployment (Recommended)
+### Option 1: CLI Local Deployment (Recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/the0.git
-cd the0
+# Install the CLI
+curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
 
 # Start all services
-cd docker
-make up
+the0 local start
 
 # Access the platform
 open http://localhost:3001  # Frontend
@@ -385,7 +382,6 @@ def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
 - [Quick Start Guide](/docs/custom-bot-development/quick-start-guide.md) - 15-minute DCA bot tutorial
 
 ### Deployment Guides
-- [Docker Setup](docker/README.md) - Local development environment
 - [Kubernetes Deployment](k8s/README.md) - Production deployment
 
 ### Development Resources
