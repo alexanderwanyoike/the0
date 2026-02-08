@@ -15,7 +15,7 @@
 - Use `CLAUDE.md` and `GEMINI.md` for architecture guidance, but prioritize what the codebase currently does.
 
 ## Build, Test, and Development Commands
-- `the0 local up`: Start the full stack locally.
+- `the0 local start`: Start the full stack locally.
 - `the0 local dev`: Dev stack with hot reload for API/frontend/docs.
 - `cd frontend && yarn install && yarn dev`: Run the web app locally.
 - `cd api && yarn install && yarn start:dev`: Run the API in watch mode.

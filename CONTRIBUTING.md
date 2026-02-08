@@ -44,7 +44,7 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 2. **Start all services:**
    ```bash
-   the0 local up
+   the0 local start
    ```
 
 3. **Access services:**

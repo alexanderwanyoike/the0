@@ -41,7 +41,7 @@
 To start the entire platform locally using the CLI:
 
 ```bash
-the0 local up
+the0 local start
 ```
 *   **Frontend:** http://localhost:3001
 *   **API:** http://localhost:3000

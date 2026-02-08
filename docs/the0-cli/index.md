@@ -45,8 +45,8 @@ the0 bot logs <id>               # View instance logs
 
 ```bash
 the0 local init            # Initialize local environment
-the0 local up              # Start all services
-the0 local down            # Stop all services
+the0 local start           # Start all services
+the0 local stop            # Stop all services
 the0 local status          # Show service status
 the0 local logs [service]  # View service logs
 the0 local dev             # Start in development mode

@@ -159,18 +159,12 @@ Data persists in Docker volumes:
 - `minio_data` - Object storage files
 - `bot_runner_data` / `bot_scheduler_data` - Runtime service state
 
-To reset all data:
-
-```bash
-the0 local stop
-docker volume rm $(docker volume ls -q | grep the0)
-the0 local start
-```
-
-To remove everything including volumes:
+To reset all data and start fresh:
 
 ```bash
 the0 local uninstall
+the0 local init --repo-path /path/to/the0
+the0 local start
 ```
 
 ## Backup and Restore

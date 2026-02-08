@@ -123,7 +123,7 @@ This enables the reconciliation loop to compare desired state (MongoDB) with act
 Using the CLI:
 
 ```bash
-the0 local up
+the0 local start
 ```
 
 This starts all services including bot-runner, bot-scheduler, and query-server. Runtime images are built automatically.

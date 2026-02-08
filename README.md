@@ -55,7 +55,7 @@ Deploy the0 locally:
 curl -sSL https://raw.githubusercontent.com/alexanderwanyoike/the0/main/scripts/install.sh | sh
 
 # Start all services
-the0 local up
+the0 local start
 
 # Access the platform
 open http://localhost:3001  # Frontend

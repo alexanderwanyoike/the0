@@ -152,7 +152,7 @@ The platform supports Python 3.11, Node.js 20, Rust, C++, C# (.NET 8), Scala, an
 Using the CLI:
 
 ```bash
-the0 local up
+the0 local start
 ```
 
 This starts all services including bot-runner and bot-scheduler. Runtime images are built automatically.
