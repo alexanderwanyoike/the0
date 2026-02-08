@@ -109,15 +109,15 @@ get_latest_version() {
     info "Fetching latest release..."
 
     TMPFILE="$(mktemp)"
-    url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+    url="https://api.github.com/repos/${GITHUB_REPO}/releases"
 
     if ! download "$url" "$TMPFILE"; then
         rm -f "$TMPFILE"
-        error "Failed to fetch latest release from GitHub"
+        error "Failed to fetch releases from GitHub"
     fi
 
-    # Extract tag_name without requiring jq
-    TAG="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TMPFILE" | head -1)"
+    # Find the latest CLI release (tags starting with "v"), skipping Helm chart releases
+    TAG="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\(v[^"]*\)".*/\1/p' "$TMPFILE" | head -1)"
     rm -f "$TMPFILE"
 
     if [ -z "$TAG" ]; then
