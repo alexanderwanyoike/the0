@@ -8,6 +8,7 @@ import {
   JetStreamManager,
   RetentionPolicy,
   StorageType,
+  StreamConfig,
 } from "nats";
 import { Result, Ok, Failure } from "@/common/result";
 
@@ -62,21 +63,25 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async ensureStream(config: Partial<StreamConfig>): Promise<void> {
+    try {
+      await this.jetStreamManager!.streams.add(config);
+    } catch (err: any) {
+      if (err?.message?.includes("stream name already in use")) {
+        await this.jetStreamManager!.streams.update(config.name!, config);
+      } else {
+        throw err;
+      }
+    }
+  }
+
   private async setupStreams(): Promise<void> {
     if (!this.jetStreamManager) {
       throw new Error("NATS JetStream manager not initialized");
     }
 
     try {
-      // Try to delete existing stream first to recreate with new configuration
-      try {
-        await this.jetStreamManager.streams.delete("THE0_EVENTS");
-      } catch (deleteError: any) {
-        // Ignore "stream not found" errors
-      }
-
-      // Create stream for bot lifecycle events
-      await this.jetStreamManager.streams.add({
+      await this.ensureStream({
         name: "THE0_EVENTS",
         subjects: [
           "the0.bot.created",
@@ -91,18 +96,12 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         storage: StorageType.File,
       });
 
-      // THE0_BOT_LOGS stream - memory-based, short retention for live log tailing
-      try {
-        await this.jetStreamManager.streams.delete("THE0_BOT_LOGS");
-      } catch (deleteError: any) {
-        // Ignore "stream not found" errors
-      }
-
-      await this.jetStreamManager.streams.add({
+      await this.ensureStream({
         name: "THE0_BOT_LOGS",
         subjects: ["the0.bot.logs.>"],
         retention: RetentionPolicy.Limits,
         max_age: 60 * 60 * 1000 * 1000000, // 1 hour in nanoseconds
+        max_bytes: 128 * 1024 * 1024, // 128MB
         storage: StorageType.Memory,
       });
 
@@ -134,7 +133,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   // Subscribe to a NATS subject using raw connection (not JetStream)
   subscribe(subject: string, callback: (msg: string) => void): () => void {
     if (!this.connection) {
-      throw new Error("NATS connection not established");
+      this.logger.warn("NATS not connected, cannot subscribe to %s", subject);
+      return () => {};
     }
 
     const sub = this.connection.subscribe(subject, {
