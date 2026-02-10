@@ -85,12 +85,12 @@ const BotDetail = ({ params }: BotDetailProps) => {
   const isRunning = bot?.status === "running";
 
   const streamHook = useBotLogsStream({
-    botId,
+    botId: isRunning ? botId : "",
     refreshInterval: 60 * 1000,
   });
 
   const pollingHook = useBotLogs({
-    botId,
+    botId: isRunning ? "" : botId,
     autoRefresh: !isRunning,
     refreshInterval: 60 * 1000,
   });
