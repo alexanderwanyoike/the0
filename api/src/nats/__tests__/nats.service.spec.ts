@@ -6,11 +6,16 @@ import { createMockLogger } from "@/test/mock-logger";
 
 // Mock NATS at the top level to avoid hoisting issues
 jest.mock("nats", () => {
+  const mockSubscription = {
+    unsubscribe: jest.fn(),
+  };
+
   const mockConnection = {
     isClosed: jest.fn().mockReturnValue(false),
     close: jest.fn().mockResolvedValue(undefined),
     jetstreamManager: jest.fn(),
     jetstream: jest.fn(),
+    subscribe: jest.fn().mockReturnValue(mockSubscription),
     info: {
       server_name: "test-server",
       version: "2.9.0",
@@ -25,6 +30,7 @@ jest.mock("nats", () => {
   const mockJetStreamManager = {
     streams: {
       add: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
     },
   };
 
@@ -47,9 +53,20 @@ jest.mock("nats", () => {
     },
     StorageType: {
       File: "file",
+      Memory: "memory",
+    },
+    // Expose mocks for test assertions
+    __mocks: {
+      mockConnection,
+      mockSubscription,
+      mockJetStreamManager,
+      mockJetStream,
     },
   };
 });
+
+// Access the exposed mocks
+const natsMocks = (require("nats") as any).__mocks;
 
 describe("NatsService", () => {
   let service: NatsService;
@@ -147,6 +164,60 @@ describe("NatsService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("NATS connection not established");
+    });
+  });
+
+  describe("Stream Setup", () => {
+    it("should create THE0_BOT_LOGS stream", () => {
+      expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "THE0_BOT_LOGS",
+          subjects: ["the0.bot.logs.>"],
+          retention: "limits",
+          storage: "memory",
+        }),
+      );
+    });
+  });
+
+  describe("Subscribe", () => {
+    it("should return an unsubscribe function", () => {
+      const unsubscribe = service.subscribe("test.subject", jest.fn());
+
+      expect(typeof unsubscribe).toBe("function");
+    });
+
+    it("should invoke callback with decoded message data", () => {
+      const callback = jest.fn();
+      service.subscribe("test.subject", callback);
+
+      // Get the callback that was passed to connection.subscribe
+      const lastCall =
+        natsMocks.mockConnection.subscribe.mock.calls[
+          natsMocks.mockConnection.subscribe.mock.calls.length - 1
+        ];
+      const opts = lastCall[1];
+
+      // Simulate a message arriving
+      const mockMsg = { data: Buffer.from("hello world") };
+      opts.callback(null, mockMsg);
+
+      expect(callback).toHaveBeenCalledWith("hello world");
+    });
+
+    it("should unsubscribe when calling the returned function", () => {
+      const unsubscribe = service.subscribe("test.subject", jest.fn());
+      unsubscribe();
+
+      expect(natsMocks.mockSubscription.unsubscribe).toHaveBeenCalled();
+    });
+
+    it("should throw when not connected", async () => {
+      await service.onModuleDestroy();
+
+      expect(() => service.subscribe("test.subject", jest.fn())).toThrow(
+        "NATS connection not established",
+      );
     });
   });
 });
