@@ -14,3 +14,9 @@ export const SCHEDULED_BOT_TOPICS = {
   UPDATED: "the0.bot-schedule.updated",
   DELETED: "the0.bot-schedule.deleted",
 } as const;
+
+// NATS topics for bot log streaming
+export const BOT_LOG_TOPICS = {
+  PREFIX: "the0.bot.logs",
+  forBot: (botId: string) => `the0.bot.logs.${botId}`,
+} as const;

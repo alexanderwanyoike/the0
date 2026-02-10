@@ -91,6 +91,21 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         storage: StorageType.File,
       });
 
+      // THE0_BOT_LOGS stream - memory-based, short retention for live log tailing
+      try {
+        await this.jetStreamManager.streams.delete("THE0_BOT_LOGS");
+      } catch (deleteError: any) {
+        // Ignore "stream not found" errors
+      }
+
+      await this.jetStreamManager.streams.add({
+        name: "THE0_BOT_LOGS",
+        subjects: ["the0.bot.logs.>"],
+        retention: RetentionPolicy.Limits,
+        max_age: 60 * 60 * 1000 * 1000000, // 1 hour in nanoseconds
+        storage: StorageType.Memory,
+      });
+
       this.logger.info("NATS JetStream initialized");
     } catch (error: any) {
       this.logger.error({ err: error }, "Failed to setup NATS streams");
@@ -114,6 +129,25 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       this.logger.error({ err: error, topic }, "Failed to publish to topic");
       return Failure(error.message);
     }
+  }
+
+  // Subscribe to a NATS subject using raw connection (not JetStream)
+  subscribe(subject: string, callback: (msg: string) => void): () => void {
+    if (!this.connection) {
+      throw new Error("NATS connection not established");
+    }
+
+    const sub = this.connection.subscribe(subject, {
+      callback: (err, msg) => {
+        if (err) {
+          this.logger.error({ err, subject }, "NATS subscription error");
+          return;
+        }
+        callback(this.sc.decode(msg.data));
+      },
+    });
+
+    return () => sub.unsubscribe();
   }
 
   // Health check
