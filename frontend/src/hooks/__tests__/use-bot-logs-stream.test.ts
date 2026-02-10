@@ -430,6 +430,88 @@ describe("useBotLogsStream", () => {
     expect(calledUrl).toContain("date=20240115");
   });
 
+  it("should reconnect SSE when clearing date filter", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ date: "2024-01-15", content: "Historical log" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    const es = MockEventSource.instances[0];
+
+    act(() => {
+      es.simulateOpen();
+    });
+
+    // Set a date filter -- should close SSE
+    await act(async () => {
+      result.current.setDateFilter("20240115");
+    });
+
+    expect(es.readyState).toBe(2);
+
+    // Clear the date filter -- should reconnect SSE
+    await act(async () => {
+      result.current.setDateFilter(null);
+    });
+
+    // A new EventSource should have been created
+    expect(MockEventSource.instances.length).toBe(2);
+    const es2 = MockEventSource.instances[1];
+
+    act(() => {
+      es2.simulateOpen();
+    });
+
+    expect(result.current.connected).toBe(true);
+  });
+
+  it("should attempt SSE reconnection with backoff after post-load drop", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    const es = MockEventSource.instances[0];
+
+    act(() => {
+      es.simulateOpen();
+    });
+
+    // Deliver history so initialLoadCompleteRef is true
+    act(() => {
+      es.simulateEvent("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Log line" },
+      ]);
+    });
+
+    expect(result.current.logs).toHaveLength(1);
+
+    // Simulate SSE error after initial load
+    act(() => {
+      es.simulateError();
+    });
+
+    expect(result.current.connected).toBe(false);
+
+    // Should NOT have called REST fetch (initial load was complete)
+    expect(mockAuthFetch).not.toHaveBeenCalled();
+
+    // Advance past the 1s backoff (first attempt: 1000 * 2^0 = 1000ms)
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    // A new EventSource should have been created for reconnection
+    expect(MockEventSource.instances.length).toBe(2);
+  });
+
   it("should switch to REST when date range filter is set", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
