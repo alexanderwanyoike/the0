@@ -140,15 +140,7 @@ func (r *SyncRunner) run() {
 	var logsSyncer *LogsSyncer
 	var logPublisher LogPublisher
 	if r.opts.LogsPath != "" {
-		// NATS publisher (optional — for real-time log streaming)
-		if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-			np, err := NewNATSPublisher(natsURL, r.logger)
-			if err != nil {
-				r.logger.Info("Failed to create NATS publisher, continuing without", "error", err.Error())
-			} else {
-				logPublisher = np
-			}
-		}
+		logPublisher = newLogPublisherFromEnv(r.logger)
 
 		logUploader, err := miniologger.NewMinIOLogger(r.ctx, miniologger.MinioLoggerOptions{
 			Endpoint:   cfg.Endpoint,
@@ -169,10 +161,14 @@ func (r *SyncRunner) run() {
 
 	r.cleanup = func() {
 		if logsSyncer != nil {
-			logsSyncer.Close()
+			if err := logsSyncer.Close(); err != nil {
+				r.logger.Info("Failed to close logs syncer", "error", err.Error())
+			}
 		}
 		if logPublisher != nil {
-			logPublisher.Close()
+			if err := logPublisher.Close(); err != nil {
+				r.logger.Info("Failed to close log publisher", "error", err.Error())
+			}
 		}
 	}
 
@@ -223,6 +219,21 @@ func (r *SyncRunner) run() {
 			return
 		}
 	}
+}
+
+// newLogPublisherFromEnv creates a LogPublisher from NATS_URL env var.
+// Returns nil if NATS_URL is not set or connection fails.
+func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		return nil
+	}
+	np, err := NewNATSPublisher(natsURL, logger)
+	if err != nil {
+		logger.Info("Failed to create NATS publisher, continuing without", "error", err.Error())
+		return nil
+	}
+	return np
 }
 
 // Sync uses fsnotify to watch for file changes and immediately syncs to MinIO.
@@ -283,15 +294,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	var logsSyncer *LogsSyncer
 	var logPublisher LogPublisher
 	if opts.LogsPath != "" {
-		// NATS publisher (optional — for real-time log streaming)
-		if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-			np, err := NewNATSPublisher(natsURL, logger)
-			if err != nil {
-				logger.Info("Failed to create NATS publisher, continuing without", "error", err.Error())
-			} else {
-				logPublisher = np
-			}
-		}
+		logPublisher = newLogPublisherFromEnv(logger)
 
 		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
 			Endpoint:   cfg.Endpoint,
@@ -326,10 +329,14 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	// Cleanup function
 	cleanup := func() {
 		if logsSyncer != nil {
-			logsSyncer.Close()
+			if err := logsSyncer.Close(); err != nil {
+				logger.Info("Failed to close logs syncer", "error", err.Error())
+			}
 		}
 		if logPublisher != nil {
-			logPublisher.Close()
+			if err := logPublisher.Close(); err != nil {
+				logger.Info("Failed to close log publisher", "error", err.Error())
+			}
 		}
 	}
 
