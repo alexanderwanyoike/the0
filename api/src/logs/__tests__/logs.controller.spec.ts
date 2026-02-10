@@ -10,6 +10,8 @@ describe("LogsController", () => {
   let mockUnsubscribe: jest.Mock;
 
   beforeEach(() => {
+    _clearActiveSubscriptions();
+
     mockUnsubscribe = jest.fn();
 
     mockLogsService = {
@@ -51,8 +53,13 @@ describe("LogsController", () => {
       };
     });
 
+    afterEach(() => {
+      // Trigger cleanup to clear keepalive intervals
+      if (closeHandler) closeHandler();
+    });
+
     it("should set SSE headers", async () => {
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-headers", mockReq, mockRes);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith(
         "Content-Type",
@@ -70,9 +77,9 @@ describe("LogsController", () => {
     });
 
     it("should send history event on connect", async () => {
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-history", mockReq, mockRes);
 
-      expect(mockLogsService.getLogs).toHaveBeenCalledWith("bot-1", {
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith("bot-history", {
         date: expect.any(String),
         limit: 1000,
         offset: 0,
@@ -85,18 +92,17 @@ describe("LogsController", () => {
     });
 
     it("should subscribe to NATS for live updates", async () => {
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-nats", mockReq, mockRes);
 
       expect(mockNatsService.subscribe).toHaveBeenCalledWith(
-        "the0.bot.logs.bot-1",
+        "the0.bot.logs.bot-nats",
         expect.any(Function),
       );
     });
 
     it("should forward NATS messages as update events", async () => {
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-forward", mockReq, mockRes);
 
-      // Get the NATS callback
       const natsCallback = (mockNatsService.subscribe as jest.Mock).mock
         .calls[0][1];
       natsCallback("new log line");
@@ -109,17 +115,17 @@ describe("LogsController", () => {
     });
 
     it("should register close handler for cleanup", async () => {
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-close", mockReq, mockRes);
 
       expect(mockReq.on).toHaveBeenCalledWith("close", expect.any(Function));
     });
 
     it("should unsubscribe from NATS on client disconnect", async () => {
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-unsub", mockReq, mockRes);
 
-      // Simulate client disconnect
       expect(closeHandler).not.toBeNull();
       closeHandler!();
+      closeHandler = null; // Prevent afterEach double-call
 
       expect(mockUnsubscribe).toHaveBeenCalled();
     });
@@ -129,9 +135,8 @@ describe("LogsController", () => {
         Failure("not found"),
       );
 
-      await controller.streamLogs("bot-1", mockReq, mockRes);
+      await controller.streamLogs("bot-fail", mockReq, mockRes);
 
-      // Should not send history event but should still subscribe to NATS
       const historyWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: history"),
       );
@@ -140,8 +145,11 @@ describe("LogsController", () => {
     });
 
     it("should share NATS subscription for same botId", async () => {
+      let closeHandler2: (() => void) | null = null;
       const mockReq2: any = {
-        on: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === "close") closeHandler2 = handler;
+        }),
       };
       const mockRes2: any = {
         setHeader: jest.fn(),
@@ -170,6 +178,9 @@ describe("LogsController", () => {
       expect(mockRes2.write).toHaveBeenCalledWith(
         expect.stringContaining("shared message"),
       );
+
+      // Cleanup second client
+      if (closeHandler2) closeHandler2();
     });
   });
 });
