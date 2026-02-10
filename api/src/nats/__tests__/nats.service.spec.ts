@@ -29,6 +29,7 @@ jest.mock("nats", () => {
 
   const mockJetStreamManager = {
     streams: {
+      info: jest.fn().mockResolvedValue(undefined),
       add: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue(undefined),
     },
@@ -168,8 +169,12 @@ describe("NatsService", () => {
   });
 
   describe("Stream Setup", () => {
-    it("should create THE0_BOT_LOGS stream with max_bytes", () => {
-      expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
+    it("should update existing streams when info() succeeds", () => {
+      // info() resolves by default (stream exists), so ensureStream calls update
+      expect(
+        natsMocks.mockJetStreamManager.streams.update,
+      ).toHaveBeenCalledWith(
+        "THE0_BOT_LOGS",
         expect.objectContaining({
           name: "THE0_BOT_LOGS",
           subjects: ["the0.bot.logs.>"],
@@ -180,25 +185,39 @@ describe("NatsService", () => {
       );
     });
 
-    it("should update stream if it already exists", async () => {
-      natsMocks.mockJetStreamManager.streams.add.mockRejectedValueOnce(
-        new Error("stream name already in use"),
+    it("should create stream when info() throws not-found", async () => {
+      jest.clearAllMocks();
+
+      // Simulate stream not found for all info() calls
+      natsMocks.mockJetStreamManager.streams.info.mockRejectedValue(
+        Object.assign(new Error("stream not found"), {
+          api_error: { err_code: 10059 },
+        }),
       );
 
-      // Re-init should trigger ensureStream which falls back to update
       await service.onModuleInit();
 
-      expect(
-        natsMocks.mockJetStreamManager.streams.update,
-      ).toHaveBeenCalled();
+      expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "THE0_BOT_LOGS",
+          subjects: ["the0.bot.logs.>"],
+          retention: "limits",
+          storage: "memory",
+          max_bytes: 128 * 1024 * 1024,
+        }),
+      );
+
+      // Restore default mock behavior
+      natsMocks.mockJetStreamManager.streams.info.mockResolvedValue(undefined);
     });
   });
 
   describe("Subscribe", () => {
-    it("should return an unsubscribe function", () => {
-      const unsubscribe = service.subscribe("test.subject", jest.fn());
+    it("should return Ok with an unsubscribe function", () => {
+      const result = service.subscribe("test.subject", jest.fn());
 
-      expect(typeof unsubscribe).toBe("function");
+      expect(result.success).toBe(true);
+      expect(typeof result.data).toBe("function");
     });
 
     it("should invoke callback with decoded message data", () => {
@@ -219,20 +238,53 @@ describe("NatsService", () => {
       expect(callback).toHaveBeenCalledWith("hello world");
     });
 
+    it("should not invoke callback when subscription receives an error", () => {
+      const callback = jest.fn();
+      service.subscribe("test.subject", callback);
+
+      const lastCall =
+        natsMocks.mockConnection.subscribe.mock.calls[
+          natsMocks.mockConnection.subscribe.mock.calls.length - 1
+        ];
+      const opts = lastCall[1];
+
+      // Simulate a subscription error
+      opts.callback(new Error("subscription error"), {} as any);
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it("should not crash when callback throws", () => {
+      const callback = jest.fn().mockImplementation(() => {
+        throw new Error("callback boom");
+      });
+      service.subscribe("test.subject", callback);
+
+      const lastCall =
+        natsMocks.mockConnection.subscribe.mock.calls[
+          natsMocks.mockConnection.subscribe.mock.calls.length - 1
+        ];
+      const opts = lastCall[1];
+
+      const mockMsg = { data: Buffer.from("hello") };
+      // Should not throw
+      expect(() => opts.callback(null, mockMsg)).not.toThrow();
+    });
+
     it("should unsubscribe when calling the returned function", () => {
-      const unsubscribe = service.subscribe("test.subject", jest.fn());
-      unsubscribe();
+      const result = service.subscribe("test.subject", jest.fn());
+      expect(result.success).toBe(true);
+      result.data!();
 
       expect(natsMocks.mockSubscription.unsubscribe).toHaveBeenCalled();
     });
 
-    it("should return no-op when not connected", async () => {
+    it("should return Failure when not connected", async () => {
       await service.onModuleDestroy();
 
-      const unsubscribe = service.subscribe("test.subject", jest.fn());
-      expect(typeof unsubscribe).toBe("function");
-      // Should not throw when called
-      unsubscribe();
+      const result = service.subscribe("test.subject", jest.fn());
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("NATS connection not established");
     });
   });
 });
