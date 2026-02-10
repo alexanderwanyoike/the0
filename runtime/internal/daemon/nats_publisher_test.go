@@ -14,6 +14,14 @@ func TestNewNATSPublisher_InvalidURL(t *testing.T) {
 	assert.Nil(t, publisher, "publisher should be nil on error")
 }
 
+func TestNATSPublisher_Publish_NilConn(t *testing.T) {
+	// Verify Publish returns error with nil connection instead of panicking
+	p := &NATSPublisher{conn: nil, logger: &util.DefaultLogger{}}
+	err := p.Publish("bot-1", "test log line")
+	assert.Error(t, err, "Publish should return error with nil connection")
+	assert.Contains(t, err.Error(), "NATS connection is closed")
+}
+
 func TestNATSPublisher_Close_NilConn(t *testing.T) {
 	// Verify Close doesn't panic with nil connection
 	p := &NATSPublisher{conn: nil, logger: &util.DefaultLogger{}}
