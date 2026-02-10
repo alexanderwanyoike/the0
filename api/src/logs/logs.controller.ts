@@ -10,11 +10,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Request, Response } from "express";
+import { PinoLogger } from "nestjs-pino";
 import { LogsService } from "./logs.service";
 import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
+
+const NATS_UNSAFE_CHARS = /[*>.]/;
 
 interface BotSubscription {
   unsubscribe: () => void;
@@ -38,6 +41,7 @@ export class LogsController {
   constructor(
     private readonly logsService: LogsService,
     private readonly natsService: NatsService,
+    private readonly logger: PinoLogger,
   ) {}
 
   @Get(":botId")
@@ -75,6 +79,16 @@ export class LogsController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
+    // Validate botId before using as NATS subject
+    if (NATS_UNSAFE_CHARS.test(botId)) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.flushHeaders();
+      res.write(`event: error\ndata: ${JSON.stringify({ message: "Invalid bot ID" })}\n\n`);
+      res.end();
+      return;
+    }
+
     // Set SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -85,9 +99,9 @@ export class LogsController {
     // Send historical logs
     const today = new Date();
     const todayStr =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
+      today.getUTCFullYear().toString() +
+      (today.getUTCMonth() + 1).toString().padStart(2, "0") +
+      today.getUTCDate().toString().padStart(2, "0");
 
     const historyResult = await this.logsService.getLogs(botId, {
       date: todayStr,
@@ -108,16 +122,22 @@ export class LogsController {
       const clients = new Set<Response>();
       const natsSubject = BOT_LOG_TOPICS.forBot(botId);
 
-      const unsubscribe = this.natsService.subscribe(
-        natsSubject,
-        (msg: string) => {
-          const data = JSON.stringify({ content: msg, timestamp: new Date().toISOString() });
-          const event = `event: update\ndata: ${data}\n\n`;
-          for (const client of clients) {
-            client.write(event);
-          }
-        },
-      );
+      let unsubscribe: () => void;
+      try {
+        unsubscribe = this.natsService.subscribe(
+          natsSubject,
+          (msg: string) => {
+            const data = JSON.stringify({ content: msg, timestamp: new Date().toISOString() });
+            const event = `event: update\ndata: ${data}\n\n`;
+            for (const client of clients) {
+              client.write(event);
+            }
+          },
+        );
+      } catch (err) {
+        this.logger.error({ err, botId }, "Failed to subscribe to NATS for bot logs");
+        unsubscribe = () => {};
+      }
 
       subscription = { unsubscribe, clients };
       activeSubscriptions.set(botId, subscription);
