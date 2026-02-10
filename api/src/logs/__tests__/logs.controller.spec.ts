@@ -23,7 +23,7 @@ describe("LogsController", () => {
     };
 
     mockNatsService = {
-      subscribe: jest.fn().mockReturnValue(mockUnsubscribe),
+      subscribe: jest.fn().mockReturnValue(Ok(mockUnsubscribe)),
     };
 
     mockLogger = {
@@ -61,6 +61,7 @@ describe("LogsController", () => {
         flushHeaders: jest.fn(),
         write: jest.fn(),
         end: jest.fn(),
+        writableEnded: false,
       };
     });
 
@@ -166,6 +167,7 @@ describe("LogsController", () => {
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
+        writableEnded: false,
       };
 
       await controller.streamLogs("bot-shared", mockReq, mockRes);
@@ -214,9 +216,9 @@ describe("LogsController", () => {
     });
 
     it("should handle NATS subscribe failure gracefully", async () => {
-      (mockNatsService.subscribe as jest.Mock).mockImplementation(() => {
-        throw new Error("NATS connection failed");
-      });
+      (mockNatsService.subscribe as jest.Mock).mockReturnValue(
+        Failure("NATS connection failed"),
+      );
 
       await controller.streamLogs("bot-nats-fail", mockReq, mockRes);
 
