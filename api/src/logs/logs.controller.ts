@@ -17,7 +17,7 @@ import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
 
-const NATS_UNSAFE_CHARS = /[*>.]/;
+const VALID_BOT_ID = /^[A-Za-z0-9_-]+$/;
 
 interface BotSubscription {
   unsubscribe: () => void;
@@ -80,7 +80,7 @@ export class LogsController {
     @Res() res: Response,
   ) {
     // Validate botId before using as NATS subject
-    if (NATS_UNSAFE_CHARS.test(botId)) {
+    if (!VALID_BOT_ID.test(botId)) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.flushHeaders();
@@ -122,23 +122,28 @@ export class LogsController {
       const clients = new Set<Response>();
       const natsSubject = BOT_LOG_TOPICS.forBot(botId);
 
-      let unsubscribe: () => void;
-      try {
-        unsubscribe = this.natsService.subscribe(
-          natsSubject,
-          (msg: string) => {
-            const data = JSON.stringify({ content: msg, timestamp: new Date().toISOString() });
-            const event = `event: update\ndata: ${data}\n\n`;
-            for (const client of clients) {
-              client.write(event);
+      const subscribeResult = this.natsService.subscribe(
+        natsSubject,
+        (msg: string) => {
+          const data = JSON.stringify({ content: msg, timestamp: new Date().toISOString() });
+          const event = `event: update\ndata: ${data}\n\n`;
+          for (const client of clients) {
+            try {
+              if (!client.writableEnded) {
+                client.write(event);
+              }
+            } catch {
+              clients.delete(client);
             }
-          },
-        );
-      } catch (err) {
-        this.logger.error({ err, botId }, "Failed to subscribe to NATS for bot logs");
-        unsubscribe = () => {};
+          }
+        },
+      );
+
+      if (!subscribeResult.success) {
+        this.logger.error({ botId, error: subscribeResult.error }, "Failed to subscribe to NATS for bot logs");
       }
 
+      const unsubscribe = subscribeResult.data ?? (() => {});
       subscription = { unsubscribe, clients };
       activeSubscriptions.set(botId, subscription);
     }

@@ -79,7 +79,8 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	}
 
 	// Read new content
-	newContent := make([]byte, currentSize-l.lastOffset)
+	readSize := int(currentSize - l.lastOffset)
+	newContent := make([]byte, readSize)
 	n, err := io.ReadFull(file, newContent)
 	if err == io.ErrUnexpectedEOF {
 		err = nil // partial read is OK for log tailing

@@ -63,12 +63,22 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async ensureStream(config: Partial<StreamConfig>): Promise<void> {
+  private async ensureStream(
+    config: Partial<StreamConfig> & Pick<StreamConfig, "name">,
+  ): Promise<void> {
     try {
-      await this.jetStreamManager!.streams.add(config);
+      // Check if stream exists
+      await this.jetStreamManager!.streams.info(config.name);
+      // Stream exists — update config
+      await this.jetStreamManager!.streams.update(config.name, config);
     } catch (err: any) {
-      if (err?.message?.includes("stream name already in use")) {
-        await this.jetStreamManager!.streams.update(config.name!, config);
+      // Stream not found — create it
+      const isNotFound =
+        err?.api_error?.err_code === 10059 ||
+        err?.code === "404" ||
+        err?.message?.includes("stream not found");
+      if (isNotFound) {
+        await this.jetStreamManager!.streams.add(config);
       } else {
         throw err;
       }
@@ -131,23 +141,40 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Subscribe to a NATS subject using raw connection (not JetStream)
-  subscribe(subject: string, callback: (msg: string) => void): () => void {
+  subscribe(
+    subject: string,
+    callback: (msg: string) => void,
+  ): Result<() => void, string> {
     if (!this.connection) {
-      this.logger.warn("NATS not connected, cannot subscribe to %s", subject);
-      return () => {};
+      return Failure("NATS connection not established");
     }
 
-    const sub = this.connection.subscribe(subject, {
-      callback: (err, msg) => {
-        if (err) {
-          this.logger.error({ err, subject }, "NATS subscription error");
-          return;
-        }
-        callback(this.sc.decode(msg.data));
-      },
-    });
+    try {
+      const sub = this.connection.subscribe(subject, {
+        callback: (err, msg) => {
+          if (err) {
+            this.logger.error({ err, subject }, "NATS subscription error");
+            return;
+          }
+          try {
+            callback(this.sc.decode(msg.data));
+          } catch (cbErr) {
+            this.logger.error(
+              { err: cbErr, subject },
+              "Error in subscription callback",
+            );
+          }
+        },
+      });
 
-    return () => sub.unsubscribe();
+      return Ok(() => sub.unsubscribe());
+    } catch (error: any) {
+      this.logger.error(
+        { err: error, subject },
+        "Failed to create NATS subscription",
+      );
+      return Failure(error.message);
+    }
   }
 
   // Health check
