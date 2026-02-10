@@ -1,12 +1,14 @@
 import { LogsController, _clearActiveSubscriptions } from "../logs.controller";
 import { LogsService } from "../logs.service";
 import { NatsService } from "@/nats/nats.service";
+import { PinoLogger } from "nestjs-pino";
 import { Ok, Failure } from "@/common/result";
 
 describe("LogsController", () => {
   let controller: LogsController;
   let mockLogsService: Partial<LogsService>;
   let mockNatsService: Partial<NatsService>;
+  let mockLogger: Partial<PinoLogger>;
   let mockUnsubscribe: jest.Mock;
 
   beforeEach(() => {
@@ -24,9 +26,17 @@ describe("LogsController", () => {
       subscribe: jest.fn().mockReturnValue(mockUnsubscribe),
     };
 
+    mockLogger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    };
+
     controller = new LogsController(
       mockLogsService as LogsService,
       mockNatsService as NatsService,
+      mockLogger as PinoLogger,
     );
   });
 
@@ -50,6 +60,7 @@ describe("LogsController", () => {
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
+        end: jest.fn(),
       };
     });
 
@@ -181,6 +192,40 @@ describe("LogsController", () => {
 
       // Cleanup second client
       if (closeHandler2) closeHandler2();
+    });
+
+    it("should reject botId with NATS wildcard characters", async () => {
+      for (const unsafeId of ["bot.with.dots", "bot*wildcard", "bot>arrow"]) {
+        mockRes.write.mockClear();
+        mockRes.end.mockClear();
+
+        await controller.streamLogs(unsafeId, mockReq, mockRes);
+
+        const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
+          call[0].startsWith("event: error"),
+        );
+        expect(errorWrite).toBeDefined();
+        expect(errorWrite[0]).toContain("Invalid bot ID");
+        expect(mockRes.end).toHaveBeenCalled();
+      }
+
+      // Should never reach NATS subscribe for unsafe IDs
+      expect(mockNatsService.subscribe).not.toHaveBeenCalled();
+    });
+
+    it("should handle NATS subscribe failure gracefully", async () => {
+      (mockNatsService.subscribe as jest.Mock).mockImplementation(() => {
+        throw new Error("NATS connection failed");
+      });
+
+      await controller.streamLogs("bot-nats-fail", mockReq, mockRes);
+
+      // Should not throw — client still gets SSE connection
+      expect(mockRes.flushHeaders).toHaveBeenCalled();
+      expect(mockLogger.error).toHaveBeenCalled();
+
+      // Keepalive should still be registered
+      expect(mockReq.on).toHaveBeenCalledWith("close", expect.any(Function));
     });
   });
 });

@@ -84,6 +84,7 @@ export const useBotLogsStream = ({
   const abortControllerRef = useRef<AbortController | null>(null);
   const initialLoadCompleteRef = useRef(false);
   const isUsingDateFilterRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
 
   // ---- REST fetch (same pattern as useBotLogs) ----
 
@@ -156,6 +157,9 @@ export const useBotLogsStream = ({
     [botId, query, toast, user],
   );
 
+  const fetchLogsRef = useRef(fetchLogs);
+  fetchLogsRef.current = fetchLogs;
+
   // ---- SSE connection ----
 
   const connectSSE = useCallback(() => {
@@ -180,7 +184,7 @@ export const useBotLogsStream = ({
     es.onopen = () => {
       setConnected(true);
       setError(null);
-      initialLoadCompleteRef.current = true;
+      reconnectAttemptsRef.current = 0;
 
       // Stop polling when SSE is active
       if (pollingIntervalRef.current) {
@@ -222,14 +226,24 @@ export const useBotLogsStream = ({
     es.onerror = () => {
       setConnected(false);
 
-      // If we never loaded data, fall back to REST
       if (!initialLoadCompleteRef.current) {
-        fetchLogs();
+        // Never loaded data -- fall back to REST
+        fetchLogsRef.current();
+      } else {
+        // SSE dropped after initial load -- try to reconnect with backoff
+        const delay = Math.min(
+          1000 * Math.pow(2, reconnectAttemptsRef.current),
+          30000,
+        );
+        reconnectAttemptsRef.current++;
+        fallbackTimeoutRef.current = setTimeout(() => {
+          connectSSE();
+        }, delay);
       }
     };
 
     eventSourceRef.current = es;
-  }, [user, botId, fetchLogs]);
+  }, [user, botId]);
 
   // ---- Cleanup helper ----
 
@@ -258,11 +272,11 @@ export const useBotLogsStream = ({
       fallbackTimeoutRef.current = setTimeout(() => {
         if (!initialLoadCompleteRef.current) {
           cleanupSSE();
-          fetchLogs();
+          fetchLogsRef.current();
 
           // Start polling as fallback
           pollingIntervalRef.current = setInterval(() => {
-            fetchLogs();
+            fetchLogsRef.current();
           }, refreshInterval);
         }
       }, 4000);
@@ -274,7 +288,7 @@ export const useBotLogsStream = ({
         fallbackTimeoutRef.current = null;
       }
     };
-  }, [user, botId, connectSSE, cleanupSSE, fetchLogs, refreshInterval]);
+  }, [user, botId, connectSSE, cleanupSSE, refreshInterval]);
 
   // ---- Cleanup everything on unmount ----
 
@@ -304,14 +318,21 @@ export const useBotLogsStream = ({
   const refresh = useCallback(() => {
     const refreshQuery = { ...query, offset: 0 };
     setQuery(refreshQuery);
-    fetchLogs(refreshQuery);
-  }, [fetchLogs, query]);
+    fetchLogsRef.current(refreshQuery);
+  }, [query]);
 
   const setDateFilter = useCallback(
     (date: string | null) => {
-      // Date filter means historical data -- switch to REST
       isUsingDateFilterRef.current = !!date;
-      cleanupSSE();
+
+      if (date) {
+        // Date filter active -- switch to REST
+        cleanupSSE();
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
 
       const updatedQuery: LogsQuery = {
         ...query,
@@ -320,9 +341,14 @@ export const useBotLogsStream = ({
         offset: 0,
       };
       setQuery(updatedQuery);
-      fetchLogs(updatedQuery);
+      fetchLogsRef.current(updatedQuery);
+
+      // Reconnect SSE when clearing date filter
+      if (!date) {
+        connectSSE();
+      }
     },
-    [query, fetchLogs, cleanupSSE],
+    [query, cleanupSSE, connectSSE],
   );
 
   const setDateRangeFilter = useCallback(
@@ -330,6 +356,10 @@ export const useBotLogsStream = ({
       // Date range filter means historical data -- switch to REST
       isUsingDateFilterRef.current = true;
       cleanupSSE();
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
 
       const updatedQuery: LogsQuery = {
         ...query,
@@ -338,9 +368,9 @@ export const useBotLogsStream = ({
         offset: 0,
       };
       setQuery(updatedQuery);
-      fetchLogs(updatedQuery);
+      fetchLogsRef.current(updatedQuery);
     },
-    [query, fetchLogs, cleanupSSE],
+    [query, cleanupSSE],
   );
 
   const exportLogs = useCallback(() => {
