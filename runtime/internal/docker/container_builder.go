@@ -207,6 +207,14 @@ func (b *ContainerBuilder) WithExtraHosts(hosts ...string) *ContainerBuilder {
 	return b
 }
 
+// WithNATSURL sets the NATS_URL environment variable on the container.
+func (b *ContainerBuilder) WithNATSURL(url string) *ContainerBuilder {
+	if url != "" {
+		b.config.Env = append(b.config.Env, fmt.Sprintf("NATS_URL=%s", url))
+	}
+	return b
+}
+
 // Build returns the finalized container.Config and container.HostConfig.
 func (b *ContainerBuilder) Build() (*container.Config, *container.HostConfig) {
 	return b.config, b.hostConfig

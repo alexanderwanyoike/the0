@@ -314,7 +314,7 @@ func TestLogsSyncer_Integration(t *testing.T) {
 		logFile := filepath.Join(logsDir, "bot.log")
 		require.NoError(t, os.WriteFile(logFile, []byte("line 1\n"), 0644))
 
-		syncer := NewLogsSyncer("test-bot-1", logsDir, minioLogger, logger)
+		syncer := NewLogsSyncer("test-bot-1", logsDir, minioLogger, nil, logger)
 		require.NotNil(t, syncer)
 
 		// First sync
@@ -345,7 +345,7 @@ func TestLogsSyncer_Integration(t *testing.T) {
 		require.NoError(t, err)
 		defer os.RemoveAll(logsDir)
 
-		syncer := NewLogsSyncer("test-bot-2", logsDir, minioLogger, logger)
+		syncer := NewLogsSyncer("test-bot-2", logsDir, minioLogger, nil, logger)
 		require.NotNil(t, syncer)
 
 		// Should not sync if log file doesn't exist
@@ -361,7 +361,7 @@ func TestLogsSyncer_Integration(t *testing.T) {
 		logFile := filepath.Join(logsDir, "bot.log")
 		require.NoError(t, os.WriteFile(logFile, []byte(""), 0644))
 
-		syncer := NewLogsSyncer("test-bot-3", logsDir, minioLogger, logger)
+		syncer := NewLogsSyncer("test-bot-3", logsDir, minioLogger, nil, logger)
 		require.NotNil(t, syncer)
 
 		// Empty file should not sync
@@ -371,7 +371,7 @@ func TestLogsSyncer_Integration(t *testing.T) {
 
 	t.Run("NewLogsSyncer_NilUploader", func(t *testing.T) {
 		// Should return nil when uploader is nil (logs disabled)
-		syncer := NewLogsSyncer("test-bot", "/tmp", nil, logger)
+		syncer := NewLogsSyncer("test-bot", "/tmp", nil, nil, logger)
 		assert.Nil(t, syncer)
 	})
 
@@ -382,7 +382,7 @@ func TestLogsSyncer_Integration(t *testing.T) {
 
 		logFile := filepath.Join(logsDir, "bot.log")
 
-		syncer := NewLogsSyncer("test-bot-4", logsDir, minioLogger, logger)
+		syncer := NewLogsSyncer("test-bot-4", logsDir, minioLogger, nil, logger)
 		require.NotNil(t, syncer)
 
 		// Write and sync incrementally
