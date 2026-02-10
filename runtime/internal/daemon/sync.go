@@ -136,6 +136,16 @@ func (r *SyncRunner) run() {
 	stateSyncer := NewStateSyncer(r.opts.BotID, r.opts.StatePath, stateManager, r.logger)
 	r.syncers = append(r.syncers, stateSyncer)
 
+	// NATS publisher (optional — for real-time log streaming)
+	var natsPublisher *NATSPublisher
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		var err error
+		natsPublisher, err = NewNATSPublisher(natsURL, r.logger)
+		if err != nil {
+			r.logger.Info("Failed to create NATS publisher, continuing without", "error", err.Error())
+		}
+	}
+
 	// Logs syncer
 	var logsSyncer *LogsSyncer
 	if r.opts.LogsPath != "" {
@@ -149,7 +159,7 @@ func (r *SyncRunner) run() {
 		if err != nil {
 			r.logger.Info("Failed to create log uploader", "error", err.Error())
 		} else {
-			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, r.logger)
+			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, natsPublisher, r.logger)
 			if logsSyncer != nil {
 				r.syncers = append(r.syncers, logsSyncer)
 			}
@@ -159,6 +169,9 @@ func (r *SyncRunner) run() {
 	r.cleanup = func() {
 		if logsSyncer != nil {
 			logsSyncer.Close()
+		}
+		if natsPublisher != nil {
+			natsPublisher.Close()
 		}
 	}
 
@@ -265,6 +278,16 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	syncers = append(syncers, stateSyncer)
 	logger.Info("State syncer initialized", "path", opts.StatePath)
 
+	// NATS publisher (optional — for real-time log streaming)
+	var natsPublisher *NATSPublisher
+	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
+		var err error
+		natsPublisher, err = NewNATSPublisher(natsURL, logger)
+		if err != nil {
+			logger.Info("Failed to create NATS publisher, continuing without", "error", err.Error())
+		}
+	}
+
 	// Logs syncer (optional - may fail if MinIO bucket doesn't exist)
 	var logsSyncer *LogsSyncer
 	if opts.LogsPath != "" {
@@ -278,7 +301,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		if err != nil {
 			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
 		} else {
-			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, logger)
+			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, natsPublisher, logger)
 			if logsSyncer != nil {
 				syncers = append(syncers, logsSyncer)
 				logger.Info("Logs syncer initialized", "path", opts.LogsPath)
@@ -302,6 +325,9 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	cleanup := func() {
 		if logsSyncer != nil {
 			logsSyncer.Close()
+		}
+		if natsPublisher != nil {
+			natsPublisher.Close()
 		}
 	}
 

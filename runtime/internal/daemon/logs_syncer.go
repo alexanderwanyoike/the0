@@ -13,24 +13,27 @@ import (
 
 // LogsSyncer handles periodic log synchronization to MinIO.
 type LogsSyncer struct {
-	botID       string
-	logsPath    string
-	logUploader miniologger.MinIOLogger
-	logger      util.Logger
-	lastOffset  int64
+	botID          string
+	logsPath       string
+	logUploader    miniologger.MinIOLogger
+	natsPublisher  LogPublisher
+	logger         util.Logger
+	lastOffset     int64
 }
 
 // NewLogsSyncer creates a new logs syncer.
 // Returns nil if logUploader is nil (logs syncing disabled).
-func NewLogsSyncer(botID, logsPath string, logUploader miniologger.MinIOLogger, logger util.Logger) *LogsSyncer {
+// natsPublisher is optional — pass nil to disable NATS log publishing.
+func NewLogsSyncer(botID, logsPath string, logUploader miniologger.MinIOLogger, natsPublisher LogPublisher, logger util.Logger) *LogsSyncer {
 	if logUploader == nil {
 		return nil
 	}
 	return &LogsSyncer{
-		botID:       botID,
-		logsPath:    logsPath,
-		logUploader: logUploader,
-		logger:      logger,
+		botID:         botID,
+		logsPath:      logsPath,
+		logUploader:   logUploader,
+		natsPublisher: natsPublisher,
+		logger:        logger,
 	}
 }
 
@@ -94,6 +97,13 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, string(newContent[:n])); err != nil {
 		l.logger.Info("Failed to upload logs", "error", err.Error())
 		return false
+	}
+
+	// Publish to NATS for real-time log streaming (best-effort)
+	if l.natsPublisher != nil {
+		if err := l.natsPublisher.Publish(l.botID, string(newContent[:n])); err != nil {
+			l.logger.Info("Failed to publish logs to NATS", "error", err.Error())
+		}
 	}
 
 	l.lastOffset = currentSize
