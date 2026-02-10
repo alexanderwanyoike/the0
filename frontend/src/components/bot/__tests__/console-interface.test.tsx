@@ -374,6 +374,40 @@ describe("ConsoleInterface", () => {
     });
   });
 
+  describe("connection status indicator", () => {
+    it("should show Live indicator when connected is true", () => {
+      render(<ConsoleInterface {...defaultProps} connected={true} lastUpdate={new Date()} />);
+      expect(screen.getByText("Live")).toBeInTheDocument();
+    });
+
+    it("should show Polling indicator when connected is false with lastUpdate", () => {
+      render(<ConsoleInterface {...defaultProps} connected={false} lastUpdate={new Date()} />);
+      expect(screen.getByText("Polling")).toBeInTheDocument();
+    });
+
+    it("should show Connecting indicator when connected is false without lastUpdate", () => {
+      render(<ConsoleInterface {...defaultProps} connected={false} lastUpdate={null} />);
+      expect(screen.getByText("Connecting...")).toBeInTheDocument();
+    });
+
+    it("should not show any indicator when connected prop is not passed", () => {
+      render(<ConsoleInterface {...defaultProps} />);
+      expect(screen.queryByText("Live")).not.toBeInTheDocument();
+      expect(screen.queryByText("Polling")).not.toBeInTheDocument();
+      expect(screen.queryByText("Connecting...")).not.toBeInTheDocument();
+    });
+
+    it("should show indicator in compact mode when connected", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} connected={true} lastUpdate={new Date()} />);
+      expect(screen.getByText("Live")).toBeInTheDocument();
+    });
+
+    it("should show Connecting in compact mode when not yet connected", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={null} />);
+      expect(screen.getByText("Connecting...")).toBeInTheDocument();
+    });
+  });
+
   describe("entry count badge", () => {
     it("shows correct count after filtering", async () => {
       const logs: LogEntry[] = [
