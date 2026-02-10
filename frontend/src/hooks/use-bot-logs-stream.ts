@@ -1,0 +1,388 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { authFetch } from "@/lib/auth-fetch";
+import { useToast } from "@/hooks/use-toast";
+import { LogEntry } from "@/components/bot/console-interface";
+import {
+  createAuthenticatedSSEUrl,
+  validateSSEAuth,
+} from "@/lib/sse/sse-auth";
+
+interface LogsQuery {
+  date?: string;
+  dateRange?: string;
+  limit?: number;
+  offset?: number;
+}
+
+interface LogsResponse {
+  data: LogEntry[];
+  total: number;
+  hasMore: boolean;
+}
+
+interface UseBotLogsStreamProps {
+  botId: string;
+  refreshInterval?: number;
+  initialQuery?: LogsQuery;
+}
+
+export interface UseBotLogsStreamReturn {
+  logs: LogEntry[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  total: number;
+  refresh: () => void;
+  exportLogs: () => void;
+  setDateFilter: (date: string | null) => void;
+  setDateRangeFilter: (start: string, end: string) => void;
+  connected: boolean;
+  lastUpdate: Date | null;
+}
+
+/**
+ * Expand raw log entries by splitting multi-line content into individual LogEntry items.
+ * Each non-empty line becomes its own entry, preserving the original timestamp.
+ */
+function expandLogEntries(entries: LogEntry[]): LogEntry[] {
+  const expanded: LogEntry[] = [];
+  entries.forEach((entry) => {
+    const lines = entry.content.split("\n").filter((line) => line.trim() !== "");
+    lines.forEach((line) => {
+      expanded.push({
+        date: entry.date,
+        content: line.trim(),
+      });
+    });
+  });
+  return expanded;
+}
+
+export const useBotLogsStream = ({
+  botId,
+  refreshInterval = 30000,
+  initialQuery = { limit: 100, offset: 0 },
+}: UseBotLogsStreamProps): UseBotLogsStreamReturn => {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [connected, setConnected] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [query, setQuery] = useState<LogsQuery>(initialQuery);
+
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const initialLoadCompleteRef = useRef(false);
+  const isUsingDateFilterRef = useRef(false);
+
+  // ---- REST fetch (same pattern as useBotLogs) ----
+
+  const fetchLogs = useCallback(
+    async (queryParams: LogsQuery = query) => {
+      if (!botId) return;
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (!user) {
+          throw new Error("User not authenticated");
+        }
+
+        const searchParams = new URLSearchParams();
+        if (queryParams.date) {
+          searchParams.set("date", queryParams.date);
+        } else {
+          searchParams.set(
+            "date",
+            new Date().toISOString().slice(0, 10).replace(/-/g, ""),
+          );
+        }
+        if (queryParams.dateRange)
+          searchParams.set("dateRange", queryParams.dateRange);
+        if (queryParams.limit)
+          searchParams.set("limit", queryParams.limit.toString());
+        if (queryParams.offset)
+          searchParams.set("offset", queryParams.offset.toString());
+
+        const response = await authFetch(
+          `/api/logs/${botId}?${searchParams.toString()}`,
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch logs: ${response.statusText}`);
+        }
+
+        const result: LogsResponse = await response.json();
+        const expandedLogs = expandLogEntries(result.data);
+
+        setLogs(expandedLogs);
+        setHasMore(result.hasMore);
+        setTotal(result.total);
+        initialLoadCompleteRef.current = true;
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+
+        const errorMessage = err.message || "Failed to fetch logs";
+        setError(errorMessage);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+        abortControllerRef.current = null;
+      }
+    },
+    [botId, query, toast, user],
+  );
+
+  // ---- SSE connection ----
+
+  const connectSSE = useCallback(() => {
+    if (!user || !botId) return;
+
+    const authResult = validateSSEAuth();
+    if (!authResult.success) return;
+
+    const urlResult = createAuthenticatedSSEUrl(`/api/logs/${botId}/stream`);
+    if (!urlResult.success) return;
+
+    // Clean up any existing EventSource
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    const es = new EventSource(urlResult.data.url, {
+      withCredentials: true,
+    });
+
+    es.onopen = () => {
+      setConnected(true);
+      setError(null);
+      initialLoadCompleteRef.current = true;
+
+      // Stop polling when SSE is active
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+
+    es.addEventListener("history", (event: MessageEvent) => {
+      try {
+        const entries: LogEntry[] = JSON.parse(event.data);
+        const expanded = expandLogEntries(entries);
+        setLogs(expanded);
+        setTotal(expanded.length);
+        setLastUpdate(new Date());
+        initialLoadCompleteRef.current = true;
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to parse history SSE event:", err);
+      }
+    });
+
+    es.addEventListener("update", (event: MessageEvent) => {
+      try {
+        const data: { content: string; timestamp: string } = JSON.parse(
+          event.data,
+        );
+        const newEntries = expandLogEntries([
+          { date: data.timestamp, content: data.content },
+        ]);
+        setLogs((prev) => [...prev, ...newEntries]);
+        setTotal((prev) => prev + newEntries.length);
+        setLastUpdate(new Date());
+      } catch (err) {
+        console.error("Failed to parse update SSE event:", err);
+      }
+    });
+
+    es.onerror = () => {
+      setConnected(false);
+
+      // If we never loaded data, fall back to REST
+      if (!initialLoadCompleteRef.current) {
+        fetchLogs();
+      }
+    };
+
+    eventSourceRef.current = es;
+  }, [user, botId, fetchLogs]);
+
+  // ---- Cleanup helper ----
+
+  const cleanupSSE = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setConnected(false);
+  }, []);
+
+  // ---- Establish SSE on mount with 4s fallback to REST polling ----
+
+  useEffect(() => {
+    if (!user || !botId) {
+      setLoading(false);
+      return;
+    }
+
+    // Only connect SSE when there is no date filter active
+    if (!isUsingDateFilterRef.current) {
+      setLoading(true);
+      connectSSE();
+
+      // If SSE doesn't connect within 4 seconds, fall back to REST polling
+      fallbackTimeoutRef.current = setTimeout(() => {
+        if (!initialLoadCompleteRef.current) {
+          cleanupSSE();
+          fetchLogs();
+
+          // Start polling as fallback
+          pollingIntervalRef.current = setInterval(() => {
+            fetchLogs();
+          }, refreshInterval);
+        }
+      }, 4000);
+    }
+
+    return () => {
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+    };
+  }, [user, botId, connectSSE, cleanupSSE, fetchLogs, refreshInterval]);
+
+  // ---- Cleanup everything on unmount ----
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
+  // ---- Public API ----
+
+  const refresh = useCallback(() => {
+    const refreshQuery = { ...query, offset: 0 };
+    setQuery(refreshQuery);
+    fetchLogs(refreshQuery);
+  }, [fetchLogs, query]);
+
+  const setDateFilter = useCallback(
+    (date: string | null) => {
+      // Date filter means historical data -- switch to REST
+      isUsingDateFilterRef.current = !!date;
+      cleanupSSE();
+
+      const updatedQuery: LogsQuery = {
+        ...query,
+        date: date || undefined,
+        dateRange: undefined,
+        offset: 0,
+      };
+      setQuery(updatedQuery);
+      fetchLogs(updatedQuery);
+    },
+    [query, fetchLogs, cleanupSSE],
+  );
+
+  const setDateRangeFilter = useCallback(
+    (start: string, end: string) => {
+      // Date range filter means historical data -- switch to REST
+      isUsingDateFilterRef.current = true;
+      cleanupSSE();
+
+      const updatedQuery: LogsQuery = {
+        ...query,
+        dateRange: `${start}-${end}`,
+        date: undefined,
+        offset: 0,
+      };
+      setQuery(updatedQuery);
+      fetchLogs(updatedQuery);
+    },
+    [query, fetchLogs, cleanupSSE],
+  );
+
+  const exportLogs = useCallback(() => {
+    if (logs.length === 0) {
+      toast({
+        title: "No logs to export",
+        description: "There are no logs available to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const logText = logs
+      .map((log) => `[${log.date}] ${log.content}`)
+      .join("\n");
+
+    const blob = new Blob([logText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      description: "Logs exported successfully",
+    });
+  }, [logs, botId, toast]);
+
+  return {
+    logs,
+    loading,
+    error,
+    hasMore,
+    total,
+    refresh,
+    exportLogs,
+    setDateFilter,
+    setDateRangeFilter,
+    connected,
+    lastUpdate,
+  };
+};
