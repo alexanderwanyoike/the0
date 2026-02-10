@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBotLogs } from "@/hooks/use-bot-logs";
+import { useBotLogsStream } from "@/hooks/use-bot-logs-stream";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
 import { cn } from "@/lib/utils";
@@ -80,7 +81,22 @@ const BotDetail = ({ params }: BotDetailProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Console logs hook
+  // Console logs hook - use streaming for running bots, polling for stopped
+  const isRunning = bot?.status === "running";
+
+  const streamHook = useBotLogsStream({
+    botId,
+    refreshInterval: 60 * 1000,
+  });
+
+  const pollingHook = useBotLogs({
+    botId,
+    autoRefresh: !isRunning,
+    refreshInterval: 60 * 1000,
+  });
+
+  const activeHook = isRunning ? streamHook : pollingHook;
+
   const {
     logs,
     loading: logsLoading,
@@ -88,11 +104,11 @@ const BotDetail = ({ params }: BotDetailProps) => {
     setDateFilter,
     setDateRangeFilter,
     exportLogs,
-  } = useBotLogs({
-    botId,
-    autoRefresh: true,
-    refreshInterval: 60 * 1000, // 1 minute
-  });
+  } = activeHook;
+
+  // Get streaming-specific fields (only available when using stream hook)
+  const connected = isRunning ? streamHook.connected : undefined;
+  const lastUpdate = isRunning ? streamHook.lastUpdate : undefined;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -552,6 +568,8 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 onDateChange={setDateFilter}
                 onDateRangeChange={setDateRangeFilter}
                 onExport={exportLogs}
+                connected={connected}
+                lastUpdate={lastUpdate ?? null}
                 className="h-full"
                 compact
               />

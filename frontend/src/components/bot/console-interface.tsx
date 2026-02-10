@@ -42,6 +42,10 @@ interface ConsoleInterfaceProps {
   className?: string;
   /** When true, hides the header (title, badges) - useful when embedded in a parent with its own header */
   compact?: boolean;
+  /** Whether the streaming connection is active */
+  connected?: boolean;
+  /** Timestamp of the last received update */
+  lastUpdate?: Date | null;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -302,6 +306,8 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   onExport,
   className,
   compact = false,
+  connected,
+  lastUpdate,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(false);
@@ -406,6 +412,28 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               >
                 {filteredLogs.length} entries
               </Badge>
+              {connected !== undefined && (
+                <span className="flex items-center gap-1 text-xs ml-2">
+                  <span className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    connected
+                      ? "bg-green-500"
+                      : lastUpdate
+                        ? "bg-gray-400"
+                        : "bg-yellow-500 animate-pulse"
+                  )} />
+                  <span className={cn(
+                    "text-[10px]",
+                    connected
+                      ? "text-green-600 dark:text-green-400"
+                      : lastUpdate
+                        ? "text-gray-500"
+                        : "text-yellow-600 dark:text-yellow-400"
+                  )}>
+                    {connected ? "Live" : lastUpdate ? "Polling" : "Connecting..."}
+                  </span>
+                </span>
+              )}
             </div>
           )}
 
@@ -416,14 +444,38 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             )}
           >
             {compact && (
-              <div className="flex-1 mr-2">
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-7 text-xs"
-                />
-              </div>
+              <>
+                {connected !== undefined && (
+                  <span className="flex items-center gap-1 text-xs mr-1">
+                    <span className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      connected
+                        ? "bg-green-500"
+                        : lastUpdate
+                          ? "bg-gray-400"
+                          : "bg-yellow-500 animate-pulse"
+                    )} />
+                    <span className={cn(
+                      "text-[10px]",
+                      connected
+                        ? "text-green-600 dark:text-green-400"
+                        : lastUpdate
+                          ? "text-gray-500"
+                          : "text-yellow-600 dark:text-yellow-400"
+                    )}>
+                      {connected ? "Live" : lastUpdate ? "Polling" : "Connecting..."}
+                    </span>
+                  </span>
+                )}
+                <div className="flex-1 mr-2">
+                  <Input
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+              </>
             )}
             {!compact && (
               <Button
