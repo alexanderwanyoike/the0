@@ -12,6 +12,12 @@ import {
 } from "nats";
 import { Result, Ok, Failure } from "@/common/result";
 
+type StreamSetupConfig = Pick<
+  StreamConfig,
+  "name" | "subjects" | "retention" | "storage"
+> &
+  Partial<StreamConfig>;
+
 @Injectable()
 export class NatsService implements OnModuleInit, OnModuleDestroy {
   private connection: NatsConnection | null = null;
@@ -27,6 +33,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     await this.connect();
     const result = await this.setupStreams();
     if (!result.success) {
+      await this.disconnect();
       throw new Error(result.error!);
     }
   }
@@ -90,7 +97,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
   private async upsertStream(
     name: string,
-    config: Partial<StreamConfig> & Pick<StreamConfig, "name">,
+    config: StreamSetupConfig,
     exists: boolean,
   ): Promise<Result<void, string>> {
     try {
@@ -106,7 +113,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async ensureStream(
-    config: Partial<StreamConfig> & Pick<StreamConfig, "name">,
+    config: StreamSetupConfig,
   ): Promise<Result<void, string>> {
     const existsResult = await this.streamExists(config.name);
     if (!existsResult.success) {
@@ -208,8 +215,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         },
       });
       return Ok(() => sub.unsubscribe());
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(error instanceof Error ? error.message : String(error));
     }
   }
 
