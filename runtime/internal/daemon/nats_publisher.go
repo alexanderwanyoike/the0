@@ -3,6 +3,7 @@ package daemon
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"runtime/internal/util"
@@ -24,18 +25,31 @@ type NATSPublisher struct {
 
 // NewNATSPublisher creates a new NATS publisher for log streaming.
 func NewNATSPublisher(natsURL string, logger util.Logger) (*NATSPublisher, error) {
+	if logger == nil {
+		logger = util.NewLogger()
+	}
 	conn, err := nats.Connect(natsURL, nats.MaxReconnects(-1), nats.ReconnectWait(time.Second))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
-	// Redact credentials before logging
-	redacted := natsURL
-	if u, parseErr := url.Parse(natsURL); parseErr == nil && u.User != nil {
-		u.User = url.UserPassword("***", "***")
-		redacted = u.String()
-	}
-	logger.Info("Connected to NATS for log publishing", "url", redacted)
+	logger.Info("Connected to NATS for log publishing", "url", redactNATSURL(natsURL))
 	return &NATSPublisher{conn: conn, logger: logger}, nil
+}
+
+// redactNATSURL redacts credentials from a NATS URL string,
+// handling comma-separated server lists.
+func redactNATSURL(rawURL string) string {
+	parts := strings.Split(rawURL, ",")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if u, err := url.Parse(part); err == nil && u.User != nil {
+			u.User = url.UserPassword("***", "***")
+			parts[i] = u.String()
+		} else {
+			parts[i] = part
+		}
+	}
+	return strings.Join(parts, ",")
 }
 
 // Publish sends log content to the bot's NATS log subject.
