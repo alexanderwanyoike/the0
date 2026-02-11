@@ -142,17 +142,34 @@ describe("LogsController", () => {
       expect(mockUnsubscribe).toHaveBeenCalled();
     });
 
-    it("should handle getLogs failure gracefully", async () => {
+    it("should terminate SSE when bot access is denied", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
-        Failure("not found"),
+        Failure("Bot not found or access denied"),
       );
 
-      await controller.streamLogs("bot-fail", mockReq, mockRes);
+      await controller.streamLogs("bot-denied", mockReq, mockRes);
+
+      const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
+        call[0].startsWith("event: error"),
+      );
+      expect(errorWrite).toBeDefined();
+      expect(errorWrite[0]).toContain("access denied");
+      expect(mockRes.end).toHaveBeenCalled();
+      expect(mockNatsService.subscribe).not.toHaveBeenCalled();
+    });
+
+    it("should continue streaming when getLogs fails for non-access reasons", async () => {
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Failure("Failed to fetch logs: MinIO unavailable"),
+      );
+
+      await controller.streamLogs("bot-minio-fail", mockReq, mockRes);
 
       const historyWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: history"),
       );
       expect(historyWrite).toBeUndefined();
+      // Should still subscribe to NATS — the user is authorized, just can't fetch history
       expect(mockNatsService.subscribe).toHaveBeenCalled();
     });
 
