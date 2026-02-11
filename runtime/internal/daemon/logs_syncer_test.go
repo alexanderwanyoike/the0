@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -49,25 +50,57 @@ func (m *MockMinIOLogger) Close() error {
 	return m.CloseError
 }
 
+// MockLogPublisher implements LogPublisher for testing.
+type MockLogPublisher struct {
+	PublishCalls []struct {
+		BotID   string
+		Content string
+	}
+	PublishError error
+	CloseCalled  bool
+	CloseError   error
+}
+
+func (m *MockLogPublisher) Publish(botID string, content string) error {
+	m.PublishCalls = append(m.PublishCalls, struct {
+		BotID   string
+		Content string
+	}{BotID: botID, Content: content})
+	return m.PublishError
+}
+
+func (m *MockLogPublisher) Close() error {
+	m.CloseCalled = true
+	return m.CloseError
+}
+
 func TestNewLogsSyncer_NilUploader(t *testing.T) {
-	syncer := NewLogsSyncer("bot-1", "/logs", nil, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", "/logs", nil, nil, &util.DefaultLogger{})
 	assert.Nil(t, syncer, "should return nil when uploader is nil")
 }
 
 func TestNewLogsSyncer_ValidUploader(t *testing.T) {
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, nil, &util.DefaultLogger{})
 
 	require.NotNil(t, syncer)
 	assert.Equal(t, "bot-1", syncer.botID)
 	assert.Equal(t, "/logs", syncer.logsPath)
 }
 
+func TestNewLogsSyncer_NilPublisher(t *testing.T) {
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, nil, &util.DefaultLogger{})
+
+	require.NotNil(t, syncer)
+	assert.Nil(t, syncer.natsPublisher, "natsPublisher should be nil when not provided")
+}
+
 func TestLogsSyncer_Sync_NoLogFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	mockUploader := &MockMinIOLogger{}
 
-	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
 	synced := syncer.Sync(context.Background())
 
 	assert.False(t, synced, "should return false when log file doesn't exist")
@@ -82,7 +115,7 @@ func TestLogsSyncer_Sync_EmptyLogFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(logFile, []byte{}, 0644))
 
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
 	synced := syncer.Sync(context.Background())
 
 	assert.False(t, synced, "should return false for empty log file")
@@ -98,7 +131,7 @@ func TestLogsSyncer_Sync_FirstSync(t *testing.T) {
 	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
 
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
 	synced := syncer.Sync(context.Background())
 
 	assert.True(t, synced, "should return true when logs are synced")
@@ -116,7 +149,7 @@ func TestLogsSyncer_Sync_IncrementalSync(t *testing.T) {
 	require.NoError(t, os.WriteFile(logFile, []byte(initial), 0644))
 
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
 
 	// First sync
 	synced := syncer.Sync(context.Background())
@@ -147,7 +180,7 @@ func TestLogsSyncer_Sync_NoNewContent(t *testing.T) {
 	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
 
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
 
 	// First sync
 	syncer.Sync(context.Background())
@@ -168,7 +201,7 @@ func TestLogsSyncer_Sync_UploadError(t *testing.T) {
 	mockUploader := &MockMinIOLogger{
 		AppendError: assert.AnError,
 	}
-	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, &util.DefaultLogger{})
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
 
 	synced := syncer.Sync(context.Background())
 	assert.False(t, synced, "should return false on upload error")
@@ -176,19 +209,70 @@ func TestLogsSyncer_Sync_UploadError(t *testing.T) {
 
 func TestLogsSyncer_Close(t *testing.T) {
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, &util.DefaultLogger{})
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, mockPublisher, &util.DefaultLogger{})
 
 	err := syncer.Close()
 	require.NoError(t, err)
 	assert.True(t, mockUploader.CloseCalled)
+	assert.True(t, mockPublisher.CloseCalled)
 }
 
-func TestLogsSyncer_Close_WithError(t *testing.T) {
+func TestLogsSyncer_Close_WithBothErrors(t *testing.T) {
 	mockUploader := &MockMinIOLogger{
-		CloseError: assert.AnError,
+		CloseError: fmt.Errorf("uploader error"),
 	}
-	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, &util.DefaultLogger{})
+	mockPublisher := &MockLogPublisher{
+		CloseError: fmt.Errorf("publisher error"),
+	}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, mockPublisher, &util.DefaultLogger{})
 
 	err := syncer.Close()
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "uploader error")
+	assert.Contains(t, err.Error(), "publisher error")
+}
+
+func TestLogsSyncer_Sync_WithNATSPublisher(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	content := "2024-01-01 10:00:00 Bot started\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, mockPublisher, &util.DefaultLogger{})
+
+	synced := syncer.Sync(context.Background())
+
+	assert.True(t, synced, "should return true when logs are synced")
+	require.Len(t, mockUploader.AppendCalls, 1)
+	assert.Equal(t, content, mockUploader.AppendCalls[0].Content)
+
+	// Verify NATS publisher was called with same content
+	require.Len(t, mockPublisher.PublishCalls, 1)
+	assert.Equal(t, "bot-1", mockPublisher.PublishCalls[0].BotID)
+	assert.Equal(t, content, mockPublisher.PublishCalls[0].Content)
+}
+
+func TestLogsSyncer_Sync_NATSPublishError(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	content := "some log line\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	mockPublisher := &MockLogPublisher{
+		PublishError: assert.AnError,
+	}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, mockPublisher, &util.DefaultLogger{})
+
+	synced := syncer.Sync(context.Background())
+
+	// Sync should still succeed even when NATS publish fails
+	assert.True(t, synced, "should return true even when NATS publish fails")
+	require.Len(t, mockUploader.AppendCalls, 1)
+	require.Len(t, mockPublisher.PublishCalls, 1)
 }
