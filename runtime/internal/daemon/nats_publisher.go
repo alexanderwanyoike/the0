@@ -11,7 +11,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// LogPublisher defines the interface for publishing bot log lines.
+// LogPublisher defines the interface for publishing bot log content chunks.
 type LogPublisher interface {
 	Publish(botID string, content string) error
 	Close() error
