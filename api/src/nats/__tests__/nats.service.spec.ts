@@ -6,11 +6,16 @@ import { createMockLogger } from "@/test/mock-logger";
 
 // Mock NATS at the top level to avoid hoisting issues
 jest.mock("nats", () => {
+  const mockSubscription = {
+    unsubscribe: jest.fn(),
+  };
+
   const mockConnection = {
     isClosed: jest.fn().mockReturnValue(false),
     close: jest.fn().mockResolvedValue(undefined),
     jetstreamManager: jest.fn(),
     jetstream: jest.fn(),
+    subscribe: jest.fn().mockReturnValue(mockSubscription),
     info: {
       server_name: "test-server",
       version: "2.9.0",
@@ -24,7 +29,9 @@ jest.mock("nats", () => {
 
   const mockJetStreamManager = {
     streams: {
+      info: jest.fn().mockResolvedValue(undefined),
       add: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue(undefined),
     },
   };
 
@@ -47,9 +54,20 @@ jest.mock("nats", () => {
     },
     StorageType: {
       File: "file",
+      Memory: "memory",
+    },
+    // Expose mocks for test assertions
+    __mocks: {
+      mockConnection,
+      mockSubscription,
+      mockJetStreamManager,
+      mockJetStream,
     },
   };
 });
+
+// Access the exposed mocks
+const natsMocks = (require("nats") as any).__mocks;
 
 describe("NatsService", () => {
   let service: NatsService;
@@ -88,6 +106,8 @@ describe("NatsService", () => {
 
   afterEach(async () => {
     await service.onModuleDestroy();
+    // Restore default mock behavior so rejected add() doesn't leak across tests
+    natsMocks.mockJetStreamManager.streams.add.mockResolvedValue(undefined);
     jest.clearAllMocks();
   });
 
@@ -145,6 +165,136 @@ describe("NatsService", () => {
 
       const result = await service.publish("test-topic", {});
 
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("NATS connection not established");
+    });
+  });
+
+  describe("Stream Setup", () => {
+    it("should create streams when they do not exist", () => {
+      // add() resolves by default (stream doesn't exist), so ensureStream creates
+      expect(
+        natsMocks.mockJetStreamManager.streams.add,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "THE0_BOT_LOGS",
+          subjects: ["the0.bot.logs.>"],
+          retention: "limits",
+          storage: "memory",
+          max_bytes: 128 * 1024 * 1024,
+        }),
+      );
+    });
+
+    it("should update stream when it already exists", async () => {
+      await service.onModuleDestroy();
+      jest.clearAllMocks();
+
+      // Simulate stream already exists for all add() calls
+      natsMocks.mockJetStreamManager.streams.add.mockRejectedValue(
+        Object.assign(new Error("stream name already in use"), {
+          api_error: { err_code: 10058 },
+        }),
+      );
+
+      await service.onModuleInit();
+
+      expect(
+        natsMocks.mockJetStreamManager.streams.update,
+      ).toHaveBeenCalledWith(
+        "THE0_BOT_LOGS",
+        expect.objectContaining({
+          name: "THE0_BOT_LOGS",
+          subjects: ["the0.bot.logs.>"],
+          retention: "limits",
+          storage: "memory",
+          max_bytes: 128 * 1024 * 1024,
+        }),
+      );
+    });
+  });
+
+  describe("Subscribe", () => {
+    it("should return Ok with an unsubscribe function", () => {
+      const result = service.subscribe("test.subject", jest.fn());
+
+      expect(result.success).toBe(true);
+      expect(typeof result.data).toBe("function");
+    });
+
+    it("should invoke callback with decoded message data", () => {
+      const callback = jest.fn();
+      service.subscribe("test.subject", callback);
+
+      // Get the callback that was passed to connection.subscribe
+      const lastCall =
+        natsMocks.mockConnection.subscribe.mock.calls[
+          natsMocks.mockConnection.subscribe.mock.calls.length - 1
+        ];
+      const opts = lastCall[1];
+
+      // Simulate a message arriving
+      const mockMsg = { data: Buffer.from("hello world") };
+      opts.callback(null, mockMsg);
+
+      expect(callback).toHaveBeenCalledWith("hello world");
+    });
+
+    it("should not invoke callback when subscription receives an error", () => {
+      const callback = jest.fn();
+      service.subscribe("test.subject", callback);
+
+      const lastCall =
+        natsMocks.mockConnection.subscribe.mock.calls[
+          natsMocks.mockConnection.subscribe.mock.calls.length - 1
+        ];
+      const opts = lastCall[1];
+
+      // Simulate a subscription error
+      opts.callback(new Error("subscription error"), {} as any);
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it("should not crash when callback throws", () => {
+      const callback = jest.fn().mockImplementation(() => {
+        throw new Error("callback boom");
+      });
+      service.subscribe("test.subject", callback);
+
+      const lastCall =
+        natsMocks.mockConnection.subscribe.mock.calls[
+          natsMocks.mockConnection.subscribe.mock.calls.length - 1
+        ];
+      const opts = lastCall[1];
+
+      const mockMsg = { data: Buffer.from("hello") };
+      // Should not throw
+      expect(() => opts.callback(null, mockMsg)).not.toThrow();
+    });
+
+    it("should unsubscribe when calling the returned function", () => {
+      const result = service.subscribe("test.subject", jest.fn());
+      expect(result.success).toBe(true);
+      result.data!();
+
+      expect(natsMocks.mockSubscription.unsubscribe).toHaveBeenCalled();
+    });
+
+    it("should return Failure when connection.subscribe throws", () => {
+      natsMocks.mockConnection.subscribe.mockImplementationOnce(() => {
+        throw new Error("invalid subject");
+      });
+
+      const result = service.subscribe("bad.subject", jest.fn());
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("invalid subject");
+    });
+
+    it("should return Failure when not connected", async () => {
+      await service.onModuleDestroy();
+
+      const result = service.subscribe("test.subject", jest.fn());
       expect(result.success).toBe(false);
       expect(result.error).toBe("NATS connection not established");
     });
