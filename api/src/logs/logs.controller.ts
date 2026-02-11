@@ -109,6 +109,12 @@ export class LogsController {
       offset: 0,
     });
 
+    if (!historyResult.success && historyResult.error?.includes("access denied")) {
+      res.write(`event: error\ndata: ${JSON.stringify({ message: "Bot not found or access denied" })}\n\n`);
+      res.end();
+      return;
+    }
+
     if (historyResult.success && historyResult.data) {
       res.write(
         `event: history\ndata: ${JSON.stringify(historyResult.data)}\n\n`,
