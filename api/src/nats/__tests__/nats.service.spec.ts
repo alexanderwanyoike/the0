@@ -106,8 +106,8 @@ describe("NatsService", () => {
 
   afterEach(async () => {
     await service.onModuleDestroy();
-    // Restore default mock behavior so rejected info() doesn't leak across tests
-    natsMocks.mockJetStreamManager.streams.info.mockResolvedValue(undefined);
+    // Restore default mock behavior so rejected add() doesn't leak across tests
+    natsMocks.mockJetStreamManager.streams.add.mockResolvedValue(undefined);
     jest.clearAllMocks();
   });
 
@@ -171,12 +171,11 @@ describe("NatsService", () => {
   });
 
   describe("Stream Setup", () => {
-    it("should update existing streams when info() succeeds", () => {
-      // info() resolves by default (stream exists), so ensureStream calls update
+    it("should create streams when they do not exist", () => {
+      // add() resolves by default (stream doesn't exist), so ensureStream creates
       expect(
-        natsMocks.mockJetStreamManager.streams.update,
+        natsMocks.mockJetStreamManager.streams.add,
       ).toHaveBeenCalledWith(
-        "THE0_BOT_LOGS",
         expect.objectContaining({
           name: "THE0_BOT_LOGS",
           subjects: ["the0.bot.logs.>"],
@@ -187,19 +186,23 @@ describe("NatsService", () => {
       );
     });
 
-    it("should create stream when info() throws not-found", async () => {
+    it("should update stream when it already exists", async () => {
+      await service.onModuleDestroy();
       jest.clearAllMocks();
 
-      // Simulate stream not found for all info() calls
-      natsMocks.mockJetStreamManager.streams.info.mockRejectedValue(
-        Object.assign(new Error("stream not found"), {
-          api_error: { err_code: 10059 },
+      // Simulate stream already exists for all add() calls
+      natsMocks.mockJetStreamManager.streams.add.mockRejectedValue(
+        Object.assign(new Error("stream name already in use"), {
+          api_error: { err_code: 10058 },
         }),
       );
 
       await service.onModuleInit();
 
-      expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
+      expect(
+        natsMocks.mockJetStreamManager.streams.update,
+      ).toHaveBeenCalledWith(
+        "THE0_BOT_LOGS",
         expect.objectContaining({
           name: "THE0_BOT_LOGS",
           subjects: ["the0.bot.logs.>"],

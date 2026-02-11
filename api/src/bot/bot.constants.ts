@@ -16,9 +16,11 @@ export const SCHEDULED_BOT_TOPICS = {
 } as const;
 
 // NATS topics for bot log streaming
+const BOT_LOG_PREFIX = "the0.bot.logs";
+
 export const BOT_LOG_TOPICS = {
-  PREFIX: "the0.bot.logs",
+  PREFIX: BOT_LOG_PREFIX,
   forBot(botId: string) {
-    return `${this.PREFIX}.${botId}`;
+    return `${BOT_LOG_PREFIX}.${botId}`;
   },
 } as const;
