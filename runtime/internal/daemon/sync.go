@@ -164,11 +164,6 @@ func (r *SyncRunner) run() {
 				r.logger.Info("Failed to close logs syncer", "error", err.Error())
 			}
 		}
-		if logPublisher != nil {
-			if err := logPublisher.Close(); err != nil {
-				r.logger.Info("Failed to close log publisher", "error", err.Error())
-			}
-		}
 	}
 
 	// Create file watcher
@@ -329,11 +324,6 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		if logsSyncer != nil {
 			if err := logsSyncer.Close(); err != nil {
 				logger.Info("Failed to close logs syncer", "error", err.Error())
-			}
-		}
-		if logPublisher != nil {
-			if err := logPublisher.Close(); err != nil {
-				logger.Info("Failed to close log publisher", "error", err.Error())
 			}
 		}
 	}
