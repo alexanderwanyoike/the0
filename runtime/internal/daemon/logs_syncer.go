@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -77,18 +78,19 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	}
 
 	// Drain all available content in bounded chunks
-	const maxChunkSize = 1024 * 1024
-	synced := false
+	const maxChunkSize int64 = 1024 * 1024
+	buf := make([]byte, maxChunkSize)
+	totalBytes := 0
+	chunks := 0
 
 	for l.lastOffset < currentSize {
 		delta := currentSize - l.lastOffset
-		readSize := int(delta)
 		if delta > maxChunkSize {
-			readSize = maxChunkSize
+			delta = maxChunkSize
 		}
+		readSize := int(delta)
 
-		buf := make([]byte, readSize)
-		n, err := io.ReadFull(file, buf)
+		n, err := io.ReadFull(file, buf[:readSize])
 		if err == io.ErrUnexpectedEOF {
 			err = nil
 		}
@@ -100,8 +102,10 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 			break
 		}
 
+		chunk := string(buf[:n])
+
 		syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, string(buf[:n])); err != nil {
+		if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, chunk); err != nil {
 			cancel()
 			l.logger.Info("Failed to upload logs", "error", err.Error())
 			break
@@ -109,31 +113,31 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		cancel()
 
 		if l.natsPublisher != nil {
-			if err := l.natsPublisher.Publish(l.botID, string(buf[:n])); err != nil {
+			if err := l.natsPublisher.Publish(l.botID, chunk); err != nil {
 				l.logger.Info("Failed to publish logs to NATS", "error", err.Error())
 			}
 		}
 
 		l.lastOffset += int64(n)
-		l.logger.Info("Logs synced successfully", "bot_id", l.botID, "bytes", n)
-		synced = true
+		totalBytes += n
+		chunks++
 	}
 
-	return synced
+	if totalBytes > 0 {
+		l.logger.Info("Logs synced successfully", "bot_id", l.botID, "bytes", totalBytes, "chunks", chunks)
+		return true
+	}
+	return false
 }
 
 // Close cleans up all owned resources (uploader and publisher).
 func (l *LogsSyncer) Close() error {
-	var firstErr error
+	var uploaderErr, publisherErr error
 	if l.logUploader != nil {
-		if err := l.logUploader.Close(); err != nil {
-			firstErr = err
-		}
+		uploaderErr = l.logUploader.Close()
 	}
 	if l.natsPublisher != nil {
-		if err := l.natsPublisher.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
+		publisherErr = l.natsPublisher.Close()
 	}
-	return firstErr
+	return errors.Join(uploaderErr, publisherErr)
 }
