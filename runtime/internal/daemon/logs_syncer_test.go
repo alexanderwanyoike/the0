@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -208,21 +209,28 @@ func TestLogsSyncer_Sync_UploadError(t *testing.T) {
 
 func TestLogsSyncer_Close(t *testing.T) {
 	mockUploader := &MockMinIOLogger{}
-	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, nil, &util.DefaultLogger{})
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, mockPublisher, &util.DefaultLogger{})
 
 	err := syncer.Close()
 	require.NoError(t, err)
 	assert.True(t, mockUploader.CloseCalled)
+	assert.True(t, mockPublisher.CloseCalled)
 }
 
-func TestLogsSyncer_Close_WithError(t *testing.T) {
+func TestLogsSyncer_Close_WithBothErrors(t *testing.T) {
 	mockUploader := &MockMinIOLogger{
-		CloseError: assert.AnError,
+		CloseError: fmt.Errorf("uploader error"),
 	}
-	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, nil, &util.DefaultLogger{})
+	mockPublisher := &MockLogPublisher{
+		CloseError: fmt.Errorf("publisher error"),
+	}
+	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, mockPublisher, &util.DefaultLogger{})
 
 	err := syncer.Close()
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "uploader error")
+	assert.Contains(t, err.Error(), "publisher error")
 }
 
 func TestLogsSyncer_Sync_WithNATSPublisher(t *testing.T) {

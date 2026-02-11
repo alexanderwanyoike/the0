@@ -33,3 +33,24 @@ func TestNATSPublisher_ImplementsLogPublisher(t *testing.T) {
 	// Compile-time check that NATSPublisher satisfies LogPublisher
 	var _ LogPublisher = (*NATSPublisher)(nil)
 }
+
+func TestSanitizeBotID(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"simple-bot", "simple-bot"},
+		{"bot_123", "bot_123"},
+		{"bot.with.dots", "bot_with_dots"},
+		{"bot*wildcard", "bot_wildcard"},
+		{"bot>greater", "bot_greater"},
+		{"bot with spaces", "bot_with_spaces"},
+		{"", "unknown"},
+		{"CamelCase123", "CamelCase123"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, sanitizeBotID(tt.input))
+		})
+	}
+}
