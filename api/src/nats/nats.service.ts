@@ -25,7 +25,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     await this.connect();
-    await this.setupStreams();
+    const result = await this.setupStreams();
+    if (!result.success) {
+      throw new Error(result.error!);
+    }
   }
 
   async onModuleDestroy() {
@@ -85,6 +88,23 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async upsertStream(
+    name: string,
+    config: Partial<StreamConfig> & Pick<StreamConfig, "name">,
+    exists: boolean,
+  ): Promise<Result<void, string>> {
+    try {
+      if (exists) {
+        await this.jetStreamManager!.streams.update(name, config);
+      } else {
+        await this.jetStreamManager!.streams.add(config);
+      }
+      return Ok(undefined);
+    } catch (err: any) {
+      return Failure(err.message ?? `Failed to ${exists ? "update" : "create"} stream ${name}`);
+    }
+  }
+
   private async ensureStream(
     config: Partial<StreamConfig> & Pick<StreamConfig, "name">,
   ): Promise<Result<void, string>> {
@@ -93,21 +113,12 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       return Failure(existsResult.error!);
     }
 
-    try {
-      if (existsResult.data) {
-        await this.jetStreamManager!.streams.update(config.name, config);
-      } else {
-        await this.jetStreamManager!.streams.add(config);
-      }
-      return Ok(undefined);
-    } catch (err: any) {
-      return Failure(err.message ?? "Failed to ensure stream");
-    }
+    return this.upsertStream(config.name, config, existsResult.data!);
   }
 
-  private async setupStreams(): Promise<void> {
+  private async setupStreams(): Promise<Result<void, string>> {
     if (!this.jetStreamManager) {
-      throw new Error("NATS JetStream manager not initialized");
+      return Failure("NATS JetStream manager not initialized");
     }
 
     const eventsResult = await this.ensureStream({
@@ -127,7 +138,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
     if (!eventsResult.success) {
       this.logger.error({ error: eventsResult.error }, "Failed to setup THE0_EVENTS stream");
-      throw new Error(eventsResult.error!);
+      return eventsResult;
     }
 
     const logsResult = await this.ensureStream({
@@ -141,10 +152,11 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
     if (!logsResult.success) {
       this.logger.error({ error: logsResult.error }, "Failed to setup THE0_BOT_LOGS stream");
-      throw new Error(logsResult.error!);
+      return logsResult;
     }
 
     this.logger.info("NATS JetStream initialized");
+    return Ok(undefined);
   }
 
   // Generic publish method - business logic handled by callers
