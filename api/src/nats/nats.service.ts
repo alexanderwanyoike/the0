@@ -73,54 +73,33 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private isStreamNotFound(err: any): boolean {
+  private isStreamAlreadyExists(err: any): boolean {
     return (
-      err?.api_error?.err_code === 10059 ||
-      err?.code === "404" ||
-      err?.message?.includes("stream not found")
+      err?.api_error?.err_code === 10058 ||
+      err?.message?.includes("stream name already in use")
     );
-  }
-
-  private async streamExists(
-    name: string,
-  ): Promise<Result<boolean, string>> {
-    try {
-      await this.jetStreamManager!.streams.info(name);
-      return Ok(true);
-    } catch (err: any) {
-      if (this.isStreamNotFound(err)) {
-        return Ok(false);
-      }
-      return Failure(err.message ?? "Failed to check stream existence");
-    }
-  }
-
-  private async upsertStream(
-    name: string,
-    config: StreamSetupConfig,
-    exists: boolean,
-  ): Promise<Result<void, string>> {
-    try {
-      if (exists) {
-        await this.jetStreamManager!.streams.update(name, config);
-      } else {
-        await this.jetStreamManager!.streams.add(config);
-      }
-      return Ok(undefined);
-    } catch (err: any) {
-      return Failure(err.message ?? `Failed to ${exists ? "update" : "create"} stream ${name}`);
-    }
   }
 
   private async ensureStream(
     config: StreamSetupConfig,
   ): Promise<Result<void, string>> {
-    const existsResult = await this.streamExists(config.name);
-    if (!existsResult.success) {
-      return Failure(existsResult.error!);
+    // Add-first: avoids TOCTOU race when multiple instances start concurrently
+    try {
+      await this.jetStreamManager!.streams.add(config);
+      return Ok(undefined);
+    } catch (err: any) {
+      if (!this.isStreamAlreadyExists(err)) {
+        return Failure(err.message ?? `Failed to create stream ${config.name}`);
+      }
     }
 
-    return this.upsertStream(config.name, config, existsResult.data!);
+    // Stream already exists — update config
+    try {
+      await this.jetStreamManager!.streams.update(config.name, config);
+      return Ok(undefined);
+    } catch (err: any) {
+      return Failure(err.message ?? `Failed to update stream ${config.name}`);
+    }
   }
 
   private async setupStreams(): Promise<Result<void, string>> {
