@@ -52,12 +52,26 @@ func redactNATSURL(rawURL string) string {
 	return strings.Join(parts, ",")
 }
 
+// sanitizeBotID replaces NATS-unsafe characters (., *, >, whitespace) with underscores.
+func sanitizeBotID(botID string) string {
+	if botID == "" {
+		return "unknown"
+	}
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, botID)
+}
+
 // Publish sends log content to the bot's NATS log subject.
 func (p *NATSPublisher) Publish(botID string, content string) error {
 	if p.conn == nil {
 		return fmt.Errorf("NATS connection is closed")
 	}
-	subject := fmt.Sprintf("the0.bot.logs.%s", botID)
+	subject := fmt.Sprintf("the0.bot.logs.%s", sanitizeBotID(botID))
 	return p.conn.Publish(subject, []byte(content))
 }
 
