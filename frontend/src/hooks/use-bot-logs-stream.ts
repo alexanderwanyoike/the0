@@ -110,7 +110,7 @@ export const useBotLogsStream = ({
         const searchParams = new URLSearchParams();
         if (queryParams.date) {
           searchParams.set("date", queryParams.date);
-        } else {
+        } else if (!queryParams.dateRange) {
           searchParams.set(
             "date",
             new Date().toISOString().slice(0, 10).replace(/-/g, ""),
@@ -118,9 +118,9 @@ export const useBotLogsStream = ({
         }
         if (queryParams.dateRange)
           searchParams.set("dateRange", queryParams.dateRange);
-        if (queryParams.limit)
+        if (queryParams.limit != null)
           searchParams.set("limit", queryParams.limit.toString());
-        if (queryParams.offset)
+        if (queryParams.offset != null)
           searchParams.set("offset", queryParams.offset.toString());
 
         const response = await authFetch(
@@ -138,6 +138,7 @@ export const useBotLogsStream = ({
         setLogs(expandedLogs);
         setHasMore(result.hasMore);
         setTotal(result.total);
+        setLastUpdate(new Date());
         initialLoadCompleteRef.current = true;
       } catch (err: any) {
         if (err.name === "AbortError") return;
@@ -186,6 +187,12 @@ export const useBotLogsStream = ({
       setError(null);
       reconnectAttemptsRef.current = 0;
 
+      // Clear fallback timer since SSE connected
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+
       // Stop polling when SSE is active
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -227,10 +234,16 @@ export const useBotLogsStream = ({
       setConnected(false);
 
       if (!initialLoadCompleteRef.current) {
-        // Never loaded data -- fall back to REST
+        // Never loaded data -- fall back to REST polling
         fetchLogsRef.current();
-      } else {
+        if (!pollingIntervalRef.current) {
+          pollingIntervalRef.current = setInterval(() => {
+            fetchLogsRef.current();
+          }, refreshInterval);
+        }
+      } else if (!isUsingDateFilterRef.current) {
         // SSE dropped after initial load -- try to reconnect with backoff
+        // Only reconnect when not using date filter
         const delay = Math.min(
           1000 * Math.pow(2, reconnectAttemptsRef.current),
           30000,
@@ -243,7 +256,7 @@ export const useBotLogsStream = ({
     };
 
     eventSourceRef.current = es;
-  }, [user, botId]);
+  }, [user, botId, refreshInterval]);
 
   // ---- Cleanup helper ----
 
@@ -287,6 +300,11 @@ export const useBotLogsStream = ({
         clearTimeout(fallbackTimeoutRef.current);
         fallbackTimeoutRef.current = null;
       }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      cleanupSSE();
     };
   }, [user, botId, connectSSE, cleanupSSE, refreshInterval]);
 
@@ -332,6 +350,10 @@ export const useBotLogsStream = ({
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
+        if (fallbackTimeoutRef.current) {
+          clearTimeout(fallbackTimeoutRef.current);
+          fallbackTimeoutRef.current = null;
+        }
       }
 
       const updatedQuery: LogsQuery = {
@@ -359,6 +381,10 @@ export const useBotLogsStream = ({
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
+      }
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
       }
 
       const updatedQuery: LogsQuery = {
