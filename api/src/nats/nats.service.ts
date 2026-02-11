@@ -63,25 +63,45 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private isStreamNotFound(err: any): boolean {
+    return (
+      err?.api_error?.err_code === 10059 ||
+      err?.code === "404" ||
+      err?.message?.includes("stream not found")
+    );
+  }
+
+  private async streamExists(
+    name: string,
+  ): Promise<Result<boolean, string>> {
+    try {
+      await this.jetStreamManager!.streams.info(name);
+      return Ok(true);
+    } catch (err: any) {
+      if (this.isStreamNotFound(err)) {
+        return Ok(false);
+      }
+      return Failure(err.message ?? "Failed to check stream existence");
+    }
+  }
+
   private async ensureStream(
     config: Partial<StreamConfig> & Pick<StreamConfig, "name">,
-  ): Promise<void> {
+  ): Promise<Result<void, string>> {
+    const existsResult = await this.streamExists(config.name);
+    if (!existsResult.success) {
+      return Failure(existsResult.error!);
+    }
+
     try {
-      // Check if stream exists
-      await this.jetStreamManager!.streams.info(config.name);
-      // Stream exists — update config
-      await this.jetStreamManager!.streams.update(config.name, config);
-    } catch (err: any) {
-      // Stream not found — create it
-      const isNotFound =
-        err?.api_error?.err_code === 10059 ||
-        err?.code === "404" ||
-        err?.message?.includes("stream not found");
-      if (isNotFound) {
-        await this.jetStreamManager!.streams.add(config);
+      if (existsResult.data) {
+        await this.jetStreamManager!.streams.update(config.name, config);
       } else {
-        throw err;
+        await this.jetStreamManager!.streams.add(config);
       }
+      return Ok(undefined);
+    } catch (err: any) {
+      return Failure(err.message ?? "Failed to ensure stream");
     }
   }
 
@@ -90,36 +110,41 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       throw new Error("NATS JetStream manager not initialized");
     }
 
-    try {
-      await this.ensureStream({
-        name: "THE0_EVENTS",
-        subjects: [
-          "the0.bot.created",
-          "the0.bot.updated",
-          "the0.bot.deleted",
-          "the0.bot-schedule.created",
-          "the0.bot-schedule.updated",
-          "the0.bot-schedule.deleted",
-        ],
-        retention: RetentionPolicy.Limits,
-        max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
-        storage: StorageType.File,
-      });
+    const eventsResult = await this.ensureStream({
+      name: "THE0_EVENTS",
+      subjects: [
+        "the0.bot.created",
+        "the0.bot.updated",
+        "the0.bot.deleted",
+        "the0.bot-schedule.created",
+        "the0.bot-schedule.updated",
+        "the0.bot-schedule.deleted",
+      ],
+      retention: RetentionPolicy.Limits,
+      max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
+      storage: StorageType.File,
+    });
 
-      await this.ensureStream({
-        name: "THE0_BOT_LOGS",
-        subjects: ["the0.bot.logs.>"],
-        retention: RetentionPolicy.Limits,
-        max_age: 60 * 60 * 1000 * 1000000, // 1 hour in nanoseconds
-        max_bytes: 128 * 1024 * 1024, // 128MB
-        storage: StorageType.Memory,
-      });
-
-      this.logger.info("NATS JetStream initialized");
-    } catch (error: any) {
-      this.logger.error({ err: error }, "Failed to setup NATS streams");
-      throw error;
+    if (!eventsResult.success) {
+      this.logger.error({ error: eventsResult.error }, "Failed to setup THE0_EVENTS stream");
+      throw new Error(eventsResult.error!);
     }
+
+    const logsResult = await this.ensureStream({
+      name: "THE0_BOT_LOGS",
+      subjects: ["the0.bot.logs.>"],
+      retention: RetentionPolicy.Limits,
+      max_age: 60 * 60 * 1000 * 1000000, // 1 hour in nanoseconds
+      max_bytes: 128 * 1024 * 1024, // 128MB
+      storage: StorageType.Memory,
+    });
+
+    if (!logsResult.success) {
+      this.logger.error({ error: logsResult.error }, "Failed to setup THE0_BOT_LOGS stream");
+      throw new Error(logsResult.error!);
+    }
+
+    this.logger.info("NATS JetStream initialized");
   }
 
   // Generic publish method - business logic handled by callers
@@ -149,31 +174,42 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       return Failure("NATS connection not established");
     }
 
+    const sub = this.createSubscription(subject, callback);
+    if (!sub.success) {
+      this.logger.error({ error: sub.error, subject }, "Failed to create NATS subscription");
+    }
+    return sub;
+  }
+
+  private createSubscription(
+    subject: string,
+    callback: (msg: string) => void,
+  ): Result<() => void, string> {
     try {
-      const sub = this.connection.subscribe(subject, {
+      const sub = this.connection!.subscribe(subject, {
         callback: (err, msg) => {
           if (err) {
             this.logger.error({ err, subject }, "NATS subscription error");
             return;
           }
-          try {
-            callback(this.sc.decode(msg.data));
-          } catch (cbErr) {
-            this.logger.error(
-              { err: cbErr, subject },
-              "Error in subscription callback",
-            );
-          }
+          this.invokeCallback(subject, callback, msg.data);
         },
       });
-
       return Ok(() => sub.unsubscribe());
     } catch (error: any) {
-      this.logger.error(
-        { err: error, subject },
-        "Failed to create NATS subscription",
-      );
       return Failure(error.message);
+    }
+  }
+
+  private invokeCallback(
+    subject: string,
+    callback: (msg: string) => void,
+    data: Uint8Array,
+  ): void {
+    try {
+      callback(this.sc.decode(data));
+    } catch (err) {
+      this.logger.error({ err, subject }, "Error in subscription callback");
     }
   }
 
