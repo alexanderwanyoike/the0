@@ -78,7 +78,7 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	}
 
 	// Drain all available content in bounded chunks
-	const maxChunkSize int64 = 1024 * 1024
+	const maxChunkSize = 1024 * 1024
 	buf := make([]byte, maxChunkSize)
 	totalBytes := 0
 	chunks := 0
