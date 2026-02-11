@@ -140,8 +140,6 @@ func (r *SyncRunner) run() {
 	var logsSyncer *LogsSyncer
 	var logPublisher LogPublisher
 	if r.opts.LogsPath != "" {
-		logPublisher = newLogPublisherFromEnv(r.logger)
-
 		logUploader, err := miniologger.NewMinIOLogger(r.ctx, miniologger.MinioLoggerOptions{
 			Endpoint:   cfg.Endpoint,
 			AccessKey:  cfg.AccessKey,
@@ -152,6 +150,7 @@ func (r *SyncRunner) run() {
 		if err != nil {
 			r.logger.Info("Failed to create log uploader", "error", err.Error())
 		} else {
+			logPublisher = newLogPublisherFromEnv(r.logger)
 			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, logPublisher, r.logger)
 			if logsSyncer != nil {
 				r.syncers = append(r.syncers, logsSyncer)
@@ -294,8 +293,6 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	var logsSyncer *LogsSyncer
 	var logPublisher LogPublisher
 	if opts.LogsPath != "" {
-		logPublisher = newLogPublisherFromEnv(logger)
-
 		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
 			Endpoint:   cfg.Endpoint,
 			AccessKey:  cfg.AccessKey,
@@ -306,6 +303,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		if err != nil {
 			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
 		} else {
+			logPublisher = newLogPublisherFromEnv(logger)
 			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, logPublisher, logger)
 			if logsSyncer != nil {
 				syncers = append(syncers, logsSyncer)
