@@ -78,8 +78,14 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		return false
 	}
 
-	// Read new content
-	readSize := int(currentSize - l.lastOffset)
+	// Read new content (cap at 1MB per chunk to avoid huge allocations)
+	const maxChunkSize = 1024 * 1024
+	delta := currentSize - l.lastOffset
+	readSize := int(delta)
+	if delta > maxChunkSize {
+		readSize = maxChunkSize
+	}
+
 	newContent := make([]byte, readSize)
 	n, err := io.ReadFull(file, newContent)
 	if err == io.ErrUnexpectedEOF {
@@ -110,7 +116,8 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		}
 	}
 
-	l.lastOffset = currentSize
+	// Advance by bytes actually read, not stat size (handles partial reads)
+	l.lastOffset += int64(n)
 	l.logger.Info("Logs synced successfully", "bot_id", l.botID, "bytes", n)
 	return true
 }
