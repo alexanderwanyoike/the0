@@ -138,6 +138,7 @@ func (r *SyncRunner) run() {
 
 	// Logs syncer
 	var logsSyncer *LogsSyncer
+	var logPublisher LogPublisher
 	if r.opts.LogsPath != "" {
 		logUploader, err := miniologger.NewMinIOLogger(r.ctx, miniologger.MinioLoggerOptions{
 			Endpoint:   cfg.Endpoint,
@@ -149,7 +150,8 @@ func (r *SyncRunner) run() {
 		if err != nil {
 			r.logger.Info("Failed to create log uploader", "error", err.Error())
 		} else {
-			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, r.logger)
+			logPublisher = newLogPublisherFromEnv(r.logger)
+			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, logPublisher, r.logger)
 			if logsSyncer != nil {
 				r.syncers = append(r.syncers, logsSyncer)
 			}
@@ -158,7 +160,9 @@ func (r *SyncRunner) run() {
 
 	r.cleanup = func() {
 		if logsSyncer != nil {
-			logsSyncer.Close()
+			if err := logsSyncer.Close(); err != nil {
+				r.logger.Info("Failed to close logs syncer", "error", err.Error())
+			}
 		}
 	}
 
@@ -209,6 +213,21 @@ func (r *SyncRunner) run() {
 			return
 		}
 	}
+}
+
+// newLogPublisherFromEnv creates a LogPublisher from NATS_URL env var.
+// Returns nil if NATS_URL is not set or connection fails.
+func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		return nil
+	}
+	np, err := NewNATSPublisher(natsURL, logger)
+	if err != nil {
+		logger.Info("Failed to create NATS publisher, continuing without", "error", err.Error())
+		return nil
+	}
+	return np
 }
 
 // Sync uses fsnotify to watch for file changes and immediately syncs to MinIO.
@@ -267,6 +286,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 
 	// Logs syncer (optional - may fail if MinIO bucket doesn't exist)
 	var logsSyncer *LogsSyncer
+	var logPublisher LogPublisher
 	if opts.LogsPath != "" {
 		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
 			Endpoint:   cfg.Endpoint,
@@ -278,7 +298,8 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		if err != nil {
 			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
 		} else {
-			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, logger)
+			logPublisher = newLogPublisherFromEnv(logger)
+			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, logPublisher, logger)
 			if logsSyncer != nil {
 				syncers = append(syncers, logsSyncer)
 				logger.Info("Logs syncer initialized", "path", opts.LogsPath)
@@ -301,7 +322,9 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	// Cleanup function
 	cleanup := func() {
 		if logsSyncer != nil {
-			logsSyncer.Close()
+			if err := logsSyncer.Close(); err != nil {
+				logger.Info("Failed to close logs syncer", "error", err.Error())
+			}
 		}
 	}
 
