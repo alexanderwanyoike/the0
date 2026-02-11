@@ -106,6 +106,8 @@ describe("NatsService", () => {
 
   afterEach(async () => {
     await service.onModuleDestroy();
+    // Restore default mock behavior so rejected info() doesn't leak across tests
+    natsMocks.mockJetStreamManager.streams.info.mockResolvedValue(undefined);
     jest.clearAllMocks();
   });
 
@@ -206,9 +208,6 @@ describe("NatsService", () => {
           max_bytes: 128 * 1024 * 1024,
         }),
       );
-
-      // Restore default mock behavior
-      natsMocks.mockJetStreamManager.streams.info.mockResolvedValue(undefined);
     });
   });
 
