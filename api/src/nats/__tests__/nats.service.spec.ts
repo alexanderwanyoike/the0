@@ -278,6 +278,16 @@ describe("NatsService", () => {
       expect(natsMocks.mockSubscription.unsubscribe).toHaveBeenCalled();
     });
 
+    it("should return Failure when connection.subscribe throws", () => {
+      natsMocks.mockConnection.subscribe.mockImplementationOnce(() => {
+        throw new Error("invalid subject");
+      });
+
+      const result = service.subscribe("bad.subject", jest.fn());
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("invalid subject");
+    });
+
     it("should return Failure when not connected", async () => {
       await service.onModuleDestroy();
 
