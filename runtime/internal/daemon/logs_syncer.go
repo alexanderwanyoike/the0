@@ -84,6 +84,9 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	chunks := 0
 
 	for l.lastOffset < currentSize {
+		if ctx.Err() != nil {
+			break
+		}
 		delta := currentSize - l.lastOffset
 		if delta > maxChunkSize {
 			delta = maxChunkSize
