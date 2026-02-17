@@ -57,6 +57,7 @@ describe("LogsController", () => {
         }),
       };
       mockRes = {
+        status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
@@ -158,6 +159,22 @@ describe("LogsController", () => {
       expect(mockNatsService.subscribe).not.toHaveBeenCalled();
     });
 
+    it("should terminate SSE when bot is not found", async () => {
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Failure("Bot not found"),
+      );
+
+      await controller.streamLogs("bot-missing", mockReq, mockRes);
+
+      const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
+        call[0].startsWith("event: error"),
+      );
+      expect(errorWrite).toBeDefined();
+      expect(errorWrite[0]).toContain("not found");
+      expect(mockRes.end).toHaveBeenCalled();
+      expect(mockNatsService.subscribe).not.toHaveBeenCalled();
+    });
+
     it("should send warning event when getLogs fails for non-access reasons", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
         Failure("Failed to fetch logs: MinIO unavailable"),
@@ -182,6 +199,7 @@ describe("LogsController", () => {
         }),
       };
       const mockRes2: any = {
+        status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
@@ -214,13 +232,15 @@ describe("LogsController", () => {
       if (closeHandler2) closeHandler2();
     });
 
-    it("should reject botId with NATS wildcard characters", async () => {
+    it("should reject botId with NATS wildcard characters with 400 status", async () => {
       for (const unsafeId of ["bot.with.dots", "bot*wildcard", "bot>arrow"]) {
         mockRes.write.mockClear();
         mockRes.end.mockClear();
+        mockRes.status.mockClear();
 
         await controller.streamLogs(unsafeId, mockReq, mockRes);
 
+        expect(mockRes.status).toHaveBeenCalledWith(400);
         const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
           call[0].startsWith("event: error"),
         );
@@ -257,6 +277,7 @@ describe("LogsController", () => {
       (mockNatsService.subscribe as jest.Mock).mockReturnValue(Ok(mockUnsubscribe));
       const mockReq2: any = { on: jest.fn() };
       const mockRes2: any = {
+        status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
