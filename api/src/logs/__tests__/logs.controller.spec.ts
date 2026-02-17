@@ -203,6 +203,7 @@ describe("LogsController", () => {
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
+        end: jest.fn(),
         writableEnded: false,
       };
 
@@ -254,14 +255,18 @@ describe("LogsController", () => {
     });
 
     it("should handle concurrent subscriptions for same botId without duplicate NATS subs", async () => {
+      let closeHandler2: (() => void) | null = null;
       const mockReq2: any = {
-        on: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === "close") closeHandler2 = handler;
+        }),
       };
       const mockRes2: any = {
         status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
         write: jest.fn(),
+        end: jest.fn(),
         writableEnded: false,
       };
 
@@ -278,6 +283,9 @@ describe("LogsController", () => {
         (call: string[]) => call[0] === "the0.bot.logs.bot-concurrent",
       );
       expect(subscribeCalls.length).toBe(1);
+
+      // Cleanup second client to clear keepalive interval
+      if (closeHandler2) closeHandler2();
     });
 
     it("should handle NATS subscribe failure gracefully", async () => {
@@ -302,7 +310,12 @@ describe("LogsController", () => {
 
       // Dead subscription should NOT be stored — next client retries
       (mockNatsService.subscribe as jest.Mock).mockReturnValue(Ok(mockUnsubscribe));
-      const mockReq2: any = { on: jest.fn() };
+      let closeHandler2: (() => void) | null = null;
+      const mockReq2: any = {
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === "close") closeHandler2 = handler;
+        }),
+      };
       const mockRes2: any = {
         status: jest.fn(),
         setHeader: jest.fn(),
@@ -315,6 +328,9 @@ describe("LogsController", () => {
 
       // Should retry subscribe since the dead one wasn't stored
       expect(mockNatsService.subscribe).toHaveBeenCalledTimes(2);
+
+      // Cleanup second client to clear keepalive interval
+      if (closeHandler2) closeHandler2();
     });
   });
 });
