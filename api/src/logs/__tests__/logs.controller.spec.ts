@@ -253,6 +253,33 @@ describe("LogsController", () => {
       expect(mockNatsService.subscribe).not.toHaveBeenCalled();
     });
 
+    it("should handle concurrent subscriptions for same botId without duplicate NATS subs", async () => {
+      const mockReq2: any = {
+        on: jest.fn(),
+      };
+      const mockRes2: any = {
+        status: jest.fn(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        writableEnded: false,
+      };
+
+      // Fire both requests concurrently — exercises the pendingSubscriptions lock
+      await Promise.all([
+        controller.streamLogs("bot-concurrent", mockReq, mockRes),
+        controller.streamLogs("bot-concurrent", mockReq2, mockRes2),
+      ]);
+
+      // Should only create one NATS subscription despite concurrent requests
+      const subscribeCalls = (
+        mockNatsService.subscribe as jest.Mock
+      ).mock.calls.filter(
+        (call: string[]) => call[0] === "the0.bot.logs.bot-concurrent",
+      );
+      expect(subscribeCalls.length).toBe(1);
+    });
+
     it("should handle NATS subscribe failure gracefully", async () => {
       (mockNatsService.subscribe as jest.Mock).mockReturnValue(
         Failure("NATS connection failed"),
