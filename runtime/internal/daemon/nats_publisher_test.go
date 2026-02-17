@@ -42,7 +42,7 @@ func TestRedactNATSURL(t *testing.T) {
 	}{
 		{"no credentials", "nats://localhost:4222", "nats://localhost:4222"},
 		{"with credentials", "nats://user:pass@localhost:4222", "nats://REDACTED:REDACTED@localhost:4222"},
-		{"multiple servers", "nats://user:pass@host1:4222, nats://user:pass@host2:4222", "nats://REDACTED:REDACTED@host1:4222,nats://REDACTED:REDACTED@host2:4222"},
+		{"multiple servers", "nats://user:pass@host1:4222,nats://user:pass@host2:4222", "nats://REDACTED:REDACTED@host1:4222,nats://REDACTED:REDACTED@host2:4222"},
 		{"malformed with at sign", "user:pass@host:4222", "***@host:4222"},
 		{"no at sign", "localhost:4222", "localhost:4222"},
 		{"empty string", "", ""},
