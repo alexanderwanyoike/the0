@@ -119,6 +119,10 @@ export class LogsController {
       res.write(
         `event: history\ndata: ${JSON.stringify(historyResult.data)}\n\n`,
       );
+    } else if (!historyResult.success) {
+      res.write(
+        `event: warning\ndata: ${JSON.stringify({ message: "History unavailable" })}\n\n`,
+      );
     }
 
     // Subscribe to NATS or join existing fan-out
@@ -147,18 +151,28 @@ export class LogsController {
 
       if (!subscribeResult.success) {
         this.logger.error({ botId, error: subscribeResult.error }, "Failed to subscribe to NATS for bot logs");
+        res.write(`event: warning\ndata: ${JSON.stringify({ message: "Live streaming unavailable" })}\n\n`);
+        // Don't store — next client will retry the subscription
+      } else {
+        const unsubscribe = subscribeResult.data ?? (() => {});
+        subscription = { unsubscribe, clients };
+        activeSubscriptions.set(botId, subscription);
       }
-
-      const unsubscribe = subscribeResult.data ?? (() => {});
-      subscription = { unsubscribe, clients };
-      activeSubscriptions.set(botId, subscription);
     }
 
-    subscription.clients.add(res);
+    if (subscription) {
+      subscription.clients.add(res);
+    }
 
     // Keepalive every 15 seconds
     const keepalive = setInterval(() => {
-      res.write(":\n\n");
+      try {
+        if (!res.writableEnded) {
+          res.write(":\n\n");
+        }
+      } catch {
+        clearInterval(keepalive);
+      }
     }, 15000);
 
     // Cleanup on disconnect
