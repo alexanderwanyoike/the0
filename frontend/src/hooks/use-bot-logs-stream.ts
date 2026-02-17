@@ -263,6 +263,10 @@ export const useBotLogsStream = ({
 
     es.onerror = () => {
       setConnected(false);
+      // Close the errored EventSource immediately to free the browser
+      // connection slot during the backoff delay before reconnecting.
+      es.close();
+      eventSourceRef.current = null;
 
       if (!initialLoadCompleteRef.current) {
         // Never loaded data -- fall back to REST polling
