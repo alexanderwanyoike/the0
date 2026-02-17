@@ -405,7 +405,7 @@ export const useBotLogsStream = ({
         connectSSE();
 
         fallbackTimeoutRef.current = setTimeout(() => {
-          if (!connected) {
+          if (!eventSourceRef.current) {
             // SSE didn't reconnect within 4s -- start polling as fallback
             if (!pollingIntervalRef.current) {
               pollingIntervalRef.current = setInterval(() => {
@@ -416,7 +416,7 @@ export const useBotLogsStream = ({
         }, 4000);
       }
     },
-    [query, cleanupSSE, connectSSE, connected, refreshInterval],
+    [query, cleanupSSE, connectSSE, refreshInterval],
   );
 
   const setDateRangeFilter = useCallback(
