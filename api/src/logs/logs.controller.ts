@@ -149,6 +149,11 @@ export class LogsController {
       const pending = pendingSubscriptions.get(botId);
       if (pending) {
         subscription = (await pending) ?? undefined;
+        if (!subscription) {
+          res.write(
+            `event: warning\ndata: ${JSON.stringify({ message: "Live streaming unavailable" })}\n\n`,
+          );
+        }
       } else {
         const createPromise = this.createSubscription(botId, res);
         pendingSubscriptions.set(botId, createPromise);
