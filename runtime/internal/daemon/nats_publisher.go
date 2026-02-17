@@ -37,19 +37,28 @@ func NewNATSPublisher(natsURL string, logger util.Logger) (*NATSPublisher, error
 }
 
 // redactNATSURL redacts credentials from a NATS URL string,
-// handling comma-separated server lists.
+// handling comma-separated server lists and malformed URLs.
 func redactNATSURL(rawURL string) string {
 	parts := strings.Split(rawURL, ",")
 	for i, part := range parts {
 		part = strings.TrimSpace(part)
 		if u, err := url.Parse(part); err == nil && u.User != nil {
-			u.User = url.UserPassword("***", "***")
+			u.User = url.UserPassword("REDACTED", "REDACTED")
 			parts[i] = u.String()
 		} else {
-			parts[i] = part
+			parts[i] = redactUserInfo(part)
 		}
 	}
 	return strings.Join(parts, ",")
+}
+
+// redactUserInfo redacts potential credentials in URL-like strings
+// when standard URL parsing fails (e.g., malformed "user:pass@host").
+func redactUserInfo(s string) string {
+	if at := strings.Index(s, "@"); at != -1 {
+		return "***@" + s[at+1:]
+	}
+	return s
 }
 
 // sanitizeBotID replaces NATS-unsafe characters (., *, >, whitespace) with underscores.
