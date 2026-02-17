@@ -545,4 +545,159 @@ describe("useBotLogsStream", () => {
     const calledUrl = mockAuthFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("dateRange=20240101-20240115");
   });
+
+  it("should not create EventSource when botId is empty", () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "" }),
+    );
+
+    expect(MockEventSource.instances.length).toBe(0);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.logs).toEqual([]);
+  });
+
+  it("should not create EventSource when user is null", () => {
+    mockUseAuth.mockReturnValue({
+      user: null,
+    } as any);
+
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    expect(MockEventSource.instances.length).toBe(0);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("should handle REST fetch error with toast notification", async () => {
+    // Make SSE auth fail so we go through the 4s fallback path
+    mockValidateSSEAuth.mockReturnValue({
+      success: false,
+      error: "Auth not ready",
+    } as any);
+
+    mockAuthFetch.mockResolvedValue({
+      ok: false,
+      statusText: "Internal Server Error",
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    // Advance past the 4-second fallback timeout to trigger REST fetch
+    await act(async () => {
+      jest.advanceTimersByTime(4000);
+    });
+
+    await waitFor(() => {
+      expect(mockAuthFetch).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toContain("Failed to fetch logs");
+    });
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Error",
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("should gracefully handle malformed SSE history event data", () => {
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    const es = MockEventSource.instances[0];
+
+    act(() => {
+      es.simulateOpen();
+    });
+
+    // Send malformed data directly via addEventListener handler
+    const event = new MessageEvent("history", {
+      data: "not valid json{{{",
+    });
+    const handlers = (es as any).listeners["history"] || [];
+    act(() => {
+      handlers.forEach((h: any) => h(event));
+    });
+
+    // Should not crash -- logs remain empty, error logged to console
+    expect(result.current.logs).toEqual([]);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Failed to parse history SSE event:",
+      expect.any(Error),
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it("should gracefully handle malformed SSE update event data", () => {
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    const es = MockEventSource.instances[0];
+
+    act(() => {
+      es.simulateOpen();
+    });
+
+    // First send valid history
+    act(() => {
+      es.simulateEvent("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Initial" },
+      ]);
+    });
+
+    expect(result.current.logs).toHaveLength(1);
+
+    // Send malformed update data
+    const event = new MessageEvent("update", {
+      data: "{{invalid json",
+    });
+    const handlers = (es as any).listeners["update"] || [];
+    act(() => {
+      handlers.forEach((h: any) => h(event));
+    });
+
+    // Should not crash -- logs remain unchanged
+    expect(result.current.logs).toHaveLength(1);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Failed to parse update SSE event:",
+      expect.any(Error),
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it("should encode botId in URL to prevent injection", async () => {
+    const specialBotId = "bot/with spaces&special=chars";
+
+    mockCreateAuthenticatedSSEUrl.mockImplementation((endpoint: string) => ({
+      success: true as const,
+      data: { url: endpoint, isAuthenticated: true },
+    }));
+
+    renderHook(() =>
+      useBotLogsStream({ botId: specialBotId }),
+    );
+
+    // The SSE URL should have the botId encoded
+    expect(mockCreateAuthenticatedSSEUrl).toHaveBeenCalledWith(
+      `/api/logs/${encodeURIComponent(specialBotId)}/stream`,
+    );
+  });
 });

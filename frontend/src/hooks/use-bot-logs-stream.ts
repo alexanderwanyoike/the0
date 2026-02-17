@@ -1,3 +1,24 @@
+/**
+ * useBotLogsStream - Real-time log streaming hook
+ *
+ * Provides the same data interface as `useBotLogs` but with real-time SSE streaming.
+ * Follows the `useCustomBotSSE` pattern: SSE connection with 4-second fallback to
+ * REST polling when SSE is unavailable.
+ *
+ * Key behaviors:
+ * - SSE active: disables polling, appends new log entries in real-time
+ * - Date filter set: disconnects SSE, fetches historical data via REST
+ * - Date filter cleared: reconnects SSE for live streaming
+ * - SSE error before initial load: falls back to REST polling
+ * - SSE error after initial load: reconnects with exponential backoff
+ *
+ * Cross-service contract: expects the API to provide:
+ * - GET /api/logs/:botId - REST endpoint returning { data: LogEntry[], total, hasMore }
+ * - GET /api/logs/:botId/stream - SSE endpoint emitting "history" and "update" events
+ *   - "history" event data: LogEntry[] (initial batch)
+ *   - "update" event data: { content: string, timestamp: string } (individual new entry)
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -46,6 +67,10 @@ export interface UseBotLogsStreamReturn {
 /**
  * Expand raw log entries by splitting multi-line content into individual LogEntry items.
  * Each non-empty line becomes its own entry, preserving the original timestamp.
+ *
+ * The API may return log entries where a single entry's `content` field contains
+ * multiple newline-separated lines (e.g. multi-line print output from a bot).
+ * This function normalizes them into one LogEntry per line for consistent rendering.
  */
 function expandLogEntries(entries: LogEntry[]): LogEntry[] {
   const expanded: LogEntry[] = [];
@@ -124,7 +149,7 @@ export const useBotLogsStream = ({
           searchParams.set("offset", queryParams.offset.toString());
 
         const response = await authFetch(
-          `/api/logs/${botId}?${searchParams.toString()}`,
+          `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
           { signal: controller.signal },
         );
 
@@ -169,13 +194,19 @@ export const useBotLogsStream = ({
     const authResult = validateSSEAuth();
     if (!authResult.success) return;
 
-    const urlResult = createAuthenticatedSSEUrl(`/api/logs/${botId}/stream`);
+    const urlResult = createAuthenticatedSSEUrl(
+      `/api/logs/${encodeURIComponent(botId)}/stream`,
+    );
     if (!urlResult.success) return;
 
-    // Clean up any existing EventSource
+    // Clean up any existing EventSource and pending timers to avoid duplicates
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
+    }
+    if (fallbackTimeoutRef.current) {
+      clearTimeout(fallbackTimeoutRef.current);
+      fallbackTimeoutRef.current = null;
     }
 
     const es = new EventSource(urlResult.data.url, {
@@ -333,6 +364,9 @@ export const useBotLogsStream = ({
 
   // ---- Public API ----
 
+  // Refresh always uses REST to get a full consistent snapshot of current logs.
+  // This is intentional even when SSE is connected -- the user is explicitly
+  // requesting a reload, and REST gives a reliable full page of results.
   const refresh = useCallback(() => {
     const refreshQuery = { ...query, offset: 0 };
     setQuery(refreshQuery);
@@ -365,12 +399,24 @@ export const useBotLogsStream = ({
       setQuery(updatedQuery);
       fetchLogsRef.current(updatedQuery);
 
-      // Reconnect SSE when clearing date filter
+      // Reconnect SSE when clearing date filter, with a fallback timeout
+      // in case the new SSE connection never establishes
       if (!date) {
         connectSSE();
+
+        fallbackTimeoutRef.current = setTimeout(() => {
+          if (!connected) {
+            // SSE didn't reconnect within 4s -- start polling as fallback
+            if (!pollingIntervalRef.current) {
+              pollingIntervalRef.current = setInterval(() => {
+                fetchLogsRef.current();
+              }, refreshInterval);
+            }
+          }
+        }, 4000);
       }
     },
-    [query, cleanupSSE, connectSSE],
+    [query, cleanupSSE, connectSSE, connected, refreshInterval],
   );
 
   const setDateRangeFilter = useCallback(
@@ -417,7 +463,7 @@ export const useBotLogsStream = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
+    link.download = `bot-${encodeURIComponent(botId)}-logs-${new Date().toISOString().split("T")[0]}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
