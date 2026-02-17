@@ -24,7 +24,7 @@ interface BotSubscription {
   clients: Set<Response>;
 }
 
-// Shared subscription map - static so it persists across request-scoped instances
+// Shared subscription map across all requests to enable SSE fan-out for a single NATS subscription per bot
 const activeSubscriptions = new Map<string, BotSubscription>();
 // Pending subscription locks to prevent duplicate NATS subscriptions under concurrency
 const pendingSubscriptions = new Map<string, Promise<BotSubscription | null>>();
