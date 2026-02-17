@@ -406,6 +406,11 @@ describe("ConsoleInterface", () => {
       render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={null} />);
       expect(screen.getByText("Connecting...")).toBeInTheDocument();
     });
+
+    it("should show Polling in compact mode when disconnected with lastUpdate", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={new Date()} />);
+      expect(screen.getByText("Polling")).toBeInTheDocument();
+    });
   });
 
   describe("entry count badge", () => {

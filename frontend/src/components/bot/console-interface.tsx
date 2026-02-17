@@ -57,9 +57,10 @@ const LOG_LEVEL_COLORS = {
 
 /**
  * Format a Date to compact display format.
+ * Returns null for null input or invalid Date objects.
  */
 function formatTimestamp(date: Date | null): { date: string; time: string } | null {
-  if (!date) return null;
+  if (!date || isNaN(date.getTime())) return null;
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
@@ -296,6 +297,46 @@ const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
   return <LogEntryComponent log={log} index={index} />;
 };
 
+/**
+ * Connection status indicator for the console toolbar.
+ *
+ * Three states derived from the useBotLogsStream hook:
+ * - connected=true              -> Green dot + "Live"        (SSE active)
+ * - connected=false, lastUpdate -> Gray dot  + "Polling"     (fell back to REST)
+ * - connected=false, no update  -> Yellow dot + "Connecting" (SSE hasn't connected yet)
+ *
+ * When `connected` is undefined the indicator is hidden (backwards compatible).
+ */
+const ConnectionStatusIndicator: React.FC<{
+  connected?: boolean;
+  lastUpdate?: Date | null;
+}> = ({ connected, lastUpdate }) => {
+  if (connected === undefined) return null;
+
+  return (
+    <span className="flex items-center gap-1 text-xs">
+      <span className={cn(
+        "h-1.5 w-1.5 rounded-full",
+        connected
+          ? "bg-green-500"
+          : lastUpdate
+            ? "bg-gray-400"
+            : "bg-yellow-500 animate-pulse"
+      )} />
+      <span className={cn(
+        "text-[10px]",
+        connected
+          ? "text-green-600 dark:text-green-400"
+          : lastUpdate
+            ? "text-gray-500"
+            : "text-yellow-600 dark:text-yellow-400"
+      )}>
+        {connected ? "Live" : lastUpdate ? "Polling" : "Connecting..."}
+      </span>
+    </span>
+  );
+};
+
 export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   botId,
   logs,
@@ -412,28 +453,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               >
                 {filteredLogs.length} entries
               </Badge>
-              {connected !== undefined && (
-                <span className="flex items-center gap-1 text-xs ml-2">
-                  <span className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    connected
-                      ? "bg-green-500"
-                      : lastUpdate
-                        ? "bg-gray-400"
-                        : "bg-yellow-500 animate-pulse"
-                  )} />
-                  <span className={cn(
-                    "text-[10px]",
-                    connected
-                      ? "text-green-600 dark:text-green-400"
-                      : lastUpdate
-                        ? "text-gray-500"
-                        : "text-yellow-600 dark:text-yellow-400"
-                  )}>
-                    {connected ? "Live" : lastUpdate ? "Polling" : "Connecting..."}
-                  </span>
-                </span>
-              )}
+              <span className="ml-2">
+                <ConnectionStatusIndicator connected={connected} lastUpdate={lastUpdate} />
+              </span>
             </div>
           )}
 
@@ -445,28 +467,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           >
             {compact && (
               <>
-                {connected !== undefined && (
-                  <span className="flex items-center gap-1 text-xs mr-1">
-                    <span className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      connected
-                        ? "bg-green-500"
-                        : lastUpdate
-                          ? "bg-gray-400"
-                          : "bg-yellow-500 animate-pulse"
-                    )} />
-                    <span className={cn(
-                      "text-[10px]",
-                      connected
-                        ? "text-green-600 dark:text-green-400"
-                        : lastUpdate
-                          ? "text-gray-500"
-                          : "text-yellow-600 dark:text-yellow-400"
-                    )}>
-                      {connected ? "Live" : lastUpdate ? "Polling" : "Connecting..."}
-                    </span>
-                  </span>
-                )}
+                <span className="mr-1">
+                  <ConnectionStatusIndicator connected={connected} lastUpdate={lastUpdate} />
+                </span>
                 <div className="flex-1 mr-2">
                   <Input
                     placeholder="Search..."
