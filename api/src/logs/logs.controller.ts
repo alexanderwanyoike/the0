@@ -103,12 +103,14 @@ export class LogsController {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Send historical logs
+    // Send historical logs.
+    // Date format must match the runtime's minio_logger which uses
+    // time.Now().Format("20060102") (local time, not UTC).
     const today = new Date();
     const todayStr =
-      today.getUTCFullYear().toString() +
-      (today.getUTCMonth() + 1).toString().padStart(2, "0") +
-      today.getUTCDate().toString().padStart(2, "0");
+      today.getFullYear().toString() +
+      (today.getMonth() + 1).toString().padStart(2, "0") +
+      today.getDate().toString().padStart(2, "0");
 
     const historyResult = await this.logsService.getLogs(botId, {
       date: todayStr,
