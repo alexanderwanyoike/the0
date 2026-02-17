@@ -140,8 +140,11 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!logsResult.success) {
+      // Non-fatal: THE0_BOT_LOGS is only used for real-time log tailing in the
+      // console UI. Unlike THE0_EVENTS (which carries critical bot lifecycle
+      // events like start/stop/status), THE0_BOT_LOGS is a convenience stream
+      // and logs are already persisted to MinIO independently.
       this.logger.warn({ error: logsResult.error }, "THE0_BOT_LOGS stream setup failed — log streaming will be unavailable");
-      // Non-fatal: the API can function without real-time log streaming
     }
 
     this.logger.info("NATS JetStream initialized");
