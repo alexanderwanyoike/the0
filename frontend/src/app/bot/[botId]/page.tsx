@@ -81,7 +81,9 @@ const BotDetail = ({ params }: BotDetailProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Console logs hook - use streaming for running bots, polling for stopped
+  // Console logs: use SSE streaming for running bots, REST polling for stopped.
+  // Both hooks are always called (React rules of hooks) but the inactive one
+  // receives an empty botId which makes it skip all network requests.
   const isRunning = bot?.status === "running";
 
   const streamHook = useBotLogsStream({
