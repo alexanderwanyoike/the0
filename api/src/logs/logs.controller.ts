@@ -17,6 +17,7 @@ import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
 
+// Must stay in sync with runtime's sanitizeBotID (runtime/internal/daemon/nats_publisher.go)
 const VALID_BOT_ID = /^[A-Za-z0-9_-]+$/;
 
 interface BotSubscription {
@@ -24,7 +25,9 @@ interface BotSubscription {
   clients: Set<Response>;
 }
 
-// Shared subscription map across all requests to enable SSE fan-out for a single NATS subscription per bot
+// Module-level maps are intentional: NestJS controllers are singletons and a
+// single NATS subscription per bot must fan out to all SSE clients in the process.
+// _clearActiveSubscriptions() provides test isolation.
 const activeSubscriptions = new Map<string, BotSubscription>();
 // Pending subscription locks to prevent duplicate NATS subscriptions under concurrency
 const pendingSubscriptions = new Map<string, Promise<BotSubscription | null>>();
@@ -133,7 +136,9 @@ export class LogsController {
       );
     }
 
-    // Subscribe to NATS or join existing fan-out
+    // Subscribe to NATS or join existing fan-out.
+    // No backoff needed: each new SSE connection is a natural retry boundary,
+    // and failed subscriptions are not stored (see createSubscription).
     let subscription = activeSubscriptions.get(botId);
 
     if (!subscription) {

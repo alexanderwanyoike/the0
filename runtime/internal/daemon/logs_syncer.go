@@ -96,6 +96,8 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 
 		n, err := io.ReadFull(file, buf[:readSize])
 		if err == io.ErrUnexpectedEOF {
+			// File was shorter than expected (likely concurrent truncation) — process what we got
+			l.logger.Info("Log file shorter than expected, processing partial read", "expected", readSize, "got", n)
 			err = nil
 		}
 		if err != nil {
@@ -117,18 +119,22 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 					l.logger.Info("Failed to seek in log file", "error", err.Error())
 					break
 				}
+			} else {
+				// No newline found in chunk — upload as-is to avoid stalling.
+				// This can happen with very long log lines (>1MB).
+				l.logger.Info("No newline boundary in chunk, uploading as-is", "bytes", n)
 			}
 		}
 
 		chunk := string(buf[:useN])
 
 		syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, chunk); err != nil {
-			cancel()
-			l.logger.Info("Failed to upload logs", "error", err.Error())
+		uploadErr := l.logUploader.AppendBotLogs(syncCtx, l.botID, chunk)
+		cancel()
+		if uploadErr != nil {
+			l.logger.Info("Failed to upload logs", "error", uploadErr.Error())
 			break
 		}
-		cancel()
 
 		if l.natsPublisher != nil {
 			if err := l.natsPublisher.Publish(l.botID, chunk); err != nil {
