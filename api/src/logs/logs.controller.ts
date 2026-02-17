@@ -26,6 +26,8 @@ interface BotSubscription {
 
 // Shared subscription map - static so it persists across request-scoped instances
 const activeSubscriptions = new Map<string, BotSubscription>();
+// Pending subscription locks to prevent duplicate NATS subscriptions under concurrency
+const pendingSubscriptions = new Map<string, Promise<BotSubscription | null>>();
 
 /** @internal Exposed for testing only */
 export function _clearActiveSubscriptions() {
@@ -33,6 +35,7 @@ export function _clearActiveSubscriptions() {
     sub.unsubscribe();
   }
   activeSubscriptions.clear();
+  pendingSubscriptions.clear();
 }
 
 @Controller("logs")
@@ -81,6 +84,7 @@ export class LogsController {
   ) {
     // Validate botId before using as NATS subject
     if (!VALID_BOT_ID.test(botId)) {
+      res.status(400);
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.flushHeaders();
@@ -109,7 +113,11 @@ export class LogsController {
       offset: 0,
     });
 
-    if (!historyResult.success && historyResult.error?.includes("access denied")) {
+    if (
+      !historyResult.success &&
+      (historyResult.error?.includes("not found") ||
+        historyResult.error?.includes("access denied"))
+    ) {
       res.write(`event: error\ndata: ${JSON.stringify({ message: "Bot not found or access denied" })}\n\n`);
       res.end();
       return;
@@ -129,34 +137,19 @@ export class LogsController {
     let subscription = activeSubscriptions.get(botId);
 
     if (!subscription) {
-      const clients = new Set<Response>();
-      const natsSubject = BOT_LOG_TOPICS.forBot(botId);
-
-      const subscribeResult = this.natsService.subscribe(
-        natsSubject,
-        (msg: string) => {
-          const data = JSON.stringify({ content: msg, timestamp: new Date().toISOString() });
-          const event = `event: update\ndata: ${data}\n\n`;
-          for (const client of clients) {
-            try {
-              if (!client.writableEnded) {
-                client.write(event);
-              }
-            } catch {
-              clients.delete(client);
-            }
-          }
-        },
-      );
-
-      if (!subscribeResult.success) {
-        this.logger.error({ botId, error: subscribeResult.error }, "Failed to subscribe to NATS for bot logs");
-        res.write(`event: warning\ndata: ${JSON.stringify({ message: "Live streaming unavailable" })}\n\n`);
-        // Don't store — next client will retry the subscription
+      // Prevent duplicate subscriptions under concurrency: if another request
+      // is already creating a subscription for this botId, wait for it
+      const pending = pendingSubscriptions.get(botId);
+      if (pending) {
+        subscription = (await pending) ?? undefined;
       } else {
-        const unsubscribe = subscribeResult.data ?? (() => {});
-        subscription = { unsubscribe, clients };
-        activeSubscriptions.set(botId, subscription);
+        const createPromise = this.createSubscription(botId, res);
+        pendingSubscriptions.set(botId, createPromise);
+        try {
+          subscription = (await createPromise) ?? undefined;
+        } finally {
+          pendingSubscriptions.delete(botId);
+        }
       }
     }
 
@@ -190,5 +183,49 @@ export class LogsController {
     };
 
     req.on("close", cleanup);
+  }
+
+  private async createSubscription(
+    botId: string,
+    res: Response,
+  ): Promise<BotSubscription | null> {
+    const clients = new Set<Response>();
+    const natsSubject = BOT_LOG_TOPICS.forBot(botId);
+
+    const subscribeResult = this.natsService.subscribe(
+      natsSubject,
+      (msg: string) => {
+        const data = JSON.stringify({
+          content: msg,
+          timestamp: new Date().toISOString(),
+        });
+        const event = `event: update\ndata: ${data}\n\n`;
+        for (const client of clients) {
+          try {
+            if (!client.writableEnded) {
+              client.write(event);
+            }
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
+    );
+
+    if (!subscribeResult.success) {
+      this.logger.error(
+        { botId, error: subscribeResult.error },
+        "Failed to subscribe to NATS for bot logs",
+      );
+      res.write(
+        `event: warning\ndata: ${JSON.stringify({ message: "Live streaming unavailable" })}\n\n`,
+      );
+      return null;
+    }
+
+    const unsubscribe = subscribeResult.data ?? (() => {});
+    const subscription: BotSubscription = { unsubscribe, clients };
+    activeSubscriptions.set(botId, subscription);
+    return subscription;
   }
 }
