@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -205,6 +206,35 @@ func TestLogsSyncer_Sync_UploadError(t *testing.T) {
 
 	synced := syncer.Sync(context.Background())
 	assert.False(t, synced, "should return false on upload error")
+}
+
+func TestLogsSyncer_Sync_LargeFileChunking(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	// Create a 2.5MB log file (should be split into 3 chunks: 1MB + 1MB + 0.5MB)
+	chunkSize := 1024 * 1024 // 1MB
+	content := strings.Repeat("A", chunkSize*2+chunkSize/2)
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, mockPublisher, &util.DefaultLogger{})
+
+	synced := syncer.Sync(context.Background())
+
+	assert.True(t, synced, "should return true when logs are synced")
+	require.Len(t, mockUploader.AppendCalls, 3, "should split into 3 chunks")
+	require.Len(t, mockPublisher.PublishCalls, 3, "publisher should also get 3 chunks")
+
+	// Verify chunk sizes
+	assert.Len(t, mockUploader.AppendCalls[0].Content, chunkSize, "first chunk should be 1MB")
+	assert.Len(t, mockUploader.AppendCalls[1].Content, chunkSize, "second chunk should be 1MB")
+	assert.Len(t, mockUploader.AppendCalls[2].Content, chunkSize/2, "third chunk should be 0.5MB")
+
+	// Verify total content is preserved
+	total := mockUploader.AppendCalls[0].Content + mockUploader.AppendCalls[1].Content + mockUploader.AppendCalls[2].Content
+	assert.Equal(t, content, total, "all chunks combined should equal original content")
 }
 
 func TestLogsSyncer_Close(t *testing.T) {
