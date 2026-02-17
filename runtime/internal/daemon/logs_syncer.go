@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -105,7 +106,21 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 			break
 		}
 
-		chunk := string(buf[:n])
+		// Chunk on newline boundaries to avoid splitting log lines or UTF-8 runes.
+		// Only apply when there's more data remaining (not the final chunk).
+		useN := n
+		if l.lastOffset+int64(n) < currentSize {
+			if idx := bytes.LastIndexByte(buf[:n], '\n'); idx >= 0 {
+				useN = idx + 1
+				// Seek back so the remainder is re-read in the next iteration
+				if _, err := file.Seek(l.lastOffset+int64(useN), 0); err != nil {
+					l.logger.Info("Failed to seek in log file", "error", err.Error())
+					break
+				}
+			}
+		}
+
+		chunk := string(buf[:useN])
 
 		syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, chunk); err != nil {
@@ -121,8 +136,8 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 			}
 		}
 
-		l.lastOffset += int64(n)
-		totalBytes += n
+		l.lastOffset += int64(useN)
+		totalBytes += useN
 		chunks++
 	}
 
