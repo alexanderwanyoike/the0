@@ -158,17 +158,18 @@ describe("LogsController", () => {
       expect(mockNatsService.subscribe).not.toHaveBeenCalled();
     });
 
-    it("should continue streaming when getLogs fails for non-access reasons", async () => {
+    it("should send warning event when getLogs fails for non-access reasons", async () => {
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
         Failure("Failed to fetch logs: MinIO unavailable"),
       );
 
       await controller.streamLogs("bot-minio-fail", mockReq, mockRes);
 
-      const historyWrite = mockRes.write.mock.calls.find((call: string[]) =>
-        call[0].startsWith("event: history"),
+      const warningWrite = mockRes.write.mock.calls.find((call: string[]) =>
+        call[0].startsWith("event: warning"),
       );
-      expect(historyWrite).toBeUndefined();
+      expect(warningWrite).toBeDefined();
+      expect(warningWrite[0]).toContain("History unavailable");
       // Should still subscribe to NATS — the user is authorized, just can't fetch history
       expect(mockNatsService.subscribe).toHaveBeenCalled();
     });
@@ -243,8 +244,29 @@ describe("LogsController", () => {
       expect(mockRes.flushHeaders).toHaveBeenCalled();
       expect(mockLogger.error).toHaveBeenCalled();
 
+      // Should send warning to client
+      const warningWrite = mockRes.write.mock.calls.find((call: string[]) =>
+        call[0].includes("Live streaming unavailable"),
+      );
+      expect(warningWrite).toBeDefined();
+
       // Keepalive should still be registered
       expect(mockReq.on).toHaveBeenCalledWith("close", expect.any(Function));
+
+      // Dead subscription should NOT be stored — next client retries
+      (mockNatsService.subscribe as jest.Mock).mockReturnValue(Ok(mockUnsubscribe));
+      const mockReq2: any = { on: jest.fn() };
+      const mockRes2: any = {
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        writableEnded: false,
+      };
+      await controller.streamLogs("bot-nats-fail", mockReq2, mockRes2);
+
+      // Should retry subscribe since the dead one wasn't stored
+      expect(mockNatsService.subscribe).toHaveBeenCalledTimes(2);
     });
   });
 });
