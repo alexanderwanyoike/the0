@@ -127,6 +127,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       return eventsResult;
     }
 
+    // Short-lived in-memory stream for real-time log fan-out.
+    // Logs are persisted to MinIO separately; this stream only bridges
+    // the runtime -> API SSE gap. 1 hour / 128MB keeps memory bounded.
     const logsResult = await this.ensureStream({
       name: "THE0_BOT_LOGS",
       subjects: ["the0.bot.logs.>"],
@@ -137,8 +140,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!logsResult.success) {
-      this.logger.error({ error: logsResult.error }, "Failed to setup THE0_BOT_LOGS stream");
-      return logsResult;
+      this.logger.warn({ error: logsResult.error }, "THE0_BOT_LOGS stream setup failed — log streaming will be unavailable");
+      // Non-fatal: the API can function without real-time log streaming
     }
 
     this.logger.info("NATS JetStream initialized");
