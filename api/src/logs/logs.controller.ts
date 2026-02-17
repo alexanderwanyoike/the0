@@ -190,6 +190,9 @@ export class LogsController {
     res: Response,
   ): Promise<BotSubscription | null> {
     const clients = new Set<Response>();
+    // Add the initiating client before subscribing so the first NATS
+    // message isn't dropped (the callback fans out to `clients`)
+    clients.add(res);
     const natsSubject = BOT_LOG_TOPICS.forBot(botId);
 
     const subscribeResult = this.natsService.subscribe(
