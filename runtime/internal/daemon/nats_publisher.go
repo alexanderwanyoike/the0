@@ -84,10 +84,12 @@ func (p *NATSPublisher) Publish(botID string, content string) error {
 	return p.conn.Publish(subject, []byte(content))
 }
 
-// Close closes the NATS connection.
+// Close drains and closes the NATS connection.
 func (p *NATSPublisher) Close() error {
 	if p.conn != nil {
-		return p.conn.Drain()
+		err := p.conn.Drain()
+		p.conn = nil
+		return err
 	}
 	return nil
 }
