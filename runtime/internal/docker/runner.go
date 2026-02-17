@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime/internal/model"
 	runtimepkg "runtime/internal/runtime"
 	"runtime/internal/util"
@@ -251,6 +252,9 @@ func (r *dockerRunner) buildContainerConfig(
 		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", queryParamsJSON)
 		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
 	}
+
+	// Pass NATS URL so the daemon can publish logs to NATS for real-time streaming
+	builder = builder.WithNATSURL(os.Getenv("NATS_URL"))
 
 	// Dev mode: mount runtime binary from host for faster iteration
 	if r.config.DevRuntimePath != "" {
