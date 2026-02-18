@@ -25,8 +25,12 @@ func NewLocalCmd() *cobra.Command {
 Start, stop, and monitor the full Docker Compose stack from anywhere,
 without needing to cd into the docker/ directory.
 
-Quick start:
-  the0 local init --repo-path /path/to/the0
+Quick start (prebuilt images):
+  the0 local init
+  the0 local start
+
+Building from source:
+  the0 local init --source
   the0 local start
   the0 local status`,
 	}
@@ -48,25 +52,25 @@ Quick start:
 // --- init ---
 
 func newLocalInitCmd() *cobra.Command {
-	var repoPath string
-	var prebuilt bool
+	var source string
 
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize the local environment",
-		Long: `Initialize the local environment by detecting Docker prerequisites,
-validating the repository path, and extracting compose files to ~/.the0/compose/.
+		Long: `Initialize the local environment by detecting Docker prerequisites
+and extracting compose files to ~/.the0/compose/.
 
-This must be run before 'the0 local start'.`,
+By default, prebuilt images from GHCR are used (no source code needed).
+Use --source to build from a local repository clone instead.
+
+This must be run before 'the0 local start'.
+
+Examples:
+  the0 local init                       # Use prebuilt GHCR images
+  the0 local init --source              # Build from source (current directory)
+  the0 local init --source /path/to/the0  # Build from source (explicit path)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// If no repo path given, try current directory
-			if repoPath == "" {
-				cwd, err := os.Getwd()
-				if err != nil {
-					return fmt.Errorf("failed to get current directory: %w", err)
-				}
-				repoPath = cwd
-			}
+			useSource := cmd.Flags().Changed("source")
 
 			// Check Docker prerequisites
 			logger.StartSpinner("Checking Docker prerequisites")
@@ -76,25 +80,32 @@ This must be run before 'the0 local start'.`,
 			}
 			logger.StopSpinnerWithSuccess("Docker is ready")
 
-			// Handle --prebuilt
-			if prebuilt {
-				logger.Warning("Prebuilt images are not yet available. Using local build mode.")
-				logger.Info("Once published images exist, --prebuilt will skip building from source.")
-				prebuilt = false
+			repoPath := ""
+			if useSource {
+				// Source mode: resolve repo path
+				repoPath = source
+				if repoPath == "" {
+					cwd, err := os.Getwd()
+					if err != nil {
+						return fmt.Errorf("failed to get current directory: %w", err)
+					}
+					repoPath = cwd
+				}
+
+				logger.StartSpinner("Validating repository path")
+				if err := local.ValidateRepoPath(repoPath); err != nil {
+					logger.StopSpinnerWithError("Invalid repository path")
+					return err
+				}
+				logger.StopSpinner()
+				logger.Success("Repository validated: %s", repoPath)
+			} else {
+				logger.Info("Using prebuilt images from GHCR")
 			}
 
-			// Validate repo path
-			logger.StartSpinner("Validating repository path")
-			if err := local.ValidateRepoPath(repoPath); err != nil {
-				logger.StopSpinnerWithError("Invalid repository path")
-				return err
-			}
-			logger.StopSpinner()
-			logger.Success("Repository validated: %s", repoPath)
-
-			// Extract compose files
+			// Extract compose files (prebuilt = !useSource)
 			logger.StartSpinner("Setting up compose files")
-			if err := local.ExtractComposeFiles(repoPath, prebuilt); err != nil {
+			if err := local.ExtractComposeFiles(repoPath, !useSource); err != nil {
 				logger.StopSpinnerWithError("Failed to extract compose files")
 				return err
 			}
@@ -116,8 +127,8 @@ This must be run before 'the0 local start'.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&repoPath, "repo-path", "", "Path to the the0 repository (defaults to current directory)")
-	cmd.Flags().BoolVar(&prebuilt, "prebuilt", false, "Use prebuilt Docker images (not yet available)")
+	cmd.Flags().StringVar(&source, "source", "", "Build from local source code instead of using prebuilt images (defaults to current directory)")
+	cmd.Flag("source").NoOptDefVal = "."
 
 	return cmd
 }
@@ -128,20 +139,30 @@ func newLocalStartCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "start",
 		Short: "Start all local services",
-		Long:  `Start the full the0 stack using Docker Compose. Builds images from source if needed.`,
+		Long:  `Start the full the0 stack using Docker Compose. Pulls prebuilt images or builds from source depending on how 'init' was run.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runner, err := local.NewComposeRunner()
 			if err != nil {
 				return err
 			}
 
-			// Build compose services
-			logger.StartSpinner("Building services")
-			if err := runner.Build(); err != nil {
-				logger.StopSpinnerWithError("Build failed")
-				return fmt.Errorf("docker compose build failed: %w", err)
+			if runner.State.Prebuilt {
+				// Prebuilt mode: pull images then start
+				logger.StartSpinner("Pulling images")
+				if err := runner.Pull(); err != nil {
+					logger.StopSpinnerWithError("Pull failed")
+					return fmt.Errorf("docker compose pull failed: %w", err)
+				}
+				logger.StopSpinnerWithSuccess("Images pulled")
+			} else {
+				// Source mode: build from local Dockerfiles
+				logger.StartSpinner("Building services")
+				if err := runner.Build(); err != nil {
+					logger.StopSpinnerWithError("Build failed")
+					return fmt.Errorf("docker compose build failed: %w", err)
+				}
+				logger.StopSpinnerWithSuccess("Services built")
 			}
-			logger.StopSpinnerWithSuccess("Services built")
 
 			// Start services
 			logger.StartSpinner("Starting services")
@@ -190,8 +211,8 @@ func newLocalStopCmd() *cobra.Command {
 func newLocalRestartCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "restart",
-		Short: "Restart all local services (rebuilds images)",
-		Long:  `Stop all services, rebuild images from source, and start again.`,
+		Short: "Restart all local services",
+		Long:  `Stop all services, pull or rebuild images, and start again.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runner, err := local.NewComposeRunner()
 			if err != nil {
@@ -206,13 +227,23 @@ func newLocalRestartCmd() *cobra.Command {
 			}
 			logger.StopSpinnerWithSuccess("Services stopped")
 
-			// Rebuild
-			logger.StartSpinner("Rebuilding services")
-			if err := runner.Build(); err != nil {
-				logger.StopSpinnerWithError("Build failed")
-				return fmt.Errorf("docker compose build failed: %w", err)
+			if runner.State.Prebuilt {
+				// Prebuilt mode: pull latest images
+				logger.StartSpinner("Pulling latest images")
+				if err := runner.Pull(); err != nil {
+					logger.StopSpinnerWithError("Pull failed")
+					return fmt.Errorf("docker compose pull failed: %w", err)
+				}
+				logger.StopSpinnerWithSuccess("Images pulled")
+			} else {
+				// Source mode: rebuild from local Dockerfiles
+				logger.StartSpinner("Rebuilding services")
+				if err := runner.Build(); err != nil {
+					logger.StopSpinnerWithError("Build failed")
+					return fmt.Errorf("docker compose build failed: %w", err)
+				}
+				logger.StopSpinnerWithSuccess("Services rebuilt")
 			}
-			logger.StopSpinnerWithSuccess("Services rebuilt")
 
 			// Start
 			logger.StartSpinner("Starting services")
@@ -397,9 +428,14 @@ are started normally.`,
 				return err
 			}
 
+			// Dev mode requires source code for volume mounts
+			if runner.State.Prebuilt {
+				return fmt.Errorf("dev mode requires source code. Re-initialize with: the0 local init --source")
+			}
+
 			// Verify repo path still exists (needed for volume mounts)
 			if err := local.ValidateRepoPath(runner.State.RepoPath); err != nil {
-				return fmt.Errorf("repository path no longer valid: %w\nRun 'the0 local init' again", err)
+				return fmt.Errorf("repository path no longer valid: %w\nRun 'the0 local init --source' again", err)
 			}
 
 			// Start infrastructure first and wait for health checks

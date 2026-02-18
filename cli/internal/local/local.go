@@ -86,14 +86,11 @@ func EnsureInitialized() (*LocalState, error) {
 	return state, nil
 }
 
-// ExtractComposeFiles writes the embedded compose files to ~/.the0/compose/
+// ExtractComposeFiles writes the embedded compose files to ~/.the0/compose/.
+// When prebuilt is true, it writes the prebuilt compose file (using GHCR images).
+// When prebuilt is false, it writes both the source compose file and dev overlay,
 // with {{REPO_PATH}} replaced by the absolute repo path.
 func ExtractComposeFiles(repoPath string, prebuilt bool) error {
-	absPath, err := filepath.Abs(repoPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve repo path: %w", err)
-	}
-
 	dir, err := ComposeDir()
 	if err != nil {
 		return err
@@ -103,9 +100,36 @@ func ExtractComposeFiles(repoPath string, prebuilt bool) error {
 		return fmt.Errorf("failed to create compose directory: %w", err)
 	}
 
+	composePath := filepath.Join(dir, "docker-compose.yml")
+
+	if prebuilt {
+		// Write the prebuilt compose file as-is (no placeholder substitution)
+		if err := os.WriteFile(composePath, embeddedComposePrebuiltFile, 0644); err != nil {
+			return fmt.Errorf("failed to write docker-compose.yml: %w", err)
+		}
+		logger.Verbose("Wrote %s (prebuilt)", composePath)
+
+		// Save state with empty repo path
+		state := &LocalState{
+			RepoPath: "",
+			Prebuilt: true,
+			InitAt:   time.Now(),
+		}
+		if err := SaveState(state); err != nil {
+			return fmt.Errorf("failed to save state: %w", err)
+		}
+
+		return nil
+	}
+
+	// Source mode: resolve repo path and substitute placeholders
+	absPath, err := filepath.Abs(repoPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve repo path: %w", err)
+	}
+
 	// Replace placeholder in main compose file
 	composeContent := strings.ReplaceAll(string(embeddedComposeFile), "{{REPO_PATH}}", absPath)
-	composePath := filepath.Join(dir, "docker-compose.yml")
 	if err := os.WriteFile(composePath, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write docker-compose.yml: %w", err)
 	}
@@ -122,7 +146,7 @@ func ExtractComposeFiles(repoPath string, prebuilt bool) error {
 	// Save state
 	state := &LocalState{
 		RepoPath: absPath,
-		Prebuilt: prebuilt,
+		Prebuilt: false,
 		InitAt:   time.Now(),
 	}
 	if err := SaveState(state); err != nil {
