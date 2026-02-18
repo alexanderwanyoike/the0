@@ -154,8 +154,12 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
+    image: the0/runtime:latest
     pull_policy: always
     environment:
+      # Runtime image override (use locally built image for bot containers)
+      RUNTIME_IMAGE: the0/runtime:latest
+
       # MongoDB configuration
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
 
@@ -213,8 +217,12 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
+    image: the0/runtime:latest
     pull_policy: always
     environment:
+      # Runtime image override (use locally built image for bot containers)
+      RUNTIME_IMAGE: the0/runtime:latest
+
       # MongoDB configuration
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
 
@@ -271,8 +279,12 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
+    image: the0/runtime:latest
     pull_policy: always
     environment:
+      # Runtime image override (use locally built image for bot containers)
+      RUNTIME_IMAGE: the0/runtime:latest
+
       # MongoDB configuration
       MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
 

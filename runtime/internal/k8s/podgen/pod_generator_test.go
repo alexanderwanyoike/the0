@@ -75,7 +75,7 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	// Bot container
 	botContainer := pod.Spec.Containers[0]
 	assert.Equal(t, "bot", botContainer.Name)
-	assert.Equal(t, "the0/runtime:latest", botContainer.Image)
+	assert.Equal(t, "ghcr.io/alexanderwanyoike/the0/runtime:latest", botContainer.Image)
 	assert.Equal(t, []string{"/app/runtime", "execute", "--skip-sync", "--skip-query-server"}, botContainer.Command)
 	assert.Equal(t, "/bot", botContainer.WorkingDir)
 
