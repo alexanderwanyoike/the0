@@ -374,6 +374,45 @@ describe("ConsoleInterface", () => {
     });
   });
 
+  describe("connection status indicator", () => {
+    it("should show Live indicator when connected is true", () => {
+      render(<ConsoleInterface {...defaultProps} connected={true} lastUpdate={new Date()} />);
+      expect(screen.getByText("Live")).toBeInTheDocument();
+    });
+
+    it("should show Polling indicator when connected is false with lastUpdate", () => {
+      render(<ConsoleInterface {...defaultProps} connected={false} lastUpdate={new Date()} />);
+      expect(screen.getByText("Polling")).toBeInTheDocument();
+    });
+
+    it("should show Connecting indicator when connected is false without lastUpdate", () => {
+      render(<ConsoleInterface {...defaultProps} connected={false} lastUpdate={null} />);
+      expect(screen.getByText("Connecting...")).toBeInTheDocument();
+    });
+
+    it("should not show any indicator when connected prop is not passed", () => {
+      render(<ConsoleInterface {...defaultProps} />);
+      expect(screen.queryByText("Live")).not.toBeInTheDocument();
+      expect(screen.queryByText("Polling")).not.toBeInTheDocument();
+      expect(screen.queryByText("Connecting...")).not.toBeInTheDocument();
+    });
+
+    it("should show indicator in compact mode when connected", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} connected={true} lastUpdate={new Date()} />);
+      expect(screen.getByText("Live")).toBeInTheDocument();
+    });
+
+    it("should show Connecting in compact mode when not yet connected", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={null} />);
+      expect(screen.getByText("Connecting...")).toBeInTheDocument();
+    });
+
+    it("should show Polling in compact mode when disconnected with lastUpdate", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={new Date()} />);
+      expect(screen.getByText("Polling")).toBeInTheDocument();
+    });
+  });
+
   describe("entry count badge", () => {
     it("shows correct count after filtering", async () => {
       const logs: LogEntry[] = [
@@ -415,6 +454,131 @@ describe("ConsoleInterface", () => {
       );
 
       expect(screen.getByText("2 entries")).toBeInTheDocument();
+    });
+  });
+
+  describe("load earlier logs", () => {
+    it("should render 'Load earlier logs' button when hasEarlierLogs is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          onLoadEarlier={jest.fn()}
+        />,
+      );
+
+      expect(screen.getByText("Load earlier logs")).toBeInTheDocument();
+    });
+
+    it("should not render button when hasEarlierLogs is false", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(<ConsoleInterface {...defaultProps} logs={logs} />);
+
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should not render button when hasEarlierLogs is true but onLoadEarlier is undefined", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface {...defaultProps} logs={logs} hasEarlierLogs={true} />,
+      );
+
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should hide button when search query is active", async () => {
+      const user = userEvent.setup();
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          onLoadEarlier={jest.fn()}
+          compact={true}
+        />,
+      );
+
+      expect(screen.getByText("Load earlier logs")).toBeInTheDocument();
+
+      // Type in the compact search input
+      const searchInput = screen.getByPlaceholderText("Search...");
+      await user.type(searchInput, "test");
+
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should call onLoadEarlier when button is clicked", async () => {
+      const user = userEvent.setup();
+      const onLoadEarlier = jest.fn();
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          onLoadEarlier={onLoadEarlier}
+        />,
+      );
+
+      await user.click(screen.getByText("Load earlier logs"));
+
+      expect(onLoadEarlier).toHaveBeenCalled();
+    });
+
+    it("should show loading state when loadingEarlier is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          loadingEarlier={true}
+          onLoadEarlier={jest.fn()}
+        />,
+      );
+
+      expect(screen.getByText("Loading...")).toBeInTheDocument();
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should disable button when loadingEarlier is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          loadingEarlier={true}
+          onLoadEarlier={jest.fn()}
+        />,
+      );
+
+      const button = screen.getByText("Loading...").closest("button");
+      expect(button).toBeDisabled();
     });
   });
 });

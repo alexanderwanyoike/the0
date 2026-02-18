@@ -252,6 +252,11 @@ func (r *dockerRunner) buildContainerConfig(
 		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
 	}
 
+	// Pass NATS URL so the daemon can publish logs to NATS for real-time streaming
+	if r.config.NatsURL != "" {
+		builder = builder.WithNATSURL(r.config.NatsURL)
+	}
+
 	// Dev mode: mount runtime binary from host for faster iteration
 	if r.config.DevRuntimePath != "" {
 		builder = builder.WithDevRuntime(r.config.DevRuntimePath)

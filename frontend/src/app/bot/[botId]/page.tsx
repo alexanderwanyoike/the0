@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBotLogs } from "@/hooks/use-bot-logs";
+import { useBotLogsStream } from "@/hooks/use-bot-logs-stream";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
 import { cn } from "@/lib/utils";
@@ -80,7 +81,24 @@ const BotDetail = ({ params }: BotDetailProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Console logs hook
+  // Console logs: use SSE streaming for running bots, REST polling for stopped.
+  // Both hooks are always called (React rules of hooks) but the inactive one
+  // receives an empty botId which makes it skip all network requests.
+  const isRunning = bot?.status === "running";
+
+  const streamHook = useBotLogsStream({
+    botId: isRunning ? botId : "",
+    refreshInterval: 60 * 1000,
+  });
+
+  const pollingHook = useBotLogs({
+    botId: isRunning ? "" : botId,
+    autoRefresh: !isRunning,
+    refreshInterval: 60 * 1000,
+  });
+
+  const activeHook = isRunning ? streamHook : pollingHook;
+
   const {
     logs,
     loading: logsLoading,
@@ -88,11 +106,14 @@ const BotDetail = ({ params }: BotDetailProps) => {
     setDateFilter,
     setDateRangeFilter,
     exportLogs,
-  } = useBotLogs({
-    botId,
-    autoRefresh: true,
-    refreshInterval: 60 * 1000, // 1 minute
-  });
+  } = activeHook;
+
+  // Get streaming-specific fields (only available when using stream hook)
+  const connected = isRunning ? streamHook.connected : undefined;
+  const lastUpdate = isRunning ? streamHook.lastUpdate : undefined;
+  const hasEarlierLogs = isRunning ? streamHook.hasEarlierLogs : undefined;
+  const loadingEarlier = isRunning ? streamHook.loadingEarlier : undefined;
+  const loadEarlierLogs = isRunning ? streamHook.loadEarlierLogs : undefined;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -552,6 +573,11 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 onDateChange={setDateFilter}
                 onDateRangeChange={setDateRangeFilter}
                 onExport={exportLogs}
+                connected={connected}
+                lastUpdate={lastUpdate ?? null}
+                hasEarlierLogs={hasEarlierLogs}
+                loadingEarlier={loadingEarlier}
+                onLoadEarlier={loadEarlierLogs}
                 className="h-full"
                 compact
               />

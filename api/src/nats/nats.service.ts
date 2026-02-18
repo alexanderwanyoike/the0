@@ -8,8 +8,15 @@ import {
   JetStreamManager,
   RetentionPolicy,
   StorageType,
+  StreamConfig,
 } from "nats";
 import { Result, Ok, Failure } from "@/common/result";
+
+type StreamSetupConfig = Pick<
+  StreamConfig,
+  "name" | "subjects" | "retention" | "storage"
+> &
+  Partial<StreamConfig>;
 
 @Injectable()
 export class NatsService implements OnModuleInit, OnModuleDestroy {
@@ -24,7 +31,11 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     await this.connect();
-    await this.setupStreams();
+    const result = await this.setupStreams();
+    if (!result.success) {
+      await this.disconnect();
+      throw new Error(result.error!);
+    }
   }
 
   async onModuleDestroy() {
@@ -62,40 +73,88 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async setupStreams(): Promise<void> {
+  private isStreamAlreadyExists(err: any): boolean {
+    return (
+      err?.api_error?.err_code === 10058 ||
+      err?.message?.includes("stream name already in use")
+    );
+  }
+
+  private async ensureStream(
+    config: StreamSetupConfig,
+  ): Promise<Result<void, string>> {
     if (!this.jetStreamManager) {
-      throw new Error("NATS JetStream manager not initialized");
+      return Failure("JetStream manager not initialized");
     }
 
+    // Add-first: avoids TOCTOU race when multiple instances start concurrently
     try {
-      // Try to delete existing stream first to recreate with new configuration
-      try {
-        await this.jetStreamManager.streams.delete("THE0_EVENTS");
-      } catch (deleteError: any) {
-        // Ignore "stream not found" errors
+      await this.jetStreamManager.streams.add(config);
+      return Ok(undefined);
+    } catch (err: any) {
+      if (!this.isStreamAlreadyExists(err)) {
+        return Failure(err.message ?? `Failed to create stream ${config.name}`);
       }
-
-      // Create stream for bot lifecycle events
-      await this.jetStreamManager.streams.add({
-        name: "THE0_EVENTS",
-        subjects: [
-          "the0.bot.created",
-          "the0.bot.updated",
-          "the0.bot.deleted",
-          "the0.bot-schedule.created",
-          "the0.bot-schedule.updated",
-          "the0.bot-schedule.deleted",
-        ],
-        retention: RetentionPolicy.Limits,
-        max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
-        storage: StorageType.File,
-      });
-
-      this.logger.info("NATS JetStream initialized");
-    } catch (error: any) {
-      this.logger.error({ err: error }, "Failed to setup NATS streams");
-      throw error;
     }
+
+    // Stream already exists — update config
+    try {
+      await this.jetStreamManager.streams.update(config.name, config);
+      return Ok(undefined);
+    } catch (err: any) {
+      return Failure(err.message ?? `Failed to update stream ${config.name}`);
+    }
+  }
+
+  private async setupStreams(): Promise<Result<void, string>> {
+    if (!this.jetStreamManager) {
+      return Failure("NATS JetStream manager not initialized");
+    }
+
+    const eventsResult = await this.ensureStream({
+      name: "THE0_EVENTS",
+      subjects: [
+        "the0.bot.created",
+        "the0.bot.updated",
+        "the0.bot.deleted",
+        "the0.bot-schedule.created",
+        "the0.bot-schedule.updated",
+        "the0.bot-schedule.deleted",
+      ],
+      retention: RetentionPolicy.Limits,
+      max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
+      storage: StorageType.File,
+    });
+
+    // THE0_EVENTS failure is fatal: it carries critical bot lifecycle events
+    // (start/stop/status) required for core bot orchestration.
+    if (!eventsResult.success) {
+      this.logger.error({ error: eventsResult.error }, "Failed to setup THE0_EVENTS stream");
+      return eventsResult;
+    }
+
+    // Short-lived in-memory stream for real-time log fan-out.
+    // Logs are persisted to MinIO separately; this stream only bridges
+    // the runtime -> API SSE gap. 1 hour / 128MB keeps memory bounded.
+    const logsResult = await this.ensureStream({
+      name: "THE0_BOT_LOGS",
+      subjects: ["the0.bot.logs.>"],
+      retention: RetentionPolicy.Limits,
+      max_age: 60 * 60 * 1000 * 1000000, // 1 hour in nanoseconds
+      max_bytes: 128 * 1024 * 1024, // 128MB
+      storage: StorageType.Memory,
+    });
+
+    if (!logsResult.success) {
+      // Non-fatal: THE0_BOT_LOGS is only used for real-time log tailing in the
+      // console UI. Unlike THE0_EVENTS (which carries critical bot lifecycle
+      // events like start/stop/status), THE0_BOT_LOGS is a convenience stream
+      // and logs are already persisted to MinIO independently.
+      this.logger.warn({ error: logsResult.error }, "THE0_BOT_LOGS stream setup failed — log streaming will be unavailable");
+    }
+
+    this.logger.info("NATS JetStream initialized");
+    return Ok(undefined);
   }
 
   // Generic publish method - business logic handled by callers
@@ -113,6 +172,54 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     } catch (error: any) {
       this.logger.error({ err: error, topic }, "Failed to publish to topic");
       return Failure(error.message);
+    }
+  }
+
+  // Subscribe to a NATS subject using raw connection (not JetStream)
+  subscribe(
+    subject: string,
+    callback: (msg: string) => void,
+  ): Result<() => void, string> {
+    if (!this.connection) {
+      return Failure("NATS connection not established");
+    }
+
+    const sub = this.createSubscription(subject, callback);
+    if (!sub.success) {
+      this.logger.error({ error: sub.error, subject }, "Failed to create NATS subscription");
+    }
+    return sub;
+  }
+
+  private createSubscription(
+    subject: string,
+    callback: (msg: string) => void,
+  ): Result<() => void, string> {
+    try {
+      const sub = this.connection!.subscribe(subject, {
+        callback: (err, msg) => {
+          if (err) {
+            this.logger.error({ err, subject }, "NATS subscription error");
+            return;
+          }
+          this.invokeCallback(subject, callback, msg.data);
+        },
+      });
+      return Ok(() => sub.unsubscribe());
+    } catch (error: unknown) {
+      return Failure(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private invokeCallback(
+    subject: string,
+    callback: (msg: string) => void,
+    data: Uint8Array,
+  ): void {
+    try {
+      callback(this.sc.decode(data));
+    } catch (err) {
+      this.logger.error({ err, subject }, "Error in subscription callback");
     }
   }
 
