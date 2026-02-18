@@ -9,7 +9,6 @@ services:
       POSTGRES_PASSWORD: the0_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - {{REPO_PATH}}/database/init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
@@ -81,11 +80,7 @@ services:
 
   # The0 API Service (TypeScript/NestJS)
   the0-api:
-    build:
-      context: {{REPO_PATH}}/api
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
+    image: ghcr.io/alexanderwanyoike/the0/api:latest
     pull_policy: always
     environment:
       # Database configuration
@@ -149,11 +144,7 @@ services:
 
   # Bot Runner Service (Go - single-process bot execution)
   bot-runner:
-    build:
-      context: {{REPO_PATH}}/runtime
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
+    image: ghcr.io/alexanderwanyoike/the0/runtime:latest
     pull_policy: always
     environment:
       # MongoDB configuration
@@ -208,11 +199,7 @@ services:
 
   # Bot Scheduler Service (Go - single-process scheduled bot execution)
   bot-scheduler:
-    build:
-      context: {{REPO_PATH}}/runtime
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
+    image: ghcr.io/alexanderwanyoike/the0/runtime:latest
     pull_policy: always
     environment:
       # MongoDB configuration
@@ -266,11 +253,7 @@ services:
 
   # Query Server Service (Go - standalone query execution)
   query-server:
-    build:
-      context: {{REPO_PATH}}/runtime
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
+    image: ghcr.io/alexanderwanyoike/the0/runtime:latest
     pull_policy: always
     environment:
       # MongoDB configuration
@@ -316,13 +299,7 @@ services:
     command: ["/app/runtime", "query-server"]
 
   the0-frontend:
-    build:
-      context: {{REPO_PATH}}/frontend
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-        - NEXT_PUBLIC_API_URL=http://localhost:3000
-        - NEXT_PUBLIC_DOCS_URL=http://localhost:3002
+    image: ghcr.io/alexanderwanyoike/the0/frontend:latest
     pull_policy: always
     environment:
       # API configuration (runtime)
@@ -361,9 +338,7 @@ services:
 
   # the0 Documentation Site (VitePress)
   the0-docs:
-    build:
-      context: {{REPO_PATH}}/docs
-      dockerfile: Dockerfile
+    image: ghcr.io/alexanderwanyoike/the0/docs:latest
     pull_policy: always
     ports:
       - "3002:80"

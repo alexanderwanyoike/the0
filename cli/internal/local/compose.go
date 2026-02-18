@@ -119,6 +119,11 @@ func (r *ComposeRunner) Build() error {
 	return r.Run("build")
 }
 
+// Pull pulls all service images
+func (r *ComposeRunner) Pull() error {
+	return r.Run("pull")
+}
+
 // BuildRuntimeImage builds the runtime Docker image from the repo
 func (r *ComposeRunner) BuildRuntimeImage(repoPath string) error {
 	runtimePath := filepath.Join(repoPath, "runtime")
