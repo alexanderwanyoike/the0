@@ -10,8 +10,8 @@ import (
 )
 
 // UniversalRuntimeImage is the single Docker image that contains all language runtimes.
-// Build with: cd docker/images && make runtime
-const UniversalRuntimeImage = "the0/runtime:latest"
+// Override with RUNTIME_IMAGE env var for local development.
+const UniversalRuntimeImage = "ghcr.io/alexanderwanyoike/the0/runtime:latest"
 
 // supportedRuntimes lists all valid runtime identifiers.
 // All runtimes use the universal image (the0/runtime:latest).

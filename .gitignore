@@ -22,7 +22,8 @@ example-bots/**/main.js
 # Example bots - lock files and misc
 example-bots/*/frontend/package-lock.json
 example-bots/*/frontend/yarn.lock
-example-bots/*/frontend/.npmrc
+# NOTE: .npmrc tracked on purpose — points @alexanderwanyoike scope to GitHub Packages (no secrets)
+# example-bots/*/frontend/.npmrc
 example-bots/*/*.lock
 example-bots/*/package-lock.json
 
