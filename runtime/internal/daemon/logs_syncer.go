@@ -39,10 +39,11 @@ func NewLogsSyncer(botID, logsPath string, logUploader miniologger.MinIOLogger, 
 	}
 }
 
-// Sync reads new log content and uploads to MinIO in bounded chunks.
-// Drains all available content (up to the size at call time) so large bursts
-// are fully caught up in a single Sync call.
-// Returns true if any logs were synced, false otherwise.
+// Sync reads new log content from the bot's log file and uploads it to MinIO
+// in bounded chunks. It drains all available content (up to the file size at
+// call time) so large bursts are fully caught up in a single Sync call.
+// Each chunk is split on newline boundaries to avoid breaking log lines or
+// UTF-8 runes. Returns true if any logs were synced, false otherwise.
 func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	logFile := filepath.Join(l.logsPath, "bot.log")
 	file, err := os.Open(logFile)
@@ -88,11 +89,11 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		if ctx.Err() != nil {
 			break
 		}
-		delta := currentSize - l.lastOffset
-		if delta > maxChunkSize {
-			delta = maxChunkSize
+		remainingBytes := currentSize - l.lastOffset
+		if remainingBytes > maxChunkSize {
+			remainingBytes = maxChunkSize
 		}
-		readSize := int(delta)
+		readSize := int(remainingBytes)
 
 		n, err := io.ReadFull(file, buf[:readSize])
 		if err == io.ErrUnexpectedEOF {
@@ -108,42 +109,28 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 			break
 		}
 
-		// Chunk on newline boundaries to avoid splitting log lines or UTF-8 runes.
-		// Only apply when there's more data remaining (not the final chunk).
-		useN := n
-		if l.lastOffset+int64(n) < currentSize {
-			if idx := bytes.LastIndexByte(buf[:n], '\n'); idx >= 0 {
-				useN = idx + 1
-				// Seek back so the remainder is re-read in the next iteration
-				if _, err := file.Seek(l.lastOffset+int64(useN), 0); err != nil {
-					l.logger.Info("Failed to seek in log file", "error", err.Error())
-					break
-				}
-			} else {
-				// No newline found in chunk — upload as-is to avoid stalling.
-				// This can happen with very long log lines (>1MB).
-				l.logger.Info("No newline boundary in chunk, uploading as-is", "bytes", n)
-			}
+		// Adjust to newline boundary to avoid splitting log lines or UTF-8 runes.
+		// Only applies when there's more data remaining (not the final chunk).
+		chunkSize, seekErr := adjustChunkToNewlineBoundary(file, buf, n, l.lastOffset, currentSize)
+		if seekErr != nil {
+			l.logger.Info("Failed to seek in log file", "error", seekErr.Error())
+			break
+		}
+		if chunkSize != n && chunkSize == 0 {
+			// No newline found — upload the full read as-is to avoid stalling
+			l.logger.Info("No newline boundary in chunk, uploading as-is", "bytes", n)
+			chunkSize = n
 		}
 
-		chunk := string(buf[:useN])
+		chunk := string(buf[:chunkSize])
 
-		syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		uploadErr := l.logUploader.AppendBotLogs(syncCtx, l.botID, chunk)
-		cancel()
-		if uploadErr != nil {
+		if uploadErr := l.uploadChunk(ctx, chunk); uploadErr != nil {
 			l.logger.Info("Failed to upload logs", "error", uploadErr.Error())
 			break
 		}
 
-		if l.natsPublisher != nil {
-			if err := l.natsPublisher.Publish(l.botID, chunk); err != nil {
-				l.logger.Info("Failed to publish logs to NATS", "error", err.Error())
-			}
-		}
-
-		l.lastOffset += int64(useN)
-		totalBytes += useN
+		l.lastOffset += int64(chunkSize)
+		totalBytes += chunkSize
 		chunks++
 	}
 
@@ -152,6 +139,45 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		return true
 	}
 	return false
+}
+
+// adjustChunkToNewlineBoundary finds the last newline in buf[:n] and seeks the
+// file back so the remainder is re-read in the next iteration. If the chunk is
+// the final one (offset+n reaches currentSize), it returns n unchanged.
+// Returns 0 when no newline is found in a non-final chunk (caller decides what to do).
+func adjustChunkToNewlineBoundary(file *os.File, buf []byte, n int, offset int64, currentSize int64) (int, error) {
+	if offset+int64(n) >= currentSize {
+		// Final chunk — no adjustment needed
+		return n, nil
+	}
+	idx := bytes.LastIndexByte(buf[:n], '\n')
+	if idx < 0 {
+		// No newline found in this chunk
+		return 0, nil
+	}
+	chunkSize := idx + 1
+	if _, err := file.Seek(offset+int64(chunkSize), 0); err != nil {
+		return 0, err
+	}
+	return chunkSize, nil
+}
+
+// uploadChunk uploads a log chunk to MinIO and publishes it to NATS.
+func (l *LogsSyncer) uploadChunk(ctx context.Context, content string) error {
+	syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, content); err != nil {
+		return err
+	}
+
+	if l.natsPublisher != nil {
+		if err := l.natsPublisher.Publish(l.botID, content); err != nil {
+			l.logger.Info("Failed to publish logs to NATS", "error", err.Error())
+		}
+	}
+
+	return nil
 }
 
 // Close cleans up all owned resources (uploader and publisher).

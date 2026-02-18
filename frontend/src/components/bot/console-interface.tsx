@@ -325,16 +325,31 @@ const ConnectionStatusIndicator: React.FC<{
 }> = ({ connected, lastUpdate }) => {
   if (connected === undefined) return null;
 
+  const statusLabel = connected
+    ? "connected"
+    : lastUpdate
+      ? "disconnected"
+      : "connecting";
+
   return (
-    <span className="flex items-center gap-1 text-xs">
-      <span className={cn(
-        "h-1.5 w-1.5 rounded-full",
-        connected
-          ? "bg-green-500"
-          : lastUpdate
-            ? "bg-gray-400"
-            : "bg-yellow-500 animate-pulse"
-      )} />
+    <span
+      className="flex items-center gap-1 text-xs"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label={`Connection status: ${statusLabel}`}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          connected
+            ? "bg-green-500"
+            : lastUpdate
+              ? "bg-gray-400"
+              : "bg-yellow-500 animate-pulse"
+        )}
+      />
       <span className={cn(
         "text-[10px]",
         connected

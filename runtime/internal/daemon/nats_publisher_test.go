@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,35 @@ func TestNATSPublisher_Close_NilConn(t *testing.T) {
 func TestNATSPublisher_ImplementsLogPublisher(t *testing.T) {
 	// Compile-time check that NATSPublisher satisfies LogPublisher
 	var _ LogPublisher = (*NATSPublisher)(nil)
+}
+
+func TestNATSPublisher_ConcurrentPublishAndClose(t *testing.T) {
+	// Verify that concurrent Publish and Close calls don't cause a data race.
+	// The publisher starts with a nil conn so no real NATS server is needed.
+	p := &NATSPublisher{conn: nil, logger: &util.DefaultLogger{}}
+
+	var wg sync.WaitGroup
+	const goroutines = 50
+
+	// Spawn goroutines that call Publish concurrently
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = p.Publish("bot-1", "log line")
+		}()
+	}
+
+	// Spawn goroutines that call Close concurrently
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = p.Close()
+		}()
+	}
+
+	wg.Wait()
 }
 
 func TestRedactNATSURL(t *testing.T) {

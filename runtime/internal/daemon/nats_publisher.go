@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"runtime/internal/util"
@@ -21,6 +22,7 @@ type LogPublisher interface {
 type NATSPublisher struct {
 	conn   *nats.Conn
 	logger util.Logger
+	mu     sync.RWMutex
 }
 
 // NewNATSPublisher creates a new NATS publisher for log streaming.
@@ -76,7 +78,10 @@ func sanitizeBotID(botID string) string {
 }
 
 // Publish sends log content to the bot's NATS log subject.
+// It is safe to call concurrently with Close.
 func (p *NATSPublisher) Publish(botID string, content string) error {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if p.conn == nil {
 		return fmt.Errorf("NATS connection is closed")
 	}
@@ -85,7 +90,10 @@ func (p *NATSPublisher) Publish(botID string, content string) error {
 }
 
 // Close drains and closes the NATS connection.
+// It is safe to call concurrently with Publish.
 func (p *NATSPublisher) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.conn != nil {
 		err := p.conn.Drain()
 		p.conn = nil

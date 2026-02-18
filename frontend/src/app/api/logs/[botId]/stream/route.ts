@@ -8,16 +8,26 @@ export async function GET(
   { params }: { params: Promise<{ botId: string }> },
 ) {
   return withAdminAuth(req, async (req: NextRequest) => {
+    const apiUrl = process.env.BOT_API_URL;
+    if (!apiUrl) {
+      return NextResponse.json(
+        { error: "API server not configured" },
+        { status: 500 },
+      );
+    }
+
     const { botId } = await params;
     const token = req.headers.get("Authorization");
+    const headers: HeadersInit = { Accept: "text/event-stream" };
+    if (token) {
+      headers.Authorization = token;
+    }
 
     try {
       const upstream = await fetch(
-        `${process.env.BOT_API_URL}/logs/${encodeURIComponent(botId)}/stream`,
+        `${apiUrl}/logs/${encodeURIComponent(botId)}/stream`,
         {
-          headers: {
-            Authorization: token,
-          } as HeadersInit,
+          headers,
           signal: req.signal,
         },
       );

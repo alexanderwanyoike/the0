@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"runtime/internal/model"
 	runtimepkg "runtime/internal/runtime"
 	"runtime/internal/util"
@@ -254,8 +253,8 @@ func (r *dockerRunner) buildContainerConfig(
 	}
 
 	// Pass NATS URL so the daemon can publish logs to NATS for real-time streaming
-	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-		builder = builder.WithNATSURL(natsURL)
+	if r.config.NatsURL != "" {
+		builder = builder.WithNATSURL(r.config.NatsURL)
 	}
 
 	// Dev mode: mount runtime binary from host for faster iteration

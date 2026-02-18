@@ -40,6 +40,7 @@ type DockerRunnerConfig struct {
 	CPUShares              int64  // CPU shares allocated to containers
 	DevRuntimePath         string // Optional: host path to runtime binary for dev mode
 	DockerNetwork          string // Docker network to connect containers to (e.g., "the0-oss-network")
+	NatsURL                string // NATS URL for log publishing inside containers (optional)
 }
 
 // GetContainerEndpoint returns the MinIO endpoint for containers.
@@ -105,6 +106,9 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	// Optional: Container-specific MinIO endpoint (e.g., host.docker.internal:9000)
 	containerEndpoint := os.Getenv("MINIO_CONTAINER_ENDPOINT")
 
+	// Optional: NATS URL for log publishing inside containers
+	natsURL := os.Getenv("NATS_URL")
+
 	return &DockerRunnerConfig{
 		MinIOEndpoint:          endpoint,
 		MinIOContainerEndpoint: containerEndpoint,
@@ -121,6 +125,7 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		CPUShares:              getCPUShares(),
 		DevRuntimePath:         devRuntimePath,
 		DockerNetwork:          dockerNetwork,
+		NatsURL:                natsURL,
 	}, nil
 }
 

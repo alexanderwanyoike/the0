@@ -83,9 +83,13 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   private async ensureStream(
     config: StreamSetupConfig,
   ): Promise<Result<void, string>> {
+    if (!this.jetStreamManager) {
+      return Failure("JetStream manager not initialized");
+    }
+
     // Add-first: avoids TOCTOU race when multiple instances start concurrently
     try {
-      await this.jetStreamManager!.streams.add(config);
+      await this.jetStreamManager.streams.add(config);
       return Ok(undefined);
     } catch (err: any) {
       if (!this.isStreamAlreadyExists(err)) {
@@ -95,7 +99,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
     // Stream already exists — update config
     try {
-      await this.jetStreamManager!.streams.update(config.name, config);
+      await this.jetStreamManager.streams.update(config.name, config);
       return Ok(undefined);
     } catch (err: any) {
       return Failure(err.message ?? `Failed to update stream ${config.name}`);
@@ -122,6 +126,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       storage: StorageType.File,
     });
 
+    // THE0_EVENTS failure is fatal: it carries critical bot lifecycle events
+    // (start/stop/status) required for core bot orchestration.
     if (!eventsResult.success) {
       this.logger.error({ error: eventsResult.error }, "Failed to setup THE0_EVENTS stream");
       return eventsResult;

@@ -81,7 +81,7 @@ function expandLogEntries(entries: LogEntry[]): LogEntry[] {
     lines.forEach((line) => {
       expanded.push({
         date: entry.date,
-        content: line.trim(),
+        content: line, // preserve original indentation (trim only used for blank-line filter)
       });
     });
   });
@@ -97,7 +97,10 @@ export const useBotLogsStream = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
+  // totalSeen: cumulative count of all logs received this session, including entries
+  // trimmed from the buffer when it exceeds MAX_LOG_ENTRIES. The UI uses logs.length
+  // for the visible entry count badge; totalSeen tracks how many we've seen overall.
+  const [totalSeen, setTotalSeen] = useState(0);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
@@ -167,7 +170,7 @@ export const useBotLogsStream = ({
 
         setLogs(expandedLogs);
         setHasMore(result.hasMore);
-        setTotal(result.total);
+        setTotalSeen(result.total);
         setLastUpdate(new Date());
         initialLoadCompleteRef.current = true;
       } catch (err: any) {
@@ -287,7 +290,7 @@ export const useBotLogsStream = ({
                   setHasEarlierLogs(false);
                   setLogs(expanded);
                 }
-                setTotal(expanded.length);
+                setTotalSeen(expanded.length);
                 setLastUpdate(new Date());
                 initialLoadCompleteRef.current = true;
                 setLoading(false);
@@ -311,7 +314,7 @@ export const useBotLogsStream = ({
                   }
                   return combined;
                 });
-                setTotal((prev) => prev + newEntries.length);
+                setTotalSeen((prev) => prev + newEntries.length);
                 setLastUpdate(new Date());
               } catch (err) {
                 console.error("Failed to parse update SSE event:", err);
@@ -612,7 +615,7 @@ export const useBotLogsStream = ({
     loading,
     error,
     hasMore,
-    total,
+    total: totalSeen,
     refresh,
     exportLogs,
     setDateFilter,

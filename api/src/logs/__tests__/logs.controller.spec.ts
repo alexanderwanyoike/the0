@@ -1,4 +1,4 @@
-import { LogsController, _clearActiveSubscriptions } from "../logs.controller";
+import { LogsController, ACCESS_DENIED_MESSAGE } from "../logs.controller";
 import { LogsService } from "../logs.service";
 import { NatsService } from "@/nats/nats.service";
 import { PinoLogger } from "nestjs-pino";
@@ -12,7 +12,7 @@ describe("LogsController", () => {
   let mockUnsubscribe: jest.Mock;
 
   beforeEach(() => {
-    _clearActiveSubscriptions();
+    LogsController._resetForTest();
 
     mockUnsubscribe = jest.fn();
 
@@ -41,7 +41,7 @@ describe("LogsController", () => {
   });
 
   afterEach(() => {
-    _clearActiveSubscriptions();
+    LogsController._resetForTest();
   });
 
   describe("streamLogs", () => {
@@ -154,7 +154,7 @@ describe("LogsController", () => {
         call[0].startsWith("event: error"),
       );
       expect(errorWrite).toBeDefined();
-      expect(errorWrite[0]).toContain("access denied");
+      expect(errorWrite[0]).toContain(ACCESS_DENIED_MESSAGE);
       expect(mockRes.end).toHaveBeenCalled();
       expect(mockNatsService.subscribe).not.toHaveBeenCalled();
     });
