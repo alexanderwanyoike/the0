@@ -129,23 +129,9 @@ export THE0_API_URL=http://localhost:3000
 export THE0_API_URL=http://api.the0.local:3000
 ```
 
-**Basic CLI usage:**
+**For CLI bot usage instructions, visit the official documentation:**
 
-```bash
-# Authenticate with the platform
-the0 auth login
-
-# Manage bots
-the0 bot list
-the0 bot create my-bot
-the0 bot deploy my-bot
-
-# Custom bot commands
-the0 custom-bot upload my-trading-bot.zip
-the0 custom-bot status my-trading-bot
-```
-
-For more CLI commands and usage, see the CLI documentation.
+📖 [the0 CLI Documentation](https://docs.the0.dev/the0-cli/)
 
 ---
 

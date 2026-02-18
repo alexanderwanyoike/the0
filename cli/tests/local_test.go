@@ -544,16 +544,11 @@ func TestLocalInitCommand_Flags(t *testing.T) {
 
 	for _, sub := range localCmd.Commands() {
 		if sub.Name() == "init" {
-			repoPathFlag := sub.Flag("repo-path")
-			if repoPathFlag == nil {
-				t.Error("Expected init command to have 'repo-path' flag")
-			}
-
-			prebuiltFlag := sub.Flag("prebuilt")
-			if prebuiltFlag == nil {
-				t.Error("Expected init command to have 'prebuilt' flag")
-			} else if prebuiltFlag.DefValue != "false" {
-				t.Errorf("Expected prebuilt default 'false', got %q", prebuiltFlag.DefValue)
+			sourceFlag := sub.Flag("source")
+			if sourceFlag == nil {
+				t.Error("Expected init command to have 'source' flag")
+			} else if sourceFlag.DefValue != "" {
+				t.Errorf("Expected source default empty string, got %q", sourceFlag.DefValue)
 			}
 
 			return
@@ -784,5 +779,144 @@ func TestCleanupComposeDir_NoErrorWhenMissing(t *testing.T) {
 	err = local.CleanupComposeDir()
 	if err != nil {
 		t.Errorf("CleanupComposeDir should not error on missing dir, got: %v", err)
+	}
+}
+
+// ---- Prebuilt mode tests ----
+
+func TestLocalState_PrebuiltMode_JSONRoundTrip(t *testing.T) {
+	original := &local.LocalState{
+		RepoPath: "",
+		Prebuilt: true,
+		InitAt:   time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC),
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	var loaded local.LocalState
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if loaded.RepoPath != "" {
+		t.Errorf("RepoPath should be empty, got %q", loaded.RepoPath)
+	}
+	if !loaded.Prebuilt {
+		t.Error("Prebuilt should be true")
+	}
+	if !loaded.InitAt.Equal(original.InitAt) {
+		t.Errorf("InitAt mismatch: expected %v, got %v", original.InitAt, loaded.InitAt)
+	}
+}
+
+func TestExtractComposeFiles_PrebuiltMode(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "prebuilt-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", origHome)
+
+	// Extract in prebuilt mode
+	if err := local.ExtractComposeFiles("", true); err != nil {
+		t.Fatalf("ExtractComposeFiles failed: %v", err)
+	}
+
+	composeDir := filepath.Join(tmpDir, ".the0", "compose")
+
+	// docker-compose.yml should exist and not contain {{REPO_PATH}}
+	composeData, err := os.ReadFile(filepath.Join(composeDir, "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("Failed to read docker-compose.yml: %v", err)
+	}
+	if strings.Contains(string(composeData), "{{REPO_PATH}}") {
+		t.Error("Prebuilt compose file should not contain {{REPO_PATH}} placeholders")
+	}
+
+	// Should contain GHCR image references
+	if !strings.Contains(string(composeData), "ghcr.io/alexanderwanyoike/the0/") {
+		t.Error("Prebuilt compose file should contain GHCR image references")
+	}
+
+	// docker-compose.dev.yml should NOT exist
+	devPath := filepath.Join(composeDir, "docker-compose.dev.yml")
+	if _, err := os.Stat(devPath); !os.IsNotExist(err) {
+		t.Error("Prebuilt mode should not write docker-compose.dev.yml")
+	}
+
+	// State should have Prebuilt=true and empty RepoPath
+	state, err := local.LoadState()
+	if err != nil {
+		t.Fatalf("Failed to load state: %v", err)
+	}
+	if !state.Prebuilt {
+		t.Error("State.Prebuilt should be true")
+	}
+	if state.RepoPath != "" {
+		t.Errorf("State.RepoPath should be empty, got %q", state.RepoPath)
+	}
+}
+
+func TestExtractComposeFiles_SourceMode(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "source-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", origHome)
+
+	// Create a fake repo path
+	repoPath := filepath.Join(tmpDir, "repo")
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("Failed to create repo dir: %v", err)
+	}
+
+	// Extract in source mode
+	if err := local.ExtractComposeFiles(repoPath, false); err != nil {
+		t.Fatalf("ExtractComposeFiles failed: %v", err)
+	}
+
+	composeDir := filepath.Join(tmpDir, ".the0", "compose")
+
+	// docker-compose.yml should exist with {{REPO_PATH}} replaced
+	composeData, err := os.ReadFile(filepath.Join(composeDir, "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("Failed to read docker-compose.yml: %v", err)
+	}
+	if strings.Contains(string(composeData), "{{REPO_PATH}}") {
+		t.Error("Source compose file should not contain {{REPO_PATH}} placeholders")
+	}
+	if !strings.Contains(string(composeData), repoPath) {
+		t.Error("Source compose file should contain the resolved repo path")
+	}
+
+	// docker-compose.dev.yml should exist
+	devData, err := os.ReadFile(filepath.Join(composeDir, "docker-compose.dev.yml"))
+	if err != nil {
+		t.Fatalf("Failed to read docker-compose.dev.yml: %v", err)
+	}
+	if strings.Contains(string(devData), "{{REPO_PATH}}") {
+		t.Error("Dev compose file should not contain {{REPO_PATH}} placeholders")
+	}
+
+	// State should have Prebuilt=false and correct RepoPath
+	state, err := local.LoadState()
+	if err != nil {
+		t.Fatalf("Failed to load state: %v", err)
+	}
+	if state.Prebuilt {
+		t.Error("State.Prebuilt should be false")
+	}
+	if state.RepoPath != repoPath {
+		t.Errorf("State.RepoPath: expected %q, got %q", repoPath, state.RepoPath)
 	}
 }
