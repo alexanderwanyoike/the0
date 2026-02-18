@@ -59,7 +59,12 @@ export interface UseBotLogsStreamReturn {
   setDateRangeFilter: (start: string, end: string) => void;
   connected: boolean;
   lastUpdate: Date | null;
+  hasEarlierLogs: boolean;
+  loadingEarlier: boolean;
+  loadEarlierLogs: () => void;
 }
+
+const MAX_LOG_ENTRIES = 2000;
 
 /**
  * Expand raw log entries by splitting multi-line content into individual LogEntry items.
@@ -96,6 +101,8 @@ export const useBotLogsStream = ({
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
+  const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -107,6 +114,7 @@ export const useBotLogsStream = ({
   const initialLoadCompleteRef = useRef(false);
   const isUsingDateFilterRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
+  const trimmedCountRef = useRef(0);
 
   // ---- REST fetch (same pattern as useBotLogs) ----
 
@@ -216,6 +224,8 @@ export const useBotLogsStream = ({
         setConnected(true);
         setError(null);
         reconnectAttemptsRef.current = 0;
+        trimmedCountRef.current = 0;
+        setHasEarlierLogs(false);
 
         // Clear fallback timer since SSE connected
         if (fallbackTimeoutRef.current) {
@@ -267,7 +277,16 @@ export const useBotLogsStream = ({
               try {
                 const entries: LogEntry[] = JSON.parse(data);
                 const expanded = expandLogEntries(entries);
-                setLogs(expanded);
+                if (expanded.length > MAX_LOG_ENTRIES) {
+                  const trimmed = expanded.length - MAX_LOG_ENTRIES;
+                  trimmedCountRef.current = trimmed;
+                  setHasEarlierLogs(true);
+                  setLogs(expanded.slice(trimmed));
+                } else {
+                  trimmedCountRef.current = 0;
+                  setHasEarlierLogs(false);
+                  setLogs(expanded);
+                }
                 setTotal(expanded.length);
                 setLastUpdate(new Date());
                 initialLoadCompleteRef.current = true;
@@ -282,7 +301,16 @@ export const useBotLogsStream = ({
                 const newEntries = expandLogEntries([
                   { date: parsed.timestamp, content: parsed.content },
                 ]);
-                setLogs((prev) => [...prev, ...newEntries]);
+                setLogs((prev) => {
+                  const combined = [...prev, ...newEntries];
+                  if (combined.length > MAX_LOG_ENTRIES) {
+                    const excess = combined.length - MAX_LOG_ENTRIES;
+                    trimmedCountRef.current += excess;
+                    setHasEarlierLogs(true);
+                    return combined.slice(excess);
+                  }
+                  return combined;
+                });
                 setTotal((prev) => prev + newEntries.length);
                 setLastUpdate(new Date());
               } catch (err) {
@@ -478,6 +506,78 @@ export const useBotLogsStream = ({
     [query, cleanupSSE],
   );
 
+  const loadEarlierLogs = useCallback(async () => {
+    if (!botId || !user) return;
+
+    setLoadingEarlier(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const searchParams = new URLSearchParams();
+      searchParams.set("date", today);
+
+      const response = await authFetch(
+        `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch earlier logs: ${response.statusText}`);
+      }
+
+      const result: LogsResponse = await response.json();
+      const allExpanded = expandLogEntries(result.data);
+
+      setLogs((currentLogs) => {
+        // Find where the current buffer starts in the full log
+        // Prepend entries that are before the current buffer
+        const currentFirst = currentLogs[0];
+        if (!currentFirst || allExpanded.length === 0) {
+          return currentLogs;
+        }
+
+        // Find the index of the first current log in the full set
+        let matchIndex = -1;
+        for (let i = 0; i < allExpanded.length; i++) {
+          if (
+            allExpanded[i].content === currentFirst.content &&
+            allExpanded[i].date === currentFirst.date
+          ) {
+            matchIndex = i;
+            break;
+          }
+        }
+
+        if (matchIndex <= 0) {
+          // No earlier entries found or already at start
+          setHasEarlierLogs(false);
+          return currentLogs;
+        }
+
+        const earlier = allExpanded.slice(0, matchIndex);
+        const combined = [...earlier, ...currentLogs];
+
+        if (combined.length > MAX_LOG_ENTRIES) {
+          const excess = combined.length - MAX_LOG_ENTRIES;
+          trimmedCountRef.current = excess;
+          setHasEarlierLogs(true);
+          return combined.slice(excess);
+        }
+
+        trimmedCountRef.current = 0;
+        setHasEarlierLogs(false);
+        return combined;
+      });
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      toast({
+        title: "Error",
+        description: err.message || "Failed to load earlier logs",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingEarlier(false);
+    }
+  }, [botId, user, toast]);
+
   const exportLogs = useCallback(() => {
     if (logs.length === 0) {
       toast({
@@ -519,5 +619,8 @@ export const useBotLogsStream = ({
     setDateRangeFilter,
     connected,
     lastUpdate,
+    hasEarlierLogs,
+    loadingEarlier,
+    loadEarlierLogs,
   };
 };

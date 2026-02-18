@@ -111,6 +111,9 @@ const BotDetail = ({ params }: BotDetailProps) => {
   // Get streaming-specific fields (only available when using stream hook)
   const connected = isRunning ? streamHook.connected : undefined;
   const lastUpdate = isRunning ? streamHook.lastUpdate : undefined;
+  const hasEarlierLogs = isRunning ? streamHook.hasEarlierLogs : undefined;
+  const loadingEarlier = isRunning ? streamHook.loadingEarlier : undefined;
+  const loadEarlierLogs = isRunning ? streamHook.loadEarlierLogs : undefined;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -572,6 +575,9 @@ const BotDetail = ({ params }: BotDetailProps) => {
                 onExport={exportLogs}
                 connected={connected}
                 lastUpdate={lastUpdate ?? null}
+                hasEarlierLogs={hasEarlierLogs}
+                loadingEarlier={loadingEarlier}
+                onLoadEarlier={loadEarlierLogs}
                 className="h-full"
                 compact
               />

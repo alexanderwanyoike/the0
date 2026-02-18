@@ -456,4 +456,129 @@ describe("ConsoleInterface", () => {
       expect(screen.getByText("2 entries")).toBeInTheDocument();
     });
   });
+
+  describe("load earlier logs", () => {
+    it("should render 'Load earlier logs' button when hasEarlierLogs is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          onLoadEarlier={jest.fn()}
+        />,
+      );
+
+      expect(screen.getByText("Load earlier logs")).toBeInTheDocument();
+    });
+
+    it("should not render button when hasEarlierLogs is false", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(<ConsoleInterface {...defaultProps} logs={logs} />);
+
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should not render button when hasEarlierLogs is true but onLoadEarlier is undefined", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface {...defaultProps} logs={logs} hasEarlierLogs={true} />,
+      );
+
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should hide button when search query is active", async () => {
+      const user = userEvent.setup();
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          onLoadEarlier={jest.fn()}
+          compact={true}
+        />,
+      );
+
+      expect(screen.getByText("Load earlier logs")).toBeInTheDocument();
+
+      // Type in the compact search input
+      const searchInput = screen.getByPlaceholderText("Search...");
+      await user.type(searchInput, "test");
+
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should call onLoadEarlier when button is clicked", async () => {
+      const user = userEvent.setup();
+      const onLoadEarlier = jest.fn();
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          onLoadEarlier={onLoadEarlier}
+        />,
+      );
+
+      await user.click(screen.getByText("Load earlier logs"));
+
+      expect(onLoadEarlier).toHaveBeenCalled();
+    });
+
+    it("should show loading state when loadingEarlier is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          loadingEarlier={true}
+          onLoadEarlier={jest.fn()}
+        />,
+      );
+
+      expect(screen.getByText("Loading...")).toBeInTheDocument();
+      expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();
+    });
+
+    it("should disable button when loadingEarlier is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+          loadingEarlier={true}
+          onLoadEarlier={jest.fn()}
+        />,
+      );
+
+      const button = screen.getByText("Loading...").closest("button");
+      expect(button).toBeDisabled();
+    });
+  });
 });

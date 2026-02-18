@@ -46,6 +46,12 @@ interface ConsoleInterfaceProps {
   connected?: boolean;
   /** Timestamp of the last received update */
   lastUpdate?: Date | null;
+  /** Whether there are earlier logs that were trimmed from the buffer */
+  hasEarlierLogs?: boolean;
+  /** Whether earlier logs are currently being fetched */
+  loadingEarlier?: boolean;
+  /** Callback to load earlier logs that were trimmed from the buffer */
+  onLoadEarlier?: () => void;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -72,7 +78,7 @@ function formatTimestamp(date: Date | null): { date: string; time: string } | nu
   };
 }
 
-const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
+const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = React.memo(({
   log,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -163,12 +169,13 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       )}
     </div>
   );
-};
+});
+LogEntryComponent.displayName = "LogEntryComponent";
 
 /**
  * Component for rendering metric entries with visual distinction.
  */
-const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
+const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = React.memo(({
   log,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -278,12 +285,13 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       )}
     </div>
   );
-};
+});
+MetricEntryComponent.displayName = "MetricEntryComponent";
 
 /**
  * Smart entry component that detects metrics vs logs.
  */
-const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
+const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = React.memo(({
   log,
   index,
 }) => {
@@ -295,7 +303,11 @@ const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
   }
 
   return <LogEntryComponent log={log} index={index} />;
-};
+}, (prevProps, nextProps) =>
+  prevProps.log.content === nextProps.log.content &&
+  prevProps.log.date === nextProps.log.date
+);
+SmartLogEntry.displayName = "SmartLogEntry";
 
 /**
  * Connection status indicator for the console toolbar.
@@ -349,6 +361,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   compact = false,
   connected,
   lastUpdate,
+  hasEarlierLogs,
+  loadingEarlier,
+  onLoadEarlier,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(false);
@@ -631,6 +646,29 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                   index={index}
                 />
               ))}
+              {hasEarlierLogs && onLoadEarlier && !searchQuery && (
+                <div className="flex justify-center py-2 border-t border-gray-200 dark:border-gray-800">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onLoadEarlier}
+                    disabled={loadingEarlier}
+                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  >
+                    {loadingEarlier ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ScrollText className="h-3 w-3 mr-1" />
+                        Load earlier logs
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
               <div ref={bottomRef} />
             </>
           )}
