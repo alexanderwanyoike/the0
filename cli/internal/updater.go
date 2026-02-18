@@ -56,8 +56,16 @@ func NewUpdater(currentVersion string) *Updater {
 		GitHubOwner:    GitHubOwner,
 		GitHubRepo:     GitHubRepo,
 		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 30 * time.Second,
 		},
+	}
+}
+
+// newDownloadClient returns an HTTP client with a generous timeout for
+// downloading release binaries over slower connections.
+func newDownloadClient() *http.Client {
+	return &http.Client{
+		Timeout: 5 * time.Minute,
 	}
 }
 
@@ -106,6 +114,8 @@ func GetPlatformBinaryName() string {
 }
 
 // DownloadAsset downloads a binary from the given URL.
+// Uses a separate HTTP client with a longer timeout than the default,
+// since binary downloads can take a while on slower connections.
 func (u *Updater) DownloadAsset(url string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -113,7 +123,8 @@ func (u *Updater) DownloadAsset(url string) ([]byte, error) {
 	}
 	req.Header.Set("User-Agent", "the0-cli/"+u.CurrentVersion)
 
-	resp, err := u.HTTPClient.Do(req)
+	client := newDownloadClient()
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download asset: %w", err)
 	}
