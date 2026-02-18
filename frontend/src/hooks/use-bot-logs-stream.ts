@@ -26,10 +26,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { LogEntry } from "@/components/bot/console-interface";
-import {
-  createAuthenticatedSSEUrl,
-  validateSSEAuth,
-} from "@/lib/sse/sse-auth";
+import { validateSSEAuth } from "@/lib/sse/sse-auth";
 
 interface LogsQuery {
   date?: string;
@@ -103,7 +100,7 @@ export const useBotLogsStream = ({
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const sseAbortRef = useRef<AbortController | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -194,111 +191,143 @@ export const useBotLogsStream = ({
     const authResult = validateSSEAuth();
     if (!authResult.success) return;
 
-    const urlResult = createAuthenticatedSSEUrl(
-      `/api/logs/${encodeURIComponent(botId)}/stream`,
-    );
-    if (!urlResult.success) return;
-
-    // Clean up any existing EventSource and pending timers to avoid duplicates
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    // Clean up any existing SSE stream and pending timers to avoid duplicates
+    if (sseAbortRef.current) {
+      sseAbortRef.current.abort();
+      sseAbortRef.current = null;
     }
     if (fallbackTimeoutRef.current) {
       clearTimeout(fallbackTimeoutRef.current);
       fallbackTimeoutRef.current = null;
     }
 
-    const es = new EventSource(urlResult.data.url, {
-      withCredentials: true,
-    });
+    const controller = new AbortController();
+    sseAbortRef.current = controller;
 
-    es.onopen = () => {
-      setConnected(true);
-      setError(null);
-      reconnectAttemptsRef.current = 0;
-
-      // Clear fallback timer since SSE connected
-      if (fallbackTimeoutRef.current) {
-        clearTimeout(fallbackTimeoutRef.current);
-        fallbackTimeoutRef.current = null;
-      }
-
-      // Stop polling when SSE is active
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-
-    es.addEventListener("history", (event: MessageEvent) => {
-      try {
-        const entries: LogEntry[] = JSON.parse(event.data);
-        const expanded = expandLogEntries(entries);
-        setLogs(expanded);
-        setTotal(expanded.length);
-        setLastUpdate(new Date());
-        initialLoadCompleteRef.current = true;
-        setLoading(false);
-      } catch (err) {
-        console.error("Failed to parse history SSE event:", err);
-      }
-    });
-
-    es.addEventListener("update", (event: MessageEvent) => {
-      try {
-        const data: { content: string; timestamp: string } = JSON.parse(
-          event.data,
-        );
-        const newEntries = expandLogEntries([
-          { date: data.timestamp, content: data.content },
-        ]);
-        setLogs((prev) => [...prev, ...newEntries]);
-        setTotal((prev) => prev + newEntries.length);
-        setLastUpdate(new Date());
-      } catch (err) {
-        console.error("Failed to parse update SSE event:", err);
-      }
-    });
-
-    es.onerror = () => {
-      setConnected(false);
-      // Close the errored EventSource immediately to free the browser
-      // connection slot during the backoff delay before reconnecting.
-      es.close();
-      eventSourceRef.current = null;
-
-      if (!initialLoadCompleteRef.current) {
-        // Never loaded data -- fall back to REST polling
-        fetchLogsRef.current();
-        if (!pollingIntervalRef.current) {
-          pollingIntervalRef.current = setInterval(() => {
-            fetchLogsRef.current();
-          }, refreshInterval);
+    // Use authFetch to send Authorization header (EventSource can't do this)
+    authFetch(`/api/logs/${encodeURIComponent(botId)}/stream`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok || !response.body) {
+          throw new Error(`Stream response: ${response.status}`);
         }
-      } else if (!isUsingDateFilterRef.current) {
-        // SSE dropped after initial load -- try to reconnect with backoff
-        // Only reconnect when not using date filter
-        const delay = Math.min(
-          1000 * Math.pow(2, reconnectAttemptsRef.current),
-          30000,
-        );
-        reconnectAttemptsRef.current++;
-        fallbackTimeoutRef.current = setTimeout(() => {
-          connectSSE();
-        }, delay);
-      }
-    };
 
-    eventSourceRef.current = es;
+        setConnected(true);
+        setError(null);
+        reconnectAttemptsRef.current = 0;
+
+        // Clear fallback timer since SSE connected
+        if (fallbackTimeoutRef.current) {
+          clearTimeout(fallbackTimeoutRef.current);
+          fallbackTimeoutRef.current = null;
+        }
+
+        // Stop polling when SSE is active
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+
+        // Read the SSE stream and parse events
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse complete SSE messages (separated by double newline)
+          const messages = buffer.split("\n\n");
+          // Keep the last chunk which may be incomplete
+          buffer = messages.pop() || "";
+
+          for (const msg of messages) {
+            if (!msg.trim()) continue;
+
+            let eventType = "message";
+            let data = "";
+
+            for (const line of msg.split("\n")) {
+              if (line.startsWith("event: ")) {
+                eventType = line.slice(7).trim();
+              } else if (line.startsWith("data: ")) {
+                data += line.slice(6);
+              } else if (line.startsWith("data:")) {
+                data += line.slice(5);
+              }
+            }
+
+            if (!data) continue;
+
+            if (eventType === "history") {
+              try {
+                const entries: LogEntry[] = JSON.parse(data);
+                const expanded = expandLogEntries(entries);
+                setLogs(expanded);
+                setTotal(expanded.length);
+                setLastUpdate(new Date());
+                initialLoadCompleteRef.current = true;
+                setLoading(false);
+              } catch (err) {
+                console.error("Failed to parse history SSE event:", err);
+              }
+            } else if (eventType === "update") {
+              try {
+                const parsed: { content: string; timestamp: string } =
+                  JSON.parse(data);
+                const newEntries = expandLogEntries([
+                  { date: parsed.timestamp, content: parsed.content },
+                ]);
+                setLogs((prev) => [...prev, ...newEntries]);
+                setTotal((prev) => prev + newEntries.length);
+                setLastUpdate(new Date());
+              } catch (err) {
+                console.error("Failed to parse update SSE event:", err);
+              }
+            }
+          }
+        }
+
+        // Stream ended cleanly
+        setConnected(false);
+      })
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        setConnected(false);
+        sseAbortRef.current = null;
+
+        if (!initialLoadCompleteRef.current) {
+          // Never loaded data -- fall back to REST polling
+          fetchLogsRef.current();
+          if (!pollingIntervalRef.current) {
+            pollingIntervalRef.current = setInterval(() => {
+              fetchLogsRef.current();
+            }, refreshInterval);
+          }
+        } else if (!isUsingDateFilterRef.current) {
+          // SSE dropped after initial load -- try to reconnect with backoff
+          const delay = Math.min(
+            1000 * Math.pow(2, reconnectAttemptsRef.current),
+            30000,
+          );
+          reconnectAttemptsRef.current++;
+          fallbackTimeoutRef.current = setTimeout(() => {
+            connectSSE();
+          }, delay);
+        }
+      });
   }, [user, botId, refreshInterval]);
 
   // ---- Cleanup helper ----
 
   const cleanupSSE = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    if (sseAbortRef.current) {
+      sseAbortRef.current.abort();
+      sseAbortRef.current = null;
     }
     setConnected(false);
   }, []);
@@ -347,9 +376,9 @@ export const useBotLogsStream = ({
 
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+      if (sseAbortRef.current) {
+        sseAbortRef.current.abort();
+        sseAbortRef.current = null;
       }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -409,7 +438,7 @@ export const useBotLogsStream = ({
         connectSSE();
 
         fallbackTimeoutRef.current = setTimeout(() => {
-          if (!eventSourceRef.current) {
+          if (!sseAbortRef.current) {
             // SSE didn't reconnect within 4s -- start polling as fallback
             if (!pollingIntervalRef.current) {
               pollingIntervalRef.current = setInterval(() => {
