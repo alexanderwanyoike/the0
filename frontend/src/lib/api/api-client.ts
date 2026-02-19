@@ -11,7 +11,7 @@ export interface BotSchema {
 export interface Bot {
   id: string;
   config: Record<string, any>;
-  status: string;
+  status?: string;
   createdAt: string;
   updatedAt: string;
 }
