@@ -42,6 +42,16 @@ interface ConsoleInterfaceProps {
   className?: string;
   /** When true, hides the header (title, badges) - useful when embedded in a parent with its own header */
   compact?: boolean;
+  /** Whether the streaming connection is active */
+  connected?: boolean;
+  /** Timestamp of the last received update */
+  lastUpdate?: Date | null;
+  /** Whether there are earlier logs that were trimmed from the buffer */
+  hasEarlierLogs?: boolean;
+  /** Whether earlier logs are currently being fetched */
+  loadingEarlier?: boolean;
+  /** Callback to load earlier logs that were trimmed from the buffer */
+  onLoadEarlier?: () => void;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -53,9 +63,10 @@ const LOG_LEVEL_COLORS = {
 
 /**
  * Format a Date to compact display format.
+ * Returns null for null input or invalid Date objects.
  */
 function formatTimestamp(date: Date | null): { date: string; time: string } | null {
-  if (!date) return null;
+  if (!date || isNaN(date.getTime())) return null;
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
@@ -67,7 +78,7 @@ function formatTimestamp(date: Date | null): { date: string; time: string } | nu
   };
 }
 
-const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
+const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = React.memo(({
   log,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -158,12 +169,13 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       )}
     </div>
   );
-};
+});
+LogEntryComponent.displayName = "LogEntryComponent";
 
 /**
  * Component for rendering metric entries with visual distinction.
  */
-const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
+const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = React.memo(({
   log,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -273,12 +285,13 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> = ({
       )}
     </div>
   );
-};
+});
+MetricEntryComponent.displayName = "MetricEntryComponent";
 
 /**
  * Smart entry component that detects metrics vs logs.
  */
-const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
+const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = React.memo(({
   log,
   index,
 }) => {
@@ -290,6 +303,65 @@ const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = ({
   }
 
   return <LogEntryComponent log={log} index={index} />;
+}, (prevProps, nextProps) =>
+  prevProps.log.content === nextProps.log.content &&
+  prevProps.log.date === nextProps.log.date
+);
+SmartLogEntry.displayName = "SmartLogEntry";
+
+/**
+ * Connection status indicator for the console toolbar.
+ *
+ * Three states derived from the useBotLogsStream hook:
+ * - connected=true              -> Green dot + "Live"        (SSE active)
+ * - connected=false, lastUpdate -> Gray dot  + "Polling"     (fell back to REST)
+ * - connected=false, no update  -> Yellow dot + "Connecting" (SSE hasn't connected yet)
+ *
+ * When `connected` is undefined the indicator is hidden (backwards compatible).
+ */
+const ConnectionStatusIndicator: React.FC<{
+  connected?: boolean;
+  lastUpdate?: Date | null;
+}> = ({ connected, lastUpdate }) => {
+  if (connected === undefined) return null;
+
+  const statusLabel = connected
+    ? "connected"
+    : lastUpdate
+      ? "disconnected"
+      : "connecting";
+
+  return (
+    <span
+      className="flex items-center gap-1 text-xs"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label={`Connection status: ${statusLabel}`}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          connected
+            ? "bg-green-500"
+            : lastUpdate
+              ? "bg-gray-400"
+              : "bg-yellow-500 animate-pulse"
+        )}
+      />
+      <span className={cn(
+        "text-[10px]",
+        connected
+          ? "text-green-600 dark:text-green-400"
+          : lastUpdate
+            ? "text-gray-500"
+            : "text-yellow-600 dark:text-yellow-400"
+      )}>
+        {connected ? "Live" : lastUpdate ? "Polling" : "Connecting..."}
+      </span>
+    </span>
+  );
 };
 
 export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
@@ -302,6 +374,11 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   onExport,
   className,
   compact = false,
+  connected,
+  lastUpdate,
+  hasEarlierLogs,
+  loadingEarlier,
+  onLoadEarlier,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(false);
@@ -406,6 +483,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               >
                 {filteredLogs.length} entries
               </Badge>
+              <span className="ml-2">
+                <ConnectionStatusIndicator connected={connected} lastUpdate={lastUpdate} />
+              </span>
             </div>
           )}
 
@@ -416,14 +496,19 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             )}
           >
             {compact && (
-              <div className="flex-1 mr-2">
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-7 text-xs"
-                />
-              </div>
+              <>
+                <span className="mr-1">
+                  <ConnectionStatusIndicator connected={connected} lastUpdate={lastUpdate} />
+                </span>
+                <div className="flex-1 mr-2">
+                  <Input
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+              </>
             )}
             {!compact && (
               <Button
@@ -576,6 +661,29 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                   index={index}
                 />
               ))}
+              {hasEarlierLogs && onLoadEarlier && !searchQuery && (
+                <div className="flex justify-center py-2 border-t border-gray-200 dark:border-gray-800">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onLoadEarlier}
+                    disabled={loadingEarlier}
+                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  >
+                    {loadingEarlier ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ScrollText className="h-3 w-3 mr-1" />
+                        Load earlier logs
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
               <div ref={bottomRef} />
             </>
           )}

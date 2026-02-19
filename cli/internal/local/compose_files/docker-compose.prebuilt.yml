@@ -366,11 +366,13 @@ services:
     networks:
       - the0-network
 
-  # NATS monitoring (optional)
-  nats-monitoring:
+  # NATS healthcheck (optional, one-shot connection check)
+  nats-healthcheck:
     image: natsio/nats-box:latest
     pull_policy: always
     command: ["nats", "server", "check", "connection", "--server=nats://nats:4222"]
+    container_name: the0-nats-healthcheck
+    restart: "no"
     depends_on:
       - nats
     profiles:
