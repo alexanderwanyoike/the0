@@ -34,6 +34,7 @@ import { useBotLogsStream } from "@/hooks/use-bot-logs-stream";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
 import { cn } from "@/lib/utils";
+import { shouldUseLogStreaming } from "@/lib/bot-utils";
 
 import {
   AlertDialog,
@@ -81,23 +82,25 @@ const BotDetail = ({ params }: BotDetailProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Console logs: use SSE streaming for running bots, REST polling for stopped.
+  // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   // Both hooks are always called (React rules of hooks) but the inactive one
   // receives an empty botId which makes it skip all network requests.
-  const isRunning = bot?.status === "running";
+  // Don't start any log fetching until the bot type is known.
+  const useStreaming = shouldUseLogStreaming(bot);
+  const hookBotId = bot !== null ? botId : "";
 
   const streamHook = useBotLogsStream({
-    botId: isRunning ? botId : "",
+    botId: useStreaming ? hookBotId : "",
     refreshInterval: 60 * 1000,
   });
 
   const pollingHook = useBotLogs({
-    botId: isRunning ? "" : botId,
-    autoRefresh: !isRunning,
+    botId: useStreaming ? "" : hookBotId,
+    autoRefresh: !useStreaming && bot !== null,
     refreshInterval: 60 * 1000,
   });
 
-  const activeHook = isRunning ? streamHook : pollingHook;
+  const activeHook = useStreaming ? streamHook : pollingHook;
 
   const {
     logs,
@@ -109,11 +112,11 @@ const BotDetail = ({ params }: BotDetailProps) => {
   } = activeHook;
 
   // Get streaming-specific fields (only available when using stream hook)
-  const connected = isRunning ? streamHook.connected : undefined;
-  const lastUpdate = isRunning ? streamHook.lastUpdate : undefined;
-  const hasEarlierLogs = isRunning ? streamHook.hasEarlierLogs : undefined;
-  const loadingEarlier = isRunning ? streamHook.loadingEarlier : undefined;
-  const loadEarlierLogs = isRunning ? streamHook.loadEarlierLogs : undefined;
+  const connected = useStreaming ? streamHook.connected : undefined;
+  const lastUpdate = useStreaming ? streamHook.lastUpdate : undefined;
+  const hasEarlierLogs = useStreaming ? streamHook.hasEarlierLogs : undefined;
+  const loadingEarlier = useStreaming ? streamHook.loadingEarlier : undefined;
+  const loadEarlierLogs = useStreaming ? streamHook.loadEarlierLogs : undefined;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -131,11 +134,6 @@ const BotDetail = ({ params }: BotDetailProps) => {
         // Check authorization (API might use 'user_id' instead of 'userId')
         const botUserId = (botData as any).userId || (botData as any).user_id;
         if (botUserId !== user.id) throw new Error("Unauthorized access");
-
-        // Add a default status if not present
-        if (!botData.status) {
-          botData.status = "running";
-        }
 
         setBot(botData);
       } catch (error) {
@@ -272,22 +270,6 @@ const BotDetail = ({ params }: BotDetailProps) => {
       });
     } finally {
       setIsUpdatingEnabled(false);
-    }
-  };
-
-  // Get status badge color based on bot status
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case "running":
-        return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-      case "stopped":
-        return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-      case "paused":
-        return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
-      case "restarting":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-      default:
-        return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
     }
   };
 
