@@ -13,7 +13,7 @@ import { Bot } from "@/lib/api/api-client";
 export function shouldUseLogStreaming(bot: Bot | null): boolean {
   if (!bot) return false;
 
-  const botType = bot.config?.type;
+  const botType = bot.config.type;
   if (typeof botType !== "string") return true;
 
   const [category] = botType.split("/");

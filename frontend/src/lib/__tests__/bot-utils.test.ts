@@ -15,7 +15,7 @@ describe("shouldUseLogStreaming", () => {
     expect(shouldUseLogStreaming(null)).toBe(false);
   });
 
-  it("returns false when bot is undefined", () => {
+  it("handles undefined gracefully at runtime (beyond type contract)", () => {
     expect(shouldUseLogStreaming(undefined as any)).toBe(false);
   });
 
@@ -47,12 +47,6 @@ describe("shouldUseLogStreaming", () => {
     expect(shouldUseLogStreaming(makeBot({ type: "event/my-bot" }))).toBe(true);
   });
 
-  it("returns true when config is undefined", () => {
-    expect(shouldUseLogStreaming({ ...makeBot(), config: undefined } as any)).toBe(
-      true,
-    );
-  });
-
   it("returns true when config.type is undefined", () => {
     expect(shouldUseLogStreaming(makeBot({}))).toBe(true);
   });
@@ -73,7 +67,9 @@ describe("shouldUseLogStreaming", () => {
     expect(shouldUseLogStreaming(makeBot({ type: true }))).toBe(true);
   });
 
-  it("returns true when config is empty object", () => {
-    expect(shouldUseLogStreaming(makeBot({}))).toBe(true);
+  it("returns true when config has unrelated keys only", () => {
+    expect(shouldUseLogStreaming(makeBot({ name: "test", enabled: true }))).toBe(
+      true,
+    );
   });
 });
