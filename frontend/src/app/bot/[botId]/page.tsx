@@ -754,7 +754,7 @@ const BotDetail = ({ params }: BotDetailProps) => {
             <div className="flex items-center gap-2 text-sm">
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
               <a
-                href="https://docs.the0.dev/the0-CLI/bot-commands"
+                href="https://docs.the0.app/the0-CLI/bot-commands"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline"

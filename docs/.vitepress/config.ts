@@ -163,6 +163,6 @@ export default withMermaid(defineConfig({
   },
 
   sitemap: {
-    hostname: 'https://docs.the0.dev'
+    hostname: 'https://docs.the0.app'
   }
 }))

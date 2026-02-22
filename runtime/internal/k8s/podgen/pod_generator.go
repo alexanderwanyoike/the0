@@ -17,22 +17,22 @@ import (
 
 const (
 	// LabelBotID is the label key for the bot instance ID.
-	LabelBotID = "the0.dev/bot-id"
+	LabelBotID = "the0.app/bot-id"
 
 	// LabelCustomBotID is the label key for the custom bot type ID.
-	LabelCustomBotID = "the0.dev/custom-bot-id"
+	LabelCustomBotID = "the0.app/custom-bot-id"
 
 	// LabelCustomBotVersion is the label key for the custom bot version.
-	LabelCustomBotVersion = "the0.dev/custom-bot-version"
+	LabelCustomBotVersion = "the0.app/custom-bot-version"
 
 	// LabelRuntime is the label key for the bot runtime (python3.11, nodejs20, etc).
-	LabelRuntime = "the0.dev/runtime"
+	LabelRuntime = "the0.app/runtime"
 
 	// LabelManagedBy indicates the controller managing this pod.
-	LabelManagedBy = "the0.dev/managed-by"
+	LabelManagedBy = "the0.app/managed-by"
 
 	// AnnotationConfigHash stores a hash of the bot config for change detection.
-	AnnotationConfigHash = "the0.dev/config-hash"
+	AnnotationConfigHash = "the0.app/config-hash"
 )
 
 // Resource defaults are defined in runtime/internal/runtime/resources.go

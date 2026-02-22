@@ -34,7 +34,7 @@ Before configuring MCP integration, ensure you have:
 The MCP server authenticates using your API key passed via the `x-api-key` header. Configure Claude Code to connect to the0's MCP endpoint using the CLI:
 
 ```bash
-claude mcp add the0 --transport http https://api.the0.dev/mcp \
+claude mcp add the0 --transport http https://api.the0.app/mcp \
   --header "x-api-key: YOUR_API_KEY"
 ```
 
@@ -61,7 +61,7 @@ claude mcp list
 The output should show the0 server as connected:
 
 ```
-the0: https://api.the0.dev/mcp (HTTP) - ✓ Connected
+the0: https://api.the0.app/mcp (HTTP) - ✓ Connected
 ```
 
 Test the integration by asking Claude Code to "list my bots"—it should invoke the MCP tools and return your bot instances.
@@ -75,7 +75,7 @@ Instead of CLI flags, you can configure MCP servers through a `.mcp.json` file i
   "mcpServers": {
     "the0": {
       "type": "http",
-      "url": "https://api.the0.dev/mcp",
+      "url": "https://api.the0.app/mcp",
       "headers": {
         "x-api-key": "YOUR_API_KEY"
       }
@@ -91,7 +91,7 @@ For team environments where you don't want to commit secrets, use environment va
   "mcpServers": {
     "the0": {
       "type": "http",
-      "url": "https://api.the0.dev/mcp",
+      "url": "https://api.the0.app/mcp",
       "headers": {
         "x-api-key": "${THE0_API_KEY}"
       }
@@ -200,7 +200,7 @@ This error indicates the API key header is not being sent. Verify your configura
 ```bash
 claude mcp list
 claude mcp remove the0
-claude mcp add the0 --transport http https://api.the0.dev/mcp \
+claude mcp add the0 --transport http https://api.the0.app/mcp \
   --header "x-api-key: YOUR_API_KEY"
 exit
 claude
@@ -213,7 +213,7 @@ If you see "MCP server exists in multiple scopes", remove the configuration from
 ```bash
 claude mcp remove the0 -s local
 claude mcp remove the0 -s project
-claude mcp add the0 --transport http https://api.the0.dev/mcp \
+claude mcp add the0 --transport http https://api.the0.app/mcp \
   --header "x-api-key: YOUR_API_KEY"
 ```
 
@@ -222,7 +222,7 @@ claude mcp add the0 --transport http https://api.the0.dev/mcp \
 Verify the MCP endpoint is accessible using curl:
 
 ```bash
-curl -X POST https://api.the0.dev/mcp \
+curl -X POST https://api.the0.app/mcp \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_API_KEY" \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'

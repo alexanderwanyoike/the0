@@ -93,7 +93,7 @@ Output custom JSON result.
 
 ## Example Bot
 
-See the [Rust Quick Start Guide](https://docs.the0.dev/custom-bot-development/rust-quick-start) for a complete example.
+See the [Rust Quick Start Guide](https://docs.the0.app/custom-bot-development/rust-quick-start) for a complete example.
 
 ## Publishing (Maintainers)
 

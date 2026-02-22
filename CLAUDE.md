@@ -82,7 +82,7 @@ the0/
 
 ```bash
 # Install the CLI
-curl -sSL https://install.the0.dev | sh
+curl -sSL https://install.the0.app | sh
 
 # Start all services
 the0 local start
@@ -414,7 +414,7 @@ docker exec -it the0-mongo mongosh
 ## Resources
 
 - **Discord**: https://discord.gg/g5mp57nK
-- **Documentation**: https://docs.the0.dev (when deployed)
+- **Documentation**: https://docs.the0.app (when deployed)
 - **GitHub Issues**: Report bugs and request features
 - **Feedback**: `/notes/feedback.md`
 

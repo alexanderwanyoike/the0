@@ -25,7 +25,7 @@ This creates a powerful workflow where you describe what you want in natural lan
 
 Integrating an AI assistant with the0 requires generating an API key and configuring the assistant to use the0's MCP endpoint. The process varies slightly depending on the tool you're using, but follows a consistent pattern:
 
-1. Generate an API key from [your account settings](https://the0.dev/settings/api-settings) or via the CLI with `the0 auth login`
+1. Generate an API key from [your account settings](https://the0.app/settings/api-settings) or via the CLI with `the0 auth login`
 2. Configure your AI tool to connect to the0's MCP server with your API key
 3. Verify the connection and begin interacting through natural language
 
