@@ -430,7 +430,7 @@ the0 self-update --force --yes
 ## Configuration
 
 ### Environment Variables
-- `THE0_API_URL` - Override API base URL (default: `https://api.the0.dev`)
+- `THE0_API_URL` - Override API base URL (default: `https://api.the0.app`)
 - `THE0_CLI_UPDATE_CHANNEL` - Set update channel (`production` or `staging`, default: `production`)
 - `THE0_QUIET` - Suppress startup update notifications when set to any value
 
@@ -643,7 +643,7 @@ make verify         # Full verification (format + lint + test + build)
 
 The CLI interacts with the the0 platform API:
 
-- **Base URL**: `https://api.the0.dev`
+- **Base URL**: `https://api.the0.app`
 - **Authentication**: API key via `Authorization: ApiKey <key>` header
 - **Rate Limits**: Automatic retry with exponential backoff
 - **Error Handling**: Comprehensive error messages with suggested actions
@@ -681,7 +681,7 @@ cat config.json | jq .  # Should not show syntax errors
 **Network Issues:**
 ```bash
 # Check connectivity to the API
-curl -I https://api.the0.dev/
+curl -I https://api.the0.app/
 ```
 
 **Update Issues:**
@@ -734,7 +734,7 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-- 📚 Documentation: [docs.the0.dev](https://docs.the0.dev)
+- 📚 Documentation: [docs.the0.app](https://docs.the0.app)
 - 💬 Discord: [Join for support](https://discord.gg/g5mp57nK)
 - 🐛 Issues: [GitHub Issues](https://github.com/the0platform/cli/issues)
 

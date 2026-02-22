@@ -7,13 +7,13 @@ description:        Utilities for building trading bots on the0 platform.
 license:            Apache-2.0
 license-file:       LICENSE
 author:             alexanderwanyoike
-maintainer:         hello@the0.dev
+maintainer:         hello@the0.app
 copyright:          2024 the0
 category:           Development, Trading, Finance
 build-type:         Simple
 extra-doc-files:    README.md
 bug-reports:        https://github.com/alexanderwanyoike/the0/issues
-homepage:           https://the0.dev
+homepage:           https://the0.app
 source-repository head
     type:     git
     location: https://github.com/alexanderwanyoike/the0.git

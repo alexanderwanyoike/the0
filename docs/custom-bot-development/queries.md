@@ -377,7 +377,7 @@ the0 bot query <bot_id> /portfolio --raw
 
 ```bash
 # HTTP request
-curl -X POST "https://api.the0.dev/bot/<bot_id>/query" \
+curl -X POST "https://api.the0.app/bot/<bot_id>/query" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"path": "/status", "params": {}}'

@@ -125,7 +125,7 @@ func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.R
 			Labels: map[string]string{
 				podgen.LabelManagedBy: "the0-query-handler",
 				podgen.LabelBotID:     bot.ID,
-				"the0.dev/query":      "true",
+				"the0.app/query":      "true",
 			},
 		},
 		Spec: batchv1.JobSpec{

@@ -1,6 +1,6 @@
 #!/bin/sh
 # the0 CLI installer
-# Usage: curl -sSL https://install.the0.dev | sh
+# Usage: curl -sSL https://install.the0.app | sh
 set -eu
 
 GITHUB_REPO="alexanderwanyoike/the0"

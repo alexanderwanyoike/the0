@@ -2,7 +2,7 @@ ThisBuild / scalaVersion := "3.3.3"
 ThisBuild / version := "0.3.3"
 ThisBuild / organization := "dev.the0"
 ThisBuild / organizationName := "the0"
-ThisBuild / organizationHomepage := Some(url("https://the0.dev"))
+ThisBuild / organizationHomepage := Some(url("https://the0.app"))
 
 ThisBuild / scmInfo := Some(
   ScmInfo(
@@ -14,7 +14,7 @@ ThisBuild / developers := List(
   Developer(
     id = "alexanderwanyoike",
     name = "Alexander Wanyoike",
-    email = "hello@the0.dev",
+    email = "hello@the0.app",
     url = url("https://github.com/alexanderwanyoike")
   )
 )

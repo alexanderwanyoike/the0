@@ -24,7 +24,7 @@ annotations:
   artifacthub.io/category: integration-delivery
   artifacthub.io/links: |
     - name: Documentation
-      url: https://docs.the0.dev
+      url: https://docs.the0.app
     - name: Source
       url: https://github.com/alexanderwanyoike/the0
     - name: Discord

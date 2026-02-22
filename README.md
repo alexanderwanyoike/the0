@@ -52,7 +52,7 @@ Deploy the0 locally:
 
 ```bash
 # Install the CLI
-curl -sSL https://install.the0.dev | sh
+curl -sSL https://install.the0.app | sh
 
 # Start all services
 the0 local start
@@ -91,7 +91,7 @@ The the0 CLI tool provides a local development interface for managing your bots.
 ### Quick Install (Recommended)
 
 ```bash
-curl -sSL https://install.the0.dev | sh
+curl -sSL https://install.the0.app | sh
 ```
 
 This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`. Make sure `~/.the0/bin` is in your PATH.
@@ -131,7 +131,7 @@ export THE0_API_URL=http://api.the0.local:3000
 
 **For CLI bot usage instructions, visit the official documentation:**
 
-📖 [the0 CLI Documentation](https://docs.the0.dev/the0-cli/)
+📖 [the0 CLI Documentation](https://docs.the0.app/the0-cli/)
 
 ---
 
@@ -419,7 +419,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Support & Community
 
 - **Discord**: [Join our community for support](https://discord.gg/g5mp57nK)
-- **Documentation**: [docs.the0.dev](https://docs.the0.dev)
+- **Documentation**: [docs.the0.app](https://docs.the0.app)
 - **GitHub Issues**: [Report bugs or request features](https://github.com/alexanderwanyoike/the0/issues)
 
 ---
@@ -428,6 +428,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 **Built by AlphaNeuron**
 
-[Website](https://the0.dev) • [Documentation](https://docs.the0.dev) • [Discord](https://discord.gg/g5mp57nK)
+[Website](https://the0.app) • [Documentation](https://docs.the0.app) • [Discord](https://discord.gg/g5mp57nK)
 
 </div>

@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.9"
 authors = [
-    {name = "alexanderwanyoike", email = "hello@the0.dev"}
+    {name = "alexanderwanyoike", email = "hello@the0.app"}
 ]
 keywords = ["trading", "bots", "algorithmic-trading", "the0", "sdk"]
 classifiers = [
@@ -27,8 +27,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://the0.dev"
-Documentation = "https://docs.the0.dev"
+Homepage = "https://the0.app"
+Documentation = "https://docs.the0.app"
 Repository = "https://github.com/alexanderwanyoike/the0"
 "Source Code" = "https://github.com/alexanderwanyoike/the0/tree/main/sdk/python"
 

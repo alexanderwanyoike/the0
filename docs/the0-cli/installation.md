@@ -18,7 +18,7 @@ To deploy bots that use Python or Node.js dependencies, you need Docker installe
 Install with a single command:
 
 ```bash
-curl -sSL https://install.the0.dev | sh
+curl -sSL https://install.the0.app | sh
 ```
 
 This downloads the latest release binary, verifies its SHA256 checksum, and installs to `~/.the0/bin`. The script automatically configures your PATH.

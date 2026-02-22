@@ -48,8 +48,8 @@ the0Api:
     BACKTEST_BUCKET: "the0-backtests"
     NODE_ENV: "production"
     PORT: "3000"
-    API_BASE_URL: "https://api.the0.dev"
-    FRONTEND_URL: "https://app.the0.dev"
+    API_BASE_URL: "https://api.the0.app"
+    FRONTEND_URL: "https://app.the0.app"
     JWT_SECRET: "CHANGEME"
     JWT_EXPIRES_IN: "7d"
     RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
@@ -61,7 +61,7 @@ the0Frontend:
   env:
     NEXT_PUBLIC_APP_NAME: "the0"
     NEXT_PUBLIC_APP_VERSION: "1.0.0"
-    NEXT_BASE_URL: "https://app.the0.dev"
+    NEXT_BASE_URL: "https://app.the0.app"
     NODE_ENV: "production"
     JWT_SECRET: "CHANGEME"
 

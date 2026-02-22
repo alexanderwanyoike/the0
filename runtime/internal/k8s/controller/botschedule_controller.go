@@ -25,13 +25,13 @@ import (
 
 const (
 	// LabelScheduleID is the label key for the schedule instance ID.
-	LabelScheduleID = "the0.dev/schedule-id"
+	LabelScheduleID = "the0.app/schedule-id"
 
 	// LabelScheduleManagedBy indicates the controller managing this CronJob.
-	LabelScheduleManagedBy = "the0.dev/managed-by"
+	LabelScheduleManagedBy = "the0.app/managed-by"
 
 	// AnnotationScheduleHash stores a hash of the schedule config for change detection.
-	AnnotationScheduleHash = "the0.dev/schedule-hash"
+	AnnotationScheduleHash = "the0.app/schedule-hash"
 )
 
 // BotScheduleRepository provides access to bot schedule data from MongoDB.
