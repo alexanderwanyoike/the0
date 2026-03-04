@@ -295,3 +295,4 @@ ingress:
   #    hosts:
   #      - the0.example.com
   #      - api.the0.example.com
+  #      - docs.the0.example.com
