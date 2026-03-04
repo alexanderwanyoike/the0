@@ -78,6 +78,19 @@ describe("POST /api/auth/login", () => {
     const body = await response.json();
     expect(body.success).toBe(false);
   });
+
+  it("returns 500 when BOT_API_URL is not configured", async () => {
+    delete process.env.BOT_API_URL;
+    const req = new NextRequest("http://localhost:3001/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "test@test.com", password: "password" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const response = await loginPOST(req);
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.message).toContain("misconfigured");
+  });
 });
 
 describe("POST /api/auth/register", () => {
@@ -144,6 +157,23 @@ describe("POST /api/auth/register", () => {
     const body = await response.json();
     expect(body.success).toBe(false);
   });
+
+  it("returns 500 when BOT_API_URL is not configured", async () => {
+    delete process.env.BOT_API_URL;
+    const req = new NextRequest("http://localhost:3001/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        username: "testuser",
+        email: "test@test.com",
+        password: "password",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const response = await registerPOST(req);
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.message).toContain("misconfigured");
+  });
 });
 
 describe("POST /api/auth/validate", () => {
@@ -193,6 +223,30 @@ describe("POST /api/auth/validate", () => {
 
     const response = await validatePOST(req);
     expect(response.status).toBe(401);
+  });
+
+  it("returns 500 on network/fetch error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("network"));
+    const req = new NextRequest("http://localhost:3001/api/auth/validate", {
+      method: "POST",
+      body: JSON.stringify({ token: "test-token" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const response = await validatePOST(req);
+    expect(response.status).toBe(500);
+  });
+
+  it("returns 500 when BOT_API_URL is not configured", async () => {
+    delete process.env.BOT_API_URL;
+    const req = new NextRequest("http://localhost:3001/api/auth/validate", {
+      method: "POST",
+      body: JSON.stringify({ token: "test-token" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const response = await validatePOST(req);
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.message).toContain("misconfigured");
   });
 });
 
@@ -255,5 +309,17 @@ describe("GET /api/auth/me", () => {
     expect(response.status).toBe(500);
     const body = await response.json();
     expect(body.success).toBe(false);
+  });
+
+  it("returns 500 when BOT_API_URL is not configured", async () => {
+    delete process.env.BOT_API_URL;
+    const req = new NextRequest("http://localhost:3001/api/auth/me", {
+      method: "GET",
+      headers: { Authorization: "Bearer valid-token" },
+    });
+    const response = await meGET(req);
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.message).toContain("misconfigured");
   });
 });

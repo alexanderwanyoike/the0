@@ -26,6 +26,11 @@ const createMockResponse = (options: Partial<Response> = {}): Response =>
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+function getFetchCallUrl(mockFn: jest.Mock, idx = 0): string {
+  const call = mockFn.mock.calls[idx];
+  return (call[0] as { url?: string })?.url ?? String(call[0]);
+}
+
 describe("JwtAuthService", () => {
   let authService: JwtAuthService;
   const mockUser: AuthUser = {
@@ -75,8 +80,7 @@ describe("JwtAuthService", () => {
       expect(result.data?.user).toEqual(mockUser);
       expect(localStorage.getItem("auth-token")).toBe("mock-jwt-token");
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      const callUrl = mockFetch.mock.calls[0][0]?.url ?? mockFetch.mock.calls[0][0];
-      expect(callUrl).toContain("/api/auth/login");
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/login");
     });
 
     it("should handle login failure", async () => {
@@ -140,8 +144,7 @@ describe("JwtAuthService", () => {
       expect(result.data?.user).toEqual(mockUser);
       expect(localStorage.getItem("auth-token")).toBe("mock-jwt-token");
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      const callUrl = mockFetch.mock.calls[0][0]?.url ?? mockFetch.mock.calls[0][0];
-      expect(callUrl).toContain("/api/auth/register");
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/register");
     });
 
     it("should handle registration failure", async () => {
@@ -182,8 +185,7 @@ describe("JwtAuthService", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockUser);
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      const callUrl = mockFetch.mock.calls[0][0]?.url ?? mockFetch.mock.calls[0][0];
-      expect(callUrl).toContain("/api/auth/validate");
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/validate");
     });
 
     it("should handle invalid token", async () => {
@@ -222,8 +224,7 @@ describe("JwtAuthService", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockUser);
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      const callUrl = mockFetch.mock.calls[0][0]?.url ?? mockFetch.mock.calls[0][0];
-      expect(callUrl).toContain("/api/auth/me");
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/me");
     });
 
     it("should return error when no token exists", async () => {
