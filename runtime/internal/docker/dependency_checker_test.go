@@ -9,6 +9,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// mockMinIOClient implements MinIOHealthClient for testing.
+type mockMinIOClient struct {
+	exists bool
+	err    error
+}
+
+func (m *mockMinIOClient) BucketExists(ctx context.Context, bucketName string) (bool, error) {
+	return m.exists, m.err
+}
+
 func TestDependencyChecker_NilClients(t *testing.T) {
 	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
 
@@ -59,4 +69,13 @@ func TestDependencyChecker_CheckHealth_UpdatesNothing(t *testing.T) {
 	// Now update cached state
 	dc.SetLastResult(mongoOK, minioOK)
 	assert.False(t, dc.IsHealthy())
+}
+
+func TestCheckMinio_BucketDoesNotExist(t *testing.T) {
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	// Inject mock MinIO client that returns (false, nil) — bucket does not exist
+	dc.minioClient = &mockMinIOClient{exists: false, err: nil}
+
+	result := dc.checkMinio(context.Background())
+	assert.False(t, result, "checkMinio should return false when bucket does not exist")
 }
