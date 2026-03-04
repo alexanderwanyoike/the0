@@ -156,9 +156,13 @@ func (s *ScheduleService) Run(ctx context.Context) error {
 	// Initialize dependency checker
 	s.initDependencyChecker()
 
-	// Mark as ready now that MongoDB is connected
+	// Synchronous health probe before declaring readiness
+	mongoOK, minioOK := s.depChecker.CheckHealth(s.ctx)
+	s.depChecker.SetLastResult(mongoOK, minioOK)
+	depsHealthy := mongoOK && minioOK
 	if s.healthServer != nil {
-		s.healthServer.SetReady(true)
+		s.healthServer.SetReady(depsHealthy)
+		s.healthServer.SetHealthy(depsHealthy)
 	}
 
 	// Start health check loop

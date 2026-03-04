@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
 	"runtime/internal/util"
 
@@ -1496,4 +1497,34 @@ func TestBotService_OnlyStopsRealtimeContainers(t *testing.T) {
 	// Only the realtime container should be in the filtered list
 	assert.Len(t, realtimeContainers, 1, "Only realtime container should remain")
 	assert.Equal(t, "orphan-realtime-bot", realtimeContainers[0].ID)
+}
+
+func TestBotService_StartsUnready_WhenDepsDown(t *testing.T) {
+	hs := health.NewServer(0)
+
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	service.healthServer = hs
+
+	// Simulate what Run() does after initDependencyChecker:
+	// create a dep checker with nil clients (unhealthy)
+	service.depChecker = NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+
+	// Synchronous probe — same logic as Run()
+	mongoOK, minioOK := service.depChecker.CheckHealth(service.ctx)
+	service.depChecker.SetLastResult(mongoOK, minioOK)
+	depsHealthy := mongoOK && minioOK
+
+	if service.healthServer != nil {
+		service.healthServer.SetReady(depsHealthy)
+		service.healthServer.SetHealthy(depsHealthy)
+	}
+
+	// Deps should be unhealthy (nil clients)
+	assert.False(t, depsHealthy, "deps should be unhealthy with nil clients")
+	assert.False(t, service.depChecker.IsHealthy(), "cached health should be false")
 }

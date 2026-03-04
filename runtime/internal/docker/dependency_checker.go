@@ -12,12 +12,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+// MinIOHealthClient is the subset of minio.Client used for health checks.
+type MinIOHealthClient interface {
+	BucketExists(ctx context.Context, bucketName string) (bool, error)
+}
+
 // DependencyChecker verifies that MinIO and MongoDB are reachable
 // before the reconciler acts. It caches the last result so the
 // reconciliation loop can read health without network calls.
 type DependencyChecker struct {
 	mongoClient *mongo.Client
-	minioClient *minio.Client
+	minioClient MinIOHealthClient
 	minioBucket string
 	logger      util.Logger
 
@@ -29,9 +34,13 @@ type DependencyChecker struct {
 // NewDependencyChecker creates a DependencyChecker.
 // Both clients may be nil — a nil client is treated as permanently unhealthy.
 func NewDependencyChecker(mongoClient *mongo.Client, minioClient *minio.Client, minioBucket string, logger util.Logger) *DependencyChecker {
+	var mc MinIOHealthClient
+	if minioClient != nil {
+		mc = minioClient
+	}
 	dc := &DependencyChecker{
 		mongoClient: mongoClient,
-		minioClient: minioClient,
+		minioClient: mc,
 		minioBucket: minioBucket,
 		logger:      logger,
 	}
@@ -84,8 +93,13 @@ func (dc *DependencyChecker) checkMinio(ctx context.Context) bool {
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if _, err := dc.minioClient.BucketExists(checkCtx, dc.minioBucket); err != nil {
+	exists, err := dc.minioClient.BucketExists(checkCtx, dc.minioBucket)
+	if err != nil {
 		dc.logger.Error("MinIO health check failed: %v", err)
+		return false
+	}
+	if !exists {
+		dc.logger.Error("MinIO health check failed: bucket %q does not exist", dc.minioBucket)
 		return false
 	}
 	return true

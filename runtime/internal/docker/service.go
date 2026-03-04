@@ -136,9 +136,13 @@ func (s *BotService) Run(ctx context.Context) error {
 	// Initialize dependency checker (MinIO + MongoDB)
 	s.initDependencyChecker()
 
-	// Mark as ready now that MongoDB is connected and dep checker is initialised
+	// Synchronous health probe before declaring readiness
+	mongoOK, minioOK := s.depChecker.CheckHealth(s.ctx)
+	s.depChecker.SetLastResult(mongoOK, minioOK)
+	depsHealthy := mongoOK && minioOK
 	if s.healthServer != nil {
-		s.healthServer.SetReady(true)
+		s.healthServer.SetReady(depsHealthy)
+		s.healthServer.SetHealthy(depsHealthy)
 	}
 
 	// Start health check loop (separate from reconciliation)
@@ -146,7 +150,7 @@ func (s *BotService) Run(ctx context.Context) error {
 	go s.runHealthCheckLoop()
 
 	// Run initial reconciliation (gated by dep checker)
-	if s.depChecker.IsHealthy() {
+	if depsHealthy {
 		s.reconcile()
 	} else {
 		s.logger.Error("Dependencies unhealthy, skipping initial reconciliation")
