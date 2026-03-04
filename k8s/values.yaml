@@ -272,3 +272,27 @@ minikube:
 # Ingress configuration (disabled - using NodePort instead)
 ingress:
   enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: the0.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+    - host: api.the0.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api
+    - host: docs.the0.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: docs
+  tls: []
+  #  - secretName: the0-tls
+  #    hosts:
+  #      - the0.example.com
+  #      - api.the0.example.com
+  #      - docs.the0.example.com
