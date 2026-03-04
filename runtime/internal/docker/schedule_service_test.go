@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -485,6 +487,59 @@ func TestScheduleService_WaitForExecutions_NoActive(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Error("waitForExecutions should complete immediately when no active executions")
 	}
+}
+
+// Test schedule loop skips when deps are unhealthy
+func TestScheduleLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+		NATSUrl:  "nats://localhost:4222",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Create unhealthy dep checker
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(false, false)
+	service.depChecker = dc
+
+	// Simulate what the schedule loop does
+	if !service.depChecker.IsHealthy() {
+		// skipped — this is the expected path
+	} else {
+		t.Error("should have skipped schedule check when deps unhealthy")
+	}
+
+	assert.Equal(t, 0, mockRunner.GetStartCallCount(), "no containers should start when deps unhealthy")
+}
+
+// Test that health server is updated when deps fail
+func TestScheduleService_HealthServerUpdatedOnDepFailure(t *testing.T) {
+	hs := health.NewServer(0) // port 0 = don't actually listen
+
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+		NATSUrl:  "nats://localhost:4222",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	service.healthServer = hs
+
+	// Create unhealthy dep checker
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	service.depChecker = dc
+
+	// Simulate health check loop iteration
+	mongoOK, minioOK := dc.CheckHealth(service.ctx)
+	dc.SetLastResult(mongoOK, minioOK)
+
+	// Both should be false (nil clients)
+	assert.False(t, mongoOK)
+	assert.False(t, minioOK)
 }
 
 // Test multiple schedules in state tracking

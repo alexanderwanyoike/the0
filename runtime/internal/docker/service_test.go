@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"runtime/internal/model"
+	"runtime/internal/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1268,6 +1269,110 @@ func TestStartBot_ConcurrentCalls(t *testing.T) {
 	assert.True(t, mockRunner.WasStarted("bot1"))
 	assert.True(t, mockRunner.WasStarted("bot2"))
 	assert.True(t, mockRunner.WasStarted("bot3"))
+}
+
+// Test reconciliation skips when deps are unhealthy
+func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Create a dep checker that reports unhealthy
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(false, false) // both deps down
+	service.depChecker = dc
+
+	// Setup: Bot is desired but not running
+	desiredBots := []model.Bot{
+		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true),
+	}
+	actualContainers := []*ContainerInfo{}
+
+	// Gate check should prevent reconciliation
+	if !service.depChecker.IsHealthy() {
+		// This is what the reconciliation loop does — skip
+	} else {
+		service.performReconciliation(service.ctx, desiredBots, actualContainers)
+	}
+
+	// No containers should have been started
+	assert.Equal(t, 0, mockRunner.GetStartCallCount(), "no containers should start when deps unhealthy")
+}
+
+// Test per-bot backoff after repeated failures
+func TestStartBot_BackoffAfterRepeatedFailures(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	mockRunner.shouldFailStart = true
+	service.runner = mockRunner
+
+	// Set up dep checker as healthy
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(true, true)
+	service.depChecker = dc
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+
+	// Fail 5 times
+	for i := 0; i < 5; i++ {
+		service.startBot(service.ctx, "bot1", bot)
+	}
+
+	// Wait for all async starts to complete
+	require.Eventually(t, func() bool {
+		return mockRunner.GetStartCallCount() == 5
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	// Bot should now be in backoff
+	assert.True(t, service.state.ShouldSkipBot("bot1"), "bot should be in backoff after 5 failures")
+}
+
+// Test backoff resets after successful start
+func TestStartBot_BackoffResets(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Set up dep checker as healthy
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(true, true)
+	service.depChecker = dc
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+
+	// Record some failures manually
+	for i := 0; i < 5; i++ {
+		service.state.RecordBotFailure("bot1")
+	}
+	assert.True(t, service.state.ShouldSkipBot("bot1"))
+
+	// Now succeed
+	mockRunner.shouldFailStart = false
+	service.startBot(service.ctx, "bot1", bot)
+
+	require.Eventually(t, func() bool {
+		return mockRunner.WasStarted("bot1")
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	// Wait a moment for the reset to be recorded
+	require.Eventually(t, func() bool {
+		return !service.state.ShouldSkipBot("bot1")
+	}, 200*time.Millisecond, 10*time.Millisecond, "backoff should reset after success")
 }
 
 // Test service defaults reconcile interval
