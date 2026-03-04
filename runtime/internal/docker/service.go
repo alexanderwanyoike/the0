@@ -10,11 +10,14 @@ import (
 	"time"
 
 	"runtime/internal/constants"
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 
 	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
 
+	"github.com/minio/minio-go/v7"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
@@ -22,12 +25,14 @@ import (
 
 // BotServiceConfig contains configuration for the BotService
 type BotServiceConfig struct {
-	MongoURI          string
-	NATSUrl           string // Optional - service degrades gracefully without NATS
-	Logger            util.Logger
-	DBName            string
-	Collection        string
-	ReconcileInterval time.Duration // How often to reconcile (default: 30s)
+	MongoURI            string
+	NATSUrl             string // Optional - service degrades gracefully without NATS
+	Logger              util.Logger
+	DBName              string
+	Collection          string
+	ReconcileInterval   time.Duration // How often to reconcile (default: 30s)
+	HealthServer        *health.Server
+	HealthCheckInterval time.Duration // How often to check deps (default: 15s)
 }
 
 // BotService is a simplified single-process bot management service
@@ -38,6 +43,10 @@ type BotService struct {
 	state       *ServiceState
 	logger      util.Logger
 	mongoClient *mongo.Client
+
+	// Dependency health checking
+	depChecker   *DependencyChecker
+	healthServer *health.Server
 
 	// NATS subscriber for persisting bot events to MongoDB
 	subscriber *botnatssubscriber.NATSSubscriber
@@ -70,14 +79,19 @@ func NewBotService(config BotServiceConfig) (*BotService, error) {
 		config.ReconcileInterval = 30 * time.Second
 	}
 
+	if config.HealthCheckInterval == 0 {
+		config.HealthCheckInterval = 15 * time.Second
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	service := &BotService{
-		config: config,
-		state:  NewServiceState(),
-		logger: config.Logger,
-		ctx:    ctx,
-		cancel: cancel,
+		config:       config,
+		state:        NewServiceState(),
+		logger:       config.Logger,
+		healthServer: config.HealthServer,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	return service, nil
@@ -119,8 +133,24 @@ func (s *BotService) Run(ctx context.Context) error {
 		s.logger.Info("NATS URL not configured - running in poll-only mode")
 	}
 
-	// Run initial reconciliation
-	s.reconcile()
+	// Initialize dependency checker (MinIO + MongoDB)
+	s.initDependencyChecker()
+
+	// Mark as ready now that MongoDB is connected and dep checker is initialised
+	if s.healthServer != nil {
+		s.healthServer.SetReady(true)
+	}
+
+	// Start health check loop (separate from reconciliation)
+	s.wg.Add(1)
+	go s.runHealthCheckLoop()
+
+	// Run initial reconciliation (gated by dep checker)
+	if s.depChecker.IsHealthy() {
+		s.reconcile()
+	} else {
+		s.logger.Error("Dependencies unhealthy, skipping initial reconciliation")
+	}
 
 	// Start reconciliation loop
 	s.wg.Add(1)
@@ -181,6 +211,60 @@ func (s *BotService) initNATSSubscriber(ctx context.Context) error {
 	return nil
 }
 
+// initDependencyChecker creates the DependencyChecker with a MinIO client
+// loaded from environment. If MinIO config is missing, the checker will treat
+// MinIO as permanently unhealthy (which is the safe default).
+func (s *BotService) initDependencyChecker() {
+	var minioClient *minio.Client
+	minioBucket := "custom-bots"
+
+	cfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		s.logger.Info("MinIO config not available for health checks: %v", err)
+	} else {
+		mc, err := storage.NewMinioClient(cfg)
+		if err != nil {
+			s.logger.Error("Failed to create MinIO client for health checks: %v", err)
+		} else {
+			minioClient = mc
+			minioBucket = cfg.CodeBucket
+		}
+	}
+
+	s.depChecker = NewDependencyChecker(s.mongoClient, minioClient, minioBucket, s.logger)
+}
+
+// runHealthCheckLoop periodically checks dependency health on its own interval,
+// separate from the reconciliation loop.
+func (s *BotService) runHealthCheckLoop() {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(s.config.HealthCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			mongoOK, minioOK := s.depChecker.CheckHealth(s.ctx)
+			s.depChecker.SetLastResult(mongoOK, minioOK)
+			if !mongoOK || !minioOK {
+				s.logger.Error("Dependencies unhealthy (mongo=%v, minio=%v)", mongoOK, minioOK)
+				if s.healthServer != nil {
+					s.healthServer.SetReady(false)
+					s.healthServer.SetHealthy(false)
+				}
+			} else {
+				if s.healthServer != nil {
+					s.healthServer.SetReady(true)
+					s.healthServer.SetHealthy(true)
+				}
+			}
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
 // runReconciliationLoop runs the periodic reconciliation
 func (s *BotService) runReconciliationLoop() {
 	defer s.wg.Done()
@@ -191,6 +275,10 @@ func (s *BotService) runReconciliationLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			if !s.depChecker.IsHealthy() {
+				s.logger.Error("Dependencies unhealthy, skipping reconciliation")
+				continue
+			}
 			s.reconcile()
 		case <-s.ctx.Done():
 			s.logger.Info("Reconciliation loop stopped")
@@ -311,6 +399,11 @@ func (s *BotService) performReconciliation(ctx context.Context, desiredBots []mo
 		runningInstances, isRunning := actualContainersMap[botID]
 
 		if !isRunning || len(runningInstances) == 0 {
+			// Check per-bot backoff before starting
+			if s.state.ShouldSkipBot(botID) {
+				s.logger.Info("Bot %s in backoff after repeated failures, skipping", botID)
+				continue
+			}
 			// Bot is desired but not running -> start it
 			s.logger.Info("Bot %s is desired but not running, starting...", botID)
 			s.startBot(ctx, botID, bot)
@@ -399,15 +492,18 @@ func (s *BotService) startBot(ctx context.Context, botID string, bot model.Bot) 
 		if err != nil {
 			s.logger.Error("Failed to start bot %s: %v", botID, err)
 			s.state.IncrementFailedRestarts()
+			s.state.RecordBotFailure(botID)
 			return
 		}
 
 		if result.Status == "error" {
 			s.logger.Error("Bot %s started with error: %s", botID, result.Error)
 			s.state.IncrementFailedRestarts()
+			s.state.RecordBotFailure(botID)
 			return
 		}
 
+		s.state.ResetBotFailure(botID)
 		s.state.SetRunningBot(&RunningBot{
 			BotID:       botID,
 			ContainerID: result.ContainerID,

@@ -8,11 +8,14 @@ import (
 	"time"
 
 	"runtime/internal/constants"
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 
 	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
 
+	"github.com/minio/minio-go/v7"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
@@ -20,12 +23,14 @@ import (
 
 // ScheduleServiceConfig contains configuration for the ScheduleService
 type ScheduleServiceConfig struct {
-	MongoURI      string
-	NATSUrl       string // Required - for API communication
-	Logger        util.Logger
-	DBName        string
-	Collection    string
-	CheckInterval time.Duration // How often to check for due schedules (default: 10s)
+	MongoURI            string
+	NATSUrl             string // Required - for API communication
+	Logger              util.Logger
+	DBName              string
+	Collection          string
+	CheckInterval       time.Duration // How often to check for due schedules (default: 10s)
+	HealthServer        *health.Server
+	HealthCheckInterval time.Duration // How often to check deps (default: 15s)
 }
 
 // ScheduleService is a simplified single-process scheduled bot execution service
@@ -35,6 +40,10 @@ type ScheduleService struct {
 	state       *ScheduleState
 	logger      util.Logger
 	mongoClient *mongo.Client
+
+	// Dependency health checking
+	depChecker   *DependencyChecker
+	healthServer *health.Server
 
 	// NATS subscriber for API events
 	subscriber *schedulenatssubscriber.NATSSubscriber
@@ -95,14 +104,19 @@ func NewScheduleService(config ScheduleServiceConfig) (*ScheduleService, error) 
 		config.CheckInterval = 10 * time.Second
 	}
 
+	if config.HealthCheckInterval == 0 {
+		config.HealthCheckInterval = 15 * time.Second
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	service := &ScheduleService{
-		config: config,
-		state:  NewScheduleState(),
-		logger: config.Logger,
-		ctx:    ctx,
-		cancel: cancel,
+		config:       config,
+		state:        NewScheduleState(),
+		logger:       config.Logger,
+		healthServer: config.HealthServer,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	return service, nil
@@ -138,6 +152,18 @@ func (s *ScheduleService) Run(ctx context.Context) error {
 	}
 	defer s.subscriber.Stop()
 	s.logger.Info("NATS subscriber started - listening for schedule events")
+
+	// Initialize dependency checker
+	s.initDependencyChecker()
+
+	// Mark as ready now that MongoDB is connected
+	if s.healthServer != nil {
+		s.healthServer.SetReady(true)
+	}
+
+	// Start health check loop
+	s.wg.Add(1)
+	go s.runHealthCheckLoop()
 
 	// Start the schedule check loop
 	s.wg.Add(1)
@@ -198,6 +224,58 @@ func (s *ScheduleService) initNATSSubscriber(ctx context.Context) error {
 	return nil
 }
 
+// initDependencyChecker creates the DependencyChecker with a MinIO client
+// loaded from environment.
+func (s *ScheduleService) initDependencyChecker() {
+	var minioClient *minio.Client
+	minioBucket := "custom-bots"
+
+	cfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		s.logger.Info("MinIO config not available for health checks: %v", err)
+	} else {
+		mc, err := storage.NewMinioClient(cfg)
+		if err != nil {
+			s.logger.Error("Failed to create MinIO client for health checks: %v", err)
+		} else {
+			minioClient = mc
+			minioBucket = cfg.CodeBucket
+		}
+	}
+
+	s.depChecker = NewDependencyChecker(s.mongoClient, minioClient, minioBucket, s.logger)
+}
+
+// runHealthCheckLoop periodically checks dependency health.
+func (s *ScheduleService) runHealthCheckLoop() {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(s.config.HealthCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			mongoOK, minioOK := s.depChecker.CheckHealth(s.ctx)
+			s.depChecker.SetLastResult(mongoOK, minioOK)
+			if !mongoOK || !minioOK {
+				s.logger.Error("Dependencies unhealthy (mongo=%v, minio=%v)", mongoOK, minioOK)
+				if s.healthServer != nil {
+					s.healthServer.SetReady(false)
+					s.healthServer.SetHealthy(false)
+				}
+			} else {
+				if s.healthServer != nil {
+					s.healthServer.SetReady(true)
+					s.healthServer.SetHealthy(true)
+				}
+			}
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
 // runScheduleLoop checks for due schedules and executes them
 func (s *ScheduleService) runScheduleLoop() {
 	defer s.wg.Done()
@@ -205,12 +283,20 @@ func (s *ScheduleService) runScheduleLoop() {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
 
-	// Run immediately on start
-	s.checkAndExecuteSchedules()
+	// Run immediately on start (gated by dep checker)
+	if s.depChecker.IsHealthy() {
+		s.checkAndExecuteSchedules()
+	} else {
+		s.logger.Error("Dependencies unhealthy, skipping initial schedule check")
+	}
 
 	for {
 		select {
 		case <-ticker.C:
+			if !s.depChecker.IsHealthy() {
+				s.logger.Error("Dependencies unhealthy, skipping schedule check")
+				continue
+			}
 			s.checkAndExecuteSchedules()
 		case <-s.ctx.Done():
 			s.logger.Info("Schedule loop stopped")
