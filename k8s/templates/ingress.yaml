@@ -42,6 +42,10 @@ spec:
                   number: {{ $.Values.the0Api.port }}
                   {{- else if eq .service "minio" }}
                   number: {{ $.Values.minio.port }}
+                  {{- else if eq .service "docs" }}
+                  number: {{ $.Values.the0Docs.port }}
+                  {{- else }}
+                  number: 80
                   {{- end }}
           {{- end }}
     {{- end }}
