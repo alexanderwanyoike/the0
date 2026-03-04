@@ -221,7 +221,6 @@ jest.mock("next/image", () => ({
 }));
 
 // Mock environment variables commonly used in tests
-process.env.NEXT_PUBLIC_API_URL = "http://localhost:3001";
 process.env.JWT_SECRET = "test-jwt-secret-key-for-testing-only";
 
 // Mock console methods to reduce noise in tests
