@@ -489,14 +489,14 @@ func TestScheduleService_WaitForExecutions_NoActive(t *testing.T) {
 	}
 }
 
-// Test schedule loop skips when deps are unhealthy
+// Test schedule loop skips when deps are unhealthy by exercising the actual goroutine
 func TestScheduleLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	service, err := NewScheduleService(ScheduleServiceConfig{
-		MongoURI: "mongodb://localhost:27017",
-		NATSUrl:  "nats://localhost:4222",
+		MongoURI:      "mongodb://localhost:27017",
+		NATSUrl:       "nats://localhost:4222",
+		CheckInterval: 20 * time.Millisecond,
 	})
 	require.NoError(t, err)
-	defer service.Stop()
 
 	mockRunner := NewMockDockerRunner()
 	service.runner = mockRunner
@@ -506,13 +506,18 @@ func TestScheduleLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	dc.SetLastResult(false, false)
 	service.depChecker = dc
 
-	// Simulate what the schedule loop does
-	if !service.depChecker.IsHealthy() {
-		// skipped — this is the expected path
-	} else {
-		t.Error("should have skipped schedule check when deps unhealthy")
-	}
+	// Start the actual schedule loop goroutine
+	service.wg.Add(1)
+	go service.runScheduleLoop()
 
+	// Let a few ticks pass
+	time.Sleep(80 * time.Millisecond)
+
+	// Stop the service to terminate the loop
+	service.Stop()
+	service.wg.Wait()
+
+	// No containers should have been started (schedule check was skipped)
 	assert.Equal(t, 0, mockRunner.GetStartCallCount(), "no containers should start when deps unhealthy")
 }
 
@@ -521,11 +526,11 @@ func TestScheduleService_HealthServerUpdatedOnDepFailure(t *testing.T) {
 	hs := health.NewServer(0) // port 0 = don't actually listen
 
 	service, err := NewScheduleService(ScheduleServiceConfig{
-		MongoURI: "mongodb://localhost:27017",
-		NATSUrl:  "nats://localhost:4222",
+		MongoURI:            "mongodb://localhost:27017",
+		NATSUrl:             "nats://localhost:4222",
+		HealthCheckInterval: 20 * time.Millisecond,
 	})
 	require.NoError(t, err)
-	defer service.Stop()
 
 	service.healthServer = hs
 
@@ -540,6 +545,18 @@ func TestScheduleService_HealthServerUpdatedOnDepFailure(t *testing.T) {
 	// Both should be false (nil clients)
 	assert.False(t, mongoOK)
 	assert.False(t, minioOK)
+
+	// Simulate what the health check loop does on unhealthy deps
+	if !mongoOK || !minioOK {
+		hs.SetReady(false)
+	}
+
+	// Readiness should be false
+	assert.False(t, hs.IsReady(), "readiness should be false when deps are down")
+	// Liveness should remain true (not gated on deps)
+	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
+
+	service.Stop()
 }
 
 // Test multiple schedules in state tracking
@@ -607,10 +624,14 @@ func TestScheduleService_StartsUnready_WhenDepsDown(t *testing.T) {
 
 	if service.healthServer != nil {
 		service.healthServer.SetReady(depsHealthy)
-		service.healthServer.SetHealthy(depsHealthy)
 	}
 
 	// Deps should be unhealthy (nil clients)
 	assert.False(t, depsHealthy, "deps should be unhealthy with nil clients")
 	assert.False(t, service.depChecker.IsHealthy(), "cached health should be false")
+
+	// Readiness should be false (deps are down)
+	assert.False(t, hs.IsReady(), "readiness should be false when deps are down")
+	// Liveness should remain true (not gated on deps)
+	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
 }
