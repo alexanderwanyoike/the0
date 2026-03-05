@@ -105,7 +105,7 @@ describe("connection", () => {
     );
   });
 
-  it("should use default pool config values", () => {
+  it("should pass through different pool config values", () => {
     jest.doMock("../../config/database.config", () => ({
       loadConfig: jest.fn().mockReturnValue({
         type: "postgresql",

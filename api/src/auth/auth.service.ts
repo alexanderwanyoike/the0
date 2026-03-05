@@ -13,6 +13,7 @@ const CONNECTION_ERROR_CODES = new Set([
   "ECONNREFUSED",
   "ECONNRESET",
   "ENOTFOUND",
+  "CONNECT_TIMEOUT",
 ]);
 
 function isConnectionError(error: unknown): boolean {
@@ -180,6 +181,11 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
+      }
       return {
         success: false,
         error: "Login failed",
@@ -256,6 +262,11 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
+      }
       return {
         success: false,
         error: "Registration failed",

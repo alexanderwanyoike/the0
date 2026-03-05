@@ -131,6 +131,17 @@ describe("AuthService", () => {
       );
     });
 
+    it("should throw ServiceUnavailableException on CONNECT_TIMEOUT", async () => {
+      const error = Object.assign(new Error("Connect timeout"), {
+        code: "CONNECT_TIMEOUT",
+      });
+      mockDbError(error);
+
+      await expect(service.validateToken("valid-token")).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
     it("should throw ServiceUnavailableException on AggregateError wrapping connection errors", async () => {
       const innerError = Object.assign(new Error("Connection timed out"), {
         code: "ETIMEDOUT",

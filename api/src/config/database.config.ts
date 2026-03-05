@@ -18,6 +18,15 @@ export interface DatabaseConfig {
   };
 }
 
+function getPoolConfig() {
+  return {
+    max: parseInt(process.env.DB_POOL_MAX) || 10,
+    idleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT) || 20,
+    connectTimeout: parseInt(process.env.DB_POOL_CONNECT_TIMEOUT) || 10,
+    maxLifetime: parseInt(process.env.DB_POOL_MAX_LIFETIME) || 1800,
+  };
+}
+
 export function loadConfig(): DatabaseConfig {
   const databaseUrl = process.env.DATABASE_URL;
   const databaseType =
@@ -45,12 +54,7 @@ export function loadConfig(): DatabaseConfig {
       database: url.pathname.slice(1),
       synchronize: process.env.NODE_ENV === "development",
       logging: process.env.NODE_ENV === "development",
-      pool: {
-        max: parseInt(process.env.DB_POOL_MAX) || 10,
-        idleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT) || 20,
-        connectTimeout: parseInt(process.env.DB_POOL_CONNECT_TIMEOUT) || 10,
-        maxLifetime: parseInt(process.env.DB_POOL_MAX_LIFETIME) || 1800,
-      },
+      pool: getPoolConfig(),
     };
   }
 
@@ -65,12 +69,7 @@ export function loadConfig(): DatabaseConfig {
     database: process.env.DB_DATABASE || "the0_oss",
     synchronize: process.env.NODE_ENV === "development",
     logging: process.env.NODE_ENV === "development",
-    pool: {
-      max: parseInt(process.env.DB_POOL_MAX) || 10,
-      idleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT) || 20,
-      connectTimeout: parseInt(process.env.DB_POOL_CONNECT_TIMEOUT) || 10,
-      maxLifetime: parseInt(process.env.DB_POOL_MAX_LIFETIME) || 1800,
-    },
+    pool: getPoolConfig(),
   };
 }
 
