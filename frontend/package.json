@@ -96,6 +96,7 @@
     "eslint-plugin-prettier": "^5.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "p-try": "2.2.0",
     "postcss": "^8.4.40",
     "prettier": "^3.0.3",
     "tailwindcss": "^3.4.7",
