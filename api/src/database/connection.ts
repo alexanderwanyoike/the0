@@ -61,7 +61,7 @@ export function getDatabase() {
   } else {
     // Disable Node 20's Happy Eyeballs (RFC 8305) which splits connect_timeout
     // across all DNS results (~250ms each).
-    if (process.env.DB_AUTO_SELECT_FAMILY === "false") {
+    if (config.autoSelectFamily === false) {
       net.setDefaultAutoSelectFamily(false);
     }
 

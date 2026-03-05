@@ -10,6 +10,7 @@ export interface DatabaseConfig {
   database?: string;
   synchronize?: boolean;
   logging?: boolean;
+  autoSelectFamily?: boolean;
   pool?: {
     max: number;
     idleTimeout: number;
@@ -18,12 +19,27 @@ export interface DatabaseConfig {
   };
 }
 
+function parsePositiveIntEnv(
+  key: string,
+  fallback: number,
+  min = 1,
+): number {
+  const raw = process.env[key];
+  if (raw === undefined || raw.trim() === "") return fallback;
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < min) {
+    throw new Error(`${key} must be an integer >= ${min}`);
+  }
+  return parsed;
+}
+
 function getPoolConfig() {
   return {
-    max: parseInt(process.env.DB_POOL_MAX) || 10,
-    idleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT) || 20,
-    connectTimeout: parseInt(process.env.DB_POOL_CONNECT_TIMEOUT) || 10,
-    maxLifetime: parseInt(process.env.DB_POOL_MAX_LIFETIME) || 1800,
+    max: parsePositiveIntEnv("DB_POOL_MAX", 10),
+    idleTimeout: parsePositiveIntEnv("DB_POOL_IDLE_TIMEOUT", 20),
+    connectTimeout: parsePositiveIntEnv("DB_POOL_CONNECT_TIMEOUT", 10),
+    maxLifetime: parsePositiveIntEnv("DB_POOL_MAX_LIFETIME", 1800),
   };
 }
 
@@ -54,6 +70,7 @@ export function loadConfig(): DatabaseConfig {
       database: url.pathname.slice(1),
       synchronize: process.env.NODE_ENV === "development",
       logging: process.env.NODE_ENV === "development",
+      autoSelectFamily: process.env.DB_AUTO_SELECT_FAMILY !== "false",
       pool: getPoolConfig(),
     };
   }
@@ -69,6 +86,7 @@ export function loadConfig(): DatabaseConfig {
     database: process.env.DB_DATABASE || "the0_oss",
     synchronize: process.env.NODE_ENV === "development",
     logging: process.env.NODE_ENV === "development",
+    autoSelectFamily: process.env.DB_AUTO_SELECT_FAMILY !== "false",
     pool: getPoolConfig(),
   };
 }
