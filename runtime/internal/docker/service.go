@@ -12,12 +12,10 @@ import (
 	"runtime/internal/constants"
 	"runtime/internal/k8s/health"
 	"runtime/internal/model"
-	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 
 	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
 
-	"github.com/minio/minio-go/v7"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
@@ -134,19 +132,14 @@ func (s *BotService) Run(ctx context.Context) error {
 	}
 
 	// Initialize dependency checker (MinIO + MongoDB)
-	s.initDependencyChecker()
+	s.depChecker = newDependencyCheckerFromEnv(s.mongoClient, s.logger)
 
 	// Synchronous health probe before declaring readiness
-	mongoOK, minioOK := s.depChecker.CheckHealth(s.ctx)
-	s.depChecker.SetLastResult(mongoOK, minioOK)
-	depsHealthy := mongoOK && minioOK
-	if s.healthServer != nil {
-		s.healthServer.SetReady(depsHealthy)
-	}
+	depsHealthy := probeDepHealth(s.ctx, s.depChecker, s.healthServer)
 
 	// Start health check loop (separate from reconciliation)
 	s.wg.Add(1)
-	go s.runHealthCheckLoop()
+	go runDepHealthLoop(s.ctx, s.config.HealthCheckInterval, s.depChecker, s.healthServer, s.logger, s.wg.Done)
 
 	// Run initial reconciliation (gated by dep checker)
 	if depsHealthy {
@@ -212,58 +205,6 @@ func (s *BotService) initNATSSubscriber(ctx context.Context) error {
 
 	s.subscriber = subscriber
 	return nil
-}
-
-// initDependencyChecker creates the DependencyChecker with a MinIO client
-// loaded from environment. If MinIO config is missing, the checker will treat
-// MinIO as permanently unhealthy (which is the safe default).
-func (s *BotService) initDependencyChecker() {
-	var minioClient *minio.Client
-	minioBucket := "custom-bots"
-
-	cfg, err := storage.LoadConfigFromEnv()
-	if err != nil {
-		s.logger.Info("MinIO config not available for health checks: %v", err)
-	} else {
-		mc, err := storage.NewMinioClient(cfg)
-		if err != nil {
-			s.logger.Error("Failed to create MinIO client for health checks: %v", err)
-		} else {
-			minioClient = mc
-			minioBucket = cfg.CodeBucket
-		}
-	}
-
-	s.depChecker = NewDependencyChecker(s.mongoClient, minioClient, minioBucket, s.logger)
-}
-
-// runHealthCheckLoop periodically checks dependency health on its own interval,
-// separate from the reconciliation loop.
-func (s *BotService) runHealthCheckLoop() {
-	defer s.wg.Done()
-
-	ticker := time.NewTicker(s.config.HealthCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			mongoOK, minioOK := s.depChecker.CheckHealth(s.ctx)
-			s.depChecker.SetLastResult(mongoOK, minioOK)
-			if !mongoOK || !minioOK {
-				s.logger.Error("Dependencies unhealthy (mongo=%v, minio=%v)", mongoOK, minioOK)
-				if s.healthServer != nil {
-					s.healthServer.SetReady(false)
-				}
-			} else {
-				if s.healthServer != nil {
-					s.healthServer.SetReady(true)
-				}
-			}
-		case <-s.ctx.Done():
-			return
-		}
-	}
 }
 
 // runReconciliationLoop runs the periodic reconciliation

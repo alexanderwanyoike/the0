@@ -1512,9 +1512,8 @@ func TestBotService_StartsUnready_WhenDepsDown(t *testing.T) {
 	service.depChecker = NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
 
 	// Start the actual health check loop to drive readiness
-	service.config.HealthCheckInterval = 20 * time.Millisecond
 	service.wg.Add(1)
-	go service.runHealthCheckLoop()
+	go runDepHealthLoop(service.ctx, 20*time.Millisecond, service.depChecker, hs, &util.NopLogger{}, service.wg.Done)
 	defer func() {
 		service.Stop()
 		service.wg.Wait()
