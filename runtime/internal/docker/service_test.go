@@ -1504,29 +1504,27 @@ func TestBotService_StartsUnready_WhenDepsDown(t *testing.T) {
 		MongoURI: "mongodb://localhost:27017",
 	})
 	require.NoError(t, err)
-	defer service.Stop()
 
 	service.healthServer = hs
+	hs.SetReady(true) // ensure we verify an actual transition
 
-	// Simulate what Run() does after initDependencyChecker:
-	// create a dep checker with nil clients (unhealthy)
+	// Create dep checker with nil clients (unhealthy)
 	service.depChecker = NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
 
-	// Synchronous probe — same logic as Run()
-	mongoOK, minioOK := service.depChecker.CheckHealth(service.ctx)
-	service.depChecker.SetLastResult(mongoOK, minioOK)
-	depsHealthy := mongoOK && minioOK
+	// Start the actual health check loop to drive readiness
+	service.config.HealthCheckInterval = 20 * time.Millisecond
+	service.wg.Add(1)
+	go service.runHealthCheckLoop()
+	defer func() {
+		service.Stop()
+		service.wg.Wait()
+	}()
 
-	if service.healthServer != nil {
-		service.healthServer.SetReady(depsHealthy)
-	}
+	// Readiness should be driven to false by the health loop
+	require.Eventually(t, func() bool {
+		return !hs.IsReady()
+	}, 250*time.Millisecond, 10*time.Millisecond, "readiness should be driven to false by health loop")
 
-	// Deps should be unhealthy (nil clients)
-	assert.False(t, depsHealthy, "deps should be unhealthy with nil clients")
-	assert.False(t, service.depChecker.IsHealthy(), "cached health should be false")
-
-	// Readiness should be false (deps are down)
-	assert.False(t, hs.IsReady(), "readiness should be false when deps are down")
 	// Liveness should remain true (not gated on deps)
 	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
 }
