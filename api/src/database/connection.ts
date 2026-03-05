@@ -64,7 +64,10 @@ export function getDatabase() {
       username: config.username,
       password: config.password,
       database: config.database,
-      max: 10,
+      max: config.pool.max,
+      idle_timeout: config.pool.idleTimeout,
+      connect_timeout: config.pool.connectTimeout,
+      max_lifetime: config.pool.maxLifetime,
     });
     dbInstance = drizzle(client, { schema: pgSchema });
 

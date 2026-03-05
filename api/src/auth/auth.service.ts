@@ -1,4 +1,4 @@
-import { Injectable, Scope } from "@nestjs/common";
+import { Injectable, Scope, ServiceUnavailableException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { getDatabase } from "../database/connection";
 import { usersTable, usersTableSqlite } from "../database/schema/users";
@@ -6,6 +6,21 @@ import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import { Result } from "../common/result";
 import { getDatabaseConfig } from "../database/connection";
+
+const CONNECTION_ERROR_CODES = new Set([
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+]);
+
+function isConnectionError(error: unknown): boolean {
+  if (error instanceof AggregateError) {
+    return error.errors.some(isConnectionError);
+  }
+  return CONNECTION_ERROR_CODES.has((error as any)?.code);
+}
 
 export interface AuthUser {
   id: string;
@@ -78,6 +93,11 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
+      }
       return {
         success: false,
         error: "Invalid token",
