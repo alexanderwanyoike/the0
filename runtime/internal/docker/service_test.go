@@ -1288,6 +1288,10 @@ func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	dc.SetLastResult(false, false) // both deps down
 	service.depChecker = dc
 
+	// NOTE: mongoClient is nil, so if the dep gate regressed and reconcile() ran,
+	// it would panic on the MongoDB query, causing the test to fail. This provides
+	// an implicit safety net beyond the explicit start-count assertion below.
+
 	// Start the actual reconciliation loop goroutine
 	service.wg.Add(1)
 	go service.runReconciliationLoop()

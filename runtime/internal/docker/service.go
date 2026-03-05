@@ -73,11 +73,11 @@ func NewBotService(config BotServiceConfig) (*BotService, error) {
 		config.Collection = constants.BOT_RUNNER_COLLECTION
 	}
 
-	if config.ReconcileInterval == 0 {
+	if config.ReconcileInterval <= 0 {
 		config.ReconcileInterval = 30 * time.Second
 	}
 
-	if config.HealthCheckInterval == 0 {
+	if config.HealthCheckInterval <= 0 {
 		config.HealthCheckInterval = 15 * time.Second
 	}
 
