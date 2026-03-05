@@ -8,8 +8,6 @@ import {
 } from "./types";
 
 export class JwtAuthService {
-  private readonly API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
   private readonly TOKEN_KEY = "auth-token";
 
   /**
@@ -17,7 +15,7 @@ export class JwtAuthService {
    */
   async login(credentials: LoginCredentials): Promise<Result<AuthResponse>> {
     try {
-      const response = await fetch(`${this.API_BASE_URL}/auth/login`, {
+      const response = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,7 +62,7 @@ export class JwtAuthService {
     credentials: RegisterCredentials,
   ): Promise<Result<AuthResponse>> {
     try {
-      const response = await fetch(`${this.API_BASE_URL}/auth/register`, {
+      const response = await fetch(`/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,7 +107,7 @@ export class JwtAuthService {
    */
   async validateToken(token: string): Promise<Result<AuthUser>> {
     try {
-      const response = await fetch(`${this.API_BASE_URL}/auth/validate`, {
+      const response = await fetch(`/api/auth/validate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -160,7 +158,7 @@ export class JwtAuthService {
     }
 
     try {
-      const response = await fetch(`${this.API_BASE_URL}/auth/me`, {
+      const response = await fetch(`/api/auth/me`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
