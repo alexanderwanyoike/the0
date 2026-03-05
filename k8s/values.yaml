@@ -148,6 +148,12 @@ the0Api:
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"
     RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
+    # Database pool lifecycle (prevents stale connections)
+    DB_POOL_MAX: "10"
+    DB_POOL_IDLE_TIMEOUT: "20"
+    DB_POOL_CONNECT_TIMEOUT: "10"
+    DB_POOL_MAX_LIFETIME: "1800"
+    DB_AUTO_SELECT_FAMILY: "true"
   resources:
     requests:
       memory: 512Mi
