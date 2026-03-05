@@ -2,7 +2,14 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import postgres from "postgres";
 import Database from "better-sqlite3";
+import * as net from "net";
 import { loadConfig, DatabaseConfig } from "../config/database.config";
+
+// Set DB_AUTO_SELECT_FAMILY=false to disable Node 20's Happy Eyeballs (RFC 8305)
+// which splits connect_timeout across all DNS results (~250ms each).
+if (process.env.DB_AUTO_SELECT_FAMILY === "false") {
+  net.setDefaultAutoSelectFamily(false);
+}
 import * as usersSchema from "./schema/users";
 import * as customBotsSchema from "./schema/custom-bots";
 import * as botsSchema from "./schema/bots";
