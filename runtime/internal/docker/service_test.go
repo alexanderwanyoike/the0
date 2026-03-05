@@ -1272,13 +1272,13 @@ func TestStartBot_ConcurrentCalls(t *testing.T) {
 	assert.True(t, mockRunner.WasStarted("bot3"))
 }
 
-// Test reconciliation skips when deps are unhealthy
+// Test reconciliation skips when deps are unhealthy by exercising the actual goroutine
 func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	service, err := NewBotService(BotServiceConfig{
-		MongoURI: "mongodb://localhost:27017",
+		MongoURI:          "mongodb://localhost:27017",
+		ReconcileInterval: 20 * time.Millisecond,
 	})
 	require.NoError(t, err)
-	defer service.Stop()
 
 	mockRunner := NewMockDockerRunner()
 	service.runner = mockRunner
@@ -1288,20 +1288,18 @@ func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	dc.SetLastResult(false, false) // both deps down
 	service.depChecker = dc
 
-	// Setup: Bot is desired but not running
-	desiredBots := []model.Bot{
-		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true),
-	}
-	actualContainers := []*ContainerInfo{}
+	// Start the actual reconciliation loop goroutine
+	service.wg.Add(1)
+	go service.runReconciliationLoop()
 
-	// Gate check should prevent reconciliation
-	if !service.depChecker.IsHealthy() {
-		// This is what the reconciliation loop does — skip
-	} else {
-		service.performReconciliation(service.ctx, desiredBots, actualContainers)
-	}
+	// Let a few ticks pass
+	time.Sleep(80 * time.Millisecond)
 
-	// No containers should have been started
+	// Stop the service to terminate the loop
+	service.Stop()
+	service.wg.Wait()
+
+	// No containers should have been started (reconciliation was skipped)
 	assert.Equal(t, 0, mockRunner.GetStartCallCount(), "no containers should start when deps unhealthy")
 }
 
@@ -1521,10 +1519,14 @@ func TestBotService_StartsUnready_WhenDepsDown(t *testing.T) {
 
 	if service.healthServer != nil {
 		service.healthServer.SetReady(depsHealthy)
-		service.healthServer.SetHealthy(depsHealthy)
 	}
 
 	// Deps should be unhealthy (nil clients)
 	assert.False(t, depsHealthy, "deps should be unhealthy with nil clients")
 	assert.False(t, service.depChecker.IsHealthy(), "cached health should be false")
+
+	// Readiness should be false (deps are down)
+	assert.False(t, hs.IsReady(), "readiness should be false when deps are down")
+	// Liveness should remain true (not gated on deps)
+	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
 }

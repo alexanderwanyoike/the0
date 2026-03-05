@@ -142,7 +142,6 @@ func (s *BotService) Run(ctx context.Context) error {
 	depsHealthy := mongoOK && minioOK
 	if s.healthServer != nil {
 		s.healthServer.SetReady(depsHealthy)
-		s.healthServer.SetHealthy(depsHealthy)
 	}
 
 	// Start health check loop (separate from reconciliation)
@@ -255,12 +254,10 @@ func (s *BotService) runHealthCheckLoop() {
 				s.logger.Error("Dependencies unhealthy (mongo=%v, minio=%v)", mongoOK, minioOK)
 				if s.healthServer != nil {
 					s.healthServer.SetReady(false)
-					s.healthServer.SetHealthy(false)
 				}
 			} else {
 				if s.healthServer != nil {
 					s.healthServer.SetReady(true)
-					s.healthServer.SetHealthy(true)
 				}
 			}
 		case <-s.ctx.Done():
