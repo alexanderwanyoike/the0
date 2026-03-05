@@ -26,6 +26,11 @@ const createMockResponse = (options: Partial<Response> = {}): Response =>
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+function getFetchCallUrl(mockFn: jest.Mock, idx = 0): string {
+  const call = mockFn.mock.calls[idx];
+  return (call[0] as { url?: string })?.url ?? String(call[0]);
+}
+
 describe("JwtAuthService", () => {
   let authService: JwtAuthService;
   const mockUser: AuthUser = {
@@ -75,6 +80,7 @@ describe("JwtAuthService", () => {
       expect(result.data?.user).toEqual(mockUser);
       expect(localStorage.getItem("auth-token")).toBe("mock-jwt-token");
       expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/login");
     });
 
     it("should handle login failure", async () => {
@@ -137,6 +143,8 @@ describe("JwtAuthService", () => {
       expect(result.data?.token).toBe("mock-jwt-token");
       expect(result.data?.user).toEqual(mockUser);
       expect(localStorage.getItem("auth-token")).toBe("mock-jwt-token");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/register");
     });
 
     it("should handle registration failure", async () => {
@@ -177,6 +185,7 @@ describe("JwtAuthService", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockUser);
       expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/validate");
     });
 
     it("should handle invalid token", async () => {
@@ -215,6 +224,7 @@ describe("JwtAuthService", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockUser);
       expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/me");
     });
 
     it("should return error when no token exists", async () => {
