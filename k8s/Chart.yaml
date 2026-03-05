@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.3.2
-appVersion: "1.7.4"
+version: 0.3.3
+appVersion: "1.7.5"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,9 +31,7 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: Prevent stale DB connections from causing JWT validation failures
-    - kind: added
-      description: Configurable database connection pool lifecycle settings
+      description: Upgrade Next.js to 15.3.8 to patch critical RSC vulnerabilities (CVE-2025-66478, CVE-2025-55183, CVE-2025-55184)
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
