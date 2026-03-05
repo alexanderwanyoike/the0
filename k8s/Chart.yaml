@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.3.1
-appVersion: "1.7.3"
+version: 0.3.2
+appVersion: "1.7.4"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,10 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: fixed
+      description: Prevent stale DB connections from causing JWT validation failures
     - kind: added
-      description: Initial Helm chart release
+      description: Configurable database connection pool lifecycle settings
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

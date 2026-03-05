@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import postgres from "postgres";
 import Database from "better-sqlite3";
+import * as net from "net";
 import { loadConfig, DatabaseConfig } from "../config/database.config";
 import * as usersSchema from "./schema/users";
 import * as customBotsSchema from "./schema/custom-bots";
@@ -58,13 +59,22 @@ export function getDatabase() {
       bots: botsSchema.botsTableSqlite,
     };
   } else {
+    // Disable Node 20's Happy Eyeballs (RFC 8305) which splits connect_timeout
+    // across all DNS results (~250ms each).
+    if (config.autoSelectFamily === false) {
+      net.setDefaultAutoSelectFamily(false);
+    }
+
     const client = postgres(config.url, {
       host: config.host,
       port: config.port,
       username: config.username,
       password: config.password,
       database: config.database,
-      max: 10,
+      max: config.pool.max,
+      idle_timeout: config.pool.idleTimeout,
+      connect_timeout: config.pool.connectTimeout,
+      max_lifetime: config.pool.maxLifetime,
     });
     dbInstance = drizzle(client, { schema: pgSchema });
 
