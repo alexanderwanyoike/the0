@@ -98,11 +98,11 @@ func NewScheduleService(config ScheduleServiceConfig) (*ScheduleService, error) 
 		config.Collection = constants.BOT_SCHEDULE_COLLECTION
 	}
 
-	if config.CheckInterval == 0 {
+	if config.CheckInterval <= 0 {
 		config.CheckInterval = 10 * time.Second
 	}
 
-	if config.HealthCheckInterval == 0 {
+	if config.HealthCheckInterval <= 0 {
 		config.HealthCheckInterval = 15 * time.Second
 	}
 
