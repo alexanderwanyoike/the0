@@ -177,7 +177,8 @@ func runBotService() {
 	healthServer := health.NewServer(8080)
 	healthServer.Start()
 
-	// Create bot service
+	// Create bot service (health server is passed in so the service
+	// controls readiness/liveness based on actual dependency health)
 	service, err := dockerrunner.NewBotService(dockerrunner.BotServiceConfig{
 		MongoURI:          mongoUri,
 		NATSUrl:           natsUrl,
@@ -185,14 +186,12 @@ func runBotService() {
 		DBName:            constants.BOT_RUNNER_DB_NAME,
 		Collection:        constants.BOT_RUNNER_COLLECTION,
 		ReconcileInterval: botRunnerReconcileInterval,
+		HealthServer:      healthServer,
 	})
 	if err != nil {
 		util.LogMaster("Failed to create bot service: %v", err)
 		os.Exit(1)
 	}
-
-	// Mark as ready once service is created
-	healthServer.SetReady(true)
 
 	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())
@@ -236,7 +235,7 @@ func runScheduleService() {
 	healthServer := health.NewServer(8080)
 	healthServer.Start()
 
-	// Create schedule service
+	// Create schedule service (health server passed in for dep-based readiness)
 	service, err := dockerrunner.NewScheduleService(dockerrunner.ScheduleServiceConfig{
 		MongoURI:      mongoUri,
 		NATSUrl:       natsUrl,
@@ -244,14 +243,12 @@ func runScheduleService() {
 		DBName:        constants.BOT_SCHEDULER_DB_NAME,
 		Collection:    constants.BOT_SCHEDULE_COLLECTION,
 		CheckInterval: botSchedulerCheckInterval,
+		HealthServer:  healthServer,
 	})
 	if err != nil {
 		util.LogMaster("Failed to create schedule service: %v", err)
 		os.Exit(1)
 	}
-
-	// Mark as ready once service is created
-	healthServer.SetReady(true)
 
 	// Setup signal handling
 	ctx, cancel := context.WithCancel(context.Background())

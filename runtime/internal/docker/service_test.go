@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1270,6 +1272,112 @@ func TestStartBot_ConcurrentCalls(t *testing.T) {
 	assert.True(t, mockRunner.WasStarted("bot3"))
 }
 
+// Test reconciliation skips when deps are unhealthy by exercising the actual goroutine
+func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI:          "mongodb://localhost:27017",
+		ReconcileInterval: 20 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Create a dep checker that reports unhealthy
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(false, false) // both deps down
+	service.depChecker = dc
+
+	// NOTE: mongoClient is nil, so if the dep gate regressed and reconcile() ran,
+	// it would panic on the MongoDB query, causing the test to fail. This provides
+	// an implicit safety net beyond the explicit start-count assertion below.
+
+	// Start the actual reconciliation loop goroutine
+	service.wg.Add(1)
+	go service.runReconciliationLoop()
+
+	// Let a few ticks pass
+	time.Sleep(80 * time.Millisecond)
+
+	// Stop the service to terminate the loop
+	service.Stop()
+	service.wg.Wait()
+
+	// No containers should have been started (reconciliation was skipped)
+	assert.Equal(t, 0, mockRunner.GetStartCallCount(), "no containers should start when deps unhealthy")
+}
+
+// Test per-bot backoff after repeated failures
+func TestStartBot_BackoffAfterRepeatedFailures(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	mockRunner.shouldFailStart = true
+	service.runner = mockRunner
+
+	// Set up dep checker as healthy
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(true, true)
+	service.depChecker = dc
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+
+	// Fail 5 times
+	for i := 0; i < 5; i++ {
+		service.startBot(service.ctx, "bot1", bot)
+	}
+
+	// Wait for all async starts to complete
+	require.Eventually(t, func() bool {
+		return mockRunner.GetStartCallCount() == 5
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	// Bot should now be in backoff
+	assert.True(t, service.state.ShouldSkipBot("bot1"), "bot should be in backoff after 5 failures")
+}
+
+// Test backoff resets after successful start
+func TestStartBot_BackoffResets(t *testing.T) {
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+	defer service.Stop()
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Set up dep checker as healthy
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(true, true)
+	service.depChecker = dc
+
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+
+	// Record some failures manually
+	for i := 0; i < 5; i++ {
+		service.state.RecordBotFailure("bot1")
+	}
+	assert.True(t, service.state.ShouldSkipBot("bot1"))
+
+	// Now succeed
+	mockRunner.shouldFailStart = false
+	service.startBot(service.ctx, "bot1", bot)
+
+	require.Eventually(t, func() bool {
+		return mockRunner.WasStarted("bot1")
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	// Wait a moment for the reset to be recorded
+	require.Eventually(t, func() bool {
+		return !service.state.ShouldSkipBot("bot1")
+	}, 200*time.Millisecond, 10*time.Millisecond, "backoff should reset after success")
+}
+
 // Test service defaults reconcile interval
 func TestNewBotService_DefaultsReconcileInterval(t *testing.T) {
 	service, err := NewBotService(BotServiceConfig{
@@ -1391,4 +1499,35 @@ func TestBotService_OnlyStopsRealtimeContainers(t *testing.T) {
 	// Only the realtime container should be in the filtered list
 	assert.Len(t, realtimeContainers, 1, "Only realtime container should remain")
 	assert.Equal(t, "orphan-realtime-bot", realtimeContainers[0].ID)
+}
+
+func TestBotService_StartsUnready_WhenDepsDown(t *testing.T) {
+	hs := health.NewServer(0)
+
+	service, err := NewBotService(BotServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+	})
+	require.NoError(t, err)
+
+	service.healthServer = hs
+	hs.SetReady(true) // ensure we verify an actual transition
+
+	// Create dep checker with nil clients (unhealthy)
+	service.depChecker = NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+
+	// Start the actual health check loop to drive readiness
+	service.wg.Add(1)
+	go runDepHealthLoop(service.ctx, 20*time.Millisecond, service.depChecker, hs, &util.NopLogger{}, service.wg.Done)
+	defer func() {
+		service.Stop()
+		service.wg.Wait()
+	}()
+
+	// Readiness should be driven to false by the health loop
+	require.Eventually(t, func() bool {
+		return !hs.IsReady()
+	}, 250*time.Millisecond, 10*time.Millisecond, "readiness should be driven to false by health loop")
+
+	// Liveness should remain true (not gated on deps)
+	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
 }
