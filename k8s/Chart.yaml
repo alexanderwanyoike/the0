@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.3.3
-appVersion: "1.7.5"
+version: 0.3.4
+appVersion: "1.7.6"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,7 +31,9 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: Upgrade Next.js to 15.3.8 to patch critical RSC vulnerabilities (CVE-2025-66478, CVE-2025-55183, CVE-2025-55184)
+      description: Resolve MCP auth error in logs endpoints when accessing logs_get and logs_summary tools
+    - kind: changed
+      description: Add MCP authentication details and examples to README documentation
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
