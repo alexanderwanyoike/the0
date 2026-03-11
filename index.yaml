@@ -5,6 +5,54 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: Resolve MCP auth error in logs endpoints when accessing logs_get and logs_summary tools
+        - kind: changed
+          description: Add MCP authentication details and examples to README documentation
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.7.6
+    created: "2026-03-11T07:43:53.961343015Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: bbb5c0aa3c81359edf08b9747813858d36d7b070e3ea52abbe7f621a812d9842
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.3.4/the0-0.3.4.tgz
+    version: 0.3.4
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: Upgrade Next.js to 15.3.8 to patch critical RSC vulnerabilities (CVE-2025-66478, CVE-2025-55183, CVE-2025-55184)
       artifacthub.io/images: |
         - name: api
@@ -233,4 +281,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-05T21:26:34.160623076Z"
+generated: "2026-03-11T07:43:53.961373772Z"
