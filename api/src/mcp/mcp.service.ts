@@ -488,12 +488,16 @@ export class McpService {
     }
     // Cap limit to prevent context overflow
     const limit = Math.min(input.limit || 100, 500);
-    const result = await this.logsService.getLogs(input.bot_id, {
-      date: input.date,
-      dateRange: input.date_range,
-      limit,
-      offset: 0,
-    });
+    const result = await this.logsService.getLogs(
+      input.bot_id,
+      {
+        date: input.date,
+        dateRange: input.date_range,
+        limit,
+        offset: 0,
+      },
+      userId
+    );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs");
     }
@@ -515,11 +519,15 @@ export class McpService {
       (today.getMonth() + 1).toString().padStart(2, "0") +
       today.getDate().toString().padStart(2, "0");
 
-    const result = await this.logsService.getLogs(input.bot_id, {
-      date: todayStr,
-      limit: 100,
-      offset: 0,
-    });
+    const result = await this.logsService.getLogs(
+      input.bot_id,
+      {
+        date: todayStr,
+        limit: 100,
+        offset: 0,
+      },
+      userId
+    );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs for summary");
     }

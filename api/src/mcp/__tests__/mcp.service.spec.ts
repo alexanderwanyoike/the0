@@ -302,7 +302,7 @@ describe("McpService", () => {
           dateRange: undefined,
           limit: 500,
           offset: 0,
-        });
+        }, "user-123");
       });
     });
 
