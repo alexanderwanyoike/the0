@@ -121,6 +121,10 @@ export class BotService {
     return this.botRepository.findOne(uid, id);
   }
 
+  findOneByUserId(userId: string, id: string): Promise<Result<Bot, string>> {
+    return this.botRepository.findOne(userId, id);
+  }
+
   async update(
     id: string,
     updateBotDto: UpdateBotDto,

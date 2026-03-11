@@ -141,26 +141,50 @@ the0 includes a built-in MCP (Model Context Protocol) server that enables AI ass
 
 ### Configure Claude Code
 
+MCP tools require authentication via API key. Generate one from the web dashboard (Settings → API Keys) or via the CLI (`the0 auth login`).
+
 **Option 1: CLI Command**
 
 ```bash
-claude mcp add the0 --transport http http://localhost:3000/mcp
+claude mcp add the0 --transport http http://localhost:3000/mcp \
+  --header "x-api-key: YOUR_API_KEY"
 ```
 
 **Option 2: Configuration File**
 
-Add to your `.mcp.json`:
+Add to your `.mcp.json` in the project root:
 
 ```json
 {
   "mcpServers": {
     "the0": {
+      "type": "http",
       "url": "http://localhost:3000/mcp",
-      "transport": "http"
+      "headers": {
+        "x-api-key": "YOUR_API_KEY"
+      }
     }
   }
 }
 ```
+
+For team environments, use environment variable expansion to avoid committing secrets:
+
+```json
+{
+  "mcpServers": {
+    "the0": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp",
+      "headers": {
+        "x-api-key": "${THE0_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Code after configuring, then verify with `/mcp` — you should see the0 server as connected.
 
 ### Available MCP Tools
 
@@ -187,7 +211,7 @@ Once configured, ask Claude Code:
 - *"What custom bots are available?"*
 - *"Deploy a new scheduled bot with this configuration"*
 
-**Note:** MCP tools require authentication via API key. Generate one from the web dashboard or CLI.
+For detailed MCP documentation including all tool parameters and troubleshooting, see [MCP Integration Guide](docs/integrations/mcp.md).
 
 ---
 
