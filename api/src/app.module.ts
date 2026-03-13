@@ -12,6 +12,7 @@ import { LoggerModule } from "./logger/logger.module";
 import { McpModule } from "./mcp/mcp.module";
 import { BotStateModule } from "./bot-state/bot-state.module";
 import { BotQueryModule } from "./bot-query/bot-query.module";
+import { HealthModule } from "./health/health.module";
 import { MinioModule } from "./minio";
 import configuration from "./config/configuration";
 
@@ -32,6 +33,7 @@ import configuration from "./config/configuration";
     McpModule,
     BotStateModule,
     BotQueryModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
