@@ -1,4 +1,14 @@
-**/*/.claude
+# Claude Code config (settings, worktrees, etc.)
+.claude/*
+# Track the tech debt agents
+!.claude/agents/
+# Exclude runtime artifacts within agents
+.claude/agents/logs/
+.claude/agents/*.lock
+.claude/agents/.venv/
+.claude/agents/.pytest_cache/
+.claude/agents/src/*.egg-info/
+__pycache__/
 .notes/
 PR_MESSAGE.md
 

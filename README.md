@@ -397,6 +397,32 @@ def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
 ### Development Resources
 - [Bot Configuration](docs/custom-bot-development/configuration.md) - Configuration reference
 - [Testing & Debugging](docs/custom-bot-development/testing.md) - Development best practices
+- [Tech Debt Agents](.claude/agents/) - Automated codebase auditing and fixing
+
+---
+
+## Tech Debt Agents
+
+the0 includes an automated tech debt management system powered by Claude. Two agents run on a schedule to keep the codebase healthy:
+
+- **Auditor** — Weekly scan of the codebase. Finds bugs, security issues, performance problems, and cleanup opportunities. Updates `.notes/issues-audit.md` with new findings and marks resolved issues.
+- **Fixer** — Daily, picks the highest priority unresolved issue (MEDIUM/LOW only — CRITICAL/HIGH require human review), creates a branch, writes the fix, verifies the build, and opens a PR.
+
+Both agents run in git worktrees to avoid interfering with your working directory and skip runs if an interactive Claude session is active.
+
+```bash
+# Install
+cd .claude/agents && python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+
+# Run manually
+tech-debt auditor --force
+tech-debt fixer --force
+
+# Run tests
+pytest -v
+```
+
+Built with the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python). See [`.claude/agents/`](.claude/agents/) for the full implementation.
 
 ---
 
