@@ -1,7 +1,7 @@
 export class Bot {
   name: string;
   id: string;
-  config: any;
+  config: Record<string, unknown>;
   topic: string;
   createdAt: Date;
   updatedAt: Date;

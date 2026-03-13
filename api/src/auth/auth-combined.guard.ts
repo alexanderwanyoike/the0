@@ -4,8 +4,10 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Request } from "express";
 import { AuthService } from "./auth.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
+import { AuthenticatedRequest } from "./auth.types";
 
 @Injectable()
 export class AuthCombinedGuard implements CanActivate {
@@ -35,7 +37,7 @@ export class AuthCombinedGuard implements CanActivate {
   }
 
   private async validateJwtToken(
-    request: any,
+    request: AuthenticatedRequest,
     token: string,
   ): Promise<boolean> {
     const result = await this.authService.validateToken(token);
@@ -60,7 +62,7 @@ export class AuthCombinedGuard implements CanActivate {
     return true;
   }
 
-  private async validateApiKey(request: any, apiKey: string): Promise<boolean> {
+  private async validateApiKey(request: AuthenticatedRequest, apiKey: string): Promise<boolean> {
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
     if (!result.success) {
@@ -83,7 +85,7 @@ export class AuthCombinedGuard implements CanActivate {
     return true;
   }
 
-  private extractJwtFromHeader(request: any): string | null {
+  private extractJwtFromHeader(request: Request): string | null {
     const authHeader = request.headers.authorization;
 
     if (authHeader) {
@@ -96,7 +98,7 @@ export class AuthCombinedGuard implements CanActivate {
     return null;
   }
 
-  private extractApiKeyFromHeader(request: any): string | null {
+  private extractApiKeyFromHeader(request: Request): string | null {
     const authHeader = request.headers.authorization;
 
     if (authHeader) {

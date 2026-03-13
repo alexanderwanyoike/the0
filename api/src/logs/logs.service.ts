@@ -2,7 +2,7 @@ import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 
@@ -37,7 +37,7 @@ export class LogsService {
     userId?: string,
   ): Promise<Result<LogEntry[], string>> {
     // Verify bot ownership
-    const uid = userId || (this.botService as any).request?.user?.uid;
+    const uid = userId || ((this.botService as unknown as { request?: { user?: { uid: string } } }).request?.user?.uid);
     if (!uid) return Failure("Authentication required");
     const botResult = await this.botService.findOneByUserId(uid, botId);
     if (!botResult.success) {
@@ -74,9 +74,9 @@ export class LogsService {
       );
 
       return Ok(paginatedLogs);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error fetching logs");
-      return Failure(`Failed to fetch logs: ${error.message}`);
+      return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
   }
 
@@ -87,8 +87,8 @@ export class LogsService {
       // Check if object exists
       try {
         await this.minioClient.statObject(this.logBucket, logPath);
-      } catch (error: any) {
-        if (error.code === "NotFound") {
+      } catch (error: unknown) {
+        if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "NotFound") {
           return Ok(""); // Return empty content if log file doesn't exist
         }
         throw error;
@@ -105,9 +105,9 @@ export class LogsService {
       const content = Buffer.concat(chunks).toString("utf-8");
 
       return Ok(content);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error, logPath }, "Error downloading log file");
-      return Failure(`Failed to download log file: ${error.message}`);
+      return Failure(`Failed to download log file: ${errorMessage(error)}`);
     }
   }
 

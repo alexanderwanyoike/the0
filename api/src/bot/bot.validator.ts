@@ -6,10 +6,18 @@ import { isValidCron } from "cron-validator";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { BOT_TYPE_PATTERN } from "@/bot/bot.constants";
 
+/** JSON Schema object shape used for bot config validation */
+interface JsonSchema {
+  type?: string;
+  properties?: Record<string, JsonSchema>;
+  additionalProperties?: boolean;
+  [key: string]: unknown;
+}
+
 @Injectable()
 export class BotValidator {
   async validate(
-    config: any,
+    config: Record<string, unknown>,
     customBot: CustomBot,
   ): Promise<Result<boolean, string[]>> {
     //Check if the config type is valid
@@ -19,13 +27,13 @@ export class BotValidator {
       return Failure<boolean, string[]>(["No type provided"]);
     }
 
-    if (BOT_TYPE_PATTERN.test(type) === false) {
+    if (BOT_TYPE_PATTERN.test(type as string) === false) {
       return Failure<boolean, string[]>([
         "Invalid bot type format. Expected format: type/name",
       ]);
     }
 
-    const [botType, _] = type.split("/");
+    const [botType, _] = (type as string).split("/");
 
     //Check if it has a schedule
     if (botType === "scheduled") {
@@ -33,7 +41,7 @@ export class BotValidator {
         return Failure<boolean, string[]>(["No schedule provided"]);
       }
 
-      if (!isValidCron(config.schedule)) {
+      if (!isValidCron(config.schedule as string)) {
         return Failure<boolean, string[]>([
           `${config.schedule} is not a valid cron expression`,
         ]);
@@ -44,7 +52,7 @@ export class BotValidator {
 
   private validateWithSchema(
     customBot: CustomBot,
-    config: any,
+    config: Record<string, unknown>,
   ): Result<boolean, string[]> {
     const {
       config: {
@@ -73,7 +81,10 @@ export class BotValidator {
     }
   }
 
-  private filterConfigForSchema(config: any, schema: any): any {
+  private filterConfigForSchema(
+    config: Record<string, unknown>,
+    schema: JsonSchema,
+  ): Record<string, unknown> {
     // If additionalProperties is not explicitly false, return original config
     if (schema.additionalProperties !== false) {
       return config;
@@ -88,12 +99,15 @@ export class BotValidator {
     return this.filterObjectProperties(config, schema);
   }
 
-  private filterObjectProperties(obj: any, schema: any): any {
+  private filterObjectProperties(
+    obj: Record<string, unknown>,
+    schema: JsonSchema,
+  ): Record<string, unknown> {
     if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
       return obj;
     }
 
-    const filtered = {};
+    const filtered: Record<string, unknown> = {};
     const schemaProperties = schema.properties || {};
 
     for (const key of Object.keys(schemaProperties)) {
@@ -102,7 +116,10 @@ export class BotValidator {
 
         // If property is an object and has its own schema, recursively filter
         if (propertySchema.type === "object" && propertySchema.properties) {
-          filtered[key] = this.filterObjectProperties(obj[key], propertySchema);
+          filtered[key] = this.filterObjectProperties(
+            obj[key] as Record<string, unknown>,
+            propertySchema,
+          );
         } else {
           filtered[key] = obj[key];
         }

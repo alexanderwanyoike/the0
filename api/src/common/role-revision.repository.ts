@@ -1,4 +1,4 @@
-import { Result, Ok, Failure } from "./result";
+import { Result, Ok, Failure, errorMessage } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
@@ -23,6 +23,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     this.keyField = revisionKeyField;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic table access via computed key
   protected get table(): any {
     return this.tables[this.tableName];
   }
@@ -41,9 +42,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         id: records[0].id,
         ...data,
       } as T);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error creating document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -59,10 +60,10 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(eq(this.table.userId, userId))
         .orderBy(desc(this.table.createdAt));
 
-      return Ok(records.map((record) => this.transformRecordToData(record)));
-    } catch (error: any) {
+      return Ok(records.map((record: Record<string, unknown>) => this.transformRecordToData(record)));
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -78,9 +79,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       }
 
       return Ok(this.transformRecordToData(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -96,9 +97,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       }
 
       return Ok(this.transformRecordToData(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document by ID");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -119,9 +120,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
 
       return this.findOne(userId, id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error updating document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -132,9 +133,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
 
       return Ok(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -152,13 +153,13 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         )
         .orderBy(desc(this.table.createdAt));
 
-      return Ok(records.map((record) => this.transformRecordToData(record)));
-    } catch (error: any) {
+      return Ok(records.map((record: Record<string, unknown>) => this.transformRecordToData(record)));
+    } catch (error: unknown) {
       logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching documents by key",
       );
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -184,12 +185,12 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       }
 
       return Ok(this.transformRecordToData(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching document by key and version",
       );
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -215,9 +216,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       }
 
       return Ok(this.transformRecordToData(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching latest version");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -236,9 +237,9 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       }
 
       return Ok(this.transformRecordToData(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching global latest version");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -250,13 +251,13 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(eq(this.table[this.keyField], key))
         .orderBy(desc(this.table.createdAt));
 
-      return Ok(records.map((record) => this.transformRecordToData(record)));
-    } catch (error: any) {
+      return Ok(records.map((record: Record<string, unknown>) => this.transformRecordToData(record)));
+    } catch (error: unknown) {
       logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching global documents by key",
       );
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -267,8 +268,8 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         return Failure(result.error);
       }
       return Ok(result.data.length > 0);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -292,16 +293,16 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       }
 
       return Ok(this.transformRecordToData(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(
         { err: error, keyField: this.keyField },
         "Error fetching global document by key and version",
       );
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
-  protected transformRecordToData(record: any): T {
+  protected transformRecordToData(record: Record<string, unknown>): T {
     return {
       id: record.id,
       ...record,
@@ -309,7 +310,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
   }
 
   // Legacy method name for backward compatibility
-  protected transformSnapshotToData<T>(record: any): T {
-    return this.transformRecordToData(record) as unknown as T;
+  protected transformSnapshotToData<U>(record: Record<string, unknown>): U {
+    return this.transformRecordToData(record) as unknown as U;
   }
 }

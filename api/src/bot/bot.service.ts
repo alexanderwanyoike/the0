@@ -9,6 +9,7 @@ import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot, BotType } from "@/custom-bot/custom-bot.types";
+import { AuthenticatedRequest } from "@/auth/auth.types";
 // UserBotsService removed for OSS version
 import { NatsService } from "@/nats/nats.service";
 import * as semver from "semver";
@@ -21,7 +22,7 @@ import {
 @Injectable({ scope: Scope.REQUEST })
 export class BotService {
   constructor(
-    @Inject(REQUEST) private readonly request: any,
+    @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     private readonly botRepository: BotRepository,
     private readonly botValidator: BotValidator,
     private readonly customBotService: CustomBotService,
@@ -204,12 +205,14 @@ export class BotService {
     // Get custom bot data to determine correct topic
     let topics = null;
     if (botResult.data.config?.type && botResult.data.config?.version) {
-      const [_, name] = botResult.data.config.type.split("/");
+      const configType = botResult.data.config.type as string;
+      const configVersion = botResult.data.config.version as string;
+      const [_, name] = configType.split("/");
       const customBotResult =
         await this.customBotService.getUserSpecificVersion(
           uid,
           name,
-          botResult.data.config.version,
+          configVersion,
         );
 
       if (customBotResult.success) {
@@ -243,11 +246,11 @@ export class BotService {
   }
 
   private async validateBotTypeAndConfig(
-    config: any,
+    config: Record<string, unknown>,
   ): Promise<Result<CustomBot, string>> {
-    const { type, version } = config;
+    const { type: rawType, version: rawVersion } = config;
 
-    if (!type) {
+    if (!rawType) {
       return {
         success: false,
         error: "Bot type is required",
@@ -255,13 +258,16 @@ export class BotService {
       };
     }
 
-    if (!version) {
+    if (!rawVersion) {
       return {
         success: false,
         error: "Bot version is required",
         data: null,
       };
     }
+
+    const type = rawType as string;
+    const version = rawVersion as string;
 
     // Check that type is in the correct format
     if (!BOT_TYPE_PATTERN.test(type)) {

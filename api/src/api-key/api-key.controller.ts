@@ -15,6 +15,7 @@ import { CreateApiKeyDto } from "@/api-key/dto/create-api-key.dto";
 import { AuthGuard } from "@nestjs/passport";
 import { ApiKeyCreatedResponseDto } from "@/api-key/dto/api-key-created-response.dto";
 import { ApiKeyResponseDto } from "@/api-key/dto/api-key-response.dto"; // Assuming you have JWT auth
+import { AuthenticatedRequest } from "@/auth/auth.types";
 
 @Controller("api-keys")
 @UseGuards(AuthGuard())
@@ -27,7 +28,7 @@ export class ApiKeyController {
    */
   @Post()
   async createApiKey(
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
     @Body() createApiKeyDto: CreateApiKeyDto,
   ): Promise<ApiKeyCreatedResponseDto> {
     const userId = req.user.uid;
@@ -56,7 +57,7 @@ export class ApiKeyController {
    * GET /api-keys
    */
   @Get()
-  async getApiKeys(@Request() req: any): Promise<ApiKeyResponseDto[]> {
+  async getApiKeys(@Request() req: AuthenticatedRequest): Promise<ApiKeyResponseDto[]> {
     if (!req.user) {
       throw new Error("Authentication required");
     }
@@ -85,7 +86,7 @@ export class ApiKeyController {
    */
   @Get(":id")
   async getApiKeyById(
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
     @Param("id") keyId: string,
   ): Promise<ApiKeyResponseDto> {
     const userId = req.user.uid;
@@ -119,7 +120,7 @@ export class ApiKeyController {
    */
   @Delete(":id")
   async deleteApiKey(
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
     @Param("id") keyId: string,
   ): Promise<{ message: string }> {
     const userId = req.user.uid;
@@ -153,7 +154,7 @@ export class ApiKeyController {
    */
   @Get("stats/summary")
   async getApiKeyStats(
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ): Promise<{ total: number; active: number }> {
     const userId = req.user.uid;
 

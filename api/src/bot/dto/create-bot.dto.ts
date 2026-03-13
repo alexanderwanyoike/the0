@@ -7,5 +7,5 @@ export class CreateBotDto {
 
   @IsNotEmpty()
   @IsObject()
-  config: any;
+  config: Record<string, unknown>;
 }
