@@ -10,6 +10,7 @@ describe("LogsController", () => {
   let mockNatsService: Partial<NatsService>;
   let mockLogger: Partial<PinoLogger>;
   let mockUnsubscribe: jest.Mock;
+  const mockUser = { uid: "user123" } as any;
 
   beforeEach(() => {
     LogsController._resetForTest();
@@ -74,7 +75,7 @@ describe("LogsController", () => {
     });
 
     it("should set SSE headers", async () => {
-      await controller.streamLogs("bot-headers", mockReq, mockRes);
+      await controller.streamLogs("bot-headers", mockUser, mockReq, mockRes);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith(
         "Content-Type",
@@ -92,13 +93,13 @@ describe("LogsController", () => {
     });
 
     it("should send history event on connect", async () => {
-      await controller.streamLogs("bot-history", mockReq, mockRes);
+      await controller.streamLogs("bot-history", mockUser, mockReq, mockRes);
 
       expect(mockLogsService.getLogs).toHaveBeenCalledWith("bot-history", {
         date: expect.any(String),
         limit: 1000,
         offset: 0,
-      });
+      }, "user123");
 
       const historyWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: history"),
@@ -107,7 +108,7 @@ describe("LogsController", () => {
     });
 
     it("should subscribe to NATS for live updates", async () => {
-      await controller.streamLogs("bot-nats", mockReq, mockRes);
+      await controller.streamLogs("bot-nats", mockUser, mockReq, mockRes);
 
       expect(mockNatsService.subscribe).toHaveBeenCalledWith(
         "the0.bot.logs.bot-nats",
@@ -116,7 +117,7 @@ describe("LogsController", () => {
     });
 
     it("should forward NATS messages as update events", async () => {
-      await controller.streamLogs("bot-forward", mockReq, mockRes);
+      await controller.streamLogs("bot-forward", mockUser, mockReq, mockRes);
 
       const natsCallback = (mockNatsService.subscribe as jest.Mock).mock
         .calls[0][1];
@@ -130,13 +131,13 @@ describe("LogsController", () => {
     });
 
     it("should register close handler for cleanup", async () => {
-      await controller.streamLogs("bot-close", mockReq, mockRes);
+      await controller.streamLogs("bot-close", mockUser, mockReq, mockRes);
 
       expect(mockReq.on).toHaveBeenCalledWith("close", expect.any(Function));
     });
 
     it("should unsubscribe from NATS on client disconnect", async () => {
-      await controller.streamLogs("bot-unsub", mockReq, mockRes);
+      await controller.streamLogs("bot-unsub", mockUser, mockReq, mockRes);
 
       expect(closeHandler).not.toBeNull();
       closeHandler!();
@@ -150,7 +151,7 @@ describe("LogsController", () => {
         Failure("Bot not found or access denied"),
       );
 
-      await controller.streamLogs("bot-denied", mockReq, mockRes);
+      await controller.streamLogs("bot-denied", mockUser, mockReq, mockRes);
 
       const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: error"),
@@ -166,7 +167,7 @@ describe("LogsController", () => {
         Failure("Bot not found"),
       );
 
-      await controller.streamLogs("bot-missing", mockReq, mockRes);
+      await controller.streamLogs("bot-missing", mockUser, mockReq, mockRes);
 
       const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: error"),
@@ -182,7 +183,7 @@ describe("LogsController", () => {
         Failure("Failed to fetch logs: MinIO unavailable"),
       );
 
-      await controller.streamLogs("bot-minio-fail", mockReq, mockRes);
+      await controller.streamLogs("bot-minio-fail", mockUser, mockReq, mockRes);
 
       const warningWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: warning"),
@@ -209,8 +210,8 @@ describe("LogsController", () => {
         writableEnded: false,
       };
 
-      await controller.streamLogs("bot-shared", mockReq, mockRes);
-      await controller.streamLogs("bot-shared", mockReq2, mockRes2);
+      await controller.streamLogs("bot-shared", mockUser, mockReq, mockRes);
+      await controller.streamLogs("bot-shared", mockUser, mockReq2, mockRes2);
 
       // NATS subscribe should only be called once for the same botId
       const subscribeCalls = (
@@ -241,7 +242,7 @@ describe("LogsController", () => {
         mockRes.end.mockClear();
         mockRes.status.mockClear();
 
-        await controller.streamLogs(unsafeId, mockReq, mockRes);
+        await controller.streamLogs(unsafeId, mockUser, mockReq, mockRes);
 
         expect(mockRes.status).toHaveBeenCalledWith(400);
         const errorWrite = mockRes.write.mock.calls.find((call: string[]) =>
@@ -274,8 +275,8 @@ describe("LogsController", () => {
 
       // Fire both requests concurrently — exercises the pendingSubscriptions lock
       await Promise.all([
-        controller.streamLogs("bot-concurrent", mockReq, mockRes),
-        controller.streamLogs("bot-concurrent", mockReq2, mockRes2),
+        controller.streamLogs("bot-concurrent", mockUser, mockReq, mockRes),
+        controller.streamLogs("bot-concurrent", mockUser, mockReq2, mockRes2),
       ]);
 
       // Should only create one NATS subscription despite concurrent requests
@@ -295,7 +296,7 @@ describe("LogsController", () => {
         Failure("NATS connection failed"),
       );
 
-      await controller.streamLogs("bot-nats-fail", mockReq, mockRes);
+      await controller.streamLogs("bot-nats-fail", mockUser, mockReq, mockRes);
 
       // Should not throw — client still gets SSE connection
       expect(mockRes.flushHeaders).toHaveBeenCalled();
@@ -328,7 +329,7 @@ describe("LogsController", () => {
         end: jest.fn(),
         writableEnded: false,
       };
-      await controller.streamLogs("bot-nats-fail", mockReq2, mockRes2);
+      await controller.streamLogs("bot-nats-fail", mockUser, mockReq2, mockRes2);
 
       // Should retry subscribe since the dead one wasn't stored
       expect(mockNatsService.subscribe).toHaveBeenCalledTimes(2);
