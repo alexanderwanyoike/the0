@@ -37,9 +37,8 @@ export class LogsService {
     userId?: string,
   ): Promise<Result<LogEntry[], string>> {
     // Verify bot ownership
-    const uid = userId || (this.botService as any).request?.user?.uid;
-    if (!uid) return Failure("Authentication required");
-    const botResult = await this.botService.findOneByUserId(uid, botId);
+    if (!userId) return Failure("Authentication required");
+    const botResult = await this.botService.findOneByUserId(userId, botId);
     if (!botResult.success) {
       return Failure("Bot not found or access denied");
     }

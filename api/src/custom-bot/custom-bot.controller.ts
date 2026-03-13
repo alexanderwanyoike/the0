@@ -21,6 +21,7 @@ import { Request, Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { CurrentUser } from "@/auth/current-user.decorator";
 import { StorageService } from "./storage.service";
 
 interface CustomBotDeployDto {
@@ -43,9 +44,9 @@ export class CustomBotController {
     @Param("name") name: string,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { version?: string },
-    @Req() request: Request,
+    @CurrentUser() user: { uid?: string },
   ) {
-    const userId = (request as any).user?.uid;
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
@@ -91,9 +92,9 @@ export class CustomBotController {
   async createCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @Req() request: Request,
+    @CurrentUser() user: { uid?: string },
   ) {
-    const userId = (request as any).user?.uid;
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
@@ -158,9 +159,9 @@ export class CustomBotController {
   async updateCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @Req() request: Request,
+    @CurrentUser() user: { uid?: string },
   ) {
-    const userId = (request as any).user?.uid;
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
@@ -223,8 +224,8 @@ export class CustomBotController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async getUserCustomBots(@Req() request: Request) {
-    const userId = (request as any).user?.uid;
+  async getUserCustomBots(@CurrentUser() user: { uid?: string }) {
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
