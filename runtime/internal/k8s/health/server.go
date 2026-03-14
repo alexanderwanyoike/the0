@@ -62,6 +62,16 @@ func (s *Server) SetHealthy(healthy bool) {
 	s.healthy.Store(healthy)
 }
 
+// IsReady returns the current readiness state.
+func (s *Server) IsReady() bool {
+	return s.ready.Load()
+}
+
+// IsHealthy returns the current liveness state.
+func (s *Server) IsHealthy() bool {
+	return s.healthy.Load()
+}
+
 // healthzHandler handles liveness probe requests.
 // Returns 200 if healthy, 503 if unhealthy.
 func (s *Server) healthzHandler(w http.ResponseWriter, r *http.Request) {

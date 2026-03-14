@@ -2,12 +2,12 @@ name: C++ SDK
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/cpp/**'
       - '.github/workflows/sdk-cpp.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/cpp/**'
       - '.github/workflows/sdk-cpp.yml'

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"runtime/internal/constants"
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
 	"runtime/internal/util"
 
@@ -20,12 +21,14 @@ import (
 
 // ScheduleServiceConfig contains configuration for the ScheduleService
 type ScheduleServiceConfig struct {
-	MongoURI      string
-	NATSUrl       string // Required - for API communication
-	Logger        util.Logger
-	DBName        string
-	Collection    string
-	CheckInterval time.Duration // How often to check for due schedules (default: 10s)
+	MongoURI            string
+	NATSUrl             string // Required - for API communication
+	Logger              util.Logger
+	DBName              string
+	Collection          string
+	CheckInterval       time.Duration // How often to check for due schedules (default: 10s)
+	HealthServer        *health.Server
+	HealthCheckInterval time.Duration // How often to check deps (default: 15s)
 }
 
 // ScheduleService is a simplified single-process scheduled bot execution service
@@ -35,6 +38,10 @@ type ScheduleService struct {
 	state       *ScheduleState
 	logger      util.Logger
 	mongoClient *mongo.Client
+
+	// Dependency health checking
+	depChecker   *DependencyChecker
+	healthServer *health.Server
 
 	// NATS subscriber for API events
 	subscriber *schedulenatssubscriber.NATSSubscriber
@@ -91,18 +98,23 @@ func NewScheduleService(config ScheduleServiceConfig) (*ScheduleService, error) 
 		config.Collection = constants.BOT_SCHEDULE_COLLECTION
 	}
 
-	if config.CheckInterval == 0 {
+	if config.CheckInterval <= 0 {
 		config.CheckInterval = 10 * time.Second
+	}
+
+	if config.HealthCheckInterval <= 0 {
+		config.HealthCheckInterval = 15 * time.Second
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	service := &ScheduleService{
-		config: config,
-		state:  NewScheduleState(),
-		logger: config.Logger,
-		ctx:    ctx,
-		cancel: cancel,
+		config:       config,
+		state:        NewScheduleState(),
+		logger:       config.Logger,
+		healthServer: config.HealthServer,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	return service, nil
@@ -138,6 +150,16 @@ func (s *ScheduleService) Run(ctx context.Context) error {
 	}
 	defer s.subscriber.Stop()
 	s.logger.Info("NATS subscriber started - listening for schedule events")
+
+	// Initialize dependency checker
+	s.depChecker = newDependencyCheckerFromEnv(s.mongoClient, s.logger)
+
+	// Synchronous health probe before declaring readiness
+	probeDepHealth(s.ctx, s.depChecker, s.healthServer)
+
+	// Start health check loop
+	s.wg.Add(1)
+	go runDepHealthLoop(s.ctx, s.config.HealthCheckInterval, s.depChecker, s.healthServer, s.logger, s.wg.Done)
 
 	// Start the schedule check loop
 	s.wg.Add(1)
@@ -205,12 +227,20 @@ func (s *ScheduleService) runScheduleLoop() {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
 
-	// Run immediately on start
-	s.checkAndExecuteSchedules()
+	// Run immediately on start (gated by dep checker)
+	if s.depChecker.IsHealthy() {
+		s.checkAndExecuteSchedules()
+	} else {
+		s.logger.Error("Dependencies unhealthy, skipping initial schedule check")
+	}
 
 	for {
 		select {
 		case <-ticker.C:
+			if !s.depChecker.IsHealthy() {
+				s.logger.Error("Dependencies unhealthy, skipping schedule check")
+				continue
+			}
 			s.checkAndExecuteSchedules()
 		case <-s.ctx.Done():
 			s.logger.Info("Schedule loop stopped")

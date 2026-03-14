@@ -1,4 +1,5 @@
 **/*/.claude
+.claude/agents/
 .notes/
 PR_MESSAGE.md
 
