@@ -103,6 +103,13 @@ export class CustomBotController {
       throw new BadRequestException("file path is required");
     }
 
+    // Ensure filePath is scoped to the requesting user
+    if (!body.filePath.startsWith(`${userId}/`)) {
+      throw new BadRequestException(
+        "File path must belong to the authenticated user",
+      );
+    }
+
     // Validate that file exists at file path
     const fileExistsResult = await this.storageService.fileExists(
       body.filePath,
@@ -168,6 +175,13 @@ export class CustomBotController {
     // Validate file path
     if (!body.filePath) {
       throw new BadRequestException("file path is required");
+    }
+
+    // Ensure filePath is scoped to the requesting user
+    if (!body.filePath.startsWith(`${userId}/`)) {
+      throw new BadRequestException(
+        "File path must belong to the authenticated user",
+      );
     }
 
     // Validate that file exists at file path
