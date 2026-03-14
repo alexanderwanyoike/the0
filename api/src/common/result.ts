@@ -16,4 +16,11 @@ const Ok = <T, E>(data: T): Result<T, E> => ({
   success: true,
 });
 
-export { Failure, Ok };
+/**
+ * Extract a message string from an unknown error value.
+ * Prefer this over `(error as any).message` in catch blocks.
+ */
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+export { Failure, Ok, errorMessage };

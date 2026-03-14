@@ -9,7 +9,7 @@ import {
   CustomBot,
   CustomBotWithVersions,
 } from "./custom-bot.types";
-import { Result, Failure, Ok } from "@/common/result";
+import { Result, Failure, Ok, errorMessage } from "@/common/result";
 
 @Injectable()
 export class CustomBotService {
@@ -109,9 +109,9 @@ export class CustomBotService {
         config.name,
         config.version,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error creating custom bot");
-      return Failure(`Failed to create custom bot: ${error.message}`);
+      return Failure(`Failed to create custom bot: ${errorMessage(error)}`);
     }
   }
 
@@ -252,9 +252,9 @@ export class CustomBotService {
         config.name,
         config.version,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error updating custom bot");
-      return Failure(`Failed to update custom bot: ${error.message}`);
+      return Failure(`Failed to update custom bot: ${errorMessage(error)}`);
     }
   }
 
@@ -269,9 +269,9 @@ export class CustomBotService {
       }
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error getting user custom bots");
-      return Failure(`Failed to get user custom bots: ${error.message}`);
+      return Failure(`Failed to get user custom bots: ${errorMessage(error)}`);
     }
   }
 

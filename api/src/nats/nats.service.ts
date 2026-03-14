@@ -10,7 +10,7 @@ import {
   StorageType,
   StreamConfig,
 } from "nats";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, errorMessage } from "@/common/result";
 
 type StreamSetupConfig = Pick<
   StreamConfig,
@@ -73,10 +73,11 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private isStreamAlreadyExists(err: any): boolean {
+  private isStreamAlreadyExists(err: unknown): boolean {
+    const natsErr = err as { api_error?: { err_code?: number }; message?: string };
     return (
-      err?.api_error?.err_code === 10058 ||
-      err?.message?.includes("stream name already in use")
+      natsErr?.api_error?.err_code === 10058 ||
+      natsErr?.message?.includes("stream name already in use") === true
     );
   }
 
@@ -91,9 +92,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.jetStreamManager.streams.add(config);
       return Ok(undefined);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!this.isStreamAlreadyExists(err)) {
-        return Failure(err.message ?? `Failed to create stream ${config.name}`);
+        return Failure(errorMessage(err) || `Failed to create stream ${config.name}`);
       }
     }
 
@@ -101,8 +102,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.jetStreamManager.streams.update(config.name, config);
       return Ok(undefined);
-    } catch (err: any) {
-      return Failure(err.message ?? `Failed to update stream ${config.name}`);
+    } catch (err: unknown) {
+      return Failure(errorMessage(err) || `Failed to update stream ${config.name}`);
     }
   }
 
@@ -158,7 +159,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Generic publish method - business logic handled by callers
-  async publish(topic: string, payload: any): Promise<Result<void, string>> {
+  async publish(topic: string, payload: Record<string, unknown> | unknown[]): Promise<Result<void, string>> {
     if (!this.connection) {
       return Failure("NATS connection not established");
     }
@@ -169,9 +170,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         timeout: 5000, // 5 second timeout
       });
       return Ok(undefined);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error, topic }, "Failed to publish to topic");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -228,7 +229,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     return this.connection !== null && !this.connection.isClosed();
   }
 
-  async getConnectionInfo(): Promise<Result<any, string>> {
+  async getConnectionInfo(): Promise<Result<Record<string, unknown>, string>> {
     if (!this.connection) {
       return Failure("NATS connection not established");
     }
@@ -244,8 +245,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         max_payload: info?.max_payload,
         connect_urls: info?.connect_urls,
       });
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 }

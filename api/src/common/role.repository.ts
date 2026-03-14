@@ -1,4 +1,4 @@
-import { Result, Ok, Failure } from "./result";
+import { Result, Ok, Failure, errorMessage } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
 import Repository from "./repository";
@@ -7,11 +7,12 @@ import pino from "pino";
 
 const logger = pino({ name: "RoleRepository" });
 
-export abstract class RoleRepository<T> implements Repository {
+export abstract class RoleRepository<T> implements Repository<T> {
   protected readonly db = getDatabase();
   protected readonly tables = getTables();
   protected abstract readonly tableName: keyof typeof this.tables;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic table access via computed key
   protected get table(): any {
     return this.tables[this.tableName];
   }
@@ -30,9 +31,9 @@ export abstract class RoleRepository<T> implements Repository {
         id: records[0].id,
         ...data,
       } as T);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error creating document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -49,11 +50,11 @@ export abstract class RoleRepository<T> implements Repository {
         .orderBy(desc(this.table.createdAt));
 
       return Ok(
-        records.map((record) => this.transformSnapshotToData<T>(record)),
+        records.map((record: Record<string, unknown>) => this.transformSnapshotToData<T>(record)),
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -73,9 +74,9 @@ export abstract class RoleRepository<T> implements Repository {
       }
 
       return Ok(this.transformSnapshotToData<T>(records[0]));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -100,9 +101,9 @@ export abstract class RoleRepository<T> implements Repository {
         .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
 
       return this.findOne(userId, id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error updating document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
@@ -117,16 +118,16 @@ export abstract class RoleRepository<T> implements Repository {
         .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
 
       return Ok(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting document");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
-  protected transformSnapshotToData<T>(record: any): T {
+  protected transformSnapshotToData<U>(record: Record<string, unknown>): U {
     return {
       id: record.id,
       ...record,
-    } as T;
+    } as U;
   }
 }

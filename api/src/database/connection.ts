@@ -36,6 +36,9 @@ export interface TableRegistry {
   bots: typeof botsSchema.botsTable | typeof botsSchema.botsTableSqlite;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dual-DB (PG/SQLite) runtime
+// selection: drizzle's PG and SQLite APIs have incompatible method signatures,
+// so the instance must remain `any` to support dynamic dispatch at runtime.
 let dbInstance: any = null;
 let configCache: DatabaseConfig | null = null;
 let tablesCache: TableRegistry | null = null;
