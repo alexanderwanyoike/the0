@@ -345,6 +345,7 @@ func (r *dockerOrchestrator) ListContainer(ctx context.Context, filter filters.A
 			ID:          cont.Labels["runtime.id"],
 			Entrypoint:  cont.Labels["runtime.entrypoint"],
 			Status:      cont.State,
+			Labels:      cont.Labels,
 		})
 	}
 	return result, nil
@@ -370,6 +371,7 @@ func (r *dockerOrchestrator) ListAllContainers(ctx context.Context, filter filte
 			ID:          cont.Labels["runtime.id"],
 			Entrypoint:  cont.Labels["runtime.entrypoint"],
 			Status:      cont.State,
+			Labels:      cont.Labels,
 		}
 
 		// For exited containers, get detailed status including exit code
