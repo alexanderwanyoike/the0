@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"runtime/internal/constants"
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
 	"runtime/internal/util"
 
@@ -22,12 +23,14 @@ import (
 
 // BotServiceConfig contains configuration for the BotService
 type BotServiceConfig struct {
-	MongoURI          string
-	NATSUrl           string // Optional - service degrades gracefully without NATS
-	Logger            util.Logger
-	DBName            string
-	Collection        string
-	ReconcileInterval time.Duration // How often to reconcile (default: 30s)
+	MongoURI            string
+	NATSUrl             string // Optional - service degrades gracefully without NATS
+	Logger              util.Logger
+	DBName              string
+	Collection          string
+	ReconcileInterval   time.Duration // How often to reconcile (default: 30s)
+	HealthServer        *health.Server
+	HealthCheckInterval time.Duration // How often to check deps (default: 15s)
 }
 
 // BotService is a simplified single-process bot management service
@@ -38,6 +41,10 @@ type BotService struct {
 	state       *ServiceState
 	logger      util.Logger
 	mongoClient *mongo.Client
+
+	// Dependency health checking
+	depChecker   *DependencyChecker
+	healthServer *health.Server
 
 	// NATS subscriber for persisting bot events to MongoDB
 	subscriber *botnatssubscriber.NATSSubscriber
@@ -66,18 +73,23 @@ func NewBotService(config BotServiceConfig) (*BotService, error) {
 		config.Collection = constants.BOT_RUNNER_COLLECTION
 	}
 
-	if config.ReconcileInterval == 0 {
+	if config.ReconcileInterval <= 0 {
 		config.ReconcileInterval = 30 * time.Second
+	}
+
+	if config.HealthCheckInterval <= 0 {
+		config.HealthCheckInterval = 15 * time.Second
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	service := &BotService{
-		config: config,
-		state:  NewServiceState(),
-		logger: config.Logger,
-		ctx:    ctx,
-		cancel: cancel,
+		config:       config,
+		state:        NewServiceState(),
+		logger:       config.Logger,
+		healthServer: config.HealthServer,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
 	return service, nil
@@ -119,8 +131,22 @@ func (s *BotService) Run(ctx context.Context) error {
 		s.logger.Info("NATS URL not configured - running in poll-only mode")
 	}
 
-	// Run initial reconciliation
-	s.reconcile()
+	// Initialize dependency checker (MinIO + MongoDB)
+	s.depChecker = newDependencyCheckerFromEnv(s.mongoClient, s.logger)
+
+	// Synchronous health probe before declaring readiness
+	depsHealthy := probeDepHealth(s.ctx, s.depChecker, s.healthServer)
+
+	// Start health check loop (separate from reconciliation)
+	s.wg.Add(1)
+	go runDepHealthLoop(s.ctx, s.config.HealthCheckInterval, s.depChecker, s.healthServer, s.logger, s.wg.Done)
+
+	// Run initial reconciliation (gated by dep checker)
+	if depsHealthy {
+		s.reconcile()
+	} else {
+		s.logger.Error("Dependencies unhealthy, skipping initial reconciliation")
+	}
 
 	// Start reconciliation loop
 	s.wg.Add(1)
@@ -191,6 +217,10 @@ func (s *BotService) runReconciliationLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			if !s.depChecker.IsHealthy() {
+				s.logger.Error("Dependencies unhealthy, skipping reconciliation")
+				continue
+			}
 			s.reconcile()
 		case <-s.ctx.Done():
 			s.logger.Info("Reconciliation loop stopped")
@@ -311,6 +341,11 @@ func (s *BotService) performReconciliation(ctx context.Context, desiredBots []mo
 		runningInstances, isRunning := actualContainersMap[botID]
 
 		if !isRunning || len(runningInstances) == 0 {
+			// Check per-bot backoff before starting
+			if s.state.ShouldSkipBot(botID) {
+				s.logger.Info("Bot %s in backoff after repeated failures, skipping", botID)
+				continue
+			}
 			// Bot is desired but not running -> start it
 			s.logger.Info("Bot %s is desired but not running, starting...", botID)
 			s.startBot(ctx, botID, bot)
@@ -399,15 +434,18 @@ func (s *BotService) startBot(ctx context.Context, botID string, bot model.Bot) 
 		if err != nil {
 			s.logger.Error("Failed to start bot %s: %v", botID, err)
 			s.state.IncrementFailedRestarts()
+			s.state.RecordBotFailure(botID)
 			return
 		}
 
 		if result.Status == "error" {
 			s.logger.Error("Bot %s started with error: %s", botID, result.Error)
 			s.state.IncrementFailedRestarts()
+			s.state.RecordBotFailure(botID)
 			return
 		}
 
+		s.state.ResetBotFailure(botID)
 		s.state.SetRunningBot(&RunningBot{
 			BotID:       botID,
 			ContainerID: result.ContainerID,

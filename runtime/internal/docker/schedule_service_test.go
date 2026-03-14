@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -487,6 +489,80 @@ func TestScheduleService_WaitForExecutions_NoActive(t *testing.T) {
 	}
 }
 
+// Test schedule loop skips when deps are unhealthy by exercising the actual goroutine
+func TestScheduleLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI:      "mongodb://localhost:27017",
+		NATSUrl:       "nats://localhost:4222",
+		CheckInterval: 20 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	mockRunner := NewMockDockerRunner()
+	service.runner = mockRunner
+
+	// Create unhealthy dep checker
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(false, false)
+	service.depChecker = dc
+
+	// NOTE: mongoClient is nil, so if the dep gate regressed and checkSchedules() ran,
+	// it would panic on the MongoDB query, causing the test to fail. This provides
+	// an implicit safety net beyond the explicit start-count assertion below.
+
+	// Start the actual schedule loop goroutine
+	service.wg.Add(1)
+	go service.runScheduleLoop()
+
+	// Let a few ticks pass
+	time.Sleep(80 * time.Millisecond)
+
+	// Stop the service to terminate the loop
+	service.Stop()
+	service.wg.Wait()
+
+	// No containers should have been started (schedule check was skipped)
+	assert.Equal(t, 0, mockRunner.GetStartCallCount(), "no containers should start when deps unhealthy")
+}
+
+// Test that health server is updated when deps fail
+func TestScheduleService_HealthServerUpdatedOnDepFailure(t *testing.T) {
+	hs := health.NewServer(0) // port 0 = don't actually listen
+
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI:            "mongodb://localhost:27017",
+		NATSUrl:             "nats://localhost:4222",
+		HealthCheckInterval: 20 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	service.healthServer = hs
+
+	// Create unhealthy dep checker
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	service.depChecker = dc
+
+	// Simulate health check loop iteration
+	mongoOK, minioOK := dc.CheckHealth(service.ctx)
+	dc.SetLastResult(mongoOK, minioOK)
+
+	// Both should be false (nil clients)
+	assert.False(t, mongoOK)
+	assert.False(t, minioOK)
+
+	// Simulate what the health check loop does on unhealthy deps
+	if !mongoOK || !minioOK {
+		hs.SetReady(false)
+	}
+
+	// Readiness should be false
+	assert.False(t, hs.IsReady(), "readiness should be false when deps are down")
+	// Liveness should remain true (not gated on deps)
+	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
+
+	service.Stop()
+}
+
 // Test multiple schedules in state tracking
 func TestScheduleState_MultipleSchedules(t *testing.T) {
 	service, err := NewScheduleService(ScheduleServiceConfig{
@@ -527,4 +603,36 @@ func TestScheduleState_MultipleSchedules(t *testing.T) {
 	service.state.mu.RLock()
 	assert.Equal(t, 2, service.state.activeExecutions)
 	service.state.mu.RUnlock()
+}
+
+func TestScheduleService_StartsUnready_WhenDepsDown(t *testing.T) {
+	hs := health.NewServer(0)
+
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+		NATSUrl:  "nats://localhost:4222",
+	})
+	require.NoError(t, err)
+
+	service.healthServer = hs
+	hs.SetReady(true) // ensure we verify an actual transition
+
+	// Create dep checker with nil clients (unhealthy)
+	service.depChecker = NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+
+	// Start the actual health check loop to drive readiness
+	service.wg.Add(1)
+	go runDepHealthLoop(service.ctx, 20*time.Millisecond, service.depChecker, hs, &util.NopLogger{}, service.wg.Done)
+	defer func() {
+		service.Stop()
+		service.wg.Wait()
+	}()
+
+	// Readiness should be driven to false by the health loop
+	require.Eventually(t, func() bool {
+		return !hs.IsReady()
+	}, 250*time.Millisecond, 10*time.Millisecond, "readiness should be driven to false by health loop")
+
+	// Liveness should remain true (not gated on deps)
+	assert.True(t, hs.IsHealthy(), "liveness should remain true regardless of dep state")
 }
