@@ -2,12 +2,12 @@ name: Scala SDK
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/scala/**'
       - '.github/workflows/sdk-scala.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/scala/**'
       - '.github/workflows/sdk-scala.yml'

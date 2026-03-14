@@ -2,12 +2,12 @@ name: .NET SDK
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/dotnet/**'
       - '.github/workflows/sdk-dotnet.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/dotnet/**'
       - '.github/workflows/sdk-dotnet.yml'
