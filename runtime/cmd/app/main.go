@@ -46,6 +46,7 @@ var (
 	minioAccessKey string
 	minioSecretKey string
 	minioBucket    string
+	minioUseSSL    bool
 
 	// Runtime image for init containers and sidecars
 	runtimeImage           string
@@ -147,6 +148,7 @@ func main() {
 	// MinIO credentials read from environment only (not CLI flags) for security
 	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
 	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
+	minioUseSSL = getEnv("MINIO_USE_SSL", "false") == "true"
 	rootCmd.AddCommand(controllerCmd)
 
 	// Query server command with flags
@@ -368,6 +370,7 @@ func runController() {
 		MinIOAccessKey:         minioAccessKey,
 		MinIOSecretKey:         minioSecretKey,
 		MinIOBucket:            minioBucket,
+		MinIOUseSSL:            minioUseSSL,
 		RuntimeImage:           runtimeImage,
 		RuntimeImagePullPolicy: runtimeImagePullPolicy,
 		Logger:                 &util.DefaultLogger{},
