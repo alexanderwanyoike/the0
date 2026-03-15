@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.3.6
-appVersion: "1.7.8"
+version: 0.3.5
+appVersion: "1.7.7"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,20 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: Dependency health checking for bot-runner and bot-scheduler with readiness gating
+    - kind: added
+      description: Per-bot failure tracking with exponential backoff to prevent restart storms
     - kind: fixed
-      description: Add MINIO_USE_SSL to bot-controller for external SSL-enabled object storage
+      description: Populate container labels in listing to prevent duplicate bot spawning
+    - kind: fixed
+      description: Decouple liveness probe from dependency health (readiness-only gating)
+    - kind: fixed
+      description: Probe dependencies before declaring readiness on startup
+    - kind: fixed
+      description: Guard against negative ticker intervals causing panics
+    - kind: changed
+      description: Extract shared dependency health logic into dep_health.go
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
