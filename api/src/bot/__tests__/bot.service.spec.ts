@@ -518,11 +518,11 @@ describe("BotService - Enhanced Tests", () => {
       const result = await service.update("test-id", updateData);
 
       expect(result.success).toBe(true);
-      // customBotId should still be set from the validated custom bot
+      // customBotId should be preserved from the existing bot record, not rotated
       expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
         ...updateData,
         config: { ...updateData.config, hasFrontend: false },
-        customBotId: mockCustomBot.id,
+        customBotId: existingBot.customBotId,
       });
     });
 

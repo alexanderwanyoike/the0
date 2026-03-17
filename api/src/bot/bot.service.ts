@@ -158,13 +158,17 @@ export class BotService {
       );
     }
 
-    // Update customBotId to point to the new version's CustomBot record
+    // Only rotate customBotId when version actually changes
     const newCustomBot = validationResult.data;
     const hasCustomFrontend = newCustomBot.config?.hasFrontend ?? false;
+    const versionChanged =
+      currentVersion && newVersion ? !semver.eq(currentVersion, newVersion) : true;
     const result = await this.botRepository.update(uid, id, {
       ...updateBotDto,
       config: { ...updateBotDto.config, hasFrontend: hasCustomFrontend },
-      customBotId: newCustomBot.id,
+      customBotId: versionChanged
+        ? newCustomBot.id
+        : currentBot.data.customBotId,
     });
 
     if (result.success) {

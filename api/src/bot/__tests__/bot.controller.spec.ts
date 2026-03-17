@@ -425,7 +425,7 @@ describe("BotController - Enhanced Tests", () => {
       expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
         ...updateData,
         config: { ...updateData.config, hasFrontend: false },
-        customBotId: mockCustomBot.id,
+        customBotId: existingBot.customBotId,
       });
     });
 
