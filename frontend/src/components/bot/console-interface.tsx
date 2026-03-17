@@ -412,7 +412,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   useEffect(() => {
     if (
       newestFirst &&
-      (autoScroll || isUserAtTop) &&
+      autoScroll &&
       filteredLogs.length > prevLogCountRef.current
     ) {
       virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "smooth" });
@@ -656,7 +656,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             ref={virtuosoRef}
             data={filteredLogs}
             overscan={200}
-            followOutput={!newestFirst && (autoScroll || isUserAtBottom) ? "smooth" : false}
+            followOutput={!newestFirst && autoScroll ? "smooth" : false}
             atBottomStateChange={(atBottom) => setIsUserAtBottom(atBottom)}
             atTopStateChange={(atTop) => setIsUserAtTop(atTop)}
             itemContent={(index, log) => (
