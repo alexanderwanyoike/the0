@@ -120,9 +120,30 @@ export const useBotLogsStream = ({
   const trimmedCountRef = useRef(0);
 
   // ---- RAF batching for SSE update events ----
+  //
+  // Chatty bots can fire hundreds of SSE "update" events per second. Without
+  // batching, each event would call setLogs/setTotalSeen/setLastUpdate
+  // individually — 900+ state updates/sec that React can never paint fast
+  // enough. Instead, update events push entries into `pendingUpdatesRef` and
+  // schedule a single requestAnimationFrame. The RAF callback
+  // (flushPendingUpdates) drains the entire buffer into one batched state
+  // update, capping renders at ~60/sec.
+  //
+  // Two operations on the buffer:
+  //
+  //   flushPendingUpdates — the normal path. Called by RAF once per frame.
+  //     Drains the buffer INTO React state (setLogs, setTotalSeen, etc.).
+  //
+  //   clearPendingUpdates — the abort path. Discards the buffer and cancels
+  //     any scheduled RAF WITHOUT applying to state. Called when the data
+  //     source changes (REST fetch, new SSE history event, SSE disconnect,
+  //     unmount) so stale entries from a previous stream don't leak into
+  //     a fresh data snapshot.
+
   const pendingUpdatesRef = useRef<LogEntry[]>([]);
   const rafIdRef = useRef<number | null>(null);
 
+  /** Discard queued updates and cancel the scheduled RAF. */
   const clearPendingUpdates = useCallback(() => {
     pendingUpdatesRef.current = [];
     if (rafIdRef.current !== null) {
@@ -131,6 +152,7 @@ export const useBotLogsStream = ({
     }
   }, []);
 
+  /** Drain queued updates into React state (called once per animation frame). */
   const flushPendingUpdates = useCallback(() => {
     rafIdRef.current = null;
     const pending = pendingUpdatesRef.current;
