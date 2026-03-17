@@ -139,7 +139,33 @@ export class BotService {
     }
 
     const { uid } = this.request.user;
-    const result = await this.botRepository.update(uid, id, updateBotDto);
+
+    // Block breaking (major) version changes — require delete/redeploy for those
+    const currentBot = await this.botRepository.findOne(uid, id);
+    if (!currentBot.success) {
+      return Failure<Bot, string>("Bot not found");
+    }
+    const currentVersion = currentBot.data.config?.version;
+    const newVersion = updateBotDto.config?.version;
+    if (
+      currentVersion &&
+      newVersion &&
+      semver.major(currentVersion) !== semver.major(newVersion)
+    ) {
+      return Failure<Bot, string>(
+        `Major version upgrade (${currentVersion} → ${newVersion}) requires delete and redeploy. ` +
+          `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`,
+      );
+    }
+
+    // Update customBotId to point to the new version's CustomBot record
+    const newCustomBot = validationResult.data;
+    const hasCustomFrontend = newCustomBot.config?.hasFrontend ?? false;
+    const result = await this.botRepository.update(uid, id, {
+      ...updateBotDto,
+      config: { ...updateBotDto.config, hasFrontend: hasCustomFrontend },
+      customBotId: newCustomBot.id,
+    });
 
     if (result.success) {
       // Fetch updated bot and custom bot data for event payload
