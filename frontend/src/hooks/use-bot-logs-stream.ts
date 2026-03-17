@@ -123,6 +123,14 @@ export const useBotLogsStream = ({
   const pendingUpdatesRef = useRef<LogEntry[]>([]);
   const rafIdRef = useRef<number | null>(null);
 
+  const clearPendingUpdates = useCallback(() => {
+    pendingUpdatesRef.current = [];
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  }, []);
+
   const flushPendingUpdates = useCallback(() => {
     rafIdRef.current = null;
     const pending = pendingUpdatesRef.current;
@@ -193,6 +201,7 @@ export const useBotLogsStream = ({
         const result: LogsResponse = await response.json();
         const expandedLogs = expandLogEntries(result.data);
 
+        clearPendingUpdates();
         setLogs(expandedLogs);
         setHasMore(result.hasMore);
         setTotalSeen(result.total);
@@ -213,7 +222,7 @@ export const useBotLogsStream = ({
         abortControllerRef.current = null;
       }
     },
-    [botId, query, toast, user],
+    [botId, query, toast, user, clearPendingUpdates],
   );
 
   const fetchLogsRef = useRef(fetchLogs);
@@ -303,6 +312,7 @@ export const useBotLogsStream = ({
 
             if (eventType === "history") {
               try {
+                clearPendingUpdates();
                 const entries: LogEntry[] = JSON.parse(data);
                 const expanded = expandLogEntries(entries);
                 if (expanded.length > MAX_LOG_ENTRIES) {
@@ -373,12 +383,13 @@ export const useBotLogsStream = ({
   // ---- Cleanup helper ----
 
   const cleanupSSE = useCallback(() => {
+    clearPendingUpdates();
     if (sseAbortRef.current) {
       sseAbortRef.current.abort();
       sseAbortRef.current = null;
     }
     setConnected(false);
-  }, []);
+  }, [clearPendingUpdates]);
 
   // ---- Establish SSE on mount with 4s fallback to REST polling ----
 
@@ -424,10 +435,7 @@ export const useBotLogsStream = ({
 
   useEffect(() => {
     return () => {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
+      clearPendingUpdates();
       if (sseAbortRef.current) {
         sseAbortRef.current.abort();
         sseAbortRef.current = null;
