@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.3.7
-appVersion: "1.7.9"
+version: 0.3.8
+appVersion: "1.8.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,17 +31,11 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: Cap scheduled bot logs at 2000 entries to prevent unbounded memory growth
-    - kind: changed
-      description: Batch SSE update events via requestAnimationFrame for smoother console rendering
-    - kind: changed
-      description: Memoize filtered logs and virtualize log list with react-virtuoso
+      description: Update customBotId on bot version bump to preserve state across upgrades
+    - kind: fixed
+      description: Only rotate customBotId when version actually changes to prevent silent retargeting
     - kind: added
-      description: Togglable log order (newest-first / oldest-first) in console interface
-    - kind: fixed
-      description: Respect auto-scroll pause when user is at scroll edge
-    - kind: fixed
-      description: Clear pending RAF batches when data source changes to prevent stale updates
+      description: Block major version upgrades in bot update requiring delete and redeploy
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
