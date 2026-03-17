@@ -21,7 +21,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
@@ -118,6 +118,31 @@ export const useBotLogsStream = ({
   const isUsingDateFilterRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const trimmedCountRef = useRef(0);
+
+  // ---- RAF batching for SSE update events ----
+  const pendingUpdatesRef = useRef<LogEntry[]>([]);
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushPendingUpdates = useCallback(() => {
+    rafIdRef.current = null;
+    const pending = pendingUpdatesRef.current;
+    if (pending.length === 0) return;
+    pendingUpdatesRef.current = [];
+
+    const count = pending.length;
+    setLogs((prev) => {
+      const combined = [...prev, ...pending];
+      if (combined.length > MAX_LOG_ENTRIES) {
+        const excess = combined.length - MAX_LOG_ENTRIES;
+        trimmedCountRef.current += excess;
+        setHasEarlierLogs(true);
+        return combined.slice(excess);
+      }
+      return combined;
+    });
+    setTotalSeen((prev) => prev + count);
+    setLastUpdate(new Date());
+  }, []);
 
   // ---- REST fetch (same pattern as useBotLogs) ----
 
@@ -304,18 +329,10 @@ export const useBotLogsStream = ({
                 const newEntries = expandLogEntries([
                   { date: parsed.timestamp, content: parsed.content },
                 ]);
-                setLogs((prev) => {
-                  const combined = [...prev, ...newEntries];
-                  if (combined.length > MAX_LOG_ENTRIES) {
-                    const excess = combined.length - MAX_LOG_ENTRIES;
-                    trimmedCountRef.current += excess;
-                    setHasEarlierLogs(true);
-                    return combined.slice(excess);
-                  }
-                  return combined;
-                });
-                setTotalSeen((prev) => prev + newEntries.length);
-                setLastUpdate(new Date());
+                pendingUpdatesRef.current.push(...newEntries);
+                if (rafIdRef.current === null) {
+                  rafIdRef.current = requestAnimationFrame(flushPendingUpdates);
+                }
               } catch (err) {
                 console.error("Failed to parse update SSE event:", err);
               }
@@ -407,6 +424,10 @@ export const useBotLogsStream = ({
 
   useEffect(() => {
     return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
       if (sseAbortRef.current) {
         sseAbortRef.current.abort();
         sseAbortRef.current = null;

@@ -3,6 +3,17 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConsoleInterface, LogEntry } from "./console-interface";
 
+jest.mock("react-virtuoso", () => ({
+  Virtuoso: React.forwardRef(({ data, itemContent, components, followOutput, atBottomStateChange, overscan, className }: any, ref: any) => (
+    <div data-testid="virtuoso-container" className={className}>
+      {components?.Header && <components.Header />}
+      {data?.map((item: any, index: number) => (
+        <div key={index}>{itemContent(index, item)}</div>
+      ))}
+    </div>
+  )),
+}));
+
 describe("ConsoleInterface", () => {
   const defaultProps = {
     botId: "test-bot",
@@ -369,12 +380,12 @@ describe("ConsoleInterface", () => {
     it("has auto-scroll toggle button", async () => {
       render(<ConsoleInterface {...defaultProps} />);
 
-      // Find the play button by its icon
-      const playButton = findButtonByIcon("lucide-play");
-      expect(playButton).toBeDefined();
+      // Auto-scroll defaults to on, so Pause icon is shown
+      const pauseButton = findButtonByIcon("lucide-pause");
+      expect(pauseButton).toBeDefined();
 
-      // Button should be clickable
-      fireEvent.click(playButton!);
+      // Button should be clickable (toggles to Play)
+      fireEvent.click(pauseButton!);
       // No error thrown means button works
     });
 

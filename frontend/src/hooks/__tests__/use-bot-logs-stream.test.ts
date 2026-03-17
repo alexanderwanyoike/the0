@@ -814,6 +814,45 @@ describe("useBotLogsStream", () => {
     expect(result.current.hasEarlierLogs).toBe(true);
   });
 
+  it("should batch multiple rapid update events into fewer state updates", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    // Send history first
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Initial" },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+    });
+
+    // Push 10 update events in quick succession
+    act(() => {
+      for (let i = 0; i < 10; i++) {
+        currentMockStream!.controller.push("update", {
+          content: `Rapid entry ${i}`,
+          timestamp: "2024-01-01T10:05:00Z",
+        });
+      }
+    });
+
+    // All 10 entries should arrive after RAF flush
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(11); // 1 initial + 10 updates
+    });
+
+    expect(result.current.logs[1].content).toBe("Rapid entry 0");
+    expect(result.current.logs[10].content).toBe("Rapid entry 9");
+  });
+
   it("should set hasEarlierLogs to false when history fits within cap", async () => {
     const { result } = renderHook(() =>
       useBotLogsStream({ botId: "bot-1" }),
