@@ -373,11 +373,31 @@ describe("BotController - Enhanced Tests", () => {
       },
     };
 
+    const existingBot = {
+      id: "test-id",
+      name: "Test Bot",
+      config: {
+        type: "scheduled/test-bot",
+        version: "1.0.0",
+        foo: "original",
+        bar: 123,
+      },
+      userId: uid,
+      customBotId: "test-custom-bot",
+      topic: "the0-scheduled-custom-bot",
+    } as Bot;
+
     beforeEach(() => {
       validator.validate = jest.fn().mockReturnValue({
         success: true,
         error: null,
         data: null,
+      });
+
+      jest.spyOn(repository, "findOne").mockResolvedValue({
+        success: true,
+        error: null,
+        data: existingBot,
       });
     });
 
@@ -402,11 +422,11 @@ describe("BotController - Enhanced Tests", () => {
       const result = await controller.update("test-id", updateData);
 
       expect(result).toEqual(updatedBot);
-      expect(repository.update).toHaveBeenCalledWith(
-        uid,
-        "test-id",
-        updateData,
-      );
+      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
+        ...updateData,
+        config: { ...updateData.config, hasFrontend: false },
+        customBotId: mockCustomBot.id,
+      });
     });
 
     it("should throw BadRequestException when update fails", async () => {
