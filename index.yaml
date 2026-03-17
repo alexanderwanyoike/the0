@@ -5,6 +5,62 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: Cap scheduled bot logs at 2000 entries to prevent unbounded memory growth
+        - kind: changed
+          description: Batch SSE update events via requestAnimationFrame for smoother console rendering
+        - kind: changed
+          description: Memoize filtered logs and virtualize log list with react-virtuoso
+        - kind: added
+          description: Togglable log order (newest-first / oldest-first) in console interface
+        - kind: fixed
+          description: Respect auto-scroll pause when user is at scroll edge
+        - kind: fixed
+          description: Clear pending RAF batches when data source changes to prevent stale updates
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.7.9
+    created: "2026-03-17T08:12:03.213836097Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: 1106b585cfd531cdef375c7e2f9bc660645072a1a5e3e9282759a2b1ab562814
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.3.7/the0-0.3.7.tgz
+    version: 0.3.7
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: Add MINIO_USE_SSL to bot-controller for external SSL-enabled object storage
       artifacthub.io/images: |
         - name: api
@@ -385,4 +441,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-15T00:18:32.514909609Z"
+generated: "2026-03-17T08:12:03.213880088Z"
