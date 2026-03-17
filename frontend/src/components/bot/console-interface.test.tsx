@@ -3,6 +3,17 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConsoleInterface, LogEntry } from "./console-interface";
 
+jest.mock("react-virtuoso", () => ({
+  Virtuoso: React.forwardRef(({ data, itemContent, components, followOutput, atBottomStateChange, atTopStateChange, overscan, className }: any, ref: any) => (
+    <div data-testid="virtuoso-container" className={className}>
+      {components?.Header && <components.Header />}
+      {data?.map((item: any, index: number) => (
+        <div key={index}>{itemContent(index, item)}</div>
+      ))}
+    </div>
+  )),
+}));
+
 describe("ConsoleInterface", () => {
   const defaultProps = {
     botId: "test-bot",
@@ -369,12 +380,12 @@ describe("ConsoleInterface", () => {
     it("has auto-scroll toggle button", async () => {
       render(<ConsoleInterface {...defaultProps} />);
 
-      // Find the play button by its icon
-      const playButton = findButtonByIcon("lucide-play");
-      expect(playButton).toBeDefined();
+      // Auto-scroll defaults to on, so Pause icon is shown
+      const pauseButton = findButtonByIcon("lucide-pause");
+      expect(pauseButton).toBeDefined();
 
-      // Button should be clickable
-      fireEvent.click(playButton!);
+      // Button should be clickable (toggles to Play)
+      fireEvent.click(pauseButton!);
       // No error thrown means button works
     });
 
@@ -456,6 +467,95 @@ describe("ConsoleInterface", () => {
 
       // Level badge should be visible
       expect(screen.getByText("INFO")).toBeInTheDocument();
+    });
+  });
+
+  describe("log order toggle", () => {
+    const findSortToggle = () => {
+      const buttons = screen.getAllByRole("button");
+      return buttons.find((btn) =>
+        btn.querySelector(".lucide-arrow-down-up"),
+      );
+    };
+
+    it("defaults to newest-first order (reversed)", () => {
+      const logs: LogEntry[] = [
+        { date: "20251227", content: "First log" },
+        { date: "20251227", content: "Second log" },
+        { date: "20251227", content: "Third log" },
+      ];
+
+      render(<ConsoleInterface {...defaultProps} logs={logs} />);
+
+      const container = screen.getByTestId("virtuoso-container");
+      const items = container.querySelectorAll(":scope > div");
+      // In newest-first mode, Third log should appear before First log
+      const texts = Array.from(items).map((el) => el.textContent);
+      const thirdIdx = texts.findIndex((t) => t?.includes("Third log"));
+      const firstIdx = texts.findIndex((t) => t?.includes("First log"));
+      expect(thirdIdx).toBeLessThan(firstIdx);
+    });
+
+    it("toggles to oldest-first (chronological) when clicked", () => {
+      const logs: LogEntry[] = [
+        { date: "20251227", content: "First log" },
+        { date: "20251227", content: "Second log" },
+        { date: "20251227", content: "Third log" },
+      ];
+
+      render(<ConsoleInterface {...defaultProps} logs={logs} />);
+
+      const sortButton = findSortToggle();
+      expect(sortButton).toBeDefined();
+      fireEvent.click(sortButton!);
+
+      const container = screen.getByTestId("virtuoso-container");
+      const items = container.querySelectorAll(":scope > div");
+      const texts = Array.from(items).map((el) => el.textContent);
+      const firstIdx = texts.findIndex((t) => t?.includes("First log"));
+      const thirdIdx = texts.findIndex((t) => t?.includes("Third log"));
+      // In oldest-first mode, First log should appear before Third log
+      expect(firstIdx).toBeLessThan(thirdIdx);
+    });
+
+    it("toggles back to newest-first on second click", () => {
+      const logs: LogEntry[] = [
+        { date: "20251227", content: "First log" },
+        { date: "20251227", content: "Third log" },
+      ];
+
+      render(<ConsoleInterface {...defaultProps} logs={logs} />);
+
+      const sortButton = findSortToggle()!;
+
+      // First click: switch to oldest-first
+      fireEvent.click(sortButton);
+      // Second click: switch back to newest-first
+      fireEvent.click(sortButton);
+
+      const container = screen.getByTestId("virtuoso-container");
+      const items = container.querySelectorAll(":scope > div");
+      const texts = Array.from(items).map((el) => el.textContent);
+      const thirdIdx = texts.findIndex((t) => t?.includes("Third log"));
+      const firstIdx = texts.findIndex((t) => t?.includes("First log"));
+      expect(thirdIdx).toBeLessThan(firstIdx);
+    });
+
+    it("has correct tooltip for sort order", () => {
+      render(<ConsoleInterface {...defaultProps} logs={[{ date: "20251227", content: "Log" }]} />);
+
+      const sortButton = findSortToggle()!;
+      expect(sortButton).toHaveAttribute("title", "Newest first");
+
+      fireEvent.click(sortButton);
+      expect(sortButton).toHaveAttribute("title", "Oldest first");
+    });
+
+    it("renders sort toggle in compact mode", () => {
+      render(<ConsoleInterface {...defaultProps} compact={true} logs={[{ date: "20251227", content: "Log" }]} />);
+
+      const sortButton = findSortToggle();
+      expect(sortButton).toBeDefined();
     });
   });
 

@@ -184,6 +184,80 @@ describe("useBotLogs", () => {
     });
   });
 
+  it("should cap logs at MAX_LOG_ENTRIES when loadMore accumulates too many", async () => {
+    // Initial fetch returns 1500 entries
+    const initialLogs = Array.from({ length: 1500 }, (_, i) => ({
+      date: "2024-01-01",
+      content: `Line ${i}`,
+    }));
+    mockAuthFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: initialLogs,
+          total: 2100,
+          hasMore: true,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: Array.from({ length: 600 }, (_, i) => ({
+            date: "2024-01-01",
+            content: `Extra ${i}`,
+          })),
+          total: 2100,
+          hasMore: false,
+        }),
+      } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1500, offset: 0 } }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.logs).toHaveLength(1500);
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    // Should be capped at 2000, oldest trimmed
+    expect(result.current.logs).toHaveLength(2000);
+    // First entry should be Line 100 (100 oldest trimmed from 1500 + 600 = 2100)
+    expect(result.current.logs[0].content).toBe("Line 100");
+    expect(result.current.logs[result.current.logs.length - 1].content).toBe("Extra 599");
+  });
+
+  it("should cap logs on initial fetch if response is very large", async () => {
+    const hugeLogs = Array.from({ length: 2500 }, (_, i) => ({
+      date: "2024-01-01",
+      content: `Huge ${i}`,
+    }));
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: hugeLogs,
+        total: 2500,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 3000, offset: 0 } }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.logs).toHaveLength(2000);
+    expect(result.current.logs[0].content).toBe("Huge 500");
+  });
+
   it("should build correct URL with query parameters", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
   AlertTriangle,
   XCircle,
   Bug,
+  ArrowDownUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
@@ -381,52 +383,42 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   onLoadEarlier,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [autoScroll, setAutoScroll] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [newestFirst, setNewestFirst] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: "",
     end: "",
   });
   const [showFilters, setShowFilters] = useState(false);
-  const [isUserAtBottom, setIsUserAtBottom] = useState(false);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+  const [isUserAtTop, setIsUserAtTop] = useState(true);
+  const prevLogCountRef = useRef(0);
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  // Track if user is at the bottom of the scroll
-  const handleScroll = () => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
+  // Memoize filtered + ordered logs
+  const filteredLogs = useMemo(() => {
+    const filtered =
+      searchQuery === ""
+        ? logs
+        : logs.filter((log) =>
+            log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+          );
+    return newestFirst ? [...filtered].reverse() : filtered;
+  }, [logs, searchQuery, newestFirst]);
 
-    const threshold = 50; // pixels from bottom
-    const isAtBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight <
-      threshold;
-    setIsUserAtBottom(isAtBottom);
-  };
-
-  // Only auto-scroll if user is already at bottom or autoScroll is manually enabled
+  // In newest-first mode, auto-scroll to top when new logs arrive
   useEffect(() => {
     if (
-      (autoScroll || isUserAtBottom) &&
-      bottomRef.current &&
-      scrollContainerRef.current
+      newestFirst &&
+      autoScroll &&
+      filteredLogs.length > prevLogCountRef.current
     ) {
-      // Use scrollTop instead of scrollIntoView to avoid page-level scroll issues
-      scrollContainerRef.current.scrollTop =
-        scrollContainerRef.current.scrollHeight;
+      virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "smooth" });
     }
-  }, [logs, autoScroll, isUserAtBottom]);
-
-  // Filter and reverse logs so newest is first
-  const filteredLogs = logs
-    .filter(
-      (log) =>
-        searchQuery === "" ||
-        log.content.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
-    .slice()
-    .reverse();
+    prevLogCountRef.current = filteredLogs.length;
+  }, [filteredLogs.length, newestFirst, autoScroll, isUserAtTop]);
 
   const handleDateChange = (value: string) => {
     setSelectedDate(value);
@@ -535,6 +527,18 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => setNewestFirst(!newestFirst)}
+              title={newestFirst ? "Newest first" : "Oldest first"}
+              className={cn(
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
+                compact && "h-7 w-7 p-0",
+              )}
+            >
+              <ArrowDownUp className={cn("h-4 w-4", newestFirst && "rotate-180")} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setAutoScroll(!autoScroll)}
               className={cn(
                 "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
@@ -636,58 +640,58 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
         )}
       </div>
 
-      <div className="flex-1 relative overflow-hidden">
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          className="h-full overflow-auto bg-gray-100 dark:bg-gray-950"
-        >
-          {loading && logs.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-gray-500 dark:text-green-500" />
-            </div>
-          ) : filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-500 dark:text-green-600 font-mono text-sm">
-              {logs.length === 0
-                ? "> Waiting for logs..."
-                : "> No logs match filter"}
-            </div>
-          ) : (
-            <>
-              {filteredLogs.map((log, index) => (
-                <SmartLogEntry
-                  key={`log-${index}-${log.content.slice(0, 20)}`}
-                  log={log}
-                  index={index}
-                />
-              ))}
-              {hasEarlierLogs && onLoadEarlier && !searchQuery && (
-                <div className="flex justify-center py-2 border-t border-gray-200 dark:border-gray-800">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onLoadEarlier}
-                    disabled={loadingEarlier}
-                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  >
-                    {loadingEarlier ? (
-                      <>
-                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <ScrollText className="h-3 w-3 mr-1" />
-                        Load earlier logs
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
-              <div ref={bottomRef} />
-            </>
-          )}
-        </div>
+      <div className="flex-1 relative overflow-hidden bg-gray-100 dark:bg-gray-950">
+        {loading && logs.length === 0 ? (
+          <div className="flex items-center justify-center h-32">
+            <RefreshCw className="h-6 w-6 animate-spin text-gray-500 dark:text-green-500" />
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="flex items-center justify-center h-32 text-gray-500 dark:text-green-600 font-mono text-sm">
+            {logs.length === 0
+              ? "> Waiting for logs..."
+              : "> No logs match filter"}
+          </div>
+        ) : (
+          <Virtuoso
+            ref={virtuosoRef}
+            data={filteredLogs}
+            overscan={200}
+            followOutput={!newestFirst && autoScroll ? "smooth" : false}
+            atBottomStateChange={(atBottom) => setIsUserAtBottom(atBottom)}
+            atTopStateChange={(atTop) => setIsUserAtTop(atTop)}
+            itemContent={(index, log) => (
+              <SmartLogEntry log={log} index={index} />
+            )}
+            components={{
+              Header: hasEarlierLogs && onLoadEarlier && !searchQuery
+                ? () => (
+                    <div className="flex justify-center py-2 border-b border-gray-200 dark:border-gray-800">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onLoadEarlier}
+                        disabled={loadingEarlier}
+                        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      >
+                        {loadingEarlier ? (
+                          <>
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <ScrollText className="h-3 w-3 mr-1" />
+                            Load earlier logs
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )
+                : undefined,
+            }}
+            className="h-full"
+          />
+        )}
       </div>
     </div>
   );
