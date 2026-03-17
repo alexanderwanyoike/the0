@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   XCircle,
   Bug,
+  ArrowDownUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
@@ -383,6 +384,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
+  const [newestFirst, setNewestFirst] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: "",
@@ -390,16 +392,33 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   });
   const [showFilters, setShowFilters] = useState(false);
   const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+  const [isUserAtTop, setIsUserAtTop] = useState(true);
+  const prevLogCountRef = useRef(0);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  // Memoize filtered logs — chronological order (oldest first, newest last)
+  // Memoize filtered + ordered logs
   const filteredLogs = useMemo(() => {
-    if (searchQuery === "") return logs;
-    return logs.filter((log) =>
-      log.content.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
-  }, [logs, searchQuery]);
+    const filtered =
+      searchQuery === ""
+        ? logs
+        : logs.filter((log) =>
+            log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+          );
+    return newestFirst ? [...filtered].reverse() : filtered;
+  }, [logs, searchQuery, newestFirst]);
+
+  // In newest-first mode, auto-scroll to top when new logs arrive
+  useEffect(() => {
+    if (
+      newestFirst &&
+      (autoScroll || isUserAtTop) &&
+      filteredLogs.length > prevLogCountRef.current
+    ) {
+      virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "smooth" });
+    }
+    prevLogCountRef.current = filteredLogs.length;
+  }, [filteredLogs.length, newestFirst, autoScroll, isUserAtTop]);
 
   const handleDateChange = (value: string) => {
     setSelectedDate(value);
@@ -504,6 +523,18 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
               )}
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setNewestFirst(!newestFirst)}
+              title={newestFirst ? "Newest first" : "Oldest first"}
+              className={cn(
+                "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
+                compact && "h-7 w-7 p-0",
+              )}
+            >
+              <ArrowDownUp className={cn("h-4 w-4", newestFirst && "rotate-180")} />
             </Button>
             <Button
               variant="ghost"
@@ -625,8 +656,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             ref={virtuosoRef}
             data={filteredLogs}
             overscan={200}
-            followOutput={(autoScroll || isUserAtBottom) ? "smooth" : false}
+            followOutput={!newestFirst && (autoScroll || isUserAtBottom) ? "smooth" : false}
             atBottomStateChange={(atBottom) => setIsUserAtBottom(atBottom)}
+            atTopStateChange={(atTop) => setIsUserAtTop(atTop)}
             itemContent={(index, log) => (
               <SmartLogEntry log={log} index={index} />
             )}

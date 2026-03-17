@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { ConsoleInterface, LogEntry } from "../console-interface";
 
 jest.mock("react-virtuoso", () => ({
-  Virtuoso: React.forwardRef(({ data, itemContent, components, followOutput, atBottomStateChange, overscan, className }: any, ref: any) => (
+  Virtuoso: React.forwardRef(({ data, itemContent, components, followOutput, atBottomStateChange, atTopStateChange, overscan, className }: any, ref: any) => (
     <div data-testid="virtuoso-container" className={className}>
       {components?.Header && <components.Header />}
       {data?.map((item: any, index: number) => (
