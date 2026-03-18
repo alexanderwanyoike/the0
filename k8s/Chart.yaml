@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.3.8
-appVersion: "1.8.0"
+version: 0.3.9
+appVersion: "1.8.1"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,11 +31,9 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: Update customBotId on bot version bump to preserve state across upgrades
+      description: Prevent JSONB double-encoding in postgres.js and Drizzle by overriding JSON type serializer
     - kind: fixed
-      description: Only rotate customBotId when version actually changes to prevent silent retargeting
-    - kind: added
-      description: Block major version upgrades in bot update requiring delete and redeploy
+      description: Register JSONB data migration in Drizzle journal and fix unwrap cast to use config #>> '{}'
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
