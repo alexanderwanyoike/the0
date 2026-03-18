@@ -36,13 +36,6 @@
       "when": 1773817200000,
       "tag": "0004_fix_jsonb_double_encoding",
       "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1773824400000,
-      "tag": "0005_fix_jsonb_unwrap",
-      "breakpoints": true
     }
   ]
 }
