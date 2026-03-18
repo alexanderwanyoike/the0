@@ -75,6 +75,17 @@ export function getDatabase() {
       idle_timeout: config.pool.idleTimeout,
       connect_timeout: config.pool.connectTimeout,
       max_lifetime: config.pool.maxLifetime,
+      types: {
+        // Fix JSONB double-encoding: Drizzle already calls JSON.stringify() in
+        // mapToDriverValue, so we must stop postgres.js from stringifying again.
+        // See https://github.com/drizzle-team/drizzle-orm/issues/5139
+        json: {
+          to: 114,
+          from: [114, 3802],
+          serialize: (x: any) => x,
+          parse: (x: string) => JSON.parse(x),
+        },
+      },
     });
     dbInstance = drizzle(client, { schema: pgSchema });
 
