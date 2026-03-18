@@ -5,6 +5,54 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: Prevent JSONB double-encoding in postgres.js and Drizzle by overriding JSON type serializer
+        - kind: fixed
+          description: Register JSONB data migration in Drizzle journal and fix unwrap cast to use config #>> '{}'
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.8.1
+    created: "2026-03-18T09:21:01.781863336Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: 0f37a4eb5af1478996bfc105d60a4266f60acd3023b92b79bdde1a9e2aa33c4d
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.3.9/the0-0.3.9.tgz
+    version: 0.3.9
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: Update customBotId on bot version bump to preserve state across upgrades
         - kind: fixed
           description: Only rotate customBotId when version actually changes to prevent silent retargeting
@@ -491,4 +539,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-17T23:29:29.951905809Z"
+generated: "2026-03-18T09:21:01.781910725Z"
