@@ -41,8 +41,6 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
   // Handle SSE messages
   const handleSSEMessage = useCallback(
     (data: any) => {
-      console.log(`Custom bot SSE update received for ${botName}:`, data);
-
       // The data might be wrapped in a response format, extract the actual bot data
       const botData = data.data || data;
 
@@ -62,13 +60,8 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
   // Handle SSE connection errors
   const handleSSEError = useCallback(
     (error: Event) => {
-      console.warn(`Custom bot SSE connection error for ${botName}:`, error);
-
       if (!initialLoadComplete) {
         // If we haven't loaded initial data and SSE fails, fall back to manual fetch
-        console.log(
-          `SSE failed during initial load for ${botName}, falling back to manual fetch`,
-        );
         fetchCustomBot();
       } else {
         // If we already have data, just show a non-intrusive connection error
@@ -80,7 +73,6 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
 
   // Handle SSE connection established
   const handleSSEConnected = useCallback(() => {
-    console.log(`Custom bot SSE connected for ${botName}`);
     if (error === "Real-time updates temporarily unavailable") {
       setError(null);
     }
@@ -88,7 +80,7 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
 
   // Handle SSE connection lost
   const handleSSEDisconnected = useCallback(() => {
-    console.log(`Custom bot SSE disconnected for ${botName}`);
+    // Connection lost, will attempt to reconnect
   }, [botName]);
 
   // Set up SSE connection (only if we have a valid bot name)
@@ -133,15 +125,12 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
         if (result.error.statusCode === 404) {
           setError(`Bot '${botName}' not found`);
         } else if (result.error.statusCode === 401) {
-          console.warn("User unauthorized for custom bot");
           setError("Unauthorized access to bot");
         } else if (result.error.statusCode === 403) {
-          console.warn("User forbidden from accessing custom bot");
           setError("Access forbidden for this bot");
         }
       }
     } catch (err: any) {
-      console.error(`Error fetching custom bot ${botName}:`, err);
       setError(err.message || "Failed to load bot details");
       setBot(null);
     } finally {
@@ -163,9 +152,6 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
     // Shorter timeout for individual bot since development needs faster feedback
     const fallbackTimeout = setTimeout(() => {
       if (!initialLoadComplete && !sseState.connected) {
-        console.log(
-          `SSE connection taking too long for ${botName}, falling back to manual fetch`,
-        );
         fetchCustomBot();
       }
     }, 4000);
@@ -181,7 +167,6 @@ export const useCustomBotSSE = (botName: string): UseCustomBotSSEReturn => {
 
   // Manual refetch function for user-initiated refresh
   const refetch = useCallback(async () => {
-    console.log(`Manual refetch requested for custom bot ${botName}`);
     await fetchCustomBot();
   }, [fetchCustomBot]);
 
