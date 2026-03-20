@@ -54,6 +54,7 @@
     "multer": "^2.0.1",
     "nats": "^2.29.3",
     "nestjs-pino": "^4.5.0",
+    "pino": "^9.6.0",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
