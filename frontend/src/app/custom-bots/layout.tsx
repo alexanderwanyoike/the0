@@ -6,24 +6,25 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import DashboardLayout from "@/components/layouts/dashboard-layout";
 import {
-  DashboardBotsProvider,
-  useDashboardBots,
-} from "@/contexts/dashboard-bots-context";
-import { BotListPanel } from "@/components/dashboard/bot-list-panel";
+  CustomBotsProvider,
+  useCustomBotsContext,
+} from "@/contexts/custom-bots-context";
+import { CustomBotListPanel } from "@/components/custom-bots/custom-bot-list-panel";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
-function DashboardInner({ children }: { children: ReactNode }) {
-  const { bots } = useDashboardBots();
+function CustomBotsInner({ children }: { children: ReactNode }) {
+  const { bots } = useCustomBotsContext();
   const router = useRouter();
   const pathname = usePathname();
   const isDesktop = useMediaQuery("(min-width: 1280px)");
 
-  // Extract active bot ID from URL
+  // Extract active bot name from URL
   const pathParts = pathname.split("/");
-  const activeBotId = pathParts.length >= 3 ? pathParts[2] : null;
+  const activeBotName =
+    pathParts.length >= 3 ? decodeURIComponent(pathParts[2]) : null;
 
-  const handleSelectBot = (botId: string) => {
-    router.push(`/dashboard/${botId}`);
+  const handleSelectBot = (name: string) => {
+    router.push(`/custom-bots/${name}`);
   };
 
   // Desktop: side panel + content
@@ -31,9 +32,9 @@ function DashboardInner({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-[calc(100vh-3rem)]">
         <aside className="w-[220px] border-r flex-shrink-0">
-          <BotListPanel
+          <CustomBotListPanel
             bots={bots}
-            activeBotId={activeBotId}
+            activeBotName={activeBotName}
             onSelectBot={handleSelectBot}
             className="h-full"
           />
@@ -43,7 +44,7 @@ function DashboardInner({ children }: { children: ReactNode }) {
     );
   }
 
-  // Non-desktop: children only (list page or detail page handles its own layout)
+  // Non-desktop: children only
   return (
     <div className="h-[calc(100vh-3rem)]">
       <main className="h-full overflow-auto">{children}</main>
@@ -70,9 +71,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <DashboardLayout>
       <AuthGate>
-        <DashboardBotsProvider>
-          <DashboardInner>{children}</DashboardInner>
-        </DashboardBotsProvider>
+        <CustomBotsProvider>
+          <CustomBotsInner>{children}</CustomBotsInner>
+        </CustomBotsProvider>
       </AuthGate>
     </DashboardLayout>
   );

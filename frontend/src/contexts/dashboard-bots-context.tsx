@@ -16,8 +16,6 @@ interface DashboardBotsContextValue {
   error: string | null;
   refetchBots: () => Promise<void>;
   removeBotFromList: (id: string) => void;
-  isListSheetOpen: boolean;
-  setListSheetOpen: (open: boolean) => void;
 }
 
 const DashboardBotsContext = createContext<DashboardBotsContextValue | null>(
@@ -32,7 +30,6 @@ export function DashboardBotsProvider({
   const [bots, setBots] = useState<Bot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isListSheetOpen, setListSheetOpen] = useState(false);
   const { user } = useAuth();
 
   const fetchBots = useCallback(async () => {
@@ -72,8 +69,6 @@ export function DashboardBotsProvider({
         error,
         refetchBots: fetchBots,
         removeBotFromList,
-        isListSheetOpen,
-        setListSheetOpen,
       }}
     >
       {children}

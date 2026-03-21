@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   Copy,
   ExternalLink,
-  List,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
@@ -69,9 +68,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { removeBotFromList, bots, setListSheetOpen } = useDashboardBots();
-  const isMobile = !useMediaQuery("(min-width: 768px)");
-  const isDesktop = useMediaQuery("(min-width: 1280px)");
+  const { removeBotFromList, bots } = useDashboardBots();
+  const isMobile = !useMediaQuery("(min-width: 1280px)");
 
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
@@ -412,16 +410,6 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           <div className="p-4 lg:px-6 lg:py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                {!isDesktop && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setListSheetOpen(true)}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                )}
                 <h1 className="text-lg font-medium">{bot.config.name}</h1>
               </div>
               <div className="flex items-center gap-2">
