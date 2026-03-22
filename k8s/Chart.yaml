@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
 type: application
-version: 0.4.0
-appVersion: "1.8.2"
+version: 0.5.0
+appVersion: "1.9.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,16 +30,24 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: Unified master-detail dashboard with responsive layout (desktop sidebar, mobile tabbed detail)
+    - kind: added
+      description: Custom bots master-detail view mirroring the dashboard pattern
+    - kind: added
+      description: Dropdown filter menus for bot type and status with text search
     - kind: fixed
-      description: Remove unused Elasticsearch dependencies from frontend (closes #193)
+      description: Server-side redirect for legacy /bot/[botId] route
     - kind: fixed
-      description: Remove console.log statements from frontend SSE hooks (closes #203)
+      description: Hydration flash prevention with useMediaQuery null-gating
     - kind: fixed
-      description: Validate name segment after bot type split (#209)
+      description: Accessibility improvements (aria-labels, aria-current on active items)
     - kind: fixed
-      description: Use updatedAt instead of createdAt for API key update timestamp (closes #198)
+      description: Error states with retry for failed bot list fetches
     - kind: fixed
-      description: Add clipboard error handling and remove unused elasticsearch deps
+      description: URL-encode custom bot names in navigation paths
+    - kind: fixed
+      description: Copy button now copies masked config (sensitive fields stripped)
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

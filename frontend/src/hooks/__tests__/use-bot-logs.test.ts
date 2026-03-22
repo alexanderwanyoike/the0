@@ -229,7 +229,9 @@ describe("useBotLogs", () => {
     expect(result.current.logs).toHaveLength(2000);
     // First entry should be Line 100 (100 oldest trimmed from 1500 + 600 = 2100)
     expect(result.current.logs[0].content).toBe("Line 100");
-    expect(result.current.logs[result.current.logs.length - 1].content).toBe("Extra 599");
+    expect(result.current.logs[result.current.logs.length - 1].content).toBe(
+      "Extra 599",
+    );
   });
 
   it("should cap logs on initial fetch if response is very large", async () => {

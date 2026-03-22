@@ -144,7 +144,8 @@ export function ApiKeySection() {
   };
 
   const copyToClipboard = (text: string, description: string = "text") => {
-    navigator.clipboard.writeText(text)
+    navigator.clipboard
+      .writeText(text)
       .then(() => {
         toast({
           title: "Copied",
