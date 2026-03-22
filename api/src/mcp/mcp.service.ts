@@ -394,18 +394,19 @@ export class McpService {
       throw new Error("Authentication required");
     }
 
-    // Extract fields from config
-    const configName = input.config?.name as string;
-    const configType = input.config?.type as string;
-    const configVersion = input.config?.version as string;
+    const config = input.config as BotConfig;
 
-    if (!configName) {
+    if (!config?.name) {
       throw new Error("Config must include 'name' field");
     }
 
-    if (!configType || !configVersion) {
+    if (!config.type || !config.version) {
       throw new Error("Config must include 'type' and 'version' fields");
     }
+
+    const configName = config.name;
+    const configType = config.type;
+    const configVersion = config.version;
 
     // Extract custom bot name from type (e.g., "scheduled/alpaca-mixture-of-experts" -> "alpaca-mixture-of-experts")
     const customBotName = configType.includes("/")
@@ -427,7 +428,7 @@ export class McpService {
 
     const result = await this.botRepository.create({
       name: configName,
-      config: input.config as BotConfig,
+      config,
       userId,
       topic: "the0-scheduled-custom-bot",
       customBotId: customBotResult.data.id,

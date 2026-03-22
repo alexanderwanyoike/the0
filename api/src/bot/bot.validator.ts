@@ -114,10 +114,11 @@ export class BotValidator {
       if (obj[key] !== undefined) {
         const propertySchema = schemaProperties[key];
 
-        // If property is an object and has its own schema, recursively filter
-        // TODO: nested schemas with additionalProperties !== false will still get pruned;
-        // should check propertySchema.additionalProperties before recursing
-        if (propertySchema.type === "object" && propertySchema.properties) {
+        if (
+          propertySchema.type === "object" &&
+          propertySchema.properties &&
+          propertySchema.additionalProperties === false
+        ) {
           filtered[key] = this.filterObjectProperties(
             obj[key] as Record<string, unknown>,
             propertySchema,

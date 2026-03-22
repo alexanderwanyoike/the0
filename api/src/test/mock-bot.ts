@@ -1,5 +1,5 @@
-import { Bot } from "../bot/entities/bot.entity";
-import { BotConfig } from "../database/schema/bots";
+import { Bot } from "@/bot/entities/bot.entity";
+import { BotConfig } from "@/database/schema/bots";
 
 const defaultConfig: BotConfig = {
   name: "test-bot",

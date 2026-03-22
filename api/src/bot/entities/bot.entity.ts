@@ -1,4 +1,4 @@
-import { BotConfig } from "../../database/schema/bots";
+import { BotConfig } from "@/database/schema/bots";
 
 export class Bot {
   name: string;

@@ -8,7 +8,7 @@ export interface BotConfig {
   name: string;
   type: string;
   version: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // PostgreSQL Bots table (matches original bots collection - running bot instances)
