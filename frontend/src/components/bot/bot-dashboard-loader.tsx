@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, ComponentType, Component, ErrorInfo, ReactNode } from "react";
+import React, {
+  useState,
+  useEffect,
+  ComponentType,
+  Component,
+  ErrorInfo,
+  ReactNode,
+} from "react";
 import * as ReactDOM from "react-dom";
 import * as ReactJSXRuntime from "react/jsx-runtime";
 import { BotEventsProvider } from "@/contexts/bot-events-context";
@@ -30,7 +37,10 @@ interface DashboardErrorBoundaryState {
   error: Error | null;
 }
 
-class DashboardErrorBoundary extends Component<DashboardErrorBoundaryProps, DashboardErrorBoundaryState> {
+class DashboardErrorBoundary extends Component<
+  DashboardErrorBoundaryProps,
+  DashboardErrorBoundaryState
+> {
   constructor(props: DashboardErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };

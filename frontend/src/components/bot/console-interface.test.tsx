@@ -4,14 +4,28 @@ import userEvent from "@testing-library/user-event";
 import { ConsoleInterface, LogEntry } from "./console-interface";
 
 jest.mock("react-virtuoso", () => ({
-  Virtuoso: React.forwardRef(({ data, itemContent, components, followOutput, atBottomStateChange, atTopStateChange, overscan, className }: any, ref: any) => (
-    <div data-testid="virtuoso-container" className={className}>
-      {components?.Header && <components.Header />}
-      {data?.map((item: any, index: number) => (
-        <div key={index}>{itemContent(index, item)}</div>
-      ))}
-    </div>
-  )),
+  Virtuoso: React.forwardRef(
+    (
+      {
+        data,
+        itemContent,
+        components,
+        followOutput,
+        atBottomStateChange,
+        atTopStateChange,
+        overscan,
+        className,
+      }: any,
+      ref: any,
+    ) => (
+      <div data-testid="virtuoso-container" className={className}>
+        {components?.Header && <components.Header />}
+        {data?.map((item: any, index: number) => (
+          <div key={index}>{itemContent(index, item)}</div>
+        ))}
+      </div>
+    ),
+  ),
 }));
 
 describe("ConsoleInterface", () => {
@@ -428,7 +442,9 @@ describe("ConsoleInterface", () => {
     });
 
     it("expands message on click", async () => {
-      const logs: LogEntry[] = [{ date: "20251227", content: "Click to expand me" }];
+      const logs: LogEntry[] = [
+        { date: "20251227", content: "Click to expand me" },
+      ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -473,9 +489,7 @@ describe("ConsoleInterface", () => {
   describe("log order toggle", () => {
     const findSortToggle = () => {
       const buttons = screen.getAllByRole("button");
-      return buttons.find((btn) =>
-        btn.querySelector(".lucide-arrow-down-up"),
-      );
+      return buttons.find((btn) => btn.querySelector(".lucide-arrow-down-up"));
     };
 
     it("defaults to newest-first order (reversed)", () => {
@@ -542,7 +556,12 @@ describe("ConsoleInterface", () => {
     });
 
     it("has correct tooltip for sort order", () => {
-      render(<ConsoleInterface {...defaultProps} logs={[{ date: "20251227", content: "Log" }]} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "20251227", content: "Log" }]}
+        />,
+      );
 
       const sortButton = findSortToggle()!;
       expect(sortButton).toHaveAttribute("title", "Newest first");
@@ -552,7 +571,13 @@ describe("ConsoleInterface", () => {
     });
 
     it("renders sort toggle in compact mode", () => {
-      render(<ConsoleInterface {...defaultProps} compact={true} logs={[{ date: "20251227", content: "Log" }]} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          compact={true}
+          logs={[{ date: "20251227", content: "Log" }]}
+        />,
+      );
 
       const sortButton = findSortToggle();
       expect(sortButton).toBeDefined();

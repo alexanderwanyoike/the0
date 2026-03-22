@@ -33,9 +33,12 @@ function makeRequest(
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = token;
 
-  const req = new NextRequest("http://localhost:3001/api/logs/" + botId + "/stream", {
-    headers,
-  });
+  const req = new NextRequest(
+    "http://localhost:3001/api/logs/" + botId + "/stream",
+    {
+      headers,
+    },
+  );
   const params = Promise.resolve({ botId });
   return { req, params };
 }
@@ -49,28 +52,32 @@ describe("GET /api/logs/[botId]/stream", () => {
   it("proxies SSE stream from backend with correct headers", async () => {
     const sseBody = new ReadableStream({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode("data: {\"type\":\"log\"}\n\n"));
+        controller.enqueue(
+          new TextEncoder().encode('data: {"type":"log"}\n\n'),
+        );
         controller.close();
       },
     });
 
-    mockFetch.mockResolvedValueOnce(
-      new Response(sseBody, { status: 200 }),
-    );
+    mockFetch.mockResolvedValueOnce(new Response(sseBody, { status: 200 }));
 
-    const { req, params } = makeRequest("bot-123", { token: "Bearer test-token" });
+    const { req, params } = makeRequest("bot-123", {
+      token: "Bearer test-token",
+    });
     const response = await GET(req, { params });
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe(
       "text/event-stream; charset=utf-8",
     );
-    expect(response.headers.get("Cache-Control")).toBe("no-cache, no-transform");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "no-cache, no-transform",
+    );
     expect(response.headers.get("X-Accel-Buffering")).toBe("no");
 
     // Verify the body is piped through
     const text = await response.text();
-    expect(text).toBe("data: {\"type\":\"log\"}\n\n");
+    expect(text).toBe('data: {"type":"log"}\n\n');
   });
 
   it("returns 401 when no auth token is provided", async () => {
@@ -82,11 +89,11 @@ describe("GET /api/logs/[botId]/stream", () => {
   });
 
   it("returns error when upstream fails", async () => {
-    mockFetch.mockResolvedValueOnce(
-      new Response(null, { status: 503 }),
-    );
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 503 }));
 
-    const { req, params } = makeRequest("bot-123", { token: "Bearer test-token" });
+    const { req, params } = makeRequest("bot-123", {
+      token: "Bearer test-token",
+    });
     const response = await GET(req, { params });
 
     expect(response.status).toBe(503);
@@ -109,7 +116,7 @@ describe("GET /api/logs/[botId]/stream", () => {
     // from whichever form was used
     const call = mockFetch.mock.calls[0];
     const calledUrl =
-      typeof call[0] === "string" ? call[0] : call[0]?.url ?? String(call[0]);
+      typeof call[0] === "string" ? call[0] : (call[0]?.url ?? String(call[0]));
     expect(calledUrl).toBe(
       "http://localhost:3000/logs/bot%2Fspecial%20chars/stream",
     );
@@ -120,14 +127,15 @@ describe("GET /api/logs/[botId]/stream", () => {
       new Response(new ReadableStream(), { status: 200 }),
     );
 
-    const { req, params } = makeRequest("bot-123", { token: "Bearer test-token" });
+    const { req, params } = makeRequest("bot-123", {
+      token: "Bearer test-token",
+    });
     await GET(req, { params });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     // The signal should be forwarded — check via the Request or options object
     const call = mockFetch.mock.calls[0];
-    const passedSignal =
-      call[1]?.signal ?? call[0]?.signal;
+    const passedSignal = call[1]?.signal ?? call[0]?.signal;
     expect(passedSignal).toBeDefined();
   });
 });

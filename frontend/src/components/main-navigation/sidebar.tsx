@@ -93,7 +93,10 @@ export function Sidebar({
             href={item.href}
             icon={item.icon}
             name={item.name}
-            isActive={currentPath === item.href}
+            isActive={
+              currentPath === item.href ||
+              currentPath.startsWith(item.href + "/")
+            }
             isCollapsed={isCollapsed}
           />
         ))}
