@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BotRepository } from "../bot.repository";
 import { Ok, Failure } from "@/common/result";
+import { mockBot, mockBotConfig } from "@/test/mock-bot";
 
 describe("BotRepository", () => {
   let repository: BotRepository;
@@ -19,24 +20,22 @@ describe("BotRepository", () => {
   describe("create", () => {
     const botData = {
       name: "Test Bot",
-      config: {
+      config: mockBotConfig({
         type: "scheduled/test-bot",
         version: "1.0.0",
         foo: "test",
         bar: 123,
-      },
+      }),
       userId: "user-123",
       topic: "the0-scheduled-custom-bot",
       customBotId: "custom-bot-123",
     };
 
     it("should create a bot successfully", async () => {
-      const mockBotResult = {
+      const mockBotResult = mockBot({
         id: "test-bot-id",
         ...botData,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
       jest.spyOn(repository, "create").mockResolvedValue(Ok(mockBotResult));
 
@@ -65,26 +64,22 @@ describe("BotRepository", () => {
 
     it("should find all bots for a user", async () => {
       const mockBots = [
-        {
+        mockBot({
           id: "bot-1",
           name: "Bot 1",
           userId: "user-123",
-          config: { type: "scheduled/bot1", version: "1.0.0" },
+          config: mockBotConfig({ type: "scheduled/bot1", version: "1.0.0" }),
           topic: "the0-scheduled-custom-bot",
           customBotId: "custom-bot-1",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
+        }),
+        mockBot({
           id: "bot-2",
           name: "Bot 2",
           userId: "user-123",
-          config: { type: "scheduled/bot2", version: "1.0.0" },
+          config: mockBotConfig({ type: "scheduled/bot2", version: "1.0.0" }),
           topic: "the0-scheduled-custom-bot",
           customBotId: "custom-bot-2",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
+        }),
       ];
 
       jest.spyOn(repository, "findAll").mockResolvedValue(Ok(mockBots));
@@ -123,21 +118,19 @@ describe("BotRepository", () => {
     const botId = "bot-123";
 
     it("should find a specific bot", async () => {
-      const mockBot = {
+      const foundBot = mockBot({
         id: botId,
         name: "Test Bot",
         userId: userId,
-        config: {
+        config: mockBotConfig({
           type: "scheduled/test",
           version: "1.0.0",
-        },
+        }),
         topic: "the0-scheduled-custom-bot",
         customBotId: "custom-bot-123",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
 
-      jest.spyOn(repository, "findOne").mockResolvedValue(Ok(mockBot));
+      jest.spyOn(repository, "findOne").mockResolvedValue(Ok(foundBot));
 
       const result = await repository.findOne(userId, botId);
 
@@ -173,15 +166,15 @@ describe("BotRepository", () => {
     const botId = "bot-123";
     const updateData = {
       name: "Updated Bot",
-      config: {
+      config: mockBotConfig({
         type: "scheduled/updated",
         version: "1.1.0",
         foo: "updated",
-      },
+      }),
     };
 
     it("should update a bot successfully", async () => {
-      const updatedBot = {
+      const updatedBot = mockBot({
         id: botId,
         ...updateData,
         userId: userId,
@@ -189,7 +182,7 @@ describe("BotRepository", () => {
         customBotId: "custom-bot-123",
         createdAt: new Date("2024-01-01"),
         updatedAt: new Date(),
-      };
+      });
 
       jest.spyOn(repository, "update").mockResolvedValue(Ok(updatedBot));
 

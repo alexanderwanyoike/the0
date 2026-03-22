@@ -19,11 +19,7 @@ export interface DatabaseConfig {
   };
 }
 
-function parsePositiveIntEnv(
-  key: string,
-  fallback: number,
-  min = 1,
-): number {
+function parsePositiveIntEnv(key: string, fallback: number, min = 1): number {
   const raw = process.env[key];
   if (raw === undefined || raw.trim() === "") return fallback;
 

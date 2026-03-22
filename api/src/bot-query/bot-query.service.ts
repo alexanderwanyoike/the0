@@ -2,7 +2,7 @@ import { Injectable, Scope } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, errorMessage } from "@/common/result";
 
 export enum BotQueryErrorCode {
   BOT_NOT_FOUND = "BOT_NOT_FOUND",
@@ -86,7 +86,12 @@ export class BotQueryService {
       if (!response.ok) {
         const errorText = await response.text();
         this.logger.error(
-          { botId, queryPath: request.queryPath, status: response.status, error: errorText },
+          {
+            botId,
+            queryPath: request.queryPath,
+            status: response.status,
+            error: errorText,
+          },
           "Query request failed",
         );
 
@@ -112,32 +117,38 @@ export class BotQueryService {
         duration: result.duration || 0,
         timestamp: result.timestamp || new Date().toISOString(),
       });
-    } catch (error: any) {
-      if (error.name === "AbortError") {
+    } catch (error: unknown) {
+      const err = error as {
+        name?: string;
+        code?: string;
+        cause?: { code?: string };
+      };
+      if (err.name === "AbortError") {
         return Failure({
           code: BotQueryErrorCode.TIMEOUT,
           message: `Query timed out after ${request.timeoutSec || 30} seconds`,
         });
       }
 
-      if (error.code === "ECONNREFUSED" || error.cause?.code === "ECONNREFUSED") {
+      if (err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
         this.logger.error(
-          { botId, queryPath: request.queryPath, error: error.message },
+          { botId, queryPath: request.queryPath, error: errorMessage(error) },
           "Runtime unavailable",
         );
         return Failure({
           code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
-          message: "Bot runtime is not available. Ensure the bot-runner service is running.",
+          message:
+            "Bot runtime is not available. Ensure the bot-runner service is running.",
         });
       }
 
       this.logger.error(
-        { botId, queryPath: request.queryPath, error: error.message },
+        { botId, queryPath: request.queryPath, error: errorMessage(error) },
         "Query execution error",
       );
       return Failure({
         code: BotQueryErrorCode.QUERY_FAILED,
-        message: `Query failed: ${error.message}`,
+        message: `Query failed: ${errorMessage(error)}`,
       });
     }
   }

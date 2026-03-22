@@ -24,7 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: Record<string, unknown>) {
     if (!payload?.sub) {
       throw new UnauthorizedException("Invalid token payload");
     }
@@ -58,6 +58,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         lastName: user.lastName || null,
         isActive: Boolean(user.isActive),
         isEmailVerified: Boolean(user.isEmailVerified),
+        authType: "jwt" as const,
       };
     } catch (error) {
       this.logger.error({ err: error }, "JWT validation error");

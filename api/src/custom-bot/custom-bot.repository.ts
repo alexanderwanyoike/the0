@@ -5,7 +5,7 @@ import {
   CustomBotWithVersions,
   CustomBotVersion,
 } from "./custom-bot.types";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { eq, and, desc } from "drizzle-orm";
 import * as semver from "semver";
 
@@ -27,8 +27,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Failure(result.error);
       }
       return Ok(result.data.length > 0);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -39,8 +39,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Failure(result.error);
       }
       return Ok(result.data.length > 0);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -52,8 +52,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     try {
       const result = await this.findByKeyAndVersion(userId, name, version);
       return Ok(result.success);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -64,8 +64,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     try {
       const result = await this.findGlobalByKeyAndVersion(name, version);
       return Ok(result.success);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -135,8 +135,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       );
 
       return Ok(customBotsWithVersions);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -179,8 +179,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       };
 
       return Ok(customBotWithVersions);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -222,8 +222,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       };
 
       return Ok(customBotWithVersions);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -376,8 +376,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       );
 
       return Ok(customBotsWithVersions);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 }

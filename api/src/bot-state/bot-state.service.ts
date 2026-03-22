@@ -2,7 +2,7 @@ import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import * as tar from "tar";
@@ -47,6 +47,7 @@ interface StateDownloadResult {
   tempDir: string;
   etag: string;
 }
+
 
 @Injectable({ scope: Scope.REQUEST })
 export class BotStateService {
@@ -142,7 +143,7 @@ export class BotStateService {
         // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error, botId }, "Error listing state keys");
       return Failure({
         code: BotStateErrorCode.STORAGE_ERROR,
@@ -224,7 +225,7 @@ export class BotStateService {
         let value: unknown;
         try {
           value = JSON.parse(content);
-        } catch (parseError: any) {
+        } catch (parseError: unknown) {
           this.logger.error(
             { err: parseError, botId, key },
             "Invalid JSON in state file",
@@ -240,7 +241,7 @@ export class BotStateService {
         // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error, botId, key }, "Error getting state key");
       return Failure({
         code: BotStateErrorCode.STORAGE_ERROR,
@@ -323,7 +324,7 @@ export class BotStateService {
         // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error, botId, key }, "Error deleting state key");
       return Failure({
         code: BotStateErrorCode.STORAGE_ERROR,
@@ -359,8 +360,8 @@ export class BotStateService {
       // Check if state exists
       try {
         await this.minioClient.statObject(this.stateBucket, statePath);
-      } catch (error: any) {
-        if (error.code === "NotFound") {
+      } catch (error: unknown) {
+        if (hasErrorCode(error) && error.code === "NotFound") {
           return Ok(true); // No state to clear
         }
         throw error;
@@ -370,7 +371,7 @@ export class BotStateService {
       await this.minioClient.removeObject(this.stateBucket, statePath);
 
       return Ok(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error, botId }, "Error clearing state");
       return Failure({
         code: BotStateErrorCode.STORAGE_ERROR,
@@ -392,8 +393,8 @@ export class BotStateService {
     let stat: Minio.BucketItemStat;
     try {
       stat = await this.minioClient.statObject(this.stateBucket, statePath);
-    } catch (error: any) {
-      if (error.code === "NotFound") {
+    } catch (error: unknown) {
+      if (hasErrorCode(error) && error.code === "NotFound") {
         return null;
       }
       throw error;
@@ -438,9 +439,7 @@ export class BotStateService {
    * Returns null if no state exists.
    * @deprecated Use downloadAndExtractStateWithEtag for write operations to prevent race conditions
    */
-  private async downloadAndExtractState(
-    botId: string,
-  ): Promise<string | null> {
+  private async downloadAndExtractState(botId: string): Promise<string | null> {
     const result = await this.downloadAndExtractStateWithEtag(botId);
     return result?.tempDir ?? null;
   }
@@ -480,8 +479,8 @@ export class BotStateService {
             );
             return false; // Conflict - state was modified
           }
-        } catch (error: any) {
-          if (error.code !== "NotFound") {
+        } catch (error: unknown) {
+          if (!hasErrorCode(error) || error.code !== "NotFound") {
             throw error;
           }
           // Object already deleted, that's fine
@@ -513,8 +512,8 @@ export class BotStateService {
             );
             return false;
           }
-        } catch (error: any) {
-          if (error.code !== "NotFound") {
+        } catch (error: unknown) {
+          if (!hasErrorCode(error) || error.code !== "NotFound") {
             throw error;
           }
         }
@@ -541,8 +540,8 @@ export class BotStateService {
           );
           return false; // Conflict - state was modified by another request
         }
-      } catch (error: any) {
-        if (error.code === "NotFound") {
+      } catch (error: unknown) {
+        if (hasErrorCode(error) && error.code === "NotFound") {
           // Object was deleted - this is also a conflict since we expected it to exist
           this.logger.warn(
             { botId, expectedEtag },

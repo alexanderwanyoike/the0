@@ -1,7 +1,9 @@
+import { BotConfig } from "@/database/schema/bots";
+
 export class Bot {
   name: string;
   id: string;
-  config: any;
+  config: BotConfig;
   topic: string;
   createdAt: Date;
   updatedAt: Date;

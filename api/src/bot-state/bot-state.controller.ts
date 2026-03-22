@@ -27,7 +27,10 @@ export class BotStateController {
   @Get()
   @ApiOperation({ summary: "List all state keys for a bot" })
   @ApiParam({ name: "botId", description: "Bot identifier" })
-  @ApiResponse({ status: 200, description: "State keys retrieved successfully" })
+  @ApiResponse({
+    status: 200,
+    description: "State keys retrieved successfully",
+  })
   @ApiResponse({ status: 404, description: "Bot not found" })
   async listKeys(@Param("botId") botId: string) {
     const result = await this.botStateService.listKeys(botId);
@@ -56,7 +59,10 @@ export class BotStateController {
   @ApiOperation({ summary: "Get a specific state value" })
   @ApiParam({ name: "botId", description: "Bot identifier" })
   @ApiParam({ name: "key", description: "State key name" })
-  @ApiResponse({ status: 200, description: "State value retrieved successfully" })
+  @ApiResponse({
+    status: 200,
+    description: "State value retrieved successfully",
+  })
   @ApiResponse({ status: 400, description: "Invalid state key" })
   @ApiResponse({ status: 404, description: "Bot or state key not found" })
   async getKey(@Param("botId") botId: string, @Param("key") key: string) {
@@ -72,7 +78,9 @@ export class BotStateController {
         case BotStateErrorCode.FILE_TOO_LARGE:
           throw new PayloadTooLargeException(result.error.message);
         case BotStateErrorCode.INVALID_JSON:
-          throw new UnprocessableEntityException("State file contains invalid JSON");
+          throw new UnprocessableEntityException(
+            "State file contains invalid JSON",
+          );
         default:
           throw new BadRequestException("Failed to get state key");
       }
@@ -98,7 +106,8 @@ export class BotStateController {
   @ApiResponse({ status: 404, description: "Bot not found" })
   @ApiResponse({
     status: 409,
-    description: "Concurrent modification - state was modified by another operation",
+    description:
+      "Concurrent modification - state was modified by another operation",
   })
   async deleteKey(@Param("botId") botId: string, @Param("key") key: string) {
     const result = await this.botStateService.deleteKey(botId, key);

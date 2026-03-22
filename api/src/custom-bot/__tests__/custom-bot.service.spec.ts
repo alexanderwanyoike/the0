@@ -331,7 +331,8 @@ describe("CustomBotService", () => {
         version: "1.0.0",
         config: scheduledNodeConfig,
         status: "active",
-        filePath: "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+        filePath:
+          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -475,7 +476,8 @@ describe("CustomBotService", () => {
         version: "1.1.0",
         config: scheduledNodeConfig,
         status: "active",
-        filePath: "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+        filePath:
+          "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
         userId,
         createdAt: new Date(),
         updatedAt: new Date(),
