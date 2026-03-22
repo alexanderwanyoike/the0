@@ -512,7 +512,7 @@ describe("CustomBotController", () => {
 
       mockService.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
 
-      const result = await controller.getAllVersions("test-bot", mockUser);
+      const result = await controller.getAllVersions("test-bot");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockVersions);
@@ -526,7 +526,7 @@ describe("CustomBotController", () => {
       );
 
       await expect(
-        controller.getAllVersions("non-existent-bot", mockUser),
+        controller.getAllVersions("non-existent-bot"),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -550,7 +550,6 @@ describe("CustomBotController", () => {
       const result = await controller.getSpecificVersion(
         "test-bot",
         "1.0.0",
-        mockUser,
       );
 
       expect(result.success).toBe(true);
@@ -568,7 +567,7 @@ describe("CustomBotController", () => {
       );
 
       await expect(
-        controller.getSpecificVersion("test-bot", "2.0.0", mockUser),
+        controller.getSpecificVersion("test-bot", "2.0.0"),
       ).rejects.toThrow(NotFoundException);
     });
   });

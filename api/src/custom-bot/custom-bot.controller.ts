@@ -7,7 +7,6 @@ import {
   Param,
   BadRequestException,
   NotFoundException,
-  Req,
   Res,
   HttpStatus,
   HttpCode,
@@ -17,10 +16,11 @@ import {
   UploadedFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { Request, Response } from "express";
+import { Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { StorageService } from "./storage.service";
 
@@ -44,7 +44,7 @@ export class CustomBotController {
     @Param("name") name: string,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { version?: string },
-    @CurrentUser() user: { uid?: string },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user?.uid;
     if (!userId) {
@@ -92,7 +92,7 @@ export class CustomBotController {
   async createCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @CurrentUser() user: { uid?: string },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user?.uid;
     if (!userId) {
@@ -159,7 +159,7 @@ export class CustomBotController {
   async updateCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @CurrentUser() user: { uid?: string },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user?.uid;
     if (!userId) {
@@ -224,7 +224,7 @@ export class CustomBotController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async getUserCustomBots(@CurrentUser() user: { uid?: string }) {
+  async getUserCustomBots(@CurrentUser() user: AuthenticatedUser) {
     const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
@@ -245,7 +245,7 @@ export class CustomBotController {
 
   @Get(":name")
   @HttpCode(HttpStatus.OK)
-  async getAllVersions(@Param("name") name: string, @Req() request: Request) {
+  async getAllVersions(@Param("name") name: string) {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
     if (!result.success) {
@@ -300,7 +300,6 @@ export class CustomBotController {
   async getSpecificVersion(
     @Param("name") name: string,
     @Param("version") version: string,
-    @Req() request: Request,
   ) {
     const result = await this.customBotService.getGlobalSpecificVersion(
       name,

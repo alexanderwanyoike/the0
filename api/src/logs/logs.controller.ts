@@ -14,6 +14,7 @@ import { PinoLogger } from "nestjs-pino";
 import { LogsService } from "./logs.service";
 import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
@@ -66,7 +67,7 @@ export class LogsController {
   async getLogs(
     @Param("botId") botId: string,
     @Query() query: GetLogsQueryDto,
-    @CurrentUser() user: { uid?: string },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     const result = await this.logsService.getLogs(botId, {
       date: query.date,
@@ -95,7 +96,7 @@ export class LogsController {
   @Get(":botId/stream")
   async streamLogs(
     @Param("botId") botId: string,
-    @CurrentUser() user: { uid?: string },
+    @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -188,9 +189,19 @@ export class LogsController {
 
     if (
       !historyResult.success &&
+      historyResult.error?.includes("Authentication required")
+    ) {
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: "Authentication required" })}\n\n`,
+      );
+      res.end();
+      return false;
+    }
+
+    if (
+      !historyResult.success &&
       (historyResult.error?.includes("not found") ||
-        historyResult.error?.includes("access denied") ||
-        historyResult.error?.includes("Authentication required"))
+        historyResult.error?.includes("access denied"))
     ) {
       res.write(
         `event: error\ndata: ${JSON.stringify({ message: ACCESS_DENIED_MESSAGE })}\n\n`,
