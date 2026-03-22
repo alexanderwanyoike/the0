@@ -238,12 +238,7 @@ export class BotService {
     let topics = null;
     const configType = botResult.data.config?.type;
     const configVersion = botResult.data.config?.version;
-    if (
-      configType &&
-      typeof configType === "string" &&
-      configVersion &&
-      typeof configVersion === "string"
-    ) {
+    if (configType && configVersion) {
       const [_, name] = configType.split("/");
       if (!name?.trim()) {
         this.logger.warn(
