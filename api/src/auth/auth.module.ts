@@ -1,4 +1,5 @@
 import { Global, Module } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { AuthController } from "./auth.controller";
@@ -10,14 +11,16 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: "jwt" }),
-    JwtModule.register({
-      secret:
-        process.env.JWT_SECRET || "the0-oss-jwt-secret-change-in-production",
-      signOptions: {
-        expiresIn: process.env.JWT_EXPIRES_IN || "24h",
-        issuer: "the0-oss-api",
-        audience: "the0-oss-clients",
-      },
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>("JWT_SECRET"),
+        signOptions: {
+          expiresIn: configService.get<string>("JWT_EXPIRES_IN") || "24h",
+          issuer: "the0-oss-api",
+          audience: "the0-oss-clients",
+        },
+      }),
     }),
     ApiKeyModule,
   ],

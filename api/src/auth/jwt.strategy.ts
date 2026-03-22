@@ -1,6 +1,7 @@
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PassportStrategy } from "@nestjs/passport";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { AuthService } from "./auth.service";
 import { getDatabase, getDatabaseConfig } from "../database/connection";
@@ -12,12 +13,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private authService: AuthService,
     private readonly logger: PinoLogger,
+    configService: ConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET || "the0-oss-jwt-secret-change-in-production",
+      secretOrKey: configService.getOrThrow<string>("JWT_SECRET"),
       issuer: "the0-oss-api",
       audience: "the0-oss-clients",
     });
