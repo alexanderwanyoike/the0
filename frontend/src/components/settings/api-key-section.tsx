@@ -144,11 +144,20 @@ export function ApiKeySection() {
   };
 
   const copyToClipboard = (text: string, description: string = "text") => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied",
-      description: `${description} copied to clipboard.`,
-    });
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast({
+          title: "Copied",
+          description: `${description} copied to clipboard.`,
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Failed to copy",
+          description: "Could not copy to clipboard. Please try again.",
+          variant: "destructive",
+        });
+      });
   };
 
   const openDeleteDialog = (apiKey: ApiKey) => {

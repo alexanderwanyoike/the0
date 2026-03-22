@@ -235,6 +235,13 @@ export class BotService {
     let topics = null;
     if (botResult.data.config?.type && botResult.data.config?.version) {
       const [_, name] = botResult.data.config.type.split("/");
+      if (!name?.trim()) {
+        this.logger.warn(
+          { type: botResult.data.config.type },
+          "Invalid bot type: missing name after '/'",
+        );
+        return Failure("Invalid bot type: missing name after '/'");
+      }
       const customBotResult =
         await this.customBotService.getUserSpecificVersion(
           uid,
@@ -313,6 +320,13 @@ export class BotService {
 
     // Extract vendor, type, and name from the bot type
     const [_, name] = type.split("/");
+    if (!name?.trim()) {
+      return {
+        success: false,
+        error: "Invalid bot type: missing name after '/'",
+        data: null,
+      };
+    }
 
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(name, version);
