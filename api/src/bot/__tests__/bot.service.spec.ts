@@ -13,6 +13,7 @@ import { NatsService } from "@/nats/nats.service";
 import { Ok, Failure } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
+import { mockBot, mockBotConfig } from "@/test/mock-bot";
 
 describe("BotService - Enhanced Tests", () => {
   let service: BotService;
@@ -119,12 +120,12 @@ describe("BotService - Enhanced Tests", () => {
   describe("create", () => {
     const validBotData = {
       name: "Test Bot",
-      config: {
+      config: mockBotConfig({
         type: "scheduled/test-custom-bot",
         version: "1.0.0",
         foo: "test",
         bar: 123,
-      },
+      }),
     };
 
     beforeEach(() => {
@@ -143,12 +144,12 @@ describe("BotService - Enhanced Tests", () => {
       jest.spyOn(repository, "create").mockResolvedValue({
         success: true,
         error: null,
-        data: {
+        data: mockBot({
           id: "test-id",
           ...validBotData,
           userId: uid,
           topic: "the0-scheduled-custom-bot",
-        } as Bot,
+        }),
       });
     });
 
@@ -156,12 +157,12 @@ describe("BotService - Enhanced Tests", () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
-        data: {
+        data: mockBot({
           id: "test-id",
           ...validBotData,
           userId: uid,
           topic: "the0-scheduled-custom-bot",
-        } as Bot,
+        }),
       });
       const result = await service.create(validBotData);
 
@@ -183,7 +184,7 @@ describe("BotService - Enhanced Tests", () => {
     it("should validate bot type and version format", async () => {
       const invalidTypeBot = {
         ...validBotData,
-        config: { ...validBotData.config, type: "invalid-format" },
+        config: mockBotConfig({ ...validBotData.config, type: "invalid-format" }),
       };
 
       const result = await service.create(invalidTypeBot);
@@ -195,7 +196,7 @@ describe("BotService - Enhanced Tests", () => {
     it("should validate semantic version format", async () => {
       const invalidVersionBot = {
         ...validBotData,
-        config: { ...validBotData.config, version: "invalid-version" },
+        config: mockBotConfig({ ...validBotData.config, version: "invalid-version" }),
       };
 
       const result = await service.create(invalidVersionBot);
@@ -239,12 +240,12 @@ describe("BotService - Enhanced Tests", () => {
         jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
-          data: {
+          data: mockBot({
             id: "test-id",
             ...validBotData,
             userId: uid,
             topic: "the0-scheduled-custom-bot",
-          } as Bot,
+          }),
         });
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
@@ -262,12 +263,12 @@ describe("BotService - Enhanced Tests", () => {
         jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
-          data: {
+          data: mockBot({
             id: "test-id",
             ...validBotData,
             userId: uid,
             topic: "the0-scheduled-custom-bot",
-          } as Bot,
+          }),
         });
         const result = await service.create(validBotData);
 
@@ -284,18 +285,19 @@ describe("BotService - Enhanced Tests", () => {
 
         jest.spyOn(repository, "create").mockResolvedValue({
           success: true,
-          data: { ...validBotData, id: "test-id" },
-        } as any);
+          error: null,
+          data: mockBot({ ...validBotData, id: "test-id" }),
+        });
 
         jest.spyOn(repository, "findOne").mockResolvedValue({
           success: true,
           error: null,
-          data: {
+          data: mockBot({
             id: "test-id",
             ...validBotData,
             userId: uid,
             topic: "the0-scheduled-custom-bot",
-          } as Bot,
+          }),
         });
 
         const result = await service.create(validBotData);
@@ -309,9 +311,9 @@ describe("BotService - Enhanced Tests", () => {
   describe("findAll", () => {
     it("should return all user bots", async () => {
       const bots = [
-        { id: "bot1", name: "Bot 1" },
-        { id: "bot2", name: "Bot 2" },
-      ] as Bot[];
+        mockBot({ id: "bot1", name: "Bot 1" }),
+        mockBot({ id: "bot2", name: "Bot 2" }),
+      ];
 
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: true,
@@ -342,7 +344,7 @@ describe("BotService - Enhanced Tests", () => {
 
   describe("findOne", () => {
     it("should return a specific bot", async () => {
-      const bot = { id: "test-id", name: "Test Bot" } as Bot;
+      const bot = mockBot({ id: "test-id", name: "Test Bot" });
 
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
@@ -374,13 +376,27 @@ describe("BotService - Enhanced Tests", () => {
   describe("update", () => {
     const updateData = {
       name: "Updated Bot",
-      config: {
+      config: mockBotConfig({
         type: "scheduled/test-custom-bot",
         version: "1.0.0",
         foo: "updated",
         bar: 456,
-      },
+      }),
     };
+
+    const existingBot = mockBot({
+      id: "test-id",
+      name: "Test Bot",
+      config: mockBotConfig({
+        type: "scheduled/test-custom-bot",
+        version: "1.0.0",
+        foo: "original",
+        bar: 123,
+      }),
+      userId: uid,
+      customBotId: "test-custom-bot",
+      topic: "the0-scheduled-custom-bot",
+    });
 
     beforeEach(() => {
       validator.validate = jest.fn().mockReturnValue({
@@ -388,10 +404,16 @@ describe("BotService - Enhanced Tests", () => {
         error: null,
         data: null,
       });
+
+      jest.spyOn(repository, "findOne").mockResolvedValue({
+        success: true,
+        error: null,
+        data: existingBot,
+      });
     });
 
     it("should update a bot successfully", async () => {
-      const updatedBot = { id: "test-id", ...updateData } as Bot;
+      const updatedBot = mockBot({ id: "test-id", ...updateData });
 
       jest.spyOn(repository, "update").mockResolvedValue({
         success: true,
@@ -403,11 +425,214 @@ describe("BotService - Enhanced Tests", () => {
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(updatedBot);
-      expect(repository.update).toHaveBeenCalledWith(
-        uid,
-        "test-id",
-        updateData,
-      );
+    });
+
+    it("should update customBotId when config version changes (non-breaking)", async () => {
+      const newCustomBot = {
+        ...mockCustomBot,
+        id: "new-custom-bot-v1.1.0",
+        version: "1.1.0",
+      };
+
+      mockCustomBotService.getGlobalSpecificVersion = jest
+        .fn()
+        .mockResolvedValue({
+          success: true,
+          error: null,
+          data: newCustomBot,
+        });
+
+      const patchUpdateData = {
+        name: "Updated Bot",
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "1.1.0",
+          foo: "updated",
+          bar: 456,
+        }),
+      };
+
+      jest.spyOn(repository, "update").mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockBot({ id: "test-id", ...patchUpdateData }),
+      });
+
+      const result = await service.update("test-id", patchUpdateData);
+
+      expect(result.success).toBe(true);
+      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
+        ...patchUpdateData,
+        config: { ...patchUpdateData.config, hasFrontend: false },
+        customBotId: "new-custom-bot-v1.1.0",
+      });
+    });
+
+    it("should update hasFrontend flag from new custom bot version", async () => {
+      const newCustomBotWithFrontend = {
+        ...mockCustomBot,
+        id: "new-custom-bot-v1.0.1",
+        version: "1.0.1",
+        config: { ...mockCustomBot.config, hasFrontend: true },
+      };
+
+      mockCustomBotService.getGlobalSpecificVersion = jest
+        .fn()
+        .mockResolvedValue({
+          success: true,
+          error: null,
+          data: newCustomBotWithFrontend,
+        });
+
+      const patchUpdateData = {
+        name: "Updated Bot",
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "1.0.1",
+          foo: "updated",
+          bar: 456,
+        }),
+      };
+
+      jest.spyOn(repository, "update").mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockBot({ id: "test-id", ...patchUpdateData }),
+      });
+
+      const result = await service.update("test-id", patchUpdateData);
+
+      expect(result.success).toBe(true);
+      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
+        ...patchUpdateData,
+        config: { ...patchUpdateData.config, hasFrontend: true },
+        customBotId: "new-custom-bot-v1.0.1",
+      });
+    });
+
+    it("should keep customBotId unchanged when version hasn't changed", async () => {
+      jest.spyOn(repository, "update").mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockBot({ id: "test-id", ...updateData }),
+      });
+
+      const result = await service.update("test-id", updateData);
+
+      expect(result.success).toBe(true);
+      // customBotId should be preserved from the existing bot record, not rotated
+      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
+        ...updateData,
+        config: { ...updateData.config, hasFrontend: false },
+        customBotId: existingBot.customBotId,
+      });
+    });
+
+    it("should reject update when major version changes", async () => {
+      const newCustomBotV2 = {
+        ...mockCustomBot,
+        id: "new-custom-bot-v2.0.0",
+        version: "2.0.0",
+      };
+
+      mockCustomBotService.getGlobalSpecificVersion = jest
+        .fn()
+        .mockResolvedValue({
+          success: true,
+          error: null,
+          data: newCustomBotV2,
+        });
+
+      const updateSpy = jest.spyOn(repository, "update");
+
+      const majorUpdateData = {
+        name: "Updated Bot",
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "2.0.0",
+          foo: "updated",
+          bar: 456,
+        }),
+      };
+
+      const result = await service.update("test-id", majorUpdateData);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Major version upgrade");
+      expect(result.error).toContain("requires delete and redeploy");
+      expect(updateSpy).not.toHaveBeenCalled();
+    });
+
+    it("should allow update when minor version changes", async () => {
+      const newCustomBot = {
+        ...mockCustomBot,
+        id: "new-custom-bot-v1.3.0",
+        version: "1.3.0",
+      };
+
+      mockCustomBotService.getGlobalSpecificVersion = jest
+        .fn()
+        .mockResolvedValue({
+          success: true,
+          error: null,
+          data: newCustomBot,
+        });
+
+      const minorUpdateData = {
+        name: "Updated Bot",
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "1.3.0",
+          foo: "updated",
+          bar: 456,
+        }),
+      };
+
+      jest.spyOn(repository, "update").mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockBot({ id: "test-id", ...minorUpdateData }),
+      });
+
+      const result = await service.update("test-id", minorUpdateData);
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should allow update when patch version changes", async () => {
+      const newCustomBot = {
+        ...mockCustomBot,
+        id: "new-custom-bot-v1.0.1",
+        version: "1.0.1",
+      };
+
+      mockCustomBotService.getGlobalSpecificVersion = jest
+        .fn()
+        .mockResolvedValue({
+          success: true,
+          error: null,
+          data: newCustomBot,
+        });
+
+      const patchUpdateData = {
+        name: "Updated Bot",
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "1.0.1",
+          foo: "updated",
+          bar: 456,
+        }),
+      };
+
+      jest.spyOn(repository, "update").mockResolvedValue({
+        success: true,
+        error: null,
+        data: mockBot({ id: "test-id", ...patchUpdateData }),
+      });
+
+      const result = await service.update("test-id", patchUpdateData);
+
+      expect(result.success).toBe(true);
     });
 
     it("should validate update data", async () => {
@@ -439,18 +664,18 @@ describe("BotService - Enhanced Tests", () => {
 
   describe("remove", () => {
     it("should remove a bot successfully", async () => {
-      const mockBot = {
+      const botToRemove = mockBot({
         id: "test-id",
         name: "Test Bot",
-        config: { type: "scheduled/test-bot", version: "1.0.0" },
+        config: mockBotConfig({ type: "scheduled/test-bot", version: "1.0.0" }),
         topic: "the0-scheduled-custom-bot",
         userId: uid,
-      } as Bot;
+      });
 
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
-        data: mockBot,
+        data: botToRemove,
       });
 
       jest.spyOn(repository, "remove").mockResolvedValue({

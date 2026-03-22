@@ -7,6 +7,7 @@ import { ApiKeyService } from "@/api-key/api-key.service";
 import { Ok, Failure } from "@/common/result";
 import { createMockLogger } from "@/test/mock-logger";
 import { PinoLogger } from "nestjs-pino";
+import { mockBot as createMockBot, mockBotConfig } from "@/test/mock-bot";
 
 describe("McpService", () => {
   let service: McpService;
@@ -17,20 +18,18 @@ describe("McpService", () => {
 
   const userId = "user-123";
 
-  const mockBot = {
+  const testBot = createMockBot({
     id: "bot-123",
     name: "Test Bot",
     userId,
     topic: "the0-scheduled-custom-bot",
     customBotId: "custom-bot-123",
-    config: {
+    config: mockBotConfig({
       type: "scheduled/test-bot",
       version: "1.0.0",
       schedule: "0 9 * * *",
-    },
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+    }),
+  });
 
   const mockCustomBot = {
     id: "custom-bot-123",
@@ -137,7 +136,7 @@ describe("McpService", () => {
       });
 
       it("should return list of bots", async () => {
-        botRepository.findAll.mockResolvedValue(Ok([mockBot]));
+        botRepository.findAll.mockResolvedValue(Ok([testBot]));
 
         const result = await service.handleToolCall("bot_list", {}, userId);
 
@@ -160,7 +159,7 @@ describe("McpService", () => {
 
     describe("bot_get", () => {
       it("should return bot details", async () => {
-        botRepository.findOne.mockResolvedValue(Ok(mockBot));
+        botRepository.findOne.mockResolvedValue(Ok(testBot));
 
         const result = await service.handleToolCall(
           "bot_get",
@@ -193,7 +192,7 @@ describe("McpService", () => {
         customBotService.getGlobalSpecificVersion.mockResolvedValue(
           Ok(mockCustomBot),
         );
-        botRepository.create.mockResolvedValue(Ok(mockBot));
+        botRepository.create.mockResolvedValue(Ok(testBot));
 
         const result = await service.handleToolCall(
           "bot_deploy",
@@ -237,7 +236,7 @@ describe("McpService", () => {
 
     describe("bot_update", () => {
       it("should update bot configuration", async () => {
-        botRepository.update.mockResolvedValue(Ok(mockBot));
+        botRepository.update.mockResolvedValue(Ok(testBot));
 
         const result = await service.handleToolCall(
           "bot_update",

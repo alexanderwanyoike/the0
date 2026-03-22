@@ -2,12 +2,12 @@ name: Haskell SDK
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/haskell/**'
       - '.github/workflows/sdk-haskell.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/haskell/**'
       - '.github/workflows/sdk-haskell.yml'

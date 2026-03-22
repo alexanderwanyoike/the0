@@ -66,7 +66,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         key: apiKey.keyValue,
         isActive: apiKey.isActive,
         createdAt: apiKey.createdAt,
-        updatedAt: apiKey.createdAt,
+        updatedAt: apiKey.updatedAt,
         lastUsedAt: apiKey.lastUsedAt,
       } as ApiKey);
     } catch (error: unknown) {

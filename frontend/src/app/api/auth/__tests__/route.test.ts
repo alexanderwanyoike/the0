@@ -15,7 +15,7 @@ import { GET as meGET } from "../me/route";
 function getCalledUrl(call: unknown[]): string {
   return typeof call[0] === "string"
     ? call[0]
-    : (call[0] as { url?: string })?.url ?? String(call[0]);
+    : ((call[0] as { url?: string })?.url ?? String(call[0]));
 }
 
 describe("POST /api/auth/login", () => {

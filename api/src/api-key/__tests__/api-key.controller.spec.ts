@@ -4,15 +4,16 @@ import { ApiKeyController } from "@/api-key/api-key.controller";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { CreateApiKeyDto } from "@/api-key/dto/create-api-key.dto";
 import { Ok, Failure } from "@/common/result";
+import { AuthenticatedRequest } from "@/auth/auth.types";
 
 describe("ApiKeyController", () => {
   let controller: ApiKeyController;
   let service: jest.Mocked<ApiKeyService>;
 
   const mockRequest = {
-    user: { uid: "user-123" },
+    user: { uid: "user-123", authType: "jwt" },
     headers: {},
-  };
+  } as unknown as AuthenticatedRequest;
 
   const mockApiKeyResponse = {
     id: "test-id",

@@ -120,6 +120,8 @@ spec:
                   key: mongo-url
             - name: NATS_URL
               value: {{ include "the0.natsUrl" . | quote }}
+            - name: MINIO_USE_SSL
+              value: {{ include "the0.minioUseSSL" . | quote }}
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:

@@ -208,6 +208,59 @@ func TestServiceState_UpdateRunningBotsFromMap(t *testing.T) {
 	assert.NotContains(t, all, "old-bot")
 }
 
+func TestServiceState_RecordBotFailure(t *testing.T) {
+	state := NewServiceState()
+
+	state.RecordBotFailure("bot1")
+	f, ok := state.GetBotFailure("bot1")
+	require.True(t, ok)
+	assert.Equal(t, 1, f.ConsecutiveFailures)
+
+	state.RecordBotFailure("bot1")
+	state.RecordBotFailure("bot1")
+	f, ok = state.GetBotFailure("bot1")
+	require.True(t, ok)
+	assert.Equal(t, 3, f.ConsecutiveFailures)
+}
+
+func TestServiceState_ResetBotFailure(t *testing.T) {
+	state := NewServiceState()
+
+	state.RecordBotFailure("bot1")
+	state.RecordBotFailure("bot1")
+
+	state.ResetBotFailure("bot1")
+
+	_, ok := state.GetBotFailure("bot1")
+	assert.False(t, ok, "failure should be cleared after reset")
+}
+
+func TestServiceState_ShouldSkipBot(t *testing.T) {
+	state := NewServiceState()
+
+	// No failures => don't skip
+	assert.False(t, state.ShouldSkipBot("bot1"))
+
+	// Below threshold => don't skip
+	for i := 0; i < 4; i++ {
+		state.RecordBotFailure("bot1")
+	}
+	assert.False(t, state.ShouldSkipBot("bot1"), "below threshold should not skip")
+
+	// At threshold => skip (within backoff window)
+	state.RecordBotFailure("bot1") // 5th failure
+	assert.True(t, state.ShouldSkipBot("bot1"), "at threshold should skip")
+
+	// Reset clears it
+	state.ResetBotFailure("bot1")
+	assert.False(t, state.ShouldSkipBot("bot1"), "after reset should not skip")
+}
+
+func TestServiceState_ShouldSkipBot_NonExistent(t *testing.T) {
+	state := NewServiceState()
+	assert.False(t, state.ShouldSkipBot("nonexistent"))
+}
+
 func TestServiceState_ConcurrentAccess(t *testing.T) {
 	state := NewServiceState()
 	var wg sync.WaitGroup

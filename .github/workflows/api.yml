@@ -2,13 +2,13 @@ name: API Service
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     tags: [ 'v*' ]
     paths:
       - 'api/**'
       - '.github/workflows/api.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'api/**'
       - '.github/workflows/api.yml'

@@ -26,6 +26,8 @@ interface UseBotLogsProps {
   initialQuery?: LogsQuery;
 }
 
+const MAX_LOG_ENTRIES = 2000;
+
 export const useBotLogs = ({
   botId,
   autoRefresh = false,
@@ -108,9 +110,18 @@ export const useBotLogs = ({
         });
 
         if (append) {
-          setLogs((prev) => [...prev, ...expandedLogs]);
+          setLogs((prev) => {
+            const combined = [...prev, ...expandedLogs];
+            return combined.length > MAX_LOG_ENTRIES
+              ? combined.slice(combined.length - MAX_LOG_ENTRIES)
+              : combined;
+          });
         } else {
-          setLogs(expandedLogs);
+          setLogs(
+            expandedLogs.length > MAX_LOG_ENTRIES
+              ? expandedLogs.slice(expandedLogs.length - MAX_LOG_ENTRIES)
+              : expandedLogs,
+          );
         }
 
         setHasMore(result.hasMore);

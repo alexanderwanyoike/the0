@@ -2,12 +2,12 @@ name: Rust SDK
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/rust/**'
       - '.github/workflows/sdk-rust.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'sdk/rust/**'
       - '.github/workflows/sdk-rust.yml'

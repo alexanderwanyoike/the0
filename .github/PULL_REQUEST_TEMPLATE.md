@@ -1,3 +1,6 @@
+<!-- IMPORTANT: PRs should target the `dev` branch, not `main`.
+     Release PRs (dev -> main) are created by maintainers only. -->
+
 ## Description
 
 <!-- Provide a clear and concise description of your changes -->

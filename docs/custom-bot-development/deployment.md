@@ -125,19 +125,50 @@ version: 1.2.3
 #        └───── Major: Breaking changes
 ```
 
-**Versions are immutable.** Once you deploy version 1.0.0, you cannot modify it. To make changes, increment the version number and deploy again. Bot instances are also tied to specific versions—to use a newer version, you must delete the instance and create a new one.
+**Versions are immutable.** Once you deploy version 1.0.0, you cannot modify it. To make changes, increment the version number and deploy again.
+
+### In-Place Updates (Minor/Patch)
+
+For minor and patch version bumps, you can update a bot instance in place. The bot keeps its ID and all persisted state (fill journals, history, counters, etc.):
 
 ```bash
-# Deploy a new version
+# Deploy the new custom bot version
 # First, update version in bot-config.yaml to 1.0.1
 the0 custom-bot deploy
 
-# Delete old instance
-the0 bot delete <bot_id>
-
-# Create new instance with updated version
-the0 bot deploy updated-config.json
+# Update the existing instance to use the new version
+# (update config.json to reference version 1.0.1)
+the0 bot update <bot_id> config.json
 ```
+
+### Breaking Changes (Major)
+
+Major version bumps (e.g. 1.x.x → 2.0.0) are blocked by `bot update` because they may be incompatible with persisted state. These require deleting the instance and deploying fresh:
+
+```bash
+# Deploy the new major version
+the0 custom-bot deploy
+
+# Delete old instance and create a new one
+the0 bot delete <bot_id> -y
+the0 bot deploy config.json
+```
+
+### What Counts as a Breaking Change?
+
+Bump the **major** version when any of the following apply:
+
+| Change | Why it breaks |
+|--------|---------------|
+| State keys removed or renamed | Existing persisted state would have orphaned or missing keys, causing crashes or silent data loss |
+| State value types changed | e.g. a position field changed from `number` to `object` — deserialization would fail on old state |
+| State value semantics changed | e.g. a field that stored USD now stores BTC — old values would be misinterpreted |
+| Config schema: required fields added | Existing bot instances would be missing required config, failing validation |
+| Config schema: field types changed | e.g. `string` → `number` — existing configs become invalid |
+| Entrypoint signature changed | The runtime would call the bot's entry function with wrong arguments or expect a different return shape |
+| Runtime language changed | e.g. Python → Node.js — the execution environment is fundamentally different |
+
+Bump **minor** for new features (new state keys, new optional config fields, new query endpoints) and **patch** for bug fixes. These are safe for in-place updates because they're additive — old state and config remain valid.
 
 ## Dependency Vendoring
 

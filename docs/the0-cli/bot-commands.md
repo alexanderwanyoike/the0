@@ -63,13 +63,15 @@ Output shows instance ID, name, type, version, schedule (if applicable), and tim
 
 ## Update
 
-Update an instance's configuration parameters:
+Update an instance's configuration and/or version:
 
 ```bash
 the0 bot update <bot_id> <config.json>
 ```
 
-This updates configuration values but does not change the custom bot version. To use a different version, delete the instance and deploy a new one.
+This updates configuration values and, if the version field has changed, points the instance to the new custom bot code and frontend. The bot keeps its ID and all persisted state.
+
+**Minor/patch version bumps** (e.g. 1.0.0 → 1.0.1 or 1.1.0) are applied in place. **Major version bumps** (e.g. 1.x → 2.0) are rejected — use `bot delete` + `bot deploy` for those, since they may be incompatible with existing state. See [Version Management](/custom-bot-development/deployment#version-management) for details on what counts as a breaking change.
 
 ## Delete
 

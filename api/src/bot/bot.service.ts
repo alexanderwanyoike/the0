@@ -140,7 +140,37 @@ export class BotService {
     }
 
     const { uid } = this.request.user;
-    const result = await this.botRepository.update(uid, id, updateBotDto);
+
+    // Block breaking (major) version changes — require delete/redeploy for those
+    const currentBot = await this.botRepository.findOne(uid, id);
+    if (!currentBot.success) {
+      return Failure<Bot, string>("Bot not found");
+    }
+    const currentVersion = currentBot.data.config?.version;
+    const newVersion = updateBotDto.config?.version;
+    if (
+      currentVersion &&
+      newVersion &&
+      semver.major(currentVersion) !== semver.major(newVersion)
+    ) {
+      return Failure<Bot, string>(
+        `Major version upgrade (${currentVersion} -> ${newVersion}) requires delete and redeploy. ` +
+          `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`,
+      );
+    }
+
+    // Only rotate customBotId when version actually changes
+    const newCustomBot = validationResult.data;
+    const hasCustomFrontend = newCustomBot.config?.hasFrontend ?? false;
+    const versionChanged =
+      currentVersion && newVersion ? !semver.eq(currentVersion, newVersion) : true;
+    const result = await this.botRepository.update(uid, id, {
+      ...updateBotDto,
+      config: { ...updateBotDto.config, hasFrontend: hasCustomFrontend },
+      customBotId: versionChanged
+        ? newCustomBot.id
+        : currentBot.data.customBotId,
+    });
 
     if (result.success) {
       // Fetch updated bot and custom bot data for event payload
@@ -213,6 +243,13 @@ export class BotService {
       typeof configVersion === "string"
     ) {
       const [_, name] = configType.split("/");
+      if (!name?.trim()) {
+        this.logger.warn(
+          { type: configType },
+          "Invalid bot type: missing name after '/'",
+        );
+        return Failure("Invalid bot type: missing name after '/'");
+      }
       const customBotResult =
         await this.customBotService.getUserSpecificVersion(
           uid,
@@ -294,6 +331,13 @@ export class BotService {
 
     // Extract vendor, type, and name from the bot type
     const [_, name] = type.split("/");
+    if (!name?.trim()) {
+      return {
+        success: false,
+        error: "Invalid bot type: missing name after '/'",
+        data: null,
+      };
+    }
 
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(name, version);

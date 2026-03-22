@@ -1,6 +1,32 @@
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConsoleInterface, LogEntry } from "../console-interface";
+
+jest.mock("react-virtuoso", () => ({
+  Virtuoso: React.forwardRef(
+    (
+      {
+        data,
+        itemContent,
+        components,
+        followOutput,
+        atBottomStateChange,
+        atTopStateChange,
+        overscan,
+        className,
+      }: any,
+      ref: any,
+    ) => (
+      <div data-testid="virtuoso-container" className={className}>
+        {components?.Header && <components.Header />}
+        {data?.map((item: any, index: number) => (
+          <div key={index}>{itemContent(index, item)}</div>
+        ))}
+      </div>
+    ),
+  ),
+}));
 
 // Mock the event parser
 jest.mock("@/lib/events/event-parser", () => ({
@@ -376,17 +402,35 @@ describe("ConsoleInterface", () => {
 
   describe("connection status indicator", () => {
     it("should show Live indicator when connected is true", () => {
-      render(<ConsoleInterface {...defaultProps} connected={true} lastUpdate={new Date()} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          connected={true}
+          lastUpdate={new Date()}
+        />,
+      );
       expect(screen.getByText("Live")).toBeInTheDocument();
     });
 
     it("should show Polling indicator when connected is false with lastUpdate", () => {
-      render(<ConsoleInterface {...defaultProps} connected={false} lastUpdate={new Date()} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          connected={false}
+          lastUpdate={new Date()}
+        />,
+      );
       expect(screen.getByText("Polling")).toBeInTheDocument();
     });
 
     it("should show Connecting indicator when connected is false without lastUpdate", () => {
-      render(<ConsoleInterface {...defaultProps} connected={false} lastUpdate={null} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          connected={false}
+          lastUpdate={null}
+        />,
+      );
       expect(screen.getByText("Connecting...")).toBeInTheDocument();
     });
 
@@ -398,17 +442,38 @@ describe("ConsoleInterface", () => {
     });
 
     it("should show indicator in compact mode when connected", () => {
-      render(<ConsoleInterface {...defaultProps} compact={true} connected={true} lastUpdate={new Date()} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          compact={true}
+          connected={true}
+          lastUpdate={new Date()}
+        />,
+      );
       expect(screen.getByText("Live")).toBeInTheDocument();
     });
 
     it("should show Connecting in compact mode when not yet connected", () => {
-      render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={null} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          compact={true}
+          connected={false}
+          lastUpdate={null}
+        />,
+      );
       expect(screen.getByText("Connecting...")).toBeInTheDocument();
     });
 
     it("should show Polling in compact mode when disconnected with lastUpdate", () => {
-      render(<ConsoleInterface {...defaultProps} compact={true} connected={false} lastUpdate={new Date()} />);
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          compact={true}
+          connected={false}
+          lastUpdate={new Date()}
+        />,
+      );
       expect(screen.getByText("Polling")).toBeInTheDocument();
     });
   });
@@ -491,7 +556,11 @@ describe("ConsoleInterface", () => {
       ];
 
       render(
-        <ConsoleInterface {...defaultProps} logs={logs} hasEarlierLogs={true} />,
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasEarlierLogs={true}
+        />,
       );
 
       expect(screen.queryByText("Load earlier logs")).not.toBeInTheDocument();

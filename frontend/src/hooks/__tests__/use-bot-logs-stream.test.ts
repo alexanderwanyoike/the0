@@ -55,8 +55,7 @@ function createMockSSEStream(): {
     stream,
     controller: {
       push(eventType: string, data: any) {
-        const payload =
-          `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+        const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
         streamController.enqueue(encoder.encode(payload));
       },
       pushRaw(raw: string) {
@@ -141,9 +140,7 @@ describe("useBotLogsStream", () => {
   // ---- Basic interface ----
 
   it("should return the full interface including connected, lastUpdate, and buffer cap fields", () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     expect(result.current).toHaveProperty("logs");
     expect(result.current).toHaveProperty("loading");
@@ -169,9 +166,7 @@ describe("useBotLogsStream", () => {
   // ---- SSE streaming ----
 
   it("should connect via SSE and handle history event with line expansion", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -196,9 +191,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should handle update events and append to existing logs", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -249,9 +242,7 @@ describe("useBotLogsStream", () => {
       }),
     } as Response);
 
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     expect(mockAuthFetch).not.toHaveBeenCalled();
 
@@ -284,9 +275,7 @@ describe("useBotLogsStream", () => {
       } as any;
     });
 
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.logs).toHaveLength(1);
@@ -316,9 +305,7 @@ describe("useBotLogsStream", () => {
   // ---- Export ----
 
   it("should export current log state", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -375,9 +362,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should show toast when exporting with no logs", () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     act(() => {
       result.current.exportLogs();
@@ -394,9 +379,7 @@ describe("useBotLogsStream", () => {
   // ---- Date filters ----
 
   it("should switch to REST when date filter is set", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -427,9 +410,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should reconnect SSE when clearing date filter", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -481,9 +462,7 @@ describe("useBotLogsStream", () => {
     jest.useFakeTimers();
 
     // Need to manually trigger the initial connection since useEffect + fake timers
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     // Flush the initial authFetch promise and state updates
     await act(async () => {
@@ -546,9 +525,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should switch to REST when date range filter is set", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -581,9 +558,7 @@ describe("useBotLogsStream", () => {
   // ---- Guard clauses ----
 
   it("should not connect when botId is empty", () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "" }));
 
     expect(mockAuthFetch).not.toHaveBeenCalled();
     expect(result.current.loading).toBe(false);
@@ -595,9 +570,7 @@ describe("useBotLogsStream", () => {
       user: null,
     } as any);
 
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     expect(mockAuthFetch).not.toHaveBeenCalled();
     expect(result.current.loading).toBe(false);
@@ -618,9 +591,7 @@ describe("useBotLogsStream", () => {
       statusText: "Internal Server Error",
     } as Response);
 
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await act(async () => {
       jest.advanceTimersByTime(4000);
@@ -647,9 +618,7 @@ describe("useBotLogsStream", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -682,9 +651,7 @@ describe("useBotLogsStream", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -725,9 +692,7 @@ describe("useBotLogsStream", () => {
   it("should encode botId in URL to prevent injection", async () => {
     const specialBotId = "bot/with spaces&special=chars";
 
-    renderHook(() =>
-      useBotLogsStream({ botId: specialBotId }),
-    );
+    renderHook(() => useBotLogsStream({ botId: specialBotId }));
 
     await waitFor(() => {
       expect(mockAuthFetch).toHaveBeenCalledWith(
@@ -740,9 +705,7 @@ describe("useBotLogsStream", () => {
   // ---- Buffer cap tests ----
 
   it("should cap logs at MAX_LOG_ENTRIES when history exceeds limit", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -770,9 +733,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should trim oldest entries when update pushes past MAX_LOG_ENTRIES", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -805,19 +766,54 @@ describe("useBotLogsStream", () => {
     }
 
     await waitFor(() => {
-      expect(
-        result.current.logs[result.current.logs.length - 1].content,
-      ).toBe("New entry 99");
+      expect(result.current.logs[result.current.logs.length - 1].content).toBe(
+        "New entry 99",
+      );
     });
 
     expect(result.current.logs).toHaveLength(2000);
     expect(result.current.hasEarlierLogs).toBe(true);
   });
 
+  it("should batch multiple rapid update events into fewer state updates", async () => {
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    // Send history first
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Initial" },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+    });
+
+    // Push 10 update events in quick succession
+    act(() => {
+      for (let i = 0; i < 10; i++) {
+        currentMockStream!.controller.push("update", {
+          content: `Rapid entry ${i}`,
+          timestamp: "2024-01-01T10:05:00Z",
+        });
+      }
+    });
+
+    // All 10 entries should arrive after RAF flush
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(11); // 1 initial + 10 updates
+    });
+
+    expect(result.current.logs[1].content).toBe("Rapid entry 0");
+    expect(result.current.logs[10].content).toBe("Rapid entry 9");
+  });
+
   it("should set hasEarlierLogs to false when history fits within cap", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -842,9 +838,7 @@ describe("useBotLogsStream", () => {
   // ---- loadEarlierLogs tests ----
 
   it("should fetch earlier logs via REST and prepend to current logs", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -896,9 +890,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should set loadingEarlier while fetching", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -953,9 +945,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should show toast on loadEarlierLogs error", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);
@@ -994,9 +984,7 @@ describe("useBotLogsStream", () => {
   });
 
   it("should update hasEarlierLogs after loading earlier logs when no more entries exist", async () => {
-    const { result } = renderHook(() =>
-      useBotLogsStream({ botId: "bot-1" }),
-    );
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
     await waitFor(() => {
       expect(result.current.connected).toBe(true);

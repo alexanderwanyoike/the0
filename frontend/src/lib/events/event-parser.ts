@@ -115,12 +115,10 @@ function tryParseStructuredLog(content: string): StructuredLog | null {
       parsed &&
       typeof parsed === "object" &&
       !("_metric" in parsed) &&
-      (
-        "level" in parsed ||
+      ("level" in parsed ||
         "message" in parsed ||
         "msg" in parsed ||
-        ("fields" in parsed && parsed.fields?.message) // Rust tracing format
-      )
+        ("fields" in parsed && parsed.fields?.message)) // Rust tracing format
     ) {
       return parsed as StructuredLog;
     }

@@ -16,6 +16,7 @@ import {
   CustomBotSchemaInput,
 } from "./mcp.types";
 import { BotRepository } from "@/bot/bot.repository";
+import { BotConfig } from "@/database/schema/bots";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
@@ -426,7 +427,7 @@ export class McpService {
 
     const result = await this.botRepository.create({
       name: configName,
-      config: input.config,
+      config: input.config as BotConfig,
       userId,
       topic: "the0-scheduled-custom-bot",
       customBotId: customBotResult.data.id,

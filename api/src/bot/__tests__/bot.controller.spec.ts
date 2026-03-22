@@ -19,6 +19,7 @@ import { NatsService } from "@/nats/nats.service";
 import { Ok } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
+import { mockBot, mockBotConfig } from "@/test/mock-bot";
 
 describe("BotController - Enhanced Tests", () => {
   let controller: BotController;
@@ -136,12 +137,12 @@ describe("BotController - Enhanced Tests", () => {
   describe("create", () => {
     const validBot = {
       name: "Test Bot",
-      config: {
+      config: mockBotConfig({
         type: "scheduled/test-bot",
         version: "1.0.0",
         foo: "test",
         bar: 123,
-      },
+      }),
     };
 
     beforeEach(() => {
@@ -160,12 +161,12 @@ describe("BotController - Enhanced Tests", () => {
       jest.spyOn(repository, "create").mockResolvedValue({
         success: true,
         error: null,
-        data: {
+        data: mockBot({
           id: "test-id",
           ...validBot,
           userId: uid,
           topic: "the0-scheduled-custom-bot",
-        } as Bot,
+        }),
       });
     });
 
@@ -173,16 +174,16 @@ describe("BotController - Enhanced Tests", () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
-        data: {
+        data: mockBot({
           id: "test-id",
           ...validBot,
           userId: uid,
           topic: "the0-scheduled-custom-bot",
-        } as Bot,
+        }),
       });
       const result = await controller.create(validBot);
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         id: "test-id",
         ...validBot,
         userId: uid,
@@ -215,7 +216,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw BadRequestException for invalid bot type format", async () => {
       const invalidBot = {
         ...validBot,
-        config: { ...validBot.config, type: "invalid-format" },
+        config: mockBotConfig({ ...validBot.config, type: "invalid-format" }),
       };
 
       await expect(controller.create(invalidBot)).rejects.toThrow(
@@ -226,7 +227,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw BadRequestException for invalid version format", async () => {
       const invalidBot = {
         ...validBot,
-        config: { ...validBot.config, version: "invalid-version" },
+        config: mockBotConfig({ ...validBot.config, version: "invalid-version" }),
       };
 
       await expect(controller.create(invalidBot)).rejects.toThrow(
@@ -238,7 +239,7 @@ describe("BotController - Enhanced Tests", () => {
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: true,
         error: null,
-        data: [{ id: "bot1" }, { id: "bot2" }, { id: "bot3" }] as Bot[],
+        data: [mockBot({ id: "bot1" }), mockBot({ id: "bot2" }), mockBot({ id: "bot3" })],
       });
 
       await expect(controller.create(validBot)).rejects.toThrow(
@@ -278,9 +279,9 @@ describe("BotController - Enhanced Tests", () => {
   describe("findAll", () => {
     it("should return all bots successfully", async () => {
       const bots = [
-        { id: "bot1", name: "Bot 1" },
-        { id: "bot2", name: "Bot 2" },
-      ] as Bot[];
+        mockBot({ id: "bot1", name: "Bot 1" }),
+        mockBot({ id: "bot2", name: "Bot 2" }),
+      ];
 
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: true,
@@ -318,22 +319,22 @@ describe("BotController - Enhanced Tests", () => {
   });
 
   describe("findOne", () => {
-    const mockBot = {
+    const testBot = mockBot({
       id: "test-id",
       name: "Test Bot",
-      config: { type: "scheduled/test-bot", version: "1.0.0" },
-    } as Bot;
+      config: mockBotConfig({ type: "scheduled/test-bot", version: "1.0.0" }),
+    });
 
     it("should return a bot successfully", async () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
-        data: mockBot,
+        data: testBot,
       });
 
       const result = await controller.findOne("test-id");
 
-      expect(result).toEqual(mockBot);
+      expect(result).toEqual(testBot);
       expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
     });
 
@@ -365,13 +366,27 @@ describe("BotController - Enhanced Tests", () => {
   describe("update", () => {
     const updateData = {
       name: "Updated Bot",
-      config: {
+      config: mockBotConfig({
         type: "scheduled/test-bot",
         version: "1.0.0",
         foo: "updated",
         bar: 456,
-      },
+      }),
     };
+
+    const existingBot = mockBot({
+      id: "test-id",
+      name: "Test Bot",
+      config: mockBotConfig({
+        type: "scheduled/test-bot",
+        version: "1.0.0",
+        foo: "original",
+        bar: 123,
+      }),
+      userId: uid,
+      customBotId: "test-custom-bot",
+      topic: "the0-scheduled-custom-bot",
+    });
 
     beforeEach(() => {
       validator.validate = jest.fn().mockReturnValue({
@@ -379,10 +394,16 @@ describe("BotController - Enhanced Tests", () => {
         error: null,
         data: null,
       });
+
+      jest.spyOn(repository, "findOne").mockResolvedValue({
+        success: true,
+        error: null,
+        data: existingBot,
+      });
     });
 
     it("should update a bot successfully", async () => {
-      const updatedBot = { id: "test-id", ...updateData } as Bot;
+      const updatedBot = mockBot({ id: "test-id", ...updateData });
 
       // Reset the mock to return success for this test
       mockCustomBotService.getGlobalSpecificVersion = jest
@@ -402,11 +423,11 @@ describe("BotController - Enhanced Tests", () => {
       const result = await controller.update("test-id", updateData);
 
       expect(result).toEqual(updatedBot);
-      expect(repository.update).toHaveBeenCalledWith(
-        uid,
-        "test-id",
-        updateData,
-      );
+      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
+        ...updateData,
+        config: { ...updateData.config, hasFrontend: false },
+        customBotId: existingBot.customBotId,
+      });
     });
 
     it("should throw BadRequestException when update fails", async () => {
@@ -450,21 +471,19 @@ describe("BotController - Enhanced Tests", () => {
 
   describe("remove", () => {
     it("should remove a bot successfully", async () => {
-      const mockBot = {
+      const botToRemove = mockBot({
         id: "test-id",
         name: "Test Bot",
-        config: { type: "scheduled/test-bot", version: "1.0.0" },
+        config: mockBotConfig({ type: "scheduled/test-bot", version: "1.0.0" }),
         topic: "the0-scheduled-custom-bot",
         userId: uid,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         customBotId: "custom-bot-123",
-      } as Bot;
+      });
 
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: true,
         error: null,
-        data: mockBot,
+        data: botToRemove,
       });
 
       jest.spyOn(repository, "remove").mockResolvedValue({
