@@ -3,6 +3,7 @@ import { LogsService } from "../logs.service";
 import { NatsService } from "@/nats/nats.service";
 import { PinoLogger } from "nestjs-pino";
 import { Ok, Failure } from "@/common/result";
+import { AuthenticatedUser } from "@/auth/auth.types";
 
 describe("LogsController", () => {
   let controller: LogsController;
@@ -10,7 +11,7 @@ describe("LogsController", () => {
   let mockNatsService: Partial<NatsService>;
   let mockLogger: Partial<PinoLogger>;
   let mockUnsubscribe: jest.Mock;
-  const mockUser = { uid: "user123" } as any;
+  const mockUser = { uid: "user123" } as AuthenticatedUser;
 
   beforeEach(() => {
     LogsController._resetForTest();

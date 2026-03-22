@@ -7,6 +7,7 @@ import {
 } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { StorageService } from "../storage.service";
+import { AuthenticatedUser } from "@/auth/auth.types";
 
 describe("CustomBotController", () => {
   let controller: CustomBotController;
@@ -14,7 +15,7 @@ describe("CustomBotController", () => {
   let mockStorageService: jest.Mocked<StorageService>;
   // Removed duplicate declaration
 
-  const mockUser = { uid: "user123" } as any;
+  const mockUser = { uid: "user123" } as AuthenticatedUser;
 
   const validConfig: CustomBotConfig = {
     name: "test-bot",

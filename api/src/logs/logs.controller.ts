@@ -170,7 +170,7 @@ export class LogsController {
   private async sendHistoricalLogs(
     res: Response,
     botId: string,
-    userId?: string,
+    userId: string,
   ): Promise<boolean> {
     // JS getFullYear()/getMonth()/getDate() return local time, matching
     // the runtime's minio_logger which uses time.Now().Format("20060102").
