@@ -16,7 +16,6 @@ import {
   CustomBotSchemaInput,
 } from "./mcp.types";
 import { BotRepository } from "@/bot/bot.repository";
-import { BotConfig } from "@/database/schema/bots";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
@@ -394,19 +393,8 @@ export class McpService {
       throw new Error("Authentication required");
     }
 
-    const config = input.config as BotConfig;
-
-    if (!config?.name) {
-      throw new Error("Config must include 'name' field");
-    }
-
-    if (!config.type || !config.version) {
-      throw new Error("Config must include 'type' and 'version' fields");
-    }
-
-    const configName = config.name;
-    const configType = config.type;
-    const configVersion = config.version;
+    const { name: configName, type: configType, version: configVersion } =
+      input.config;
 
     // Extract custom bot name from type (e.g., "scheduled/alpaca-mixture-of-experts" -> "alpaca-mixture-of-experts")
     const customBotName = configType.includes("/")
@@ -428,7 +416,7 @@ export class McpService {
 
     const result = await this.botRepository.create({
       name: configName,
-      config,
+      config: input.config,
       userId,
       topic: "the0-scheduled-custom-bot",
       customBotId: customBotResult.data.id,
