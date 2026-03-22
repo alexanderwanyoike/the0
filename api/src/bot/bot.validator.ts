@@ -5,6 +5,7 @@ import addFormats from "ajv-formats";
 import { isValidCron } from "cron-validator";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { BOT_TYPE_PATTERN } from "@/bot/bot.constants";
+import { BotConfig } from "@/database/schema/bots";
 
 /** JSON Schema object shape used for bot config validation */
 interface JsonSchema {
@@ -17,34 +18,28 @@ interface JsonSchema {
 @Injectable()
 export class BotValidator {
   async validate(
-    config: Record<string, unknown>,
+    config: BotConfig,
     customBot: CustomBot,
   ): Promise<Result<boolean, string[]>> {
-    //Check if the config type is valid
     const { type } = config;
 
     if (!type) {
-      return Failure<boolean, string[]>(["No type provided"]);
+      return Failure(["No type provided"]);
     }
 
-    if (BOT_TYPE_PATTERN.test(type as string) === false) {
-      return Failure<boolean, string[]>([
-        "Invalid bot type format. Expected format: type/name",
-      ]);
+    if (!BOT_TYPE_PATTERN.test(type)) {
+      return Failure(["Invalid bot type format. Expected format: type/name"]);
     }
 
-    const [botType, _] = (type as string).split("/");
+    const [botType] = type.split("/");
 
-    //Check if it has a schedule
     if (botType === "scheduled") {
       if (!config.schedule) {
-        return Failure<boolean, string[]>(["No schedule provided"]);
+        return Failure(["No schedule provided"]);
       }
 
-      if (!isValidCron(config.schedule as string)) {
-        return Failure<boolean, string[]>([
-          `${config.schedule} is not a valid cron expression`,
-        ]);
+      if (!isValidCron(config.schedule)) {
+        return Failure([`${config.schedule} is not a valid cron expression`]);
       }
     }
     return this.validateWithSchema(customBot, config);
@@ -52,7 +47,7 @@ export class BotValidator {
 
   private validateWithSchema(
     customBot: CustomBot,
-    config: Record<string, unknown>,
+    config: BotConfig,
   ): Result<boolean, string[]> {
     const {
       config: {

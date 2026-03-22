@@ -8,6 +8,7 @@ export interface BotConfig {
   name: string;
   type: string;
   version: string;
+  schedule?: string;
   [key: string]: unknown;
 }
 

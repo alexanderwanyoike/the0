@@ -396,6 +396,12 @@ export class McpService {
     const { name: configName, type: configType, version: configVersion } =
       input.config;
 
+    if (!configName || !configType || !configVersion) {
+      throw new Error(
+        "Config must include 'name', 'type', and 'version' fields",
+      );
+    }
+
     // Extract custom bot name from type (e.g., "scheduled/alpaca-mixture-of-experts" -> "alpaca-mixture-of-experts")
     const customBotName = configType.includes("/")
       ? configType.split("/")[1]

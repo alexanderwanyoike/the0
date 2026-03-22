@@ -2,6 +2,8 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BotValidator } from "../bot.validator";
 import { Failure, Ok } from "@/common";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
+import { mockBotConfig } from "@/test/mock-bot";
+import { BotConfig } from "@/database/schema/bots";
 
 describe("BotValidator", () => {
   let validator: BotValidator;
@@ -96,7 +98,7 @@ describe("BotValidator", () => {
   describe("bot type validation", () => {
     it("should return an error if the bot type string is invalid", async () => {
       // Arrange
-      const config = { type: "invalid-bot-type" };
+      const config = mockBotConfig({ type: "invalid-bot-type" });
       const result = await validator.validate(config, customBot);
 
       // Assert
@@ -111,7 +113,7 @@ describe("BotValidator", () => {
   describe("scheduled bots", () => {
     it("should always have a schedule in the configuration", async () => {
       //Arrange
-      const config = { type: "scheduled/test-bot", foo: "bar" };
+      const config = mockBotConfig({ type: "scheduled/test-bot", foo: "bar" });
 
       const result = await validator.validate(config, customBot);
 
@@ -123,11 +125,11 @@ describe("BotValidator", () => {
 
     it("should validate that the schedule is correctly formatted", async () => {
       // Arrange
-      const config = {
+      const config = mockBotConfig({
         type: "scheduled/test-bot",
         schedule: "invalid-schedule",
         foo: "bar",
-      };
+      });
 
       const result = await validator.validate(config, customBot);
 
@@ -141,11 +143,11 @@ describe("BotValidator", () => {
 
     it("should not validate the schedule if the bot type is not scheduled", async () => {
       // Arrange
-      const config = {
+      const config = mockBotConfig({
         type: "other/test-bot",
         foo: "bar",
         bar: 42,
-      };
+      });
 
       const result = await validator.validate(config, nonScheduledCustomBot);
 
@@ -156,12 +158,12 @@ describe("BotValidator", () => {
 
   describe("validation against schema", () => {
     it("should validate successfully if config is valid (scheduled)", async () => {
-      const config = {
+      const config = mockBotConfig({
         type: "scheduled/test-bot",
         schedule: "*/5 * * * *",
         foo: "bar",
         bar: 42,
-      };
+      });
 
       const result = await validator.validate(config, customBot);
 
@@ -169,8 +171,10 @@ describe("BotValidator", () => {
     });
 
     it("should return an error if config does not match schema (scheduled)", async () => {
-      const config = {
+      const config: BotConfig = {
+        name: "test-bot",
         type: "scheduled/test-bot",
+        version: "1.0.0",
         schedule: "*/5 * * * *",
         foo: 123,
       };
@@ -186,11 +190,11 @@ describe("BotValidator", () => {
     });
 
     it("should validate successfully if config is valid (non-scheduled)", async () => {
-      const config = {
+      const config = mockBotConfig({
         type: "other/test-bot",
         foo: "bar",
         bar: 42,
-      };
+      });
 
       const result = await validator.validate(config, nonScheduledCustomBot);
 
@@ -198,8 +202,10 @@ describe("BotValidator", () => {
     });
 
     it("should return an error if config does not match schema (non-scheduled)", async () => {
-      const config = {
+      const config: BotConfig = {
+        name: "test-bot",
         type: "other/test-bot",
+        version: "1.0.0",
         foo: 123,
       };
 
