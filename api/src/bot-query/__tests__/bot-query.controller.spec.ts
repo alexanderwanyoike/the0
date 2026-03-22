@@ -1,5 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, NotFoundException, ServiceUnavailableException, GatewayTimeoutException, CanActivate } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+  GatewayTimeoutException,
+  CanActivate,
+} from "@nestjs/common";
 import { BotQueryController } from "../bot-query.controller";
 import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
@@ -57,17 +63,25 @@ describe("BotQueryController", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual(queryResult);
       expect(result.message).toBe("Query executed successfully");
-      expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith("test-bot-id", {
-        queryPath: "/portfolio",
-        params: { symbol: "BTC" },
-        timeoutSec: undefined,
-      });
+      expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith(
+        "test-bot-id",
+        {
+          queryPath: "/portfolio",
+          params: { symbol: "BTC" },
+          timeoutSec: undefined,
+        },
+      );
     });
 
     it("should prepend / to query_path if missing", async () => {
       mockBotQueryService.executeQuery.mockResolvedValue({
         success: true,
-        data: { status: "ok", data: {}, duration: 0, timestamp: new Date().toISOString() },
+        data: {
+          status: "ok",
+          data: {},
+          duration: 0,
+          timestamp: new Date().toISOString(),
+        },
         error: null,
       });
 
@@ -75,11 +89,14 @@ describe("BotQueryController", () => {
         query_path: "portfolio",
       });
 
-      expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith("test-bot-id", {
-        queryPath: "/portfolio",
-        params: undefined,
-        timeoutSec: undefined,
-      });
+      expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith(
+        "test-bot-id",
+        {
+          queryPath: "/portfolio",
+          params: undefined,
+          timeoutSec: undefined,
+        },
+      );
     });
 
     it("should throw BadRequestException when query_path is missing", async () => {
@@ -161,7 +178,12 @@ describe("BotQueryController", () => {
     it("should pass timeout_sec to service", async () => {
       mockBotQueryService.executeQuery.mockResolvedValue({
         success: true,
-        data: { status: "ok", data: {}, duration: 0, timestamp: new Date().toISOString() },
+        data: {
+          status: "ok",
+          data: {},
+          duration: 0,
+          timestamp: new Date().toISOString(),
+        },
         error: null,
       });
 
@@ -170,11 +192,14 @@ describe("BotQueryController", () => {
         timeout_sec: 60,
       });
 
-      expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith("test-bot-id", {
-        queryPath: "/portfolio",
-        params: undefined,
-        timeoutSec: 60,
-      });
+      expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith(
+        "test-bot-id",
+        {
+          queryPath: "/portfolio",
+          params: undefined,
+          timeoutSec: 60,
+        },
+      );
     });
   });
 });

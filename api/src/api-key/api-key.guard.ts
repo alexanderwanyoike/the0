@@ -34,7 +34,9 @@ export class ApiKeyGuard implements CanActivate {
     return true;
   }
 
-  private extractApiKeyFromHeader(request: Record<string, unknown> & { headers: Record<string, string> }): string | null {
+  private extractApiKeyFromHeader(
+    request: Record<string, unknown> & { headers: Record<string, string> },
+  ): string | null {
     // Support multiple header formats:
     // Authorization: Bearer the0_xxx
     // Authorization: ApiKey the0_xxx

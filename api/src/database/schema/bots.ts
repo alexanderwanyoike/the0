@@ -45,9 +45,7 @@ export const botsTableSqlite = sqliteTable("bots", {
     .notNull()
     .references(() => customBotsTableSqlite.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  config: text("config", { mode: "json" })
-    .$type<BotConfig>()
-    .notNull(),
+  config: text("config", { mode: "json" }).$type<BotConfig>().notNull(),
   topic: text("topic"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

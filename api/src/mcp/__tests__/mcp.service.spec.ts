@@ -296,12 +296,16 @@ describe("McpService", () => {
           userId,
         );
 
-        expect(logsService.getLogs).toHaveBeenCalledWith("bot-123", {
-          date: undefined,
-          dateRange: undefined,
-          limit: 500,
-          offset: 0,
-        }, "user-123");
+        expect(logsService.getLogs).toHaveBeenCalledWith(
+          "bot-123",
+          {
+            date: undefined,
+            dateRange: undefined,
+            limit: 500,
+            offset: 0,
+          },
+          "user-123",
+        );
       });
     });
 

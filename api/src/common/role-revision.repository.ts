@@ -60,7 +60,11 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(eq(this.table.userId, userId))
         .orderBy(desc(this.table.createdAt));
 
-      return Ok(records.map((record: Record<string, unknown>) => this.transformRecordToData(record)));
+      return Ok(
+        records.map((record: Record<string, unknown>) =>
+          this.transformRecordToData(record),
+        ),
+      );
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");
       return Failure(errorMessage(error));
@@ -153,7 +157,11 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         )
         .orderBy(desc(this.table.createdAt));
 
-      return Ok(records.map((record: Record<string, unknown>) => this.transformRecordToData(record)));
+      return Ok(
+        records.map((record: Record<string, unknown>) =>
+          this.transformRecordToData(record),
+        ),
+      );
     } catch (error: unknown) {
       logger.error(
         { err: error, keyField: this.keyField },
@@ -251,7 +259,11 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(eq(this.table[this.keyField], key))
         .orderBy(desc(this.table.createdAt));
 
-      return Ok(records.map((record: Record<string, unknown>) => this.transformRecordToData(record)));
+      return Ok(
+        records.map((record: Record<string, unknown>) =>
+          this.transformRecordToData(record),
+        ),
+      );
     } catch (error: unknown) {
       logger.error(
         { err: error, keyField: this.keyField },

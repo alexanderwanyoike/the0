@@ -62,7 +62,10 @@ export class AuthCombinedGuard implements CanActivate {
     return true;
   }
 
-  private async validateApiKey(request: AuthenticatedRequest, apiKey: string): Promise<boolean> {
+  private async validateApiKey(
+    request: AuthenticatedRequest,
+    apiKey: string,
+  ): Promise<boolean> {
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
     if (!result.success) {

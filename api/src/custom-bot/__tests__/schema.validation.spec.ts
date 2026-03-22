@@ -211,18 +211,24 @@ describe("Custom Bot Schema Validation", () => {
 
   describe("validateCustomBotPayload (backward compatibility)", () => {
     it("should validate config directly", () => {
-      const result = validateCustomBotPayload(validConfig as unknown as Record<string, unknown>);
+      const result = validateCustomBotPayload(
+        validConfig as unknown as Record<string, unknown>,
+      );
       expect(result.valid).toBe(true);
     });
 
     it("should validate payload with config property", () => {
       const payload = { config: validConfig };
-      const result = validateCustomBotPayload(payload as unknown as Record<string, unknown>);
+      const result = validateCustomBotPayload(
+        payload as unknown as Record<string, unknown>,
+      );
       expect(result.valid).toBe(true);
     });
 
     it("should handle invalid payload gracefully", () => {
-      const result = validateCustomBotPayload(null as unknown as Record<string, unknown>);
+      const result = validateCustomBotPayload(
+        null as unknown as Record<string, unknown>,
+      );
       expect(result.valid).toBe(false);
     });
   });

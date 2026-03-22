@@ -17,9 +17,11 @@ describe("LogsController", () => {
     mockUnsubscribe = jest.fn();
 
     mockLogsService = {
-      getLogs: jest.fn().mockResolvedValue(
-        Ok([{ date: "20260210", content: "test log line" }]),
-      ),
+      getLogs: jest
+        .fn()
+        .mockResolvedValue(
+          Ok([{ date: "20260210", content: "test log line" }]),
+        ),
     };
 
     mockNatsService = {
@@ -309,7 +311,9 @@ describe("LogsController", () => {
       expect(mockReq.on).toHaveBeenCalledWith("close", expect.any(Function));
 
       // Dead subscription should NOT be stored — next client retries
-      (mockNatsService.subscribe as jest.Mock).mockReturnValue(Ok(mockUnsubscribe));
+      (mockNatsService.subscribe as jest.Mock).mockReturnValue(
+        Ok(mockUnsubscribe),
+      );
       let closeHandler2: (() => void) | null = null;
       const mockReq2: any = {
         on: jest.fn((event: string, handler: () => void) => {

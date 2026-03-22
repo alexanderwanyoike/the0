@@ -443,9 +443,7 @@ export class BotStateService {
    * Returns null if no state exists.
    * @deprecated Use downloadAndExtractStateWithEtag for write operations to prevent race conditions
    */
-  private async downloadAndExtractState(
-    botId: string,
-  ): Promise<string | null> {
+  private async downloadAndExtractState(botId: string): Promise<string | null> {
     const result = await this.downloadAndExtractStateWithEtag(botId);
     return result?.tempDir ?? null;
   }

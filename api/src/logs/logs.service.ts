@@ -37,7 +37,10 @@ export class LogsService {
     userId?: string,
   ): Promise<Result<LogEntry[], string>> {
     // Verify bot ownership
-    const uid = userId || ((this.botService as unknown as { request?: { user?: { uid: string } } }).request?.user?.uid);
+    const uid =
+      userId ||
+      (this.botService as unknown as { request?: { user?: { uid: string } } })
+        .request?.user?.uid;
     if (!uid) return Failure("Authentication required");
     const botResult = await this.botService.findOneByUserId(uid, botId);
     if (!botResult.success) {
@@ -88,7 +91,12 @@ export class LogsService {
       try {
         await this.minioClient.statObject(this.logBucket, logPath);
       } catch (error: unknown) {
-        if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "NotFound") {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code: string }).code === "NotFound"
+        ) {
           return Ok(""); // Return empty content if log file doesn't exist
         }
         throw error;

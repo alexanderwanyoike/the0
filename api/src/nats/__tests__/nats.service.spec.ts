@@ -173,9 +173,7 @@ describe("NatsService", () => {
   describe("Stream Setup", () => {
     it("should create streams when they do not exist", () => {
       // add() resolves by default (stream doesn't exist), so ensureStream creates
-      expect(
-        natsMocks.mockJetStreamManager.streams.add,
-      ).toHaveBeenCalledWith(
+      expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "THE0_BOT_LOGS",
           subjects: ["the0.bot.logs.>"],

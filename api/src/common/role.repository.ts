@@ -50,7 +50,9 @@ export abstract class RoleRepository<T> implements Repository<T> {
         .orderBy(desc(this.table.createdAt));
 
       return Ok(
-        records.map((record: Record<string, unknown>) => this.transformSnapshotToData<T>(record)),
+        records.map((record: Record<string, unknown>) =>
+          this.transformSnapshotToData<T>(record),
+        ),
       );
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");

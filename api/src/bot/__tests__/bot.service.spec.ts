@@ -184,7 +184,10 @@ describe("BotService - Enhanced Tests", () => {
     it("should validate bot type and version format", async () => {
       const invalidTypeBot = {
         ...validBotData,
-        config: mockBotConfig({ ...validBotData.config, type: "invalid-format" }),
+        config: mockBotConfig({
+          ...validBotData.config,
+          type: "invalid-format",
+        }),
       };
 
       const result = await service.create(invalidTypeBot);
@@ -196,7 +199,10 @@ describe("BotService - Enhanced Tests", () => {
     it("should validate semantic version format", async () => {
       const invalidVersionBot = {
         ...validBotData,
-        config: mockBotConfig({ ...validBotData.config, version: "invalid-version" }),
+        config: mockBotConfig({
+          ...validBotData.config,
+          version: "invalid-version",
+        }),
       };
 
       const result = await service.create(invalidVersionBot);

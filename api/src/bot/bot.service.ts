@@ -163,7 +163,9 @@ export class BotService {
     const newCustomBot = validationResult.data;
     const hasCustomFrontend = newCustomBot.config?.hasFrontend ?? false;
     const versionChanged =
-      currentVersion && newVersion ? !semver.eq(currentVersion, newVersion) : true;
+      currentVersion && newVersion
+        ? !semver.eq(currentVersion, newVersion)
+        : true;
     const result = await this.botRepository.update(uid, id, {
       ...updateBotDto,
       config: { ...updateBotDto.config, hasFrontend: hasCustomFrontend },

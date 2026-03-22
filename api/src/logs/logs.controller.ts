@@ -38,7 +38,10 @@ export class LogsController {
   // Static maps are intentional: NestJS controllers are singletons and a
   // single NATS subscription per bot must fan out to all SSE clients in the process.
   private static activeSubscriptions = new Map<string, BotSubscription>();
-  private static pendingSubscriptions = new Map<string, Promise<SubscriptionResult>>();
+  private static pendingSubscriptions = new Map<
+    string,
+    Promise<SubscriptionResult>
+  >();
 
   /** @internal Reset shared state for test isolation. Only works in test env. */
   static _resetForTest() {
@@ -99,7 +102,9 @@ export class LogsController {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.flushHeaders();
-      res.write(`event: error\ndata: ${JSON.stringify({ message: "Invalid bot ID" })}\n\n`);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: "Invalid bot ID" })}\n\n`,
+      );
       res.end();
       return;
     }
@@ -182,7 +187,9 @@ export class LogsController {
       (historyResult.error?.includes("not found") ||
         historyResult.error?.includes("access denied"))
     ) {
-      res.write(`event: error\ndata: ${JSON.stringify({ message: ACCESS_DENIED_MESSAGE })}\n\n`);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: ACCESS_DENIED_MESSAGE })}\n\n`,
+      );
       res.end();
       return false;
     }
@@ -225,7 +232,10 @@ export class LogsController {
       }
       // Re-check active map — the pending promise may have populated it
       subscription = LogsController.activeSubscriptions.get(botId);
-      return { subscription: subscription ?? null, warningsSent: result.warningsSent };
+      return {
+        subscription: subscription ?? null,
+        warningsSent: result.warningsSent,
+      };
     }
 
     const createPromise = this.createSubscription(botId, res);

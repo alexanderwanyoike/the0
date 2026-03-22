@@ -227,7 +227,10 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw BadRequestException for invalid version format", async () => {
       const invalidBot = {
         ...validBot,
-        config: mockBotConfig({ ...validBot.config, version: "invalid-version" }),
+        config: mockBotConfig({
+          ...validBot.config,
+          version: "invalid-version",
+        }),
       };
 
       await expect(controller.create(invalidBot)).rejects.toThrow(
@@ -239,7 +242,11 @@ describe("BotController - Enhanced Tests", () => {
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: true,
         error: null,
-        data: [mockBot({ id: "bot1" }), mockBot({ id: "bot2" }), mockBot({ id: "bot3" })],
+        data: [
+          mockBot({ id: "bot1" }),
+          mockBot({ id: "bot2" }),
+          mockBot({ id: "bot3" }),
+        ],
       });
 
       await expect(controller.create(validBot)).rejects.toThrow(

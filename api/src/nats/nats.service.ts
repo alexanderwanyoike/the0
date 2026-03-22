@@ -74,7 +74,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private isStreamAlreadyExists(err: unknown): boolean {
-    const natsErr = err as { api_error?: { err_code?: number }; message?: string };
+    const natsErr = err as {
+      api_error?: { err_code?: number };
+      message?: string;
+    };
     return (
       natsErr?.api_error?.err_code === 10058 ||
       natsErr?.message?.includes("stream name already in use") === true
@@ -94,7 +97,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       return Ok(undefined);
     } catch (err: unknown) {
       if (!this.isStreamAlreadyExists(err)) {
-        return Failure(errorMessage(err) || `Failed to create stream ${config.name}`);
+        return Failure(
+          errorMessage(err) || `Failed to create stream ${config.name}`,
+        );
       }
     }
 
@@ -103,7 +108,9 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       await this.jetStreamManager.streams.update(config.name, config);
       return Ok(undefined);
     } catch (err: unknown) {
-      return Failure(errorMessage(err) || `Failed to update stream ${config.name}`);
+      return Failure(
+        errorMessage(err) || `Failed to update stream ${config.name}`,
+      );
     }
   }
 
@@ -130,7 +137,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     // THE0_EVENTS failure is fatal: it carries critical bot lifecycle events
     // (start/stop/status) required for core bot orchestration.
     if (!eventsResult.success) {
-      this.logger.error({ error: eventsResult.error }, "Failed to setup THE0_EVENTS stream");
+      this.logger.error(
+        { error: eventsResult.error },
+        "Failed to setup THE0_EVENTS stream",
+      );
       return eventsResult;
     }
 
@@ -151,7 +161,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       // console UI. Unlike THE0_EVENTS (which carries critical bot lifecycle
       // events like start/stop/status), THE0_BOT_LOGS is a convenience stream
       // and logs are already persisted to MinIO independently.
-      this.logger.warn({ error: logsResult.error }, "THE0_BOT_LOGS stream setup failed — log streaming will be unavailable");
+      this.logger.warn(
+        { error: logsResult.error },
+        "THE0_BOT_LOGS stream setup failed — log streaming will be unavailable",
+      );
     }
 
     this.logger.info("NATS JetStream initialized");
@@ -159,7 +172,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Generic publish method - business logic handled by callers
-  async publish(topic: string, payload: Record<string, unknown> | unknown[]): Promise<Result<void, string>> {
+  async publish(
+    topic: string,
+    payload: Record<string, unknown> | unknown[],
+  ): Promise<Result<void, string>> {
     if (!this.connection) {
       return Failure("NATS connection not established");
     }
@@ -187,7 +203,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
 
     const sub = this.createSubscription(subject, callback);
     if (!sub.success) {
-      this.logger.error({ error: sub.error, subject }, "Failed to create NATS subscription");
+      this.logger.error(
+        { error: sub.error, subject },
+        "Failed to create NATS subscription",
+      );
     }
     return sub;
   }

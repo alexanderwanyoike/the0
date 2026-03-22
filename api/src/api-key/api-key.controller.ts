@@ -57,7 +57,9 @@ export class ApiKeyController {
    * GET /api-keys
    */
   @Get()
-  async getApiKeys(@Request() req: AuthenticatedRequest): Promise<ApiKeyResponseDto[]> {
+  async getApiKeys(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiKeyResponseDto[]> {
     if (!req.user) {
       throw new Error("Authentication required");
     }

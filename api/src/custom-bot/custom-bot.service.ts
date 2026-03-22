@@ -39,7 +39,15 @@ export class CustomBotService {
         return Failure(existsResult.error);
       }
 
-      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const validRuntimes = [
+        "python3.11",
+        "nodejs20",
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
 
       if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
@@ -52,7 +60,13 @@ export class CustomBotService {
       }
 
       // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const compiledRuntimes = [
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
       const requiredFiles = compiledRuntimes.includes(config.runtime)
         ? [] // Skip entrypoint validation for compiled languages
         : Object.values(config.entrypoints).filter(Boolean);
@@ -133,7 +147,15 @@ export class CustomBotService {
         return Failure("Bot name in config must match the URL parameter");
       }
 
-      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const validRuntimes = [
+        "python3.11",
+        "nodejs20",
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
 
       if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
@@ -195,7 +217,13 @@ export class CustomBotService {
       }
 
       // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const compiledRuntimes = [
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
       const requiredFiles = compiledRuntimes.includes(config.runtime)
         ? [] // Skip entrypoint validation for compiled languages
         : Object.values(config.entrypoints).filter(Boolean);

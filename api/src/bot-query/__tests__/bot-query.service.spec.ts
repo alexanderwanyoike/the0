@@ -84,7 +84,9 @@ describe("BotQueryService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data.status).toBe("ok");
-      expect(result.data.data).toEqual({ positions: [{ symbol: "BTC", amount: 1.5 }] });
+      expect(result.data.data).toEqual({
+        positions: [{ symbol: "BTC", amount: 1.5 }],
+      });
       expect(mockFetch).toHaveBeenCalledWith(
         "http://localhost:9477/query",
         expect.objectContaining({

@@ -86,7 +86,12 @@ export class BotQueryService {
       if (!response.ok) {
         const errorText = await response.text();
         this.logger.error(
-          { botId, queryPath: request.queryPath, status: response.status, error: errorText },
+          {
+            botId,
+            queryPath: request.queryPath,
+            status: response.status,
+            error: errorText,
+          },
           "Query request failed",
         );
 
@@ -113,7 +118,11 @@ export class BotQueryService {
         timestamp: result.timestamp || new Date().toISOString(),
       });
     } catch (error: unknown) {
-      const err = error as { name?: string; code?: string; cause?: { code?: string } };
+      const err = error as {
+        name?: string;
+        code?: string;
+        cause?: { code?: string };
+      };
       if (err.name === "AbortError") {
         return Failure({
           code: BotQueryErrorCode.TIMEOUT,
@@ -128,7 +137,8 @@ export class BotQueryService {
         );
         return Failure({
           code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
-          message: "Bot runtime is not available. Ensure the bot-runner service is running.",
+          message:
+            "Bot runtime is not available. Ensure the bot-runner service is running.",
         });
       }
 
