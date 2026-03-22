@@ -1,8 +1,10 @@
 import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { Result, Ok, Failure, errorMessage } from "@/common/result";
+import { AuthenticatedRequest } from "@/auth/auth.types";
+import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 
@@ -23,6 +25,7 @@ export class LogsService {
   private logBucket: string;
 
   constructor(
+    @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
     private readonly configService: ConfigService,
     private readonly botService: BotService,
@@ -37,10 +40,7 @@ export class LogsService {
     userId?: string,
   ): Promise<Result<LogEntry[], string>> {
     // Verify bot ownership
-    const uid =
-      userId ||
-      (this.botService as unknown as { request?: { user?: { uid: string } } })
-        .request?.user?.uid;
+    const uid = userId || this.request?.user?.uid;
     if (!uid) return Failure("Authentication required");
     const botResult = await this.botService.findOneByUserId(uid, botId);
     if (!botResult.success) {
@@ -91,12 +91,7 @@ export class LogsService {
       try {
         await this.minioClient.statObject(this.logBucket, logPath);
       } catch (error: unknown) {
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          (error as { code: string }).code === "NotFound"
-        ) {
+        if (hasErrorCode(error) && error.code === "NotFound") {
           return Ok(""); // Return empty content if log file doesn't exist
         }
         throw error;

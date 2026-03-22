@@ -23,4 +23,8 @@ const Ok = <T, E>(data: T): Result<T, E> => ({
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-export { Failure, Ok, errorMessage };
+/** Type guard for errors with a `code` property (e.g. MinIO S3 errors). */
+const hasErrorCode = (error: unknown): error is { code: string } =>
+  typeof error === "object" && error !== null && "code" in error;
+
+export { Failure, Ok, errorMessage, hasErrorCode };

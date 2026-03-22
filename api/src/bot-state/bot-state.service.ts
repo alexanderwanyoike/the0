@@ -2,7 +2,7 @@ import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import * as tar from "tar";
@@ -48,10 +48,6 @@ interface StateDownloadResult {
   etag: string;
 }
 
-/** Type guard for errors with a `code` property (e.g. MinIO S3 errors) */
-function hasErrorCode(error: unknown): error is { code: string } {
-  return typeof error === "object" && error !== null && "code" in error;
-}
 
 @Injectable({ scope: Scope.REQUEST })
 export class BotStateService {
