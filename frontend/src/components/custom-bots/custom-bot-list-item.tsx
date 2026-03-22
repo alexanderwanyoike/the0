@@ -21,6 +21,7 @@ export function CustomBotListItem({
 
   return (
     <button
+      aria-current={isActive ? "page" : undefined}
       onClick={onClick}
       className={cn(
         "w-full text-left px-3 py-2.5 rounded-md transition-colors",

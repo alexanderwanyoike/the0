@@ -30,6 +30,7 @@ export function CustomBotFilterDropdown({
         <Button
           variant="outline"
           size="icon"
+          aria-label={`Filter custom bots${activeCount > 0 ? ` (${activeCount} active)` : ""}`}
           className="h-8 w-8 flex-shrink-0 relative"
         >
           <Filter className="h-3.5 w-3.5" />

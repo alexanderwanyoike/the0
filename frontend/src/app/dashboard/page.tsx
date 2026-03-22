@@ -9,14 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { BotFilterDropdown } from "@/components/dashboard/bot-filter-dropdown";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
-import { Bot, Clock, Search } from "lucide-react";
+import { AlertTriangle, Bot, Clock, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import cronstrue from "cronstrue";
 import { Loader2 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { bots, loading } = useDashboardBots();
+  const { bots, loading, error, refetchBots } = useDashboardBots();
   const isDesktop = useMediaQuery("(min-width: 1280px)");
   const router = useRouter();
 
@@ -39,6 +39,9 @@ export default function DashboardPage() {
         </div>
       );
     }
+    if (error) {
+      return <ErrorState error={error} onRetry={refetchBots} />;
+    }
     if (bots.length === 0) {
       return <EmptyState />;
     }
@@ -52,6 +55,10 @@ export default function DashboardPage() {
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState error={error} onRetry={refetchBots} />;
   }
 
   if (bots.length === 0) {
@@ -168,6 +175,24 @@ function MobileBotList({ bots }: { bots: ApiBotType[] }) {
           })
         )}
       </div>
+    </div>
+  );
+}
+
+function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 h-full">
+      <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+        <AlertTriangle className="w-8 h-8 text-destructive" />
+      </div>
+      <h3 className="text-lg font-semibold mb-1">Failed to load bots</h3>
+      <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
+        {error}
+      </p>
+      <Button variant="outline" size="sm" onClick={onRetry} className="gap-2">
+        <RefreshCw className="h-4 w-4" />
+        Try again
+      </Button>
     </div>
   );
 }

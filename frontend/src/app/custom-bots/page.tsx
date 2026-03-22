@@ -8,12 +8,13 @@ import { useCustomBotFilters } from "@/hooks/use-custom-bot-filters";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CustomBotFilterDropdown } from "@/components/custom-bots/custom-bot-filter-dropdown";
-import { Bot, Loader2, Search } from "lucide-react";
+import { AlertTriangle, Bot, Loader2, RefreshCw, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/custom-bots/empty-state";
 import { CustomBotWithVersions } from "@/types/custom-bots";
 
 export default function CustomBotsPage() {
-  const { bots, loading } = useCustomBotsContext();
+  const { bots, loading, error, refetch } = useCustomBotsContext();
   const isDesktop = useMediaQuery("(min-width: 1280px)");
   const router = useRouter();
 
@@ -35,6 +36,9 @@ export default function CustomBotsPage() {
         </div>
       );
     }
+    if (error) {
+      return <ErrorState error={error} onRetry={refetch} />;
+    }
     if (bots.length === 0) {
       return <EmptyState />;
     }
@@ -47,6 +51,10 @@ export default function CustomBotsPage() {
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState error={error} onRetry={refetch} />;
   }
 
   if (bots.length === 0) {
@@ -141,6 +149,24 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
           })
         )}
       </div>
+    </div>
+  );
+}
+
+function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 h-full">
+      <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+        <AlertTriangle className="w-8 h-8 text-destructive" />
+      </div>
+      <h3 className="text-lg font-semibold mb-1">Failed to load custom bots</h3>
+      <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
+        {error}
+      </p>
+      <Button variant="outline" size="sm" onClick={onRetry} className="gap-2">
+        <RefreshCw className="h-4 w-4" />
+        Try again
+      </Button>
     </div>
   );
 }
