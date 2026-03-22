@@ -14,7 +14,7 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>("JWT_SECRET"),
+        secret: configService.getOrThrow<string>("JWT_SECRET"),
         signOptions: {
           expiresIn: configService.get<string>("JWT_EXPIRES_IN") || "24h",
           issuer: "the0-oss-api",
