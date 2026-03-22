@@ -1,3 +1,6 @@
+// Set required environment variables for tests
+process.env.JWT_SECRET = "test-jwt-secret";
+
 // Mock MinIO for OSS version
 jest.mock("minio", () => ({
   Client: jest.fn().mockImplementation(() => ({
