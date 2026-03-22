@@ -179,7 +179,13 @@ function MobileBotList({ bots }: { bots: ApiBotType[] }) {
   );
 }
 
-function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+function ErrorState({
+  error,
+  onRetry,
+}: {
+  error: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 h-full">
       <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
