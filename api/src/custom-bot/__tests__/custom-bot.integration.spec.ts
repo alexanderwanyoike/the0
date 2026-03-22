@@ -777,7 +777,7 @@ describe("Custom Bot API Integration Tests", () => {
       expect(response.body.message).toContain("Database connection failed");
     });
 
-    it("should handle GCS service errors gracefully", async () => {
+    it("should handle storage service errors gracefully", async () => {
       const filePath =
         "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
@@ -821,8 +821,7 @@ describe("Custom Bot API Integration Tests", () => {
       );
     });
 
-    it("should handle missing user authentication", async () => {
-      // Create a request without the auth middleware
+    it("should reject request when config name mismatches URL param", async () => {
       const response = await request(app.getHttpServer())
         .post("/custom-bots/no-auth-bot")
         .send({
@@ -830,8 +829,22 @@ describe("Custom Bot API Integration Tests", () => {
           filePath: "test-user-123/no-auth-bot/1.0.0/test-bot.zip",
         });
 
-      // This should fail because there's no auth middleware applied to this specific route
+      // Config name (from validConfig) does not match URL param "no-auth-bot"
       expect(response.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("should reject filePath belonging to another user", async () => {
+      const response = await request(app.getHttpServer())
+        .post("/custom-bots/integration-test-bot")
+        .send({
+          config: JSON.stringify(validConfig),
+          filePath: "other-user/integration-test-bot/1.0.0/test-bot.zip",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain(
+        "File path must belong to the authenticated user",
+      );
     });
 
     it("should validate file content type properly", async () => {

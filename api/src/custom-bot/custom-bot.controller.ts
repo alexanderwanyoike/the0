@@ -11,7 +11,6 @@ import {
   HttpStatus,
   HttpCode,
   UseGuards,
-  Patch,
   UseInterceptors,
   UploadedFile,
 } from "@nestjs/common";
