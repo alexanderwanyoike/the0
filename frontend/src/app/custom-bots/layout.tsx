@@ -24,7 +24,7 @@ function CustomBotsInner({ children }: { children: ReactNode }) {
     pathParts.length >= 3 ? decodeURIComponent(pathParts[2]) : null;
 
   const handleSelectBot = (name: string) => {
-    router.push(`/custom-bots/${name}`);
+    router.push(`/custom-bots/${encodeURIComponent(name)}`);
   };
 
   // Wait for media query to resolve

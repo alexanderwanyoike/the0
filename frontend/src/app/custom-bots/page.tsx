@@ -21,7 +21,7 @@ export default function CustomBotsPage() {
   // Desktop: auto-redirect to first bot
   useEffect(() => {
     if (!loading && isDesktop && bots.length > 0) {
-      router.replace(`/custom-bots/${bots[0].name}`);
+      router.replace(`/custom-bots/${encodeURIComponent(bots[0].name)}`);
     }
   }, [loading, isDesktop, bots, router]);
 
@@ -122,7 +122,7 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
             return (
               <button
                 key={bot.id}
-                onClick={() => router.push(`/custom-bots/${bot.name}`)}
+                onClick={() => router.push(`/custom-bots/${encodeURIComponent(bot.name)}`)}
                 className="w-full text-left p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
