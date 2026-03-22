@@ -14,6 +14,8 @@ import { PinoLogger } from "nestjs-pino";
 import { LogsService } from "./logs.service";
 import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { AuthenticatedUser } from "@/auth/auth.types";
+import { CurrentUser } from "@/auth/current-user.decorator";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
 
@@ -65,13 +67,14 @@ export class LogsController {
   async getLogs(
     @Param("botId") botId: string,
     @Query() query: GetLogsQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     const result = await this.logsService.getLogs(botId, {
       date: query.date,
       dateRange: query.dateRange,
       limit: query.limit || 100,
       offset: query.offset || 0,
-    });
+    }, user?.uid);
 
     if (!result.success) {
       if (
@@ -93,6 +96,7 @@ export class LogsController {
   @Get(":botId/stream")
   async streamLogs(
     @Param("botId") botId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -132,7 +136,7 @@ export class LogsController {
     req.on("close", cleanup);
 
     // Send historical logs
-    const shouldContinue = await this.sendHistoricalLogs(res, botId);
+    const shouldContinue = await this.sendHistoricalLogs(res, botId, user?.uid);
     if (!shouldContinue) return;
 
     // If client disconnected during history fetch, clean up immediately
@@ -166,6 +170,7 @@ export class LogsController {
   private async sendHistoricalLogs(
     res: Response,
     botId: string,
+    userId?: string,
   ): Promise<boolean> {
     // JS getFullYear()/getMonth()/getDate() return local time, matching
     // the runtime's minio_logger which uses time.Now().Format("20060102").
@@ -180,7 +185,18 @@ export class LogsController {
       date: todayStr,
       limit: 1000,
       offset: 0,
-    });
+    }, userId);
+
+    if (
+      !historyResult.success &&
+      historyResult.error?.includes("Authentication required")
+    ) {
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: "Authentication required" })}\n\n`,
+      );
+      res.end();
+      return false;
+    }
 
     if (
       !historyResult.success &&
