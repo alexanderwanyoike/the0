@@ -69,7 +69,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const { removeBotFromList, bots } = useDashboardBots();
-  const isMobile = !useMediaQuery("(min-width: 1280px)");
+  const mediaQuery = useMediaQuery("(min-width: 1280px)");
+  const isMobile = mediaQuery === null ? null : !mediaQuery;
 
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
@@ -267,7 +268,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   if (!bot) return null;
 
   const maskedConfig = getMaskedConfig(bot.config);
-  const customBotId = (bot as any).customBotId;
+  const customBotId = bot.customBotId;
 
   // Shared CLI update modal (used by both mobile and desktop)
   const cliUpdateModal = (
@@ -368,6 +369,15 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
       </DialogContent>
     </Dialog>
   );
+
+  // Wait for media query to resolve
+  if (isMobile === null) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   // Mobile: render tabbed layout
   if (isMobile) {

@@ -27,6 +27,9 @@ export default function DashboardPage() {
     }
   }, [loading, isDesktop, bots, router]);
 
+  // Wait for media query to resolve before rendering
+  if (isDesktop === null) return null;
+
   // Desktop: show nothing while redirecting (or empty state if no bots)
   if (isDesktop) {
     if (loading) {
@@ -90,6 +93,7 @@ function MobileBotList({ bots }: { bots: ApiBotType[] }) {
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Filter bots"
             placeholder="Filter bots..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}

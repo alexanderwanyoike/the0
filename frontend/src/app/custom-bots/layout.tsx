@@ -27,6 +27,15 @@ function CustomBotsInner({ children }: { children: ReactNode }) {
     router.push(`/custom-bots/${name}`);
   };
 
+  // Wait for media query to resolve
+  if (isDesktop === null) {
+    return (
+      <div className="h-[calc(100vh-3rem)]">
+        <main className="h-full overflow-auto">{children}</main>
+      </div>
+    );
+  }
+
   // Desktop: side panel + content
   if (isDesktop) {
     return (

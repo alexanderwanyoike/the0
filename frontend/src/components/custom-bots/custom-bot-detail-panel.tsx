@@ -83,6 +83,15 @@ export function CustomBotDetailPanel({ botName }: CustomBotDetailPanelProps) {
     createdAt: selectedVersionData.createdAt,
   };
 
+  // Wait for media query to resolve
+  if (isDesktop === null) {
+    return (
+      <div className="container max-w-7xl mx-auto py-6 px-4 lg:px-6">
+        <LoadingState />
+      </div>
+    );
+  }
+
   // Non-desktop: tabbed mobile layout
   if (!isDesktop) {
     return (
