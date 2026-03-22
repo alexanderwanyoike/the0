@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { NatsService } from "@/nats/nats.service";
 import { MINIO_CLIENT } from "@/minio/minio.provider";
@@ -23,11 +24,17 @@ interface ComponentHealth {
 
 @Injectable()
 export class HealthService {
+  private readonly minioBucket: string;
+
   constructor(
     private readonly natsService: NatsService,
     @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
+    private readonly configService: ConfigService,
     private readonly logger: PinoLogger,
-  ) {}
+  ) {
+    this.minioBucket =
+      this.configService.get<string>("CUSTOM_BOTS_BUCKET") || "custom-bots";
+  }
 
   async getLiveness(): Promise<{ status: "ok" }> {
     return { status: "ok" };
@@ -79,7 +86,7 @@ export class HealthService {
   private async checkMinio(): Promise<ComponentHealth> {
     const start = Date.now();
     try {
-      await this.minioClient.listBuckets();
+      await this.minioClient.bucketExists(this.minioBucket);
       return { status: "up", latencyMs: Date.now() - start };
     } catch (error: any) {
       this.logger.warn({ err: error }, "MinIO health check failed");
