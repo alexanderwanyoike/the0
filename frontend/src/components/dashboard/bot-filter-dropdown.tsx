@@ -32,10 +32,17 @@ export function BotFilterDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0 relative">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 flex-shrink-0 relative"
+        >
           <Filter className="h-3.5 w-3.5" />
           {activeCount > 0 && (
-            <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
+            <Badge
+              variant="secondary"
+              className="absolute -top-1.5 -right-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]"
+            >
               {activeCount}
             </Badge>
           )}

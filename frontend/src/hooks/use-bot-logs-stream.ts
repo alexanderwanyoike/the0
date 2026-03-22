@@ -77,7 +77,9 @@ const MAX_LOG_ENTRIES = 2000;
 function expandLogEntries(entries: LogEntry[]): LogEntry[] {
   const expanded: LogEntry[] = [];
   entries.forEach((entry) => {
-    const lines = entry.content.split("\n").filter((line) => line.trim() !== "");
+    const lines = entry.content
+      .split("\n")
+      .filter((line) => line.trim() !== "");
     lines.forEach((line) => {
       expanded.push({
         date: entry.date,

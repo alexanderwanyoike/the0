@@ -147,6 +147,7 @@ int main() {
     the0::log("Bot " + botId + " started - " + symbol + " SMA(" +
               std::to_string(shortPeriod) + "/" + std::to_string(longPeriod) +
               ") - loaded " + std::to_string(state.signalCount) + " signals");
+    the0::log("v1.1.0 - update interval: " + std::to_string(updateIntervalMs) + "ms");
 
     // Initialize CURL
     curl_global_init(CURL_GLOBAL_DEFAULT);

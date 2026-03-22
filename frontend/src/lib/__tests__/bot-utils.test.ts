@@ -68,8 +68,8 @@ describe("shouldUseLogStreaming", () => {
   });
 
   it("returns true when config has unrelated keys only", () => {
-    expect(shouldUseLogStreaming(makeBot({ name: "test", enabled: true }))).toBe(
-      true,
-    );
+    expect(
+      shouldUseLogStreaming(makeBot({ name: "test", enabled: true })),
+    ).toBe(true);
   });
 });
