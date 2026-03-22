@@ -3,6 +3,7 @@ package internal
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -119,10 +120,12 @@ func GetAuthTokenWithRetry() (*Auth, error) {
 	return auth, nil
 }
 
-// IsAuthError checks if an error is authentication related
+// IsAuthError checks if an error is authentication related by looking for
+// an APIError with a 401 or 403 status code
 func IsAuthError(err error) bool {
-	return strings.Contains(err.Error(), "401") ||
-		strings.Contains(err.Error(), "403") ||
-		strings.Contains(err.Error(), "invalid") ||
-		strings.Contains(err.Error(), "revoked")
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == 401 || apiErr.StatusCode == 403
+	}
+	return false
 }
