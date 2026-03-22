@@ -239,7 +239,7 @@ func (c *APIClient) CheckBotExists(config *BotConfig, auth *Auth) (bool, error) 
 	}
 
 	if resp.StatusCode != 200 {
-		return false, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("failed to check bot existence: HTTP %d", resp.StatusCode)}
+		return false, &APIError{StatusCode: resp.StatusCode, Message: "failed to check bot existence"}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -1149,17 +1149,17 @@ func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryR
 					jsonPart := errorResp.Message[idx:]
 					if endIdx := strings.LastIndex(jsonPart, "}"); endIdx >= 0 {
 						if err := json.Unmarshal([]byte(jsonPart[:endIdx+1]), &nestedError); err == nil && nestedError.Error != "" {
-							return nil, fmt.Errorf("%s", nestedError.Error)
+							return nil, &APIError{StatusCode: resp.StatusCode, Message: nestedError.Error}
 						}
 					}
 				}
-				return nil, fmt.Errorf("%s", errorResp.Message)
+				return nil, &APIError{StatusCode: resp.StatusCode, Message: errorResp.Message}
 			}
 			if errorResp.Data.Error != "" {
-				return nil, fmt.Errorf("%s", errorResp.Data.Error)
+				return nil, &APIError{StatusCode: resp.StatusCode, Message: errorResp.Data.Error}
 			}
 		}
-		return nil, fmt.Errorf("query failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("query failed: %s", string(body))}
 	}
 
 	var response BotQueryResponse
