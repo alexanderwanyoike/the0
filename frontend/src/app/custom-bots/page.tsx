@@ -118,15 +118,22 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
             const config = bot.versions[0]?.config;
             const botType = config?.type || "Bot";
             const description = config?.description || "";
+            const status = bot.versions[0]?.status;
+            const statusColor =
+              status === "active" ? "bg-green-500" : "bg-yellow-500";
 
             return (
               <button
                 key={bot.id}
-                onClick={() => router.push(`/custom-bots/${encodeURIComponent(bot.name)}`)}
+                onClick={() =>
+                  router.push(`/custom-bots/${encodeURIComponent(bot.name)}`)
+                }
                 className="w-full text-left p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-green-500" />
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${statusColor}`}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{bot.name}</p>
                     {description && (
@@ -153,7 +160,13 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
   );
 }
 
-function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+function ErrorState({
+  error,
+  onRetry,
+}: {
+  error: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 h-full">
       <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">

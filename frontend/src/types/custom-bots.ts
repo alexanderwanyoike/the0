@@ -48,6 +48,10 @@ export interface CustomBotWithVersions {
   updatedAt: Date;
 }
 
+// Combined bot + selected version view used in detail panels
+export type CustomBotCurrentView = CustomBotWithVersions &
+  Pick<CustomBotVersion, "version" | "status" | "config" | "filePath">;
+
 // Single Custom Bot Document
 export interface CustomBot {
   id: string;

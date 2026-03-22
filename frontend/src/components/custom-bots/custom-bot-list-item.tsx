@@ -18,6 +18,8 @@ export function CustomBotListItem({
   const latestVersionData = bot.versions[0];
   const config = latestVersionData?.config;
   const type = config?.type || "";
+  const status = latestVersionData?.status;
+  const statusColor = status === "active" ? "bg-green-500" : "bg-yellow-500";
 
   return (
     <button
@@ -31,7 +33,9 @@ export function CustomBotListItem({
       )}
     >
       <div className="flex items-center gap-2 min-w-0">
-        <span className="h-2 w-2 rounded-full flex-shrink-0 bg-green-500" />
+        <span
+          className={cn("h-2 w-2 rounded-full flex-shrink-0", statusColor)}
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{bot.name}</p>
           <div className="flex items-center gap-1.5 mt-0.5">

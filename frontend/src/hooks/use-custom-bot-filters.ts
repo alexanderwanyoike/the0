@@ -11,7 +11,7 @@ export function useCustomBotFilters() {
     setTypeState((prev) => (prev === value ? "all" : value));
   }, []);
 
-  const hasActiveFilters = type !== "all" || search !== "";
+  const hasActiveFilters = type !== "all" || search.trim() !== "";
   const activeCount = type !== "all" ? 1 : 0;
 
   const filterBots = useCallback(
@@ -20,8 +20,9 @@ export function useCustomBotFilters() {
         const config = bot.versions[0]?.config;
 
         // Text search
-        if (search) {
-          const q = search.toLowerCase();
+        const trimmed = search.trim();
+        if (trimmed) {
+          const q = trimmed.toLowerCase();
           const name = bot.name.toLowerCase();
           const desc = (config?.description || "").toLowerCase();
           if (!name.includes(q) && !desc.includes(q)) return false;

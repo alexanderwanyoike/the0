@@ -17,7 +17,8 @@ export function useBotFilters() {
     setStatusState((prev) => (prev === value ? "all" : value));
   }, []);
 
-  const hasActiveFilters = type !== "all" || status !== "all" || search !== "";
+  const hasActiveFilters =
+    type !== "all" || status !== "all" || search.trim() !== "";
   const activeCount = (type !== "all" ? 1 : 0) + (status !== "all" ? 1 : 0);
 
   const filterBots = useCallback(
@@ -26,8 +27,9 @@ export function useBotFilters() {
         const config = bot.config as Record<string, any>;
 
         // Text search
-        if (search) {
-          const q = search.toLowerCase();
+        const trimmed = search.trim();
+        if (trimmed) {
+          const q = trimmed.toLowerCase();
           const name = (config?.name || bot.id).toLowerCase();
           const symbol = (config?.symbol || "").toLowerCase();
           if (!name.includes(q) && !symbol.includes(q)) return false;

@@ -129,7 +129,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           (error.message === "Bot not found" ||
             error.message === "Unauthorized access")
         ) {
-          setTimeout(() => router.push("/dashboard"), 2000);
+          const timeout = setTimeout(() => router.push("/dashboard"), 2000);
+          return () => clearTimeout(timeout);
         }
       } finally {
         setLoading(false);
@@ -140,8 +141,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   const copyToClipboard = () => {
     if (!bot) return;
-    const configCopy = JSON.parse(JSON.stringify(bot.config));
-    navigator.clipboard.writeText(JSON.stringify(configCopy, null, 2));
+    const masked = getMaskedConfig(bot.config);
+    navigator.clipboard.writeText(JSON.stringify(masked, null, 2));
     toast({
       description: "Bot configuration copied to clipboard",
       duration: 2000,
@@ -239,7 +240,6 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
       /credential/i,
       /passphrase/i,
       /pin/i,
-      /code/i,
     ];
     const filterSensitiveData = (obj: any): any => {
       if (!obj || typeof obj !== "object") return obj;

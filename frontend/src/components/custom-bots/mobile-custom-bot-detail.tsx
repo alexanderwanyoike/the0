@@ -12,11 +12,14 @@ import { BotInfo } from "@/components/custom-bots/bot-info";
 import { VersionHistory } from "@/components/custom-bots/version-history";
 import { ActionButtons } from "@/components/custom-bots/action-buttons";
 import { StatusHeader } from "@/components/custom-bots/status-header";
-import { CustomBotWithVersions } from "@/types/custom-bots";
+import {
+  CustomBotWithVersions,
+  CustomBotCurrentView,
+} from "@/types/custom-bots";
 
 interface MobileCustomBotDetailProps {
   bot: CustomBotWithVersions;
-  currentBotView: any;
+  currentBotView: CustomBotCurrentView;
   selectedVersion: string;
   onVersionChange: (version: string) => void;
 }

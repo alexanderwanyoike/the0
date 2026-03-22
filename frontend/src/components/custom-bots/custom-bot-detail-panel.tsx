@@ -15,6 +15,7 @@ import { ReadmeComponent } from "@/components/custom-bots/readme-component";
 import { LoadingState } from "@/components/custom-bots/loading-detail-state";
 import { SchemaDisplay } from "@/components/custom-bots/schema-display";
 import { MobileCustomBotDetail } from "@/components/custom-bots/mobile-custom-bot-detail";
+import { CustomBotCurrentView } from "@/types/custom-bots";
 
 interface CustomBotDetailPanelProps {
   botName: string;
@@ -27,12 +28,12 @@ export function CustomBotDetailPanel({ botName }: CustomBotDetailPanelProps) {
 
   const [selectedVersion, setSelectedVersion] = useState<string>("");
 
-  // Set initial selected version when bot loads
+  // Update selected version when bot loads or changes
   useEffect(() => {
-    if (bot && !selectedVersion) {
+    if (bot) {
       setSelectedVersion(bot.latestVersion);
     }
-  }, [bot, selectedVersion]);
+  }, [bot?.latestVersion]);
 
   const handleBack = () => {
     router.push("/custom-bots");
@@ -74,7 +75,7 @@ export function CustomBotDetailPanel({ botName }: CustomBotDetailPanelProps) {
     bot.versions.find((v) => v.version === selectedVersion) || bot.versions[0];
 
   // Create a combined bot object with selected version data
-  const currentBotView = {
+  const currentBotView: CustomBotCurrentView = {
     ...bot,
     version: selectedVersionData.version,
     status: selectedVersionData.status,
