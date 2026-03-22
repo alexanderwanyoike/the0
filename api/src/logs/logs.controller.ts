@@ -74,7 +74,7 @@ export class LogsController {
       dateRange: query.dateRange,
       limit: query.limit || 100,
       offset: query.offset || 0,
-    }, user?.uid);
+    }, user.uid);
 
     if (!result.success) {
       if (
@@ -136,7 +136,7 @@ export class LogsController {
     req.on("close", cleanup);
 
     // Send historical logs
-    const shouldContinue = await this.sendHistoricalLogs(res, botId, user?.uid);
+    const shouldContinue = await this.sendHistoricalLogs(res, botId, user.uid);
     if (!shouldContinue) return;
 
     // If client disconnected during history fetch, clean up immediately

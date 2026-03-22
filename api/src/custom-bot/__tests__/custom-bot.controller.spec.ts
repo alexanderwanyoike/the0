@@ -104,17 +104,6 @@ describe("CustomBotController", () => {
       );
     });
 
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const noUidUser = {} as any;
-      const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
-      const body = { config: JSON.stringify(validConfig), filePath };
-
-      await expect(
-        controller.createCustomBot("test-bot", body, noUidUser),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it("should throw BadRequestException when filePath is missing", async () => {
       const body = { config: JSON.stringify(validConfig) } as any;
 
@@ -298,17 +287,6 @@ describe("CustomBotController", () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const noUidUser = {} as any;
-      const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
-      const body = { config: JSON.stringify(validConfig), filePath };
-
-      await expect(
-        controller.updateCustomBot("test-bot", body, noUidUser),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it("should throw BadRequestException when filePath is missing", async () => {
       const body = { config: JSON.stringify(validConfig) } as any;
 
@@ -436,16 +414,6 @@ describe("CustomBotController", () => {
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
 
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const requestWithoutUser = {} as any;
-
-      await expect(
-        controller.getUserCustomBots(requestWithoutUser),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
-
     it("should throw BadRequestException when service returns error", async () => {
       mockService.getUserCustomBots.mockResolvedValue(
         Failure("Database connection failed"),
@@ -458,29 +426,6 @@ describe("CustomBotController", () => {
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
 
-    it("should handle undefined user object", async () => {
-      await expect(
-        controller.getUserCustomBots(undefined as any),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
-
-    it("should handle null user object", async () => {
-      await expect(
-        controller.getUserCustomBots(null as any),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
-
-    it("should handle user object missing uid", async () => {
-      await expect(
-        controller.getUserCustomBots({} as any),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
   });
 
   describe("getAllVersions", () => {

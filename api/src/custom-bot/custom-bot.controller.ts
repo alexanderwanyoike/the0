@@ -46,10 +46,7 @@ export class CustomBotController {
     @Body() body: { version?: string },
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
 
     if (!file) {
       throw new BadRequestException("File is required");
@@ -94,10 +91,7 @@ export class CustomBotController {
     @Body() body: CustomBotDeployDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
 
     // Validate file path
     if (!body.filePath) {
@@ -161,10 +155,7 @@ export class CustomBotController {
     @Body() body: CustomBotDeployDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
 
     // Validate file path
     if (!body.filePath) {
@@ -225,10 +216,7 @@ export class CustomBotController {
   @Get()
   @HttpCode(HttpStatus.OK)
   async getUserCustomBots(@CurrentUser() user: AuthenticatedUser) {
-    const userId = user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
 
     const result = await this.customBotService.getUserCustomBots(userId);
 
