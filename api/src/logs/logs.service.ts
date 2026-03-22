@@ -76,7 +76,7 @@ export class LogsService {
       return Ok(paginatedLogs);
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error fetching logs");
-      return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
+      return Failure("Failed to fetch logs");
     }
   }
 
@@ -107,7 +107,7 @@ export class LogsService {
       return Ok(content);
     } catch (error: unknown) {
       this.logger.error({ err: error, logPath }, "Error downloading log file");
-      return Failure(`Failed to download log file: ${errorMessage(error)}`);
+      return Failure("Failed to download log file");
     }
   }
 

@@ -204,9 +204,14 @@ export class BotService {
 
     // Get custom bot data to determine correct topic
     let topics = null;
-    if (botResult.data.config?.type && botResult.data.config?.version) {
-      const configType = botResult.data.config.type as string;
-      const configVersion = botResult.data.config.version as string;
+    const configType = botResult.data.config?.type;
+    const configVersion = botResult.data.config?.version;
+    if (
+      configType &&
+      typeof configType === "string" &&
+      configVersion &&
+      typeof configVersion === "string"
+    ) {
       const [_, name] = configType.split("/");
       const customBotResult =
         await this.customBotService.getUserSpecificVersion(

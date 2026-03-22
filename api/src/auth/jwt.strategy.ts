@@ -57,6 +57,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         lastName: user.lastName || null,
         isActive: Boolean(user.isActive),
         isEmailVerified: Boolean(user.isEmailVerified),
+        authType: "jwt" as const,
       };
     } catch (error) {
       this.logger.error({ err: error }, "JWT validation error");
