@@ -10,6 +10,7 @@ import { BotValidator } from "./bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot, BotType } from "@/custom-bot/custom-bot.types";
 import { AuthenticatedRequest } from "@/auth/auth.types";
+import { BotConfig } from "@/database/schema/bots";
 // UserBotsService removed for OSS version
 import { NatsService } from "@/nats/nats.service";
 import * as semver from "semver";
@@ -39,8 +40,8 @@ export class BotService {
     );
 
     if (!validationResult.success) {
-      return Failure<Bot, string>(
-        validationResult.error || "Invalid bot config",
+      return Failure(
+        validationResult.error,
       );
     }
 
@@ -56,7 +57,7 @@ export class BotService {
     );
 
     if (!deploymentAuthResult.success) {
-      return Failure<Bot, string>(deploymentAuthResult.error);
+      return Failure(deploymentAuthResult.error);
     }
 
     // Get hasFrontend flag from the validated custom bot
@@ -72,7 +73,7 @@ export class BotService {
     });
 
     if (!result.success) {
-      return Failure<Bot, string>(result.error);
+      return Failure(result.error);
     }
 
     // validationResult.data is the CustomBot from validateBotTypeAndConfig
@@ -134,8 +135,8 @@ export class BotService {
       updateBotDto.config,
     );
     if (!validationResult.success) {
-      return Failure<Bot, string>(
-        validationResult.error || "Invalid bot config",
+      return Failure(
+        validationResult.error,
       );
     }
 
@@ -144,7 +145,7 @@ export class BotService {
     // Block breaking (major) version changes — require delete/redeploy for those
     const currentBot = await this.botRepository.findOne(uid, id);
     if (!currentBot.success) {
-      return Failure<Bot, string>("Bot not found");
+      return Failure("Bot not found");
     }
     const currentVersion = currentBot.data.config?.version;
     const newVersion = updateBotDto.config?.version;
@@ -153,7 +154,7 @@ export class BotService {
       newVersion &&
       semver.major(currentVersion) !== semver.major(newVersion)
     ) {
-      return Failure<Bot, string>(
+      return Failure(
         `Major version upgrade (${currentVersion} -> ${newVersion}) requires delete and redeploy. ` +
           `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`,
       );
@@ -285,65 +286,35 @@ export class BotService {
   }
 
   private async validateBotTypeAndConfig(
-    config: Record<string, unknown>,
+    config: BotConfig,
   ): Promise<Result<CustomBot, string>> {
-    const { type: rawType, version: rawVersion } = config;
+    const { type, version } = config;
 
-    if (!rawType) {
-      return {
-        success: false,
-        error: "Bot type is required",
-        data: null,
-      };
+    if (!type) {
+      return Failure("Bot type is required");
     }
 
-    if (!rawVersion) {
-      return {
-        success: false,
-        error: "Bot version is required",
-        data: null,
-      };
+    if (!version) {
+      return Failure("Bot version is required");
     }
 
-    const type = rawType as string;
-    const version = rawVersion as string;
-
-    // Check that type is in the correct format
     if (!BOT_TYPE_PATTERN.test(type)) {
-      return {
-        success: false,
-        error: `Invalid bot type format. Expected format: type/name`,
-        data: null,
-      };
+      return Failure("Invalid bot type format. Expected format: type/name");
     }
 
-    // use semver to check if version is valid
     if (!semver.valid(version)) {
-      return {
-        success: false,
-        error: `Invalid version format. Expected format: x.y.z`,
-        data: null,
-      };
+      return Failure("Invalid version format. Expected format: x.y.z");
     }
 
-    // Extract vendor, type, and name from the bot type
     const [_, name] = type.split("/");
     if (!name?.trim()) {
-      return {
-        success: false,
-        error: "Invalid bot type: missing name after '/'",
-        data: null,
-      };
+      return Failure("Invalid bot type: missing name after '/'");
     }
 
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(name, version);
     if (!customBotResult.success) {
-      return {
-        success: false,
-        error: `Bot type '${type}' not found`,
-        data: null,
-      };
+      return Failure(`Bot type '${type}' not found`);
     }
 
     const customBot = customBotResult.data;
