@@ -74,7 +74,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [] as string[] as string[],
+          required: [] as string[],
         },
       },
 

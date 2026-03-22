@@ -4,7 +4,7 @@ import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
 import { AuthenticatedRequest } from "@/auth/auth.types";
-import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
+import { Result, Ok, Failure, errorMessage, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 
@@ -79,7 +79,7 @@ export class LogsService {
       return Ok(paginatedLogs);
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error fetching logs");
-      return Failure("Failed to fetch logs");
+      return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
   }
 
@@ -110,7 +110,7 @@ export class LogsService {
       return Ok(content);
     } catch (error: unknown) {
       this.logger.error({ err: error, logPath }, "Error downloading log file");
-      return Failure("Failed to download log file");
+      return Failure(`Failed to download log file: ${errorMessage(error)}`);
     }
   }
 

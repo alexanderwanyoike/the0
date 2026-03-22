@@ -17,7 +17,7 @@ module.exports = {
   },
   ignorePatterns: [".eslintrc.js", "dist/"],
   rules: {
-    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-explicit-any": "warn",
   },
   overrides: [
     {

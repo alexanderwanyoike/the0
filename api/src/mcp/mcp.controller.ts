@@ -193,7 +193,7 @@ export class McpController {
         inputSchema: {
           type: "object",
           properties: {},
-          required: [] as string[] as string[],
+          required: [] as string[],
         },
       },
 
