@@ -189,7 +189,8 @@ export class LogsController {
     if (
       !historyResult.success &&
       (historyResult.error?.includes("not found") ||
-        historyResult.error?.includes("access denied"))
+        historyResult.error?.includes("access denied") ||
+        historyResult.error?.includes("Authentication required"))
     ) {
       res.write(
         `event: error\ndata: ${JSON.stringify({ message: ACCESS_DENIED_MESSAGE })}\n\n`,
