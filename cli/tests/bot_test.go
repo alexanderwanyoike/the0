@@ -77,7 +77,7 @@ func TestAPIClient_ListBots(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "API error: 500",
+			errorContains: "API error 500:",
 		},
 		{
 			name:          "malformed JSON",
@@ -423,7 +423,7 @@ func TestAPIClient_DeleteBotInstance(t *testing.T) {
 			responseBody:  `{"error": "Internal Server Error"}`,
 			botID:         "bot_123",
 			expectedError: true,
-			errorContains: "deletion failed with status 500",
+			errorContains: "deletion failed:",
 		},
 	}
 
@@ -620,7 +620,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    401,
 			responseBody:  `{"error": "Unauthorized"}`,
 			expectedError: true,
-			errorContains: "upload failed (HTTP 401)",
+			errorContains: "authentication failed",
 		},
 		{
 			name:          "upload failed",
@@ -638,7 +638,7 @@ func TestAPIClient_UploadFileDirect(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "upload failed (HTTP 500)",
+			errorContains: "upload failed:",
 		},
 		{
 			name:       "API success false",

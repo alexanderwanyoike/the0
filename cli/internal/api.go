@@ -18,6 +18,16 @@ import (
 
 const DEFAULT_API_URL = "http://localhost:3000"
 
+// APIError represents an error response from the API with a status code
+type APIError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Message)
+}
+
 // APIClient handles all API interactions
 type APIClient struct {
 	BaseURL    string
@@ -181,11 +191,11 @@ func (c *APIClient) TestAPIKey(auth *Auth) error {
 	}
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("API key is invalid or revoked")
+		return &APIError{StatusCode: resp.StatusCode, Message: "API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+		return &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	var apiResponse APIKeyValidationResponse
@@ -225,11 +235,11 @@ func (c *APIClient) CheckBotExists(config *BotConfig, auth *Auth) (bool, error) 
 	}
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return false, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return false, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode != 200 {
-		return false, fmt.Errorf("failed to check bot existence: HTTP %d", resp.StatusCode)
+		return false, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("failed to check bot existence: HTTP %d", resp.StatusCode)}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -371,7 +381,7 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		logger.StopSpinner()
-		return fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
@@ -379,9 +389,9 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 		// Try to read error message from response
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == 400 {
-			return fmt.Errorf("validation error: %s", string(body))
+			return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("validation error: %s", string(body))}
 		}
-		return fmt.Errorf("deployment failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("deployment failed: %s", string(body))}
 	}
 
 	logger.StopSpinnerWithSuccess("Deployment successful")
@@ -411,7 +421,7 @@ func (c *APIClient) ListBots(auth *Auth) ([]BotInstance, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -420,7 +430,7 @@ func (c *APIClient) ListBots(auth *Auth) ([]BotInstance, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	// Try to parse as wrapped response first
@@ -463,7 +473,7 @@ func (c *APIClient) DeployBotInstance(auth *Auth, request *BotDeployRequest) (*B
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -473,9 +483,9 @@ func (c *APIClient) DeployBotInstance(auth *Auth, request *BotDeployRequest) (*B
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
 		if resp.StatusCode == 400 {
-			return nil, fmt.Errorf("validation error: %s", string(body))
+			return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("validation error: %s", string(body))}
 		}
-		return nil, fmt.Errorf("deployment failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("deployment failed: %s", string(body))}
 	}
 
 	var botInstance BotInstance
@@ -508,19 +518,19 @@ func (c *APIClient) UpdateBotInstance(auth *Auth, botID string, request *BotUpda
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return fmt.Errorf("bot not found: %s", botID)
+		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == 400 {
-			return fmt.Errorf("validation error: %s", string(body))
+			return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("validation error: %s", string(body))}
 		}
-		return fmt.Errorf("update failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("update failed: %s", string(body))}
 	}
 
 	return nil
@@ -564,16 +574,16 @@ func (c *APIClient) DeleteBotInstance(auth *Auth, botID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return fmt.Errorf("bot not found: %s", botID)
+		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("deletion failed with status %d: %s", resp.StatusCode, string(body))
+		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("deletion failed: %s", string(body))}
 	}
 
 	return nil
@@ -611,7 +621,7 @@ func (c *APIClient) ListUserBots(auth *Auth) ([]UserBot, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -620,7 +630,7 @@ func (c *APIClient) ListUserBots(auth *Auth) ([]UserBot, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	var apiResponse UserBotListResponse
@@ -651,7 +661,7 @@ func (c *APIClient) ListCustomBots(auth *Auth) ([]CustomBotData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -660,7 +670,7 @@ func (c *APIClient) ListCustomBots(auth *Auth) ([]CustomBotData, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	var apiResponse CustomBotListResponse
@@ -691,11 +701,11 @@ func (c *APIClient) GetCustomBot(auth *Auth, customBotName string) (*CustomBotDa
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("custom bot not found: %s", customBotName)
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("custom bot not found: %s", customBotName)}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -704,7 +714,7 @@ func (c *APIClient) GetCustomBot(auth *Auth, customBotName string) (*CustomBotDa
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	var apiResponse CustomBotAPIResponse
@@ -752,11 +762,11 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("bot not found: %s", botID)
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -765,7 +775,7 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error: %d - %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	var apiResponse LogsResponse
@@ -844,11 +854,15 @@ func (c *APIClient) UploadFileDirect(botName string, version string, filePath st
 		return "", fmt.Errorf("failed to read response body: %v", err)
 	}
 
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return "", &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
+	}
+
 	if resp.StatusCode != 200 {
 		if resp.StatusCode == 400 {
-			return "", fmt.Errorf("validation error: %s", string(body))
+			return "", &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("validation error: %s", string(body))}
 		}
-		return "", fmt.Errorf("upload failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return "", &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("upload failed: %s", string(body))}
 	}
 
 	// Parse the response as a flat structure instead of wrapped
@@ -930,15 +944,15 @@ func (c *APIClient) ListBotState(auth *Auth, botID string) ([]BotStateKey, error
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("bot not found: %s", botID)
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to list state (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("failed to list state: %s", string(body))}
 	}
 
 	var response BotStateListResponse
@@ -967,15 +981,15 @@ func (c *APIClient) GetBotStateKey(auth *Auth, botID string, key string) (any, e
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("bot or state key not found")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "bot or state key not found"}
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to get state key (HTTP %d): %s", resp.StatusCode, string(body))
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("failed to get state key: %s", string(body))}
 	}
 
 	var response BotStateValueResponse
@@ -1004,19 +1018,19 @@ func (c *APIClient) DeleteBotStateKey(auth *Auth, botID string, key string) (boo
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return false, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return false, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return false, fmt.Errorf("bot not found: %s", botID)
+		return false, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	if resp.StatusCode == 409 {
-		return false, fmt.Errorf("concurrent modification - state was modified by another operation")
+		return false, &APIError{StatusCode: resp.StatusCode, Message: "concurrent modification - state was modified by another operation"}
 	}
 
 	if resp.StatusCode != 200 {
-		return false, fmt.Errorf("failed to delete state key (HTTP %d): %s", resp.StatusCode, string(body))
+		return false, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("failed to delete state key: %s", string(body))}
 	}
 
 	var response BotStateDeleteResponse
@@ -1045,15 +1059,15 @@ func (c *APIClient) ClearBotState(auth *Auth, botID string) (bool, error) {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return false, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return false, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return false, fmt.Errorf("bot not found: %s", botID)
+		return false, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	if resp.StatusCode != 200 {
-		return false, fmt.Errorf("failed to clear state (HTTP %d): %s", resp.StatusCode, string(body))
+		return false, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("failed to clear state: %s", string(body))}
 	}
 
 	var response BotStateClearResponse
@@ -1107,11 +1121,11 @@ func (c *APIClient) ExecuteBotQuery(auth *Auth, botID string, request *BotQueryR
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("authentication failed: API key is invalid or revoked")
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
 	}
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("bot not found: %s", botID)
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
