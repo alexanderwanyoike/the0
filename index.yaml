@@ -5,6 +5,60 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: Remove unused Elasticsearch dependencies from frontend (closes #193)
+        - kind: fixed
+          description: Remove console.log statements from frontend SSE hooks (closes #203)
+        - kind: fixed
+          description: Validate name segment after bot type split (#209)
+        - kind: fixed
+          description: Use updatedAt instead of createdAt for API key update timestamp (closes #198)
+        - kind: fixed
+          description: Add clipboard error handling and remove unused elasticsearch deps
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.8.2
+    created: "2026-03-22T09:09:40.452315429Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: 54e93bfd67ee1395dbe6bd64229064c9b2caf8a7d80c68a9d6f6e8e31d865670
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.4.0/the0-0.4.0.tgz
+    version: 0.4.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: Prevent JSONB double-encoding in postgres.js and Drizzle by overriding JSON type serializer
         - kind: fixed
           description: Register JSONB data migration in Drizzle journal and fix unwrap cast to use config #>> '{}'
@@ -539,4 +593,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-18T09:21:01.781910725Z"
+generated: "2026-03-22T09:09:40.452364671Z"
