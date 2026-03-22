@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCustomBotsContext } from "@/contexts/custom-bots-context";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useCustomBotFilters } from "@/hooks/use-custom-bot-filters";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { CustomBotFilterDropdown } from "@/components/custom-bots/custom-bot-filter-dropdown";
 import { Bot, Loader2, Search } from "lucide-react";
 import { EmptyState } from "@/components/custom-bots/empty-state";
 import { CustomBotWithVersions } from "@/types/custom-bots";
@@ -22,7 +24,6 @@ export default function CustomBotsPage() {
     }
   }, [loading, isDesktop, bots, router]);
 
-  // Desktop: show nothing while redirecting (or empty state if no bots)
   if (isDesktop) {
     if (loading) {
       return (
@@ -37,7 +38,6 @@ export default function CustomBotsPage() {
     return null;
   }
 
-  // Non-desktop: show bot list
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -54,16 +54,18 @@ export default function CustomBotsPage() {
 }
 
 function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
-  const [filter, setFilter] = useState("");
+  const {
+    search,
+    setSearch,
+    type,
+    setType,
+    hasActiveFilters,
+    activeCount,
+    filterBots,
+  } = useCustomBotFilters();
   const router = useRouter();
 
-  const filtered = bots.filter((bot) => {
-    if (!filter) return true;
-    const q = filter.toLowerCase();
-    const name = bot.name.toLowerCase();
-    const desc = (bot.versions[0]?.config?.description || "").toLowerCase();
-    return name.includes(q) || desc.includes(q);
-  });
+  const filtered = filterBots(bots);
 
   return (
     <div className="px-3 py-4">
@@ -72,16 +74,25 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
           Custom Bots
         </h2>
         <p className="text-xl font-semibold">
-          {bots.length} {bots.length === 1 ? "bot" : "bots"}
+          {hasActiveFilters
+            ? `${filtered.length} / ${bots.length} bots`
+            : `${bots.length} ${bots.length === 1 ? "bot" : "bots"}`}
         </p>
       </div>
-      <div className="relative mb-3">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Filter bots..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="pl-8"
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Filter bots..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <CustomBotFilterDropdown
+          type={type}
+          setType={setType}
+          activeCount={activeCount}
         />
       </div>
       <div className="space-y-2">
@@ -93,7 +104,7 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
         ) : (
           filtered.map((bot) => {
             const config = bot.versions[0]?.config;
-            const type = config?.type || "Bot";
+            const botType = config?.type || "Bot";
             const description = config?.description || "";
 
             return (
@@ -113,7 +124,7 @@ function MobileCustomBotList({ bots }: { bots: CustomBotWithVersions[] }) {
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant="outline" className="text-xs">
-                        {type}
+                        {botType}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         v{bot.latestVersion}

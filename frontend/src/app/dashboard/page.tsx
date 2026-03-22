@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useDashboardBots } from "@/contexts/dashboard-bots-context";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useBotFilters } from "@/hooks/use-bot-filters";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { BotFilterDropdown } from "@/components/dashboard/bot-filter-dropdown";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 import { Bot, Clock, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,17 +59,20 @@ export default function DashboardPage() {
 }
 
 function MobileBotList({ bots }: { bots: ApiBotType[] }) {
-  const [filter, setFilter] = useState("");
+  const {
+    search,
+    setSearch,
+    type,
+    setType,
+    status,
+    setStatus,
+    hasActiveFilters,
+    activeCount,
+    filterBots,
+  } = useBotFilters();
   const router = useRouter();
 
-  const filtered = bots.filter((bot) => {
-    if (!filter) return true;
-    const config = bot.config as Record<string, any>;
-    const name = (config?.name || bot.id).toLowerCase();
-    const symbol = (config?.symbol || "").toLowerCase();
-    const q = filter.toLowerCase();
-    return name.includes(q) || symbol.includes(q);
-  });
+  const filtered = filterBots(bots);
 
   return (
     <div className="px-3 py-4">
@@ -76,16 +81,27 @@ function MobileBotList({ bots }: { bots: ApiBotType[] }) {
           Trading Bots
         </h2>
         <p className="text-xl font-semibold">
-          {bots.length} {bots.length === 1 ? "bot" : "bots"}
+          {hasActiveFilters
+            ? `${filtered.length} / ${bots.length} bots`
+            : `${bots.length} ${bots.length === 1 ? "bot" : "bots"}`}
         </p>
       </div>
-      <div className="relative mb-3">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Filter bots..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="pl-8"
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Filter bots..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <BotFilterDropdown
+          type={type}
+          setType={setType}
+          status={status}
+          setStatus={setStatus}
+          activeCount={activeCount}
         />
       </div>
       <div className="space-y-2">
@@ -99,7 +115,7 @@ function MobileBotList({ bots }: { bots: ApiBotType[] }) {
             const config = bot.config as Record<string, any>;
             const name = config?.name || bot.id;
             const symbol = config?.symbol || "";
-            const type = config?.type || "Bot";
+            const botType = config?.type || "Bot";
             const schedule = config?.schedule;
             const enabled = config?.enabled ?? true;
 
@@ -134,15 +150,13 @@ function MobileBotList({ bots }: { bots: ApiBotType[] }) {
                         </Badge>
                       )}
                       <Badge variant="outline" className="text-xs">
-                        {type}
+                        {botType}
                       </Badge>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
                     <Clock className="h-3 w-3" />
-                    <span className="hidden sm:inline">
-                      {readableSchedule}
-                    </span>
+                    <span className="hidden sm:inline">{readableSchedule}</span>
                   </div>
                 </div>
               </button>

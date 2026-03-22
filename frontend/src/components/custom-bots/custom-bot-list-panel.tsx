@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { CustomBotWithVersions } from "@/types/custom-bots";
 import { CustomBotListItem } from "./custom-bot-list-item";
+import { CustomBotFilterDropdown } from "./custom-bot-filter-dropdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Bot, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCustomBotFilters } from "@/hooks/use-custom-bot-filters";
 
 interface CustomBotListPanelProps {
   bots: CustomBotWithVersions[];
@@ -22,15 +23,17 @@ export function CustomBotListPanel({
   onSelectBot,
   className,
 }: CustomBotListPanelProps) {
-  const [filter, setFilter] = useState("");
+  const {
+    search,
+    setSearch,
+    type,
+    setType,
+    hasActiveFilters,
+    activeCount,
+    filterBots,
+  } = useCustomBotFilters();
 
-  const filtered = bots.filter((bot) => {
-    if (!filter) return true;
-    const q = filter.toLowerCase();
-    const name = bot.name.toLowerCase();
-    const desc = (bot.versions[0]?.config?.description || "").toLowerCase();
-    return name.includes(q) || desc.includes(q);
-  });
+  const filtered = filterBots(bots);
 
   return (
     <div className={cn("flex flex-col", className)}>
@@ -39,16 +42,25 @@ export function CustomBotListPanel({
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">Custom Bots</span>
           <Badge variant="secondary" className="text-xs">
-            {bots.length}
+            {hasActiveFilters
+              ? `${filtered.length} / ${bots.length}`
+              : bots.length}
           </Badge>
         </div>
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Filter bots..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="h-8 pl-7 text-sm"
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Filter bots..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 pl-7 text-sm"
+            />
+          </div>
+          <CustomBotFilterDropdown
+            type={type}
+            setType={setType}
+            activeCount={activeCount}
           />
         </div>
       </div>
