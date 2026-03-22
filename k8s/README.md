@@ -480,6 +480,7 @@ metadata:
   name: the0
   namespace: flux-system
 spec:
+  type: "oci"
   interval: 5m
   url: oci://ghcr.io/alexanderwanyoike/the0/charts
 ```
