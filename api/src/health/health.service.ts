@@ -5,6 +5,7 @@ import { NatsService } from "@/nats/nats.service";
 import { MINIO_CLIENT } from "@/minio/minio.provider";
 import { getDatabase } from "@/database/connection";
 import { sql } from "drizzle-orm";
+import { errorMessage } from "@/common/result";
 import * as Minio from "minio";
 
 export interface HealthStatus {
@@ -63,9 +64,9 @@ export class HealthService {
       const db = getDatabase();
       await db.execute(sql`SELECT 1`);
       return { status: "up", latencyMs: Date.now() - start };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn({ err: error }, "Postgres health check failed");
-      return { status: "down", error: error.message };
+      return { status: "down", error: errorMessage(error) };
     }
   }
 
@@ -77,9 +78,9 @@ export class HealthService {
         return { status: "down", error: "Not connected" };
       }
       return { status: "up", latencyMs: Date.now() - start };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn({ err: error }, "NATS health check failed");
-      return { status: "down", error: error.message };
+      return { status: "down", error: errorMessage(error) };
     }
   }
 
@@ -88,9 +89,9 @@ export class HealthService {
     try {
       await this.minioClient.bucketExists(this.minioBucket);
       return { status: "up", latencyMs: Date.now() - start };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn({ err: error }, "MinIO health check failed");
-      return { status: "down", error: error.message };
+      return { status: "down", error: errorMessage(error) };
     }
   }
 }
