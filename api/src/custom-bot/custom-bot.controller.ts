@@ -7,7 +7,6 @@ import {
   Param,
   BadRequestException,
   NotFoundException,
-  Req,
   Res,
   HttpStatus,
   HttpCode,
@@ -21,7 +20,8 @@ import { Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
-import { AuthenticatedRequest } from "@/auth/auth.types";
+import { AuthenticatedUser } from "@/auth/auth.types";
+import { CurrentUser } from "@/auth/current-user.decorator";
 import { StorageService } from "./storage.service";
 
 interface CustomBotDeployDto {
@@ -37,6 +37,26 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
+  /**
+   * Validates and normalizes the filePath, ensuring it is a non-empty string
+   * scoped to the authenticated user. Returns the trimmed path.
+   */
+  private validateFilePath(filePath: unknown, userId: string): string {
+    if (typeof filePath !== "string" || filePath.trim() === "") {
+      throw new BadRequestException("filePath is required");
+    }
+
+    const trimmed = filePath.trim();
+
+    if (!trimmed.startsWith(`${userId}/`)) {
+      throw new BadRequestException(
+        "File path must belong to the authenticated user",
+      );
+    }
+
+    return trimmed;
+  }
+
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))
@@ -44,9 +64,9 @@ export class CustomBotController {
     @Param("name") name: string,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { version?: string },
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = request.user?.uid;
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
@@ -92,26 +112,14 @@ export class CustomBotController {
   async createCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = request.user?.uid;
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
 
-    // Validate file path
-    if (typeof body.filePath !== "string" || body.filePath.trim() === "") {
-      throw new BadRequestException("file path is required");
-    }
-
-    const filePath = body.filePath.trim();
-
-    // Ensure filePath is scoped to the requesting user
-    if (!filePath.startsWith(`${userId}/`)) {
-      throw new BadRequestException(
-        "File path must belong to the authenticated user",
-      );
-    }
+    const filePath = this.validateFilePath(body.filePath, userId);
 
     // Validate that file exists at file path
     const fileExistsResult = await this.storageService.fileExists(filePath);
@@ -166,26 +174,14 @@ export class CustomBotController {
   async updateCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = request.user?.uid;
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
 
-    // Validate file path
-    if (typeof body.filePath !== "string" || body.filePath.trim() === "") {
-      throw new BadRequestException("file path is required");
-    }
-
-    const filePath = body.filePath.trim();
-
-    // Ensure filePath is scoped to the requesting user
-    if (!filePath.startsWith(`${userId}/`)) {
-      throw new BadRequestException(
-        "File path must belong to the authenticated user",
-      );
-    }
+    const filePath = this.validateFilePath(body.filePath, userId);
 
     // Validate that file exists at file path
     const fileExistsResult = await this.storageService.fileExists(filePath);
@@ -238,8 +234,8 @@ export class CustomBotController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async getUserCustomBots(@Req() request: AuthenticatedRequest) {
-    const userId = request.user?.uid;
+  async getUserCustomBots(@CurrentUser() user: AuthenticatedUser) {
+    const userId = user?.uid;
     if (!userId) {
       throw new BadRequestException("User ID is required");
     }
@@ -259,7 +255,7 @@ export class CustomBotController {
 
   @Get(":name")
   @HttpCode(HttpStatus.OK)
-  async getAllVersions(@Param("name") name: string, @Req() request: AuthenticatedRequest) {
+  async getAllVersions(@Param("name") name: string) {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
     if (!result.success) {
@@ -314,7 +310,6 @@ export class CustomBotController {
   async getSpecificVersion(
     @Param("name") name: string,
     @Param("version") version: string,
-    @Req() request: AuthenticatedRequest,
   ) {
     const result = await this.customBotService.getGlobalSpecificVersion(
       name,
