@@ -75,7 +75,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [],
+          required: [] as string[] as string[],
         },
       },
 
@@ -87,7 +87,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [],
+          required: [] as string[],
         },
       },
       {
@@ -208,7 +208,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [],
+          required: [] as string[],
         },
       },
       {
@@ -497,7 +497,7 @@ export class McpService {
         limit,
         offset: 0,
       },
-      userId
+      userId,
     );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs");
@@ -527,7 +527,7 @@ export class McpService {
         limit: 100,
         offset: 0,
       },
-      userId
+      userId,
     );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs for summary");
