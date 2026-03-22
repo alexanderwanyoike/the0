@@ -4,6 +4,68 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: added
+          description: Unified master-detail dashboard with responsive layout (desktop sidebar, mobile tabbed detail)
+        - kind: added
+          description: Custom bots master-detail view mirroring the dashboard pattern
+        - kind: added
+          description: Dropdown filter menus for bot type and status with text search
+        - kind: fixed
+          description: Server-side redirect for legacy /bot/[botId] route
+        - kind: fixed
+          description: Hydration flash prevention with useMediaQuery null-gating
+        - kind: fixed
+          description: Accessibility improvements (aria-labels, aria-current on active items)
+        - kind: fixed
+          description: Error states with retry for failed bot list fetches
+        - kind: fixed
+          description: URL-encode custom bot names in navigation paths
+        - kind: fixed
+          description: Copy button now copies masked config (sensitive fields stripped)
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.9.0
+    created: "2026-03-22T12:33:25.67930983Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: 576a7132279c5b3d57b1844bcbc4a5a7c5aec24be13a2b84e842a1edda4199c8
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.5.0/the0-0.5.0.tgz
+    version: 0.5.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: fixed
           description: Remove unused Elasticsearch dependencies from frontend (closes #193)
         - kind: fixed
@@ -593,4 +655,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-22T09:09:40.452364671Z"
+generated: "2026-03-22T12:33:25.679412542Z"
