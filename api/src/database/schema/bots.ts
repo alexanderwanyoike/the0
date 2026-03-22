@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 import { usersTable, usersTableSqlite } from "./users";
@@ -24,7 +24,10 @@ export const botsTable = pgTable("bots", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("bots_user_id_idx").on(table.userId),
+  customBotIdIdx: index("bots_custom_bot_id_idx").on(table.customBotId),
+}));
 
 // SQLite Bots table
 export const botsTableSqlite = sqliteTable("bots", {
