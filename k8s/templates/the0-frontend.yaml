@@ -36,6 +36,8 @@ spec:
       app.kubernetes.io/component: frontend
   template:
     metadata:
+      annotations:
+        checksum/chart-version: "{{ .Chart.Version }}"
       labels:
         {{- include "the0.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend

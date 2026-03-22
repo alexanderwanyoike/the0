@@ -469,6 +469,24 @@ botController:
     registry: "localhost:5000"  # Minikube registry
 ```
 
+## Flux Configuration
+
+If using Flux for GitOps, set a short reconciliation interval on the HelmRepository to pick up new chart versions quickly:
+
+```yaml
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: the0
+  namespace: flux-system
+spec:
+  type: "oci"
+  interval: 5m
+  url: oci://ghcr.io/alexanderwanyoike/the0/charts
+```
+
+All deployment pod templates include a `checksum/chart-version` annotation that changes with each chart version. This ensures Kubernetes detects a diff and triggers a rolling update whenever Flux reconciles a new chart version, preventing stale pods from running after an upgrade.
+
 ## Comparison with Docker Compose
 
 | Feature | Docker Compose | Kubernetes |
