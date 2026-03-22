@@ -189,9 +189,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - bot_runner_data:/app/data
       - /tmp/bot-runner:/tmp/bot-runner
-    privileged: true
-    sysctls:
-      - net.ipv4.ip_forward=1
     depends_on:
       mongo:
         condition: service_healthy
@@ -251,9 +248,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - bot_scheduler_data:/app/data
       - /tmp/bot-scheduler:/tmp/bot-scheduler
-    privileged: true
-    sysctls:
-      - net.ipv4.ip_forward=1
     depends_on:
       mongo:
         condition: service_healthy
@@ -308,9 +302,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/query-server:/tmp/query-server
-    privileged: true
-    sysctls:
-      - net.ipv4.ip_forward=1
     depends_on:
       mongo:
         condition: service_healthy
