@@ -128,7 +128,7 @@ describe("Custom Bot API Integration Tests", () => {
   describe("POST /custom-bots/:name (Signed URL Deploy)", () => {
     it("should create a new custom bot successfully with signed URL", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/integration-test-bot_1.0.0_123456.zip";
+        "test-user-123/integration-test-bot/1.0.0/integration-test-bot_1.0.0_123456.zip";
 
       const mockCreatedBot: CustomBot = {
         id: "new-bot-id",
@@ -177,12 +177,12 @@ describe("Custom Bot API Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body.message).toBe("file path is required");
+      expect(response.body.message).toBe("filePath must be a string");
     });
 
     it("should return 400 when file does not exist at filePath", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/nonexistent.zip";
+        "test-user-123/integration-test-bot/1.0.0/nonexistent.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(false));
 
@@ -201,7 +201,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when config is missing", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
 
@@ -217,7 +217,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when config is invalid JSON", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
 
@@ -234,7 +234,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when bot name in config doesnt match URL", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
       const configWithDifferentName = {
         ...validConfig,
         name: "different-name",
@@ -257,7 +257,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when bot already exists", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(true));
@@ -277,7 +277,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when ZIP validation fails", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -298,7 +298,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when config validation fails", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
       const invalidConfig = {
         ...validConfig,
         version: "invalid-version", // Invalid semver
@@ -321,7 +321,7 @@ describe("Custom Bot API Integration Tests", () => {
   describe("PUT /custom-bots/:name (Signed URL Deploy)", () => {
     it("should update bot with new version successfully", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.1.0/integration-test-bot_1.1.0_123456.zip";
+        "test-user-123/integration-test-bot/1.1.0/integration-test-bot_1.1.0_123456.zip";
       const updateConfig = {
         ...validConfig,
         version: "1.1.0",
@@ -333,7 +333,7 @@ describe("Custom Bot API Integration Tests", () => {
         name: "integration-test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath: "gs://test-bucket/old-file.zip",
+        filePath: "test-user-123/old-file.zip",
         userId: "test-user-123",
         status: "active",
         createdAt: new Date(),
@@ -373,7 +373,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when bot does not exist", async () => {
       const filePath =
-        "gs://test-bucket/user123/non-existent-bot/1.0.0/test-bot.zip";
+        "test-user-123/non-existent-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -393,7 +393,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when user is not the owner", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(true));
@@ -414,13 +414,13 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when version is not newer", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
       const mockExistingBot: CustomBot = {
         id: "existing-id",
         name: "integration-test-bot",
         version: "2.0.0", // Higher than payload version
         config: validConfig,
-        filePath: "gs://test-bucket/old-file.zip",
+        filePath: "test-user-123/old-file.zip",
         userId: "test-user-123",
         status: "active",
         createdAt: new Date(),
@@ -448,13 +448,13 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 400 when version already exists", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.1.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.1.0/test-bot.zip";
       const mockExistingBot: CustomBot = {
         id: "existing-id",
         name: "integration-test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath: "gs://test-bucket/old-file.zip",
+        filePath: "test-user-123/old-file.zip",
         userId: "test-user-123",
         status: "active",
         createdAt: new Date(),
@@ -490,7 +490,7 @@ describe("Custom Bot API Integration Tests", () => {
           {
             version: "1.1.0",
             config: { ...validConfig, version: "1.1.0" },
-            filePath: "gs://bucket/v1.1.zip",
+            filePath: "test-user-123/v1.1.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
             status: "active",
@@ -501,7 +501,7 @@ describe("Custom Bot API Integration Tests", () => {
           {
             version: "1.0.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.0.zip",
+            filePath: "test-user-123/v1.0.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
             status: "active",
@@ -547,7 +547,7 @@ describe("Custom Bot API Integration Tests", () => {
         name: "integration-test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath: "gs://test-bucket/file.zip",
+        filePath: "test-user-123/file.zip",
         status: "active",
         userId: "test-user-123",
         createdAt: new Date(),
@@ -605,7 +605,7 @@ describe("Custom Bot API Integration Tests", () => {
         version: "1.0.0",
         config: createConfig,
         status: "active",
-        filePath: "gs://test-bucket/e2e-v1.zip",
+        filePath: "test-user-123/e2e-v1.zip",
         userId: "test-user-123",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -621,7 +621,7 @@ describe("Custom Bot API Integration Tests", () => {
         .post(`/custom-bots/${botName}`)
         .send({
           config: JSON.stringify(createConfig),
-          filePath: "gs://test-bucket/e2e-v1.zip",
+          filePath: "test-user-123/e2e-v1.zip",
         })
         .expect(201);
 
@@ -645,7 +645,7 @@ describe("Custom Bot API Integration Tests", () => {
           version: "1.0.0",
           config: createConfig,
           status: "active",
-          filePath: "gs://test-bucket/e2e-v1.zip",
+          filePath: "test-user-123/e2e-v1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -660,7 +660,7 @@ describe("Custom Bot API Integration Tests", () => {
           version: "1.1.0",
           config: updateConfig,
           status: "active",
-          filePath: "gs://test-bucket/e2e-v1.1.zip",
+          filePath: "test-user-123/e2e-v1.1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -673,7 +673,7 @@ describe("Custom Bot API Integration Tests", () => {
           version: "1.1.0",
           config: updateConfig,
           status: "active",
-          filePath: "gs://test-bucket/e2e-v1.1.zip",
+          filePath: "test-user-123/e2e-v1.1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -684,7 +684,7 @@ describe("Custom Bot API Integration Tests", () => {
         .put(`/custom-bots/${botName}`)
         .send({
           config: JSON.stringify(updateConfig),
-          filePath: "gs://test-bucket/e2e-v1.1.zip",
+          filePath: "test-user-123/e2e-v1.1.zip",
         })
         .expect(200);
 
@@ -700,7 +700,7 @@ describe("Custom Bot API Integration Tests", () => {
             {
               version: "1.1.0",
               config: updateConfig,
-              filePath: "gs://test-bucket/e2e-v1.1.zip",
+              filePath: "test-user-123/e2e-v1.1.zip",
               createdAt: new Date(),
               updatedAt: new Date(),
               status: "active",
@@ -711,7 +711,7 @@ describe("Custom Bot API Integration Tests", () => {
             {
               version: "1.0.0",
               config: createConfig,
-              filePath: "gs://test-bucket/e2e-v1.zip",
+              filePath: "test-user-123/e2e-v1.zip",
               createdAt: new Date(),
               updatedAt: new Date(),
               status: "active",
@@ -741,7 +741,7 @@ describe("Custom Bot API Integration Tests", () => {
           version: "1.0.0",
           config: createConfig,
           status: "active",
-          filePath: "gs://test-bucket/e2e-v1.zip",
+          filePath: "test-user-123/e2e-v1.zip",
           userId: "test-user-123",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -759,7 +759,7 @@ describe("Custom Bot API Integration Tests", () => {
   describe("Error handling and edge cases", () => {
     it("should handle repository errors gracefully", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(
@@ -779,7 +779,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should handle GCS service errors gracefully", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/test-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -800,7 +800,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should handle large file uploads properly", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/large-bot.zip";
+        "test-user-123/integration-test-bot/1.0.0/large-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -821,22 +821,34 @@ describe("Custom Bot API Integration Tests", () => {
       );
     });
 
-    it("should handle missing user authentication", async () => {
-      // Create a request without the auth middleware
+    it("should reject filePath belonging to another user", async () => {
       const response = await request(app.getHttpServer())
-        .post("/custom-bots/no-auth-bot")
+        .post("/custom-bots/integration-test-bot")
         .send({
           config: JSON.stringify(validConfig),
-          filePath: "gs://test-bucket/user123/no-auth-bot/1.0.0/test-bot.zip",
+          filePath: "other-user/integration-test-bot/1.0.0/test-bot.zip",
         });
 
-      // This should fail because there's no auth middleware applied to this specific route
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain(
+        "File path must belong to the authenticated user",
+      );
+    });
+
+    it("should reject request when config name mismatches URL param", async () => {
+      const response = await request(app.getHttpServer())
+        .post("/custom-bots/mismatched-bot")
+        .send({
+          config: JSON.stringify(validConfig),
+          filePath: "test-user-123/mismatched-bot/1.0.0/test-bot.zip",
+        });
+
       expect(response.status).toBeGreaterThanOrEqual(400);
     });
 
     it("should validate file content type properly", async () => {
       const filePath =
-        "gs://test-bucket/user123/integration-test-bot/1.0.0/fake.zip";
+        "test-user-123/integration-test-bot/1.0.0/fake.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -861,7 +873,7 @@ describe("Custom Bot API Integration Tests", () => {
         .send({ invalid: "data" })
         .expect(400);
 
-      expect(response.body.message).toBe("file path is required");
+      expect(response.body.message).toBe("filePath must be a string");
     });
   });
 });

@@ -71,14 +71,14 @@ describe("CustomBotController", () => {
         version: "1.0.0",
         config: validConfig,
         filePath:
-          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation
@@ -115,7 +115,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when file does not exist at filePath", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return file not found
@@ -132,7 +132,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when GCS validation fails", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return error
@@ -149,7 +149,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when config is missing", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -165,7 +165,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when config is invalid JSON", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "invalid json", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -185,7 +185,7 @@ describe("CustomBotController", () => {
         name: "different-bot",
       };
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -204,7 +204,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when service returns error", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -215,6 +215,24 @@ describe("CustomBotController", () => {
       mockService.createCustomBot.mockResolvedValue(
         Failure("Bot already exists"),
       );
+
+      await expect(
+        controller.createCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should reject filePath not scoped to the requesting user", async () => {
+      const filePath = "other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
+
+      await expect(
+        controller.createCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should reject filePath with path traversal", async () => {
+      const filePath = "user123/../other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
 
       await expect(
         controller.createCustomBot("test-bot", body, mockUser),
@@ -235,14 +253,14 @@ describe("CustomBotController", () => {
         version: "1.1.0",
         config: updateConfig,
         filePath:
-          "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+          "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
+        "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
       const body = { config: JSON.stringify(updateConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -271,7 +289,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when service returns error", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -302,7 +320,7 @@ describe("CustomBotController", () => {
         name: "different-bot",
       };
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -318,9 +336,17 @@ describe("CustomBotController", () => {
         controller.updateCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it("should reject filePath not scoped to the requesting user", async () => {
+      const filePath = "other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
+
+      await expect(
+        controller.updateCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
-  // NEW TEST SECTION
   describe("getUserCustomBots", () => {
     it("should get user custom bots successfully", async () => {
       const mockUserBots: CustomBotWithVersions[] = [
@@ -342,7 +368,7 @@ describe("CustomBotController", () => {
 
               userId: "test-user-123",
               id: "bot-id",
-              filePath: "gs://bucket/user123/my-arbitrage-bot/1.2.0/file.zip",
+              filePath: "user123/my-arbitrage-bot/1.2.0/file.zip",
               createdAt: new Date("2025-01-15T10:30:00.000Z"),
               updatedAt: new Date("2025-01-15T10:30:00.000Z"),
             },
@@ -354,7 +380,7 @@ describe("CustomBotController", () => {
                 version: "1.1.0",
                 description: "Basic arbitrage trading bot",
               },
-              filePath: "gs://bucket/user123/my-arbitrage-bot/1.1.0/file.zip",
+              filePath: "user123/my-arbitrage-bot/1.1.0/file.zip",
               createdAt: new Date("2025-01-10T09:15:00.000Z"),
               updatedAt: new Date("2025-01-10T09:15:00.000Z"),
               status: "active",
@@ -380,7 +406,7 @@ describe("CustomBotController", () => {
                 version: "2.0.0",
                 description: "Trend following strategy",
               },
-              filePath: "gs://bucket/user123/trend-follower/2.0.0/file.zip",
+              filePath: "user123/trend-follower/2.0.0/file.zip",
               createdAt: new Date("2025-01-12T14:20:00.000Z"),
               updatedAt: new Date("2025-01-12T14:20:00.000Z"),
               status: "active",
@@ -439,14 +465,14 @@ describe("CustomBotController", () => {
           {
             version: "1.1.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.1.zip",
+            filePath: "user123/v1.1.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
           },
           {
             version: "1.0.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.0.zip",
+            filePath: "user123/v1.0.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -485,7 +511,7 @@ describe("CustomBotController", () => {
         version: "1.0.0",
         config: validConfig,
         filePath:
-          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
