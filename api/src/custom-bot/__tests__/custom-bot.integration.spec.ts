@@ -837,10 +837,10 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should reject request when config name mismatches URL param", async () => {
       const response = await request(app.getHttpServer())
-        .post("/custom-bots/no-auth-bot")
+        .post("/custom-bots/mismatched-bot")
         .send({
           config: JSON.stringify(validConfig),
-          filePath: "test-user-123/no-auth-bot/1.0.0/test-bot.zip",
+          filePath: "test-user-123/mismatched-bot/1.0.0/test-bot.zip",
         });
 
       expect(response.status).toBeGreaterThanOrEqual(400);
