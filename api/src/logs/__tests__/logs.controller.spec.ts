@@ -48,6 +48,47 @@ describe("LogsController", () => {
     LogsController._resetForTest();
   });
 
+  describe("getLogs", () => {
+    it("should return logs successfully", async () => {
+      const mockLogs = [{ date: "20260210", content: "test log" }];
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(Ok(mockLogs));
+
+      const result = await controller.getLogs(
+        "bot-123",
+        { limit: 100, offset: 0 } as any,
+        mockUser,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockLogs);
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+        "bot-123",
+        { date: undefined, dateRange: undefined, limit: 100, offset: 0 },
+        "user123",
+      );
+    });
+
+    it("should throw NotFoundException for not found errors", async () => {
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Failure("Bot not found or access denied"),
+      );
+
+      await expect(
+        controller.getLogs("bot-123", { limit: 100, offset: 0 } as any, mockUser),
+      ).rejects.toThrow("Bot not found or access denied");
+    });
+
+    it("should throw BadRequestException for other errors", async () => {
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Failure("Invalid date format"),
+      );
+
+      await expect(
+        controller.getLogs("bot-123", { limit: 100, offset: 0 } as any, mockUser),
+      ).rejects.toThrow("Invalid date format");
+    });
+  });
+
   describe("streamLogs", () => {
     let mockReq: any;
     let mockRes: any;
