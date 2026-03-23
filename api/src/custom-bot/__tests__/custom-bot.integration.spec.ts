@@ -177,7 +177,7 @@ describe("Custom Bot API Integration Tests", () => {
         })
         .expect(400);
 
-      expect(response.body.message).toBe("filePath is required");
+      expect(response.body.message).toBe("filePath must be a string");
     });
 
     it("should return 400 when file does not exist at filePath", async () => {
@@ -873,7 +873,7 @@ describe("Custom Bot API Integration Tests", () => {
         .send({ invalid: "data" })
         .expect(400);
 
-      expect(response.body.message).toBe("filePath is required");
+      expect(response.body.message).toBe("filePath must be a string");
     });
   });
 });

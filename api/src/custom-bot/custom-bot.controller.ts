@@ -37,7 +37,10 @@ export class CustomBotController {
   ) {}
 
   private validateFilePath(filePath: unknown, userId: string): string {
-    if (typeof filePath !== "string" || filePath.trim() === "") {
+    if (typeof filePath !== "string") {
+      throw new BadRequestException("filePath must be a string");
+    }
+    if (filePath.trim() === "") {
       throw new BadRequestException("filePath is required");
     }
     const trimmed = filePath.trim();
