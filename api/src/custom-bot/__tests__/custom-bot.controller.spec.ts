@@ -229,6 +229,15 @@ describe("CustomBotController", () => {
         controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it("should reject filePath with path traversal", async () => {
+      const filePath = "user123/../other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
+
+      await expect(
+        controller.createCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe("updateCustomBot", () => {
@@ -359,7 +368,7 @@ describe("CustomBotController", () => {
 
               userId: "test-user-123",
               id: "bot-id",
-              filePath: "gs://bucket/user123/my-arbitrage-bot/1.2.0/file.zip",
+              filePath: "user123/my-arbitrage-bot/1.2.0/file.zip",
               createdAt: new Date("2025-01-15T10:30:00.000Z"),
               updatedAt: new Date("2025-01-15T10:30:00.000Z"),
             },
@@ -371,7 +380,7 @@ describe("CustomBotController", () => {
                 version: "1.1.0",
                 description: "Basic arbitrage trading bot",
               },
-              filePath: "gs://bucket/user123/my-arbitrage-bot/1.1.0/file.zip",
+              filePath: "user123/my-arbitrage-bot/1.1.0/file.zip",
               createdAt: new Date("2025-01-10T09:15:00.000Z"),
               updatedAt: new Date("2025-01-10T09:15:00.000Z"),
               status: "active",
@@ -397,7 +406,7 @@ describe("CustomBotController", () => {
                 version: "2.0.0",
                 description: "Trend following strategy",
               },
-              filePath: "gs://bucket/user123/trend-follower/2.0.0/file.zip",
+              filePath: "user123/trend-follower/2.0.0/file.zip",
               createdAt: new Date("2025-01-12T14:20:00.000Z"),
               updatedAt: new Date("2025-01-12T14:20:00.000Z"),
               status: "active",
@@ -456,14 +465,14 @@ describe("CustomBotController", () => {
           {
             version: "1.1.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.1.zip",
+            filePath: "user123/v1.1.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
           },
           {
             version: "1.0.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.0.zip",
+            filePath: "user123/v1.0.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
           },

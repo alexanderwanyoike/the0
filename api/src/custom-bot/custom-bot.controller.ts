@@ -41,6 +41,9 @@ export class CustomBotController {
       throw new BadRequestException("filePath is required");
     }
     const trimmed = filePath.trim();
+    if (trimmed.includes("..") || trimmed.includes("//")) {
+      throw new BadRequestException("Invalid file path");
+    }
     if (!trimmed.startsWith(`${userId}/`)) {
       throw new BadRequestException(
         "File path must belong to the authenticated user",
