@@ -5,6 +5,74 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: added
+          description: Health and readiness endpoints (/health, /health/ready) with dependency checks
+        - kind: added
+          description: "@CurrentUser() decorator replacing unsafe (request as any).user pattern"
+        - kind: added
+          description: BotConfig typed interface with noImplicitAny and ESLint no-explicit-any enforcement
+        - kind: added
+          description: Database indexes on all foreign key columns (bots, custom_bots, api_keys)
+        - kind: added
+          description: Chart version annotation on pod templates for Flux rollout detection
+        - kind: security
+          description: Prevent filePath IDOR in custom-bot deploy with path traversal protection
+        - kind: security
+          description: Remove unnecessary privileged mode from runtime containers
+        - kind: security
+          description: Require JWT_SECRET env var at startup with dotenv preload
+        - kind: fixed
+          description: CLI auth error matching uses typed APIError instead of brittle string matching
+        - kind: fixed
+          description: Replace ~95 any types with proper TypeScript types across API
+        - kind: fixed
+          description: Shared hasErrorCode and errorMessage utilities in common/result.ts
+        - kind: fixed
+          description: Treat Authentication required as terminal error in SSE log stream
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.10.0
+    created: "2026-03-24T12:58:14.870412315Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: aebaf49f00249da0f8884872bc68173e9e2ed7d61ce1065eb50f0b120c429983
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.6.0/the0-0.6.0.tgz
+    version: 0.6.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: added
           description: Unified master-detail dashboard with responsive layout (desktop sidebar, mobile tabbed detail)
         - kind: added
           description: Custom bots master-detail view mirroring the dashboard pattern
@@ -655,4 +723,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-22T12:33:25.679412542Z"
+generated: "2026-03-24T12:58:14.870522261Z"
