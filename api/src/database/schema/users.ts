@@ -4,6 +4,7 @@ import {
   timestamp,
   boolean,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
@@ -74,7 +75,9 @@ export const apiKeysTable = pgTable("api_keys", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("api_keys_user_id_idx").on(table.userId),
+}));
 
 // SQLite API Keys table
 export const apiKeysTableSqlite = sqliteTable("api_keys", {

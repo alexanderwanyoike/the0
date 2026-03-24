@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "nestjs-pino";
@@ -5,6 +6,16 @@ import { AppModule } from "./app.module";
 import { runMigrations } from "./database/migrate";
 
 async function bootstrap() {
+  // Fail fast if JWT_SECRET is not configured
+  if (!process.env.JWT_SECRET) {
+    console.error(
+      "FATAL: JWT_SECRET environment variable is not set. " +
+        "The API cannot start without a secure JWT secret. " +
+        "Set JWT_SECRET in your environment before starting the server.",
+    );
+    process.exit(1);
+  }
+
   // Run database migrations before starting the application
   // Note: migrations run before NestJS app is created, so we use console here
   console.log("Running database migrations...");

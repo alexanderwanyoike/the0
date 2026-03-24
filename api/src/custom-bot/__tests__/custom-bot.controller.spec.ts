@@ -7,6 +7,7 @@ import {
 } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { StorageService } from "../storage.service";
+import { AuthenticatedUser } from "@/auth/auth.types";
 
 describe("CustomBotController", () => {
   let controller: CustomBotController;
@@ -14,10 +15,7 @@ describe("CustomBotController", () => {
   let mockStorageService: jest.Mocked<StorageService>;
   // Removed duplicate declaration
 
-  const mockRequest = {
-    user: { uid: "user123" },
-    userId: "user123",
-  } as any;
+  const mockUser = { uid: "user123" } as AuthenticatedUser;
 
   const validConfig: CustomBotConfig = {
     name: "test-bot",
@@ -73,14 +71,14 @@ describe("CustomBotController", () => {
         version: "1.0.0",
         config: validConfig,
         filePath:
-          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation
@@ -94,7 +92,7 @@ describe("CustomBotController", () => {
       const result = await controller.createCustomBot(
         "test-bot",
         body,
-        mockRequest,
+        mockUser,
       );
 
       expect(result.success).toBe(true);
@@ -107,28 +105,17 @@ describe("CustomBotController", () => {
       );
     });
 
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const requestWithoutUser = {} as any;
-      const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
-      const body = { config: JSON.stringify(validConfig), filePath };
-
-      await expect(
-        controller.createCustomBot("test-bot", body, requestWithoutUser),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it("should throw BadRequestException when filePath is missing", async () => {
       const body = { config: JSON.stringify(validConfig) } as any;
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when file does not exist at filePath", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return file not found
@@ -139,13 +126,13 @@ describe("CustomBotController", () => {
       });
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when GCS validation fails", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return error
@@ -156,13 +143,13 @@ describe("CustomBotController", () => {
       });
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when config is missing", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -172,13 +159,13 @@ describe("CustomBotController", () => {
       });
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when config is invalid JSON", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "invalid json", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -188,7 +175,7 @@ describe("CustomBotController", () => {
       });
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -198,7 +185,7 @@ describe("CustomBotController", () => {
         name: "different-bot",
       };
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -211,13 +198,13 @@ describe("CustomBotController", () => {
       });
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when service returns error", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -230,7 +217,25 @@ describe("CustomBotController", () => {
       );
 
       await expect(
-        controller.createCustomBot("test-bot", body, mockRequest),
+        controller.createCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should reject filePath not scoped to the requesting user", async () => {
+      const filePath = "other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
+
+      await expect(
+        controller.createCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should reject filePath with path traversal", async () => {
+      const filePath = "user123/../other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
+
+      await expect(
+        controller.createCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -248,14 +253,14 @@ describe("CustomBotController", () => {
         version: "1.1.0",
         config: updateConfig,
         filePath:
-          "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+          "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
+        "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
       const body = { config: JSON.stringify(updateConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -268,7 +273,7 @@ describe("CustomBotController", () => {
       const result = await controller.updateCustomBot(
         "test-bot",
         body,
-        mockRequest,
+        mockUser,
       );
 
       expect(result.success).toBe(true);
@@ -284,7 +289,7 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when service returns error", async () => {
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -297,18 +302,7 @@ describe("CustomBotController", () => {
       );
 
       await expect(
-        controller.updateCustomBot("test-bot", body, mockRequest),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const requestWithoutUser = {} as any;
-      const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
-      const body = { config: JSON.stringify(validConfig), filePath };
-
-      await expect(
-        controller.updateCustomBot("test-bot", body, requestWithoutUser),
+        controller.updateCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -316,7 +310,7 @@ describe("CustomBotController", () => {
       const body = { config: JSON.stringify(validConfig) } as any;
 
       await expect(
-        controller.updateCustomBot("test-bot", body, mockRequest),
+        controller.updateCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -326,7 +320,7 @@ describe("CustomBotController", () => {
         name: "different-bot",
       };
       const filePath =
-        "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -339,12 +333,20 @@ describe("CustomBotController", () => {
       });
 
       await expect(
-        controller.updateCustomBot("test-bot", body, mockRequest),
+        controller.updateCustomBot("test-bot", body, mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should reject filePath not scoped to the requesting user", async () => {
+      const filePath = "other-user/test-bot/1.0.0/test-bot.zip";
+      const body = { config: JSON.stringify(validConfig), filePath };
+
+      await expect(
+        controller.updateCustomBot("test-bot", body, mockUser),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
-  // NEW TEST SECTION
   describe("getUserCustomBots", () => {
     it("should get user custom bots successfully", async () => {
       const mockUserBots: CustomBotWithVersions[] = [
@@ -366,7 +368,7 @@ describe("CustomBotController", () => {
 
               userId: "test-user-123",
               id: "bot-id",
-              filePath: "gs://bucket/user123/my-arbitrage-bot/1.2.0/file.zip",
+              filePath: "user123/my-arbitrage-bot/1.2.0/file.zip",
               createdAt: new Date("2025-01-15T10:30:00.000Z"),
               updatedAt: new Date("2025-01-15T10:30:00.000Z"),
             },
@@ -378,7 +380,7 @@ describe("CustomBotController", () => {
                 version: "1.1.0",
                 description: "Basic arbitrage trading bot",
               },
-              filePath: "gs://bucket/user123/my-arbitrage-bot/1.1.0/file.zip",
+              filePath: "user123/my-arbitrage-bot/1.1.0/file.zip",
               createdAt: new Date("2025-01-10T09:15:00.000Z"),
               updatedAt: new Date("2025-01-10T09:15:00.000Z"),
               status: "active",
@@ -404,7 +406,7 @@ describe("CustomBotController", () => {
                 version: "2.0.0",
                 description: "Trend following strategy",
               },
-              filePath: "gs://bucket/user123/trend-follower/2.0.0/file.zip",
+              filePath: "user123/trend-follower/2.0.0/file.zip",
               createdAt: new Date("2025-01-12T14:20:00.000Z"),
               updatedAt: new Date("2025-01-12T14:20:00.000Z"),
               status: "active",
@@ -420,7 +422,7 @@ describe("CustomBotController", () => {
 
       mockService.getUserCustomBots.mockResolvedValue(Ok(mockUserBots));
 
-      const result = await controller.getUserCustomBots(mockRequest);
+      const result = await controller.getUserCustomBots(mockUser);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockUserBots);
@@ -431,7 +433,7 @@ describe("CustomBotController", () => {
     it("should return empty array when user has no custom bots", async () => {
       mockService.getUserCustomBots.mockResolvedValue(Ok([]));
 
-      const result = await controller.getUserCustomBots(mockRequest);
+      const result = await controller.getUserCustomBots(mockUser);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual([]);
@@ -439,57 +441,18 @@ describe("CustomBotController", () => {
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
 
-    it("should throw BadRequestException when user ID is missing", async () => {
-      const requestWithoutUser = {} as any;
-
-      await expect(
-        controller.getUserCustomBots(requestWithoutUser),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
-
     it("should throw BadRequestException when service returns error", async () => {
       mockService.getUserCustomBots.mockResolvedValue(
         Failure("Database connection failed"),
       );
 
-      await expect(controller.getUserCustomBots(mockRequest)).rejects.toThrow(
+      await expect(controller.getUserCustomBots(mockUser)).rejects.toThrow(
         BadRequestException,
       );
 
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
 
-    it("should handle request with undefined user object", async () => {
-      const requestWithUndefinedUser = { user: undefined } as any;
-
-      await expect(
-        controller.getUserCustomBots(requestWithUndefinedUser),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
-
-    it("should handle request with null user object", async () => {
-      const requestWithNullUser = { user: null } as any;
-
-      await expect(
-        controller.getUserCustomBots(requestWithNullUser),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
-
-    it("should handle request with user object missing uid", async () => {
-      const requestWithUserNoUid = { user: {} } as any;
-
-      await expect(
-        controller.getUserCustomBots(requestWithUserNoUid),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockService.getUserCustomBots).not.toHaveBeenCalled();
-    });
   });
 
   describe("getAllVersions", () => {
@@ -502,14 +465,14 @@ describe("CustomBotController", () => {
           {
             version: "1.1.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.1.zip",
+            filePath: "user123/v1.1.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
           },
           {
             version: "1.0.0",
             config: validConfig,
-            filePath: "gs://bucket/v1.0.zip",
+            filePath: "user123/v1.0.zip",
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -521,7 +484,7 @@ describe("CustomBotController", () => {
 
       mockService.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
 
-      const result = await controller.getAllVersions("test-bot", mockRequest);
+      const result = await controller.getAllVersions("test-bot");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockVersions);
@@ -535,7 +498,7 @@ describe("CustomBotController", () => {
       );
 
       await expect(
-        controller.getAllVersions("non-existent-bot", mockRequest),
+        controller.getAllVersions("non-existent-bot"),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -548,7 +511,7 @@ describe("CustomBotController", () => {
         version: "1.0.0",
         config: validConfig,
         filePath:
-          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -559,7 +522,6 @@ describe("CustomBotController", () => {
       const result = await controller.getSpecificVersion(
         "test-bot",
         "1.0.0",
-        mockRequest,
       );
 
       expect(result.success).toBe(true);
@@ -577,7 +539,7 @@ describe("CustomBotController", () => {
       );
 
       await expect(
-        controller.getSpecificVersion("test-bot", "2.0.0", mockRequest),
+        controller.getSpecificVersion("test-bot", "2.0.0"),
       ).rejects.toThrow(NotFoundException);
     });
   });

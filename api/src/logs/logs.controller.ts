@@ -14,6 +14,8 @@ import { PinoLogger } from "nestjs-pino";
 import { LogsService } from "./logs.service";
 import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { AuthenticatedUser } from "@/auth/auth.types";
+import { CurrentUser } from "@/auth/current-user.decorator";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
 
@@ -38,7 +40,10 @@ export class LogsController {
   // Static maps are intentional: NestJS controllers are singletons and a
   // single NATS subscription per bot must fan out to all SSE clients in the process.
   private static activeSubscriptions = new Map<string, BotSubscription>();
-  private static pendingSubscriptions = new Map<string, Promise<SubscriptionResult>>();
+  private static pendingSubscriptions = new Map<
+    string,
+    Promise<SubscriptionResult>
+  >();
 
   /** @internal Reset shared state for test isolation. Only works in test env. */
   static _resetForTest() {
@@ -62,13 +67,14 @@ export class LogsController {
   async getLogs(
     @Param("botId") botId: string,
     @Query() query: GetLogsQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     const result = await this.logsService.getLogs(botId, {
       date: query.date,
       dateRange: query.dateRange,
       limit: query.limit || 100,
       offset: query.offset || 0,
-    });
+    }, user.uid);
 
     if (!result.success) {
       if (
@@ -90,6 +96,7 @@ export class LogsController {
   @Get(":botId/stream")
   async streamLogs(
     @Param("botId") botId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -99,7 +106,9 @@ export class LogsController {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.flushHeaders();
-      res.write(`event: error\ndata: ${JSON.stringify({ message: "Invalid bot ID" })}\n\n`);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: "Invalid bot ID" })}\n\n`,
+      );
       res.end();
       return;
     }
@@ -127,7 +136,7 @@ export class LogsController {
     req.on("close", cleanup);
 
     // Send historical logs
-    const shouldContinue = await this.sendHistoricalLogs(res, botId);
+    const shouldContinue = await this.sendHistoricalLogs(res, botId, user.uid);
     if (!shouldContinue) return;
 
     // If client disconnected during history fetch, clean up immediately
@@ -161,6 +170,7 @@ export class LogsController {
   private async sendHistoricalLogs(
     res: Response,
     botId: string,
+    userId: string,
   ): Promise<boolean> {
     // JS getFullYear()/getMonth()/getDate() return local time, matching
     // the runtime's minio_logger which uses time.Now().Format("20060102").
@@ -175,14 +185,27 @@ export class LogsController {
       date: todayStr,
       limit: 1000,
       offset: 0,
-    });
+    }, userId);
+
+    if (
+      !historyResult.success &&
+      historyResult.error?.includes("Authentication required")
+    ) {
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: "Authentication required" })}\n\n`,
+      );
+      res.end();
+      return false;
+    }
 
     if (
       !historyResult.success &&
       (historyResult.error?.includes("not found") ||
         historyResult.error?.includes("access denied"))
     ) {
-      res.write(`event: error\ndata: ${JSON.stringify({ message: ACCESS_DENIED_MESSAGE })}\n\n`);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: ACCESS_DENIED_MESSAGE })}\n\n`,
+      );
       res.end();
       return false;
     }
@@ -225,7 +248,10 @@ export class LogsController {
       }
       // Re-check active map — the pending promise may have populated it
       subscription = LogsController.activeSubscriptions.get(botId);
-      return { subscription: subscription ?? null, warningsSent: result.warningsSent };
+      return {
+        subscription: subscription ?? null,
+        warningsSent: result.warningsSent,
+      };
     }
 
     const createPromise = this.createSubscription(botId, res);

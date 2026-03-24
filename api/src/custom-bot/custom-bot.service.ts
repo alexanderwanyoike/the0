@@ -9,7 +9,7 @@ import {
   CustomBot,
   CustomBotWithVersions,
 } from "./custom-bot.types";
-import { Result, Failure, Ok } from "@/common/result";
+import { Result, Failure, Ok, errorMessage } from "@/common/result";
 
 @Injectable()
 export class CustomBotService {
@@ -39,7 +39,15 @@ export class CustomBotService {
         return Failure(existsResult.error);
       }
 
-      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const validRuntimes = [
+        "python3.11",
+        "nodejs20",
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
 
       if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
@@ -52,7 +60,13 @@ export class CustomBotService {
       }
 
       // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const compiledRuntimes = [
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
       const requiredFiles = compiledRuntimes.includes(config.runtime)
         ? [] // Skip entrypoint validation for compiled languages
         : Object.values(config.entrypoints).filter(Boolean);
@@ -109,9 +123,9 @@ export class CustomBotService {
         config.name,
         config.version,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error creating custom bot");
-      return Failure(`Failed to create custom bot: ${error.message}`);
+      return Failure(`Failed to create custom bot: ${errorMessage(error)}`);
     }
   }
 
@@ -133,7 +147,15 @@ export class CustomBotService {
         return Failure("Bot name in config must match the URL parameter");
       }
 
-      const validRuntimes = ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const validRuntimes = [
+        "python3.11",
+        "nodejs20",
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
 
       if (!config.runtime || !validRuntimes.includes(config.runtime)) {
         return Failure(
@@ -195,7 +217,13 @@ export class CustomBotService {
       }
 
       // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = ["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"];
+      const compiledRuntimes = [
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ];
       const requiredFiles = compiledRuntimes.includes(config.runtime)
         ? [] // Skip entrypoint validation for compiled languages
         : Object.values(config.entrypoints).filter(Boolean);
@@ -252,9 +280,9 @@ export class CustomBotService {
         config.name,
         config.version,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error updating custom bot");
-      return Failure(`Failed to update custom bot: ${error.message}`);
+      return Failure(`Failed to update custom bot: ${errorMessage(error)}`);
     }
   }
 
@@ -269,9 +297,9 @@ export class CustomBotService {
       }
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error({ err: error }, "Error getting user custom bots");
-      return Failure(`Failed to get user custom bots: ${error.message}`);
+      return Failure(`Failed to get user custom bots: ${errorMessage(error)}`);
     }
   }
 

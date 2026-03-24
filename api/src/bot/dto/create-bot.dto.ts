@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsObject, IsString } from "class-validator";
+import { BotConfig } from "@/database/schema/bots";
 
 export class CreateBotDto {
   @IsNotEmpty()
@@ -7,5 +8,5 @@ export class CreateBotDto {
 
   @IsNotEmpty()
   @IsObject()
-  config: any;
+  config: BotConfig;
 }

@@ -4,6 +4,7 @@ import { PinoLogger } from "nestjs-pino";
 import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
 import { BotService } from "@/bot/bot.service";
 import { createMockLogger } from "@/test/mock-logger";
+import { mockBot as createMockBot, mockBotConfig } from "@/test/mock-bot";
 
 describe("BotQueryService", () => {
   let service: BotQueryService;
@@ -11,16 +12,14 @@ describe("BotQueryService", () => {
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockFetch: jest.SpyInstance;
 
-  const mockBot = {
+  const testBot = createMockBot({
     id: "test-bot-id",
     name: "Test Bot",
-    config: { type: "scheduled/test-bot", version: "1.0.0" },
+    config: mockBotConfig({ type: "scheduled/test-bot", version: "1.0.0" }),
     userId: "test-user-id",
     topic: "the0-scheduled-custom-bot",
-    createdAt: new Date(),
-    updatedAt: new Date(),
     customBotId: "test-custom-bot",
-  };
+  });
 
   beforeEach(async () => {
     mockBotService = {
@@ -63,7 +62,7 @@ describe("BotQueryService", () => {
     it("should execute query successfully", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -85,7 +84,9 @@ describe("BotQueryService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data.status).toBe("ok");
-      expect(result.data.data).toEqual({ positions: [{ symbol: "BTC", amount: 1.5 }] });
+      expect(result.data.data).toEqual({
+        positions: [{ symbol: "BTC", amount: 1.5 }],
+      });
       expect(mockFetch).toHaveBeenCalledWith(
         "http://localhost:9477/query",
         expect.objectContaining({
@@ -121,7 +122,7 @@ describe("BotQueryService", () => {
     it("should return BOT_NOT_FOUND when runtime returns 404", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -143,7 +144,7 @@ describe("BotQueryService", () => {
     it("should return QUERY_FAILED when runtime returns error", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -165,7 +166,7 @@ describe("BotQueryService", () => {
     it("should return TIMEOUT when request times out", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -186,7 +187,7 @@ describe("BotQueryService", () => {
     it("should return RUNTIME_UNAVAILABLE when connection refused", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -206,7 +207,7 @@ describe("BotQueryService", () => {
     it("should use custom timeout when provided", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -235,7 +236,7 @@ describe("BotQueryService", () => {
     it("should use default timeout when not provided", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 
@@ -263,7 +264,7 @@ describe("BotQueryService", () => {
     it("should handle empty params", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,
-        data: mockBot,
+        data: testBot,
         error: null,
       });
 

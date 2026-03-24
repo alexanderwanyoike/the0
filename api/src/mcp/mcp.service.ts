@@ -74,7 +74,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [],
+          required: [] as string[],
         },
       },
 
@@ -86,7 +86,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [],
+          required: [] as string[],
         },
       },
       {
@@ -207,7 +207,7 @@ export class McpService {
         inputSchema: {
           type: "object" as const,
           properties: {},
-          required: [],
+          required: [] as string[],
         },
       },
       {
@@ -393,17 +393,13 @@ export class McpService {
       throw new Error("Authentication required");
     }
 
-    // Extract fields from config
-    const configName = input.config?.name as string;
-    const configType = input.config?.type as string;
-    const configVersion = input.config?.version as string;
+    const { name: configName, type: configType, version: configVersion } =
+      input.config;
 
-    if (!configName) {
-      throw new Error("Config must include 'name' field");
-    }
-
-    if (!configType || !configVersion) {
-      throw new Error("Config must include 'type' and 'version' fields");
+    if (!configName || !configType || !configVersion) {
+      throw new Error(
+        "Config must include 'name', 'type', and 'version' fields",
+      );
     }
 
     // Extract custom bot name from type (e.g., "scheduled/alpaca-mixture-of-experts" -> "alpaca-mixture-of-experts")
@@ -496,7 +492,7 @@ export class McpService {
         limit,
         offset: 0,
       },
-      userId
+      userId,
     );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs");
@@ -526,7 +522,7 @@ export class McpService {
         limit: 100,
         offset: 0,
       },
-      userId
+      userId,
     );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs for summary");

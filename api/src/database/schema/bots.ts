@@ -1,8 +1,16 @@
-import { pgTable, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, varchar, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 import { usersTable, usersTableSqlite } from "./users";
 import { customBotsTable, customBotsTableSqlite } from "./custom-bots";
+
+export interface BotConfig {
+  name: string;
+  type: string;
+  version: string;
+  schedule?: string;
+  [key: string]: unknown;
+}
 
 // PostgreSQL Bots table (matches original bots collection - running bot instances)
 export const botsTable = pgTable("bots", {
@@ -16,7 +24,7 @@ export const botsTable = pgTable("bots", {
     .notNull()
     .references(() => customBotsTable.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
-  config: jsonb("config").$type<Record<string, any>>().notNull(), // runtime configuration
+  config: jsonb("config").$type<BotConfig>().notNull(),
   topic: varchar("topic", { length: 255 }), // message queue topic
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -24,7 +32,10 @@ export const botsTable = pgTable("bots", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => ({
+  userIdIdx: index("bots_user_id_idx").on(table.userId),
+  customBotIdIdx: index("bots_custom_bot_id_idx").on(table.customBotId),
+}));
 
 // SQLite Bots table
 export const botsTableSqlite = sqliteTable("bots", {
@@ -38,9 +49,7 @@ export const botsTableSqlite = sqliteTable("bots", {
     .notNull()
     .references(() => customBotsTableSqlite.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  config: text("config", { mode: "json" })
-    .$type<Record<string, any>>()
-    .notNull(),
+  config: text("config", { mode: "json" }).$type<BotConfig>().notNull(),
   topic: text("topic"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

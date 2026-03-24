@@ -34,7 +34,15 @@ export const customBotConfigSchema = {
     },
     runtime: {
       type: "string",
-      enum: ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"],
+      enum: [
+        "python3.11",
+        "nodejs20",
+        "rust-stable",
+        "dotnet8",
+        "gcc13",
+        "scala3",
+        "ghc96",
+      ],
     },
     author: {
       type: "string",
@@ -111,7 +119,17 @@ export const customBotConfigSchema = {
       },
       then: {
         properties: {
-          runtime: { enum: ["python3.11", "nodejs20", "rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"] },
+          runtime: {
+            enum: [
+              "python3.11",
+              "nodejs20",
+              "rust-stable",
+              "dotnet8",
+              "gcc13",
+              "scala3",
+              "ghc96",
+            ],
+          },
         },
       },
     },
@@ -157,13 +175,16 @@ const validateSchema = (
   try {
     schemaAjv.compile(schema);
     return { valid: true };
-  } catch (error: any) {
-    return { valid: false, errors: [error.message] };
+  } catch (error: unknown) {
+    return {
+      valid: false,
+      errors: [error instanceof Error ? error.message : String(error)],
+    };
   }
 };
 
 // Keep the old validation function name for compatibility but update it
-export function validateCustomBotPayload(payload: any): {
+export function validateCustomBotPayload(payload: Record<string, unknown>): {
   valid: boolean;
   errors?: string[];
 } {

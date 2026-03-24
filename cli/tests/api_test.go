@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,7 @@ func TestAPIClient_TestAPIKey(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "API error: 500",
+			errorContains: "API error 500:",
 		},
 	}
 
@@ -167,7 +168,7 @@ func TestAPIClient_ListUserBots(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "API error: 500",
+			errorContains: "API error 500:",
 		},
 	}
 
@@ -539,7 +540,7 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 			statusCode:    500,
 			responseBody:  `{"error": "Internal Server Error"}`,
 			expectedError: true,
-			errorContains: "API error: 500",
+			errorContains: "API error 500:",
 		},
 	}
 
@@ -749,3 +750,108 @@ func TestAPIClient_ExecuteBotQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIClient_ReturnsTypedAPIError(t *testing.T) {
+	// Verify that API methods return *APIError for HTTP failures so that
+	// IsAuthError can distinguish auth errors from validation errors.
+	tests := []struct {
+		name               string
+		statusCode         int
+		expectIsAuthError  bool
+		expectedStatusCode int
+	}{
+		{
+			name:               "401 returns APIError detected by IsAuthError",
+			statusCode:         401,
+			expectIsAuthError:  true,
+			expectedStatusCode: 401,
+		},
+		{
+			name:               "403 returns APIError detected by IsAuthError",
+			statusCode:         403,
+			expectIsAuthError:  true,
+			expectedStatusCode: 403,
+		},
+		{
+			name:               "400 returns APIError not detected by IsAuthError",
+			statusCode:         400,
+			expectIsAuthError:  false,
+			expectedStatusCode: 400,
+		},
+		{
+			name:               "500 returns APIError not detected by IsAuthError",
+			statusCode:         500,
+			expectIsAuthError:  false,
+			expectedStatusCode: 500,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				w.Write([]byte(fmt.Sprintf(`{"error": "test error %d"}`, tt.statusCode)))
+			}))
+			defer server.Close()
+
+			client := internal.NewAPIClient(server.URL)
+			auth := &internal.Auth{
+				APIKey:    "test-key",
+				CreatedAt: time.Now(),
+			}
+
+			_, err := client.ListBots(auth)
+			if err == nil {
+				t.Fatal("ListBots() expected error but got nil")
+			}
+
+			// Verify error is a typed APIError
+			var apiErr *internal.APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("expected *APIError, got %T: %v", err, err)
+			}
+
+			if apiErr.StatusCode != tt.expectedStatusCode {
+				t.Errorf("APIError.StatusCode = %d, want %d", apiErr.StatusCode, tt.expectedStatusCode)
+			}
+
+			// Verify IsAuthError matches correctly
+			if got := internal.IsAuthError(err); got != tt.expectIsAuthError {
+				t.Errorf("IsAuthError() = %v, want %v for status %d", got, tt.expectIsAuthError, tt.statusCode)
+			}
+		})
+	}
+}
+
+func TestValidationErrorNotMistakenForAuth(t *testing.T) {
+	// This is the core bug scenario: a validation error containing "invalid"
+	// should NOT be treated as an auth error.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error": "invalid version format"}`))
+	}))
+	defer server.Close()
+
+	client := internal.NewAPIClient(server.URL)
+	auth := &internal.Auth{
+		APIKey:    "test-key",
+		CreatedAt: time.Now(),
+	}
+
+	_, err := client.ListBots(auth)
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+
+	// The old string-matching IsAuthError would match "invalid" and return true.
+	// The new typed approach should correctly return false.
+	if internal.IsAuthError(err) {
+		t.Errorf("IsAuthError() should be false for validation errors, but got true: %v", err)
+	}
+
+	// Verify the error message still contains the validation details
+	if !strings.Contains(err.Error(), "invalid version format") {
+		t.Errorf("error message should contain 'invalid version format', got: %v", err)
+	}
+}
+

@@ -7,20 +7,20 @@ import {
   Param,
   BadRequestException,
   NotFoundException,
-  Req,
   Res,
   HttpStatus,
   HttpCode,
   UseGuards,
-  Patch,
   UseInterceptors,
   UploadedFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { Request, Response } from "express";
+import { Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { AuthenticatedUser } from "@/auth/auth.types";
+import { CurrentUser } from "@/auth/current-user.decorator";
 import { StorageService } from "./storage.service";
 
 interface CustomBotDeployDto {
@@ -36,6 +36,25 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
+  private validateFilePath(filePath: unknown, userId: string): string {
+    if (typeof filePath !== "string") {
+      throw new BadRequestException("filePath must be a string");
+    }
+    if (filePath.trim() === "") {
+      throw new BadRequestException("filePath is required");
+    }
+    const trimmed = filePath.trim();
+    if (trimmed.includes("..") || trimmed.includes("//")) {
+      throw new BadRequestException("Invalid file path");
+    }
+    if (!trimmed.startsWith(`${userId}/`)) {
+      throw new BadRequestException(
+        "File path must belong to the authenticated user",
+      );
+    }
+    return trimmed;
+  }
+
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))
@@ -43,12 +62,9 @@ export class CustomBotController {
     @Param("name") name: string,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { version?: string },
-    @Req() request: Request,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = (request as any).user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
 
     if (!file) {
       throw new BadRequestException("File is required");
@@ -91,22 +107,12 @@ export class CustomBotController {
   async createCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @Req() request: Request,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = (request as any).user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
+    const filePath = this.validateFilePath(body.filePath, userId);
 
-    // Validate file path
-    if (!body.filePath) {
-      throw new BadRequestException("file path is required");
-    }
-
-    // Validate that file exists at file path
-    const fileExistsResult = await this.storageService.fileExists(
-      body.filePath,
-    );
+    const fileExistsResult = await this.storageService.fileExists(filePath);
     if (!fileExistsResult.success) {
       throw new BadRequestException(
         `File validation failed: ${fileExistsResult.error}`,
@@ -117,7 +123,6 @@ export class CustomBotController {
       throw new BadRequestException("File not found at specified file path");
     }
 
-    // Validate and parse config
     if (!body.config) {
       throw new BadRequestException("Config field is required");
     }
@@ -129,7 +134,6 @@ export class CustomBotController {
       throw new BadRequestException("Config must be valid JSON");
     }
 
-    // Ensure the name in config matches URL parameter
     if (config.name !== name) {
       throw new BadRequestException(
         "Bot name in config must match URL parameter",
@@ -139,7 +143,7 @@ export class CustomBotController {
     const result = await this.customBotService.createCustomBot(
       userId,
       config,
-      body.filePath,
+      filePath,
     );
 
     if (!result.success) {
@@ -158,22 +162,12 @@ export class CustomBotController {
   async updateCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
-    @Req() request: Request,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = (request as any).user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+    const userId = user.uid;
+    const filePath = this.validateFilePath(body.filePath, userId);
 
-    // Validate file path
-    if (!body.filePath) {
-      throw new BadRequestException("file path is required");
-    }
-
-    // Validate that file exists at file path
-    const fileExistsResult = await this.storageService.fileExists(
-      body.filePath,
-    );
+    const fileExistsResult = await this.storageService.fileExists(filePath);
     if (!fileExistsResult.success) {
       throw new BadRequestException(
         `File validation failed: ${fileExistsResult.error}`,
@@ -184,7 +178,6 @@ export class CustomBotController {
       throw new BadRequestException("File not found at specified file path");
     }
 
-    // Validate and parse config
     if (!body.config) {
       throw new BadRequestException("Config field is required");
     }
@@ -196,7 +189,6 @@ export class CustomBotController {
       throw new BadRequestException("Config must be valid JSON");
     }
 
-    // Ensure the name in config matches URL parameter
     if (config.name !== name) {
       throw new BadRequestException(
         "Bot name in config must match URL parameter",
@@ -207,7 +199,7 @@ export class CustomBotController {
       userId,
       name,
       config,
-      body.filePath,
+      filePath,
     );
 
     if (!result.success) {
@@ -223,11 +215,8 @@ export class CustomBotController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async getUserCustomBots(@Req() request: Request) {
-    const userId = (request as any).user?.uid;
-    if (!userId) {
-      throw new BadRequestException("User ID is required");
-    }
+  async getUserCustomBots(@CurrentUser() user: AuthenticatedUser) {
+    const userId = user.uid;
 
     const result = await this.customBotService.getUserCustomBots(userId);
 
@@ -244,7 +233,7 @@ export class CustomBotController {
 
   @Get(":name")
   @HttpCode(HttpStatus.OK)
-  async getAllVersions(@Param("name") name: string, @Req() request: Request) {
+  async getAllVersions(@Param("name") name: string) {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
     if (!result.success) {
@@ -299,7 +288,6 @@ export class CustomBotController {
   async getSpecificVersion(
     @Param("name") name: string,
     @Param("version") version: string,
-    @Req() request: Request,
   ) {
     const result = await this.customBotService.getGlobalSpecificVersion(
       name,

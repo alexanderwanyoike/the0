@@ -9,7 +9,13 @@ import {
   ServiceUnavailableException,
   GatewayTimeoutException,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBody,
+} from "@nestjs/swagger";
 import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
 import { BotQueryService, BotQueryErrorCode } from "./bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
@@ -97,7 +103,9 @@ export class BotQueryController {
         case BotQueryErrorCode.TIMEOUT:
           throw new GatewayTimeoutException(result.error.message);
         default:
-          throw new BadRequestException(result.error?.message || "Query failed");
+          throw new BadRequestException(
+            result.error?.message || "Query failed",
+          );
       }
     }
 

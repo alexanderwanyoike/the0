@@ -1,6 +1,7 @@
 /**
  * MCP Types for the0 API
  */
+import { BotConfig } from "@/database/schema/bots";
 
 // Tool input schemas
 export interface BotListInput {
@@ -12,13 +13,13 @@ export interface BotGetInput {
 }
 
 export interface BotDeployInput {
-  config: Record<string, unknown>;
+  config: BotConfig;
 }
 
 export interface BotUpdateInput {
   bot_id: string;
   name?: string;
-  config: Record<string, unknown>;
+  config: BotConfig;
 }
 
 export interface BotDeleteInput {

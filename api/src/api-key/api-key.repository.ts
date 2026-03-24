@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { RoleRepository } from "@/common/role.repository";
 import { ApiKey } from "./models/api-key.model";
-import { Result, Ok, Failure } from "@/common/result";
+import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { eq, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import * as crypto from "crypto";
@@ -39,8 +39,8 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         ...result.data,
         key: apiKey,
       } as ApiKey);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -69,8 +69,8 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         updatedAt: apiKey.updatedAt,
         lastUsedAt: apiKey.lastUsedAt,
       } as ApiKey);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -82,8 +82,8 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         .where(eq(this.table.id, keyId));
 
       return Ok(null);
-    } catch (error: any) {
-      return Failure(error.message);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
     }
   }
 
@@ -103,14 +103,14 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         .where(and(eq(this.table.id, id), eq(this.table.userId, userId)));
 
       return Ok(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting API key");
-      return Failure(error.message);
+      return Failure(errorMessage(error));
     }
   }
 
   // Override transformSnapshotToData to show full API key info
-  protected transformSnapshotToData<T>(record: any): T {
+  protected transformSnapshotToData<U>(record: Record<string, unknown>): U {
     return {
       id: record.id,
       userId: record.userId,
@@ -120,7 +120,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       lastUsedAt: record.lastUsedAt,
-    } as T;
+    } as U;
   }
 
   private generateApiKey(): string {
