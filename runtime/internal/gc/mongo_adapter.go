@@ -2,6 +2,7 @@ package gc
 
 import (
 	"context"
+	"fmt"
 
 	"runtime/internal/constants"
 
@@ -51,7 +52,7 @@ func (m *mongoBotStore) collectIDs(ctx context.Context, dbName, collectionName s
 			ID string `bson:"id"`
 		}
 		if err := cursor.Decode(&doc); err != nil {
-			continue
+			return fmt.Errorf("failed to decode bot document in %s/%s: %w", dbName, collectionName, err)
 		}
 		if doc.ID != "" {
 			ids[doc.ID] = true

@@ -574,13 +574,13 @@ func runGC() {
 
 	util.LogMaster("MinIO: %s (logs=%s, state=%s)", cfg.Endpoint, cfg.LogsBucket, cfg.StateBucket)
 
-	collector := gc.NewGarbageCollector(
-		gc.NewMinIOAdapter(minioClient),
-		gc.NewMongoBotStore(mongoClient),
-		cfg.LogsBucket,
-		cfg.StateBucket,
-		&util.DefaultLogger{},
-	)
+	collector := gc.NewGarbageCollector(gc.GarbageCollectorOptions{
+		MinIO:       gc.NewMinIOAdapter(minioClient),
+		Store:       gc.NewMongoBotStore(mongoClient),
+		LogsBucket:  cfg.LogsBucket,
+		StateBucket: cfg.StateBucket,
+		Logger:      &util.DefaultLogger{},
+	})
 
 	// Run once
 	ctx, cancel := context.WithCancel(context.Background())

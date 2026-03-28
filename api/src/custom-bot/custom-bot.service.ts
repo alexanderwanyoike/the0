@@ -414,14 +414,25 @@ export class CustomBotService {
       );
     }
 
-    // Clean up MinIO files (code bundle + frontend)
+    // Delete DB row first, then best-effort storage cleanup.
+    // Orphaned MinIO files are harmless; dangling DB rows pointing to
+    // missing files would be a real problem.
+    const removeResult = await this.customBotRepository.remove(
+      userId,
+      customBot.id,
+    );
+    if (!removeResult.success) {
+      return Failure(removeResult.error);
+    }
+
+    // Best-effort MinIO cleanup (code bundle + frontend)
     const filesResult = await this.storageService.listObjects(
       customBot.filePath,
     );
     if (!filesResult.success) {
       this.logger.warn(
         { filePath: customBot.filePath, error: filesResult.error },
-        "Failed to list files for cleanup, proceeding with DB deletion",
+        "Failed to list files for cleanup after version deletion",
       );
     } else {
       for (const filePath of filesResult.data) {
@@ -435,7 +446,7 @@ export class CustomBotService {
       }
     }
 
-    return await this.customBotRepository.remove(userId, customBot.id);
+    return Ok(null);
   }
 
   async deleteAllVersions(
@@ -475,16 +486,36 @@ export class CustomBotService {
       );
     }
 
-    // Clean up MinIO files for all versions
+    // Delete DB rows first, then best-effort storage cleanup
+    const removeResult = await this.customBotRepository.removeAllByName(
+      userId,
+      name,
+    );
+    if (!removeResult.success) {
+      return Failure(removeResult.error);
+    }
+
+    // Best-effort MinIO cleanup for all versions
     const prefix = `${userId}/${name}/`;
     const filesResult = await this.storageService.listObjects(prefix);
-    if (filesResult.success) {
+    if (!filesResult.success) {
+      this.logger.warn(
+        { prefix, error: filesResult.error },
+        "Failed to list files for cleanup after deleting all versions",
+      );
+    } else {
       for (const filePath of filesResult.data) {
-        await this.storageService.deleteFile(filePath);
+        const deleteResult = await this.storageService.deleteFile(filePath);
+        if (!deleteResult.success) {
+          this.logger.warn(
+            { filePath, error: deleteResult.error },
+            "Failed to delete file during bulk version cleanup",
+          );
+        }
       }
     }
 
-    return await this.customBotRepository.removeAllByName(userId, name);
+    return Ok(null);
   }
 
   async checkOrphaned(

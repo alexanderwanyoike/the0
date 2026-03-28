@@ -276,7 +276,16 @@ export class BotService {
       const orphanResult = await this.customBotService.checkOrphaned(
         botResult.data.customBotId,
       );
-      if (orphanResult.success && orphanResult.data.orphaned) {
+      if (!orphanResult.success) {
+        this.logger.warn(
+          {
+            botId: botResult.data.id,
+            customBotId: botResult.data.customBotId,
+            error: orphanResult.error,
+          },
+          "Failed to check if custom bot version is orphaned",
+        );
+      } else if (orphanResult.data.orphaned) {
         deleteResult.orphanedVersion = {
           name: orphanResult.data.name,
           version: orphanResult.data.version,

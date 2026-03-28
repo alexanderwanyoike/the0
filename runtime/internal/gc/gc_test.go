@@ -79,7 +79,7 @@ func TestGC_DeletesOrphanedArtifacts(t *testing.T) {
 		},
 	}
 
-	gc := NewGarbageCollector(minio, store, "bot-logs", "bot-state", nil)
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
 	result, err := gc.Run(context.Background())
 
 	require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestGC_NoOrphans(t *testing.T) {
 		},
 	}
 
-	gc := NewGarbageCollector(minio, store, "bot-logs", "bot-state", nil)
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
 	result, err := gc.Run(context.Background())
 
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestGC_EmptyMinIO(t *testing.T) {
 		existingIDs: map[string]bool{"bot-1": true},
 	}
 
-	gc := NewGarbageCollector(minio, store, "bot-logs", "bot-state", nil)
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
 	result, err := gc.Run(context.Background())
 
 	require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestGC_MinIOListError(t *testing.T) {
 		existingIDs: map[string]bool{},
 	}
 
-	gc := NewGarbageCollector(minio, store, "bot-logs", "bot-state", nil)
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
 	_, err := gc.Run(context.Background())
 
 	assert.Error(t, err)
@@ -159,7 +159,7 @@ func TestGC_MongoQueryError(t *testing.T) {
 		queryErr: assert.AnError,
 	}
 
-	gc := NewGarbageCollector(minio, store, "bot-logs", "bot-state", nil)
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
 	_, err := gc.Run(context.Background())
 
 	assert.Error(t, err)
@@ -177,7 +177,7 @@ func TestGC_RemoveErrorContinues(t *testing.T) {
 		existingIDs: map[string]bool{},
 	}
 
-	gc := NewGarbageCollector(minio, store, "bot-logs", "bot-state", nil)
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
 	result, err := gc.Run(context.Background())
 
 	// Should not return error -- removal failures are logged, not fatal

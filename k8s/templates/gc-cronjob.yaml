@@ -33,19 +33,21 @@ spec:
                 - name: MONGO_URI
                   valueFrom:
                     secretKeyRef:
-                      name: {{ include "the0.fullname" . }}-secrets
-                      key: mongo-uri
+                      name: {{ include "the0.secretName" . }}
+                      key: mongo-url
                 - name: MINIO_ENDPOINT
-                  value: {{ .Values.minio.endpoint | default "minio:9000" | quote }}
+                  value: {{ include "the0.minioEndpointWithPort" . | quote }}
+                - name: MINIO_USE_SSL
+                  value: {{ .Values.minio.external.useSSL | default false | quote }}
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: {{ include "the0.fullname" . }}-secrets
+                      name: {{ include "the0.secretName" . }}
                       key: minio-access-key
                 - name: MINIO_SECRET_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: {{ include "the0.fullname" . }}-secrets
+                      name: {{ include "the0.secretName" . }}
                       key: minio-secret-key
               resources:
                 requests:

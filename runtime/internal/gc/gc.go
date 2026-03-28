@@ -34,17 +34,26 @@ type GarbageCollector struct {
 	logger      util.Logger
 }
 
+// GarbageCollectorOptions configures a GarbageCollector.
+type GarbageCollectorOptions struct {
+	MinIO       MinIOClient
+	Store       BotStore
+	LogsBucket  string
+	StateBucket string
+	Logger      util.Logger
+}
+
 // NewGarbageCollector creates a new GarbageCollector.
-func NewGarbageCollector(minio MinIOClient, store BotStore, logsBucket, stateBucket string, logger util.Logger) *GarbageCollector {
-	if logger == nil {
-		logger = &util.NopLogger{}
+func NewGarbageCollector(opts GarbageCollectorOptions) *GarbageCollector {
+	if opts.Logger == nil {
+		opts.Logger = &util.NopLogger{}
 	}
 	return &GarbageCollector{
-		minio:       minio,
-		store:       store,
-		logsBucket:  logsBucket,
-		stateBucket: stateBucket,
-		logger:      logger,
+		minio:       opts.MinIO,
+		store:       opts.Store,
+		logsBucket:  opts.LogsBucket,
+		stateBucket: opts.StateBucket,
+		logger:      opts.Logger,
 	}
 }
 
@@ -107,9 +116,9 @@ func (gc *GarbageCollector) collectMinIOBotIDs(ctx context.Context) (map[string]
 		return nil, err
 	}
 	for _, name := range logObjects {
-		// Extract botID from "logs/{botID}/..."
+		// Accept only logs/{botID}/{file}
 		parts := strings.SplitN(strings.TrimPrefix(name, "logs/"), "/", 2)
-		if len(parts) >= 1 && parts[0] != "" {
+		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
 			ids[parts[0]] = true
 		}
 	}
@@ -120,8 +129,12 @@ func (gc *GarbageCollector) collectMinIOBotIDs(ctx context.Context) (map[string]
 		return nil, err
 	}
 	for _, name := range stateObjects {
+		// Accept only {botID}/state.tar.gz
+		if !strings.HasSuffix(name, "/state.tar.gz") {
+			continue
+		}
 		parts := strings.SplitN(name, "/", 2)
-		if len(parts) >= 1 && parts[0] != "" {
+		if len(parts) == 2 && parts[0] != "" {
 			ids[parts[0]] = true
 		}
 	}
