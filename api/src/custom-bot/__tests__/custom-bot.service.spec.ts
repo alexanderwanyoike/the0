@@ -73,6 +73,11 @@ describe("CustomBotService", () => {
       getAllUserVersions: jest.fn(),
       getSpecificUserVersion: jest.fn(),
       getUserCustomBots: jest.fn(),
+      countInstancesByCustomBotId: jest.fn(),
+      countInstancesByCustomBotIds: jest.fn(),
+      removeAllByName: jest.fn(),
+      remove: jest.fn(),
+      findOneById: jest.fn(),
     } as unknown as jest.Mocked<CustomBotRepository>;
 
     mockStorageService = {
@@ -85,6 +90,7 @@ describe("CustomBotService", () => {
       ensureBucket: jest.fn(),
       extractAndStoreFrontend: jest.fn().mockResolvedValue(Ok(null)),
       getFrontendBundle: jest.fn(),
+      listObjects: jest.fn(),
     } as unknown as jest.Mocked<StorageService>;
 
     mockValidateConfig = validateCustomBotConfigPayload as jest.MockedFunction<
@@ -1068,6 +1074,284 @@ describe("CustomBotService", () => {
         botName,
         version,
       );
+    });
+  });
+
+  describe("deleteVersion", () => {
+    const userId = "user123";
+    const botName = "test-bot";
+    const version = "1.0.0";
+    const mockBot = {
+      id: "cb-id-1",
+      name: botName,
+      version,
+      config: validConfig,
+      filePath: "user123/test-bot/1.0.0",
+      userId,
+      status: "active" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it("should delete a version with no active instances", async () => {
+      mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+      mockRepository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockBot));
+      mockRepository.countInstancesByCustomBotId.mockResolvedValue(Ok(0));
+      mockStorageService.listObjects.mockResolvedValue(
+        Ok(["user123/test-bot/1.0.0", "user123/test-bot/1.0.0/frontend.js"]),
+      );
+      mockStorageService.deleteFile.mockResolvedValue(Ok(undefined));
+      mockRepository.remove.mockResolvedValue(Ok(null));
+
+      const result = await service.deleteVersion(userId, botName, version);
+
+      expect(result.success).toBe(true);
+      expect(mockStorageService.listObjects).toHaveBeenCalledWith(
+        "user123/test-bot/1.0.0",
+      );
+      expect(mockStorageService.deleteFile).toHaveBeenCalledTimes(2);
+      expect(mockRepository.remove).toHaveBeenCalledWith(userId, "cb-id-1");
+    });
+
+    it("should refuse to delete a version with active instances", async () => {
+      mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+      mockRepository.getSpecificGlobalVersion.mockResolvedValue(Ok(mockBot));
+      mockRepository.countInstancesByCustomBotId.mockResolvedValue(Ok(3));
+
+      const result = await service.deleteVersion(userId, botName, version);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("3 active instance(s)");
+      expect(mockStorageService.deleteFile).not.toHaveBeenCalled();
+      expect(mockRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it("should fail if user does not own the bot", async () => {
+      mockRepository.checkUserOwnership.mockResolvedValue(
+        Failure("Insufficient permissions"),
+      );
+
+      const result = await service.deleteVersion(userId, botName, version);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Insufficient permissions");
+    });
+
+    it("should fail if version does not exist", async () => {
+      mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+      mockRepository.getSpecificGlobalVersion.mockResolvedValue(
+        Failure("Not found"),
+      );
+
+      const result = await service.deleteVersion(userId, botName, version);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Not found");
+    });
+  });
+
+  describe("deleteAllVersions", () => {
+    const userId = "user123";
+    const botName = "test-bot";
+
+    it("should delete all versions when none have instances", async () => {
+      const mockVersions: CustomBotWithVersions = {
+        id: "cb-1",
+        name: botName,
+        userId,
+        versions: [
+          {
+            id: "cb-1",
+            version: "2.0.0",
+            config: { ...validConfig, version: "2.0.0" },
+            filePath: "user123/test-bot/2.0.0",
+            userId,
+            status: "active",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: "cb-2",
+            version: "1.0.0",
+            config: validConfig,
+            filePath: "user123/test-bot/1.0.0",
+            userId,
+            status: "active",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        latestVersion: "2.0.0",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+      mockRepository.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
+      mockRepository.countInstancesByCustomBotIds.mockResolvedValue(
+        Ok(new Map([["cb-1", 0], ["cb-2", 0]])),
+      );
+      mockStorageService.listObjects.mockResolvedValue(Ok(["user123/test-bot/2.0.0", "user123/test-bot/1.0.0"]));
+      mockStorageService.deleteFile.mockResolvedValue(Ok(undefined));
+      mockRepository.removeAllByName.mockResolvedValue(Ok(null));
+
+      const result = await service.deleteAllVersions(userId, botName);
+
+      expect(result.success).toBe(true);
+      expect(mockRepository.removeAllByName).toHaveBeenCalledWith(userId, botName);
+    });
+
+    it("should refuse if any version has active instances", async () => {
+      const mockVersions: CustomBotWithVersions = {
+        id: "cb-1",
+        name: botName,
+        userId,
+        versions: [
+          {
+            id: "cb-1",
+            version: "2.0.0",
+            config: { ...validConfig, version: "2.0.0" },
+            filePath: "user123/test-bot/2.0.0",
+            userId,
+            status: "active",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: "cb-2",
+            version: "1.0.0",
+            config: validConfig,
+            filePath: "user123/test-bot/1.0.0",
+            userId,
+            status: "active",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        latestVersion: "2.0.0",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+      mockRepository.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
+      mockRepository.countInstancesByCustomBotIds.mockResolvedValue(
+        Ok(new Map([["cb-1", 2], ["cb-2", 0]])),
+      );
+
+      const result = await service.deleteAllVersions(userId, botName);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("active instance(s)");
+      expect(mockRepository.removeAllByName).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getVersionsWithInstanceCounts", () => {
+    it("should return versions enriched with instance counts", async () => {
+      const userId = "user123";
+      const botName = "test-bot";
+      const mockVersions: CustomBotWithVersions = {
+        id: "cb-1",
+        name: botName,
+        userId,
+        versions: [
+          {
+            id: "cb-1",
+            version: "2.0.0",
+            config: { ...validConfig, version: "2.0.0" },
+            filePath: "path1",
+            userId,
+            status: "active",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: "cb-2",
+            version: "1.0.0",
+            config: validConfig,
+            filePath: "path2",
+            userId,
+            status: "active",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        latestVersion: "2.0.0",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockRepository.getAllUserVersions.mockResolvedValue(Ok(mockVersions));
+      mockRepository.countInstancesByCustomBotIds.mockResolvedValue(
+        Ok(new Map([["cb-1", 3], ["cb-2", 0]])),
+      );
+
+      const result = await service.getVersionsWithInstanceCounts(userId, botName);
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(2);
+      expect(result.data![0].version).toBe("2.0.0");
+      expect(result.data![0].instanceCount).toBe(3);
+      expect(result.data![1].version).toBe("1.0.0");
+      expect(result.data![1].instanceCount).toBe(0);
+    });
+  });
+
+  describe("checkOrphaned", () => {
+    it("should return orphaned=true when no instances remain", async () => {
+      mockRepository.findOneById.mockResolvedValue(
+        Ok({
+          id: "cb-1",
+          name: "test-bot",
+          version: "1.0.0",
+          config: validConfig,
+          filePath: "path",
+          userId: "user123",
+          status: "active" as const,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      mockRepository.countInstancesByCustomBotId.mockResolvedValue(Ok(0));
+
+      const result = await service.checkOrphaned("cb-1");
+
+      expect(result.success).toBe(true);
+      expect(result.data!.orphaned).toBe(true);
+      expect(result.data!.name).toBe("test-bot");
+      expect(result.data!.version).toBe("1.0.0");
+    });
+
+    it("should return orphaned=false when instances still exist", async () => {
+      mockRepository.findOneById.mockResolvedValue(
+        Ok({
+          id: "cb-1",
+          name: "test-bot",
+          version: "1.0.0",
+          config: validConfig,
+          filePath: "path",
+          userId: "user123",
+          status: "active" as const,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      mockRepository.countInstancesByCustomBotId.mockResolvedValue(Ok(2));
+
+      const result = await service.checkOrphaned("cb-1");
+
+      expect(result.success).toBe(true);
+      expect(result.data!.orphaned).toBe(false);
+    });
+
+    it("should handle missing custom bot", async () => {
+      mockRepository.findOneById.mockResolvedValue(Failure("Not found"));
+
+      const result = await service.checkOrphaned("nonexistent");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Not found");
     });
   });
 });

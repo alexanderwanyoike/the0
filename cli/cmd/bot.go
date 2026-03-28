@@ -471,7 +471,7 @@ func deleteBotInstance(cmd *cobra.Command, args []string, skipConfirm bool) {
 
 	// Delete bot
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
-	err = apiClient.DeleteBotInstance(auth, botID)
+	deleteResp, err := apiClient.DeleteBotInstance(auth, botID)
 	if err != nil {
 		// Retry with new auth if needed
 		if internal.IsAuthError(err) {
@@ -484,7 +484,7 @@ func deleteBotInstance(cmd *cobra.Command, args []string, skipConfirm bool) {
 			}
 
 			// Retry deletion
-			err = apiClient.DeleteBotInstance(auth, botID)
+			deleteResp, err = apiClient.DeleteBotInstance(auth, botID)
 			if err != nil {
 				logger.StopSpinnerWithError("Deletion failed")
 				logger.Error("%v", err)
@@ -499,6 +499,14 @@ func deleteBotInstance(cmd *cobra.Command, args []string, skipConfirm bool) {
 
 	logger.StopSpinnerWithSuccess("Bot deleted successfully")
 	logger.Print("  ID: %s", botID)
+
+	// Show orphaned version info if applicable
+	if deleteResp != nil && deleteResp.OrphanedVersion != nil {
+		ov := deleteResp.OrphanedVersion
+		logger.Newline()
+		logger.Info("Version %s of '%s' has no remaining instances.", ov.Version, ov.Name)
+		logger.Print("  Run 'the0 custom-bot delete %s --version %s' to clean up the code bundle.", ov.Name, ov.Version)
+	}
 }
 
 func enableBotInstance(cmd *cobra.Command, args []string) {

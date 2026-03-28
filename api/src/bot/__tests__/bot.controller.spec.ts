@@ -12,6 +12,7 @@ import {
 import { BotValidator } from "../bot.validator";
 import { ConfigModule } from "@nestjs/config";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { StorageService } from "@/custom-bot/storage.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { NatsService } from "@/nats/nats.service";
@@ -83,6 +84,7 @@ describe("BotController - Enhanced Tests", () => {
     getAllUserVersions: jest.fn(),
     getAllGlobalVersions: jest.fn(),
     getAllUserSpecificVersions: jest.fn(),
+    checkOrphaned: jest.fn().mockResolvedValue(Ok({ orphaned: false, name: "test", version: "1.0.0" })),
   };
 
   beforeEach(async () => {
@@ -102,6 +104,12 @@ describe("BotController - Enhanced Tests", () => {
         {
           provide: ApiKeyService,
           useValue: {},
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            deletePrefixFromBucket: jest.fn().mockResolvedValue(Ok(0)),
+          },
         },
         {
           provide: NatsService,
@@ -499,7 +507,8 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.remove("test-id")).resolves.toBeUndefined();
+      const result = await controller.remove("test-id");
+      expect(result).toBeDefined();
       expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
     });
 

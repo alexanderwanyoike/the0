@@ -463,7 +463,7 @@ func TestAPIClient_DeleteBotInstance(t *testing.T) {
 			}
 
 			// Delete bot
-			err := client.DeleteBotInstance(auth, tt.botID)
+			_, err := client.DeleteBotInstance(auth, tt.botID)
 
 			if tt.expectedError {
 				if err == nil {

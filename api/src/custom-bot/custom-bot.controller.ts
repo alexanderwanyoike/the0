@@ -3,6 +3,7 @@ import {
   Post,
   Put,
   Get,
+  Delete,
   Body,
   Param,
   BadRequestException,
@@ -281,6 +282,72 @@ export class CustomBotController {
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     streamResult.data.pipe(res);
+  }
+
+  @Get(":name/versions")
+  @HttpCode(HttpStatus.OK)
+  async getVersionsWithInstances(
+    @Param("name") name: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const result = await this.customBotService.getVersionsWithInstanceCounts(
+      user.uid,
+      name,
+    );
+
+    if (!result.success) {
+      throw new NotFoundException(result.error);
+    }
+
+    return {
+      success: true,
+      data: result.data,
+      message: "Bot versions with instance counts retrieved successfully",
+    };
+  }
+
+  @Delete(":name/:version")
+  @HttpCode(HttpStatus.OK)
+  async deleteVersion(
+    @Param("name") name: string,
+    @Param("version") version: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const result = await this.customBotService.deleteVersion(
+      user.uid,
+      name,
+      version,
+    );
+
+    if (!result.success) {
+      throw new BadRequestException(result.error);
+    }
+
+    return {
+      success: true,
+      message: `Version ${version} of '${name}' deleted successfully`,
+    };
+  }
+
+  @Delete(":name")
+  @HttpCode(HttpStatus.OK)
+  async deleteAllVersions(
+    @Param("name") name: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const result = await this.customBotService.deleteAllVersions(
+      user.uid,
+      name,
+    );
+
+    if (!result.success) {
+      throw new BadRequestException(result.error);
+    }
+
+    return {
+      success: true,
+      message: `All versions of '${name}' deleted successfully`,
+    };
   }
 
   @Get(":name/:version")

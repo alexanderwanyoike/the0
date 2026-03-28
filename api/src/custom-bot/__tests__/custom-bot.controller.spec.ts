@@ -45,6 +45,9 @@ describe("CustomBotController", () => {
       getPublishedBots: jest.fn(),
       getPublishedBotsByCategory: jest.fn(),
       getUserPublishedBots: jest.fn(),
+      getVersionsWithInstanceCounts: jest.fn(),
+      deleteVersion: jest.fn(),
+      deleteAllVersions: jest.fn(),
     };
 
     mockStorageService = {
@@ -541,6 +544,94 @@ describe("CustomBotController", () => {
       await expect(
         controller.getSpecificVersion("test-bot", "2.0.0"),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe("getVersionsWithInstances", () => {
+    it("should return versions with instance counts", async () => {
+      const mockVersions = [
+        { version: "2.0.0", instanceCount: 3, id: "cb-1" },
+        { version: "1.0.0", instanceCount: 0, id: "cb-2" },
+      ];
+
+      mockService.getVersionsWithInstanceCounts.mockResolvedValue(
+        Ok(mockVersions),
+      );
+
+      const result = await controller.getVersionsWithInstances(
+        "test-bot",
+        mockUser,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockVersions);
+      expect(mockService.getVersionsWithInstanceCounts).toHaveBeenCalledWith(
+        "user123",
+        "test-bot",
+      );
+    });
+
+    it("should throw NotFoundException when bot not found", async () => {
+      mockService.getVersionsWithInstanceCounts.mockResolvedValue(
+        Failure("Bot not found"),
+      );
+
+      await expect(
+        controller.getVersionsWithInstances("nonexistent", mockUser),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe("deleteVersion", () => {
+    it("should delete a specific version successfully", async () => {
+      mockService.deleteVersion.mockResolvedValue(Ok(null));
+
+      const result = await controller.deleteVersion(
+        "test-bot",
+        "1.0.0",
+        mockUser,
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockService.deleteVersion).toHaveBeenCalledWith(
+        "user123",
+        "test-bot",
+        "1.0.0",
+      );
+    });
+
+    it("should throw BadRequestException when version has instances", async () => {
+      mockService.deleteVersion.mockResolvedValue(
+        Failure("Cannot delete version 1.0.0: 3 active instance(s) reference it"),
+      );
+
+      await expect(
+        controller.deleteVersion("test-bot", "1.0.0", mockUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("deleteAllVersions", () => {
+    it("should delete all versions successfully", async () => {
+      mockService.deleteAllVersions.mockResolvedValue(Ok(null));
+
+      const result = await controller.deleteAllVersions("test-bot", mockUser);
+
+      expect(result.success).toBe(true);
+      expect(mockService.deleteAllVersions).toHaveBeenCalledWith(
+        "user123",
+        "test-bot",
+      );
+    });
+
+    it("should throw BadRequestException when versions have instances", async () => {
+      mockService.deleteAllVersions.mockResolvedValue(
+        Failure("Cannot delete: versions with active instance(s)"),
+      );
+
+      await expect(
+        controller.deleteAllVersions("test-bot", mockUser),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

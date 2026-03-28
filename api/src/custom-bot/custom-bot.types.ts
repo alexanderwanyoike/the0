@@ -72,3 +72,15 @@ export interface CustomBotWithVersions {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface VersionWithInstances extends CustomBotVersion {
+  instanceCount: number;
+}
+
+export interface BotDeleteResult {
+  orphanedVersion?: {
+    name: string;
+    version: string;
+    customBotId: string;
+  };
+}

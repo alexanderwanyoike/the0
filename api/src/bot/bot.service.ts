@@ -8,7 +8,8 @@ import { Bot } from "./entities/bot.entity";
 import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
-import { CustomBot, BotType } from "@/custom-bot/custom-bot.types";
+import { StorageService } from "@/custom-bot/storage.service";
+import { CustomBot, BotType, BotDeleteResult } from "@/custom-bot/custom-bot.types";
 import { AuthenticatedRequest } from "@/auth/auth.types";
 import { BotConfig } from "@/database/schema/bots";
 // UserBotsService removed for OSS version
@@ -27,6 +28,7 @@ export class BotService {
     private readonly botRepository: BotRepository,
     private readonly botValidator: BotValidator,
     private readonly customBotService: CustomBotService,
+    private readonly storageService: StorageService,
     // UserBotsService removed for OSS version
     private readonly natsService: NatsService,
     private readonly logger: PinoLogger,
@@ -226,7 +228,7 @@ export class BotService {
     return result;
   }
 
-  async remove(id: string): Promise<Result<void, string>> {
+  async remove(id: string): Promise<Result<BotDeleteResult, string>> {
     const { uid } = this.request.user;
 
     // Fetch bot data before deletion for event payload
@@ -262,7 +264,50 @@ export class BotService {
 
     const result = await this.botRepository.remove(uid, id);
 
-    if (result.success && topics) {
+    if (!result.success) {
+      return Failure(result.error);
+    }
+
+    // Clean up bot logs from MinIO (fire-and-forget, don't fail the deletion)
+    const logsCleanup = await this.storageService.deletePrefixFromBucket(
+      "bot-logs",
+      `logs/${botResult.data.id}/`,
+    );
+    if (!logsCleanup.success) {
+      this.logger.warn(
+        { error: logsCleanup.error, botId: botResult.data.id },
+        "Failed to clean up bot logs",
+      );
+    }
+
+    // Clean up bot state from MinIO
+    const stateCleanup = await this.storageService.deletePrefixFromBucket(
+      "bot-state",
+      `${botResult.data.id}/`,
+    );
+    if (!stateCleanup.success) {
+      this.logger.warn(
+        { error: stateCleanup.error, botId: botResult.data.id },
+        "Failed to clean up bot state",
+      );
+    }
+
+    // Check if custom bot version is now orphaned
+    const deleteResult: BotDeleteResult = {};
+    if (botResult.data.customBotId) {
+      const orphanResult = await this.customBotService.checkOrphaned(
+        botResult.data.customBotId,
+      );
+      if (orphanResult.success && orphanResult.data.orphaned) {
+        deleteResult.orphanedVersion = {
+          name: orphanResult.data.name,
+          version: orphanResult.data.version,
+          customBotId: botResult.data.customBotId,
+        };
+      }
+    }
+
+    if (topics) {
       // Format event data for runtime subscriber (bot-scheduler expects flat structure)
       const eventPayload = {
         id: botResult.data.id,
@@ -282,7 +327,7 @@ export class BotService {
       }
     }
 
-    return result;
+    return Ok(deleteResult);
   }
 
   private async validateBotTypeAndConfig(
