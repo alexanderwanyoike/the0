@@ -13,6 +13,7 @@ jest.mock("drizzle-orm", () => ({
   and: jest.fn(),
   desc: jest.fn(),
   asc: jest.fn(),
+  inArray: jest.fn(),
 }));
 
 jest.mock("@paralleldrive/cuid2", () => ({
@@ -662,6 +663,102 @@ describe("CustomBotRepository", () => {
 
       // Restore original method
       repository.findGlobalByKeyAndVersion = originalFindGlobalByKeyAndVersion;
+    });
+  });
+
+  describe("countInstancesByCustomBotId", () => {
+    it("should return count of bot instances referencing a custom bot", async () => {
+      const mockBotsTable = {
+        customBotId: { name: "customBotId" },
+      };
+      mockTables.bots = mockBotsTable;
+
+      mockDb.where.mockResolvedValue([
+        { id: "bot-1" },
+        { id: "bot-2" },
+      ]);
+
+      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(2);
+    });
+
+    it("should return 0 when no instances reference the custom bot", async () => {
+      const mockBotsTable = {
+        customBotId: { name: "customBotId" },
+      };
+      mockTables.bots = mockBotsTable;
+
+      mockDb.where.mockResolvedValue([]);
+
+      const result = await repository.countInstancesByCustomBotId("unused-custom-bot-id");
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(0);
+    });
+
+    it("should handle database errors", async () => {
+      const mockBotsTable = {
+        customBotId: { name: "customBotId" },
+      };
+      mockTables.bots = mockBotsTable;
+
+      mockDb.where.mockRejectedValue(new Error("Database error"));
+
+      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Database error");
+    });
+  });
+
+  describe("countInstancesByCustomBotIds", () => {
+    it("should return a map of instance counts by custom bot id", async () => {
+      const mockBotsTable = {
+        customBotId: { name: "customBotId" },
+      };
+      mockTables.bots = mockBotsTable;
+
+      mockDb.where.mockResolvedValue([
+        { customBotId: "cb-1" },
+        { customBotId: "cb-1" },
+        { customBotId: "cb-2" },
+      ]);
+
+      const result = await repository.countInstancesByCustomBotIds(["cb-1", "cb-2", "cb-3"]);
+
+      expect(result.success).toBe(true);
+      expect(result.data!.get("cb-1")).toBe(2);
+      expect(result.data!.get("cb-2")).toBe(1);
+      expect(result.data!.get("cb-3")).toBe(0);
+    });
+
+    it("should return empty map for empty input", async () => {
+      const result = await repository.countInstancesByCustomBotIds([]);
+
+      expect(result.success).toBe(true);
+      expect(result.data!.size).toBe(0);
+    });
+  });
+
+  describe("removeAllByName", () => {
+    it("should delete all versions of a bot by name", async () => {
+      mockDb.where.mockResolvedValue(undefined);
+
+      const result = await repository.removeAllByName("user123", "test-bot");
+
+      expect(result.success).toBe(true);
+      expect(mockDb.delete).toHaveBeenCalled();
+    });
+
+    it("should handle database errors", async () => {
+      mockDb.where.mockRejectedValue(new Error("Constraint violation"));
+
+      const result = await repository.removeAllByName("user123", "test-bot");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Constraint violation");
     });
   });
 

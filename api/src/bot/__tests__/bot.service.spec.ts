@@ -669,7 +669,7 @@ describe("BotService - Enhanced Tests", () => {
   });
 
   describe("remove", () => {
-    it("should remove a bot successfully", async () => {
+    it("should remove a bot and clean up logs and state", async () => {
       const botToRemove = mockBot({
         id: "test-id",
         name: "Test Bot",
@@ -690,11 +690,53 @@ describe("BotService - Enhanced Tests", () => {
         data: undefined,
       });
 
+      (mockCustomBotService.checkOrphaned as jest.Mock) = jest
+        .fn()
+        .mockResolvedValue(Ok({ orphaned: false, name: "test-bot", version: "1.0.0" }));
+
       const result = await service.remove("test-id");
 
       expect(result.success).toBe(true);
       expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
       expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
+    });
+
+    it("should return orphaned version info when version becomes orphaned", async () => {
+      const botToRemove = mockBot({
+        id: "test-id",
+        name: "Test Bot",
+        config: mockBotConfig({ type: "scheduled/test-bot", version: "1.0.0" }),
+        topic: "the0-scheduled-custom-bot",
+        userId: uid,
+        customBotId: "cb-123",
+      });
+
+      jest.spyOn(repository, "findOne").mockResolvedValue({
+        success: true,
+        error: null,
+        data: botToRemove,
+      });
+
+      jest.spyOn(repository, "remove").mockResolvedValue({
+        success: true,
+        error: null,
+        data: undefined,
+      });
+
+      (mockCustomBotService.checkOrphaned as jest.Mock) = jest
+        .fn()
+        .mockResolvedValue(Ok({ orphaned: true, name: "test-bot", version: "1.0.0" }));
+
+      const result = await service.remove("test-id");
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({
+        orphanedVersion: {
+          name: "test-bot",
+          version: "1.0.0",
+          customBotId: "cb-123",
+        },
+      });
     });
 
     it("should handle removal failures", async () => {
