@@ -12,7 +12,6 @@ import {
 import { BotValidator } from "../bot.validator";
 import { ConfigModule } from "@nestjs/config";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
-import { StorageService } from "@/custom-bot/storage.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { NatsService } from "@/nats/nats.service";
@@ -104,12 +103,6 @@ describe("BotController - Enhanced Tests", () => {
         {
           provide: ApiKeyService,
           useValue: {},
-        },
-        {
-          provide: StorageService,
-          useValue: {
-            deletePrefixFromBucket: jest.fn().mockResolvedValue(Ok(0)),
-          },
         },
         {
           provide: NatsService,

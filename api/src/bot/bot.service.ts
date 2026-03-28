@@ -8,7 +8,6 @@ import { Bot } from "./entities/bot.entity";
 import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
-import { StorageService } from "@/custom-bot/storage.service";
 import { CustomBot, BotType, BotDeleteResult } from "@/custom-bot/custom-bot.types";
 import { AuthenticatedRequest } from "@/auth/auth.types";
 import { BotConfig } from "@/database/schema/bots";
@@ -28,7 +27,6 @@ export class BotService {
     private readonly botRepository: BotRepository,
     private readonly botValidator: BotValidator,
     private readonly customBotService: CustomBotService,
-    private readonly storageService: StorageService,
     // UserBotsService removed for OSS version
     private readonly natsService: NatsService,
     private readonly logger: PinoLogger,
@@ -268,29 +266,9 @@ export class BotService {
       return Failure(result.error);
     }
 
-    // Clean up bot logs from MinIO (fire-and-forget, don't fail the deletion)
-    const logsCleanup = await this.storageService.deletePrefixFromBucket(
-      "bot-logs",
-      `logs/${botResult.data.id}/`,
-    );
-    if (!logsCleanup.success) {
-      this.logger.warn(
-        { error: logsCleanup.error, botId: botResult.data.id },
-        "Failed to clean up bot logs",
-      );
-    }
-
-    // Clean up bot state from MinIO
-    const stateCleanup = await this.storageService.deletePrefixFromBucket(
-      "bot-state",
-      `${botResult.data.id}/`,
-    );
-    if (!stateCleanup.success) {
-      this.logger.warn(
-        { error: stateCleanup.error, botId: botResult.data.id },
-        "Failed to clean up bot state",
-      );
-    }
+    // Note: MinIO log/state cleanup is handled by the runtime GC process,
+    // not here. The GC periodically sweeps orphaned artifacts after the
+    // bot container has fully exited and done its final sync.
 
     // Check if custom bot version is now orphaned
     const deleteResult: BotDeleteResult = {};

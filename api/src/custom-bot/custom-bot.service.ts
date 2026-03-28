@@ -418,9 +418,20 @@ export class CustomBotService {
     const filesResult = await this.storageService.listObjects(
       customBot.filePath,
     );
-    if (filesResult.success) {
+    if (!filesResult.success) {
+      this.logger.warn(
+        { filePath: customBot.filePath, error: filesResult.error },
+        "Failed to list files for cleanup, proceeding with DB deletion",
+      );
+    } else {
       for (const filePath of filesResult.data) {
-        await this.storageService.deleteFile(filePath);
+        const deleteResult = await this.storageService.deleteFile(filePath);
+        if (!deleteResult.success) {
+          this.logger.warn(
+            { filePath, error: deleteResult.error },
+            "Failed to delete file during version cleanup",
+          );
+        }
       }
     }
 

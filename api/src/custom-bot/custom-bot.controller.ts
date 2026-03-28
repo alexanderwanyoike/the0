@@ -232,6 +232,28 @@ export class CustomBotController {
     };
   }
 
+  @Get(":name/versions")
+  @HttpCode(HttpStatus.OK)
+  async getVersionsWithInstances(
+    @Param("name") name: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const result = await this.customBotService.getVersionsWithInstanceCounts(
+      user.uid,
+      name,
+    );
+
+    if (!result.success) {
+      throw new NotFoundException(result.error);
+    }
+
+    return {
+      success: true,
+      data: result.data,
+      message: "Bot versions with instance counts retrieved successfully",
+    };
+  }
+
   @Get(":name")
   @HttpCode(HttpStatus.OK)
   async getAllVersions(@Param("name") name: string) {
@@ -282,28 +304,6 @@ export class CustomBotController {
     res.setHeader("Content-Type", "application/javascript");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     streamResult.data.pipe(res);
-  }
-
-  @Get(":name/versions")
-  @HttpCode(HttpStatus.OK)
-  async getVersionsWithInstances(
-    @Param("name") name: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const result = await this.customBotService.getVersionsWithInstanceCounts(
-      user.uid,
-      name,
-    );
-
-    if (!result.success) {
-      throw new NotFoundException(result.error);
-    }
-
-    return {
-      success: true,
-      data: result.data,
-      message: "Bot versions with instance counts retrieved successfully",
-    };
   }
 
   @Delete(":name/:version")

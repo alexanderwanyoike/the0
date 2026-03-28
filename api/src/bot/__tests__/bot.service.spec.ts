@@ -8,7 +8,6 @@ import { HttpModule } from "@nestjs/axios";
 import { ConfigModule } from "@nestjs/config";
 import { CustomBotModule } from "@/custom-bot/custom-bot.module";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
-import { StorageService } from "@/custom-bot/storage.service";
 import { NatsService } from "@/nats/nats.service";
 // FeatureGateService removed for OSS version
 import { Ok, Failure } from "@/common/result";
@@ -91,12 +90,6 @@ describe("BotService - Enhanced Tests", () => {
         {
           provide: CustomBotService,
           useValue: mockCustomBotService,
-        },
-        {
-          provide: StorageService,
-          useValue: {
-            deletePrefixFromBucket: jest.fn().mockResolvedValue(Ok(0)),
-          },
         },
         {
           provide: NatsService,

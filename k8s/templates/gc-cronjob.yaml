@@ -1,0 +1,57 @@
+{{- if .Values.gc.enabled }}
+# GC CronJob - cleans up orphaned bot artifacts from MinIO
+# Runs periodically to remove logs and state for bots that no longer exist
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "the0.fullname" . }}-gc
+  labels:
+    {{- include "the0.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gc
+spec:
+  schedule: {{ .Values.gc.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 300
+      template:
+        metadata:
+          labels:
+            {{- include "the0.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: gc
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: gc
+              image: "{{ .Values.gc.image.repository }}:{{ .Values.gc.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.gc.image.pullPolicy | default "IfNotPresent" }}
+              command: ["./runtime", "gc"]
+              env:
+                - name: MONGO_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "the0.fullname" . }}-secrets
+                      key: mongo-uri
+                - name: MINIO_ENDPOINT
+                  value: {{ .Values.minio.endpoint | default "minio:9000" | quote }}
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "the0.fullname" . }}-secrets
+                      key: minio-access-key
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "the0.fullname" . }}-secrets
+                      key: minio-secret-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+{{- end }}

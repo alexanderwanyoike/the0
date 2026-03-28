@@ -11,6 +11,6 @@ import { LoggerModule } from "@/logger/logger.module";
   imports: [ConfigModule, ApiKeyModule, LoggerModule],
   controllers: [CustomBotController],
   providers: [CustomBotService, CustomBotRepository, StorageService],
-  exports: [CustomBotService, CustomBotRepository, StorageService],
+  exports: [CustomBotService, CustomBotRepository],
 })
 export class CustomBotModule {}

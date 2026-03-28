@@ -312,18 +312,15 @@ export class StorageService {
     prefix: string,
   ): Promise<Result<number, string>> {
     try {
-      const objects: string[] = [];
       const stream = this.minioClient.listObjects(bucket, prefix, true);
+      let deletedCount = 0;
 
       for await (const obj of stream) {
-        objects.push(obj.name);
+        await this.minioClient.removeObject(bucket, obj.name);
+        deletedCount++;
       }
 
-      for (const objectName of objects) {
-        await this.minioClient.removeObject(bucket, objectName);
-      }
-
-      return Ok(objects.length);
+      return Ok(deletedCount);
     } catch (error) {
       return Failure(`Error deleting objects with prefix: ${error.message}`);
     }
