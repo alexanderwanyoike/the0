@@ -477,7 +477,7 @@ func NewCustomBotDeleteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&version, "version", "v", "", "Delete a specific version")
+	cmd.Flags().StringVar(&version, "version", "", "Delete a specific version")
 	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompt")
 
 	return cmd
