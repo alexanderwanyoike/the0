@@ -92,8 +92,6 @@ var ServiceRegistry = map[string]ServiceInfo{
 	"gc": {
 		ComposeService: "gc",
 		FriendlyName:   "GC",
-		Port:           8084,
-		URL:            "http://localhost:8084/healthz",
 		Category:       "runtime",
 	},
 }
@@ -151,6 +149,9 @@ func PrintServiceURLs() {
 		sort.Strings(names)
 		for _, name := range names {
 			svc := ServiceRegistry[name]
+			if svc.URL == "" {
+				continue
+			}
 			logger.Printf("    %-20s %s\n", svc.FriendlyName, svc.URL)
 		}
 		logger.Newline()
