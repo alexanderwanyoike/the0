@@ -5,6 +5,70 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: added
+          description: Custom bot version management - list versions with instance counts, delete single or all versions
+        - kind: added
+          description: Safety guard preventing deletion of custom bot versions with active bot instances
+        - kind: added
+          description: Runtime GC command (runtime gc) for periodic cleanup of orphaned MinIO artifacts
+        - kind: added
+          description: GC CronJob template for Kubernetes and docker-compose service for Docker mode
+        - kind: added
+          description: CLI custom-bot delete command with --version and --yes flags
+        - kind: added
+          description: Orphaned version info shown on bot delete in CLI
+        - kind: changed
+          description: Enhanced custom-bot versions command to show instance counts per version
+        - kind: changed
+          description: Bot deletion returns orphaned version metadata for CLI consumption
+        - kind: fixed
+          description: Controller route ordering for GET custom-bots/:name/versions
+        - kind: fixed
+          description: DB rows deleted before best-effort MinIO cleanup to avoid dangling references
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.11.0
+    created: "2026-03-29T12:27:52.356709041Z"
+    description: A distributed trading bot platform with backtesting, bot scheduling,
+      and security analysis
+    digest: 6bf53e9b09c5e6808354b14f645b72423ff87dcad0eaff6a5f5aaebcd283b8e2
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.7.0/the0-0.7.0.tgz
+    version: 0.7.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: added
           description: Health and readiness endpoints (/health, /health/ready) with dependency checks
         - kind: added
           description: "@CurrentUser() decorator replacing unsafe (request as any).user pattern"
@@ -723,4 +787,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-24T12:58:14.870522261Z"
+generated: "2026-03-29T12:27:52.356861033Z"
