@@ -598,7 +598,10 @@ func runGC() {
 		return
 	}
 
-	// Continuous mode: ticker loop with signal handling
+	// Continuous mode: health server + ticker loop with signal handling
+	healthServer := health.NewServer(8084)
+	healthServer.Start()
+	healthServer.SetReady(true)
 	util.LogMaster("Running continuously every %v (Ctrl+C to stop)", gcInterval)
 
 	ch := make(chan os.Signal, 1)
@@ -618,6 +621,7 @@ func runGC() {
 			}
 		case <-ch:
 			util.LogMaster("Received shutdown signal, exiting...")
+			healthServer.Stop(context.Background())
 			return
 		}
 	}
