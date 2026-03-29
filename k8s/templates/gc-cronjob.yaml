@@ -28,7 +28,7 @@ spec:
             - name: gc
               image: "{{ .Values.gc.image.repository }}:{{ .Values.gc.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.gc.image.pullPolicy | default "IfNotPresent" }}
-              command: ["./runtime", "gc"]
+              command: ["/app/runtime", "gc"]
               env:
                 - name: MONGO_URI
                   valueFrom:

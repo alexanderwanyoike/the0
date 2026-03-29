@@ -1,9 +1,9 @@
 apiVersion: v2
 name: the0
-description: A distributed trading bot platform with backtesting, bot scheduling, and security analysis
+description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.0
-appVersion: "1.11.0"
+version: 0.7.1
+appVersion: "1.11.1"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,26 +30,12 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
-    - kind: added
-      description: Custom bot version management - list versions with instance counts, delete single or all versions
-    - kind: added
-      description: Safety guard preventing deletion of custom bot versions with active bot instances
-    - kind: added
-      description: Runtime GC command (runtime gc) for periodic cleanup of orphaned MinIO artifacts
-    - kind: added
-      description: GC CronJob template for Kubernetes and docker-compose service for Docker mode
-    - kind: added
-      description: CLI custom-bot delete command with --version and --yes flags
-    - kind: added
-      description: Orphaned version info shown on bot delete in CLI
-    - kind: changed
-      description: Enhanced custom-bot versions command to show instance counts per version
-    - kind: changed
-      description: Bot deletion returns orphaned version metadata for CLI consumption
     - kind: fixed
-      description: Controller route ordering for GET custom-bots/:name/versions
+      description: GC CronJob uses /app/runtime instead of ./runtime for correct container path
     - kind: fixed
-      description: DB rows deleted before best-effort MinIO cleanup to avoid dangling references
+      description: GC CronJob defaults to GHCR runtime image instead of local dev image name
+    - kind: fixed
+      description: Updated chart description to accurately reflect platform capabilities
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
