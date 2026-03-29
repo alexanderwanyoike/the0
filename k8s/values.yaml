@@ -308,6 +308,6 @@ gc:
   enabled: true
   schedule: "*/5 * * * *"  # Every 5 minutes
   image:
-    repository: the0-runtime
+    repository: ghcr.io/alexanderwanyoike/the0/runtime
     tag: ""  # Defaults to Chart.AppVersion
     pullPolicy: IfNotPresent
