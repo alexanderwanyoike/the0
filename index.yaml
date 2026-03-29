@@ -4,6 +4,56 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: fixed
+          description: GC CronJob uses /app/runtime instead of ./runtime for correct container path
+        - kind: fixed
+          description: GC CronJob defaults to GHCR runtime image instead of local dev image name
+        - kind: fixed
+          description: Updated chart description to accurately reflect platform capabilities
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.11.1
+    created: "2026-03-29T13:12:24.73603089Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 3f6d4f969c36f3955d24dad85851de2ea52d92184a7a3808d8906523b963c1bf
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.7.1/the0-0.7.1.tgz
+    version: 0.7.1
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: added
           description: Custom bot version management - list versions with instance counts, delete single or all versions
         - kind: added
@@ -787,4 +837,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-29T12:27:52.356861033Z"
+generated: "2026-03-29T13:12:24.73613805Z"
