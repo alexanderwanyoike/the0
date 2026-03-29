@@ -89,6 +89,11 @@ var ServiceRegistry = map[string]ServiceInfo{
 		URL:            "http://localhost:9477",
 		Category:       "runtime",
 	},
+	"gc": {
+		ComposeService: "gc",
+		FriendlyName:   "GC",
+		Category:       "runtime",
+	},
 }
 
 // ResolveFriendlyName maps a user-provided name to the compose service name.
