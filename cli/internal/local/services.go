@@ -92,6 +92,8 @@ var ServiceRegistry = map[string]ServiceInfo{
 	"gc": {
 		ComposeService: "gc",
 		FriendlyName:   "GC",
+		Port:           8084,
+		URL:            "http://localhost:8084/healthz",
 		Category:       "runtime",
 	},
 }
