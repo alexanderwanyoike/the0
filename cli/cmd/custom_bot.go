@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
@@ -23,6 +25,7 @@ func NewCustomBotCmd() *cobra.Command {
 	cmd.AddCommand(NewCustomBotListCmd())
 	cmd.AddCommand(NewCustomBotSchemaCmd())
 	cmd.AddCommand(NewCustomBotVersionsCmd())
+	cmd.AddCommand(NewCustomBotDeleteCmd())
 	return cmd
 }
 
@@ -389,9 +392,9 @@ func NewCustomBotVersionsCmd() *cobra.Command {
 }
 
 func getCustomBotVersions(cmd *cobra.Command, args []string) {
-	typeName := args[0]
+	botName := args[0]
 
-	logger.StartSpinner("Fetching versions for " + typeName)
+	logger.StartSpinner("Fetching versions for " + botName)
 
 	auth, err := internal.GetAuthTokenWithRetry()
 	if err != nil {
@@ -401,7 +404,7 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 	}
 
 	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
-	customBots, err := apiClient.ListCustomBots(auth)
+	versions, err := apiClient.GetCustomBotVersionsWithInstances(auth, botName)
 	if err != nil {
 		if internal.IsAuthError(err) {
 			logger.UpdateSpinner("Session expired. Re-authenticating")
@@ -412,14 +415,14 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 
-			customBots, err = apiClient.ListCustomBots(auth)
+			versions, err = apiClient.GetCustomBotVersionsWithInstances(auth, botName)
 			if err != nil {
-				logger.StopSpinnerWithError("Failed to list custom bots")
+				logger.StopSpinnerWithError("Failed to fetch versions")
 				logger.Error("%v", err)
 				os.Exit(1)
 			}
 		} else {
-			logger.StopSpinnerWithError("Failed to list custom bots")
+			logger.StopSpinnerWithError("Failed to fetch versions")
 			logger.Error("%v", err)
 			os.Exit(1)
 		}
@@ -427,38 +430,15 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 
 	logger.StopSpinner()
 
-	var targetCustomBot *internal.CustomBotData
-	for _, customBot := range customBots {
-		if len(customBot.Versions) > 0 {
-			for _, version := range customBot.Versions {
-				if version.Version == customBot.LatestVersion {
-					botType := fmt.Sprintf("%s/%s", version.Config.Type, version.Config.Name)
-					if botType == typeName || customBot.Name == typeName {
-						targetCustomBot = &customBot
-						break
-					}
-				}
-			}
-			if targetCustomBot != nil {
-				break
-			}
-		}
-	}
-
-	if targetCustomBot == nil {
-		logger.Error("Custom bot not found: %s", typeName)
-		os.Exit(1)
-	}
-
-	if len(targetCustomBot.Versions) == 0 {
-		logger.Info("No versions found for custom bot '%s'", typeName)
+	if len(versions) == 0 {
+		logger.Info("No versions found for custom bot '%s'", botName)
 		return
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.Header("Version", "Created At", "Type")
+	table.Header("Version", "Instances", "Created At", "Type")
 
-	for _, version := range targetCustomBot.Versions {
+	for _, version := range versions {
 		createdTime, err := time.Parse(time.RFC3339, version.CreatedAt)
 		if err != nil {
 			createdTime = time.Now() // fallback
@@ -467,13 +447,118 @@ func getCustomBotVersions(cmd *cobra.Command, args []string) {
 
 		botType := fmt.Sprintf("%s/%s", version.Config.Type, version.Config.Name)
 
-		table.Append(version.Version, createdStr, botType)
+		instanceStr := "unused"
+		if version.InstanceCount > 0 {
+			instanceStr = fmt.Sprintf("%d instance(s)", version.InstanceCount)
+		}
+
+		table.Append(version.Version, instanceStr, createdStr, botType)
 	}
 
-	logger.Success("Found %d version(s) for '%s':", len(targetCustomBot.Versions), typeName)
+	logger.Success("Found %d version(s) for '%s':", len(versions), botName)
 	logger.Newline()
 	if err := table.Render(); err != nil {
 		logger.Error("Failed to render table: %v", err)
 		os.Exit(1)
+	}
+}
+
+func NewCustomBotDeleteCmd() *cobra.Command {
+	var version string
+	var skipConfirm bool
+
+	cmd := &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a custom bot or specific version",
+		Long:  "Delete all versions of a custom bot, or a specific version with --version flag",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			deleteCustomBot(cmd, args, version, skipConfirm)
+		},
+	}
+
+	cmd.Flags().StringVarP(&version, "version", "v", "", "Delete a specific version")
+	cmd.Flags().BoolVarP(&skipConfirm, "yes", "y", false, "Skip confirmation prompt")
+
+	return cmd
+}
+
+func deleteCustomBot(cmd *cobra.Command, args []string, version string, skipConfirm bool) {
+	botName := args[0]
+
+	if !skipConfirm {
+		if version != "" {
+			logger.Warning("Are you sure you want to delete version '%s' of '%s'?", version, botName)
+		} else {
+			logger.Warning("Are you sure you want to delete ALL versions of '%s'?", botName)
+		}
+		logger.Print("This action cannot be undone")
+		logger.Printf("Type 'yes' to confirm: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		confirmation, err := reader.ReadString('\n')
+		if err != nil {
+			logger.Error("Failed to read confirmation: %v", err)
+			os.Exit(1)
+		}
+
+		confirmation = strings.TrimSpace(strings.ToLower(confirmation))
+		if confirmation != "yes" {
+			logger.Info("Deletion cancelled")
+			return
+		}
+	}
+
+	logger.StartSpinner("Deleting custom bot")
+
+	auth, err := internal.GetAuthTokenWithRetry()
+	if err != nil {
+		logger.StopSpinnerWithError("Authentication failed")
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+
+	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+
+	if version != "" {
+		err = apiClient.DeleteCustomBotVersion(auth, botName, version)
+	} else {
+		err = apiClient.DeleteCustomBot(auth, botName)
+	}
+
+	if err != nil {
+		if internal.IsAuthError(err) {
+			logger.UpdateSpinner("Session expired. Re-authenticating")
+			auth, err = internal.PromptForNewAPIKey()
+			if err != nil {
+				logger.StopSpinnerWithError("Authentication failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+
+			if version != "" {
+				err = apiClient.DeleteCustomBotVersion(auth, botName, version)
+			} else {
+				err = apiClient.DeleteCustomBot(auth, botName)
+			}
+
+			if err != nil {
+				logger.StopSpinnerWithError("Deletion failed")
+				logger.Error("%v", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.StopSpinnerWithError("Deletion failed")
+			logger.Error("%v", err)
+			os.Exit(1)
+		}
+	}
+
+	logger.StopSpinner()
+
+	if version != "" {
+		logger.Success("Version '%s' of '%s' deleted successfully", version, botName)
+	} else {
+		logger.Success("All versions of '%s' deleted successfully", botName)
 	}
 }

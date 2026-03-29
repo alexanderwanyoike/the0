@@ -506,4 +506,91 @@ describe("StorageService", () => {
       expect(path).toBe("user123/test-bot/1.0.0/frontend.js");
     });
   });
+
+  describe("deletePrefixFromBucket", () => {
+    it("should list and delete all objects under the prefix", async () => {
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield { name: "logs/bot-123/20260101.log" };
+          yield { name: "logs/bot-123/20260102.log" };
+        },
+      };
+      mockMinioClient.listObjects.mockReturnValue(mockStream as any);
+      mockMinioClient.removeObject.mockResolvedValue(undefined);
+
+      const result = await service.deletePrefixFromBucket(
+        "bot-logs",
+        "logs/bot-123/",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(2);
+      expect(mockMinioClient.listObjects).toHaveBeenCalledWith(
+        "bot-logs",
+        "logs/bot-123/",
+        true,
+      );
+      expect(mockMinioClient.removeObject).toHaveBeenCalledTimes(2);
+      expect(mockMinioClient.removeObject).toHaveBeenCalledWith(
+        "bot-logs",
+        "logs/bot-123/20260101.log",
+      );
+      expect(mockMinioClient.removeObject).toHaveBeenCalledWith(
+        "bot-logs",
+        "logs/bot-123/20260102.log",
+      );
+    });
+
+    it("should return 0 when no objects match the prefix", async () => {
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          // empty - no objects
+        },
+      };
+      mockMinioClient.listObjects.mockReturnValue(mockStream as any);
+
+      const result = await service.deletePrefixFromBucket(
+        "bot-logs",
+        "logs/nonexistent/",
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(0);
+      expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+    });
+
+    it("should handle errors during listing", async () => {
+      mockMinioClient.listObjects.mockImplementation(() => {
+        throw new Error("Bucket not found");
+      });
+
+      const result = await service.deletePrefixFromBucket(
+        "bad-bucket",
+        "some/prefix/",
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Bucket not found");
+    });
+
+    it("should handle errors during object removal", async () => {
+      const mockStream = {
+        [Symbol.asyncIterator]: async function* () {
+          yield { name: "logs/bot-123/20260101.log" };
+        },
+      };
+      mockMinioClient.listObjects.mockReturnValue(mockStream as any);
+      mockMinioClient.removeObject.mockRejectedValue(
+        new Error("Permission denied"),
+      );
+
+      const result = await service.deletePrefixFromBucket(
+        "bot-logs",
+        "logs/bot-123/",
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Permission denied");
+    });
+  });
 });

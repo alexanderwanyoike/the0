@@ -83,6 +83,7 @@ describe("BotController - Enhanced Tests", () => {
     getAllUserVersions: jest.fn(),
     getAllGlobalVersions: jest.fn(),
     getAllUserSpecificVersions: jest.fn(),
+    checkOrphaned: jest.fn().mockResolvedValue(Ok({ orphaned: false, name: "test", version: "1.0.0" })),
   };
 
   beforeEach(async () => {
@@ -499,7 +500,8 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.remove("test-id")).resolves.toBeUndefined();
+      const result = await controller.remove("test-id");
+      expect(result).toBeDefined();
       expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
     });
 

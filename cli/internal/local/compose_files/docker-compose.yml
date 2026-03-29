@@ -266,6 +266,39 @@ services:
       - the0-network
     command: ["/app/runtime", "bot-scheduler"]
 
+  # GC Service (Go - cleans up orphaned bot artifacts from MinIO)
+  gc:
+    build:
+      context: {{REPO_PATH}}/runtime
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: the0/runtime:latest
+    pull_policy: always
+    environment:
+      MONGO_URI: mongodb://root:the0_mongo_password@mongo:27017
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: the0admin
+      MINIO_SECRET_KEY: the0password
+      MINIO_USE_SSL: "false"
+      MINIO_LOGS_BUCKET: bot-logs
+      MINIO_STATE_BUCKET: bot-state
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8084/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - the0-network
+    command: ["/app/runtime", "gc", "--interval", "5m"]
+
   # Query Server Service (Go - standalone query execution)
   query-server:
     build:

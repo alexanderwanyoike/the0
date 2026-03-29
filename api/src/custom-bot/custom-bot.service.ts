@@ -8,6 +8,7 @@ import {
   CustomBotConfig,
   CustomBot,
   CustomBotWithVersions,
+  VersionWithInstances,
 } from "./custom-bot.types";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
 
@@ -352,5 +353,192 @@ export class CustomBotService {
 
   async getById(id: string): Promise<Result<CustomBot, string>> {
     return await this.customBotRepository.findOneById(id);
+  }
+
+  async getVersionsWithInstanceCounts(
+    userId: string,
+    name: string,
+  ): Promise<Result<VersionWithInstances[], string>> {
+    const versionsResult = await this.customBotRepository.getAllUserVersions(
+      userId,
+      name,
+    );
+    if (!versionsResult.success) {
+      return Failure(versionsResult.error);
+    }
+
+    const ids = versionsResult.data.versions.map((v) => v.id);
+    const countsResult =
+      await this.customBotRepository.countInstancesByCustomBotIds(ids);
+    if (!countsResult.success) {
+      return Failure(countsResult.error);
+    }
+
+    const enriched: VersionWithInstances[] = versionsResult.data.versions.map(
+      (v) => ({
+        ...v,
+        instanceCount: countsResult.data.get(v.id) || 0,
+      }),
+    );
+
+    return Ok(enriched);
+  }
+
+  async deleteVersion(
+    userId: string,
+    name: string,
+    version: string,
+  ): Promise<Result<void, string>> {
+    const ownershipResult =
+      await this.customBotRepository.checkUserOwnership(userId, name);
+    if (!ownershipResult.success) {
+      return Failure(ownershipResult.error);
+    }
+
+    const versionResult =
+      await this.customBotRepository.getSpecificGlobalVersion(name, version);
+    if (!versionResult.success) {
+      return Failure(versionResult.error);
+    }
+
+    const customBot = versionResult.data;
+    const countResult =
+      await this.customBotRepository.countInstancesByCustomBotId(customBot.id);
+    if (!countResult.success) {
+      return Failure(countResult.error);
+    }
+
+    if (countResult.data > 0) {
+      return Failure(
+        `Cannot delete version ${version}: ${countResult.data} active instance(s) reference it`,
+      );
+    }
+
+    // Delete DB row first, then best-effort storage cleanup.
+    // Orphaned MinIO files are harmless; dangling DB rows pointing to
+    // missing files would be a real problem.
+    const removeResult = await this.customBotRepository.remove(
+      userId,
+      customBot.id,
+    );
+    if (!removeResult.success) {
+      return Failure(removeResult.error);
+    }
+
+    // Best-effort MinIO cleanup (code bundle + frontend)
+    const filesResult = await this.storageService.listObjects(
+      customBot.filePath,
+    );
+    if (!filesResult.success) {
+      this.logger.warn(
+        { filePath: customBot.filePath, error: filesResult.error },
+        "Failed to list files for cleanup after version deletion",
+      );
+    } else {
+      for (const filePath of filesResult.data) {
+        const deleteResult = await this.storageService.deleteFile(filePath);
+        if (!deleteResult.success) {
+          this.logger.warn(
+            { filePath, error: deleteResult.error },
+            "Failed to delete file during version cleanup",
+          );
+        }
+      }
+    }
+
+    return Ok(null);
+  }
+
+  async deleteAllVersions(
+    userId: string,
+    name: string,
+  ): Promise<Result<void, string>> {
+    const ownershipResult =
+      await this.customBotRepository.checkUserOwnership(userId, name);
+    if (!ownershipResult.success) {
+      return Failure(ownershipResult.error);
+    }
+
+    const versionsResult =
+      await this.customBotRepository.getAllGlobalVersions(name);
+    if (!versionsResult.success) {
+      return Failure(versionsResult.error);
+    }
+
+    const ids = versionsResult.data.versions.map((v) => v.id);
+    const countsResult =
+      await this.customBotRepository.countInstancesByCustomBotIds(ids);
+    if (!countsResult.success) {
+      return Failure(countsResult.error);
+    }
+
+    const versionsWithInstances: string[] = [];
+    for (const [id, count] of countsResult.data) {
+      if (count > 0) {
+        const v = versionsResult.data.versions.find((ver) => ver.id === id);
+        versionsWithInstances.push(`${v?.version || id} (${count})`);
+      }
+    }
+
+    if (versionsWithInstances.length > 0) {
+      return Failure(
+        `Cannot delete: versions with active instance(s): ${versionsWithInstances.join(", ")}`,
+      );
+    }
+
+    // Delete DB rows first, then best-effort storage cleanup
+    const removeResult = await this.customBotRepository.removeAllByName(
+      userId,
+      name,
+    );
+    if (!removeResult.success) {
+      return Failure(removeResult.error);
+    }
+
+    // Best-effort MinIO cleanup for all versions
+    const prefix = `${userId}/${name}/`;
+    const filesResult = await this.storageService.listObjects(prefix);
+    if (!filesResult.success) {
+      this.logger.warn(
+        { prefix, error: filesResult.error },
+        "Failed to list files for cleanup after deleting all versions",
+      );
+    } else {
+      for (const filePath of filesResult.data) {
+        const deleteResult = await this.storageService.deleteFile(filePath);
+        if (!deleteResult.success) {
+          this.logger.warn(
+            { filePath, error: deleteResult.error },
+            "Failed to delete file during bulk version cleanup",
+          );
+        }
+      }
+    }
+
+    return Ok(null);
+  }
+
+  async checkOrphaned(
+    customBotId: string,
+  ): Promise<
+    Result<{ orphaned: boolean; name: string; version: string }, string>
+  > {
+    const botResult =
+      await this.customBotRepository.findOneById(customBotId);
+    if (!botResult.success) {
+      return Failure(botResult.error);
+    }
+
+    const countResult =
+      await this.customBotRepository.countInstancesByCustomBotId(customBotId);
+    if (!countResult.success) {
+      return Failure(countResult.error);
+    }
+
+    return Ok({
+      orphaned: countResult.data === 0,
+      name: botResult.data.name,
+      version: botResult.data.version,
+    });
   }
 }

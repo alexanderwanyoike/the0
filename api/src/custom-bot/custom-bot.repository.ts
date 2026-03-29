@@ -6,7 +6,7 @@ import {
   CustomBotVersion,
 } from "./custom-bot.types";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import * as semver from "semver";
 
 @Injectable()
@@ -273,6 +273,66 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       return Failure("Insufficient permissions");
     }
     return Ok(true);
+  }
+
+  async countInstancesByCustomBotId(
+    customBotId: string,
+  ): Promise<Result<number, string>> {
+    try {
+      const records = await this.db
+        .select()
+        .from(this.tables.bots)
+        .where(eq(this.tables.bots.customBotId, customBotId));
+
+      return Ok(records.length);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
+    }
+  }
+
+  async countInstancesByCustomBotIds(
+    ids: string[],
+  ): Promise<Result<Map<string, number>, string>> {
+    try {
+      if (ids.length === 0) {
+        return Ok(new Map());
+      }
+
+      const records = await this.db
+        .select()
+        .from(this.tables.bots)
+        .where(inArray(this.tables.bots.customBotId, ids));
+
+      const counts = new Map<string, number>();
+      for (const id of ids) {
+        counts.set(id, 0);
+      }
+      for (const record of records) {
+        const id = record.customBotId;
+        counts.set(id, (counts.get(id) || 0) + 1);
+      }
+
+      return Ok(counts);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
+    }
+  }
+
+  async removeAllByName(
+    userId: string,
+    name: string,
+  ): Promise<Result<void, string>> {
+    try {
+      await this.db
+        .delete(this.table)
+        .where(
+          and(eq(this.table.userId, userId), eq(this.table[this.keyField], name)),
+        );
+
+      return Ok(null);
+    } catch (error: unknown) {
+      return Failure(errorMessage(error));
+    }
   }
 
   // Legacy aliases for backward compatibility

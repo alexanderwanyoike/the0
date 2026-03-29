@@ -558,9 +558,116 @@ type CustomBotListResponse struct {
 	Message string          `json:"message"`
 }
 
-// DeleteBotInstance deletes a bot instance
-func (c *APIClient) DeleteBotInstance(auth *Auth, botID string) error {
+// VersionWithInstances represents a version with its instance count
+type VersionWithInstances struct {
+	CustomBotVersion
+	InstanceCount int `json:"instanceCount"`
+}
+
+// VersionsWithInstancesResponse represents the response for listing versions with instance counts
+type VersionsWithInstancesResponse struct {
+	Success bool                  `json:"success"`
+	Data    []VersionWithInstances `json:"data"`
+	Message string                `json:"message"`
+}
+
+// BotDeleteResponse represents the response from deleting a bot instance
+type BotDeleteResponse struct {
+	OrphanedVersion *OrphanedVersionInfo `json:"orphanedVersion,omitempty"`
+}
+
+// OrphanedVersionInfo contains info about an orphaned custom bot version
+type OrphanedVersionInfo struct {
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	CustomBotId string `json:"customBotId"`
+}
+
+// DeleteBotInstance deletes a bot instance and returns orphan info if applicable
+func (c *APIClient) DeleteBotInstance(auth *Auth, botID string) (*BotDeleteResponse, error) {
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/bot/%s", c.BaseURL, botID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("deletion failed: %s", string(body))}
+	}
+
+	// Parse response body for orphan info
+	body, err := io.ReadAll(resp.Body)
+	if err != nil || len(body) == 0 {
+		return &BotDeleteResponse{}, nil
+	}
+
+	var deleteResponse BotDeleteResponse
+	if err := json.Unmarshal(body, &deleteResponse); err != nil {
+		return &BotDeleteResponse{}, nil
+	}
+
+	return &deleteResponse, nil
+}
+
+// GetCustomBotVersionsWithInstances retrieves versions with instance counts
+func (c *APIClient) GetCustomBotVersionsWithInstances(auth *Auth, name string) ([]VersionWithInstances, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/custom-bots/%s/versions", c.BaseURL, name), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: "authentication failed"}
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: string(body)}
+	}
+
+	var apiResponse VersionsWithInstancesResponse
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse API response: %v", err)
+	}
+
+	if !apiResponse.Success {
+		return nil, fmt.Errorf("API error: %s", apiResponse.Message)
+	}
+
+	return apiResponse.Data, nil
+}
+
+// DeleteCustomBotVersion deletes a specific version of a custom bot
+func (c *APIClient) DeleteCustomBotVersion(auth *Auth, name string, version string) error {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/custom-bots/%s/%s", c.BaseURL, name, version), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
@@ -574,16 +681,39 @@ func (c *APIClient) DeleteBotInstance(auth *Auth, botID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return &APIError{StatusCode: resp.StatusCode, Message: "authentication failed: API key is invalid or revoked"}
+		return &APIError{StatusCode: resp.StatusCode, Message: "authentication failed"}
 	}
 
-	if resp.StatusCode == 404 {
-		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("bot not found: %s", botID)}
-	}
-
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return &APIError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("deletion failed: %s", string(body))}
+		return &APIError{StatusCode: resp.StatusCode, Message: string(body)}
+	}
+
+	return nil
+}
+
+// DeleteCustomBot deletes all versions of a custom bot
+func (c *APIClient) DeleteCustomBot(auth *Auth, name string) error {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/custom-bots/%s", c.BaseURL, name), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "ApiKey "+auth.APIKey)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("network error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return &APIError{StatusCode: resp.StatusCode, Message: "authentication failed"}
+	}
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return &APIError{StatusCode: resp.StatusCode, Message: string(body)}
 	}
 
 	return nil

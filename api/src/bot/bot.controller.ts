@@ -62,5 +62,6 @@ export class BotController {
     if (!result.success) {
       throw new BadRequestException(result.error);
     }
+    return result.data;
   }
 }

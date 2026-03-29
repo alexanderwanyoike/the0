@@ -14,6 +14,8 @@ import (
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 
 	dockerrunner "runtime/internal/docker"
+	"runtime/internal/gc"
+	"runtime/internal/runtime/storage"
 	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
 	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
 	"runtime/internal/constants"
@@ -54,6 +56,9 @@ var (
 
 	// Query server flags
 	queryServerPort int
+
+	// GC flags
+	gcInterval time.Duration
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -116,6 +121,17 @@ Supports both realtime and scheduled bots by querying both MongoDB collections.`
 	},
 }
 
+// GC command - clean up orphaned bot artifacts from MinIO
+var gcCmd = &cobra.Command{
+	Use:   "gc",
+	Short: "Clean up orphaned bot artifacts from MinIO",
+	Long: `Removes log and state files from MinIO for bots that no longer exist in MongoDB.
+By default runs once and exits (for K8s CronJob). Use --interval for continuous mode (Docker).`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runGC()
+	},
+}
+
 // Version command
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -154,6 +170,9 @@ func main() {
 	// Query server command with flags
 	queryServerCmd.Flags().IntVar(&queryServerPort, "port", getEnvInt("QUERY_SERVER_PORT", 9477), "Port for query server")
 	rootCmd.AddCommand(queryServerCmd)
+
+	gcCmd.Flags().DurationVar(&gcInterval, "interval", 0, "Run continuously at this interval (0 = run once and exit)")
+	rootCmd.AddCommand(gcCmd)
 
 	rootCmd.AddCommand(versionCmd)
 
@@ -526,6 +545,86 @@ func createMongoClient(mongoUri string) (*mongo.Client, error) {
 	}
 
 	return mongoClient, nil
+}
+
+func runGC() {
+	util.LogMaster("Starting garbage collector...")
+	util.LogMaster("MongoDB: %s", maskCredentialsInURL(mongoUri))
+
+	// Connect to MongoDB
+	mongoClient, err := createMongoClient(mongoUri)
+	if err != nil {
+		util.LogMaster("Failed to connect to MongoDB: %v", err)
+		os.Exit(1)
+	}
+	defer mongoClient.Disconnect(context.Background())
+
+	// Create MinIO client from env
+	cfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		util.LogMaster("Failed to load MinIO config: %v", err)
+		os.Exit(1)
+	}
+
+	minioClient, err := storage.NewMinioClient(cfg)
+	if err != nil {
+		util.LogMaster("Failed to create MinIO client: %v", err)
+		os.Exit(1)
+	}
+
+	util.LogMaster("MinIO: %s (logs=%s, state=%s)", cfg.Endpoint, cfg.LogsBucket, cfg.StateBucket)
+
+	collector := gc.NewGarbageCollector(gc.GarbageCollectorOptions{
+		MinIO:       gc.NewMinIOAdapter(minioClient),
+		Store:       gc.NewMongoBotStore(mongoClient),
+		LogsBucket:  cfg.LogsBucket,
+		StateBucket: cfg.StateBucket,
+		Logger:      &util.DefaultLogger{},
+	})
+
+	// Run once
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result, err := collector.Run(ctx)
+	if err != nil {
+		util.LogMaster("GC sweep failed: %v", err)
+		os.Exit(1)
+	}
+	util.LogMaster("GC sweep complete: %d orphaned bot(s), %d objects deleted", result.OrphanedBots, result.DeletedObjects)
+
+	// If no interval, exit after single sweep
+	if gcInterval <= 0 {
+		return
+	}
+
+	// Continuous mode: health server + ticker loop with signal handling
+	healthServer := health.NewServer(8084)
+	healthServer.Start()
+	healthServer.SetReady(true)
+	util.LogMaster("Running continuously every %v (Ctrl+C to stop)", gcInterval)
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+
+	ticker := time.NewTicker(gcInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			result, err := collector.Run(ctx)
+			if err != nil {
+				util.LogMaster("GC sweep failed: %v", err)
+			} else {
+				util.LogMaster("GC sweep: %d orphaned bot(s), %d objects deleted", result.OrphanedBots, result.DeletedObjects)
+			}
+		case <-ch:
+			util.LogMaster("Received shutdown signal, exiting...")
+			healthServer.Stop(context.Background())
+			return
+		}
+	}
 }
 
 // maskCredentialsInURL masks password in a connection URL for safe logging.

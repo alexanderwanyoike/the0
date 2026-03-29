@@ -89,6 +89,11 @@ var ServiceRegistry = map[string]ServiceInfo{
 		URL:            "http://localhost:9477",
 		Category:       "runtime",
 	},
+	"gc": {
+		ComposeService: "gc",
+		FriendlyName:   "GC",
+		Category:       "runtime",
+	},
 }
 
 // ResolveFriendlyName maps a user-provided name to the compose service name.
@@ -144,6 +149,9 @@ func PrintServiceURLs() {
 		sort.Strings(names)
 		for _, name := range names {
 			svc := ServiceRegistry[name]
+			if svc.URL == "" {
+				continue
+			}
 			logger.Printf("    %-20s %s\n", svc.FriendlyName, svc.URL)
 		}
 		logger.Newline()

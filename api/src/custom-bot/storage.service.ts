@@ -302,4 +302,27 @@ export class StorageService {
   getFrontendPath(userId: string, botName: string, version: string): string {
     return `${userId}/${botName}/${version}/frontend.js`;
   }
+
+  /**
+   * Delete all objects under a prefix in a specified bucket.
+   * Used for cross-bucket cleanup (bot-logs, bot-state).
+   */
+  async deletePrefixFromBucket(
+    bucket: string,
+    prefix: string,
+  ): Promise<Result<number, string>> {
+    try {
+      const stream = this.minioClient.listObjects(bucket, prefix, true);
+      let deletedCount = 0;
+
+      for await (const obj of stream) {
+        await this.minioClient.removeObject(bucket, obj.name);
+        deletedCount++;
+      }
+
+      return Ok(deletedCount);
+    } catch (error) {
+      return Failure(`Error deleting objects with prefix: ${error.message}`);
+    }
+  }
 }

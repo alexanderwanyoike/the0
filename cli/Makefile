@@ -35,7 +35,8 @@ lint:
 
 # Install the CLI locally
 install: build
-	cp bin/the0 ~/bin/the0
+	@mkdir -p ~/.the0/bin
+	cp bin/the0 ~/.the0/bin/the0
 
 # Run the CLI in development mode
 dev: build
