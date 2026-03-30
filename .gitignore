@@ -1,3 +1,11 @@
+# AI context & planning artifacts (local-only)
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+**/CLAUDE.md
+**/PRPs/
+**/stories/
+
 **/*/.claude
 .claude/agents/
 .notes/
