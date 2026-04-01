@@ -415,6 +415,32 @@ export const useBotLogsStream = ({
     setConnected(false);
   }, [clearPendingUpdates]);
 
+  // ---- Reset all refs and state when botId changes ----
+  // Refs must reset before the connection effect runs.
+  // Otherwise initialLoadCompleteRef stays true from the previous bot and SSE init is skipped.
+  useEffect(() => {
+    // Abort any in-flight REST fetch so a stale response doesn't
+    // overwrite the new bot's state.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    initialLoadCompleteRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    trimmedCountRef.current = 0;
+    isUsingDateFilterRef.current = false;
+    setQuery(initialQuery);
+    setLogs([]);
+    setTotalSeen(0);
+    setHasEarlierLogs(false);
+    setHasMore(false);
+    setError(null);
+    setLastUpdate(null);
+    setLoadingEarlier(false);
+    setLoading(true);
+    setConnected(false);
+  }, [botId]);
+
   // ---- Establish SSE on mount with 4s fallback to REST polling ----
 
   useEffect(() => {

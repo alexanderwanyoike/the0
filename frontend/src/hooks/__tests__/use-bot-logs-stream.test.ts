@@ -983,6 +983,63 @@ describe("useBotLogsStream", () => {
     });
   });
 
+  // ---- Stale refs on bot navigation ----
+
+  it("should reset logs, totalSeen, and hasEarlierLogs when botId changes", async () => {
+    let botId = "bot-a";
+
+    const { result, rerender } = renderHook(
+      ({ id }) => useBotLogsStream({ botId: id }),
+      { initialProps: { id: botId } },
+    );
+
+    // Wait for SSE connection to bot-a
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    // Deliver history for bot-a so initialLoadCompleteRef is set
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Bot A log 1" },
+        { date: "2024-01-01T10:01:00Z", content: "Bot A log 2" },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(2);
+      expect(result.current.total).toBe(2);
+    });
+
+    // Close current stream before switching
+    currentMockStream!.controller.close();
+
+    // Prepare fresh mock for bot-b stream
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return {
+          ok: true,
+          body: currentMockStream.stream,
+        } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({ data: [], total: 0, hasMore: false }),
+      } as any;
+    });
+
+    // Switch to bot-b
+    rerender({ id: "bot-b" });
+
+    // After rerender with a new botId, state should be reset
+    await waitFor(() => {
+      expect(result.current.logs).toEqual([]);
+      expect(result.current.total).toBe(0);
+      expect(result.current.hasEarlierLogs).toBe(false);
+    });
+  });
+
   it("should update hasEarlierLogs after loading earlier logs when no more entries exist", async () => {
     const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
