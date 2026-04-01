@@ -21,7 +21,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
@@ -121,46 +121,54 @@ export const useBotLogsStream = ({
   const reconnectAttemptsRef = useRef(0);
   const trimmedCountRef = useRef(0);
 
-  // The SSE read loop settles asynchronously after abort. Guard setState
-  // calls to prevent updates after the component has moved on.
-  const disposedRef = useRef(false);
+  // Monotonically incrementing epoch that changes on every botId switch or
+  // unmount. Async continuations capture the epoch at start and compare
+  // before updating state, preventing stale writes from a previous bot.
+  const streamEpochRef = useRef(0);
 
-  // ---- RAF batching for SSE update events ----
+  // ---- Debounced batching for SSE update events ----
   //
   // Chatty bots can fire hundreds of SSE "update" events per second. Without
   // batching, each event would call setLogs/setTotalSeen/setLastUpdate
-  // individually — 900+ state updates/sec that React can never paint fast
+  // individually -- 900+ state updates/sec that React can never paint fast
   // enough. Instead, update events push entries into `pendingUpdatesRef` and
-  // schedule a single requestAnimationFrame. The RAF callback
+  // schedule a debounced flush via setTimeout. The flush callback
   // (flushPendingUpdates) drains the entire buffer into one batched state
-  // update, capping renders at ~60/sec.
+  // update, capping renders at ~2/sec (every 500ms).
+  //
+  // The pending buffer is eagerly capped at MAX_BUFFER_SIZE on each push to
+  // prevent unbounded memory growth between flushes. A chatty bot emitting
+  // 100+ logs/sec can accumulate thousands of entries in 500ms without this.
   //
   // Two operations on the buffer:
   //
-  //   flushPendingUpdates — the normal path. Called by RAF once per frame.
-  //     Drains the buffer INTO React state (setLogs, setTotalSeen, etc.).
+  //   flushPendingUpdates -- the normal path. Called by setTimeout after
+  //     FLUSH_DEBOUNCE_MS. Drains the buffer INTO React state.
   //
-  //   clearPendingUpdates — the abort path. Discards the buffer and cancels
-  //     any scheduled RAF WITHOUT applying to state. Called when the data
+  //   clearPendingUpdates -- the abort path. Discards the buffer and cancels
+  //     any scheduled timeout WITHOUT applying to state. Called when the data
   //     source changes (REST fetch, new SSE history event, SSE disconnect,
   //     unmount) so stale entries from a previous stream don't leak into
   //     a fresh data snapshot.
 
-  const pendingUpdatesRef = useRef<LogEntry[]>([]);
-  const rafIdRef = useRef<number | null>(null);
+  const FLUSH_DEBOUNCE_MS = 500; // Log viewing doesn't need 60fps; 2 updates/sec is plenty
+  const MAX_BUFFER_SIZE = 500;
 
-  /** Discard queued updates and cancel the scheduled RAF. */
+  const pendingUpdatesRef = useRef<LogEntry[]>([]);
+  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Discard queued updates and cancel the scheduled flush timeout. */
   const clearPendingUpdates = useCallback(() => {
     pendingUpdatesRef.current = [];
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
+    if (flushTimeoutRef.current !== null) {
+      clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = null;
     }
   }, []);
 
-  /** Drain queued updates into React state (called once per animation frame). */
+  /** Drain queued updates into React state (called once per debounce interval). */
   const flushPendingUpdates = useCallback(() => {
-    rafIdRef.current = null;
+    flushTimeoutRef.current = null;
     const pending = pendingUpdatesRef.current;
     if (pending.length === 0) return;
     pendingUpdatesRef.current = [];
@@ -180,10 +188,34 @@ export const useBotLogsStream = ({
     setLastUpdate(new Date());
   }, []);
 
+  /** Buffer update entries and schedule a debounced flush. */
+  const bufferUpdate = useCallback(
+    (entries: LogEntry[]) => {
+      const buffer = pendingUpdatesRef.current;
+      buffer.push(...entries);
+
+      // Cap eagerly on push to prevent unbounded growth between flushes.
+      // A chatty bot can emit thousands of events in 500ms.
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        pendingUpdatesRef.current = buffer.slice(
+          buffer.length - MAX_BUFFER_SIZE,
+        );
+      }
+
+      if (flushTimeoutRef.current) clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = setTimeout(
+        flushPendingUpdates,
+        FLUSH_DEBOUNCE_MS,
+      );
+    },
+    [flushPendingUpdates],
+  );
+
   // ---- REST fetch (same pattern as useBotLogs) ----
 
   const fetchLogs = useCallback(
     async (queryParams: LogsQuery = query) => {
+      const epoch = streamEpochRef.current;
       if (!botId) return;
 
       if (abortControllerRef.current) {
@@ -227,6 +259,7 @@ export const useBotLogsStream = ({
         }
 
         const result: LogsResponse = await response.json();
+        if (epoch !== streamEpochRef.current) return;
         const expandedLogs = expandLogEntries(result.data);
 
         clearPendingUpdates();
@@ -237,6 +270,7 @@ export const useBotLogsStream = ({
         initialLoadCompleteRef.current = true;
       } catch (err: any) {
         if (err.name === "AbortError") return;
+        if (epoch !== streamEpochRef.current) return;
 
         const errorMessage = err.message || "Failed to fetch logs";
         setError(errorMessage);
@@ -246,8 +280,10 @@ export const useBotLogsStream = ({
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
-        abortControllerRef.current = null;
+        if (epoch === streamEpochRef.current) {
+          setLoading(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [botId, query, toast, user, clearPendingUpdates],
@@ -260,6 +296,8 @@ export const useBotLogsStream = ({
 
   const connectSSE = useCallback(() => {
     if (!user || !botId) return;
+
+    const epoch = streamEpochRef.current;
 
     const authResult = validateSSEAuth();
     if (!authResult.success) return;
@@ -310,9 +348,9 @@ export const useBotLogsStream = ({
         let buffer = "";
 
         while (true) {
-          if (disposedRef.current) break;
+          if (epoch !== streamEpochRef.current) break;
           const { done, value } = await reader.read();
-          if (disposedRef.current) break;
+          if (epoch !== streamEpochRef.current) break;
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -345,7 +383,7 @@ export const useBotLogsStream = ({
                 clearPendingUpdates();
                 const entries: LogEntry[] = JSON.parse(data);
                 const expanded = expandLogEntries(entries);
-                if (!disposedRef.current) {
+                if (epoch === streamEpochRef.current) {
                   if (expanded.length > MAX_LOG_ENTRIES) {
                     const trimmed = expanded.length - MAX_LOG_ENTRIES;
                     trimmedCountRef.current = trimmed;
@@ -368,15 +406,11 @@ export const useBotLogsStream = ({
               try {
                 const parsed: { content: string; timestamp: string } =
                   JSON.parse(data);
-                if (!disposedRef.current) {
+                if (epoch === streamEpochRef.current) {
                   const newEntries = expandLogEntries([
                     { date: parsed.timestamp, content: parsed.content },
                   ]);
-                  pendingUpdatesRef.current.push(...newEntries);
-                  if (rafIdRef.current === null) {
-                    rafIdRef.current =
-                      requestAnimationFrame(flushPendingUpdates);
-                  }
+                  bufferUpdate(newEntries);
                 }
               } catch (err) {
                 console.error("Failed to parse update SSE event:", err);
@@ -386,13 +420,13 @@ export const useBotLogsStream = ({
         }
 
         // Stream ended cleanly
-        if (!disposedRef.current) {
+        if (epoch === streamEpochRef.current) {
           setConnected(false);
         }
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
-        if (disposedRef.current) return;
+        if (epoch !== streamEpochRef.current) return;
         setConnected(false);
         sseAbortRef.current = null;
 
@@ -416,7 +450,7 @@ export const useBotLogsStream = ({
           }, delay);
         }
       });
-  }, [user, botId, refreshInterval]);
+  }, [user, botId, refreshInterval, bufferUpdate, clearPendingUpdates]);
 
   // ---- Cleanup helper ----
 
@@ -433,19 +467,29 @@ export const useBotLogsStream = ({
   // Refs must reset before the connection effect runs.
   // Otherwise initialLoadCompleteRef stays true from the previous bot and SSE init is skipped.
   useEffect(() => {
-    // Stop the old bot's read loop from calling setState
-    disposedRef.current = true;
+    // Invalidate all async work from the previous bot
+    streamEpochRef.current += 1;
+    // Abort any in-flight REST fetch so a stale response doesn't
+    // overwrite the new bot's state.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     initialLoadCompleteRef.current = false;
     reconnectAttemptsRef.current = 0;
     trimmedCountRef.current = 0;
     isUsingDateFilterRef.current = false;
+    setQuery(initialQuery);
     setLogs([]);
     setTotalSeen(0);
     setHasEarlierLogs(false);
+    setHasMore(false);
+    setError(null);
+    setLastUpdate(null);
+    setLoadingEarlier(false);
     setLoading(true);
     setConnected(false);
-    // Allow the new bot's read loop to proceed
-    disposedRef.current = false;
+    // No need to "re-enable" - the new connectSSE call captures the current epoch
   }, [botId]);
 
   // ---- Establish SSE on mount with 4s fallback to REST polling ----
@@ -492,7 +536,7 @@ export const useBotLogsStream = ({
 
   useEffect(() => {
     return () => {
-      disposedRef.current = true;
+      streamEpochRef.current += 1;
       clearPendingUpdates();
       if (sseAbortRef.current) {
         sseAbortRef.current.abort();
