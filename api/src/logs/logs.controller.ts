@@ -45,6 +45,12 @@ export class LogsController {
     Promise<SubscriptionResult>
   >();
 
+  // Per-client message buffers for SSE backpressure handling.
+  // Drop oldest messages beyond MAX_CLIENT_BUFFER to prevent unbounded server memory growth.
+  private static readonly MAX_CLIENT_BUFFER = 500;
+  private static clientBuffers = new Map<Response, string[]>();
+  private static drainRegistered = new WeakSet<Response>();
+
   /** @internal Reset shared state for test isolation. Only works in test env. */
   static _resetForTest() {
     if (process.env.NODE_ENV !== "test") {
@@ -55,6 +61,8 @@ export class LogsController {
     }
     LogsController.activeSubscriptions.clear();
     LogsController.pendingSubscriptions.clear();
+    LogsController.clientBuffers.clear();
+    LogsController.drainRegistered = new WeakSet<Response>();
   }
 
   constructor(
@@ -123,6 +131,7 @@ export class LogsController {
     const cleanup = () => {
       disconnected = true;
       if (keepalive) clearInterval(keepalive);
+      LogsController.clientBuffers.delete(res);
 
       const sub = LogsController.activeSubscriptions.get(botId);
       if (sub) {
@@ -300,6 +309,74 @@ export class LogsController {
         LogsController.activeSubscriptions.delete(botId);
       }
     }
+    LogsController.clientBuffers.delete(client);
+  }
+
+  /**
+   * Queue an SSE event in the per-client backpressure buffer.
+   * Drop oldest messages beyond MAX_CLIENT_BUFFER to prevent unbounded
+   * server memory growth.
+   */
+  private bufferEvent(client: Response, event: string): void {
+    let buffer = LogsController.clientBuffers.get(client);
+    if (!buffer) {
+      buffer = [];
+      LogsController.clientBuffers.set(client, buffer);
+    }
+
+    buffer.push(event);
+
+    if (buffer.length > LogsController.MAX_CLIENT_BUFFER) {
+      const dropped = buffer.length - LogsController.MAX_CLIENT_BUFFER;
+      // Remove oldest messages to stay within the cap
+      buffer.splice(0, dropped);
+      // Replace the oldest remaining entry with a warning so the client
+      // knows messages were lost
+      const warning = `event: warning\ndata: ${JSON.stringify({ message: `${dropped} messages dropped due to backpressure` })}\n\n`;
+      buffer[0] = warning;
+    }
+  }
+
+  /**
+   * Register a one-time drain handler that flushes the backpressure buffer
+   * once the TCP send buffer has space again.
+   */
+  private registerDrainHandler(client: Response): void {
+    if (LogsController.drainRegistered.has(client)) {
+      return;
+    }
+    LogsController.drainRegistered.add(client);
+
+    client.once("drain", () => {
+      LogsController.drainRegistered.delete(client);
+      const buffer = LogsController.clientBuffers.get(client);
+      if (!buffer || buffer.length === 0) {
+        return;
+      }
+
+      // Flush all buffered events
+      const events = buffer.splice(0, buffer.length);
+      for (const event of events) {
+        try {
+          const ok = client.write(event);
+          if (!ok) {
+            // Still under pressure -- re-buffer remaining events and
+            // wait for another drain
+            buffer.unshift(...events.slice(events.indexOf(event) + 1));
+            this.registerDrainHandler(client);
+            return;
+          }
+        } catch {
+          // Client gone -- buffer will be cleaned up by close handler
+          return;
+        }
+      }
+
+      // All flushed -- remove the empty buffer
+      if (buffer.length === 0) {
+        LogsController.clientBuffers.delete(client);
+      }
+    });
   }
 
   private async createSubscription(
@@ -324,11 +401,28 @@ export class LogsController {
           try {
             if (client.writableEnded) {
               clients.delete(client);
-            } else {
-              client.write(event);
+              LogsController.clientBuffers.delete(client);
+              continue;
+            }
+
+            // If this client already has a backpressure buffer, queue instead
+            // of writing directly to avoid out-of-order delivery.
+            const existingBuffer = LogsController.clientBuffers.get(client);
+            if (existingBuffer && existingBuffer.length > 0) {
+              this.bufferEvent(client, event);
+              continue;
+            }
+
+            // When write() returns false the TCP send buffer is full.
+            // Pause writes until the drain event fires.
+            const ok = client.write(event);
+            if (!ok) {
+              this.bufferEvent(client, event);
+              this.registerDrainHandler(client);
             }
           } catch {
             clients.delete(client);
+            LogsController.clientBuffers.delete(client);
           }
         }
         // If all clients disconnected, clean up the NATS subscription

@@ -105,8 +105,9 @@ describe("LogsController", () => {
         status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
-        write: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
         end: jest.fn(),
+        once: jest.fn(),
         writableEnded: false,
       };
     });
@@ -247,8 +248,9 @@ describe("LogsController", () => {
         status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
-        write: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
         end: jest.fn(),
+        once: jest.fn(),
         writableEnded: false,
       };
 
@@ -310,8 +312,9 @@ describe("LogsController", () => {
         status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
-        write: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
         end: jest.fn(),
+        once: jest.fn(),
         writableEnded: false,
       };
 
@@ -367,8 +370,9 @@ describe("LogsController", () => {
         status: jest.fn(),
         setHeader: jest.fn(),
         flushHeaders: jest.fn(),
-        write: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
         end: jest.fn(),
+        once: jest.fn(),
         writableEnded: false,
       };
       await controller.streamLogs("bot-nats-fail", mockUser, mockReq2, mockRes2);
@@ -378,6 +382,103 @@ describe("LogsController", () => {
 
       // Cleanup second client to clear keepalive interval
       if (closeHandler2) closeHandler2();
+    });
+
+    describe("backpressure", () => {
+      let natsCallback: (msg: string) => void;
+
+      beforeEach(async () => {
+        // Make write() return false to simulate TCP buffer full
+        mockRes.write = jest.fn().mockReturnValue(false);
+
+        await controller.streamLogs("bot-bp", mockUser, mockReq, mockRes);
+
+        // Grab the NATS callback so we can publish messages
+        natsCallback = (mockNatsService.subscribe as jest.Mock).mock
+          .calls[0][1];
+      });
+
+      it("should handle backpressure when client cannot keep up", () => {
+        // Publish 1000+ messages in a tight loop while write returns false
+        for (let i = 0; i < 1100; i++) {
+          natsCallback(`log line ${i}`);
+        }
+
+        // The per-client buffer should not exceed MAX_CLIENT_BUFFER (500).
+        // We check the total number of write calls: the initial history write
+        // plus the first NATS message that triggered backpressure. After that,
+        // messages should be buffered, not written.
+        //
+        // The buffer is capped at 500, so only the newest 500 messages should
+        // be retained (oldest dropped). When overflow occurs, a warning event
+        // is queued in the buffer.
+        //
+        // We verify the buffer cap indirectly: after emitting drain, only up to
+        // 500 messages plus the warning should be flushed.
+        const clientBuffers = (LogsController as any).clientBuffers as Map<
+          any,
+          string[]
+        >;
+        const buffer = clientBuffers.get(mockRes);
+        expect(buffer).toBeDefined();
+        expect(buffer!.length).toBeLessThanOrEqual(500);
+      });
+
+      it("should queue a warning event when buffer overflows", () => {
+        // Push more than MAX_CLIENT_BUFFER messages
+        for (let i = 0; i < 600; i++) {
+          natsCallback(`overflow msg ${i}`);
+        }
+
+        const clientBuffers = (LogsController as any).clientBuffers as Map<
+          any,
+          string[]
+        >;
+        const buffer = clientBuffers.get(mockRes);
+        expect(buffer).toBeDefined();
+
+        // Buffer should contain a warning about dropped messages
+        const hasWarning = buffer!.some(
+          (evt: string) =>
+            evt.includes("event: warning") && evt.includes("messages dropped"),
+        );
+        expect(hasWarning).toBe(true);
+      });
+
+      it("should resume writing after drain event", () => {
+        // Simulate backpressure
+        for (let i = 0; i < 100; i++) {
+          natsCallback(`drain msg ${i}`);
+        }
+
+        // Verify messages were buffered
+        const clientBuffers = (LogsController as any).clientBuffers as Map<
+          any,
+          string[]
+        >;
+        expect(clientBuffers.get(mockRes)!.length).toBeGreaterThan(0);
+
+        // Now make write succeed and emit drain
+        mockRes.write = jest.fn().mockReturnValue(true);
+
+        // The controller registers a one-time drain handler via mockRes.once
+        // Find and call it
+        const onceCall = mockRes.once.mock.calls.find(
+          (call: any[]) => call[0] === "drain",
+        );
+        expect(onceCall).toBeDefined();
+        const drainHandler = onceCall[1];
+        drainHandler();
+
+        // After drain, buffered messages should have been flushed via write()
+        expect(mockRes.write).toHaveBeenCalled();
+
+        // Buffer should be cleared
+        const bufferAfterDrain = clientBuffers.get(mockRes);
+        expect(
+          bufferAfterDrain === undefined || bufferAfterDrain.length === 0,
+        ).toBe(true);
+      });
     });
   });
 });
