@@ -121,6 +121,11 @@ export const useBotLogsStream = ({
   const reconnectAttemptsRef = useRef(0);
   const trimmedCountRef = useRef(0);
 
+  // Monotonically incrementing epoch that changes on every botId switch or
+  // unmount. Async continuations capture the epoch at start and compare
+  // before updating state, preventing stale writes from a previous bot.
+  const streamEpochRef = useRef(0);
+
   // ---- RAF batching for SSE update events ----
   //
   // Chatty bots can fire hundreds of SSE "update" events per second. Without
@@ -180,6 +185,7 @@ export const useBotLogsStream = ({
 
   const fetchLogs = useCallback(
     async (queryParams: LogsQuery = query) => {
+      const epoch = streamEpochRef.current;
       if (!botId) return;
 
       if (abortControllerRef.current) {
@@ -223,6 +229,7 @@ export const useBotLogsStream = ({
         }
 
         const result: LogsResponse = await response.json();
+        if (epoch !== streamEpochRef.current) return;
         const expandedLogs = expandLogEntries(result.data);
 
         clearPendingUpdates();
@@ -233,6 +240,7 @@ export const useBotLogsStream = ({
         initialLoadCompleteRef.current = true;
       } catch (err: any) {
         if (err.name === "AbortError") return;
+        if (epoch !== streamEpochRef.current) return;
 
         const errorMessage = err.message || "Failed to fetch logs";
         setError(errorMessage);
@@ -242,8 +250,10 @@ export const useBotLogsStream = ({
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
-        abortControllerRef.current = null;
+        if (epoch === streamEpochRef.current) {
+          setLoading(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [botId, query, toast, user, clearPendingUpdates],
@@ -259,6 +269,8 @@ export const useBotLogsStream = ({
 
     const authResult = validateSSEAuth();
     if (!authResult.success) return;
+
+    const epoch = streamEpochRef.current;
 
     // Clean up any existing SSE stream and pending timers to avoid duplicates
     if (sseAbortRef.current) {
@@ -306,7 +318,9 @@ export const useBotLogsStream = ({
         let buffer = "";
 
         while (true) {
+          if (epoch !== streamEpochRef.current) break;
           const { done, value } = await reader.read();
+          if (epoch !== streamEpochRef.current) break;
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -339,20 +353,22 @@ export const useBotLogsStream = ({
                 clearPendingUpdates();
                 const entries: LogEntry[] = JSON.parse(data);
                 const expanded = expandLogEntries(entries);
-                if (expanded.length > MAX_LOG_ENTRIES) {
-                  const trimmed = expanded.length - MAX_LOG_ENTRIES;
-                  trimmedCountRef.current = trimmed;
-                  setHasEarlierLogs(true);
-                  setLogs(expanded.slice(trimmed));
-                } else {
-                  trimmedCountRef.current = 0;
-                  setHasEarlierLogs(false);
-                  setLogs(expanded);
+                if (epoch === streamEpochRef.current) {
+                  if (expanded.length > MAX_LOG_ENTRIES) {
+                    const trimmed = expanded.length - MAX_LOG_ENTRIES;
+                    trimmedCountRef.current = trimmed;
+                    setHasEarlierLogs(true);
+                    setLogs(expanded.slice(trimmed));
+                  } else {
+                    trimmedCountRef.current = 0;
+                    setHasEarlierLogs(false);
+                    setLogs(expanded);
+                  }
+                  setTotalSeen(expanded.length);
+                  setLastUpdate(new Date());
+                  initialLoadCompleteRef.current = true;
+                  setLoading(false);
                 }
-                setTotalSeen(expanded.length);
-                setLastUpdate(new Date());
-                initialLoadCompleteRef.current = true;
-                setLoading(false);
               } catch (err) {
                 console.error("Failed to parse history SSE event:", err);
               }
@@ -360,12 +376,15 @@ export const useBotLogsStream = ({
               try {
                 const parsed: { content: string; timestamp: string } =
                   JSON.parse(data);
-                const newEntries = expandLogEntries([
-                  { date: parsed.timestamp, content: parsed.content },
-                ]);
-                pendingUpdatesRef.current.push(...newEntries);
-                if (rafIdRef.current === null) {
-                  rafIdRef.current = requestAnimationFrame(flushPendingUpdates);
+                if (epoch === streamEpochRef.current) {
+                  const newEntries = expandLogEntries([
+                    { date: parsed.timestamp, content: parsed.content },
+                  ]);
+                  pendingUpdatesRef.current.push(...newEntries);
+                  if (rafIdRef.current === null) {
+                    rafIdRef.current =
+                      requestAnimationFrame(flushPendingUpdates);
+                  }
                 }
               } catch (err) {
                 console.error("Failed to parse update SSE event:", err);
@@ -375,10 +394,13 @@ export const useBotLogsStream = ({
         }
 
         // Stream ended cleanly
-        setConnected(false);
+        if (epoch === streamEpochRef.current) {
+          setConnected(false);
+        }
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
+        if (epoch !== streamEpochRef.current) return;
         setConnected(false);
         sseAbortRef.current = null;
 
@@ -419,15 +441,29 @@ export const useBotLogsStream = ({
   // Refs must reset before the connection effect runs.
   // Otherwise initialLoadCompleteRef stays true from the previous bot and SSE init is skipped.
   useEffect(() => {
+    // Invalidate all async work from the previous bot
+    streamEpochRef.current += 1;
+    // Abort any in-flight REST fetch so a stale response doesn't
+    // overwrite the new bot's state.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     initialLoadCompleteRef.current = false;
     reconnectAttemptsRef.current = 0;
     trimmedCountRef.current = 0;
     isUsingDateFilterRef.current = false;
+    setQuery(initialQuery);
     setLogs([]);
     setTotalSeen(0);
     setHasEarlierLogs(false);
+    setHasMore(false);
+    setError(null);
+    setLastUpdate(null);
+    setLoadingEarlier(false);
     setLoading(true);
     setConnected(false);
+    // No need to "re-enable" - the new connectSSE call captures the current epoch
   }, [botId]);
 
   // ---- Establish SSE on mount with 4s fallback to REST polling ----
@@ -474,6 +510,7 @@ export const useBotLogsStream = ({
 
   useEffect(() => {
     return () => {
+      streamEpochRef.current += 1;
       clearPendingUpdates();
       if (sseAbortRef.current) {
         sseAbortRef.current.abort();

@@ -1040,6 +1040,137 @@ describe("useBotLogsStream", () => {
     });
   });
 
+  // ---- SSE navigation cleanup ----
+
+  it("should transition to loading state quickly when botId changes during active stream", async () => {
+    const { result, rerender } = renderHook(
+      ({ id }) => useBotLogsStream({ botId: id }),
+      { initialProps: { id: "bot-a" } },
+    );
+
+    // Wait for SSE connection to bot-a
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    // Deliver history so the stream is actively reading
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Bot A log 1" },
+        { date: "2024-01-01T10:00:01Z", content: "Bot A log 2" },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(2);
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Close current stream before switching
+    currentMockStream!.controller.close();
+
+    // Prepare fresh mock for bot-b stream
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return {
+          ok: true,
+          body: currentMockStream.stream,
+        } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({ data: [], total: 0, hasMore: false }),
+      } as any;
+    });
+
+    // Switch botId -- this should reset state quickly without blocking
+    const startTime = Date.now();
+    rerender({ id: "bot-b" });
+
+    // Within 100ms, hook should show loading=true for the new bot
+    await waitFor(
+      () => {
+        expect(result.current.loading).toBe(true);
+        expect(result.current.logs).toEqual([]);
+      },
+      { timeout: 100 },
+    );
+
+    const elapsed = Date.now() - startTime;
+    // Transition should be nearly instant, well under 100ms
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  it("should handle rapid botId alternation without errors", async () => {
+    // Track all streams created so we can verify old ones don't cause state updates
+    const allStreams: MockSSEStreamController[] = [];
+
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        allStreams.push(currentMockStream.controller);
+        return {
+          ok: true,
+          body: currentMockStream.stream,
+        } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({ data: [], total: 0, hasMore: false }),
+      } as any;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ id }) => useBotLogsStream({ botId: id }),
+      { initialProps: { id: "bot-a" } },
+    );
+
+    // Wait for initial connection
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    // Deliver history so the stream loop is actively reading
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Bot A active" },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+    });
+
+    // Rapidly alternate botId 5 times
+    for (let i = 0; i < 5; i++) {
+      const nextId = i % 2 === 0 ? "bot-b" : "bot-a";
+      rerender({ id: nextId });
+    }
+
+    // Let async cleanup settle
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // Close all old streams to trigger their finally/catch paths
+    for (const ctrl of allStreams) {
+      try {
+        ctrl.close();
+      } catch {
+        // ignore
+      }
+    }
+
+    // Let the closed-stream callbacks settle
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // Should not have thrown any errors
+    expect(result.current.error).toBeNull();
+  });
+
   it("should update hasEarlierLogs after loading earlier logs when no more entries exist", async () => {
     const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
 
