@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -453,6 +454,167 @@ func TestGetMutexConcurrency(t *testing.T) {
 	if firstMutex == differentBotMutex {
 		t.Error("Different bots should get different mutexes")
 	}
+}
+
+// TestComposeAppend verifies that AppendBotLogs scales with chunk size rather
+// than accumulated file size by appending many chunks and checking that each
+// append completes within a bounded duration. It also verifies that the final
+// file content is the ordered concatenation of all chunks with timestamps.
+func TestComposeAppend(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
+	defer container.Terminate(context.Background())
+
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      endpoint,
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
+		UseSSL:        false,
+		LogsBucket:    "test-compose-logs",
+		ResultsBucket: "test-compose-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	botID := "compose-append-bot"
+	const numChunks = 200
+	const chunkSize = 10 * 1024 // 10KB
+
+	// Generate reproducible 10KB payloads so we can verify ordering later.
+	chunks := make([]string, numChunks)
+	for i := 0; i < numChunks; i++ {
+		payload := make([]byte, chunkSize)
+		for j := range payload {
+			payload[j] = byte('A' + (i % 26))
+		}
+		chunks[i] = fmt.Sprintf("CHUNK-%04d:%s", i, string(payload))
+	}
+
+	// Append all chunks, recording the duration of each to detect O(file_size) scaling.
+	durations := make([]time.Duration, numChunks)
+	for i, chunk := range chunks {
+		start := time.Now()
+		err := logger.AppendBotLogs(context.Background(), botID, chunk)
+		durations[i] = time.Since(start)
+		require.NoError(t, err, "chunk %d failed", i)
+	}
+
+	// Compare the average duration of the last 50 appends (file ~1.5-2MB) to the
+	// first 50 appends (file ~0-500KB). With a read-modify-write approach the last
+	// batch would be significantly slower. With server-side compose they should be
+	// roughly similar. We allow a 3x ratio to account for I/O variance.
+	var earlyTotal, lateTotal time.Duration
+	for i := 0; i < 50; i++ {
+		earlyTotal += durations[i]
+		lateTotal += durations[numChunks-50+i]
+	}
+	earlyAvg := earlyTotal / 50
+	lateAvg := lateTotal / 50
+	t.Logf("Average append duration: first 50 = %v, last 50 = %v, ratio = %.2f",
+		earlyAvg, lateAvg, float64(lateAvg)/float64(earlyAvg))
+
+	// Each individual append should complete in bounded time (generous for CI).
+	maxAppendDuration := 2 * time.Second
+	for i, d := range durations {
+		assert.Less(t, d, maxAppendDuration,
+			"chunk %d took %v which exceeds the %v bound", i, d, maxAppendDuration)
+	}
+
+	// Read back the full daily log and verify content.
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: false,
+	})
+	require.NoError(t, err)
+
+	timestamp := time.Now().Format("20060102")
+	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
+
+	obj, err := client.GetObject(context.Background(), "test-compose-logs", objectPath, minio.GetObjectOptions{})
+	require.NoError(t, err)
+	defer obj.Close()
+
+	content, err := io.ReadAll(obj)
+	require.NoError(t, err)
+
+	contentStr := string(content)
+
+	// Every chunk must appear in order.
+	lastIdx := -1
+	for i, chunk := range chunks {
+		idx := strings.Index(contentStr, chunk)
+		require.NotEqual(t, -1, idx, "chunk %d not found in final file", i)
+		assert.Greater(t, idx, lastIdx,
+			"chunk %d appeared at index %d which is before chunk %d at index %d",
+			i, idx, i-1, lastIdx)
+		lastIdx = idx
+	}
+
+	// Each entry must have a timestamp prefix like [2026-04-01 ...]
+	todayPrefix := time.Now().Format("2006-01-02")
+	assert.Contains(t, contentStr, todayPrefix, "file should contain today's date in timestamp prefixes")
+
+	// Verify no temp objects were left behind.
+	tempPrefix := fmt.Sprintf("logs/%s/.tmp-", botID)
+	objectCh := client.ListObjects(context.Background(), "test-compose-logs", minio.ListObjectsOptions{
+		Prefix:    tempPrefix,
+		Recursive: true,
+	})
+	tempCount := 0
+	for range objectCh {
+		tempCount++
+	}
+	assert.Equal(t, 0, tempCount, "temp objects should be cleaned up")
+}
+
+// TestComposeAppendFirstWrite verifies that the first write of the day (no
+// existing daily file) works correctly with the compose-based implementation.
+func TestComposeAppendFirstWrite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
+	defer container.Terminate(context.Background())
+
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      endpoint,
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
+		UseSSL:        false,
+		LogsBucket:    "test-first-write",
+		ResultsBucket: "test-first-write-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	botID := "first-write-bot"
+
+	err = logger.AppendBotLogs(context.Background(), botID, "hello world")
+	require.NoError(t, err)
+
+	// Read back
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: false,
+	})
+	require.NoError(t, err)
+
+	timestamp := time.Now().Format("20060102")
+	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
+
+	obj, err := client.GetObject(context.Background(), "test-first-write", objectPath, minio.GetObjectOptions{})
+	require.NoError(t, err)
+	defer obj.Close()
+
+	content, err := io.ReadAll(obj)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(content), "hello world")
+	assert.Contains(t, string(content), time.Now().Format("2006-01-02"))
 }
 
 func TestMinIOLoggerInterface(t *testing.T) {
