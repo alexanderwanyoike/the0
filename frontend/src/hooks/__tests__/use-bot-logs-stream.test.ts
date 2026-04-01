@@ -1215,4 +1215,118 @@ describe("useBotLogsStream", () => {
       expect(result.current.hasEarlierLogs).toBe(false);
     });
   });
+
+  // ---- Debounce + buffer cap tests ----
+
+  it("should cap the pending buffer to prevent unbounded growth", async () => {
+    jest.useFakeTimers();
+
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
+
+    // Flush the initial authFetch promise
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.connected).toBe(true);
+
+    // Send history first so the stream is established
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Initial" },
+      ]);
+    });
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.logs).toHaveLength(1);
+
+    // Emit 3000 update events rapidly without allowing flush
+    act(() => {
+      for (let i = 0; i < 3000; i++) {
+        currentMockStream!.controller.push("update", {
+          content: `Rapid entry ${i}`,
+          timestamp: "2024-01-01T11:00:00Z",
+        });
+      }
+    });
+
+    // Process microtasks but do NOT advance timers (debounce stays pending)
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    // The pending buffer should have been capped at MAX_BUFFER_SIZE (500),
+    // not all 3000 entries. Logs should still be just the initial entry
+    // since the debounce timeout hasn't fired.
+    expect(result.current.logs).toHaveLength(1);
+
+    // Now flush by advancing past the debounce interval
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(500);
+    });
+
+    // After flush, logs should contain initial + at most 500 buffered entries
+    // (capped from the 3000 that were emitted)
+    expect(result.current.logs.length).toBeLessThanOrEqual(2000);
+    expect(result.current.logs.length).toBeGreaterThan(1);
+    // The buffer was capped to 500, so we should have 1 + 500 = 501 max
+    expect(result.current.logs.length).toBeLessThanOrEqual(501);
+  });
+
+  it("should debounce state updates at 500ms intervals", async () => {
+    jest.useFakeTimers();
+
+    const { result } = renderHook(() => useBotLogsStream({ botId: "bot-1" }));
+
+    // Flush the initial authFetch promise
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.connected).toBe(true);
+
+    // Send history first
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "Initial" },
+      ]);
+    });
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.logs).toHaveLength(1);
+
+    // Emit 100 update events
+    act(() => {
+      for (let i = 0; i < 100; i++) {
+        currentMockStream!.controller.push("update", {
+          content: `Entry ${i}`,
+          timestamp: "2024-01-01T11:00:00Z",
+        });
+      }
+    });
+
+    // Flush microtasks but keep timers frozen at 50ms (below 500ms debounce)
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(50);
+    });
+
+    // State should NOT be updated yet (debounce hasn't fired at 500ms)
+    expect(result.current.logs).toHaveLength(1);
+
+    // Advance timers to 500ms total (450ms more)
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(450);
+    });
+
+    // NOW the debounce should have fired and flushed all 100 entries
+    expect(result.current.logs).toHaveLength(101); // 1 initial + 100 updates
+    expect(result.current.logs[1].content).toBe("Entry 0");
+    expect(result.current.logs[100].content).toBe("Entry 99");
+  });
 });

@@ -21,7 +21,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
@@ -125,42 +125,49 @@ export const useBotLogsStream = ({
   // calls to prevent updates after the component has moved on.
   const disposedRef = useRef(false);
 
-  // ---- RAF batching for SSE update events ----
+  // ---- Debounced batching for SSE update events ----
   //
   // Chatty bots can fire hundreds of SSE "update" events per second. Without
   // batching, each event would call setLogs/setTotalSeen/setLastUpdate
-  // individually — 900+ state updates/sec that React can never paint fast
+  // individually -- 900+ state updates/sec that React can never paint fast
   // enough. Instead, update events push entries into `pendingUpdatesRef` and
-  // schedule a single requestAnimationFrame. The RAF callback
+  // schedule a debounced flush via setTimeout. The flush callback
   // (flushPendingUpdates) drains the entire buffer into one batched state
-  // update, capping renders at ~60/sec.
+  // update, capping renders at ~2/sec (every 500ms).
+  //
+  // The pending buffer is eagerly capped at MAX_BUFFER_SIZE on each push to
+  // prevent unbounded memory growth between flushes. A chatty bot emitting
+  // 100+ logs/sec can accumulate thousands of entries in 500ms without this.
   //
   // Two operations on the buffer:
   //
-  //   flushPendingUpdates — the normal path. Called by RAF once per frame.
-  //     Drains the buffer INTO React state (setLogs, setTotalSeen, etc.).
+  //   flushPendingUpdates -- the normal path. Called by setTimeout after
+  //     FLUSH_DEBOUNCE_MS. Drains the buffer INTO React state.
   //
-  //   clearPendingUpdates — the abort path. Discards the buffer and cancels
-  //     any scheduled RAF WITHOUT applying to state. Called when the data
+  //   clearPendingUpdates -- the abort path. Discards the buffer and cancels
+  //     any scheduled timeout WITHOUT applying to state. Called when the data
   //     source changes (REST fetch, new SSE history event, SSE disconnect,
   //     unmount) so stale entries from a previous stream don't leak into
   //     a fresh data snapshot.
 
-  const pendingUpdatesRef = useRef<LogEntry[]>([]);
-  const rafIdRef = useRef<number | null>(null);
+  const FLUSH_DEBOUNCE_MS = 500; // Log viewing doesn't need 60fps; 2 updates/sec is plenty
+  const MAX_BUFFER_SIZE = 500;
 
-  /** Discard queued updates and cancel the scheduled RAF. */
+  const pendingUpdatesRef = useRef<LogEntry[]>([]);
+  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Discard queued updates and cancel the scheduled flush timeout. */
   const clearPendingUpdates = useCallback(() => {
     pendingUpdatesRef.current = [];
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
+    if (flushTimeoutRef.current !== null) {
+      clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = null;
     }
   }, []);
 
-  /** Drain queued updates into React state (called once per animation frame). */
+  /** Drain queued updates into React state (called once per debounce interval). */
   const flushPendingUpdates = useCallback(() => {
-    rafIdRef.current = null;
+    flushTimeoutRef.current = null;
     const pending = pendingUpdatesRef.current;
     if (pending.length === 0) return;
     pendingUpdatesRef.current = [];
@@ -179,6 +186,29 @@ export const useBotLogsStream = ({
     setTotalSeen((prev) => prev + count);
     setLastUpdate(new Date());
   }, []);
+
+  /** Buffer update entries and schedule a debounced flush. */
+  const bufferUpdate = useCallback(
+    (entries: LogEntry[]) => {
+      const buffer = pendingUpdatesRef.current;
+      buffer.push(...entries);
+
+      // Cap eagerly on push to prevent unbounded growth between flushes.
+      // A chatty bot can emit thousands of events in 500ms.
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        pendingUpdatesRef.current = buffer.slice(
+          buffer.length - MAX_BUFFER_SIZE,
+        );
+      }
+
+      if (flushTimeoutRef.current) clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = setTimeout(
+        flushPendingUpdates,
+        FLUSH_DEBOUNCE_MS,
+      );
+    },
+    [flushPendingUpdates],
+  );
 
   // ---- REST fetch (same pattern as useBotLogs) ----
 
@@ -372,11 +402,7 @@ export const useBotLogsStream = ({
                   const newEntries = expandLogEntries([
                     { date: parsed.timestamp, content: parsed.content },
                   ]);
-                  pendingUpdatesRef.current.push(...newEntries);
-                  if (rafIdRef.current === null) {
-                    rafIdRef.current =
-                      requestAnimationFrame(flushPendingUpdates);
-                  }
+                  bufferUpdate(newEntries);
                 }
               } catch (err) {
                 console.error("Failed to parse update SSE event:", err);
@@ -416,7 +442,7 @@ export const useBotLogsStream = ({
           }, delay);
         }
       });
-  }, [user, botId, refreshInterval]);
+  }, [user, botId, refreshInterval, bufferUpdate, clearPendingUpdates]);
 
   // ---- Cleanup helper ----
 
