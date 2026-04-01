@@ -121,6 +121,10 @@ export const useBotLogsStream = ({
   const reconnectAttemptsRef = useRef(0);
   const trimmedCountRef = useRef(0);
 
+  // The SSE read loop settles asynchronously after abort. Guard setState
+  // calls to prevent updates after the component has moved on.
+  const disposedRef = useRef(false);
+
   // ---- RAF batching for SSE update events ----
   //
   // Chatty bots can fire hundreds of SSE "update" events per second. Without
@@ -306,7 +310,9 @@ export const useBotLogsStream = ({
         let buffer = "";
 
         while (true) {
+          if (disposedRef.current) break;
           const { done, value } = await reader.read();
+          if (disposedRef.current) break;
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -339,20 +345,22 @@ export const useBotLogsStream = ({
                 clearPendingUpdates();
                 const entries: LogEntry[] = JSON.parse(data);
                 const expanded = expandLogEntries(entries);
-                if (expanded.length > MAX_LOG_ENTRIES) {
-                  const trimmed = expanded.length - MAX_LOG_ENTRIES;
-                  trimmedCountRef.current = trimmed;
-                  setHasEarlierLogs(true);
-                  setLogs(expanded.slice(trimmed));
-                } else {
-                  trimmedCountRef.current = 0;
-                  setHasEarlierLogs(false);
-                  setLogs(expanded);
+                if (!disposedRef.current) {
+                  if (expanded.length > MAX_LOG_ENTRIES) {
+                    const trimmed = expanded.length - MAX_LOG_ENTRIES;
+                    trimmedCountRef.current = trimmed;
+                    setHasEarlierLogs(true);
+                    setLogs(expanded.slice(trimmed));
+                  } else {
+                    trimmedCountRef.current = 0;
+                    setHasEarlierLogs(false);
+                    setLogs(expanded);
+                  }
+                  setTotalSeen(expanded.length);
+                  setLastUpdate(new Date());
+                  initialLoadCompleteRef.current = true;
+                  setLoading(false);
                 }
-                setTotalSeen(expanded.length);
-                setLastUpdate(new Date());
-                initialLoadCompleteRef.current = true;
-                setLoading(false);
               } catch (err) {
                 console.error("Failed to parse history SSE event:", err);
               }
@@ -360,12 +368,15 @@ export const useBotLogsStream = ({
               try {
                 const parsed: { content: string; timestamp: string } =
                   JSON.parse(data);
-                const newEntries = expandLogEntries([
-                  { date: parsed.timestamp, content: parsed.content },
-                ]);
-                pendingUpdatesRef.current.push(...newEntries);
-                if (rafIdRef.current === null) {
-                  rafIdRef.current = requestAnimationFrame(flushPendingUpdates);
+                if (!disposedRef.current) {
+                  const newEntries = expandLogEntries([
+                    { date: parsed.timestamp, content: parsed.content },
+                  ]);
+                  pendingUpdatesRef.current.push(...newEntries);
+                  if (rafIdRef.current === null) {
+                    rafIdRef.current =
+                      requestAnimationFrame(flushPendingUpdates);
+                  }
                 }
               } catch (err) {
                 console.error("Failed to parse update SSE event:", err);
@@ -375,10 +386,13 @@ export const useBotLogsStream = ({
         }
 
         // Stream ended cleanly
-        setConnected(false);
+        if (!disposedRef.current) {
+          setConnected(false);
+        }
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
+        if (disposedRef.current) return;
         setConnected(false);
         sseAbortRef.current = null;
 
@@ -419,6 +433,8 @@ export const useBotLogsStream = ({
   // Refs must reset before the connection effect runs.
   // Otherwise initialLoadCompleteRef stays true from the previous bot and SSE init is skipped.
   useEffect(() => {
+    // Stop the old bot's read loop from calling setState
+    disposedRef.current = true;
     initialLoadCompleteRef.current = false;
     reconnectAttemptsRef.current = 0;
     trimmedCountRef.current = 0;
@@ -428,6 +444,8 @@ export const useBotLogsStream = ({
     setHasEarlierLogs(false);
     setLoading(true);
     setConnected(false);
+    // Allow the new bot's read loop to proceed
+    disposedRef.current = false;
   }, [botId]);
 
   // ---- Establish SSE on mount with 4s fallback to REST polling ----
@@ -474,6 +492,7 @@ export const useBotLogsStream = ({
 
   useEffect(() => {
     return () => {
+      disposedRef.current = true;
       clearPendingUpdates();
       if (sseAbortRef.current) {
         sseAbortRef.current.abort();
