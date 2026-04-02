@@ -538,19 +538,18 @@ func TestComposeAppend(t *testing.T) {
 	todayPrefix := time.Now().Format("2006-01-02")
 	assert.Contains(t, contentStr, todayPrefix, "file should contain today's date in timestamp prefixes")
 
-	// Verify no temp objects were left behind.
+	// Verify no temp objects were left behind. Because cleanup is synchronous
+	// (runs before AppendBotLogs returns), we can assert immediately without
+	// polling or sleeping.
 	tempPrefix := fmt.Sprintf("logs/%s/.tmp-", botID)
-	// Temp cleanup runs in a background goroutine, so wait briefly for it to finish.
-	require.Eventually(t, func() bool {
-		count := 0
-		for range client.ListObjects(context.Background(), "test-compose-logs", minio.ListObjectsOptions{
-			Prefix:    tempPrefix,
-			Recursive: true,
-		}) {
-			count++
-		}
-		return count == 0
-	}, 5*time.Second, 100*time.Millisecond, "temp objects should be cleaned up")
+	var tempCount int
+	for range client.ListObjects(context.Background(), "test-compose-logs", minio.ListObjectsOptions{
+		Prefix:    tempPrefix,
+		Recursive: true,
+	}) {
+		tempCount++
+	}
+	assert.Equal(t, 0, tempCount, "temp objects should be cleaned up synchronously before AppendBotLogs returns")
 }
 
 // TestComposeAppendFirstWrite verifies that the first write of the day (no

@@ -4,13 +4,21 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"runtime/internal/util"
 )
 
+// ObjectInfo holds metadata for a single MinIO object.
+type ObjectInfo struct {
+	Name         string
+	LastModified time.Time
+}
+
 // MinIOClient abstracts the MinIO operations needed by the GC.
 type MinIOClient interface {
 	ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error)
+	ListObjectsWithInfo(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error)
 	RemoveObject(ctx context.Context, bucket, name string) error
 }
 
@@ -21,8 +29,9 @@ type BotStore interface {
 
 // RunResult contains the outcome of a GC sweep.
 type RunResult struct {
-	OrphanedBots   int
-	DeletedObjects int
+	OrphanedBots     int
+	DeletedObjects   int
+	StaleTempFiles   int
 }
 
 // GarbageCollector removes MinIO artifacts for bots that no longer exist.
@@ -57,8 +66,19 @@ func NewGarbageCollector(opts GarbageCollectorOptions) *GarbageCollector {
 	}
 }
 
-// Run performs a single GC sweep: finds orphaned bot IDs in MinIO and deletes their artifacts.
+// staleTempFileAge is the minimum age for a temp file to be considered stale.
+// Temp files older than this are assumed to be leaked from a previous bug or
+// crash and are safe to delete.
+const staleTempFileAge = 1 * time.Hour
+
+// Run performs a single GC sweep: cleans up stale temp files, then finds
+// orphaned bot IDs in MinIO and deletes their artifacts.
 func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
+	result := &RunResult{}
+
+	// 0. Clean up stale temp files (leaked by the old fire-and-forget goroutine bug)
+	result.StaleTempFiles = gc.cleanupStaleTempFiles(ctx)
+
 	// 1. Collect bot IDs from MinIO
 	minioBotIDs, err := gc.collectMinIOBotIDs(ctx)
 	if err != nil {
@@ -67,7 +87,7 @@ func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
 
 	if len(minioBotIDs) == 0 {
 		gc.logger.Info("GC: no bot artifacts found in MinIO")
-		return &RunResult{}, nil
+		return result, nil
 	}
 
 	// 2. Get existing bot IDs from database
@@ -86,7 +106,7 @@ func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
 
 	if len(orphanIDs) == 0 {
 		gc.logger.Info("GC: no orphaned artifacts found (%d bots checked)", len(minioBotIDs))
-		return &RunResult{}, nil
+		return result, nil
 	}
 
 	gc.logger.Info("GC: found %d orphaned bot(s), cleaning up...", len(orphanIDs))
@@ -100,10 +120,9 @@ func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
 
 	gc.logger.Info("GC: deleted %d objects for %d orphaned bot(s)", totalDeleted, len(orphanIDs))
 
-	return &RunResult{
-		OrphanedBots:   len(orphanIDs),
-		DeletedObjects: totalDeleted,
-	}, nil
+	result.OrphanedBots = len(orphanIDs)
+	result.DeletedObjects = totalDeleted
+	return result, nil
 }
 
 // collectMinIOBotIDs lists all unique bot IDs that have artifacts in MinIO.
@@ -167,6 +186,40 @@ func (gc *GarbageCollector) cleanupBot(ctx context.Context, botID string) int {
 		gc.logger.Error("GC: failed to delete state for bot %s: %v", botID, err)
 	} else {
 		deleted++
+	}
+
+	return deleted
+}
+
+// cleanupStaleTempFiles lists all objects under logs/ and deletes any temp
+// files (containing ".tmp-" in the name) that are older than staleTempFileAge.
+// Returns the number of deleted objects. Errors are logged, not returned,
+// because temp cleanup is best-effort and should not block the orphan sweep.
+func (gc *GarbageCollector) cleanupStaleTempFiles(ctx context.Context) int {
+	objects, err := gc.minio.ListObjectsWithInfo(ctx, gc.logsBucket, "logs/")
+	if err != nil {
+		gc.logger.Error("GC: failed to list objects for temp cleanup: %v", err)
+		return 0
+	}
+
+	cutoff := time.Now().Add(-staleTempFileAge)
+	deleted := 0
+
+	for _, obj := range objects {
+		if !strings.Contains(obj.Name, ".tmp-") {
+			continue
+		}
+		if obj.LastModified.Before(cutoff) {
+			if err := gc.minio.RemoveObject(ctx, gc.logsBucket, obj.Name); err != nil {
+				gc.logger.Error("GC: failed to delete stale temp file %s: %v", obj.Name, err)
+			} else {
+				deleted++
+			}
+		}
+	}
+
+	if deleted > 0 {
+		gc.logger.Info("GC: deleted %d stale temp file(s)", deleted)
 	}
 
 	return deleted

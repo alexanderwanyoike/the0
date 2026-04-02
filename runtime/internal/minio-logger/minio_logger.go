@@ -185,14 +185,13 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	if err != nil {
 		return fmt.Errorf("upload temp chunk: %w", err)
 	}
-	// Clean up the temp object after the function returns. Run in a goroutine
-	// so it doesn't hold the bot mutex during the RemoveObject call.
+	// Clean up the temp object after the compose/copy completes. Synchronous
+	// so that callers can rely on temp files being gone when AppendBotLogs
+	// returns, and we don't leak objects on process exit or slow storage.
 	defer func() {
-		go func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = m.client.RemoveObject(cleanupCtx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{})
-		}()
+		if err := m.client.RemoveObject(ctx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{}); err != nil {
+			m.logger.Warn("Failed to clean up temp object", "key", tmpKey, "error", err)
+		}
 	}()
 
 	// Check whether the daily file already exists and how large it is.
