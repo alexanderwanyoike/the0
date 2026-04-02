@@ -5,6 +5,58 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: Rewrite SSE log streaming hook for simplicity (760 lines to 429, 13 refs to 5)
+        - kind: fixed
+          description: Reduce rendering overhead in log console (split memos, overscan, parseLogLine cache)
+        - kind: fixed
+          description: Use MinIO server-side ComposeObject for daily log appends to avoid O(file_size) rewrites
+        - kind: changed
+          description: Remove PRP, story, and AI context files from git tracking
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.11.3
+    created: "2026-04-02T18:02:01.466336367Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 81e52c17f9252e9af3ebef437dd9b8d282b4019932f6c86eb6f6fec3cd7c81c5
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.7.2/the0-0.7.2.tgz
+    version: 0.7.2
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: GC CronJob uses /app/runtime instead of ./runtime for correct container path
         - kind: fixed
           description: GC CronJob defaults to GHCR runtime image instead of local dev image name
@@ -837,4 +889,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-03-29T13:12:24.73613805Z"
+generated: "2026-04-02T18:02:01.466458124Z"
