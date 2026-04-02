@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.1
-appVersion: "1.11.1"
+version: 0.7.2
+appVersion: "1.11.3"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,11 +31,13 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: GC CronJob uses /app/runtime instead of ./runtime for correct container path
+      description: Rewrite SSE log streaming hook for simplicity (760 lines to 429, 13 refs to 5)
     - kind: fixed
-      description: GC CronJob defaults to GHCR runtime image instead of local dev image name
+      description: Reduce rendering overhead in log console (split memos, overscan, parseLogLine cache)
     - kind: fixed
-      description: Updated chart description to accurately reflect platform capabilities
+      description: Use MinIO server-side ComposeObject for daily log appends to avoid O(file_size) rewrites
+    - kind: changed
+      description: Remove PRP, story, and AI context files from git tracking
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
