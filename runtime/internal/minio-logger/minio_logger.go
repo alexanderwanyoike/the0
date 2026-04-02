@@ -185,11 +185,12 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	if err != nil {
 		return fmt.Errorf("upload temp chunk: %w", err)
 	}
-	// Clean up the temp object after the compose/copy completes. Synchronous
-	// so that callers can rely on temp files being gone when AppendBotLogs
-	// returns, and we don't leak objects on process exit or slow storage.
+	// Clean up the temp object after the compose/copy completes. Uses a fresh
+	// context so cleanup succeeds even if the caller's context was cancelled.
 	defer func() {
-		if err := m.client.RemoveObject(ctx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{}); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := m.client.RemoveObject(cleanupCtx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{}); err != nil {
 			m.logger.Warn("Failed to clean up temp object", "key", tmpKey, "error", err)
 		}
 	}()
