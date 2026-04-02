@@ -145,6 +145,12 @@ func (m *minIOLogger) getMutex(botID string) *sync.Mutex {
 	return mu
 }
 
+// composeMinPartSize is the minimum part size that S3/MinIO requires for
+// non-last parts in a ComposeObject (multipart server-side copy). Parts smaller
+// than this trigger an error, so we fall back to read-modify-write for daily
+// log files below this threshold.
+const composeMinPartSize = 5 * 1024 * 1024 // 5 MiB
+
 func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string) error {
 	if logs == "" {
 		return nil // No logs to append
@@ -159,65 +165,103 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	botMutex.Lock()
 	defer botMutex.Unlock()
 
+	// Single clock read for the entire append to avoid midnight-boundary splits
+	// where the daily key, timestamp prefix, and temp key disagree on the date.
+	now := time.Now()
+
 	// Generate file path: logs/{bot_id}/{YYYYMMDD}.log
-	timestamp := time.Now().Format("20060102") // YYYYMMDD format
-	objectPath := fmt.Sprintf("logs/%s/%s.log", id, timestamp)
-	m.logger.Debug("Attempting to append logs to MinIO", "path", objectPath, "bucket", m.logsBucket)
+	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, now.Format("20060102"))
+	m.logger.Debug("Attempting to append logs to MinIO", "path", dailyKey, "bucket", m.logsBucket)
 
-	// Read existing content if file exists
-	var existingContent []byte
-	obj, err := m.client.GetObject(ctx, m.logsBucket, objectPath, minio.GetObjectOptions{})
-	if err != nil {
-		// Check if error is NoSuchKey (file doesn't exist) using string contains
-		m.logger.Debug("GetObject error", "error", err.Error())
-		if strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "The specified key does not exist") {
-			m.logger.Debug("File doesn't exist, will create new one")
-			// File doesn't exist, that's okay - we'll create it
-		} else {
-			return fmt.Errorf("failed to read existing log file: %v", err)
-		}
-	} else {
-		m.logger.Debug("GetObject succeeded, reading content")
-		existingContent, err = io.ReadAll(obj)
-		obj.Close()
-		if err != nil {
-			// Check if this is also a NoSuchKey error (race condition)
-			m.logger.Debug("ReadAll error", "error", err.Error())
-			if strings.Contains(err.Error(), "NoSuchKey") || strings.Contains(err.Error(), "The specified key does not exist") {
-				// File was deleted between GetObject and ReadAll, treat as if file doesn't exist
-				m.logger.Debug("ReadAll NoSuchKey, treating as empty file")
-				existingContent = []byte{}
-			} else {
-				// For any other ReadAll error, treat as empty file and continue
-				m.logger.Debug("ReadAll error, treating as empty file and continuing")
-				existingContent = []byte{}
-			}
-		} else {
-			m.logger.Debug("Successfully read existing content", "bytes", len(existingContent))
-		}
-	}
+	// Format the new log entry with a timestamp prefix.
+	content := fmt.Sprintf("[%s] %s\n", now.Format("2006-01-02 15:04:05"), strings.TrimSpace(logs))
 
-	// Append new logs to existing content
-	var buffer bytes.Buffer
-	buffer.Write(existingContent)
-
-	// Add timestamp prefix to new logs
-	timestampPrefix := time.Now().Format("2006-01-02 15:04:05")
-	newLogEntry := fmt.Sprintf("[%s] %s\n", timestampPrefix, strings.TrimSpace(logs))
-	buffer.WriteString(newLogEntry)
-
-	// Write the combined content back to MinIO
-	reader := bytes.NewReader(buffer.Bytes())
-	m.logger.Debug("Writing bytes to MinIO", "bytes", buffer.Len())
-	_, err = m.client.PutObject(ctx, m.logsBucket, objectPath, reader, int64(buffer.Len()), minio.PutObjectOptions{
+	// Upload the new chunk as a temporary object.
+	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, now.UnixNano())
+	reader := strings.NewReader(content)
+	_, err := m.client.PutObject(ctx, m.logsBucket, tmpKey, reader, int64(len(content)), minio.PutObjectOptions{
 		ContentType: "text/plain",
 	})
 	if err != nil {
-		m.logger.Debug("PutObject failed", "error", err.Error())
-		return fmt.Errorf("failed to write logs to MinIO: %v", err)
+		return fmt.Errorf("upload temp chunk: %w", err)
+	}
+	// Clean up the temp object after the function returns. Run in a goroutine
+	// so it doesn't hold the bot mutex during the RemoveObject call.
+	defer func() {
+		go func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = m.client.RemoveObject(cleanupCtx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{})
+		}()
+	}()
+
+	// Check whether the daily file already exists and how large it is.
+	info, statErr := m.client.StatObject(ctx, m.logsBucket, dailyKey, minio.StatObjectOptions{})
+
+	if statErr != nil {
+		// Only treat "NoSuchKey" as "file doesn't exist". Any other error
+		// (network, auth, timeout) should not silently replace the daily log.
+		errResponse := minio.ToErrorResponse(statErr)
+		if errResponse.Code != "NoSuchKey" {
+			return fmt.Errorf("stat daily log: %w", statErr)
+		}
+		// Daily file does not exist yet. Server-side copy the temp object
+		// into the daily key so we avoid re-uploading the data.
+		m.logger.Debug("Daily file does not exist, copying temp to daily key")
+		dst := minio.CopyDestOptions{Bucket: m.logsBucket, Object: dailyKey}
+		src := minio.CopySrcOptions{Bucket: m.logsBucket, Object: tmpKey}
+		_, err = m.client.CopyObject(ctx, dst, src)
+		if err != nil {
+			return fmt.Errorf("copy temp to daily key: %w", err)
+		}
+		m.logger.Debug("Successfully created daily log file", "path", dailyKey)
+		return nil
 	}
 
-	m.logger.Debug("Successfully wrote logs to MinIO", "path", objectPath)
+	// Daily file exists. Choose the append strategy based on its size.
+	if info.Size >= composeMinPartSize {
+		// The existing file is large enough (>= 5 MiB) for a server-side
+		// ComposeObject. Each sync stays O(chunk_size) instead of degrading
+		// to O(file_size) as the daily log grows throughout the day.
+		m.logger.Debug("Using ComposeObject for append", "existingSize", info.Size)
+		dst := minio.CopyDestOptions{Bucket: m.logsBucket, Object: dailyKey}
+		srcs := []minio.CopySrcOptions{
+			{Bucket: m.logsBucket, Object: dailyKey},
+			{Bucket: m.logsBucket, Object: tmpKey},
+		}
+		_, err = m.client.ComposeObject(ctx, dst, srcs...)
+		if err != nil {
+			return fmt.Errorf("compose daily log: %w", err)
+		}
+	} else {
+		// The existing file is smaller than the 5 MiB compose threshold.
+		// Fall back to read-modify-write, but this is bounded by at most
+		// 5 MiB of I/O so it stays fast.
+		m.logger.Debug("Using read-modify-write for small file", "existingSize", info.Size)
+		obj, getErr := m.client.GetObject(ctx, m.logsBucket, dailyKey, minio.GetObjectOptions{})
+		if getErr != nil {
+			return fmt.Errorf("read existing daily log: %w", getErr)
+		}
+		existingContent, readErr := io.ReadAll(obj)
+		obj.Close()
+		if readErr != nil {
+			return fmt.Errorf("read existing daily log body: %w", readErr)
+		}
+
+		var buffer bytes.Buffer
+		buffer.Write(existingContent)
+		buffer.WriteString(content)
+
+		combined := bytes.NewReader(buffer.Bytes())
+		_, err = m.client.PutObject(ctx, m.logsBucket, dailyKey, combined, int64(buffer.Len()), minio.PutObjectOptions{
+			ContentType: "text/plain",
+		})
+		if err != nil {
+			return fmt.Errorf("write combined daily log: %w", err)
+		}
+	}
+
+	m.logger.Debug("Successfully appended logs to MinIO", "path", dailyKey)
 	return nil
 }
 
