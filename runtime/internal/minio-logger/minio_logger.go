@@ -173,8 +173,8 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, now.Format("20060102"))
 	m.logger.Debug("Attempting to append logs to MinIO", "path", dailyKey, "bucket", m.logsBucket)
 
-	// Format the new log entry with a timestamp prefix.
-	content := fmt.Sprintf("[%s] %s\n", now.Format("2006-01-02 15:04:05"), strings.TrimSpace(logs))
+	// Format the new log entry as NDJSON with guaranteed timestamp fields.
+	content := FormatLogChunk(logs, now)
 
 	// Upload the new chunk as a temporary object.
 	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, now.UnixNano())
