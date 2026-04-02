@@ -83,10 +83,9 @@ export class LogsService {
   ): Promise<void> {
     let stream: NodeJS.ReadableStream;
     try {
-      await this.minioClient.statObject(this.logBucket, logPath);
       stream = await this.minioClient.getObject(this.logBucket, logPath);
     } catch (error: unknown) {
-      if (hasErrorCode(error) && error.code === "NotFound") return;
+      if (hasErrorCode(error) && error.code === "NoSuchKey") return;
       throw error;
     }
 

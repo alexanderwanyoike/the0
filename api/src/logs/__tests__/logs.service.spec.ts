@@ -294,7 +294,7 @@ describe("LogsService", () => {
     });
 
     it("should return empty array when log file does not exist", async () => {
-      mockMinioClient.statObject.mockRejectedValue({ code: "NotFound" });
+      mockMinioClient.getObject.mockRejectedValue({ code: "NoSuchKey" });
 
       const result = await service.getLogs("bot-1", {
         date: "20260401",

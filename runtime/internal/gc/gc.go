@@ -206,7 +206,11 @@ func (gc *GarbageCollector) cleanupStaleTempFiles(ctx context.Context) int {
 	deleted := 0
 
 	for _, obj := range objects {
-		if !strings.Contains(obj.Name, ".tmp-") {
+		// Check the filename portion only, not the full path, to avoid
+		// matching bot IDs that happen to contain ".tmp-"
+		parts := strings.Split(obj.Name, "/")
+		filename := parts[len(parts)-1]
+		if !strings.HasPrefix(filename, ".tmp-") {
 			continue
 		}
 		if obj.LastModified.Before(cutoff) {

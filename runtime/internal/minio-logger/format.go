@@ -23,14 +23,20 @@ func FormatLogChunk(logs string, ts time.Time) string {
 			continue
 		}
 
-		var obj map[string]interface{}
-		if json.Unmarshal([]byte(trimmed), &obj) == nil {
-			if _, hasTS := obj["timestamp"]; !hasTS {
-				obj["timestamp"] = isoTS
-				normalized, _ := json.Marshal(obj)
-				buffer.Write(normalized)
+		var raw interface{}
+		if json.Unmarshal([]byte(trimmed), &raw) == nil {
+			if obj, ok := raw.(map[string]interface{}); ok {
+				if _, hasTS := obj["timestamp"]; !hasTS {
+					obj["timestamp"] = isoTS
+					normalized, _ := json.Marshal(obj)
+					buffer.Write(normalized)
+				} else {
+					buffer.WriteString(trimmed)
+				}
 			} else {
-				buffer.WriteString(trimmed)
+				// Valid JSON but not an object (e.g. null, array, scalar) - wrap it
+				escaped, _ := json.Marshal(trimmed)
+				fmt.Fprintf(&buffer, `{"timestamp":"%s","message":%s}`, isoTS, escaped)
 			}
 		} else {
 			escaped, _ := json.Marshal(trimmed)
