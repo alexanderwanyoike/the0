@@ -144,7 +144,7 @@ describe("useBotEvents", () => {
         botId: "bot-123",
         autoRefresh: false,
         refreshInterval: 30000,
-        initialQuery: { limit: 100, offset: 0 },
+        initialQuery: { limit: 100, offset: 0, type: "metrics" },
       });
     });
 

@@ -82,14 +82,15 @@ export function useBotEvents({
   refreshInterval = 30000,
   dateRange,
 }: UseBotEventsOptions): UseBotEventsReturn {
-  // Build initial query from dateRange
+  // Build initial query from dateRange; always request metrics type
   const initialQuery = dateRange
     ? {
         dateRange: `${dateRange.start}-${dateRange.end}`,
         limit: 100,
         offset: 0,
+        type: "metrics" as const,
       }
-    : { limit: 100, offset: 0 };
+    : { limit: 100, offset: 0, type: "metrics" as const };
 
   const {
     logs: rawLogs,

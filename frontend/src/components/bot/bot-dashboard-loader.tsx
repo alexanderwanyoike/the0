@@ -10,7 +10,10 @@ import React, {
 } from "react";
 import * as ReactDOM from "react-dom";
 import * as ReactJSXRuntime from "react/jsx-runtime";
-import { BotEventsProvider } from "@/contexts/bot-events-context";
+import {
+  BotEventsProvider,
+  useBotEventsContext,
+} from "@/contexts/bot-events-context";
 import { RefreshCw, AlertCircle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -91,9 +94,51 @@ class DashboardErrorBoundary extends Component<
   }
 }
 
+/**
+ * Inner component that watches event loading state from context
+ * and calls onEventsReady when the initial load completes.
+ */
+function EventsLoadingGate({
+  children,
+  onEventsReady,
+  isWaiting,
+  className,
+}: {
+  children: ReactNode;
+  onEventsReady: () => void;
+  isWaiting: boolean;
+  className?: string;
+}) {
+  const { loading } = useBotEventsContext();
+
+  useEffect(() => {
+    if (!loading && isWaiting) {
+      onEventsReady();
+    }
+  }, [loading, isWaiting, onEventsReady]);
+
+  if (isWaiting) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center bg-muted/30 rounded-lg min-h-[200px]",
+          className,
+        )}
+      >
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+        <p className="text-muted-foreground">Loading events...</p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 interface BotDashboardLoaderProps {
   botId: string;
   customBotId: string;
+  version?: string;
+  dateRange?: { start: string; end: string };
   className?: string;
 }
 
@@ -107,49 +152,120 @@ type DashboardComponent = ComponentType<Record<string, never>>;
 export const BotDashboardLoader = React.memo(function BotDashboardLoader({
   botId,
   customBotId,
+  version,
+  dateRange,
   className,
 }: BotDashboardLoaderProps) {
   const [BotDashboard, setBotDashboard] = useState<DashboardComponent | null>(
     null,
   );
   const [loadError, setLoadError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadPhase, setLoadPhase] = useState<
+    "dashboard" | "events" | null
+  >(null);
 
   useEffect(() => {
     if (!customBotId) {
-      setIsLoading(false);
+      setLoadPhase(null);
       return;
     }
 
-    setIsLoading(true);
+    setLoadPhase("dashboard");
     setLoadError(null);
+    setBotDashboard(null);
 
     const frontendUrl = `/api/custom-bots/frontend/${encodeURIComponent(customBotId)}`;
+    const cacheKey = `the0-bundle-${customBotId}-${version || "latest"}`;
 
-    // Dynamic import - import map resolves react to host-served modules
-    import(/* webpackIgnore: true */ frontendUrl)
-      .then((mod) => {
-        if (mod.default) {
-          setBotDashboard(() => mod.default);
-        } else {
-          throw new Error("Bundle must export a default component");
+    /**
+     * Import the bundle, with localStorage caching.
+     * On cache hit: load from a blob URL.
+     * On miss: fetch as text, cache, then import via blob URL.
+     * Falls back to direct import if localStorage is unavailable.
+     */
+    const importBundle = async (): Promise<DashboardComponent> => {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const blob = new Blob([cached], {
+            type: "application/javascript",
+          });
+          const url = URL.createObjectURL(blob);
+          try {
+            const mod = await import(/* webpackIgnore: true */ url);
+            if (!mod.default)
+              throw new Error("Bundle must export a default component");
+            return mod.default;
+          } finally {
+            URL.revokeObjectURL(url);
+          }
         }
+      } catch {
+        // localStorage unavailable or blob import failed - continue to fetch
+      }
+
+      // Fetch, cache, then import via blob URL
+      try {
+        const res = await fetch(frontendUrl);
+        if (!res.ok)
+          throw new Error(`Failed to fetch bundle: ${res.statusText}`);
+        const text = await res.text();
+
+        // Best-effort cache
+        try {
+          localStorage.setItem(cacheKey, text);
+        } catch {
+          // Quota exceeded or private browsing - ignore
+        }
+
+        const blob = new Blob([text], { type: "application/javascript" });
+        const url = URL.createObjectURL(blob);
+        try {
+          const mod = await import(/* webpackIgnore: true */ url);
+          if (!mod.default)
+            throw new Error("Bundle must export a default component");
+          return mod.default;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      } catch (err) {
+        // Last resort: direct import without caching
+        const mod = await import(/* webpackIgnore: true */ frontendUrl);
+        if (!mod.default)
+          throw new Error("Bundle must export a default component");
+        return mod.default;
+      }
+    };
+
+    const loadWithTimeout = async () => {
+      const TIMEOUT_MS = 10_000;
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Dashboard load timed out")),
+          TIMEOUT_MS,
+        ),
+      );
+      return Promise.race([importBundle(), timeout]);
+    };
+
+    loadWithTimeout()
+      .then((component) => {
+        setBotDashboard(() => component);
+        setLoadPhase("events");
       })
       .catch((err) => {
         console.error("Failed to load bot frontend:", err);
         setLoadError(err);
-      })
-      .finally(() => {
-        setIsLoading(false);
+        setLoadPhase(null);
       });
-  }, [customBotId]);
+  }, [customBotId, version]);
 
-  // Loading state
-  if (isLoading) {
+  // Loading state: show phase
+  if (loadPhase === "dashboard") {
     return (
       <div
         className={cn(
-          "flex flex-col items-center justify-center bg-muted/30 rounded-lg",
+          "flex flex-col items-center justify-center bg-muted/30 rounded-lg min-h-[200px]",
           className,
         )}
       >
@@ -182,11 +298,22 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
   // Render custom dashboard with event context and error boundary
   if (BotDashboard) {
     return (
-      <BotEventsProvider botId={botId} autoRefresh refreshInterval={30000}>
+      <BotEventsProvider
+        botId={botId}
+        autoRefresh
+        refreshInterval={30000}
+        dateRange={dateRange}
+      >
         <DashboardErrorBoundary>
-          <div className={cn("h-full overflow-auto", className)}>
-            <BotDashboard />
-          </div>
+          <EventsLoadingGate
+            isWaiting={loadPhase === "events"}
+            onEventsReady={() => setLoadPhase(null)}
+            className={className}
+          >
+            <div className={cn("h-full overflow-auto", className)}>
+              <BotDashboard />
+            </div>
+          </EventsLoadingGate>
         </DashboardErrorBoundary>
       </BotEventsProvider>
     );

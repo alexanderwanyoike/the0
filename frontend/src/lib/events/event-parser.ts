@@ -8,6 +8,8 @@ import { parseISO, isValid } from "date-fns";
 export interface RawLogEntry {
   date: string;
   content: string;
+  /** API-extracted timestamp from NDJSON. Null for old-format logs. */
+  timestamp?: string | null;
 }
 
 export interface BotEvent {
@@ -221,62 +223,164 @@ function mapStructuredLogLevel(
 }
 
 /**
- * Parse a single log line into a BotEvent.
+ * Resolve the effective timestamp for a parsed event.
+ * Priority: API timestamp (from NDJSON) > parser-extracted timestamp > null.
  */
-export function parseLogLine(content: string): BotEvent {
-  const timestamp = extractTimestamp(content);
+function resolveTimestamp(
+  apiTimestamp: string | null | undefined,
+  extracted: Date | null,
+): Date | null {
+  if (apiTimestamp) {
+    const parsed = parseISO(apiTimestamp);
+    if (isValid(parsed)) return parsed;
+    // Try Date constructor as fallback for non-ISO formats
+    const fallback = new Date(apiTimestamp);
+    if (!isNaN(fallback.getTime())) return fallback;
+  }
+  return extracted;
+}
+
+/**
+ * Each parser in the chain returns a BotEvent or null if it cannot handle the format.
+ */
+type LogLineParser = (
+  content: string,
+  apiTimestamp?: string | null,
+) => BotEvent | null;
+
+/**
+ * Parse metric JSON: content is a JSON object with a _metric field.
+ * Handles optional log-level prefix before the JSON (e.g. "INFO: {...}").
+ */
+const parseMetricJSON: LogLineParser = (content, apiTimestamp) => {
+  const stripped = stripTimestamp(content);
+  const level = extractLevel(stripped);
+  const metric = tryParseMetric(stripped);
+  if (!metric) return null;
+
+  const bracketTs = extractTimestamp(content);
+  return {
+    timestamp: resolveTimestamp(apiTimestamp, bracketTs),
+    type: "metric",
+    metricType: metric._metric,
+    data: metric,
+    level,
+    raw: content,
+  };
+};
+
+/**
+ * Parse structured JSON log (pino, winston, Rust tracing, etc.).
+ * Content is a JSON object with level/message/msg fields but no _metric.
+ */
+const parseStructuredJSON: LogLineParser = (content, apiTimestamp) => {
+  const stripped = stripTimestamp(content);
+  const prefixLevel = extractLevel(stripped);
+  const structuredLog = tryParseStructuredLog(stripped);
+  if (!structuredLog) return null;
+
+  const bracketTs = extractTimestamp(content);
+  const structuredTs = extractTimestampFromStructuredLog(structuredLog);
+  // API timestamp > structured log timestamp > bracket timestamp
+  const effectiveTs = resolveTimestamp(
+    apiTimestamp,
+    structuredTs ?? bracketTs,
+  );
+  const structuredLevel = mapStructuredLogLevel(structuredLog.level);
+
+  const message =
+    structuredLog.message ||
+    structuredLog.msg ||
+    structuredLog.fields?.message ||
+    JSON.stringify(structuredLog);
+
+  return {
+    timestamp: effectiveTs,
+    type: "log",
+    data: message,
+    level: structuredLevel || prefixLevel || "INFO",
+    raw: content,
+  };
+};
+
+/**
+ * Parse bracket-prefixed log lines: [2006-01-02 15:04:05] content
+ * Only matches when the content starts with a bracket timestamp.
+ */
+const parseBracketLog: LogLineParser = (content, apiTimestamp) => {
+  const bracketTs = extractTimestamp(content);
+  if (!bracketTs) return null;
+
   const stripped = stripTimestamp(content);
   const level = extractLevel(stripped);
 
-  // 1. Try to parse as metric (existing behavior - highest priority)
-  const metric = tryParseMetric(stripped);
-  if (metric) {
-    return {
-      timestamp,
-      type: "metric",
-      metricType: metric._metric,
-      data: metric,
-      level,
-      raw: content,
-    };
-  }
-
-  // 2. Try to parse as structured JSON log (pino, winston, Rust tracing, etc.)
-  const structuredLog = tryParseStructuredLog(stripped);
-  if (structuredLog) {
-    const structuredTimestamp =
-      extractTimestampFromStructuredLog(structuredLog) || timestamp;
-    const structuredLevel = mapStructuredLogLevel(structuredLog.level);
-
-    // Extract message - check fields.message for Rust tracing format
-    const message =
-      structuredLog.message ||
-      structuredLog.msg ||
-      structuredLog.fields?.message ||
-      JSON.stringify(structuredLog);
-
-    return {
-      timestamp: structuredTimestamp,
-      type: "log",
-      data: message,
-      level: structuredLevel || level || "INFO",
-      raw: content,
-    };
-  }
-
-  // 3. Regular log entry (fallback)
   return {
-    timestamp,
+    timestamp: resolveTimestamp(apiTimestamp, bracketTs),
     type: "log",
     data: stripped,
     level: level || "INFO",
+    raw: content,
+  };
+};
+
+/**
+ * Fallback parser for plain text log lines.
+ * Always succeeds -- this is the last parser in the chain.
+ */
+const parsePlainText: LogLineParser = (content, apiTimestamp) => {
+  const level = extractLevel(content);
+
+  return {
+    timestamp: resolveTimestamp(apiTimestamp, null),
+    type: "log",
+    data: content,
+    level: level || "INFO",
+    raw: content,
+  };
+};
+
+/**
+ * Ordered parser chain. The first parser that returns non-null wins.
+ */
+const parsers: LogLineParser[] = [
+  parseMetricJSON,
+  parseStructuredJSON,
+  parseBracketLog,
+  parsePlainText,
+];
+
+/**
+ * Parse a single log line into a BotEvent.
+ *
+ * @param content  The log line content (may include bracket timestamps, JSON, etc.)
+ * @param timestamp  Optional API-provided timestamp (from NDJSON). When present,
+ *                   takes precedence over any timestamp extracted from content.
+ *                   Pass null or omit for old-format / backward-compatible usage.
+ */
+export function parseLogLine(
+  content: string,
+  timestamp?: string | null,
+): BotEvent {
+  for (const parser of parsers) {
+    const result = parser(content, timestamp);
+    if (result) return result;
+  }
+
+  // Should never reach here since parsePlainText always succeeds,
+  // but TypeScript needs a return.
+  return {
+    timestamp: resolveTimestamp(timestamp, null),
+    type: "log",
+    data: content,
+    level: "INFO",
     raw: content,
   };
 }
 
 /**
  * Parse raw log entries into typed BotEvents.
- * Handles the API response format where content is the entire file.
+ * Handles both new NDJSON format (one line per entry with timestamp)
+ * and old format (multi-line content without timestamp).
  */
 export function parseEvents(logs: RawLogEntry[]): BotEvent[] {
   const events: BotEvent[] = [];
@@ -286,7 +390,7 @@ export function parseEvents(logs: RawLogEntry[]): BotEvent[] {
     const lines = entry.content.split("\n").filter((line) => line.trim());
 
     for (const line of lines) {
-      events.push(parseLogLine(line));
+      events.push(parseLogLine(line, entry.timestamp));
     }
   }
 
