@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.3
-appVersion: "1.11.4"
+version: 0.7.4
+appVersion: "1.12.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,20 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: NDJSON log format with per-line timestamps for all bot output
+    - kind: added
+      description: API streams MinIO logs line-by-line with type=metrics filtering
+    - kind: added
+      description: Interval picker (Live/1d/3d/7d/30d/Custom) for dashboard and console
+    - kind: added
+      description: Bundle caching in localStorage for custom bot frontends
+    - kind: added
+      description: Event parser chain for NDJSON, structured JSON, and legacy formats
     - kind: fixed
-      description: Fix scheduled bot logs navigation hang and stale state on bot switch
+      description: Synchronous temp file cleanup and GC sweep for stale .tmp- objects
+    - kind: fixed
+      description: Import timeout and loading phase UX for custom bot dashboards
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
