@@ -56,6 +56,7 @@ describe("McpService", () => {
   const mockLogEntry = {
     date: "20251202",
     content: "Bot executed successfully",
+    timestamp: "2025-12-02T10:00:00Z",
   };
 
   beforeEach(async () => {
