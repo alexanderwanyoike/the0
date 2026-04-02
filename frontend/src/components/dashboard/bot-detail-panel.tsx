@@ -21,7 +21,8 @@ import { ConsoleInterface } from "@/components/bot/console-interface";
 import {
   IntervalPicker,
   IntervalValue,
-  DEFAULT_INTERVAL,
+  LIVE_INTERVAL,
+  DEFAULT_DAY_INTERVAL,
 } from "@/components/bot/interval-picker";
 import {
   Dialog,
@@ -77,11 +78,14 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const mediaQuery = useMediaQuery("(min-width: 1280px)");
   const isMobile = mediaQuery === null ? null : !mediaQuery;
 
-  // Interval picker state (shared by dashboard + console)
-  const [interval, setInterval_] = useState<IntervalValue>(DEFAULT_INTERVAL);
-
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
+
+  // Interval picker state (shared by dashboard + console)
+  // Realtime bots default to live mode; scheduled bots default to 1d range.
+  const [interval, setInterval_] = useState<IntervalValue>(
+    useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL,
+  );
   const hookBotId = bot !== null ? botId : "";
 
   const streamHook = useBotLogsStream({
@@ -99,10 +103,12 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   const handleIntervalChange = (val: IntervalValue) => {
     setInterval_(val);
-    // Push the new range into the active log hook so it re-fetches
-    const startDate = val.start.slice(0, 10).replace(/-/g, "");
-    const endDate = val.end.slice(0, 10).replace(/-/g, "");
-    activeHook.setDateRangeFilter(startDate, endDate);
+    if (val.label === "live") {
+      // Clear date filter so SSE streams all logs
+      activeHook.setDateFilter(null);
+    } else {
+      activeHook.setDateRangeFilter(val.start, val.end);
+    }
   };
 
   const {
@@ -428,6 +434,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
           interval={interval}
           onIntervalChange={handleIntervalChange}
+          showLive={useStreaming}
         />
         {cliUpdateModal}
       </>
@@ -519,7 +526,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
         {/* Interval Picker */}
         <div className="px-4 lg:px-6">
-          <IntervalPicker value={interval} onChange={handleIntervalChange} />
+          <IntervalPicker value={interval} onChange={handleIntervalChange} showLive={useStreaming} />
         </div>
 
         {/* Main Content - Dashboard and Console side by side */}

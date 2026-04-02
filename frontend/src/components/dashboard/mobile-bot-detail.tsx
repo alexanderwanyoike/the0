@@ -63,6 +63,7 @@ interface MobileBotDetailProps {
   onOpenUpdateModal: () => void;
   interval: IntervalValue;
   onIntervalChange: (value: IntervalValue) => void;
+  showLive?: boolean;
 }
 
 export function MobileBotDetail({
@@ -89,6 +90,7 @@ export function MobileBotDetail({
   onOpenUpdateModal,
   interval,
   onIntervalChange,
+  showLive,
 }: MobileBotDetailProps) {
   const router = useRouter();
 
@@ -122,7 +124,7 @@ export function MobileBotDetail({
 
       {/* Interval Picker */}
       <div className="px-3 py-2 border-b">
-        <IntervalPicker value={interval} onChange={onIntervalChange} />
+        <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} />
       </div>
 
       {/* Tabbed content */}
