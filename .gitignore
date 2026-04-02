@@ -41,3 +41,4 @@ sdk/react/.npmrc
 sdk/react/node_modules/
 sdk/react/dist/
 _debug_test_bots/
+_stress_test_bots/

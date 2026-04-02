@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,26 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
+
+/**
+ * Module-level cache for parseLogLine results.
+ * Avoids re-parsing the same log content string on every render.
+ * Capped at 5000 entries to prevent unbounded memory growth.
+ */
+const parseLogLineCache = new Map<string, ReturnType<typeof parseLogLine>>();
+function cachedParseLogLine(content: string) {
+  let result = parseLogLineCache.get(content);
+  if (result === undefined) {
+    result = parseLogLine(content);
+    parseLogLineCache.set(content, result);
+    // Prevent unbounded cache growth
+    if (parseLogLineCache.size > 5000) {
+      const firstKey = parseLogLineCache.keys().next().value;
+      if (firstKey !== undefined) parseLogLineCache.delete(firstKey);
+    }
+  }
+  return result;
+}
 
 export interface LogEntry {
   date: string;
@@ -87,8 +107,8 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> =
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
 
-    // Use the event parser to get structured data
-    const event = parseLogLine(log.content);
+    // Use the event parser to get structured data (cached)
+    const event = cachedParseLogLine(log.content);
     const message = typeof event.data === "string" ? event.data : log.content;
     const level = event.level || "INFO";
     const ts = formatTimestamp(event.timestamp);
@@ -201,7 +221,7 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> =
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
 
-    const event = parseLogLine(log.content);
+    const event = cachedParseLogLine(log.content);
 
     if (!isMetricEvent(event)) {
       return <LogEntryComponent log={log} index={0} />;
@@ -323,8 +343,8 @@ MetricEntryComponent.displayName = "MetricEntryComponent";
  */
 const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = React.memo(
   ({ log, index }) => {
-    // Check if this is a metric by trying to parse
-    const event = parseLogLine(log.content);
+    // Check if this is a metric by trying to parse (cached)
+    const event = cachedParseLogLine(log.content);
 
     if (isMetricEvent(event)) {
       return <MetricEntryComponent log={log} index={index} />;
@@ -426,55 +446,60 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  // Memoize filtered + ordered logs
+  // Step 1: filter logs (only recomputes when logs or searchQuery change)
   const filteredLogs = useMemo(() => {
-    const filtered =
-      searchQuery === ""
-        ? logs
-        : logs.filter((log) =>
-            log.content.toLowerCase().includes(searchQuery.toLowerCase()),
-          );
-    return newestFirst ? [...filtered].reverse() : filtered;
-  }, [logs, searchQuery, newestFirst]);
+    if (searchQuery === "") return logs;
+    return logs.filter((log) =>
+      log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [logs, searchQuery]);
+
+  // Step 2: reverse for display order (recomputes when filteredLogs or newestFirst change)
+  const displayLogs = useMemo(() => {
+    return newestFirst ? [...filteredLogs].reverse() : filteredLogs;
+  }, [filteredLogs, newestFirst]);
 
   // In newest-first mode, auto-scroll to top when new logs arrive
   useEffect(() => {
     if (
       newestFirst &&
       autoScroll &&
-      filteredLogs.length > prevLogCountRef.current
+      displayLogs.length > prevLogCountRef.current
     ) {
       virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "smooth" });
     }
-    prevLogCountRef.current = filteredLogs.length;
-  }, [filteredLogs.length, newestFirst, autoScroll, isUserAtTop]);
+    prevLogCountRef.current = displayLogs.length;
+  }, [displayLogs.length, newestFirst, autoScroll, isUserAtTop]);
 
-  const handleDateChange = (value: string) => {
-    setSelectedDate(value);
-    if (value) {
-      onDateChange(value.replace(/-/g, ""));
-      setDateRange({ start: "", end: "" });
-    } else {
-      onDateChange(null);
-    }
-  };
+  const handleDateChange = useCallback(
+    (value: string) => {
+      setSelectedDate(value);
+      if (value) {
+        onDateChange(value.replace(/-/g, ""));
+        setDateRange({ start: "", end: "" });
+      } else {
+        onDateChange(null);
+      }
+    },
+    [onDateChange],
+  );
 
-  const handleDateRangeChange = () => {
-    if (dateRange.start && dateRange.end) {
-      onDateRangeChange(
-        dateRange.start.replace(/-/g, ""),
-        dateRange.end.replace(/-/g, ""),
-      );
-      setSelectedDate("");
-    }
-  };
+  const handleDateRangeChange = useCallback(
+    (start: string, end: string) => {
+      if (start && end) {
+        onDateRangeChange(start.replace(/-/g, ""), end.replace(/-/g, ""));
+        setSelectedDate("");
+      }
+    },
+    [onDateRangeChange],
+  );
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchQuery("");
     setSelectedDate("");
     setDateRange({ start: "", end: "" });
     onDateChange(null);
-  };
+  }, [onDateChange]);
 
   return (
     <div
@@ -502,7 +527,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                 variant="outline"
                 className="text-xs bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-800 text-green-600 dark:text-green-400"
               >
-                {filteredLogs.length} entries
+                {displayLogs.length} entries
               </Badge>
               <span className="ml-2">
                 <ConnectionStatusIndicator
@@ -637,9 +662,13 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                   <Input
                     type="date"
                     value={dateRange.start}
-                    onChange={(e) =>
-                      setDateRange({ ...dateRange, start: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const nextStart = e.target.value;
+                      setDateRange((prev) => ({ ...prev, start: nextStart }));
+                      if (nextStart && dateRange.end) {
+                        handleDateRangeChange(nextStart, dateRange.end);
+                      }
+                    }}
                   />
                 </div>
                 <div>
@@ -650,9 +679,10 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                     type="date"
                     value={dateRange.end}
                     onChange={(e) => {
-                      setDateRange({ ...dateRange, end: e.target.value });
-                      if (e.target.value && dateRange.start) {
-                        handleDateRangeChange();
+                      const nextEnd = e.target.value;
+                      setDateRange((prev) => ({ ...prev, end: nextEnd }));
+                      if (nextEnd && dateRange.start) {
+                        handleDateRangeChange(dateRange.start, nextEnd);
                       }
                     }}
                   />
@@ -682,7 +712,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           <div className="flex items-center justify-center h-32">
             <RefreshCw className="h-6 w-6 animate-spin text-gray-500 dark:text-green-500" />
           </div>
-        ) : filteredLogs.length === 0 ? (
+        ) : displayLogs.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-gray-500 dark:text-green-600 font-mono text-sm">
             {logs.length === 0
               ? "> Waiting for logs..."
@@ -691,8 +721,8 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
         ) : (
           <Virtuoso
             ref={virtuosoRef}
-            data={filteredLogs}
-            overscan={200}
+            data={displayLogs}
+            overscan={50}
             followOutput={!newestFirst && autoScroll ? "smooth" : false}
             atBottomStateChange={(atBottom) => setIsUserAtBottom(atBottom)}
             atTopStateChange={(atTop) => setIsUserAtTop(atTop)}
