@@ -19,6 +19,11 @@ import { useToast } from "@/hooks/use-toast";
 import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
 import { ConsoleInterface } from "@/components/bot/console-interface";
 import {
+  IntervalPicker,
+  IntervalValue,
+  DEFAULT_INTERVAL,
+} from "@/components/bot/interval-picker";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -72,6 +77,9 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const mediaQuery = useMediaQuery("(min-width: 1280px)");
   const isMobile = mediaQuery === null ? null : !mediaQuery;
 
+  // Interval picker state (shared by dashboard + console)
+  const [interval, setInterval_] = useState<IntervalValue>(DEFAULT_INTERVAL);
+
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
   const hookBotId = bot !== null ? botId : "";
@@ -88,6 +96,14 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   });
 
   const activeHook = useStreaming ? streamHook : pollingHook;
+
+  const handleIntervalChange = (val: IntervalValue) => {
+    setInterval_(val);
+    // Push the new range into the active log hook so it re-fetches
+    const startDate = val.start.slice(0, 10).replace(/-/g, "");
+    const endDate = val.end.slice(0, 10).replace(/-/g, "");
+    activeHook.setDateRangeFilter(startDate, endDate);
+  };
 
   const {
     logs,
@@ -410,6 +426,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           onDelete={handleDeleteBot}
           onCopyConfig={copyToClipboard}
           onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
+          interval={interval}
+          onIntervalChange={handleIntervalChange}
         />
         {cliUpdateModal}
       </>
@@ -499,10 +517,15 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           </div>
         </div>
 
+        {/* Interval Picker */}
+        <div className="px-4 lg:px-6">
+          <IntervalPicker value={interval} onChange={handleIntervalChange} />
+        </div>
+
         {/* Main Content - Dashboard and Console side by side */}
         <div
           className="flex flex-row px-4 gap-4 flex-1 min-h-0"
-          style={{ height: "calc(100vh - 12rem)" }}
+          style={{ height: "calc(100vh - 14rem)" }}
         >
           {/* Dashboard Area - 60% */}
           <div className="w-[60%] rounded-lg border overflow-auto">
@@ -511,6 +534,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 key={botId}
                 botId={botId}
                 customBotId={customBotId}
+                version={bot.config.version}
+                dateRange={{ start: interval.start, end: interval.end }}
                 className=""
               />
             ) : (

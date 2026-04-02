@@ -16,6 +16,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
 import { ConsoleInterface } from "@/components/bot/console-interface";
+import {
+  IntervalPicker,
+  IntervalValue,
+} from "@/components/bot/interval-picker";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 import {
   AlertDialog,
@@ -57,6 +61,8 @@ interface MobileBotDetailProps {
   onDelete: () => void;
   onCopyConfig: () => void;
   onOpenUpdateModal: () => void;
+  interval: IntervalValue;
+  onIntervalChange: (value: IntervalValue) => void;
 }
 
 export function MobileBotDetail({
@@ -81,6 +87,8 @@ export function MobileBotDetail({
   onDelete,
   onCopyConfig,
   onOpenUpdateModal,
+  interval,
+  onIntervalChange,
 }: MobileBotDetailProps) {
   const router = useRouter();
 
@@ -112,6 +120,11 @@ export function MobileBotDetail({
         </div>
       </div>
 
+      {/* Interval Picker */}
+      <div className="px-3 py-2 border-b">
+        <IntervalPicker value={interval} onChange={onIntervalChange} />
+      </div>
+
       {/* Tabbed content */}
       <Tabs defaultValue="dashboard" className="flex-1 flex flex-col min-h-0">
         <TabsList className="w-full rounded-none border-b bg-transparent h-10 flex-shrink-0">
@@ -132,6 +145,8 @@ export function MobileBotDetail({
               key={botId}
               botId={botId}
               customBotId={customBotId}
+              version={bot.config.version}
+              dateRange={{ start: interval.start, end: interval.end }}
               className=""
             />
           ) : (
