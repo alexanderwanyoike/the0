@@ -13,6 +13,7 @@ export interface LogsQuery {
   dateRange?: string;
   limit: number;
   offset: number;
+  type?: "all" | "metrics";
 }
 
 export interface LogEntry {
@@ -56,61 +57,74 @@ export class LogsService {
     }
 
     try {
-      const logEntries: LogEntry[] = [];
+      const entries: LogEntry[] = [];
+      const skipped = { count: 0 };
 
       for (const date of dates) {
         const logPath = `logs/${botId}/${date}.log`;
-        const logContent = await this.getLogContent(logPath);
-
-        if (logContent.success && logContent.data) {
-          logEntries.push({
-            date,
-            content: logContent.data,
-          });
-        }
+        await this.streamFilteredLogs(logPath, date, query, entries, skipped);
+        if (entries.length >= query.limit) break;
       }
 
-      // Apply pagination
-      const paginatedLogs = logEntries.slice(
-        query.offset,
-        query.offset + query.limit,
-      );
-
-      return Ok(paginatedLogs);
+      return Ok(entries);
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error fetching logs");
       return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
   }
 
-  private async getLogContent(
+  private async streamFilteredLogs(
     logPath: string,
-  ): Promise<Result<string, string>> {
+    logDate: string,
+    query: LogsQuery,
+    entries: LogEntry[],
+    skipped: { count: number },
+  ): Promise<void> {
+    let stream: NodeJS.ReadableStream;
     try {
-      // Check if object exists
-      try {
-        await this.minioClient.statObject(this.logBucket, logPath);
-      } catch (error: unknown) {
-        if (hasErrorCode(error) && error.code === "NotFound") {
-          return Ok(""); // Return empty content if log file doesn't exist
-        }
-        throw error;
-      }
-
-      // Get the object
-      const stream = await this.minioClient.getObject(this.logBucket, logPath);
-
-      // Convert stream to string
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
-      const content = Buffer.concat(chunks).toString("utf-8");
-
-      return Ok(content);
+      await this.minioClient.statObject(this.logBucket, logPath);
+      stream = await this.minioClient.getObject(this.logBucket, logPath);
     } catch (error: unknown) {
-      this.logger.error({ err: error, logPath }, "Error downloading log file");
-      return Failure(`Failed to download log file: ${errorMessage(error)}`);
+      if (hasErrorCode(error) && error.code === "NotFound") return;
+      throw error;
+    }
+
+    let leftover = "";
+    for await (const chunk of stream) {
+      const text = leftover + chunk.toString("utf-8");
+      const lines = text.split("\n");
+      leftover = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        // Filter by type
+        if (query.type === "metrics" && !line.includes('"_metric"')) continue;
+
+        // Handle offset
+        if (skipped.count < query.offset) {
+          skipped.count++;
+          continue;
+        }
+
+        entries.push({ date: logDate, content: line });
+
+        if (entries.length >= query.limit) {
+          (stream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.();
+          return;
+        }
+      }
+    }
+
+    // Handle leftover line (content after last newline)
+    if (leftover.trim()) {
+      if (query.type !== "metrics" || leftover.includes('"_metric"')) {
+        if (skipped.count < query.offset) {
+          skipped.count++;
+        } else if (entries.length < query.limit) {
+          entries.push({ date: logDate, content: leftover });
+        }
+      }
     }
   }
 
