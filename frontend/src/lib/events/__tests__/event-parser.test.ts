@@ -121,6 +121,118 @@ describe("event-parser", () => {
     });
   });
 
+  describe("parseLogLine with API timestamp (NDJSON format)", () => {
+    it("should parse NDJSON metric with API timestamp", () => {
+      const content =
+        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
+      const event = parseLogLine(content, "2026-04-01T10:00:00Z");
+
+      expect(event.type).toBe("metric");
+      expect(event.metricType).toBe("price");
+      expect(event.data).toEqual({
+        _metric: "price",
+        value: 42,
+        timestamp: "2026-04-01T10:00:00Z",
+      });
+      expect(event.timestamp).toEqual(new Date("2026-04-01T10:00:00Z"));
+    });
+
+    it("should parse extracted message from NDJSON with API timestamp", () => {
+      const content = "INFO:main:Starting bot";
+      const event = parseLogLine(content, "2026-04-01T10:00:00Z");
+
+      expect(event.type).toBe("log");
+      expect(event.data).toBe("INFO:main:Starting bot");
+      expect(event.timestamp).toEqual(new Date("2026-04-01T10:00:00Z"));
+    });
+
+    it("should parse old bracket format with null timestamp", () => {
+      const content = "[2026-03-30 13:00:26] INFO:main:Starting bot";
+      const event = parseLogLine(content, null);
+
+      expect(event.type).toBe("log");
+      expect(event.timestamp).toEqual(new Date("2026-03-30T13:00:26"));
+      expect(event.data).toBe("INFO:main:Starting bot");
+    });
+
+    it("should parse old plain text with null timestamp", () => {
+      const content = "INFO:main:Quotes: bid=40.09";
+      const event = parseLogLine(content, null);
+
+      expect(event.type).toBe("log");
+      expect(event.data).toBe("INFO:main:Quotes: bid=40.09");
+      expect(event.timestamp).toBeNull();
+    });
+
+    it("should prefer API timestamp over bracket timestamp in content", () => {
+      const content = "[2026-03-30 13:00:26] INFO:main:test";
+      const event = parseLogLine(content, "2026-04-01T10:00:00Z");
+
+      expect(event.timestamp).toEqual(new Date("2026-04-01T10:00:00Z"));
+      // Content should still be stripped of the bracket prefix
+      expect(event.data).toBe("INFO:main:test");
+    });
+
+    it("should extract log level from message content with API timestamp", () => {
+      const event = parseLogLine(
+        "INFO:main:Starting",
+        "2026-04-01T10:00:00Z",
+      );
+
+      expect(event.level).toBe("INFO");
+      expect(event.timestamp).toEqual(new Date("2026-04-01T10:00:00Z"));
+    });
+
+    it("should handle structured JSON log with API timestamp", () => {
+      const content =
+        '{"level": "warn", "msg": "Connection slow", "time": 1735312800000}';
+      const event = parseLogLine(content, "2026-04-01T10:00:00Z");
+
+      expect(event.type).toBe("log");
+      expect(event.data).toBe("Connection slow");
+      expect(event.level).toBe("WARN");
+      // API timestamp takes precedence over structured log timestamp
+      expect(event.timestamp).toEqual(new Date("2026-04-01T10:00:00Z"));
+    });
+
+    it("should use structured log timestamp when API timestamp is null", () => {
+      const content =
+        '{"level": "info", "msg": "Test", "time": 1735312800000}';
+      const event = parseLogLine(content, null);
+
+      expect(event.type).toBe("log");
+      expect(event.timestamp).toEqual(new Date(1735312800000));
+    });
+
+    it("should handle undefined timestamp (backward compat with old callers)", () => {
+      const content = "[2026-03-30 13:00:26] INFO:main:Starting bot";
+      // Call without the second argument at all (old signature)
+      const event = parseLogLine(content);
+
+      expect(event.type).toBe("log");
+      expect(event.timestamp).toEqual(new Date("2026-03-30T13:00:26"));
+      expect(event.data).toBe("INFO:main:Starting bot");
+    });
+
+    it("should handle metric JSON without bracket prefix and API timestamp", () => {
+      const content = '{"_metric":"portfolio_value","value":10000}';
+      const event = parseLogLine(content, "2026-04-01T12:00:00Z");
+
+      expect(event.type).toBe("metric");
+      expect(event.metricType).toBe("portfolio_value");
+      expect(event.timestamp).toEqual(new Date("2026-04-01T12:00:00Z"));
+    });
+
+    it("should fall back to null timestamp when neither API nor content has one", () => {
+      const content = "Just some plain text";
+      const event = parseLogLine(content, null);
+
+      expect(event.type).toBe("log");
+      expect(event.timestamp).toBeNull();
+      expect(event.data).toBe("Just some plain text");
+    });
+  });
+
   describe("parseEvents", () => {
     it("should parse multiple log entries from raw log data", () => {
       const logs: RawLogEntry[] = [

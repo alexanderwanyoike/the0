@@ -56,6 +56,7 @@ describe("McpService", () => {
   const mockLogEntry = {
     date: "20251202",
     content: "Bot executed successfully",
+    timestamp: "2025-12-02T10:00:00Z",
   };
 
   beforeEach(async () => {
@@ -328,9 +329,9 @@ describe("McpService", () => {
 
       it("should count errors in logs", async () => {
         const logsWithErrors = [
-          { date: "20251202", content: "something went wrong with error" },
-          { date: "20251202", content: "success message" },
-          { date: "20251202", content: "task failed to complete" },
+          { date: "20251202", content: "something went wrong with error", timestamp: "2025-12-02T10:00:00Z" },
+          { date: "20251202", content: "success message", timestamp: "2025-12-02T10:01:00Z" },
+          { date: "20251202", content: "task failed to complete", timestamp: "2025-12-02T10:02:00Z" },
         ];
         logsService.getLogs.mockResolvedValue(Ok(logsWithErrors));
 

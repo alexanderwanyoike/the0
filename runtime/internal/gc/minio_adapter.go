@@ -30,6 +30,23 @@ func (m *minioAdapter) ListObjectNames(ctx context.Context, bucket, prefix strin
 	return names, nil
 }
 
+func (m *minioAdapter) ListObjectsWithInfo(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error) {
+	var objects []ObjectInfo
+	for obj := range m.client.ListObjects(ctx, bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		objects = append(objects, ObjectInfo{
+			Name:         obj.Key,
+			LastModified: obj.LastModified,
+		})
+	}
+	return objects, nil
+}
+
 func (m *minioAdapter) RemoveObject(ctx context.Context, bucket, name string) error {
 	return m.client.RemoveObject(ctx, bucket, name, minio.RemoveObjectOptions{})
 }
