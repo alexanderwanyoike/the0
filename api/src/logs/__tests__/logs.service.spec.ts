@@ -85,14 +85,17 @@ describe("LogsService", () => {
       expect(result.data![0]).toEqual({
         date: "20260401",
         content: '{"level":"info","msg":"started"}',
+        timestamp: null,
       });
       expect(result.data![1]).toEqual({
         date: "20260401",
         content: '{"level":"info","msg":"running"}',
+        timestamp: null,
       });
       expect(result.data![2]).toEqual({
         date: "20260401",
         content: '{"level":"info","msg":"done"}',
+        timestamp: null,
       });
     });
 
@@ -343,6 +346,260 @@ describe("LogsService", () => {
       expect(result.data).toHaveLength(2);
       expect(result.data![0].content).toContain("d1-l2");
       expect(result.data![1].content).toContain("d2-l1");
+    });
+  });
+
+  describe("getLogs - JSON-based metrics filtering", () => {
+    it("should filter metrics using JSON parsing not string matching", async () => {
+      // This line contains the text _metric in a message but is NOT a metric line
+      const lines = [
+        '{"timestamp":"2026-03-30T13:00:26Z","message":"check _metric docs"}',
+        '{"_metric":true,"name":"pnl","value":42}',
+        '{"timestamp":"2026-03-30T13:00:27Z","message":"see _metric reference"}',
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      // Only the actual metric line should be returned, not the ones that
+      // merely contain the string "_metric" in their message text
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0].content).toContain('"name":"pnl"');
+    });
+
+    it("should skip non-JSON lines when type=metrics", async () => {
+      const lines = [
+        "[2026-03-30 13:00:26] INFO:main:Starting bot",
+        '{"_metric":true,"name":"pnl","value":42}',
+        "plain text log line with no structure",
+        "[2026-03-30 13:00:27] ERROR:main:Something failed",
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0].content).toContain('"name":"pnl"');
+    });
+
+    it("should return old format lines when type=all", async () => {
+      const lines = [
+        "[2026-03-30 13:00:26] INFO:main:Starting bot",
+        '{"level":"info","msg":"json line"}',
+        "plain text log line",
+        '{"_metric":true,"name":"pnl","value":42}',
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        type: "all",
+      });
+
+      expect(result.success).toBe(true);
+      // All lines should be returned regardless of format
+      expect(result.data).toHaveLength(4);
+      expect(result.data![0].content).toBe(
+        "[2026-03-30 13:00:26] INFO:main:Starting bot",
+      );
+      expect(result.data![0].timestamp).toBeNull();
+      expect(result.data![1].content).toBe(
+        '{"level":"info","msg":"json line"}',
+      );
+      expect(result.data![1].timestamp).toBeNull();
+      expect(result.data![2].content).toBe("plain text log line");
+      expect(result.data![2].timestamp).toBeNull();
+      expect(result.data![3].content).toContain('"_metric"');
+      expect(result.data![3].timestamp).toBeNull();
+    });
+
+    it("should handle leftover line with JSON-based metrics filtering", async () => {
+      // No trailing newline, so the metric line becomes leftover
+      const content =
+        '{"level":"info","msg":"check _metric docs"}\n{"_metric":true,"name":"sharpe","value":1.5}';
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(content));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      // The first line mentions _metric in text but isn't a metric;
+      // the leftover (second line) IS a real metric
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0].content).toContain('"name":"sharpe"');
+    });
+
+    it("should skip non-JSON leftover line when type=metrics", async () => {
+      // The leftover is a plain text line
+      const content =
+        '{"_metric":true,"name":"pnl","value":42}\n[2026-03-30 13:00:26] INFO:main:done';
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(content));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0].content).toContain('"name":"pnl"');
+    });
+  });
+
+  describe("getLogs - line normalization", () => {
+    it("should normalize NDJSON wrapped text with extracted message and timestamp", async () => {
+      const lines = [
+        '{"timestamp":"2026-03-30T13:00:26Z","message":"INFO:main:Starting bot"}',
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260330",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0]).toEqual({
+        date: "20260330",
+        content: "INFO:main:Starting bot",
+        timestamp: "2026-03-30T13:00:26Z",
+      });
+    });
+
+    it("should normalize metric lines keeping full JSON as content with timestamp", async () => {
+      const metricLine =
+        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
+      const lines = [metricLine].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0]).toEqual({
+        date: "20260401",
+        content: metricLine,
+        timestamp: "2026-04-01T10:00:00Z",
+      });
+    });
+
+    it("should handle old format plain text with null timestamp", async () => {
+      const lines = [
+        "[2026-03-30 13:00:26] INFO:main:Starting bot",
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260330",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0]).toEqual({
+        date: "20260330",
+        content: "[2026-03-30 13:00:26] INFO:main:Starting bot",
+        timestamp: null,
+      });
+    });
+
+    it("should filter metrics using JSON parsing not string matching", async () => {
+      const lines = [
+        '{"timestamp":"2026-03-30T13:00:26Z","message":"check _metric docs"}',
+        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}',
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      // Only the real metric line should be returned
+      expect(result.data).toHaveLength(1);
+      expect(result.data![0].content).toContain('"_metric"');
+      expect(result.data![0].timestamp).toBe("2026-04-01T10:00:00Z");
+    });
+
+    it("should handle mixed old and new format lines", async () => {
+      const metricLine =
+        '{"_metric":"sharpe","value":1.5,"timestamp":"2026-04-01T10:05:00Z"}';
+      const lines = [
+        "[2026-03-30 13:00:26] INFO:main:Starting bot",
+        '{"timestamp":"2026-03-30T13:00:27Z","message":"Running strategy"}',
+        metricLine,
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260330",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(3);
+
+      // Old format: content as-is, timestamp null
+      expect(result.data![0]).toEqual({
+        date: "20260330",
+        content: "[2026-03-30 13:00:26] INFO:main:Starting bot",
+        timestamp: null,
+      });
+
+      // NDJSON wrapped text: extracted message, extracted timestamp
+      expect(result.data![1]).toEqual({
+        date: "20260330",
+        content: "Running strategy",
+        timestamp: "2026-03-30T13:00:27Z",
+      });
+
+      // Metric line: full JSON as content, extracted timestamp
+      expect(result.data![2]).toEqual({
+        date: "20260330",
+        content: metricLine,
+        timestamp: "2026-04-01T10:05:00Z",
+      });
     });
   });
 
