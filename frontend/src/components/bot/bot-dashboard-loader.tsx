@@ -178,11 +178,12 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
     setBotDashboard(null);
 
     const frontendUrl = `/api/custom-bots/frontend/${encodeURIComponent(customBotId)}`;
-    const cacheKey = `the0-bundle-${customBotId}-${version || "latest"}`;
+    // Only cache when version is known - otherwise we can't invalidate
+    const cacheKey = version ? `the0-bundle-${customBotId}-${version}` : null;
 
     const importBundle = async (): Promise<DashboardComponent> => {
-      // Try localStorage cache first
-      try {
+      // Try localStorage cache first (only if versioned)
+      if (cacheKey) try {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           const blob = new Blob([cached], { type: "application/javascript" });
@@ -203,7 +204,7 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
       const res = await fetch(frontendUrl);
       if (!res.ok) throw new Error(`Failed to fetch bundle: ${res.statusText}`);
       const text = await res.text();
-      try { localStorage.setItem(cacheKey, text); } catch { /* quota exceeded */ }
+      if (cacheKey) try { localStorage.setItem(cacheKey, text); } catch { /* quota exceeded */ }
 
       const blob = new Blob([text], { type: "application/javascript" });
       const url = URL.createObjectURL(blob);
@@ -219,6 +220,7 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
     const TIMEOUT_MS = 10_000;
     const timeoutId = setTimeout(() => {
       if (!cancelled) {
+        cancelled = true;
         setLoadError(new Error("Dashboard load timed out"));
         setLoadPhase(null);
       }
