@@ -82,7 +82,7 @@ export const useBotLogs = ({
           searchParams.set("offset", queryParams.offset.toString());
 
         const response = await authFetch(
-          `/api/logs/${botId}?${searchParams.toString()}`,
+          `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
           {
             signal: controller.signal,
           },
@@ -104,7 +104,7 @@ export const useBotLogs = ({
           lines.forEach((line) => {
             expandedLogs.push({
               date: logEntry.date,
-              content: line.trim(),
+              content: line,
             });
           });
         });
@@ -143,7 +143,9 @@ export const useBotLogs = ({
           });
         }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
         abortControllerRef.current = null;
       }
     },
@@ -224,47 +226,39 @@ export const useBotLogs = ({
 
     const blob = new Blob([logText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
+    a.click();
     URL.revokeObjectURL(url);
-
-    toast({
-      description: "Logs exported successfully",
-    });
   }, [logs, botId, toast]);
 
-  // Setup auto-refresh
+  // Lifecycle: reset state, fetch, and set up polling when botId changes
   useEffect(() => {
-    if (autoRefresh && refreshInterval > 0) {
-      intervalRef.current = setInterval(refresh, refreshInterval);
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-      };
+    if (!botId || !user) {
+      setLoading(false);
+      return;
     }
-  }, [autoRefresh, refreshInterval, refresh]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    setLogs([]);
+    setError(null);
+    setQuery(initialQuery);
+    setHasMore(false);
+    setTotal(0);
+    setLoading(true);
 
-  // Cleanup on unmount
-  useEffect(() => {
+    fetchLogs(initialQuery);
+
+    let interval: NodeJS.Timeout | null = null;
+    if (autoRefresh && refreshInterval > 0) {
+      interval = setInterval(() => fetchLogs(), refreshInterval);
+    }
+
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      if (interval) clearInterval(interval);
+      abortControllerRef.current?.abort();
     };
-  }, []);
+  }, [botId, user]);
 
   return {
     logs,

@@ -105,7 +105,7 @@ describe("useBotLogs", () => {
     );
   });
 
-  it("should handle authentication error", async () => {
+  it("should not fetch when user is null", async () => {
     mockUseAuth.mockReturnValue({
       user: null,
     } as any);
@@ -116,7 +116,8 @@ describe("useBotLogs", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.error).toBe("User not authenticated");
+    expect(mockAuthFetch).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
   });
 
   it("should support pagination with loadMore", async () => {
@@ -259,6 +260,153 @@ describe("useBotLogs", () => {
     expect(result.current.logs).toHaveLength(2000);
     expect(result.current.logs[0].content).toBe("Huge 500");
   });
+
+  // ---- Navigation bugs ----
+
+  it("should reset state when botId changes", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ date: "20240101", content: "Bot A log" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result, rerender } = renderHook(
+      ({ id }) => useBotLogs({ botId: id }),
+      { initialProps: { id: "bot-a" } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.loading).toBe(false);
+    });
+
+    rerender({ id: "bot-b" });
+
+    await waitFor(() => {
+      expect(result.current.logs).toEqual([]);
+    });
+  });
+
+  it("should not set loading to false after aborted fetch", async () => {
+    let callCount = 0;
+    mockAuthFetch.mockImplementation(async () => {
+      callCount++;
+      if (callCount <= 1) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ date: "20240101", content: "Bot A" }],
+            total: 1,
+            hasMore: false,
+          }),
+        } as any;
+      }
+      // Hang until aborted
+      return new Promise(() => {});
+    });
+
+    const { result, rerender } = renderHook(
+      ({ id }) => useBotLogs({ botId: id }),
+      { initialProps: { id: "bot-a" } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Switch to bot-b (fetch hangs), then bot-c
+    rerender({ id: "bot-b" });
+
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ date: "20240101", content: "Bot C" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as any);
+
+    rerender({ id: "bot-c" });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.logs[0].content).toBe("Bot C");
+      expect(result.current.loading).toBe(false);
+    });
+  });
+
+  it("should not double-fetch on filter change", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ date: "20240101", content: "Log" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const callsBefore = mockAuthFetch.mock.calls.length;
+
+    act(() => {
+      result.current.setDateFilter("20240101");
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const callsAfter = mockAuthFetch.mock.calls.length;
+    expect(callsAfter - callsBefore).toBe(1);
+  });
+
+  it("should encode botId in URL", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 0, hasMore: false }),
+    } as Response);
+
+    renderHook(() => useBotLogs({ botId: "bot/special&chars" }));
+
+    await waitFor(() => {
+      expect(mockAuthFetch).toHaveBeenCalledWith(
+        expect.stringContaining("bot%2Fspecial%26chars"),
+        expect.any(Object),
+      );
+    });
+  });
+
+  it("should handle rapid botId changes without errors", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 0, hasMore: false }),
+    } as Response);
+
+    const { result, rerender } = renderHook(
+      ({ id }) => useBotLogs({ botId: id }),
+      { initialProps: { id: "bot-a" } },
+    );
+
+    for (let i = 0; i < 5; i++) {
+      rerender({ id: i % 2 === 0 ? "bot-b" : "bot-a" });
+    }
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(result.current.error).toBeNull();
+  });
+
+  // ---- Existing tests ----
 
   it("should build correct URL with query parameters", async () => {
     mockAuthFetch.mockResolvedValue({
