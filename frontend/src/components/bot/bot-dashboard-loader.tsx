@@ -166,10 +166,13 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
 
   useEffect(() => {
     if (!customBotId) {
+      setBotDashboard(null);
+      setLoadError(null);
       setLoadPhase(null);
       return;
     }
 
+    let cancelled = false;
     setLoadPhase("dashboard");
     setLoadError(null);
     setBotDashboard(null);
@@ -177,87 +180,69 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
     const frontendUrl = `/api/custom-bots/frontend/${encodeURIComponent(customBotId)}`;
     const cacheKey = `the0-bundle-${customBotId}-${version || "latest"}`;
 
-    /**
-     * Import the bundle, with localStorage caching.
-     * On cache hit: load from a blob URL.
-     * On miss: fetch as text, cache, then import via blob URL.
-     * Falls back to direct import if localStorage is unavailable.
-     */
     const importBundle = async (): Promise<DashboardComponent> => {
+      // Try localStorage cache first
       try {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
-          const blob = new Blob([cached], {
-            type: "application/javascript",
-          });
+          const blob = new Blob([cached], { type: "application/javascript" });
           const url = URL.createObjectURL(blob);
           try {
             const mod = await import(/* webpackIgnore: true */ url);
-            if (!mod.default)
-              throw new Error("Bundle must export a default component");
+            if (!mod.default) throw new Error("Bundle must export a default component");
             return mod.default;
           } finally {
             URL.revokeObjectURL(url);
           }
         }
       } catch {
-        // localStorage unavailable or blob import failed - continue to fetch
+        // localStorage unavailable or blob import failed
       }
 
-      // Fetch, cache, then import via blob URL
+      // Fetch, cache, then import
+      const res = await fetch(frontendUrl);
+      if (!res.ok) throw new Error(`Failed to fetch bundle: ${res.statusText}`);
+      const text = await res.text();
+      try { localStorage.setItem(cacheKey, text); } catch { /* quota exceeded */ }
+
+      const blob = new Blob([text], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
       try {
-        const res = await fetch(frontendUrl);
-        if (!res.ok)
-          throw new Error(`Failed to fetch bundle: ${res.statusText}`);
-        const text = await res.text();
-
-        // Best-effort cache
-        try {
-          localStorage.setItem(cacheKey, text);
-        } catch {
-          // Quota exceeded or private browsing - ignore
-        }
-
-        const blob = new Blob([text], { type: "application/javascript" });
-        const url = URL.createObjectURL(blob);
-        try {
-          const mod = await import(/* webpackIgnore: true */ url);
-          if (!mod.default)
-            throw new Error("Bundle must export a default component");
-          return mod.default;
-        } finally {
-          URL.revokeObjectURL(url);
-        }
-      } catch (err) {
-        // Last resort: direct import without caching
-        const mod = await import(/* webpackIgnore: true */ frontendUrl);
-        if (!mod.default)
-          throw new Error("Bundle must export a default component");
+        const mod = await import(/* webpackIgnore: true */ url);
+        if (!mod.default) throw new Error("Bundle must export a default component");
         return mod.default;
+      } finally {
+        URL.revokeObjectURL(url);
       }
     };
 
-    const loadWithTimeout = async () => {
-      const TIMEOUT_MS = 10_000;
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Dashboard load timed out")),
-          TIMEOUT_MS,
-        ),
-      );
-      return Promise.race([importBundle(), timeout]);
-    };
+    const TIMEOUT_MS = 10_000;
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setLoadError(new Error("Dashboard load timed out"));
+        setLoadPhase(null);
+      }
+    }, TIMEOUT_MS);
 
-    loadWithTimeout()
+    importBundle()
       .then((component) => {
+        if (cancelled) return;
+        clearTimeout(timeoutId);
         setBotDashboard(() => component);
         setLoadPhase("events");
       })
       .catch((err) => {
+        if (cancelled) return;
+        clearTimeout(timeoutId);
         console.error("Failed to load bot frontend:", err);
         setLoadError(err);
         setLoadPhase(null);
       });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [customBotId, version]);
 
   // Loading state: show phase

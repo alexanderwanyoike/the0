@@ -7,8 +7,8 @@ import { Clock } from "lucide-react";
 
 export interface IntervalValue {
   label: string;
-  start: string; // ISO date string
-  end: string; // ISO date string
+  start: string; // YYYYMMDD format
+  end: string; // YYYYMMDD format
 }
 
 interface IntervalPickerProps {
@@ -16,27 +16,30 @@ interface IntervalPickerProps {
   onChange: (value: IntervalValue) => void;
 }
 
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 const PRESETS = [
-  { label: "15m", duration: 15 * 60 * 1000 },
-  { label: "1h", duration: 60 * 60 * 1000 },
-  { label: "6h", duration: 6 * 60 * 60 * 1000 },
-  { label: "1d", duration: 24 * 60 * 60 * 1000 },
+  { label: "1d", days: 1 },
+  { label: "3d", days: 3 },
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
 ] as const;
 
-export function computeInterval(label: string, duration: number): IntervalValue {
+export function computeInterval(label: string, days: number): IntervalValue {
   const now = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - days + 1);
   return {
     label,
-    start: new Date(now.getTime() - duration).toISOString(),
-    end: now.toISOString(),
+    start: formatDate(start),
+    end: formatDate(now),
   };
 }
 
 /** Default interval: last 1 day */
-export const DEFAULT_INTERVAL: IntervalValue = computeInterval(
-  "1d",
-  24 * 60 * 60 * 1000,
-);
+export const DEFAULT_INTERVAL: IntervalValue = computeInterval("1d", 1);
 
 export function IntervalPicker({ value, onChange }: IntervalPickerProps) {
   return (
@@ -52,7 +55,7 @@ export function IntervalPicker({ value, onChange }: IntervalPickerProps) {
             value.label === preset.label &&
               "bg-secondary text-secondary-foreground",
           )}
-          onClick={() => onChange(computeInterval(preset.label, preset.duration))}
+          onClick={() => onChange(computeInterval(preset.label, preset.days))}
         >
           {preset.label}
         </Button>
