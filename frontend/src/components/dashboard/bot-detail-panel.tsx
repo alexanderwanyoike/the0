@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import moment from "moment";
@@ -257,6 +257,12 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
     return filterSensitiveData(configCopy);
   };
 
+  // Memoize the masked config to avoid JSON.parse(JSON.stringify()) on every render
+  const maskedConfig = useMemo(
+    () => (bot ? getMaskedConfig(bot.config) : null),
+    [bot?.config],
+  );
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -267,7 +273,6 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   if (!bot) return null;
 
-  const maskedConfig = getMaskedConfig(bot.config);
   const customBotId = bot.customBotId;
 
   // Shared CLI update modal (used by both mobile and desktop)

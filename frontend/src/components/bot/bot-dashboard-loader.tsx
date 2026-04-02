@@ -102,8 +102,9 @@ type DashboardComponent = ComponentType<Record<string, never>>;
 /**
  * Loads and renders custom bot dashboard dynamically.
  * Shows error state if load fails.
+ * Wrapped in React.memo to avoid re-renders from parent state changes.
  */
-export function BotDashboardLoader({
+export const BotDashboardLoader = React.memo(function BotDashboardLoader({
   botId,
   customBotId,
   className,
@@ -202,4 +203,4 @@ export function BotDashboardLoader({
       <p>No dashboard available</p>
     </div>
   );
-}
+});
