@@ -173,8 +173,8 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, now.Format("20060102"))
 	m.logger.Debug("Attempting to append logs to MinIO", "path", dailyKey, "bucket", m.logsBucket)
 
-	// Format the new log entry with a timestamp prefix.
-	content := fmt.Sprintf("[%s] %s\n", now.Format("2006-01-02 15:04:05"), strings.TrimSpace(logs))
+	// Format the new log entry as NDJSON with guaranteed timestamp fields.
+	content := FormatLogChunk(logs, now)
 
 	// Upload the new chunk as a temporary object.
 	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, now.UnixNano())
@@ -185,14 +185,14 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	if err != nil {
 		return fmt.Errorf("upload temp chunk: %w", err)
 	}
-	// Clean up the temp object after the function returns. Run in a goroutine
-	// so it doesn't hold the bot mutex during the RemoveObject call.
+	// Clean up the temp object after the compose/copy completes. Uses a fresh
+	// context so cleanup succeeds even if the caller's context was cancelled.
 	defer func() {
-		go func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = m.client.RemoveObject(cleanupCtx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{})
-		}()
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := m.client.RemoveObject(cleanupCtx, m.logsBucket, tmpKey, minio.RemoveObjectOptions{}); err != nil {
+			m.logger.Warn("Failed to clean up temp object", "key", tmpKey, "error", err)
+		}
 	}()
 
 	// Check whether the daily file already exists and how large it is.

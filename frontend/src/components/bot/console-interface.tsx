@@ -34,11 +34,15 @@ import { parseLogLine, isMetricEvent } from "@/lib/events/event-parser";
  * Capped at 5000 entries to prevent unbounded memory growth.
  */
 const parseLogLineCache = new Map<string, ReturnType<typeof parseLogLine>>();
-function cachedParseLogLine(content: string) {
-  let result = parseLogLineCache.get(content);
+function cachedParseLogLine(
+  content: string,
+  timestamp?: string | null,
+) {
+  const cacheKey = timestamp ? `${timestamp}\0${content}` : content;
+  let result = parseLogLineCache.get(cacheKey);
   if (result === undefined) {
-    result = parseLogLine(content);
-    parseLogLineCache.set(content, result);
+    result = parseLogLine(content, timestamp);
+    parseLogLineCache.set(cacheKey, result);
     // Prevent unbounded cache growth
     if (parseLogLineCache.size > 5000) {
       const firstKey = parseLogLineCache.keys().next().value;
@@ -51,6 +55,8 @@ function cachedParseLogLine(content: string) {
 export interface LogEntry {
   date: string;
   content: string;
+  /** API-extracted timestamp from NDJSON. Null/undefined for old-format logs. */
+  timestamp?: string | null;
 }
 
 interface ConsoleInterfaceProps {
@@ -108,7 +114,7 @@ const LogEntryComponent: React.FC<{ log: LogEntry; index: number }> =
     const [expanded, setExpanded] = useState(false);
 
     // Use the event parser to get structured data (cached)
-    const event = cachedParseLogLine(log.content);
+    const event = cachedParseLogLine(log.content, log.timestamp);
     const message = typeof event.data === "string" ? event.data : log.content;
     const level = event.level || "INFO";
     const ts = formatTimestamp(event.timestamp);
@@ -221,7 +227,7 @@ const MetricEntryComponent: React.FC<{ log: LogEntry; index: number }> =
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
 
-    const event = cachedParseLogLine(log.content);
+    const event = cachedParseLogLine(log.content, log.timestamp);
 
     if (!isMetricEvent(event)) {
       return <LogEntryComponent log={log} index={0} />;
@@ -344,7 +350,7 @@ MetricEntryComponent.displayName = "MetricEntryComponent";
 const SmartLogEntry: React.FC<{ log: LogEntry; index: number }> = React.memo(
   ({ log, index }) => {
     // Check if this is a metric by trying to parse (cached)
-    const event = cachedParseLogLine(log.content);
+    const event = cachedParseLogLine(log.content, log.timestamp);
 
     if (isMetricEvent(event)) {
       return <MetricEntryComponent log={log} index={index} />;

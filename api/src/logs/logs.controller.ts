@@ -74,6 +74,7 @@ export class LogsController {
       dateRange: query.dateRange,
       limit: query.limit || 100,
       offset: query.offset || 0,
+      type: query.type,
     }, user.uid);
 
     if (!result.success) {

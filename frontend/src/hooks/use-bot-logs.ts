@@ -11,6 +11,7 @@ interface LogsQuery {
   dateRange?: string;
   limit?: number;
   offset?: number;
+  type?: string;
 }
 
 interface LogsResponse {
@@ -80,6 +81,7 @@ export const useBotLogs = ({
           searchParams.set("limit", queryParams.limit.toString());
         if (queryParams.offset)
           searchParams.set("offset", queryParams.offset.toString());
+        if (queryParams.type) searchParams.set("type", queryParams.type);
 
         const response = await authFetch(
           `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,

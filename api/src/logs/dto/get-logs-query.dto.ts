@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsInt, Min, Max } from "class-validator";
+import { IsOptional, IsString, IsInt, IsIn, Min, Max } from "class-validator";
 import { Transform } from "class-transformer";
 
 export class GetLogsQueryDto {
@@ -22,4 +22,9 @@ export class GetLogsQueryDto {
   @IsInt()
   @Min(0)
   offset?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["all", "metrics"])
+  type?: "all" | "metrics";
 }

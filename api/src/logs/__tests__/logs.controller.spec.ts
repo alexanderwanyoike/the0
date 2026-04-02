@@ -87,6 +87,54 @@ describe("LogsController", () => {
         controller.getLogs("bot-123", { limit: 100, offset: 0 } as any, mockUser),
       ).rejects.toThrow("Invalid date format");
     });
+
+    it("should pass type parameter to service", async () => {
+      const mockLogs = [
+        { date: "20260210", content: '{"_metric":true,"value":42}' },
+      ];
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(Ok(mockLogs));
+
+      await controller.getLogs(
+        "bot-123",
+        { limit: 100, offset: 0, type: "metrics" } as any,
+        mockUser,
+      );
+
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+        "bot-123",
+        {
+          date: undefined,
+          dateRange: undefined,
+          limit: 100,
+          offset: 0,
+          type: "metrics",
+        },
+        "user123",
+      );
+    });
+
+    it("should pass type=all parameter to service", async () => {
+      const mockLogs = [{ date: "20260210", content: "some log" }];
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(Ok(mockLogs));
+
+      await controller.getLogs(
+        "bot-123",
+        { limit: 50, offset: 0, type: "all" } as any,
+        mockUser,
+      );
+
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+        "bot-123",
+        {
+          date: undefined,
+          dateRange: undefined,
+          limit: 50,
+          offset: 0,
+          type: "all",
+        },
+        "user123",
+      );
+    });
   });
 
   describe("streamLogs", () => {
