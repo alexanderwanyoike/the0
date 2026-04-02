@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.2
-appVersion: "1.11.3"
+version: 0.7.3
+appVersion: "1.11.4"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,13 +31,7 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: Rewrite SSE log streaming hook for simplicity (760 lines to 429, 13 refs to 5)
-    - kind: fixed
-      description: Reduce rendering overhead in log console (split memos, overscan, parseLogLine cache)
-    - kind: fixed
-      description: Use MinIO server-side ComposeObject for daily log appends to avoid O(file_size) rewrites
-    - kind: changed
-      description: Remove PRP, story, and AI context files from git tracking
+      description: Fix scheduled bot logs navigation hang and stale state on bot switch
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
