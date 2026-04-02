@@ -108,27 +108,27 @@ func TestFormatLogChunk_NoDoubleTimestamp(t *testing.T) {
 func TestFormatLogChunk_RealProductionLogs(t *testing.T) {
 	ts := time.Date(2026, 3, 30, 13, 0, 26, 0, time.UTC)
 
-	// Real production log data (first 20 lines)
-	input := `[2026-03-30 13:00:26] INFO:an_alpaca.alpaca:Using Alpaca paper trading
-INFO:main:[mod5c26cndc6hgl2gsafe1ek] MM run #1 for HAL (alpaca)
-[2026-03-30 13:00:27] INFO:an_alpaca.alpaca:Filtered 2 dust positions (< $1.0)
-[2026-03-30 13:00:27] INFO:an_alpaca.alpaca:Retrieved 3 positions
-INFO:an_alpaca.alpaca:Available cash: $1363939.57, Buying power: $5446956.56
-INFO:an_alpaca.alpaca:Retrieved 0 orders for HAL
-[2026-03-30 13:00:27] INFO:an_alpaca.alpaca:Retrieved 0 orders for HAL
-INFO:an_alpaca.alpaca:Retrieved 0 orders for HAL
-INFO:an_alpaca.alpaca:Fetched 0 candles for HAL (1m)
-INFO:main:Quotes: bid=40.0931, ask=None, spread=33.3bps, regime=Sideways
-INFO:an_alpaca.alpaca:Placing limit buy order for 1.0 HAL
-[2026-03-30 13:00:29] INFO:an_alpaca.alpaca:Buy order placed successfully: 51fe0a1d-2ddf-4116-9ec8-2722c1152960
-INFO:main:Posted BID: 1.0 @ $40.09
-{"_metric": "inventory", "symbol": "HAL", "position_qty": 0, "position_value": 0, "cash": 1363939.57, "equity": 1363939.57, "timestamp": "2026-03-30T13:00:27.141337Z"}
-{"_metric": "staleness", "symbol": "HAL", "mid_drift_bps": 0.0, "stale_rate_5": 0.0, "timestamp": "2026-03-30T13:00:27.141410Z"}
-{"_metric": "quote", "symbol": "HAL", "bid": 40.09307781974383, "ask": null, "spread_bps": 33.327779012033446, "regime": "Sideways", "mid": 40.16, "timestamp": "2026-03-30T13:00:27.631856Z"}
-{"_metric": "momentum", "symbol": "HAL", "spread_multiplier": 1.0, "is_toxic": false, "momentum_bps": 0.0, "trend_3_bps": 0.0, "timestamp": "2026-03-30T13:00:27.631904Z"}
-{"_metric": "as_model", "symbol": "HAL", "reservation_price": 40.16, "mid": 40.16, "skew_from_mid_bps": 0.0, "gamma": 0.1, "timestamp": "2026-03-30T13:00:27.631926Z"}
-{"_metric": "order", "symbol": "HAL", "side": "buy", "price": 40.09307781974383, "size": 1.245019920318725, "status": "posted", "attempts": 1, "reason": null, "timestamp": "2026-03-30T13:00:27.855647Z"}
-{"_metric": "cycle", "symbol": "HAL", "regime": "Sideways", "spread_bps": 33.327779012033446, "orders_posted": 1, "run_count": 1, "timestamp": "2026-03-30T13:00:27.856524Z"}`
+	// Realistic scheduled market-maker bot log format: mix of plain text, bracket-prefixed, and metrics
+	input := `[2026-03-30 13:00:26] INFO:broker.client:Using paper trading
+INFO:main:[abc123def456] MM run #1 for ACME (paper)
+[2026-03-30 13:00:27] INFO:broker.client:Filtered 2 dust positions (< $1.0)
+[2026-03-30 13:00:27] INFO:broker.client:Retrieved 3 positions
+INFO:broker.client:Available cash: $50000.00, Buying power: $100000.00
+INFO:broker.client:Retrieved 0 orders for ACME
+[2026-03-30 13:00:27] INFO:broker.client:Retrieved 0 orders for ACME
+INFO:broker.client:Retrieved 0 orders for ACME
+INFO:broker.client:Fetched 0 candles for ACME (1m)
+INFO:main:Quotes: bid=150.25, ask=None, spread=12.5bps, regime=Sideways
+INFO:broker.client:Placing limit buy order for 1.0 ACME
+[2026-03-30 13:00:29] INFO:broker.client:Buy order placed successfully: aaaabbbb-cccc-dddd-eeee-ffffffffffff
+INFO:main:Posted BID: 1.0 @ $150.25
+{"_metric": "inventory", "symbol": "ACME", "position_qty": 0, "position_value": 0, "cash": 50000.0, "equity": 50000.0, "timestamp": "2026-03-30T13:00:27.141337Z"}
+{"_metric": "staleness", "symbol": "ACME", "mid_drift_bps": 0.0, "stale_rate_5": 0.0, "timestamp": "2026-03-30T13:00:27.141410Z"}
+{"_metric": "quote", "symbol": "ACME", "bid": 150.25, "ask": null, "spread_bps": 12.5, "regime": "Sideways", "mid": 150.30, "timestamp": "2026-03-30T13:00:27.631856Z"}
+{"_metric": "momentum", "symbol": "ACME", "spread_multiplier": 1.0, "is_toxic": false, "momentum_bps": 0.0, "trend_3_bps": 0.0, "timestamp": "2026-03-30T13:00:27.631904Z"}
+{"_metric": "model", "symbol": "ACME", "reservation_price": 150.30, "mid": 150.30, "skew_from_mid_bps": 0.0, "gamma": 0.1, "timestamp": "2026-03-30T13:00:27.631926Z"}
+{"_metric": "order", "symbol": "ACME", "side": "buy", "price": 150.25, "size": 1.5, "status": "posted", "attempts": 1, "reason": null, "timestamp": "2026-03-30T13:00:27.855647Z"}
+{"_metric": "cycle", "symbol": "ACME", "regime": "Sideways", "spread_bps": 12.5, "orders_posted": 1, "run_count": 1, "timestamp": "2026-03-30T13:00:27.856524Z"}`
 
 	output := FormatLogChunk(input, ts)
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
