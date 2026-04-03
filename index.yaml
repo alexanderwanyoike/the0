@@ -4,6 +4,64 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: added
+          description: NDJSON log format with per-line timestamps for all bot output
+        - kind: added
+          description: API streams MinIO logs line-by-line with type=metrics filtering
+        - kind: added
+          description: Interval picker (Live/1d/3d/7d/30d/Custom) for dashboard and console
+        - kind: added
+          description: Bundle caching in localStorage for custom bot frontends
+        - kind: added
+          description: Event parser chain for NDJSON, structured JSON, and legacy formats
+        - kind: fixed
+          description: Synchronous temp file cleanup and GC sweep for stale .tmp- objects
+        - kind: fixed
+          description: Import timeout and loading phase UX for custom bot dashboards
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.12.0
+    created: "2026-04-03T00:00:10.102802969Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 5dc9f4c4b6cfc8f2bc1cd2336e63a6ea71a95685d8e1adc57b0de4d2b300beea
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.7.4/the0-0.7.4.tgz
+    version: 0.7.4
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: fixed
           description: Fix scheduled bot logs navigation hang and stale state on bot switch
       artifacthub.io/images: |
@@ -935,4 +993,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-04-02T19:08:31.843798127Z"
+generated: "2026-04-03T00:00:10.102914247Z"
