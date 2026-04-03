@@ -89,7 +89,8 @@ export class LogsController {
 
     return {
       success: true,
-      data: result.data,
+      data: result.data.entries,
+      hasMore: result.data.hasMore,
       message: "Logs retrieved successfully",
     };
   }
@@ -213,7 +214,7 @@ export class LogsController {
 
     if (historyResult.success && historyResult.data) {
       res.write(
-        `event: history\ndata: ${JSON.stringify(historyResult.data)}\n\n`,
+        `event: history\ndata: ${JSON.stringify(historyResult.data.entries)}\n\n`,
       );
     } else if (!historyResult.success) {
       res.write(

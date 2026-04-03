@@ -80,6 +80,12 @@ interface ConsoleInterfaceProps {
   loadingEarlier?: boolean;
   /** Callback to load earlier logs that were trimmed from the buffer */
   onLoadEarlier?: () => void;
+  /** Whether there are more paginated logs available from the API */
+  hasMore?: boolean;
+  /** Callback to load more paginated logs */
+  loadMore?: () => void;
+  /** Whether more logs are currently being loaded */
+  loadingMore?: boolean;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -436,6 +442,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   hasEarlierLogs,
   loadingEarlier,
   onLoadEarlier,
+  hasMore,
+  loadMore,
+  loadingMore,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
@@ -735,6 +744,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             itemContent={(index, log) => (
               <SmartLogEntry log={log} index={index} />
             )}
+            endReached={hasMore && loadMore ? loadMore : undefined}
             components={{
               Header:
                 hasEarlierLogs && onLoadEarlier && !searchQuery
@@ -757,6 +767,29 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
                               <ScrollText className="h-3 w-3 mr-1" />
                               Load earlier logs
                             </>
+                          )}
+                        </Button>
+                      </div>
+                    )
+                  : undefined,
+              Footer:
+                hasMore && loadMore
+                  ? () => (
+                      <div className="flex justify-center py-2 border-t border-gray-200 dark:border-gray-800">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={loadMore}
+                          disabled={loadingMore}
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                        >
+                          {loadingMore ? (
+                            <>
+                              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            "Load more"
                           )}
                         </Button>
                       </div>

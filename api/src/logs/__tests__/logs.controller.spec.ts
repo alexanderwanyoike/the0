@@ -22,7 +22,7 @@ describe("LogsController", () => {
       getLogs: jest
         .fn()
         .mockResolvedValue(
-          Ok([{ date: "20260210", content: "test log line" }]),
+          Ok({ entries: [{ date: "20260210", content: "test log line" }], hasMore: false }),
         ),
     };
 
@@ -51,7 +51,9 @@ describe("LogsController", () => {
   describe("getLogs", () => {
     it("should return logs successfully", async () => {
       const mockLogs = [{ date: "20260210", content: "test log" }];
-      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(Ok(mockLogs));
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: mockLogs, hasMore: false }),
+      );
 
       const result = await controller.getLogs(
         "bot-123",
@@ -61,6 +63,7 @@ describe("LogsController", () => {
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockLogs);
+      expect(result.hasMore).toBe(false);
       expect(mockLogsService.getLogs).toHaveBeenCalledWith(
         "bot-123",
         { date: undefined, dateRange: undefined, limit: 100, offset: 0 },
@@ -92,7 +95,9 @@ describe("LogsController", () => {
       const mockLogs = [
         { date: "20260210", content: '{"_metric":true,"value":42}' },
       ];
-      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(Ok(mockLogs));
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: mockLogs, hasMore: false }),
+      );
 
       await controller.getLogs(
         "bot-123",
@@ -113,9 +118,67 @@ describe("LogsController", () => {
       );
     });
 
+    it("should return hasMore=true when entries equal limit", async () => {
+      const mockLogs = Array.from({ length: 100 }, (_, i) => ({
+        date: "20260210",
+        content: `log-${i}`,
+      }));
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: mockLogs, hasMore: true }),
+      );
+
+      const result = await controller.getLogs(
+        "bot-123",
+        { limit: 100, offset: 0 } as any,
+        mockUser,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockLogs);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it("should return hasMore=false when entries less than limit", async () => {
+      const mockLogs = [{ date: "20260210", content: "only one" }];
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: mockLogs, hasMore: false }),
+      );
+
+      const result = await controller.getLogs(
+        "bot-123",
+        { limit: 100, offset: 0 } as any,
+        mockUser,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockLogs);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it("should return hasMore=false for metrics queries", async () => {
+      const mockLogs = Array.from({ length: 100 }, (_, i) => ({
+        date: "20260210",
+        content: `{"_metric":true,"value":${i}}`,
+      }));
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: mockLogs, hasMore: false }),
+      );
+
+      const result = await controller.getLogs(
+        "bot-123",
+        { limit: 100, offset: 0, type: "metrics" } as any,
+        mockUser,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.hasMore).toBe(false);
+    });
+
     it("should pass type=all parameter to service", async () => {
       const mockLogs = [{ date: "20260210", content: "some log" }];
-      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(Ok(mockLogs));
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: mockLogs, hasMore: false }),
+      );
 
       await controller.getLogs(
         "bot-123",

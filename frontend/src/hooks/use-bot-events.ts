@@ -85,7 +85,9 @@ export function useBotEvents({
   // Build initial query from dateRange; always request metrics type
   const initialQuery = dateRange
     ? {
-        dateRange: `${dateRange.start}-${dateRange.end}`,
+        dateRange: dateRange.start.includes("T")
+          ? `${dateRange.start}--${dateRange.end}`
+          : `${dateRange.start}-${dateRange.end}`,
         limit: 100,
         offset: 0,
         type: "metrics" as const,

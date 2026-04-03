@@ -33,7 +33,7 @@ export const useBotLogs = ({
   botId,
   autoRefresh = false,
   refreshInterval = 30000, // 30 seconds
-  initialQuery = { limit: 100, offset: 0 },
+  initialQuery = { limit: 2000, offset: 0 },
 }: UseBotLogsProps) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,7 +67,9 @@ export const useBotLogs = ({
         }
 
         const searchParams = new URLSearchParams();
-        if (queryParams.date) {
+        if (queryParams.dateRange) {
+          searchParams.set("dateRange", queryParams.dateRange);
+        } else if (queryParams.date) {
           searchParams.set("date", queryParams.date);
         } else {
           searchParams.set(
@@ -75,8 +77,6 @@ export const useBotLogs = ({
             new Date().toISOString().slice(0, 10).replace(/-/g, ""),
           );
         }
-        if (queryParams.dateRange)
-          searchParams.set("dateRange", queryParams.dateRange);
         if (queryParams.limit)
           searchParams.set("limit", queryParams.limit.toString());
         if (queryParams.offset)
@@ -201,8 +201,10 @@ export const useBotLogs = ({
   // Set date range filter
   const setDateRangeFilter = useCallback(
     (startDate: string, endDate: string) => {
+      // Use -- separator for ISO datetime ranges, - for YYYYMMDD date ranges
+      const separator = startDate.includes("T") ? "--" : "-";
       updateQuery({
-        dateRange: `${startDate}-${endDate}`,
+        dateRange: `${startDate}${separator}${endDate}`,
         date: undefined, // Clear single date when range is set
       });
     },

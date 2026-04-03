@@ -273,7 +273,7 @@ describe("McpService", () => {
 
     describe("logs_get", () => {
       it("should return bot logs", async () => {
-        logsService.getLogs.mockResolvedValue(Ok([mockLogEntry]));
+        logsService.getLogs.mockResolvedValue(Ok({ entries: [mockLogEntry], hasMore: false }));
 
         const result = await service.handleToolCall(
           "logs_get",
@@ -289,7 +289,7 @@ describe("McpService", () => {
       });
 
       it("should cap limit at 500", async () => {
-        logsService.getLogs.mockResolvedValue(Ok([]));
+        logsService.getLogs.mockResolvedValue(Ok({ entries: [], hasMore: false }));
 
         await service.handleToolCall(
           "logs_get",
@@ -312,7 +312,7 @@ describe("McpService", () => {
 
     describe("logs_summary", () => {
       it("should return log summary", async () => {
-        logsService.getLogs.mockResolvedValue(Ok([mockLogEntry]));
+        logsService.getLogs.mockResolvedValue(Ok({ entries: [mockLogEntry], hasMore: false }));
 
         const result = await service.handleToolCall(
           "logs_summary",
@@ -333,7 +333,7 @@ describe("McpService", () => {
           { date: "20251202", content: "success message", timestamp: "2025-12-02T10:01:00Z" },
           { date: "20251202", content: "task failed to complete", timestamp: "2025-12-02T10:02:00Z" },
         ];
-        logsService.getLogs.mockResolvedValue(Ok(logsWithErrors));
+        logsService.getLogs.mockResolvedValue(Ok({ entries: logsWithErrors, hasMore: false }));
 
         const result = await service.handleToolCall(
           "logs_summary",
