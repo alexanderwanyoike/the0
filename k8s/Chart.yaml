@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.5
-appVersion: "1.12.1"
+version: 0.7.6
+appVersion: "1.12.2"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,20 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: Tail-based log reads for latest entries on single-date queries
+    - kind: added
+      description: ISO datetime range filtering for sub-day time windows
+    - kind: added
+      description: Hour-based interval presets (1h, 6h) with datetime ranges
+    - kind: added
+      description: Console pagination with hasMore and load more on scroll
     - kind: fixed
-      description: Remove EventsLoadingGate flash on custom bot dashboard load
+      description: Unbounded metrics queries (no limit for type=metrics)
+    - kind: fixed
+      description: API proxy forwards all query params including type
+    - kind: fixed
+      description: Live mode default for realtime bots
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
