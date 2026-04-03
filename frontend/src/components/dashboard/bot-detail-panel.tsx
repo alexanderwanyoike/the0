@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import moment from "moment";
@@ -83,9 +83,25 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   // Interval picker state (shared by dashboard + console)
   // Realtime bots default to live mode; scheduled bots default to 1d range.
+  // Note: bot is null at mount, so useStreaming is initially false. The
+  // useEffect below corrects the interval once the bot loads.
   const [interval, setInterval_] = useState<IntervalValue>(
     useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL,
   );
+  const streamingInitialized = useRef(false);
+
+  // Reset interval default when bot changes or streaming status resolves
+  useEffect(() => {
+    streamingInitialized.current = false;
+  }, [botId]);
+
+  useEffect(() => {
+    if (!streamingInitialized.current && bot) {
+      streamingInitialized.current = true;
+      setInterval_(useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL);
+    }
+  }, [useStreaming, bot]);
+
   const hookBotId = bot !== null ? botId : "";
 
   const streamHook = useBotLogsStream({
@@ -103,7 +119,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   const handleIntervalChange = (val: IntervalValue) => {
     setInterval_(val);
-    if (val.label === "live") {
+    if (val.type === "live") {
       // Clear date filter so SSE streams all logs
       activeHook.setDateFilter(null);
     } else {
@@ -125,6 +141,10 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const hasEarlierLogs = useStreaming ? streamHook.hasEarlierLogs : undefined;
   const loadingEarlier = useStreaming ? streamHook.loadingEarlier : undefined;
   const loadEarlierLogs = useStreaming ? streamHook.loadEarlierLogs : undefined;
+
+  // Pagination: only relevant for REST polling (not SSE streaming)
+  const hasMoreLogs = !useStreaming ? pollingHook.hasMore : undefined;
+  const loadMoreLogs = !useStreaming ? pollingHook.loadMore : undefined;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -426,6 +446,9 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           hasEarlierLogs={hasEarlierLogs}
           loadingEarlier={loadingEarlier}
           loadEarlierLogs={loadEarlierLogs}
+          hasMore={hasMoreLogs}
+          loadMore={loadMoreLogs}
+          loadingMore={!useStreaming ? logsLoading : undefined}
           isUpdatingEnabled={isUpdatingEnabled}
           isDeleting={isDeleting}
           onToggleEnabled={handleToggleEnabled}
@@ -542,7 +565,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 botId={botId}
                 customBotId={customBotId}
                 version={bot.config.version}
-                dateRange={{ start: interval.start, end: interval.end }}
+                dateRange={interval.type === "range" ? { start: interval.start, end: interval.end } : undefined}
                 className=""
               />
             ) : (
@@ -579,6 +602,9 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 hasEarlierLogs={hasEarlierLogs}
                 loadingEarlier={loadingEarlier}
                 onLoadEarlier={loadEarlierLogs}
+                hasMore={hasMoreLogs}
+                loadMore={loadMoreLogs}
+                loadingMore={!useStreaming ? logsLoading : undefined}
                 className="h-full"
                 compact
               />

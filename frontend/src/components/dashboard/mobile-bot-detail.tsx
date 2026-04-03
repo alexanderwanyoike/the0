@@ -55,6 +55,9 @@ interface MobileBotDetailProps {
   hasEarlierLogs?: boolean;
   loadingEarlier?: boolean;
   loadEarlierLogs?: () => void;
+  hasMore?: boolean;
+  loadMore?: () => void;
+  loadingMore?: boolean;
   isUpdatingEnabled: boolean;
   isDeleting: boolean;
   onToggleEnabled: (enabled: boolean) => void;
@@ -82,6 +85,9 @@ export function MobileBotDetail({
   hasEarlierLogs,
   loadingEarlier,
   loadEarlierLogs,
+  hasMore,
+  loadMore,
+  loadingMore,
   isUpdatingEnabled,
   isDeleting,
   onToggleEnabled,
@@ -172,6 +178,9 @@ export function MobileBotDetail({
             hasEarlierLogs={hasEarlierLogs}
             loadingEarlier={loadingEarlier}
             onLoadEarlier={loadEarlierLogs}
+            hasMore={hasMore}
+            loadMore={loadMore}
+            loadingMore={loadingMore}
             className="h-full"
             compact
           />

@@ -14,6 +14,9 @@ export interface LogsQuery {
   limit: number;
   offset: number;
   type?: "all" | "metrics";
+  // Parsed datetime bounds (set by parseDateQuery for datetime ranges)
+  startTime?: Date;
+  endTime?: Date;
 }
 
 export interface LogEntry {
@@ -24,6 +27,7 @@ export interface LogEntry {
 
 @Injectable({ scope: Scope.REQUEST })
 export class LogsService {
+  private static readonly TAIL_BYTES = 512 * 1024; // 512KB
   private logBucket: string;
 
   constructor(
@@ -40,7 +44,7 @@ export class LogsService {
     botId: string,
     query: LogsQuery,
     userId?: string,
-  ): Promise<Result<LogEntry[], string>> {
+  ): Promise<Result<{ entries: LogEntry[]; hasMore: boolean }, string>> {
     // Verify bot ownership
     const uid = userId || this.request?.user?.uid;
     if (!uid) return Failure("Authentication required");
@@ -53,21 +57,29 @@ export class LogsService {
     const dates = this.parseDateQuery(query);
     if (!dates.length) {
       return Failure(
-        "Invalid date or dateRange format. Use YYYYMMDD or YYYYMMDD-YYYYMMDD",
+        "Invalid date or dateRange format. Use YYYYMMDD, YYYYMMDD-YYYYMMDD, or ISO datetime range with -- separator",
       );
     }
 
     try {
       const entries: LogEntry[] = [];
-      const skipped = { count: 0 };
 
-      for (const date of dates) {
-        const logPath = `logs/${botId}/${date}.log`;
-        await this.streamFilteredLogs(logPath, date, query, entries, skipped);
-        if (entries.length >= query.limit) break;
+      if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
+        // Single date, non-metrics: tail for latest entries
+        const logPath = `logs/${botId}/${dates[0]}.log`;
+        await this.tailFilteredLogs(logPath, dates[0], query, entries);
+      } else {
+        // Multi-date or metrics: stream from start, chronological
+        const skipped = { count: 0 };
+        for (const date of dates) {
+          const logPath = `logs/${botId}/${date}.log`;
+          await this.streamFilteredLogs(logPath, date, query, entries, skipped);
+          if (query.type !== "metrics" && entries.length >= query.limit) break;
+        }
       }
 
-      return Ok(entries);
+      const hasMore = query.type !== "metrics" && entries.length >= query.limit;
+      return Ok({ entries, hasMore });
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error fetching logs");
       return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
@@ -114,9 +126,25 @@ export class LogsService {
           continue;
         }
 
-        entries.push(this.normalizeLine(line, logDate));
+        const normalized = this.normalizeLine(line, logDate);
 
-        if (entries.length >= query.limit) {
+        // Filter by datetime window if set
+        if (query.startTime && query.endTime) {
+          const entryTime = normalized.timestamp
+            ? new Date(normalized.timestamp)
+            : null;
+          if (
+            entryTime &&
+            (entryTime < query.startTime || entryTime > query.endTime)
+          ) {
+            continue; // Outside time window
+          }
+          // Lines without timestamps are included (can't filter, don't exclude)
+        }
+
+        entries.push(normalized);
+
+        if (query.type !== "metrics" && entries.length >= query.limit) {
           (stream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.();
           return;
         }
@@ -138,10 +166,97 @@ export class LogsService {
       if (includeLeftover) {
         if (skipped.count < query.offset) {
           skipped.count++;
-        } else if (entries.length < query.limit) {
-          entries.push(this.normalizeLine(leftover, logDate));
+        } else if (query.type === "metrics" || entries.length < query.limit) {
+          const normalized = this.normalizeLine(leftover, logDate);
+
+          // Filter by datetime window if set
+          if (query.startTime && query.endTime) {
+            const entryTime = normalized.timestamp
+              ? new Date(normalized.timestamp)
+              : null;
+            if (
+              entryTime &&
+              (entryTime < query.startTime || entryTime > query.endTime)
+            ) {
+              // Outside time window - skip
+            } else {
+              entries.push(normalized);
+            }
+          } else {
+            entries.push(normalized);
+          }
         }
       }
+    }
+  }
+
+  private async tailFilteredLogs(
+    logPath: string,
+    logDate: string,
+    query: LogsQuery,
+    entries: LogEntry[],
+  ): Promise<void> {
+    let stat: { size: number };
+    try {
+      stat = await this.minioClient.statObject(this.logBucket, logPath);
+    } catch (error: unknown) {
+      if (hasErrorCode(error) && error.code === "NoSuchKey") return;
+      throw error;
+    }
+
+    const fileSize = stat.size;
+    const start = Math.max(0, fileSize - LogsService.TAIL_BYTES);
+
+    let stream: NodeJS.ReadableStream;
+    try {
+      stream =
+        start > 0
+          ? await this.minioClient.getPartialObject(
+              this.logBucket,
+              logPath,
+              start,
+            )
+          : await this.minioClient.getObject(this.logBucket, logPath);
+    } catch (error: unknown) {
+      // File may have been deleted between stat and read
+      if (hasErrorCode(error) && error.code === "NoSuchKey") return;
+      throw error;
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const content = Buffer.concat(chunks).toString("utf-8");
+
+    const lines = content.split("\n");
+    // Drop first line if reading from mid-file (likely partial)
+    if (start > 0) lines.shift();
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const normalized = this.normalizeLine(line, logDate);
+
+      // Filter by datetime window if set
+      if (query.startTime && query.endTime) {
+        const entryTime = normalized.timestamp
+          ? new Date(normalized.timestamp)
+          : null;
+        if (
+          entryTime &&
+          (entryTime < query.startTime || entryTime > query.endTime)
+        ) {
+          continue; // Outside time window
+        }
+        // Lines without timestamps are included (can't filter, don't exclude)
+      }
+
+      entries.push(normalized);
+    }
+
+    // Keep only the last `limit` entries (skip for metrics - return all)
+    if (query.type !== "metrics" && entries.length > query.limit) {
+      entries.splice(0, entries.length - query.limit);
     }
   }
 
@@ -173,6 +288,25 @@ export class LogsService {
     }
 
     if (query.dateRange) {
+      // Datetime range: contains T and uses -- separator
+      if (query.dateRange.includes("T")) {
+        const parts = query.dateRange.split("--");
+        if (parts.length !== 2) return [];
+        const startTime = new Date(parts[0]);
+        const endTime = new Date(parts[1]);
+        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return [];
+
+        // Store parsed times for line-level filtering
+        query.startTime = startTime;
+        query.endTime = endTime;
+
+        // Generate date list from the datetime range
+        const startDate = parts[0].slice(0, 10).replace(/-/g, "");
+        const endDate = parts[1].slice(0, 10).replace(/-/g, "");
+        return this.generateDateRange(startDate, endDate);
+      }
+
+      // Legacy YYYYMMDD-YYYYMMDD format
       const [startDate, endDate] = query.dateRange.split("-");
       if (
         !startDate ||
