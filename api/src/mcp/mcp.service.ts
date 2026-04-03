@@ -497,10 +497,11 @@ export class McpService {
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs");
     }
+    const entries = result.data?.entries || [];
     return {
       bot_id: input.bot_id,
-      count: result.data?.length || 0,
-      logs: result.data || [],
+      count: entries.length,
+      logs: entries,
     };
   }
 
@@ -528,7 +529,7 @@ export class McpService {
       throw new Error(result.error || "Failed to get logs for summary");
     }
 
-    const logs = result.data || [];
+    const logs = result.data?.entries || [];
     const errorCount = logs.filter(
       (log) =>
         log.content?.toLowerCase().includes("error") ||

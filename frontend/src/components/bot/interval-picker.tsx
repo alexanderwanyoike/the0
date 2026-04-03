@@ -13,9 +13,10 @@ import { CalendarIcon, Clock, Radio } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 export interface IntervalValue {
+  type: "live" | "range";
   label: string;
-  start: string; // YYYYMMDD format (empty for "live")
-  end: string; // YYYYMMDD format (empty for "live")
+  start: string; // YYYYMMDD or ISO datetime (empty for "live")
+  end: string; // YYYYMMDD or ISO datetime (empty for "live")
 }
 
 interface IntervalPickerProps {
@@ -32,31 +33,49 @@ function formatDate(date: Date): string {
 }
 
 const PRESETS = [
+  { label: "1h", hours: 1 },
+  { label: "6h", hours: 6 },
   { label: "1d", days: 1 },
   { label: "3d", days: 3 },
   { label: "7d", days: 7 },
   { label: "30d", days: 30 },
 ] as const;
 
-export function computeInterval(label: string, days: number): IntervalValue {
+export function computeInterval(
+  label: string,
+  preset: { hours?: number; days?: number },
+): IntervalValue {
   const now = new Date();
-  const start = new Date(now);
-  start.setDate(start.getDate() - days + 1);
+  if (preset.hours) {
+    const start = new Date(now.getTime() - preset.hours * 60 * 60 * 1000);
+    return {
+      type: "range",
+      label,
+      start: start.toISOString(),
+      end: now.toISOString(),
+    };
+  }
+  const startDay = new Date(now);
+  startDay.setDate(startDay.getDate() - (preset.days || 1) + 1);
   return {
+    type: "range",
     label,
-    start: formatDate(start),
+    start: formatDate(startDay),
     end: formatDate(now),
   };
 }
 
 export const LIVE_INTERVAL: IntervalValue = {
+  type: "live",
   label: "live",
   start: "",
   end: "",
 };
 
 /** Default interval: last 1 day */
-export const DEFAULT_DAY_INTERVAL: IntervalValue = computeInterval("1d", 1);
+export const DEFAULT_DAY_INTERVAL: IntervalValue = computeInterval("1d", {
+  days: 1,
+});
 
 /** @deprecated Use DEFAULT_DAY_INTERVAL instead */
 export const DEFAULT_INTERVAL: IntervalValue = DEFAULT_DAY_INTERVAL;
@@ -73,6 +92,7 @@ export function IntervalPicker({
     setRange(selected);
     if (selected?.from && selected?.to) {
       onChange({
+        type: "range",
         label: "custom",
         start: formatDate(selected.from),
         end: formatDate(selected.to),
@@ -112,7 +132,7 @@ export function IntervalPicker({
             value.label === preset.label &&
               "bg-secondary text-secondary-foreground",
           )}
-          onClick={() => onChange(computeInterval(preset.label, preset.days))}
+          onClick={() => onChange(computeInterval(preset.label, preset))}
         >
           {preset.label}
         </Button>

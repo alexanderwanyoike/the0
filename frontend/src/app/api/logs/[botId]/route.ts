@@ -10,18 +10,8 @@ export async function GET(
       const { botId } = await params;
       const { searchParams } = new URL(req.url);
 
-      // Extract query parameters
-      const date = searchParams.get("date");
-      const dateRange = searchParams.get("dateRange");
-      const limit = searchParams.get("limit") || "100";
-      const offset = searchParams.get("offset") || "0";
-
-      // Build query string for backend API
-      const queryParams = new URLSearchParams();
-      if (date) queryParams.set("date", date);
-      if (dateRange) queryParams.set("dateRange", dateRange);
-      queryParams.set("limit", limit);
-      queryParams.set("offset", offset);
+      // Forward all query parameters to backend API
+      const queryParams = new URLSearchParams(searchParams);
 
       const token = req.headers.get("Authorization");
       const response = await fetch(

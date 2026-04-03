@@ -355,10 +355,12 @@ export const useBotLogsStream = ({
   const setDateRangeFilter = useCallback(
     (start: string, end: string) => {
       dateFilterActiveRef.current = true;
+      // Use -- separator for ISO datetime ranges, - for YYYYMMDD date ranges
+      const separator = start.includes("T") ? "--" : "-";
       const updatedQuery = {
         ...query,
         date: undefined,
-        dateRange: `${start}-${end}`,
+        dateRange: `${start}${separator}${end}`,
         offset: 0,
       };
       setQuery(updatedQuery);

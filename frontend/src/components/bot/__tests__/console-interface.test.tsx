@@ -13,6 +13,7 @@ jest.mock("react-virtuoso", () => ({
         followOutput,
         atBottomStateChange,
         atTopStateChange,
+        endReached,
         overscan,
         className,
       }: any,
@@ -23,6 +24,7 @@ jest.mock("react-virtuoso", () => ({
         {data?.map((item: any, index: number) => (
           <div key={index} data-testid={`log-item-${index}`}>{itemContent(index, item)}</div>
         ))}
+        {components?.Footer && <components.Footer />}
       </div>
     ),
   ),
@@ -650,6 +652,42 @@ describe("ConsoleInterface", () => {
 
       const button = screen.getByText("Loading...").closest("button");
       expect(button).toBeDisabled();
+    });
+  });
+
+  describe("load more (pagination footer)", () => {
+    it("should render footer when hasMore is true", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasMore={true}
+          loadMore={jest.fn()}
+        />,
+      );
+
+      expect(screen.getByText("Load more")).toBeInTheDocument();
+    });
+
+    it("should not render footer when hasMore is false", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          hasMore={false}
+          loadMore={jest.fn()}
+        />,
+      );
+
+      expect(screen.queryByText("Load more")).not.toBeInTheDocument();
     });
   });
 
