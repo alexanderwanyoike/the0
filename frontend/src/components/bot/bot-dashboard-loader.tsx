@@ -12,7 +12,7 @@ import * as ReactDOM from "react-dom";
 import * as ReactJSXRuntime from "react/jsx-runtime";
 import {
   BotEventsProvider,
-  useBotEventsContext,
+
 } from "@/contexts/bot-events-context";
 import { RefreshCw, AlertCircle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -94,45 +94,6 @@ class DashboardErrorBoundary extends Component<
   }
 }
 
-/**
- * Inner component that watches event loading state from context
- * and calls onEventsReady when the initial load completes.
- */
-function EventsLoadingGate({
-  children,
-  onEventsReady,
-  isWaiting,
-  className,
-}: {
-  children: ReactNode;
-  onEventsReady: () => void;
-  isWaiting: boolean;
-  className?: string;
-}) {
-  const { loading } = useBotEventsContext();
-
-  useEffect(() => {
-    if (!loading && isWaiting) {
-      onEventsReady();
-    }
-  }, [loading, isWaiting, onEventsReady]);
-
-  if (isWaiting) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col items-center justify-center bg-muted/30 rounded-lg min-h-[200px]",
-          className,
-        )}
-      >
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-        <p className="text-muted-foreground">Loading events...</p>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
 
 interface BotDashboardLoaderProps {
   botId: string;
@@ -292,15 +253,9 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
         dateRange={dateRange}
       >
         <DashboardErrorBoundary>
-          <EventsLoadingGate
-            isWaiting={loadPhase === "events"}
-            onEventsReady={() => setLoadPhase(null)}
-            className={className}
-          >
-            <div className={cn("h-full overflow-auto", className)}>
-              <BotDashboard />
-            </div>
-          </EventsLoadingGate>
+          <div className={cn("h-full overflow-auto", className)}>
+            <BotDashboard />
+          </div>
         </DashboardErrorBoundary>
       </BotEventsProvider>
     );
