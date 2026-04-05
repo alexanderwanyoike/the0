@@ -30,6 +30,11 @@ export class LogsService {
   private static readonly TAIL_BYTES = 512 * 1024; // 512KB
   private logBucket: string;
 
+  /** AWS/MinIO use "NoSuchKey", Cloudflare R2 uses "NotFound". */
+  private static isNotFoundError(error: unknown): boolean {
+    return hasErrorCode(error) && (error.code === "NoSuchKey" || error.code === "NotFound");
+  }
+
   constructor(
     @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
@@ -97,7 +102,7 @@ export class LogsService {
     try {
       stream = await this.minioClient.getObject(this.logBucket, logPath);
     } catch (error: unknown) {
-      if (hasErrorCode(error) && error.code === "NoSuchKey") return;
+      if (LogsService.isNotFoundError(error)) return;
       throw error;
     }
 
@@ -200,7 +205,7 @@ export class LogsService {
     try {
       stat = await this.minioClient.statObject(this.logBucket, logPath);
     } catch (error: unknown) {
-      if (hasErrorCode(error) && error.code === "NoSuchKey") return;
+      if (LogsService.isNotFoundError(error)) return;
       throw error;
     }
 
@@ -219,7 +224,7 @@ export class LogsService {
           : await this.minioClient.getObject(this.logBucket, logPath);
     } catch (error: unknown) {
       // File may have been deleted between stat and read
-      if (hasErrorCode(error) && error.code === "NoSuchKey") return;
+      if (LogsService.isNotFoundError(error)) return;
       throw error;
     }
 
