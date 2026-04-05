@@ -209,9 +209,9 @@ describe("IntervalPicker", () => {
       // end should be today
       const today = new Date();
       const expectedEnd =
-        String(today.getFullYear()) +
-        String(today.getMonth() + 1).padStart(2, "0") +
-        String(today.getDate()).padStart(2, "0");
+        String(today.getUTCFullYear()) +
+        String(today.getUTCMonth() + 1).padStart(2, "0") +
+        String(today.getUTCDate()).padStart(2, "0");
       expect(result.end).toBe(expectedEnd);
     });
 
