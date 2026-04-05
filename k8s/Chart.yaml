@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.7
-appVersion: "1.12.3"
+version: 0.7.8
+appVersion: "1.12.4"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,7 +31,7 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: fixed
-      description: Handle Cloudflare R2 NotFound error code for missing log files
+      description: Use UTC dates in interval picker to match log file storage
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
