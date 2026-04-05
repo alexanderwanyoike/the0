@@ -326,6 +326,33 @@ describe("LogsService", () => {
       expect(result.data!.entries).toEqual([]);
     });
 
+    it("should handle R2 NotFound error on tail path (statObject)", async () => {
+      // Cloudflare R2 returns "NotFound" instead of "NoSuchKey"
+      mockMinioClient.statObject.mockRejectedValue({ code: "NotFound" });
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260405",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toEqual([]);
+    });
+
+    it("should handle R2 NotFound error on stream path (getObject)", async () => {
+      mockMinioClient.getObject.mockRejectedValue({ code: "NotFound" });
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260405-20260405",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toEqual([]);
+    });
+
     it("should span multiple date files with line-level pagination", async () => {
       // Two days, 3 lines each
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
