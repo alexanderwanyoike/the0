@@ -77,8 +77,10 @@ export const DEFAULT_DAY_INTERVAL: IntervalValue = computeInterval("1d", {
   days: 1,
 });
 
-/** @deprecated Use DEFAULT_DAY_INTERVAL instead */
-export const DEFAULT_INTERVAL: IntervalValue = DEFAULT_DAY_INTERVAL;
+/** Default interval for scheduled bots: last 1 hour */
+export const DEFAULT_INTERVAL: IntervalValue = computeInterval("1h", {
+  hours: 1,
+});
 
 export function IntervalPicker({
   value,
