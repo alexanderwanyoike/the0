@@ -256,7 +256,7 @@ export const useBotLogs = ({
       if (interval) clearInterval(interval);
       abortControllerRef.current?.abort();
     };
-  }, [botId, user]);
+  }, [botId, user, autoRefresh, refreshInterval]);
 
   return {
     logs,

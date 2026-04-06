@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { RefreshSelector } from "../refresh-selector";
+import { RefreshSelector, shouldHideRefreshSelector } from "../refresh-selector";
 
 describe("RefreshSelector", () => {
   const mockOnChange = jest.fn();
@@ -50,5 +50,48 @@ describe("RefreshSelector", () => {
     fireEvent.click(screen.getByRole("button", { name: /off/i }));
 
     expect(mockOnChange).toHaveBeenCalledWith(0);
+  });
+
+  it("should render nothing when hidden is true", () => {
+    const { container } = render(
+      <RefreshSelector value={30000} onChange={mockOnChange} hidden />,
+    );
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("should render when hidden is false", () => {
+    render(
+      <RefreshSelector value={30000} onChange={mockOnChange} hidden={false} />,
+    );
+    expect(screen.getByRole("button", { name: /30s/i })).toBeInTheDocument();
+  });
+
+  describe("shouldHideRefreshSelector", () => {
+    it("should be visible for scheduled bots regardless of interval", () => {
+      expect(shouldHideRefreshSelector(false, "1d")).toBe(false);
+      expect(shouldHideRefreshSelector(false, "1h")).toBe(false);
+      expect(shouldHideRefreshSelector(false, "live")).toBe(false);
+      expect(shouldHideRefreshSelector(false, "custom")).toBe(false);
+    });
+
+    it("should be hidden for realtime bots in live mode", () => {
+      expect(shouldHideRefreshSelector(true, "live")).toBe(true);
+    });
+
+    it("should be visible for realtime bots with rolling hour presets", () => {
+      expect(shouldHideRefreshSelector(true, "1h")).toBe(false);
+      expect(shouldHideRefreshSelector(true, "6h")).toBe(false);
+    });
+
+    it("should be hidden for realtime bots with day presets", () => {
+      expect(shouldHideRefreshSelector(true, "1d")).toBe(true);
+      expect(shouldHideRefreshSelector(true, "3d")).toBe(true);
+      expect(shouldHideRefreshSelector(true, "7d")).toBe(true);
+      expect(shouldHideRefreshSelector(true, "30d")).toBe(true);
+    });
+
+    it("should be hidden for realtime bots with custom range", () => {
+      expect(shouldHideRefreshSelector(true, "custom")).toBe(true);
+    });
   });
 });

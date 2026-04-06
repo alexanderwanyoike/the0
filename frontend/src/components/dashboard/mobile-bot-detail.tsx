@@ -20,7 +20,7 @@ import {
   IntervalPicker,
   IntervalValue,
 } from "@/components/bot/interval-picker";
-import { RefreshSelector } from "@/components/bot/refresh-selector";
+import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 import {
   AlertDialog,
@@ -136,7 +136,7 @@ export function MobileBotDetail({
       {/* Interval Picker + Refresh Selector */}
       <div className="px-3 py-2 border-b space-y-1.5">
         <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} />
-        <RefreshSelector value={refreshInterval} onChange={onRefreshIntervalChange} />
+        <RefreshSelector value={refreshInterval} onChange={onRefreshIntervalChange} hidden={shouldHideRefreshSelector(!!showLive, interval.label)} />
       </div>
 
       {/* Tabbed content */}

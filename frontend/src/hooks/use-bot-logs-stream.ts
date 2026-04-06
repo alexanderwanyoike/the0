@@ -275,7 +275,9 @@ export const useBotLogsStream = ({
 
         // Fall back to REST polling
         fetchLogs();
-        pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        if (refreshInterval > 0) {
+          pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        }
       });
   }, [botId, user, refreshInterval, fetchLogs, stopPolling]);
 
@@ -306,7 +308,9 @@ export const useBotLogsStream = ({
     const fallbackTimer = setTimeout(() => {
       if (!historyReceivedRef.current) {
         fetchLogs();
-        pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        if (refreshInterval > 0) {
+          pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        }
       }
     }, 4000);
 
@@ -314,7 +318,7 @@ export const useBotLogsStream = ({
       clearTimeout(fallbackTimer);
       abortAll();
     };
-  }, [botId, user]);
+  }, [botId, user, refreshInterval]);
 
   // -- Date filter: disconnect SSE, fetch REST, reconnect on clear --
 

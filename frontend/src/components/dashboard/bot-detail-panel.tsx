@@ -24,7 +24,7 @@ import {
   LIVE_INTERVAL,
   DEFAULT_INTERVAL,
 } from "@/components/bot/interval-picker";
-import { RefreshSelector } from "@/components/bot/refresh-selector";
+import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
 import {
   Dialog,
   DialogContent,
@@ -110,13 +110,13 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   const streamHook = useBotLogsStream({
     botId: useStreaming ? hookBotId : "",
-    refreshInterval: refreshInterval || undefined,
+    refreshInterval,
   });
 
   const pollingHook = useBotLogs({
     botId: useStreaming ? "" : hookBotId,
     autoRefresh: !useStreaming && bot !== null && refreshInterval > 0,
-    refreshInterval: refreshInterval || undefined,
+    refreshInterval,
   });
 
   const activeHook = useStreaming ? streamHook : pollingHook;
@@ -556,7 +556,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
         {/* Interval Picker + Refresh Selector */}
         <div className="px-4 lg:px-6 flex flex-wrap items-center gap-4">
           <IntervalPicker value={interval} onChange={handleIntervalChange} showLive={useStreaming} />
-          <RefreshSelector value={refreshInterval} onChange={setRefreshInterval} />
+          <RefreshSelector value={refreshInterval} onChange={setRefreshInterval} hidden={shouldHideRefreshSelector(useStreaming, interval.label)} />
         </div>
 
         {/* Main Content - Dashboard and Console side by side */}
