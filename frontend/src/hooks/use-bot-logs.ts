@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { LogEntry } from "@/components/bot/console-interface";
+import { expandLogEntries } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 
@@ -96,20 +97,7 @@ export const useBotLogs = ({
 
         const result: LogsResponse = await response.json();
 
-        // Split each log entry's content into individual lines
-        const expandedLogs: LogEntry[] = [];
-        result.data.forEach((logEntry) => {
-          // Split content by newlines and create individual entries
-          const lines = logEntry.content
-            .split("\n")
-            .filter((line) => line.trim() !== "");
-          lines.forEach((line) => {
-            expandedLogs.push({
-              date: logEntry.date,
-              content: line,
-            });
-          });
-        });
+        const expandedLogs = expandLogEntries(result.data);
 
         if (append) {
           setLogs((prev) => {

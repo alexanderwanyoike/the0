@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { LogEntry } from "@/components/bot/console-interface";
+import { expandLogEntries } from "@/lib/log-utils";
 import { validateSSEAuth } from "@/lib/sse/sse-auth";
 
 interface LogsQuery {
@@ -61,17 +62,6 @@ export interface UseBotLogsStreamReturn {
 
 const MAX_LOG_ENTRIES = 2000;
 
-/** Split multi-line log entries into individual LogEntry items. */
-function expandLogEntries(entries: LogEntry[]): LogEntry[] {
-  const expanded: LogEntry[] = [];
-  for (const entry of entries) {
-    const lines = entry.content.split("\n").filter((l) => l.trim() !== "");
-    for (const line of lines) {
-      expanded.push({ date: entry.date, content: line });
-    }
-  }
-  return expanded;
-}
 
 /** Parse a raw SSE message block into event type and data. */
 function parseSSEMessage(msg: string): { eventType: string; data: string } {
@@ -262,7 +252,7 @@ export const useBotLogsStream = ({
                 const parsed: { content: string; timestamp: string } =
                   JSON.parse(data);
                 const entries = expandLogEntries([
-                  { date: parsed.timestamp, content: parsed.content },
+                  { date: parsed.timestamp, content: parsed.content, timestamp: parsed.timestamp },
                 ]);
                 setLogs((prev) =>
                   [...prev, ...entries].slice(-MAX_LOG_ENTRIES),
