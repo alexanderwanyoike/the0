@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect, useRef } from "react";
 import { useBotLogs } from "./use-bot-logs";
 import {
   BotEvent,
@@ -108,6 +108,16 @@ export function useBotEvents({
     refreshInterval,
     initialQuery,
   });
+
+  // Refetch when dateRange changes
+  const prevDateRange = useRef(dateRange);
+  useEffect(() => {
+    const prev = prevDateRange.current;
+    prevDateRange.current = dateRange;
+    if (!dateRange || !prev) return;
+    if (prev.start === dateRange.start && prev.end === dateRange.end) return;
+    setDateRangeFilter(dateRange.start, dateRange.end);
+  }, [dateRange, setDateRangeFilter]);
 
   // Parse raw logs into events
   // Ensure timestamps are always Date objects for SDK compatibility
