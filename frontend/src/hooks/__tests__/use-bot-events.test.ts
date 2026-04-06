@@ -181,6 +181,32 @@ describe("useBotEvents", () => {
         }),
       );
     });
+
+    it("should refetch when dateRange prop changes", () => {
+      const { rerender } = renderHook(
+        ({ dateRange }) =>
+          useBotEvents({
+            botId: "bot-123",
+            dateRange,
+          }),
+        {
+          initialProps: {
+            dateRange: { start: "20240101", end: "20240101" },
+          },
+        },
+      );
+
+      // Change dateRange
+      rerender({
+        dateRange: { start: "20240102", end: "20240102" },
+      });
+
+      // Should call setDateRangeFilter with the new range
+      expect(mockSetDateRangeFilter).toHaveBeenCalledWith(
+        "20240102",
+        "20240102",
+      );
+    });
   });
 
   describe("event parsing", () => {
