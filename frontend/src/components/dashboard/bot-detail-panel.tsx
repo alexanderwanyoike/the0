@@ -24,6 +24,7 @@ import {
   LIVE_INTERVAL,
   DEFAULT_INTERVAL,
 } from "@/components/bot/interval-picker";
+import { RefreshSelector } from "@/components/bot/refresh-selector";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +79,9 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const mediaQuery = useMediaQuery("(min-width: 1280px)");
   const isMobile = mediaQuery === null ? null : !mediaQuery;
 
+  // Configurable refresh rate for polling (console + dashboard)
+  const [refreshInterval, setRefreshInterval] = useState(30000);
+
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
 
@@ -106,13 +110,13 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   const streamHook = useBotLogsStream({
     botId: useStreaming ? hookBotId : "",
-    refreshInterval: 60 * 1000,
+    refreshInterval: refreshInterval || undefined,
   });
 
   const pollingHook = useBotLogs({
     botId: useStreaming ? "" : hookBotId,
-    autoRefresh: !useStreaming && bot !== null,
-    refreshInterval: 60 * 1000,
+    autoRefresh: !useStreaming && bot !== null && refreshInterval > 0,
+    refreshInterval: refreshInterval || undefined,
   });
 
   const activeHook = useStreaming ? streamHook : pollingHook;
@@ -458,6 +462,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           interval={interval}
           onIntervalChange={handleIntervalChange}
           showLive={useStreaming}
+          refreshInterval={refreshInterval}
+          onRefreshIntervalChange={setRefreshInterval}
         />
         {cliUpdateModal}
       </>
@@ -547,9 +553,10 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           </div>
         </div>
 
-        {/* Interval Picker */}
-        <div className="px-4 lg:px-6">
+        {/* Interval Picker + Refresh Selector */}
+        <div className="px-4 lg:px-6 flex flex-wrap items-center gap-4">
           <IntervalPicker value={interval} onChange={handleIntervalChange} showLive={useStreaming} />
+          <RefreshSelector value={refreshInterval} onChange={setRefreshInterval} />
         </div>
 
         {/* Main Content - Dashboard and Console side by side */}
@@ -566,6 +573,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 customBotId={customBotId}
                 version={bot.config.version}
                 dateRange={interval.type === "range" ? { start: interval.start, end: interval.end } : undefined}
+                refreshInterval={refreshInterval}
                 className=""
               />
             ) : (

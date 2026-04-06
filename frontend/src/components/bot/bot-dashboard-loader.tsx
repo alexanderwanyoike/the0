@@ -100,6 +100,7 @@ interface BotDashboardLoaderProps {
   customBotId: string;
   version?: string;
   dateRange?: { start: string; end: string };
+  refreshInterval?: number;
   className?: string;
 }
 
@@ -115,6 +116,7 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
   customBotId,
   version,
   dateRange,
+  refreshInterval = 30000,
   className,
 }: BotDashboardLoaderProps) {
   const [BotDashboard, setBotDashboard] = useState<DashboardComponent | null>(
@@ -248,8 +250,8 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
     return (
       <BotEventsProvider
         botId={botId}
-        autoRefresh
-        refreshInterval={30000}
+        autoRefresh={refreshInterval > 0}
+        refreshInterval={refreshInterval || undefined}
         dateRange={dateRange}
       >
         <DashboardErrorBoundary>
