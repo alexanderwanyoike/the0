@@ -614,4 +614,95 @@ describe("useBotLogsStream", () => {
       expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:05:00Z");
     });
   });
+
+  it("should not start polling when refreshInterval is 0 and SSE fails", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockImplementation(async (url: string) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          throw new Error("SSE failed");
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ date: "20260406", content: "log" }],
+            total: 1,
+            hasMore: false,
+          }),
+        } as any;
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogsStream({ botId: "bot-1", refreshInterval: 0 }),
+      );
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      const callsAfterFallback = mockAuthFetch.mock.calls.filter(
+        (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+      ).length;
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60000);
+      });
+
+      const callsAfterWait = mockAuthFetch.mock.calls.filter(
+        (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+      ).length;
+
+      expect(callsAfterWait).toBe(callsAfterFallback);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("should reconfigure polling interval when refreshInterval prop changes", async () => {
+    jest.useFakeTimers();
+    try {
+      // SSE fails, falls back to polling
+      mockAuthFetch.mockImplementation(async (url: string) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          throw new Error("SSE failed");
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ date: "20260406", content: "log" }],
+            total: 1,
+            hasMore: false,
+          }),
+        } as any;
+      });
+
+      const { rerender } = renderHook(
+        ({ interval }) =>
+          useBotLogsStream({ botId: "bot-1", refreshInterval: interval }),
+        { initialProps: { interval: 60000 } },
+      );
+
+      // Wait for SSE failure and fallback
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      mockAuthFetch.mockClear();
+
+      // Change refresh interval to 5s
+      rerender({ interval: 5000 });
+
+      // Advance 5s - should poll with new interval
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      const restCalls = mockAuthFetch.mock.calls.filter(
+        (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+      );
+      expect(restCalls.length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

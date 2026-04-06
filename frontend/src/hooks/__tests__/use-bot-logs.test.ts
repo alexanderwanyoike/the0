@@ -568,4 +568,85 @@ describe("useBotLogs", () => {
     expect(calledUrl).toContain("limit=50");
     expect(calledUrl).toContain("offset=10");
   });
+
+  it("should reconfigure polling when refreshInterval changes", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20260406", content: "Log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as Response);
+
+      const { rerender } = renderHook(
+        ({ interval }) =>
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: interval,
+          }),
+        { initialProps: { interval: 60000 } },
+      );
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      mockAuthFetch.mockClear();
+
+      // Change refresh interval to 5000ms
+      rerender({ interval: 5000 });
+
+      // Advance 5 seconds - should fire with new interval
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      // Should have fetched with the new interval
+      expect(mockAuthFetch).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("should not poll when refreshInterval is 0 (Off)", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20260406", content: "Log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as Response);
+
+      renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          autoRefresh: true,
+          refreshInterval: 0,
+        }),
+      );
+
+      // Flush initial fetch
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      mockAuthFetch.mockClear();
+
+      // Advance 60 seconds - should NOT poll
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60000);
+      });
+
+      expect(mockAuthFetch).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
