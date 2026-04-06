@@ -22,7 +22,7 @@ import {
   IntervalPicker,
   IntervalValue,
   LIVE_INTERVAL,
-  DEFAULT_DAY_INTERVAL,
+  DEFAULT_INTERVAL,
 } from "@/components/bot/interval-picker";
 import {
   Dialog,
@@ -86,7 +86,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   // Note: bot is null at mount, so useStreaming is initially false. The
   // useEffect below corrects the interval once the bot loads.
   const [interval, setInterval_] = useState<IntervalValue>(
-    useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL,
+    useStreaming ? LIVE_INTERVAL : DEFAULT_INTERVAL,
   );
   const streamingInitialized = useRef(false);
 
@@ -98,7 +98,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   useEffect(() => {
     if (!streamingInitialized.current && bot) {
       streamingInitialized.current = true;
-      setInterval_(useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL);
+      setInterval_(useStreaming ? LIVE_INTERVAL : DEFAULT_INTERVAL);
     }
   }, [useStreaming, bot]);
 
