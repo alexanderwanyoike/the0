@@ -261,6 +261,34 @@ describe("useBotLogs", () => {
     expect(result.current.logs[0].content).toBe("Huge 500");
   });
 
+  it("should preserve timestamp field when expanding log entries", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            date: "20260403",
+            content: "line1\nline2",
+            timestamp: "2026-04-03T10:00:00Z",
+          },
+        ],
+        total: 2,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Both expanded lines should carry the original timestamp
+    expect(result.current.logs).toHaveLength(2);
+    expect(result.current.logs[0].timestamp).toBe("2026-04-03T10:00:00Z");
+    expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:00:00Z");
+  });
+
   // ---- Navigation bugs ----
 
   it("should reset state when botId changes", async () => {

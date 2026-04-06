@@ -563,4 +563,55 @@ describe("useBotLogsStream", () => {
       );
     });
   });
+
+  it("should preserve timestamp from SSE history events", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        {
+          date: "2026-04-03T10:00:00Z",
+          content: "Log line 1",
+          timestamp: "2026-04-03T10:00:00Z",
+        },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.logs[0].timestamp).toBe("2026-04-03T10:00:00Z");
+    });
+  });
+
+  it("should preserve timestamp from SSE update events", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2026-04-03T10:00:00Z", content: "Initial", timestamp: "2026-04-03T10:00:00Z" },
+      ]);
+    });
+
+    await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+    act(() => {
+      currentMockStream!.controller.push("update", {
+        content: "New entry",
+        timestamp: "2026-04-03T10:05:00Z",
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(2);
+      expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:05:00Z");
+    });
+  });
 });
