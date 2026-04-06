@@ -46,6 +46,9 @@ export const useBotLogs = ({
   const { toast } = useToast();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Ref to always hold the latest fetchLogs so the polling interval
+  // never calls a stale closure after query/filter changes.
+  const fetchLogsRef = useRef<typeof fetchLogs>(null!);
 
   const fetchLogs = useCallback(
     async (queryParams: LogsQuery = query, append: boolean = false) => {
@@ -153,6 +156,7 @@ export const useBotLogs = ({
     },
     [botId, query, toast, user],
   );
+  fetchLogsRef.current = fetchLogs;
 
   // Load more logs (pagination)
   const loadMore = useCallback(async () => {
@@ -255,7 +259,9 @@ export const useBotLogs = ({
 
     let interval: NodeJS.Timeout | null = null;
     if (autoRefresh && refreshInterval > 0) {
-      interval = setInterval(() => fetchLogs(), refreshInterval);
+      // Use the ref so the interval always calls the latest fetchLogs
+      // without needing to recreate the timer on every query change.
+      interval = setInterval(() => fetchLogsRef.current(), refreshInterval);
     }
 
     return () => {
