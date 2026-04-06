@@ -406,6 +406,116 @@ describe("useBotLogs", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("should not trigger extra fetches when date filter changes during auto-refresh", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ date: "20260401", content: "Log" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogs({
+        botId: "bot-1",
+        autoRefresh: true,
+        refreshInterval: 60000,
+      }),
+    );
+
+    // Wait for initial fetch to complete
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const callsAfterInit = mockAuthFetch.mock.calls.length;
+
+    // Change the date range filter
+    act(() => {
+      result.current.setDateRangeFilter("20260401", "20260403");
+    });
+
+    // Wait for the filter-triggered fetch to settle
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Brief pause to catch any spurious extra fetches
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    const callsAfterFilter = mockAuthFetch.mock.calls.length;
+    // Expect exactly one additional fetch from the filter change, not multiple
+    expect(callsAfterFilter - callsAfterInit).toBe(1);
+  });
+
+  it("should use latest query when polling interval fires after filter change", async () => {
+    // This tests the stale closure bug: the polling interval captures fetchLogs
+    // at setup time. If fetchLogs changes (because query changed), the interval
+    // should still call the latest version, not the stale one.
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20260401", content: "Log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as Response);
+
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          autoRefresh: true,
+          refreshInterval: 5000,
+        }),
+      );
+
+      // Flush initial fetch
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Change date range filter - this updates the query state and calls fetchLogs
+      await act(async () => {
+        result.current.setDateRangeFilter("20260401", "20260403");
+      });
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Clear call history so we can inspect what the next interval tick sends
+      mockAuthFetch.mockClear();
+
+      // Advance past the polling interval so it fires
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      // The polling fetch should have fired
+      expect(mockAuthFetch).toHaveBeenCalled();
+
+      // The polling fetch should use the UPDATED date range, not the original query.
+      // If the closure is stale, it will use the default query (today's date, no dateRange).
+      const pollingUrl = mockAuthFetch.mock.calls[0][0] as string;
+      expect(pollingUrl).toContain("dateRange=20260401-20260403");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   // ---- Existing tests ----
 
   it("should build correct URL with query parameters", async () => {
