@@ -58,6 +58,8 @@ export interface UseBotLogsStreamReturn {
   hasEarlierLogs: boolean;
   loadingEarlier: boolean;
   loadEarlierLogs: () => void;
+  /** Load more paginated results (only available in REST mode, i.e. when a date filter is active) */
+  loadMore?: () => Promise<void>;
 }
 
 const MAX_LOG_ENTRIES = 2000;
@@ -87,6 +89,7 @@ export const useBotLogsStream = ({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
   const [totalSeen, setTotalSeen] = useState(0);
 
@@ -98,6 +101,7 @@ export const useBotLogsStream = ({
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const dateFilterActiveRef = useRef(false);
   const historyReceivedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
 
   // -- Cleanup helpers --
 
@@ -119,7 +123,7 @@ export const useBotLogsStream = ({
   // -- REST fetch (for fallback, date filters, load-earlier) --
 
   const fetchLogs = useCallback(
-    async (params?: Partial<LogsQuery>, append = false) => {
+    async (params?: Partial<LogsQuery>, merge: false | "prepend" | "append" = false) => {
       if (!botId || !user) return;
 
       restAbortRef.current?.abort();
@@ -129,7 +133,7 @@ export const useBotLogsStream = ({
       const effectiveQuery = { ...query, ...params };
 
       try {
-        if (!append) setLoading(true);
+        if (!merge) setLoading(true);
         setError(null);
 
         const searchParams = new URLSearchParams();
@@ -160,21 +164,30 @@ export const useBotLogsStream = ({
         const result: LogsResponse = await response.json();
         const expanded = expandLogEntries(result.data);
 
-        if (append) {
+        if (merge) {
           setLogs((prev) => {
-            // Deduplicate: earlier logs may overlap with entries already in the buffer
             const existingKeys = new Set(
               prev.map((l) => `${l.date}|${l.content}`),
             );
             const unique = expanded.filter(
               (l) => !existingKeys.has(`${l.date}|${l.content}`),
             );
-            const combined = [...unique, ...prev];
-            return combined.slice(0, MAX_LOG_ENTRIES);
+            const combined = merge === "prepend"
+              ? [...unique, ...prev]
+              : [...prev, ...unique];
+            // Prepend keeps the front (earlier logs), append keeps the tail (latest)
+            return merge === "prepend"
+              ? combined.slice(0, MAX_LOG_ENTRIES)
+              : combined.slice(-MAX_LOG_ENTRIES);
           });
         } else {
           setLogs(expanded.slice(-MAX_LOG_ENTRIES));
           setHasEarlierLogs(expanded.length >= MAX_LOG_ENTRIES);
+        }
+        // Only update forward pagination state on non-prepend fetches.
+        // Prepend (loadEarlierLogs) has its own hasMore semantics.
+        if (merge !== "prepend") {
+          setHasMore(result.hasMore);
         }
         setTotalSeen(result.total);
         setLastUpdate(new Date());
@@ -298,6 +311,7 @@ export const useBotLogsStream = ({
     setLastUpdate(null);
     setHasEarlierLogs(false);
     setLoadingEarlier(false);
+    setHasMore(false);
     setQuery(initialQuery);
     dateFilterActiveRef.current = false;
     historyReceivedRef.current = false;
@@ -340,6 +354,10 @@ export const useBotLogsStream = ({
         setConnected(false);
         fetchLogs(updatedQuery);
       } else {
+        // Reconnecting to SSE - abort any in-flight REST request and reset
+        restAbortRef.current?.abort();
+        restAbortRef.current = null;
+        setHasMore(false);
         connectSSE();
       }
     },
@@ -378,9 +396,29 @@ export const useBotLogsStream = ({
     const date =
       query.date ||
       new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    await fetchLogs({ date, limit: 1000, offset: 0 }, true);
+    await fetchLogs({ date, limit: 1000, offset: 0 }, "prepend");
     setHasEarlierLogs(false);
   }, [botId, user, loadingEarlier, fetchLogs, query.date]);
+
+  // -- Load more (pagination for REST date-range fetches) --
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMore || !botId || !user) return;
+    loadingMoreRef.current = true;
+
+    const nextQuery = {
+      ...query,
+      offset: (query.offset || 0) + (query.limit || 100),
+    };
+
+    try {
+      await fetchLogs(nextQuery, "append");
+      // Only advance offset after successful fetch
+      setQuery(nextQuery);
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [hasMore, botId, user, query, fetchLogs]);
 
   // -- Refresh: reconnect or re-fetch depending on mode --
 
@@ -419,7 +457,7 @@ export const useBotLogsStream = ({
     logs,
     loading,
     error,
-    hasMore: false,
+    hasMore,
     total: totalSeen,
     refresh,
     exportLogs,
@@ -430,5 +468,6 @@ export const useBotLogsStream = ({
     hasEarlierLogs,
     loadingEarlier,
     loadEarlierLogs,
+    loadMore: hasMore ? loadMore : undefined,
   };
 };

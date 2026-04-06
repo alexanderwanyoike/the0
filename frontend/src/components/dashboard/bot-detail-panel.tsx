@@ -146,9 +146,14 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const loadingEarlier = useStreaming ? streamHook.loadingEarlier : undefined;
   const loadEarlierLogs = useStreaming ? streamHook.loadEarlierLogs : undefined;
 
-  // Pagination: only relevant for REST polling (not SSE streaming)
-  const hasMoreLogs = !useStreaming ? pollingHook.hasMore : undefined;
-  const loadMoreLogs = !useStreaming ? pollingHook.loadMore : undefined;
+  // Pagination: available for REST polling and for stream hook's REST mode
+  // (when a realtime bot is viewing a date range)
+  const hasMoreLogs = useStreaming
+    ? streamHook.hasMore || undefined
+    : pollingHook.hasMore || undefined;
+  const loadMoreLogs = useStreaming
+    ? streamHook.loadMore
+    : pollingHook.loadMore;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -452,7 +457,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           loadEarlierLogs={loadEarlierLogs}
           hasMore={hasMoreLogs}
           loadMore={loadMoreLogs}
-          loadingMore={!useStreaming ? logsLoading : undefined}
+          loadingMore={hasMoreLogs ? logsLoading : undefined}
           isUpdatingEnabled={isUpdatingEnabled}
           isDeleting={isDeleting}
           onToggleEnabled={handleToggleEnabled}
@@ -612,7 +617,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 onLoadEarlier={loadEarlierLogs}
                 hasMore={hasMoreLogs}
                 loadMore={loadMoreLogs}
-                loadingMore={!useStreaming ? logsLoading : undefined}
+                loadingMore={hasMoreLogs ? logsLoading : undefined}
                 className="h-full"
                 compact
               />
