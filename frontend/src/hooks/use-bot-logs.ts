@@ -28,7 +28,7 @@ interface UseBotLogsProps {
   initialQuery?: LogsQuery;
 }
 
-const MAX_LOG_ENTRIES = 2000;
+const MAX_LOG_ENTRIES = 10000;
 
 export const useBotLogs = ({
   botId,
@@ -50,6 +50,10 @@ export const useBotLogs = ({
   // Ref to always hold the latest fetchLogs so the polling interval
   // never calls a stale closure after query/filter changes.
   const fetchLogsRef = useRef<typeof fetchLogs>(null!);
+  // Track whether the user has explicitly paginated (loadMore).
+  // When true, auto-refresh polling is skipped to avoid overwriting paginated data.
+  const paginatedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
 
   const fetchLogs = useCallback(
     async (queryParams: LogsQuery = query, append: boolean = false) => {
@@ -148,15 +152,23 @@ export const useBotLogs = ({
 
   // Load more logs (pagination)
   const loadMore = useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loadingMoreRef.current || !hasMore) return;
+    loadingMoreRef.current = true;
 
     const nextQuery = {
       ...query,
       offset: (query.offset || 0) + (query.limit || 100),
     };
 
-    await fetchLogs(nextQuery, true);
-  }, [fetchLogs, loading, hasMore, query]);
+    try {
+      await fetchLogs(nextQuery, true);
+      // Advance offset so consecutive loadMore calls use the correct offset
+      setQuery(nextQuery);
+      paginatedRef.current = true;
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [fetchLogs, hasMore, query]);
 
   // Refresh logs
   const refresh = useCallback(() => {
@@ -242,6 +254,7 @@ export const useBotLogs = ({
     setHasMore(false);
     setTotal(0);
     setLoading(true);
+    paginatedRef.current = false;
 
     fetchLogs(initialQuery);
 
@@ -249,7 +262,11 @@ export const useBotLogs = ({
     if (autoRefresh && refreshInterval > 0) {
       // Use the ref so the interval always calls the latest fetchLogs
       // without needing to recreate the timer on every query change.
-      interval = setInterval(() => fetchLogsRef.current(), refreshInterval);
+      // Skip polling when the user has explicitly paginated (loadMore)
+      // to avoid overwriting their paginated data with offset=0 results.
+      interval = setInterval(() => {
+        if (!paginatedRef.current) fetchLogsRef.current();
+      }, refreshInterval);
     }
 
     return () => {

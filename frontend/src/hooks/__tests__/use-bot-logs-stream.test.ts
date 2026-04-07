@@ -346,8 +346,8 @@ describe("useBotLogsStream", () => {
 
     await waitFor(() => expect(result.current.connected).toBe(true));
 
-    // Send 2500 entries (over 2000 cap)
-    const entries = Array.from({ length: 2500 }, (_, i) => ({
+    // Send 12000 entries (over 10000 cap)
+    const entries = Array.from({ length: 12000 }, (_, i) => ({
       date: "2024-01-01T10:00:00Z",
       content: `Entry ${i}`,
     }));
@@ -357,7 +357,7 @@ describe("useBotLogsStream", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.logs.length).toBeLessThanOrEqual(2000);
+      expect(result.current.logs.length).toBeLessThanOrEqual(10000);
       expect(result.current.hasEarlierLogs).toBe(true);
     });
   });
@@ -370,7 +370,7 @@ describe("useBotLogsStream", () => {
     await waitFor(() => expect(result.current.connected).toBe(true));
 
     // Fill to cap with history
-    const entries = Array.from({ length: 2000 }, (_, i) => ({
+    const entries = Array.from({ length: 10000 }, (_, i) => ({
       date: "2024-01-01T10:00:00Z",
       content: `Entry ${i}`,
     }));
@@ -379,7 +379,7 @@ describe("useBotLogsStream", () => {
       currentMockStream!.controller.push("history", entries);
     });
 
-    await waitFor(() => expect(result.current.logs).toHaveLength(2000));
+    await waitFor(() => expect(result.current.logs).toHaveLength(10000));
 
     // Push one more update
     act(() => {
@@ -390,7 +390,7 @@ describe("useBotLogsStream", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.logs.length).toBeLessThanOrEqual(2000);
+      expect(result.current.logs.length).toBeLessThanOrEqual(10000);
       expect(result.current.logs[result.current.logs.length - 1].content).toBe(
         "New entry",
       );
@@ -656,6 +656,47 @@ describe("useBotLogsStream", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("should not reconnect SSE when refreshInterval changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ interval }) =>
+        useBotLogsStream({ botId: "bot-1", refreshInterval: interval }),
+      { initialProps: { interval: 30000 } },
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    // Push some history via SSE
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "SSE log" },
+      ]);
+    });
+
+    await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+    // Count how many times authFetch was called for the /stream endpoint
+    const streamCallsBefore = mockAuthFetch.mock.calls.filter(
+      (call) => typeof call[0] === "string" && call[0].includes("/stream"),
+    ).length;
+
+    // Change refreshInterval - should NOT cause SSE reconnection
+    rerender({ interval: 10000 });
+
+    // Wait a bit for any potential reconnection
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    const streamCallsAfter = mockAuthFetch.mock.calls.filter(
+      (call) => typeof call[0] === "string" && call[0].includes("/stream"),
+    ).length;
+
+    // SSE should NOT have reconnected (no new stream calls)
+    expect(streamCallsAfter).toBe(streamCallsBefore);
+    // Should still be connected
+    expect(result.current.connected).toBe(true);
   });
 
   it("should reconfigure polling interval when refreshInterval prop changes", async () => {

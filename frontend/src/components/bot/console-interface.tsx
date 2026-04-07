@@ -474,11 +474,14 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
     return newestFirst ? [...filteredLogs].reverse() : filteredLogs;
   }, [filteredLogs, newestFirst]);
 
-  // In newest-first mode, auto-scroll to top when new logs arrive
+  // In newest-first mode, auto-scroll to top when new logs arrive from
+  // live polling/SSE. Only scrolls when the user is already at the top
+  // so loading more historical data doesn't jolt them back.
   useEffect(() => {
     if (
       newestFirst &&
       autoScroll &&
+      isUserAtTop &&
       displayLogs.length > prevLogCountRef.current
     ) {
       virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "smooth" });
@@ -738,13 +741,13 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             ref={virtuosoRef}
             data={displayLogs}
             overscan={50}
-            followOutput={!newestFirst && autoScroll ? "smooth" : false}
+            followOutput={connected && !newestFirst && autoScroll ? "smooth" : false}
             atBottomStateChange={(atBottom) => setIsUserAtBottom(atBottom)}
             atTopStateChange={(atTop) => setIsUserAtTop(atTop)}
             itemContent={(index, log) => (
               <SmartLogEntry log={log} index={index} />
             )}
-            endReached={hasMore && loadMore ? loadMore : undefined}
+            endReached={undefined}
             components={{
               Header:
                 hasEarlierLogs && onLoadEarlier && !searchQuery
