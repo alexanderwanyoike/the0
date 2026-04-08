@@ -500,8 +500,7 @@ describe("ConsoleInterface", () => {
       );
 
       // Toggle to oldest-first (newestFirst=false)
-      const buttons = screen.getAllByRole("button");
-      const sortButton = buttons[2]; // refresh=1, sort=2
+      const sortButton = screen.getByRole("button", { name: /Newest first|Oldest first/i });
       await user.click(sortButton); // now newestFirst=false
 
       const container = screen.getByTestId("virtuoso-container");
@@ -526,8 +525,7 @@ describe("ConsoleInterface", () => {
       );
 
       // Toggle to oldest-first
-      const buttons = screen.getAllByRole("button");
-      const sortButton = buttons[2];
+      const sortButton = screen.getByRole("button", { name: /Newest first|Oldest first/i });
       await user.click(sortButton); // now newestFirst=false
 
       const container = screen.getByTestId("virtuoso-container");
