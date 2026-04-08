@@ -19,7 +19,7 @@ jest.mock("react-virtuoso", () => ({
       }: any,
       ref: any,
     ) => (
-      <div data-testid="virtuoso-container" data-overscan={overscan} className={className}>
+      <div data-testid="virtuoso-container" data-overscan={overscan} data-follow-output={String(followOutput)} className={className}>
         {components?.Header && <components.Header />}
         {data?.map((item: any, index: number) => (
           <div key={index} data-testid={`log-item-${index}`}>{itemContent(index, item)}</div>
@@ -479,6 +479,58 @@ describe("ConsoleInterface", () => {
         />,
       );
       expect(screen.getByText("Polling")).toBeInTheDocument();
+    });
+  });
+
+  describe("followOutput behavior", () => {
+    it("should disable followOutput when not connected even in oldest-first mode", async () => {
+      const user = userEvent.setup();
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      // Render with connected=false (viewing historical/REST data)
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          connected={false}
+          lastUpdate={new Date()}
+        />,
+      );
+
+      // Toggle to oldest-first (newestFirst=false)
+      const sortButton = screen.getByRole("button", { name: /Newest first|Oldest first/i });
+      await user.click(sortButton); // now newestFirst=false
+
+      const container = screen.getByTestId("virtuoso-container");
+      // Even with newestFirst=false and autoScroll=true, followOutput should
+      // be false because we're NOT connected (viewing historical data)
+      expect(container.getAttribute("data-follow-output")).toBe("false");
+    });
+
+    it("should enable followOutput only when connected in oldest-first mode", async () => {
+      const user = userEvent.setup();
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          connected={true}
+          lastUpdate={new Date()}
+        />,
+      );
+
+      // Toggle to oldest-first
+      const sortButton = screen.getByRole("button", { name: /Newest first|Oldest first/i });
+      await user.click(sortButton); // now newestFirst=false
+
+      const container = screen.getByTestId("virtuoso-container");
+      // With connected=true, newestFirst=false, autoScroll=true => followOutput="smooth"
+      expect(container.getAttribute("data-follow-output")).toBe("smooth");
     });
   });
 

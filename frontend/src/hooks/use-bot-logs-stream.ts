@@ -62,7 +62,7 @@ export interface UseBotLogsStreamReturn {
   loadMore?: () => Promise<void>;
 }
 
-const MAX_LOG_ENTRIES = 2000;
+const MAX_LOG_ENTRIES = 10000;
 
 
 /** Parse a raw SSE message block into event type and data. */
@@ -102,6 +102,10 @@ export const useBotLogsStream = ({
   const dateFilterActiveRef = useRef(false);
   const historyReceivedRef = useRef(false);
   const loadingMoreRef = useRef(false);
+  // Ref so SSE connection and polling can read the latest refreshInterval
+  // without causing the lifecycle effect to tear down and reconnect SSE.
+  const refreshIntervalRef = useRef(refreshInterval);
+  refreshIntervalRef.current = refreshInterval;
 
   // -- Cleanup helpers --
 
@@ -288,11 +292,11 @@ export const useBotLogsStream = ({
 
         // Fall back to REST polling
         fetchLogs();
-        if (refreshInterval > 0) {
-          pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        if (refreshIntervalRef.current > 0) {
+          pollingRef.current = setInterval(() => fetchLogs(), refreshIntervalRef.current);
         }
       });
-  }, [botId, user, refreshInterval, fetchLogs, stopPolling]);
+  }, [botId, user, fetchLogs, stopPolling]);
 
   // -- Lifecycle: connect on mount/botId change, cleanup on unmount --
 
@@ -322,8 +326,8 @@ export const useBotLogsStream = ({
     const fallbackTimer = setTimeout(() => {
       if (!historyReceivedRef.current) {
         fetchLogs();
-        if (refreshInterval > 0) {
-          pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        if (refreshIntervalRef.current > 0) {
+          pollingRef.current = setInterval(() => fetchLogs(), refreshIntervalRef.current);
         }
       }
     }, 4000);
@@ -332,7 +336,20 @@ export const useBotLogsStream = ({
       clearTimeout(fallbackTimer);
       abortAll();
     };
-  }, [botId, user, refreshInterval]);
+    // refreshInterval intentionally excluded - uses ref to avoid SSE reconnection
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botId, user]);
+
+  // Reconfigure REST polling interval when refreshInterval changes
+  // without tearing down the SSE connection.
+  useEffect(() => {
+    if (!pollingRef.current) return; // No active polling, nothing to reconfigure
+    stopPolling();
+    if (refreshInterval > 0) {
+      pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshInterval]);
 
   // -- Date filter: disconnect SSE, fetch REST, reconnect on clear --
 
