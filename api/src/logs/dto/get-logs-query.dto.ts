@@ -27,4 +27,9 @@ export class GetLogsQueryDto {
   @IsString()
   @IsIn(["all", "metrics"])
   type?: "all" | "metrics";
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["asc", "desc"])
+  sort?: "asc" | "desc";
 }

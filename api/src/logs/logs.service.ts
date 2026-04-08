@@ -14,6 +14,7 @@ export interface LogsQuery {
   limit: number;
   offset: number;
   type?: "all" | "metrics";
+  sort?: "asc" | "desc";
   // Parsed datetime bounds (set by parseDateQuery for datetime ranges)
   startTime?: Date;
   endTime?: Date;
@@ -69,17 +70,34 @@ export class LogsService {
     try {
       const entries: LogEntry[] = [];
 
+      const sortOrder = query.sort || "desc";
+
       if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
-        // Single date, non-metrics: tail for latest entries
+        // Single date, non-metrics: tail for latest entries (returns newest-first)
         const logPath = `logs/${botId}/${dates[0]}.log`;
         await this.tailFilteredLogs(logPath, dates[0], query, entries);
+        if (sortOrder === "asc") entries.reverse();
       } else {
-        // Multi-date or metrics: stream from start, chronological
+        // Multi-date or metrics: stream from start (returns oldest-first)
         const skipped = { count: 0 };
-        for (const date of dates) {
-          const logPath = `logs/${botId}/${date}.log`;
-          await this.streamFilteredLogs(logPath, date, query, entries, skipped);
-          if (query.type !== "metrics" && entries.length >= query.limit) break;
+        if (sortOrder === "desc" && query.type !== "metrics") {
+          // For desc on the stream path, read all entries without offset/limit,
+          // reverse to newest-first, then apply offset and limit
+          const unboundedQuery = { ...query, offset: 0, limit: Infinity };
+          for (const date of dates) {
+            const logPath = `logs/${botId}/${date}.log`;
+            await this.streamFilteredLogs(logPath, date, unboundedQuery, entries, skipped);
+          }
+          entries.reverse();
+          entries.splice(0, query.offset);
+          if (entries.length > query.limit) entries.length = query.limit;
+        } else {
+          for (const date of dates) {
+            const logPath = `logs/${botId}/${date}.log`;
+            await this.streamFilteredLogs(logPath, date, query, entries, skipped);
+            if (query.type !== "metrics" && entries.length >= query.limit) break;
+          }
+          if (sortOrder === "desc") entries.reverse();
         }
       }
 
