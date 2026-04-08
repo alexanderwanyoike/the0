@@ -718,6 +718,48 @@ describe("useBotLogs", () => {
     expect(calledUrl).toContain("offset=10");
   });
 
+  it("should include sort=desc in URL by default", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 0, hasMore: false }),
+    } as Response);
+
+    renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(mockAuthFetch).toHaveBeenCalled();
+    });
+
+    const url = mockAuthFetch.mock.calls[0][0] as string;
+    expect(url).toContain("sort=desc");
+  });
+
+  it("should pass sort=asc when query sort is changed", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 0, hasMore: false }),
+    } as Response);
+
+    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    mockAuthFetch.mockClear();
+
+    act(() => {
+      result.current.updateQuery({ sort: "asc" });
+    });
+
+    await waitFor(() => {
+      expect(mockAuthFetch).toHaveBeenCalled();
+    });
+
+    const url = mockAuthFetch.mock.calls[0][0] as string;
+    expect(url).toContain("sort=asc");
+  });
+
   it("should reconfigure polling when refreshInterval changes", async () => {
     jest.useFakeTimers();
     try {

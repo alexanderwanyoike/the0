@@ -86,6 +86,10 @@ interface ConsoleInterfaceProps {
   loadMore?: () => void;
   /** Whether more logs are currently being loaded */
   loadingMore?: boolean;
+  /** Current sort order from the API */
+  sort?: "asc" | "desc";
+  /** Callback when user toggles sort order */
+  onSortChange?: (sort: "asc" | "desc") => void;
 }
 
 const LOG_LEVEL_COLORS = {
@@ -445,10 +449,11 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   hasMore,
   loadMore,
   loadingMore,
+  sort = "desc",
+  onSortChange,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
-  const [newestFirst, setNewestFirst] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: "",
@@ -456,38 +461,17 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   });
   const [showFilters, setShowFilters] = useState(false);
   const [isUserAtBottom, setIsUserAtBottom] = useState(true);
-  const [isUserAtTop, setIsUserAtTop] = useState(true);
-  const prevLogCountRef = useRef(0);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  // Step 1: filter logs (only recomputes when logs or searchQuery change)
-  const filteredLogs = useMemo(() => {
+  // Filter logs (only recomputes when logs or searchQuery change)
+  // No reversal needed - the API returns data in the requested sort order
+  const displayLogs = useMemo(() => {
     if (searchQuery === "") return logs;
     return logs.filter((log) =>
       log.content.toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [logs, searchQuery]);
-
-  // Step 2: reverse for display order (recomputes when filteredLogs or newestFirst change)
-  const displayLogs = useMemo(() => {
-    return newestFirst ? [...filteredLogs].reverse() : filteredLogs;
-  }, [filteredLogs, newestFirst]);
-
-  // In newest-first mode, auto-scroll to top when new logs arrive from
-  // live polling/SSE. Only scrolls when the user is already at the top
-  // so loading more historical data doesn't jolt them back.
-  useEffect(() => {
-    if (
-      newestFirst &&
-      autoScroll &&
-      isUserAtTop &&
-      displayLogs.length > prevLogCountRef.current
-    ) {
-      virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "smooth" });
-    }
-    prevLogCountRef.current = displayLogs.length;
-  }, [displayLogs.length, newestFirst, autoScroll, isUserAtTop]);
 
   const handleDateChange = useCallback(
     (value: string) => {
@@ -605,15 +589,15 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setNewestFirst(!newestFirst)}
-              title={newestFirst ? "Newest first" : "Oldest first"}
+              onClick={() => onSortChange?.(sort === "desc" ? "asc" : "desc")}
+              title={sort === "desc" ? "Newest first" : "Oldest first"}
               className={cn(
                 "text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30 hover:text-green-700 dark:hover:text-green-300",
                 compact && "h-7 w-7 p-0",
               )}
             >
               <ArrowDownUp
-                className={cn("h-4 w-4", newestFirst && "rotate-180")}
+                className={cn("h-4 w-4", sort === "desc" && "rotate-180")}
               />
             </Button>
             <Button
@@ -741,9 +725,8 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
             ref={virtuosoRef}
             data={displayLogs}
             overscan={50}
-            followOutput={connected && !newestFirst && autoScroll ? "smooth" : false}
+            followOutput={connected && sort === "asc" && autoScroll ? "smooth" : false}
             atBottomStateChange={(atBottom) => setIsUserAtBottom(atBottom)}
-            atTopStateChange={(atTop) => setIsUserAtTop(atTop)}
             itemContent={(index, log) => (
               <SmartLogEntry log={log} index={index} />
             )}

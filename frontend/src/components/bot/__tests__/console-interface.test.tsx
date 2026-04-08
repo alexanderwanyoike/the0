@@ -483,34 +483,26 @@ describe("ConsoleInterface", () => {
   });
 
   describe("followOutput behavior", () => {
-    it("should disable followOutput when not connected even in oldest-first mode", async () => {
-      const user = userEvent.setup();
+    it("should disable followOutput when not connected even with sort=asc", () => {
       const logs: LogEntry[] = [
         { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
       ];
 
-      // Render with connected=false (viewing historical/REST data)
       render(
         <ConsoleInterface
           {...defaultProps}
           logs={logs}
           connected={false}
           lastUpdate={new Date()}
+          sort="asc"
         />,
       );
 
-      // Toggle to oldest-first (newestFirst=false)
-      const sortButton = screen.getByRole("button", { name: /Newest first|Oldest first/i });
-      await user.click(sortButton); // now newestFirst=false
-
       const container = screen.getByTestId("virtuoso-container");
-      // Even with newestFirst=false and autoScroll=true, followOutput should
-      // be false because we're NOT connected (viewing historical data)
       expect(container.getAttribute("data-follow-output")).toBe("false");
     });
 
-    it("should enable followOutput only when connected in oldest-first mode", async () => {
-      const user = userEvent.setup();
+    it("should enable followOutput when connected with sort=asc", () => {
       const logs: LogEntry[] = [
         { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
       ];
@@ -521,16 +513,31 @@ describe("ConsoleInterface", () => {
           logs={logs}
           connected={true}
           lastUpdate={new Date()}
+          sort="asc"
         />,
       );
 
-      // Toggle to oldest-first
-      const sortButton = screen.getByRole("button", { name: /Newest first|Oldest first/i });
-      await user.click(sortButton); // now newestFirst=false
+      const container = screen.getByTestId("virtuoso-container");
+      expect(container.getAttribute("data-follow-output")).toBe("smooth");
+    });
+
+    it("should disable followOutput when sort=desc even if connected", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          connected={true}
+          lastUpdate={new Date()}
+          sort="desc"
+        />,
+      );
 
       const container = screen.getByTestId("virtuoso-container");
-      // With connected=true, newestFirst=false, autoScroll=true => followOutput="smooth"
-      expect(container.getAttribute("data-follow-output")).toBe("smooth");
+      expect(container.getAttribute("data-follow-output")).toBe("false");
     });
   });
 
@@ -751,17 +758,16 @@ describe("ConsoleInterface", () => {
       }));
     }
 
-    it("should not create new array reference when logs are appended in newest-first mode", () => {
+    it("should render logs in received order without client-side reversal", () => {
       const initialLogs = makeLogs(100);
       const { rerender } = render(
         <ConsoleInterface {...defaultProps} logs={initialLogs} />,
       );
 
-      // Default is newest-first. The first rendered item should be last log reversed.
+      // No reversal: item 0 = first log in the array
       const firstItem = screen.getByTestId("log-item-0");
       expect(firstItem).toBeInTheDocument();
-      // Reversed: item 0 in display = last log from the original array
-      expect(firstItem.textContent).toContain("message 99");
+      expect(firstItem.textContent).toContain("message 0");
 
       // Append 10 more logs
       const appendedLogs = [...initialLogs, ...makeLogs(10, "New")];
@@ -769,10 +775,9 @@ describe("ConsoleInterface", () => {
         <ConsoleInterface {...defaultProps} logs={appendedLogs} />,
       );
 
-      // After appending, newest log should be first displayed item
+      // First item unchanged, new items at the end
       const updatedFirstItem = screen.getByTestId("log-item-0");
-      expect(updatedFirstItem).toBeInTheDocument();
-      expect(updatedFirstItem.textContent).toContain("New message 9");
+      expect(updatedFirstItem.textContent).toContain("message 0");
 
       // All 110 items should be rendered
       expect(screen.getByTestId("log-item-109")).toBeInTheDocument();
