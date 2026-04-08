@@ -81,12 +81,15 @@ export class LogsService {
         // Multi-date or metrics: stream from start (returns oldest-first)
         const skipped = { count: 0 };
         if (sortOrder === "desc" && query.type !== "metrics") {
-          // For desc on the stream path, read all entries without offset/limit,
-          // reverse to newest-first, then apply offset and limit
-          const unboundedQuery = { ...query, offset: 0, limit: Infinity };
+          // For desc on the stream path, read entries in chronological order,
+          // reverse to newest-first, then apply offset and limit.
+          // Cap total reads to prevent memory exhaustion on huge ranges.
+          const maxRead = Math.max(query.offset + query.limit, 10000);
+          const cappedQuery = { ...query, offset: 0, limit: maxRead };
           for (const date of dates) {
             const logPath = `logs/${botId}/${date}.log`;
-            await this.streamFilteredLogs(logPath, date, unboundedQuery, entries, skipped);
+            await this.streamFilteredLogs(logPath, date, cappedQuery, entries, skipped);
+            if (entries.length >= maxRead) break;
           }
           entries.reverse();
           entries.splice(0, query.offset);
