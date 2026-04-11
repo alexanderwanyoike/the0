@@ -66,7 +66,7 @@ describe("LogsController", () => {
       expect(result.hasMore).toBe(false);
       expect(mockLogsService.getLogs).toHaveBeenCalledWith(
         "bot-123",
-        { date: undefined, dateRange: undefined, limit: 100, offset: 0 },
+        { date: undefined, dateRange: undefined, limit: 100, offset: 0, sort: "desc" },
         "user123",
       );
     });
@@ -113,6 +113,7 @@ describe("LogsController", () => {
           limit: 100,
           offset: 0,
           type: "metrics",
+          sort: "desc",
         },
         "user123",
       );
@@ -194,6 +195,7 @@ describe("LogsController", () => {
           limit: 50,
           offset: 0,
           type: "all",
+          sort: "desc",
         },
         "user123",
       );

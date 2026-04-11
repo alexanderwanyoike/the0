@@ -75,6 +75,7 @@ export class LogsController {
       limit: query.limit || 100,
       offset: query.offset || 0,
       type: query.type,
+      sort: query.sort || "desc",
     }, user.uid);
 
     if (!result.success) {

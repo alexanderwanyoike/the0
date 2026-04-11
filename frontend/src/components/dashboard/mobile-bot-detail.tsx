@@ -70,6 +70,8 @@ interface MobileBotDetailProps {
   showLive?: boolean;
   refreshInterval: number;
   onRefreshIntervalChange: (ms: number) => void;
+  sort?: "asc" | "desc";
+  onSortChange?: (sort: "asc" | "desc") => void;
 }
 
 export function MobileBotDetail({
@@ -102,6 +104,8 @@ export function MobileBotDetail({
   showLive,
   refreshInterval,
   onRefreshIntervalChange,
+  sort,
+  onSortChange,
 }: MobileBotDetailProps) {
   const router = useRouter();
 
@@ -188,6 +192,8 @@ export function MobileBotDetail({
             hasMore={hasMore}
             loadMore={loadMore}
             loadingMore={loadingMore}
+            sort={sort}
+            onSortChange={onSortChange}
             className="h-full"
             compact
           />

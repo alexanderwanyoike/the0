@@ -81,6 +81,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   // Configurable refresh rate for polling (console + dashboard)
   const [refreshInterval, setRefreshInterval] = useState(30000);
+  // Sort order for console logs (API-side sorting)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
@@ -469,6 +471,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           showLive={useStreaming}
           refreshInterval={refreshInterval}
           onRefreshIntervalChange={setRefreshInterval}
+          sort={sortOrder}
+          onSortChange={(s) => { setSortOrder(s); activeHook.updateQuery({ sort: s }); }}
         />
         {cliUpdateModal}
       </>
@@ -618,6 +622,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 hasMore={hasMoreLogs}
                 loadMore={loadMoreLogs}
                 loadingMore={hasMoreLogs ? logsLoading : undefined}
+                sort={sortOrder}
+                onSortChange={(s) => { setSortOrder(s); activeHook.updateQuery({ sort: s }); }}
                 className="h-full"
                 compact
               />

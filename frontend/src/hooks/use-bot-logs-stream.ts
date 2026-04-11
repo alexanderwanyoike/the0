@@ -29,6 +29,7 @@ interface LogsQuery {
   dateRange?: string;
   limit?: number;
   offset?: number;
+  sort?: "asc" | "desc";
 }
 
 interface LogsResponse {
@@ -60,6 +61,7 @@ export interface UseBotLogsStreamReturn {
   loadEarlierLogs: () => void;
   /** Load more paginated results (only available in REST mode, i.e. when a date filter is active) */
   loadMore?: () => Promise<void>;
+  updateQuery: (params: Partial<{ date?: string; dateRange?: string; limit?: number; offset?: number; sort?: "asc" | "desc" }>) => void;
 }
 
 const MAX_LOG_ENTRIES = 10000;
@@ -80,7 +82,7 @@ function parseSSEMessage(msg: string): { eventType: string; data: string } {
 export const useBotLogsStream = ({
   botId,
   refreshInterval = 30000,
-  initialQuery = { limit: 100, offset: 0 },
+  initialQuery = { limit: 100, offset: 0, sort: "desc" },
 }: UseBotLogsStreamProps): UseBotLogsStreamReturn => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -155,6 +157,8 @@ export const useBotLogsStream = ({
           searchParams.set("limit", effectiveQuery.limit.toString());
         if (effectiveQuery.offset != null)
           searchParams.set("offset", effectiveQuery.offset.toString());
+        if (effectiveQuery.sort)
+          searchParams.set("sort", effectiveQuery.sort);
 
         const response = await authFetch(
           `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
@@ -448,6 +452,19 @@ export const useBotLogsStream = ({
     }
   }, [fetchLogs, abortAll, connectSSE]);
 
+  // -- Update query (for sort changes, etc.) --
+
+  const updateQuery = useCallback(
+    (params: Partial<LogsQuery>) => {
+      const updatedQuery = { ...query, ...params, offset: 0 };
+      setQuery(updatedQuery);
+      if (dateFilterActiveRef.current) {
+        fetchLogs(updatedQuery);
+      }
+    },
+    [query, fetchLogs],
+  );
+
   // -- Export logs as downloadable file --
 
   const exportLogs = useCallback(() => {
@@ -486,5 +503,6 @@ export const useBotLogsStream = ({
     loadingEarlier,
     loadEarlierLogs,
     loadMore: hasMore ? loadMore : undefined,
+    updateQuery,
   };
 };

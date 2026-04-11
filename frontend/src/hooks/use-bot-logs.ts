@@ -13,6 +13,7 @@ interface LogsQuery {
   limit?: number;
   offset?: number;
   type?: string;
+  sort?: "asc" | "desc";
 }
 
 interface LogsResponse {
@@ -34,7 +35,7 @@ export const useBotLogs = ({
   botId,
   autoRefresh = false,
   refreshInterval = 30000, // 30 seconds
-  initialQuery = { limit: 2000, offset: 0 },
+  initialQuery = { limit: 2000, offset: 0, sort: "desc" },
 }: UseBotLogsProps) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,6 +91,7 @@ export const useBotLogs = ({
         if (queryParams.offset)
           searchParams.set("offset", queryParams.offset.toString());
         if (queryParams.type) searchParams.set("type", queryParams.type);
+        if (queryParams.sort) searchParams.set("sort", queryParams.sort);
 
         const response = await authFetch(
           `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
