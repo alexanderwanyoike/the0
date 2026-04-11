@@ -2,11 +2,13 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,6 +81,73 @@ func TestNewLogsSyncer_NilUploader(t *testing.T) {
 	syncer := NewLogsSyncer("bot-1", "/logs", nil, nil, &util.DefaultLogger{})
 	assert.Nil(t, syncer, "should return nil when uploader is nil")
 }
+
+// slowDeadlineRecordingUploader records the ctx deadline and optionally blocks
+// until the ctx is cancelled, simulating a long upload.
+type slowDeadlineRecordingUploader struct {
+	observedDeadline time.Time
+	block            time.Duration
+	returnErr        error
+}
+
+func (s *slowDeadlineRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string) error {
+	if d, ok := ctx.Deadline(); ok {
+		s.observedDeadline = d
+	}
+	if s.block > 0 {
+		select {
+		case <-time.After(s.block):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return s.returnErr
+}
+func (s *slowDeadlineRecordingUploader) StoreFinalLogs(ctx context.Context, id, content string) error {
+	return nil
+}
+func (s *slowDeadlineRecordingUploader) Close() error { return nil }
+
+func TestLogsSyncer_DefaultUploadTimeoutIs120s(t *testing.T) {
+	recorder := &slowDeadlineRecordingUploader{}
+	syncer := NewLogsSyncer("bot-1", "/logs", recorder, nil, &util.DefaultLogger{})
+	require.NotNil(t, syncer)
+
+	start := time.Now()
+	err := syncer.uploadChunk(context.Background(), "hello")
+	require.NoError(t, err)
+
+	require.False(t, recorder.observedDeadline.IsZero(), "upload should have observed a ctx deadline")
+	gotTimeout := recorder.observedDeadline.Sub(start)
+	assert.InDelta(t, (120 * time.Second).Seconds(), gotTimeout.Seconds(), 1.0,
+		"default upload timeout must be 120s (got %s)", gotTimeout)
+}
+
+func TestLogsSyncer_WithUploadTimeoutOverridesDefault(t *testing.T) {
+	recorder := &slowDeadlineRecordingUploader{}
+	syncer := NewLogsSyncer("bot-1", "/logs", recorder, nil, &util.DefaultLogger{}, WithLogsUploadTimeout(50*time.Millisecond))
+	require.NotNil(t, syncer)
+
+	start := time.Now()
+	err := syncer.uploadChunk(context.Background(), "hello")
+	require.NoError(t, err)
+
+	gotTimeout := recorder.observedDeadline.Sub(start)
+	assert.InDelta(t, (50 * time.Millisecond).Seconds(), gotTimeout.Seconds(), 0.1,
+		"upload timeout should honor WithLogsUploadTimeout (got %s)", gotTimeout)
+}
+
+func TestLogsSyncer_UploadTimeoutEnforced(t *testing.T) {
+	recorder := &slowDeadlineRecordingUploader{block: 500 * time.Millisecond}
+	syncer := NewLogsSyncer("bot-1", "/logs", recorder, nil, &util.DefaultLogger{}, WithLogsUploadTimeout(50*time.Millisecond))
+	require.NotNil(t, syncer)
+
+	err := syncer.uploadChunk(context.Background(), "hello")
+	require.Error(t, err, "upload must error when mock blocks past the configured timeout")
+	assert.True(t, errors.Is(err, context.DeadlineExceeded),
+		"error should wrap context.DeadlineExceeded, got %v", err)
+}
+
 
 func TestNewLogsSyncer_ValidUploader(t *testing.T) {
 	mockUploader := &MockMinIOLogger{}

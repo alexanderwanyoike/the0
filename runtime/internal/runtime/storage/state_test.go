@@ -4,11 +4,15 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
+	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -194,4 +198,132 @@ func TestUploadState_NonExistentDir(t *testing.T) {
 	// Verify it doesn't exist
 	_, err := os.ReadDir(nonExistentDir)
 	assert.True(t, os.IsNotExist(err))
+}
+
+// fakeStateObjectWriter is a controllable stand-in for the upload subset of
+// minio.Client that state.go uses. Lets us deterministically fail an upload
+// mid-stream and assert that the abort path ran with the right args.
+type fakeStateObjectWriter struct {
+	mu sync.Mutex
+
+	putErr    error
+	removeErr error
+
+	putCalls    []fakePutCall
+	removeCalls []fakeRemoveCall
+}
+
+type fakePutCall struct {
+	bucket, object string
+}
+
+type fakeRemoveCall struct {
+	bucket, object string
+	ctxDone        bool
+}
+
+func (f *fakeStateObjectWriter) PutObject(ctx context.Context, bucket, object string, reader io.Reader, size int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	// Drain the reader so the background tar.gz goroutine can exit cleanly;
+	// otherwise it blocks forever writing into a dead pipe.
+	_, _ = io.Copy(io.Discard, reader)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.putCalls = append(f.putCalls, fakePutCall{bucket: bucket, object: object})
+	if f.putErr != nil {
+		return minio.UploadInfo{}, f.putErr
+	}
+	return minio.UploadInfo{Bucket: bucket, Key: object}, nil
+}
+
+func (f *fakeStateObjectWriter) RemoveIncompleteUpload(ctx context.Context, bucket, object string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	done := false
+	select {
+	case <-ctx.Done():
+		done = true
+	default:
+	}
+	f.removeCalls = append(f.removeCalls, fakeRemoveCall{bucket: bucket, object: object, ctxDone: done})
+	return f.removeErr
+}
+
+// writeSimpleStateDir creates a directory with two tiny state files that
+// validateStateSize / createTarGz will happily process.
+func writeSimpleStateDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "state-abort-")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "portfolio.json"), []byte(`{"AAPL":100}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "counters.json"), []byte(`{"trades":42}`), 0644))
+	return dir
+}
+
+func TestUploadState_AbortsIncompleteUploadOnPutError(t *testing.T) {
+	fake := &fakeStateObjectWriter{putErr: fmt.Errorf("simulated put failure")}
+	mgr := &stateManager{
+		minioClient:      nil, // ensureBucket path is bypassed via uploader seam
+		uploader:         fake,
+		bucket:           "bot-state",
+		maxStateSize:     8 * 1024 * 1024 * 1024,
+		maxStateFileSize: 10 * 1024 * 1024,
+		logger:           &testLogger{},
+		skipEnsureBucket: true,
+	}
+
+	srcDir := writeSimpleStateDir(t)
+
+	err := mgr.UploadState(context.Background(), "abort-bot", srcDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "simulated put failure")
+
+	require.Len(t, fake.putCalls, 1, "put should have been attempted")
+	require.Len(t, fake.removeCalls, 1, "RemoveIncompleteUpload must fire on put error")
+	assert.Equal(t, "bot-state", fake.removeCalls[0].bucket)
+	assert.Equal(t, "abort-bot/state.tar.gz", fake.removeCalls[0].object)
+}
+
+func TestUploadState_AbortUsesFreshContextWhenCallerCancelled(t *testing.T) {
+	fake := &fakeStateObjectWriter{putErr: context.Canceled}
+	mgr := &stateManager{
+		minioClient:      nil,
+		uploader:         fake,
+		bucket:           "bot-state",
+		maxStateSize:     8 * 1024 * 1024 * 1024,
+		maxStateFileSize: 10 * 1024 * 1024,
+		logger:           &testLogger{},
+		skipEnsureBucket: true,
+	}
+
+	srcDir := writeSimpleStateDir(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := mgr.UploadState(ctx, "abort-ctx-bot", srcDir)
+	require.Error(t, err)
+
+	require.Len(t, fake.removeCalls, 1, "abort must run even though caller ctx is cancelled")
+	assert.False(t, fake.removeCalls[0].ctxDone, "abort must run on a fresh, non-cancelled context")
+}
+
+func TestUploadState_HappyPathDoesNotAbort(t *testing.T) {
+	fake := &fakeStateObjectWriter{}
+	mgr := &stateManager{
+		minioClient:      nil,
+		uploader:         fake,
+		bucket:           "bot-state",
+		maxStateSize:     8 * 1024 * 1024 * 1024,
+		maxStateFileSize: 10 * 1024 * 1024,
+		logger:           &testLogger{},
+		skipEnsureBucket: true,
+	}
+
+	srcDir := writeSimpleStateDir(t)
+	err := mgr.UploadState(context.Background(), "ok-bot", srcDir)
+	require.NoError(t, err)
+
+	assert.Len(t, fake.putCalls, 1)
+	assert.Empty(t, fake.removeCalls, "no abort should run on success")
 }
