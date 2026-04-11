@@ -1,6 +1,7 @@
 package miniologger
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -597,6 +598,212 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 
 	assert.Contains(t, string(content), "hello world")
 	assert.Contains(t, string(content), time.Now().Format("2006-01-02"))
+}
+
+// fakeMultipartClient is a controllable implementation of multipartClient.
+// It records every call and can be programmed to return errors at specific
+// steps so we can deterministically exercise the abort-on-error contract.
+type fakeMultipartClient struct {
+	mu sync.Mutex
+
+	// Programmed errors. If set, the matching method returns that error.
+	newErr      error
+	copyErr     error // returned on every CopyObjectPart call unless copyErrPartID > 0
+	copyErrPart int   // if > 0, only the CopyObjectPart call with this partID errors
+	completeErr error
+	abortErr    error
+
+	// Call records.
+	uploadIDs    []string // uploadIDs handed out
+	copyCalls    []fakeCopyCall
+	completedIDs []string
+	abortedIDs   []string
+}
+
+type fakeCopyCall struct {
+	srcBucket, srcObject     string
+	destBucket, destObject   string
+	uploadID                 string
+	partID                   int
+	startOffset, length      int64
+}
+
+func (f *fakeMultipartClient) NewMultipartUpload(ctx context.Context, bucket, object string, opts minio.PutObjectOptions) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.newErr != nil {
+		return "", f.newErr
+	}
+	id := fmt.Sprintf("fake-upload-%d", len(f.uploadIDs)+1)
+	f.uploadIDs = append(f.uploadIDs, id)
+	return id, nil
+}
+
+func (f *fakeMultipartClient) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
+	partID int, startOffset, length int64, metadata map[string]string,
+) (minio.CompletePart, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.copyCalls = append(f.copyCalls, fakeCopyCall{
+		srcBucket: srcBucket, srcObject: srcObject,
+		destBucket: destBucket, destObject: destObject,
+		uploadID: uploadID, partID: partID,
+		startOffset: startOffset, length: length,
+	})
+	if f.copyErr != nil && (f.copyErrPart == 0 || f.copyErrPart == partID) {
+		return minio.CompletePart{}, f.copyErr
+	}
+	return minio.CompletePart{PartNumber: partID, ETag: fmt.Sprintf("etag-%d", partID)}, nil
+}
+
+func (f *fakeMultipartClient) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, parts []minio.CompletePart, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.completeErr != nil {
+		return minio.UploadInfo{}, f.completeErr
+	}
+	f.completedIDs = append(f.completedIDs, uploadID)
+	return minio.UploadInfo{Bucket: bucket, Key: object}, nil
+}
+
+func (f *fakeMultipartClient) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.abortErr != nil {
+		return f.abortErr
+	}
+	f.abortedIDs = append(f.abortedIDs, uploadID)
+	return nil
+}
+
+// primeDailyLog puts an object at the daily key for a bot using the real
+// MinIO client, so the subsequent AppendBotLogs call sees a file >= the
+// compose threshold and takes the multipart-copy branch.
+func primeDailyLog(t *testing.T, client *minio.Client, bucket, botID string, size int) {
+	t.Helper()
+	payload := make([]byte, size)
+	for i := range payload {
+		payload[i] = 'x'
+	}
+	dailyKey := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().Format("20060102"))
+	_, err := client.PutObject(context.Background(), bucket, dailyKey, bytes.NewReader(payload), int64(len(payload)), minio.PutObjectOptions{ContentType: "text/plain"})
+	require.NoError(t, err)
+}
+
+func TestAppendBotLogs_AbortsOnCompleteMultipartError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
+	defer container.Terminate(context.Background())
+
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      endpoint,
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
+		UseSSL:        false,
+		LogsBucket:    "test-abort-complete",
+		ResultsBucket: "test-abort-complete-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	// Seed an 8 MiB daily log so the next append takes the compose branch.
+	botID := "abort-complete-bot"
+	primeDailyLog(t, logger.client, "test-abort-complete", botID, 8*1024*1024)
+
+	// Swap in a fake multipart client programmed to fail on complete.
+	fake := &fakeMultipartClient{completeErr: fmt.Errorf("simulated r2 complete failure")}
+	logger.mpClient = fake
+
+	err = logger.AppendBotLogs(context.Background(), botID, "new chunk")
+	require.Error(t, err, "AppendBotLogs should surface the compose failure")
+	assert.Contains(t, err.Error(), "simulated r2 complete failure")
+
+	// Contract: on failure, the multipart upload must have been aborted.
+	require.Len(t, fake.uploadIDs, 1, "exactly one multipart upload should have been created")
+	assert.Equal(t, fake.uploadIDs, fake.abortedIDs, "the created upload must be aborted")
+	assert.Empty(t, fake.completedIDs, "no upload should be marked complete on failure")
+}
+
+func TestAppendBotLogs_AbortsOnCopyPartError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
+	defer container.Terminate(context.Background())
+
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      endpoint,
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
+		UseSSL:        false,
+		LogsBucket:    "test-abort-copy",
+		ResultsBucket: "test-abort-copy-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	botID := "abort-copy-bot"
+	primeDailyLog(t, logger.client, "test-abort-copy", botID, 8*1024*1024)
+
+	fake := &fakeMultipartClient{copyErr: fmt.Errorf("simulated uploadpartcopy failure"), copyErrPart: 2}
+	logger.mpClient = fake
+
+	err = logger.AppendBotLogs(context.Background(), botID, "new chunk")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "simulated uploadpartcopy failure")
+
+	require.Len(t, fake.uploadIDs, 1)
+	assert.Equal(t, fake.uploadIDs, fake.abortedIDs, "uploadPartCopy failure must still abort")
+}
+
+func TestAppendBotLogs_NoLeakedUploadsOnHappyCompose(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
+	defer container.Terminate(context.Background())
+
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      endpoint,
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
+		UseSSL:        false,
+		LogsBucket:    "test-happy-compose",
+		ResultsBucket: "test-happy-compose-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	botID := "happy-compose-bot"
+
+	// Drive 10 appends each larger than the 5 MiB threshold so every call
+	// after the first exercises the multipart-copy path on the real MinIO.
+	chunk := make([]byte, 6*1024*1024)
+	for i := range chunk {
+		chunk[i] = 'y'
+	}
+	for i := 0; i < 10; i++ {
+		err := logger.AppendBotLogs(context.Background(), botID, string(chunk))
+		require.NoError(t, err, "append %d failed", i)
+	}
+
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: false,
+	})
+	require.NoError(t, err)
+
+	// Verify no orphaned incomplete multipart uploads remain.
+	var incomplete int
+	for range client.ListIncompleteUploads(context.Background(), "test-happy-compose", fmt.Sprintf("logs/%s/", botID), true) {
+		incomplete++
+	}
+	assert.Equal(t, 0, incomplete, "happy-path compose must not leave incomplete uploads")
 }
 
 func TestMinIOLoggerInterface(t *testing.T) {

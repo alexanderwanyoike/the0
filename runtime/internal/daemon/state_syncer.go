@@ -14,23 +14,42 @@ import (
 	"runtime/internal/util"
 )
 
+// defaultStateUploadTimeout bounds a single UploadState call. Previously 60s,
+// raised to give R2 tail latency on the streamed multipart upload enough
+// headroom to complete instead of timing out and leaking upload IDs.
+const defaultStateUploadTimeout = 180 * time.Second
+
+// StateSyncerOption configures a StateSyncer at construction.
+type StateSyncerOption func(*StateSyncer)
+
+// WithStateUploadTimeout overrides the per-upload timeout used inside Sync.
+func WithStateUploadTimeout(d time.Duration) StateSyncerOption {
+	return func(s *StateSyncer) { s.uploadTimeout = d }
+}
+
 // StateSyncer handles periodic state synchronization to MinIO.
 type StateSyncer struct {
-	botID        string
-	statePath    string
-	stateManager storage.StateManager
-	logger       util.Logger
-	lastHash     string
+	botID         string
+	statePath     string
+	stateManager  storage.StateManager
+	logger        util.Logger
+	lastHash      string
+	uploadTimeout time.Duration
 }
 
 // NewStateSyncer creates a new state syncer.
-func NewStateSyncer(botID, statePath string, stateManager storage.StateManager, logger util.Logger) *StateSyncer {
-	return &StateSyncer{
-		botID:        botID,
-		statePath:    statePath,
-		stateManager: stateManager,
-		logger:       logger,
+func NewStateSyncer(botID, statePath string, stateManager storage.StateManager, logger util.Logger, opts ...StateSyncerOption) *StateSyncer {
+	s := &StateSyncer{
+		botID:         botID,
+		statePath:     statePath,
+		stateManager:  stateManager,
+		logger:        logger,
+		uploadTimeout: defaultStateUploadTimeout,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Sync checks for state changes and uploads if changed.
@@ -53,7 +72,7 @@ func (s *StateSyncer) Sync(ctx context.Context) bool {
 	}
 
 	s.logger.Info("State changed, syncing to MinIO", "bot_id", s.botID)
-	syncCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	syncCtx, cancel := context.WithTimeout(ctx, s.uploadTimeout)
 	defer cancel()
 
 	if err := s.stateManager.UploadState(syncCtx, s.botID, s.statePath); err != nil {

@@ -2,6 +2,8 @@ package gc
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,12 +13,23 @@ import (
 
 // mockMinIOClient implements the MinIOClient interface for testing
 type mockMinIOClient struct {
-	logObjects      []string     // object names in logs bucket
-	stateObjects    []string     // object names in state bucket
-	logObjectsInfo  []ObjectInfo // objects with metadata in logs bucket
-	deleted         []string     // track deleted object paths (bucket:name)
-	listErr         error
-	removeErr       error
+	logObjects     []string     // object names in logs bucket
+	stateObjects   []string     // object names in state bucket
+	logObjectsInfo []ObjectInfo // objects with metadata in logs bucket
+	deleted        []string     // track deleted object paths (bucket:name)
+	listErr        error
+	removeErr      error
+
+	// Incomplete multipart uploads, keyed by bucket.
+	incompleteUploads map[string][]IncompleteUploadInfo
+	// Tracks aborted uploads as "bucket:key:uploadID".
+	aborted []string
+	// Per-bucket list error (nil means OK). If listIncompleteErr is non-nil
+	// for a bucket, the list call for that bucket returns it.
+	listIncompleteErr map[string]error
+	// If set, AbortIncompleteUpload returns this error for keys matching abortErrKey.
+	abortErr    error
+	abortErrKey string
 }
 
 func (m *mockMinIOClient) ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error) {
@@ -62,6 +75,36 @@ func (m *mockMinIOClient) RemoveObject(ctx context.Context, bucket, name string)
 		return m.removeErr
 	}
 	m.deleted = append(m.deleted, bucket+":"+name)
+	return nil
+}
+
+func (m *mockMinIOClient) ListIncompleteUploads(ctx context.Context, bucket, prefix string) ([]IncompleteUploadInfo, error) {
+	if m.listIncompleteErr != nil {
+		if err, ok := m.listIncompleteErr[bucket]; ok && err != nil {
+			return nil, err
+		}
+	}
+	if m.incompleteUploads == nil {
+		return nil, nil
+	}
+	uploads, ok := m.incompleteUploads[bucket]
+	if !ok {
+		return nil, nil
+	}
+	var result []IncompleteUploadInfo
+	for _, u := range uploads {
+		if prefix == "" || strings.HasPrefix(u.Key, prefix) {
+			result = append(result, u)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockMinIOClient) AbortIncompleteUpload(ctx context.Context, bucket, key, uploadID string) error {
+	if m.abortErr != nil && (m.abortErrKey == "" || m.abortErrKey == key) {
+		return m.abortErr
+	}
+	m.aborted = append(m.aborted, bucket+":"+key+":"+uploadID)
 	return nil
 }
 
@@ -257,6 +300,115 @@ func TestGC_CleansUpStaleTempFiles(t *testing.T) {
 		assert.NotContains(t, d, ".tmp-1711900200000000000", "fresh temp file should not be deleted")
 		assert.NotContains(t, d, "20260101.log", "regular log file should not be deleted")
 	}
+}
+
+func TestGC_AbortsStaleIncompleteUploadsOnLogsAndState(t *testing.T) {
+	now := time.Now()
+	stale := now.Add(-2 * time.Hour) // older than staleIncompleteUploadAge
+	fresh := now.Add(-10 * time.Minute)
+
+	minio := &mockMinIOClient{
+		incompleteUploads: map[string][]IncompleteUploadInfo{
+			"bot-logs": {
+				{Key: "logs/bot-a/20260410.log", UploadID: "u1-stale", Initiated: stale},
+				{Key: "logs/bot-a/20260410.log", UploadID: "u2-stale", Initiated: stale},
+				{Key: "logs/bot-b/20260411.log", UploadID: "u3-fresh", Initiated: fresh},
+			},
+			"bot-state": {
+				{Key: "bot-a/state.tar.gz", UploadID: "s1-stale", Initiated: stale},
+				{Key: "bot-c/state.tar.gz", UploadID: "s2-stale", Initiated: stale},
+				{Key: "bot-a/state.tar.gz", UploadID: "s3-fresh", Initiated: fresh},
+			},
+		},
+	}
+	store := &mockBotStore{existingIDs: map[string]bool{"bot-a": true, "bot-b": true, "bot-c": true}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	result, err := gc.Run(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 4, result.AbortedMultipartUploads, "expect 2 stale uploads aborted on each of 2 buckets")
+
+	assert.Contains(t, minio.aborted, "bot-logs:logs/bot-a/20260410.log:u1-stale")
+	assert.Contains(t, minio.aborted, "bot-logs:logs/bot-a/20260410.log:u2-stale")
+	assert.Contains(t, minio.aborted, "bot-state:bot-a/state.tar.gz:s1-stale")
+	assert.Contains(t, minio.aborted, "bot-state:bot-c/state.tar.gz:s2-stale")
+
+	for _, a := range minio.aborted {
+		assert.NotContains(t, a, "u3-fresh", "fresh logs upload should not be aborted")
+		assert.NotContains(t, a, "s3-fresh", "fresh state upload should not be aborted")
+	}
+}
+
+func TestGC_IncompleteUploadsListErrorOnOneBucket(t *testing.T) {
+	stale := time.Now().Add(-2 * time.Hour)
+
+	minio := &mockMinIOClient{
+		incompleteUploads: map[string][]IncompleteUploadInfo{
+			"bot-state": {
+				{Key: "bot-x/state.tar.gz", UploadID: "s1", Initiated: stale},
+			},
+		},
+		listIncompleteErr: map[string]error{
+			"bot-logs": errors.New("r2 list failed"),
+		},
+	}
+	store := &mockBotStore{existingIDs: map[string]bool{"bot-x": true}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	result, err := gc.Run(context.Background())
+
+	require.NoError(t, err, "list failure on one bucket must not abort the whole sweep")
+	assert.Equal(t, 1, result.AbortedMultipartUploads, "the other bucket's sweep must still run")
+	assert.Contains(t, minio.aborted, "bot-state:bot-x/state.tar.gz:s1")
+}
+
+func TestGC_IncompleteUploadsAbortErrorContinues(t *testing.T) {
+	stale := time.Now().Add(-2 * time.Hour)
+
+	minio := &mockMinIOClient{
+		incompleteUploads: map[string][]IncompleteUploadInfo{
+			"bot-logs": {
+				{Key: "logs/bot-a/20260410.log", UploadID: "bad", Initiated: stale},
+				{Key: "logs/bot-b/20260410.log", UploadID: "good", Initiated: stale},
+			},
+		},
+		abortErr:    errors.New("r2 abort failed"),
+		abortErrKey: "logs/bot-a/20260410.log",
+	}
+	store := &mockBotStore{existingIDs: map[string]bool{"bot-a": true, "bot-b": true}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	result, err := gc.Run(context.Background())
+
+	require.NoError(t, err, "per-upload abort failure must not fail the sweep")
+	assert.Equal(t, 1, result.AbortedMultipartUploads, "only the successful abort should count")
+	assert.Contains(t, minio.aborted, "bot-logs:logs/bot-b/20260410.log:good")
+	assert.NotContains(t, minio.aborted, "bot-logs:logs/bot-a/20260410.log:bad")
+}
+
+func TestGC_IncompleteUploadsAgeFilterBoundary(t *testing.T) {
+	now := time.Now()
+	justStale := now.Add(-staleIncompleteUploadAge).Add(-1 * time.Millisecond)
+	justFresh := now.Add(-staleIncompleteUploadAge).Add(1 * time.Millisecond)
+
+	minio := &mockMinIOClient{
+		incompleteUploads: map[string][]IncompleteUploadInfo{
+			"bot-logs": {
+				{Key: "logs/bot-a/x.log", UploadID: "stale", Initiated: justStale},
+				{Key: "logs/bot-a/x.log", UploadID: "fresh", Initiated: justFresh},
+			},
+		},
+	}
+	store := &mockBotStore{existingIDs: map[string]bool{"bot-a": true}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	result, err := gc.Run(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.AbortedMultipartUploads)
+	assert.Contains(t, minio.aborted, "bot-logs:logs/bot-a/x.log:stale")
+	assert.NotContains(t, minio.aborted, "bot-logs:logs/bot-a/x.log:fresh")
 }
 
 func TestGC_StaleTempFilesListError(t *testing.T) {

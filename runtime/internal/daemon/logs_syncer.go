@@ -13,30 +13,50 @@ import (
 	"runtime/internal/util"
 )
 
+// defaultLogsUploadTimeout bounds a single AppendBotLogs call. Comfortably
+// exceeds R2 tail latency on the multipart-copy path for bots with growing
+// daily logs; previously this was 30s which was causing context timeouts
+// mid-upload and leaking multipart upload IDs on R2.
+const defaultLogsUploadTimeout = 120 * time.Second
+
+// LogsSyncerOption configures a LogsSyncer at construction.
+type LogsSyncerOption func(*LogsSyncer)
+
+// WithLogsUploadTimeout overrides the per-chunk upload timeout.
+func WithLogsUploadTimeout(d time.Duration) LogsSyncerOption {
+	return func(l *LogsSyncer) { l.uploadTimeout = d }
+}
+
 // LogsSyncer handles periodic log synchronization to MinIO.
 type LogsSyncer struct {
-	botID          string
-	logsPath       string
-	logUploader    miniologger.MinIOLogger
-	natsPublisher  LogPublisher
-	logger         util.Logger
-	lastOffset     int64
+	botID         string
+	logsPath      string
+	logUploader   miniologger.MinIOLogger
+	natsPublisher LogPublisher
+	logger        util.Logger
+	lastOffset    int64
+	uploadTimeout time.Duration
 }
 
 // NewLogsSyncer creates a new logs syncer.
 // Returns nil if logUploader is nil (logs syncing disabled).
 // natsPublisher is optional — pass nil to disable NATS log publishing.
-func NewLogsSyncer(botID, logsPath string, logUploader miniologger.MinIOLogger, natsPublisher LogPublisher, logger util.Logger) *LogsSyncer {
+func NewLogsSyncer(botID, logsPath string, logUploader miniologger.MinIOLogger, natsPublisher LogPublisher, logger util.Logger, opts ...LogsSyncerOption) *LogsSyncer {
 	if logUploader == nil {
 		return nil
 	}
-	return &LogsSyncer{
+	l := &LogsSyncer{
 		botID:         botID,
 		logsPath:      logsPath,
 		logUploader:   logUploader,
 		natsPublisher: natsPublisher,
 		logger:        logger,
+		uploadTimeout: defaultLogsUploadTimeout,
 	}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
 }
 
 // Sync reads new log content from the bot's log file and uploads it to MinIO
@@ -164,7 +184,7 @@ func adjustChunkToNewlineBoundary(file *os.File, buf []byte, n int, offset int64
 
 // uploadChunk uploads a log chunk to MinIO and publishes it to NATS.
 func (l *LogsSyncer) uploadChunk(ctx context.Context, content string) error {
-	syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	syncCtx, cancel := context.WithTimeout(ctx, l.uploadTimeout)
 	defer cancel()
 
 	if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, content); err != nil {

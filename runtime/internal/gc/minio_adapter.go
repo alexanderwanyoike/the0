@@ -50,3 +50,23 @@ func (m *minioAdapter) ListObjectsWithInfo(ctx context.Context, bucket, prefix s
 func (m *minioAdapter) RemoveObject(ctx context.Context, bucket, name string) error {
 	return m.client.RemoveObject(ctx, bucket, name, minio.RemoveObjectOptions{})
 }
+
+func (m *minioAdapter) ListIncompleteUploads(ctx context.Context, bucket, prefix string) ([]IncompleteUploadInfo, error) {
+	var uploads []IncompleteUploadInfo
+	for u := range m.client.ListIncompleteUploads(ctx, bucket, prefix, true) {
+		if u.Err != nil {
+			return nil, u.Err
+		}
+		uploads = append(uploads, IncompleteUploadInfo{
+			Key:       u.Key,
+			UploadID:  u.UploadID,
+			Initiated: u.Initiated,
+		})
+	}
+	return uploads, nil
+}
+
+func (m *minioAdapter) AbortIncompleteUpload(ctx context.Context, bucket, key, uploadID string) error {
+	core := minio.Core{Client: m.client}
+	return core.AbortMultipartUpload(ctx, bucket, key, uploadID)
+}
