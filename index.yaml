@@ -4,6 +4,62 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: added
+          description: Configurable refresh interval (10s/30s/60s/Off) for console and dashboard
+        - kind: added
+          description: Load more pagination for realtime bots on non-live intervals
+        - kind: fixed
+          description: Default interval changed from 1d to 1h for scheduled bots
+        - kind: fixed
+          description: Preserve timestamp field in log expansion (shared expandLogEntries)
+        - kind: fixed
+          description: Prevent console refresh loop on interval change (stale closure fix)
+        - kind: fixed
+          description: Correct prepend/append merge direction for pagination
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.13.0
+    created: "2026-04-12T10:17:44.725737249Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: a9dbef43dd190958ef273aa7d31026530155f914d470ee2948ea909a27c09067
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.8.0/the0-0.8.0.tgz
+    version: 0.8.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: fixed
           description: Dashboard refetches metrics when interval picker changes
       artifacthub.io/images: |
@@ -1235,4 +1291,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-04-06T00:39:03.858103731Z"
+generated: "2026-04-12T10:17:44.725940364Z"
