@@ -20,6 +20,7 @@ import {
   IntervalPicker,
   IntervalValue,
 } from "@/components/bot/interval-picker";
+import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 import {
   AlertDialog,
@@ -67,6 +68,10 @@ interface MobileBotDetailProps {
   interval: IntervalValue;
   onIntervalChange: (value: IntervalValue) => void;
   showLive?: boolean;
+  refreshInterval: number;
+  onRefreshIntervalChange: (ms: number) => void;
+  sort?: "asc" | "desc";
+  onSortChange?: (sort: "asc" | "desc") => void;
 }
 
 export function MobileBotDetail({
@@ -97,6 +102,10 @@ export function MobileBotDetail({
   interval,
   onIntervalChange,
   showLive,
+  refreshInterval,
+  onRefreshIntervalChange,
+  sort,
+  onSortChange,
 }: MobileBotDetailProps) {
   const router = useRouter();
 
@@ -128,9 +137,10 @@ export function MobileBotDetail({
         </div>
       </div>
 
-      {/* Interval Picker */}
-      <div className="px-3 py-2 border-b">
+      {/* Interval Picker + Refresh Selector */}
+      <div className="px-3 py-2 border-b space-y-1.5">
         <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} />
+        <RefreshSelector value={refreshInterval} onChange={onRefreshIntervalChange} hidden={shouldHideRefreshSelector(!!showLive, interval.label)} />
       </div>
 
       {/* Tabbed content */}
@@ -155,6 +165,7 @@ export function MobileBotDetail({
               customBotId={customBotId}
               version={bot.config.version}
               dateRange={{ start: interval.start, end: interval.end }}
+              refreshInterval={refreshInterval}
               className=""
             />
           ) : (
@@ -181,6 +192,8 @@ export function MobileBotDetail({
             hasMore={hasMore}
             loadMore={loadMore}
             loadingMore={loadingMore}
+            sort={sort}
+            onSortChange={onSortChange}
             className="h-full"
             compact
           />

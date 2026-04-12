@@ -4,6 +4,7 @@ import {
   IntervalPicker,
   LIVE_INTERVAL,
   DEFAULT_DAY_INTERVAL,
+  DEFAULT_INTERVAL,
   computeInterval,
 } from "../interval-picker";
 
@@ -197,6 +198,15 @@ describe("IntervalPicker", () => {
       expect(DEFAULT_DAY_INTERVAL.label).toBe("1d");
       expect(DEFAULT_DAY_INTERVAL.start).toMatch(/^\d{8}$/);
       expect(DEFAULT_DAY_INTERVAL.end).toMatch(/^\d{8}$/);
+    });
+  });
+
+  describe("DEFAULT_INTERVAL constant", () => {
+    it("should be 1h with ISO datetime range", () => {
+      expect(DEFAULT_INTERVAL.label).toBe("1h");
+      // ISO datetime strings contain "T"
+      expect(DEFAULT_INTERVAL.start).toContain("T");
+      expect(DEFAULT_INTERVAL.end).toContain("T");
     });
   });
 

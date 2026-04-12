@@ -22,8 +22,9 @@ import {
   IntervalPicker,
   IntervalValue,
   LIVE_INTERVAL,
-  DEFAULT_DAY_INTERVAL,
+  DEFAULT_INTERVAL,
 } from "@/components/bot/interval-picker";
+import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +79,11 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const mediaQuery = useMediaQuery("(min-width: 1280px)");
   const isMobile = mediaQuery === null ? null : !mediaQuery;
 
+  // Configurable refresh rate for polling (console + dashboard)
+  const [refreshInterval, setRefreshInterval] = useState(30000);
+  // Sort order for console logs (API-side sorting)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
   // Console logs: use SSE streaming for realtime bots, REST polling for scheduled.
   const useStreaming = shouldUseLogStreaming(bot);
 
@@ -86,7 +92,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   // Note: bot is null at mount, so useStreaming is initially false. The
   // useEffect below corrects the interval once the bot loads.
   const [interval, setInterval_] = useState<IntervalValue>(
-    useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL,
+    useStreaming ? LIVE_INTERVAL : DEFAULT_INTERVAL,
   );
   const streamingInitialized = useRef(false);
 
@@ -98,7 +104,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   useEffect(() => {
     if (!streamingInitialized.current && bot) {
       streamingInitialized.current = true;
-      setInterval_(useStreaming ? LIVE_INTERVAL : DEFAULT_DAY_INTERVAL);
+      setInterval_(useStreaming ? LIVE_INTERVAL : DEFAULT_INTERVAL);
     }
   }, [useStreaming, bot]);
 
@@ -106,13 +112,13 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
   const streamHook = useBotLogsStream({
     botId: useStreaming ? hookBotId : "",
-    refreshInterval: 60 * 1000,
+    refreshInterval,
   });
 
   const pollingHook = useBotLogs({
     botId: useStreaming ? "" : hookBotId,
-    autoRefresh: !useStreaming && bot !== null,
-    refreshInterval: 60 * 1000,
+    autoRefresh: !useStreaming && bot !== null && refreshInterval > 0,
+    refreshInterval,
   });
 
   const activeHook = useStreaming ? streamHook : pollingHook;
@@ -142,9 +148,14 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const loadingEarlier = useStreaming ? streamHook.loadingEarlier : undefined;
   const loadEarlierLogs = useStreaming ? streamHook.loadEarlierLogs : undefined;
 
-  // Pagination: only relevant for REST polling (not SSE streaming)
-  const hasMoreLogs = !useStreaming ? pollingHook.hasMore : undefined;
-  const loadMoreLogs = !useStreaming ? pollingHook.loadMore : undefined;
+  // Pagination: available for REST polling and for stream hook's REST mode
+  // (when a realtime bot is viewing a date range)
+  const hasMoreLogs = useStreaming
+    ? streamHook.hasMore || undefined
+    : pollingHook.hasMore || undefined;
+  const loadMoreLogs = useStreaming
+    ? streamHook.loadMore
+    : pollingHook.loadMore;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -448,7 +459,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           loadEarlierLogs={loadEarlierLogs}
           hasMore={hasMoreLogs}
           loadMore={loadMoreLogs}
-          loadingMore={!useStreaming ? logsLoading : undefined}
+          loadingMore={hasMoreLogs ? logsLoading : undefined}
           isUpdatingEnabled={isUpdatingEnabled}
           isDeleting={isDeleting}
           onToggleEnabled={handleToggleEnabled}
@@ -458,6 +469,10 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           interval={interval}
           onIntervalChange={handleIntervalChange}
           showLive={useStreaming}
+          refreshInterval={refreshInterval}
+          onRefreshIntervalChange={setRefreshInterval}
+          sort={sortOrder}
+          onSortChange={(s) => { setSortOrder(s); activeHook.updateQuery({ sort: s }); }}
         />
         {cliUpdateModal}
       </>
@@ -547,9 +562,10 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           </div>
         </div>
 
-        {/* Interval Picker */}
-        <div className="px-4 lg:px-6">
+        {/* Interval Picker + Refresh Selector */}
+        <div className="px-4 lg:px-6 flex flex-wrap items-center gap-4">
           <IntervalPicker value={interval} onChange={handleIntervalChange} showLive={useStreaming} />
+          <RefreshSelector value={refreshInterval} onChange={setRefreshInterval} hidden={shouldHideRefreshSelector(useStreaming, interval.label)} />
         </div>
 
         {/* Main Content - Dashboard and Console side by side */}
@@ -566,6 +582,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 customBotId={customBotId}
                 version={bot.config.version}
                 dateRange={interval.type === "range" ? { start: interval.start, end: interval.end } : undefined}
+                refreshInterval={refreshInterval}
                 className=""
               />
             ) : (
@@ -604,7 +621,9 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 onLoadEarlier={loadEarlierLogs}
                 hasMore={hasMoreLogs}
                 loadMore={loadMoreLogs}
-                loadingMore={!useStreaming ? logsLoading : undefined}
+                loadingMore={hasMoreLogs ? logsLoading : undefined}
+                sort={sortOrder}
+                onSortChange={(s) => { setSortOrder(s); activeHook.updateQuery({ sort: s }); }}
                 className="h-full"
                 compact
               />

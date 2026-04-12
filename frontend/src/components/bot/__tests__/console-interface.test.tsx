@@ -19,7 +19,7 @@ jest.mock("react-virtuoso", () => ({
       }: any,
       ref: any,
     ) => (
-      <div data-testid="virtuoso-container" data-overscan={overscan} className={className}>
+      <div data-testid="virtuoso-container" data-overscan={overscan} data-follow-output={String(followOutput)} className={className}>
         {components?.Header && <components.Header />}
         {data?.map((item: any, index: number) => (
           <div key={index} data-testid={`log-item-${index}`}>{itemContent(index, item)}</div>
@@ -482,6 +482,65 @@ describe("ConsoleInterface", () => {
     });
   });
 
+  describe("followOutput behavior", () => {
+    it("should disable followOutput when not connected even with sort=asc", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          connected={false}
+          lastUpdate={new Date()}
+          sort="asc"
+        />,
+      );
+
+      const container = screen.getByTestId("virtuoso-container");
+      expect(container.getAttribute("data-follow-output")).toBe("false");
+    });
+
+    it("should enable followOutput when connected with sort=asc", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          connected={true}
+          lastUpdate={new Date()}
+          sort="asc"
+        />,
+      );
+
+      const container = screen.getByTestId("virtuoso-container");
+      expect(container.getAttribute("data-follow-output")).toBe("smooth");
+    });
+
+    it("should disable followOutput when sort=desc even if connected", () => {
+      const logs: LogEntry[] = [
+        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+      ];
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={logs}
+          connected={true}
+          lastUpdate={new Date()}
+          sort="desc"
+        />,
+      );
+
+      const container = screen.getByTestId("virtuoso-container");
+      expect(container.getAttribute("data-follow-output")).toBe("false");
+    });
+  });
+
   describe("entry count badge", () => {
     it("shows correct count after filtering", async () => {
       const logs: LogEntry[] = [
@@ -699,17 +758,16 @@ describe("ConsoleInterface", () => {
       }));
     }
 
-    it("should not create new array reference when logs are appended in newest-first mode", () => {
+    it("should render logs in received order without client-side reversal", () => {
       const initialLogs = makeLogs(100);
       const { rerender } = render(
         <ConsoleInterface {...defaultProps} logs={initialLogs} />,
       );
 
-      // Default is newest-first. The first rendered item should be last log reversed.
+      // No reversal: item 0 = first log in the array
       const firstItem = screen.getByTestId("log-item-0");
       expect(firstItem).toBeInTheDocument();
-      // Reversed: item 0 in display = last log from the original array
-      expect(firstItem.textContent).toContain("message 99");
+      expect(firstItem.textContent).toContain("message 0");
 
       // Append 10 more logs
       const appendedLogs = [...initialLogs, ...makeLogs(10, "New")];
@@ -717,10 +775,9 @@ describe("ConsoleInterface", () => {
         <ConsoleInterface {...defaultProps} logs={appendedLogs} />,
       );
 
-      // After appending, newest log should be first displayed item
+      // First item unchanged, new items at the end
       const updatedFirstItem = screen.getByTestId("log-item-0");
-      expect(updatedFirstItem).toBeInTheDocument();
-      expect(updatedFirstItem.textContent).toContain("New message 9");
+      expect(updatedFirstItem.textContent).toContain("message 0");
 
       // All 110 items should be rendered
       expect(screen.getByTestId("log-item-109")).toBeInTheDocument();

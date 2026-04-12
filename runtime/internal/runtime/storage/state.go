@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 )
@@ -35,13 +36,23 @@ type StateManager interface {
 	StateExists(ctx context.Context, botID string) (bool, error)
 }
 
+// stateObjectWriter is the narrow subset of minio.Client used by UploadState.
+// Extracted so tests can inject failing stubs and assert the abort-on-error
+// contract. *minio.Client already satisfies this interface.
+type stateObjectWriter interface {
+	PutObject(ctx context.Context, bucket, object string, reader io.Reader, size int64, opts minio.PutObjectOptions) (minio.UploadInfo, error)
+	RemoveIncompleteUpload(ctx context.Context, bucket, object string) error
+}
+
 // stateManager implements StateManager using MinIO as the storage backend.
 type stateManager struct {
 	minioClient      *minio.Client
+	uploader         stateObjectWriter
 	bucket           string
 	maxStateSize     int64
 	maxStateFileSize int64
 	logger           Logger
+	skipEnsureBucket bool // test-only: skip ensureBucket when uploader is a fake
 }
 
 // NewStateManager creates a new StateManager that stores state in MinIO.
@@ -60,6 +71,7 @@ func NewStateManager(minioClient *minio.Client, cfg *Config, logger Logger) Stat
 	}
 	return &stateManager{
 		minioClient:      minioClient,
+		uploader:         minioClient,
 		bucket:           bucket,
 		maxStateSize:     maxStateSize,
 		maxStateFileSize: maxStateFileSize,
@@ -141,8 +153,10 @@ func (m *stateManager) UploadState(ctx context.Context, botID string, srcDir str
 	}
 	m.logger.Info("State size", "bot_id", botID, "bytes", totalSize)
 
-	if err := m.ensureBucket(ctx); err != nil {
-		return err
+	if !m.skipEnsureBucket {
+		if err := m.ensureBucket(ctx); err != nil {
+			return err
+		}
 	}
 
 	pr, pw := io.Pipe()
@@ -153,10 +167,27 @@ func (m *stateManager) UploadState(ctx context.Context, botID string, srcDir str
 		errChan <- m.createTarGz(srcDir, pw)
 	}()
 
-	_, err = m.minioClient.PutObject(ctx, m.bucket, m.objectName(botID), pr, -1, minio.PutObjectOptions{
+	objectName := m.objectName(botID)
+	_, err = m.uploader.PutObject(ctx, m.bucket, objectName, pr, -1, minio.PutObjectOptions{
 		ContentType: "application/gzip",
 	})
 	if err != nil {
+		// Unblock the tar.gz goroutine if it is still writing into the pipe.
+		_ = pr.CloseWithError(err)
+
+		// minio-go's streaming-multipart path calls abortMultipartUpload in
+		// a defer, but it passes the caller's ctx which is typically already
+		// cancelled by the time we reach this error. That leaks the upload
+		// ID on R2. We issue our own abort on a fresh background context to
+		// guarantee cleanup. Safe because StateSyncer.Sync is serial per bot
+		// so no other goroutine can own an upload for this key.
+		abortCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if rmErr := m.uploader.RemoveIncompleteUpload(abortCtx, m.bucket, objectName); rmErr != nil {
+			m.logger.Info("Failed to abort orphaned state upload",
+				"bot_id", botID, "error", rmErr.Error())
+		}
+
 		return fmt.Errorf("failed to upload state to MinIO: %w", err)
 	}
 

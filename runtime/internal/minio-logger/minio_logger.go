@@ -21,8 +21,43 @@ type MinIOLogger interface {
 	Close() error
 }
 
+// multipartClient is the subset of minio.Core the compose-append path needs.
+// Extracted so the abort-on-error contract in AppendBotLogs can be unit-tested
+// with a fake that triggers failures at each step of the multipart flow.
+type multipartClient interface {
+	NewMultipartUpload(ctx context.Context, bucket, object string, opts minio.PutObjectOptions) (string, error)
+	CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
+		partID int, startOffset, length int64, metadata map[string]string) (minio.CompletePart, error)
+	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, parts []minio.CompletePart, opts minio.PutObjectOptions) (minio.UploadInfo, error)
+	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error
+}
+
+// coreMultipartClient adapts minio.Core to the multipartClient interface.
+type coreMultipartClient struct {
+	core minio.Core
+}
+
+func (c coreMultipartClient) NewMultipartUpload(ctx context.Context, bucket, object string, opts minio.PutObjectOptions) (string, error) {
+	return c.core.NewMultipartUpload(ctx, bucket, object, opts)
+}
+
+func (c coreMultipartClient) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
+	partID int, startOffset, length int64, metadata map[string]string,
+) (minio.CompletePart, error) {
+	return c.core.CopyObjectPart(ctx, srcBucket, srcObject, destBucket, destObject, uploadID, partID, startOffset, length, metadata)
+}
+
+func (c coreMultipartClient) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, parts []minio.CompletePart, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	return c.core.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, opts)
+}
+
+func (c coreMultipartClient) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
+	return c.core.AbortMultipartUpload(ctx, bucket, object, uploadID)
+}
+
 type minIOLogger struct {
 	client        *minio.Client
+	mpClient      multipartClient
 	logsBucket    string
 	resultsBucket string
 	mutexes       map[string]*sync.Mutex // Per-bot mutexes to prevent concurrent writes
@@ -115,6 +150,7 @@ func NewMinIOLogger(
 
 	return &minIOLogger{
 		client:        client,
+		mpClient:      coreMultipartClient{core: minio.Core{Client: client}},
 		logsBucket:    options.LogsBucket,
 		resultsBucket: options.ResultsBucket,
 		mutexes:       make(map[string]*sync.Mutex),
@@ -221,17 +257,15 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	// Daily file exists. Choose the append strategy based on its size.
 	if info.Size >= composeMinPartSize {
 		// The existing file is large enough (>= 5 MiB) for a server-side
-		// ComposeObject. Each sync stays O(chunk_size) instead of degrading
-		// to O(file_size) as the daily log grows throughout the day.
-		m.logger.Debug("Using ComposeObject for append", "existingSize", info.Size)
-		dst := minio.CopyDestOptions{Bucket: m.logsBucket, Object: dailyKey}
-		srcs := []minio.CopySrcOptions{
-			{Bucket: m.logsBucket, Object: dailyKey},
-			{Bucket: m.logsBucket, Object: tmpKey},
-		}
-		_, err = m.client.ComposeObject(ctx, dst, srcs...)
-		if err != nil {
-			return fmt.Errorf("compose daily log: %w", err)
+		// multipart copy. We drive the flow ourselves via minio.Core so
+		// that on ANY error (caller ctx cancelled, network flake, R2 tail
+		// latency, simulated failure in tests) we guarantee an abort on
+		// the upload ID. minio-go's high-level ComposeObject leaks the
+		// upload ID on error, which is the root cause of the bot-logs
+		// orphaned multipart uploads this path exists to fix.
+		m.logger.Debug("Using multipart-copy for append", "existingSize", info.Size)
+		if err := m.composeAppendMultipart(ctx, dailyKey, tmpKey); err != nil {
+			return err
 		}
 	} else {
 		// The existing file is smaller than the 5 MiB compose threshold.
@@ -262,6 +296,65 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	}
 
 	m.logger.Debug("Successfully appended logs to MinIO", "path", dailyKey)
+	return nil
+}
+
+// composeAppendMultipartAbortTimeout is the per-abort budget used when the
+// caller's context is already cancelled. We always issue the abort with a
+// fresh background context so cleanup reaches R2 even after the caller's
+// deadline has fired.
+const composeAppendMultipartAbortTimeout = 30 * time.Second
+
+// composeAppendMultipart performs a server-side multipart copy that
+// concatenates the existing daily log and the newly-uploaded temp chunk
+// back into the daily key. We own the upload ID and defer an abort that
+// fires whenever the flow did not reach a successful CompleteMultipartUpload.
+// The abort runs on a fresh context so a cancelled caller context does not
+// prevent the cleanup from reaching R2.
+//
+// Safe to abort on this key because AppendBotLogs holds a per-bot mutex:
+// no other goroutine can have an in-flight multipart upload for dailyKey
+// when this function is running.
+func (m *minIOLogger) composeAppendMultipart(ctx context.Context, dailyKey, tmpKey string) error {
+	uploadID, err := m.mpClient.NewMultipartUpload(ctx, m.logsBucket, dailyKey, minio.PutObjectOptions{
+		ContentType: "text/plain",
+	})
+	if err != nil {
+		return fmt.Errorf("init multipart upload: %w", err)
+	}
+
+	done := false
+	defer func() {
+		if done {
+			return
+		}
+		abortCtx, cancel := context.WithTimeout(context.Background(), composeAppendMultipartAbortTimeout)
+		defer cancel()
+		if abortErr := m.mpClient.AbortMultipartUpload(abortCtx, m.logsBucket, dailyKey, uploadID); abortErr != nil {
+			m.logger.Warn("Failed to abort multipart upload after compose error",
+				"key", dailyKey, "uploadID", uploadID, "error", abortErr)
+		}
+	}()
+
+	// Part 1: the existing daily log. length = -1 copies the whole source.
+	// The daily file is guaranteed >= 5 MiB here (caller checks composeMinPartSize).
+	part1, err := m.mpClient.CopyObjectPart(ctx, m.logsBucket, dailyKey, m.logsBucket, dailyKey, uploadID, 1, 0, -1, nil)
+	if err != nil {
+		return fmt.Errorf("copy daily part: %w", err)
+	}
+
+	// Part 2: the new temp chunk. This is the LAST part so it may be < 5 MiB.
+	part2, err := m.mpClient.CopyObjectPart(ctx, m.logsBucket, tmpKey, m.logsBucket, dailyKey, uploadID, 2, 0, -1, nil)
+	if err != nil {
+		return fmt.Errorf("copy temp part: %w", err)
+	}
+
+	if _, err := m.mpClient.CompleteMultipartUpload(ctx, m.logsBucket, dailyKey, uploadID,
+		[]minio.CompletePart{part1, part2}, minio.PutObjectOptions{}); err != nil {
+		return fmt.Errorf("complete multipart upload: %w", err)
+	}
+
+	done = true
 	return nil
 }
 

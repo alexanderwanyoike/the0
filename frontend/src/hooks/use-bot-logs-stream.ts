@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
 import { LogEntry } from "@/components/bot/console-interface";
+import { expandLogEntries } from "@/lib/log-utils";
 import { validateSSEAuth } from "@/lib/sse/sse-auth";
 
 interface LogsQuery {
@@ -28,6 +29,7 @@ interface LogsQuery {
   dateRange?: string;
   limit?: number;
   offset?: number;
+  sort?: "asc" | "desc";
 }
 
 interface LogsResponse {
@@ -57,21 +59,13 @@ export interface UseBotLogsStreamReturn {
   hasEarlierLogs: boolean;
   loadingEarlier: boolean;
   loadEarlierLogs: () => void;
+  /** Load more paginated results (only available in REST mode, i.e. when a date filter is active) */
+  loadMore?: () => Promise<void>;
+  updateQuery: (params: Partial<{ date?: string; dateRange?: string; limit?: number; offset?: number; sort?: "asc" | "desc" }>) => void;
 }
 
-const MAX_LOG_ENTRIES = 2000;
+const MAX_LOG_ENTRIES = 10000;
 
-/** Split multi-line log entries into individual LogEntry items. */
-function expandLogEntries(entries: LogEntry[]): LogEntry[] {
-  const expanded: LogEntry[] = [];
-  for (const entry of entries) {
-    const lines = entry.content.split("\n").filter((l) => l.trim() !== "");
-    for (const line of lines) {
-      expanded.push({ date: entry.date, content: line });
-    }
-  }
-  return expanded;
-}
 
 /** Parse a raw SSE message block into event type and data. */
 function parseSSEMessage(msg: string): { eventType: string; data: string } {
@@ -88,7 +82,7 @@ function parseSSEMessage(msg: string): { eventType: string; data: string } {
 export const useBotLogsStream = ({
   botId,
   refreshInterval = 30000,
-  initialQuery = { limit: 100, offset: 0 },
+  initialQuery = { limit: 100, offset: 0, sort: "desc" },
 }: UseBotLogsStreamProps): UseBotLogsStreamReturn => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,6 +91,7 @@ export const useBotLogsStream = ({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
   const [totalSeen, setTotalSeen] = useState(0);
 
@@ -108,6 +103,11 @@ export const useBotLogsStream = ({
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const dateFilterActiveRef = useRef(false);
   const historyReceivedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  // Ref so SSE connection and polling can read the latest refreshInterval
+  // without causing the lifecycle effect to tear down and reconnect SSE.
+  const refreshIntervalRef = useRef(refreshInterval);
+  refreshIntervalRef.current = refreshInterval;
 
   // -- Cleanup helpers --
 
@@ -129,7 +129,7 @@ export const useBotLogsStream = ({
   // -- REST fetch (for fallback, date filters, load-earlier) --
 
   const fetchLogs = useCallback(
-    async (params?: Partial<LogsQuery>, append = false) => {
+    async (params?: Partial<LogsQuery>, merge: false | "prepend" | "append" = false) => {
       if (!botId || !user) return;
 
       restAbortRef.current?.abort();
@@ -139,7 +139,7 @@ export const useBotLogsStream = ({
       const effectiveQuery = { ...query, ...params };
 
       try {
-        if (!append) setLoading(true);
+        if (!merge) setLoading(true);
         setError(null);
 
         const searchParams = new URLSearchParams();
@@ -157,6 +157,8 @@ export const useBotLogsStream = ({
           searchParams.set("limit", effectiveQuery.limit.toString());
         if (effectiveQuery.offset != null)
           searchParams.set("offset", effectiveQuery.offset.toString());
+        if (effectiveQuery.sort)
+          searchParams.set("sort", effectiveQuery.sort);
 
         const response = await authFetch(
           `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
@@ -170,21 +172,30 @@ export const useBotLogsStream = ({
         const result: LogsResponse = await response.json();
         const expanded = expandLogEntries(result.data);
 
-        if (append) {
+        if (merge) {
           setLogs((prev) => {
-            // Deduplicate: earlier logs may overlap with entries already in the buffer
             const existingKeys = new Set(
               prev.map((l) => `${l.date}|${l.content}`),
             );
             const unique = expanded.filter(
               (l) => !existingKeys.has(`${l.date}|${l.content}`),
             );
-            const combined = [...unique, ...prev];
-            return combined.slice(0, MAX_LOG_ENTRIES);
+            const combined = merge === "prepend"
+              ? [...unique, ...prev]
+              : [...prev, ...unique];
+            // Prepend keeps the front (earlier logs), append keeps the tail (latest)
+            return merge === "prepend"
+              ? combined.slice(0, MAX_LOG_ENTRIES)
+              : combined.slice(-MAX_LOG_ENTRIES);
           });
         } else {
           setLogs(expanded.slice(-MAX_LOG_ENTRIES));
           setHasEarlierLogs(expanded.length >= MAX_LOG_ENTRIES);
+        }
+        // Only update forward pagination state on non-prepend fetches.
+        // Prepend (loadEarlierLogs) has its own hasMore semantics.
+        if (merge !== "prepend") {
+          setHasMore(result.hasMore);
         }
         setTotalSeen(result.total);
         setLastUpdate(new Date());
@@ -262,7 +273,7 @@ export const useBotLogsStream = ({
                 const parsed: { content: string; timestamp: string } =
                   JSON.parse(data);
                 const entries = expandLogEntries([
-                  { date: parsed.timestamp, content: parsed.content },
+                  { date: parsed.timestamp, content: parsed.content, timestamp: parsed.timestamp },
                 ]);
                 setLogs((prev) =>
                   [...prev, ...entries].slice(-MAX_LOG_ENTRIES),
@@ -285,9 +296,11 @@ export const useBotLogsStream = ({
 
         // Fall back to REST polling
         fetchLogs();
-        pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        if (refreshIntervalRef.current > 0) {
+          pollingRef.current = setInterval(() => fetchLogs(), refreshIntervalRef.current);
+        }
       });
-  }, [botId, user, refreshInterval, fetchLogs, stopPolling]);
+  }, [botId, user, fetchLogs, stopPolling]);
 
   // -- Lifecycle: connect on mount/botId change, cleanup on unmount --
 
@@ -306,6 +319,7 @@ export const useBotLogsStream = ({
     setLastUpdate(null);
     setHasEarlierLogs(false);
     setLoadingEarlier(false);
+    setHasMore(false);
     setQuery(initialQuery);
     dateFilterActiveRef.current = false;
     historyReceivedRef.current = false;
@@ -316,7 +330,9 @@ export const useBotLogsStream = ({
     const fallbackTimer = setTimeout(() => {
       if (!historyReceivedRef.current) {
         fetchLogs();
-        pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+        if (refreshIntervalRef.current > 0) {
+          pollingRef.current = setInterval(() => fetchLogs(), refreshIntervalRef.current);
+        }
       }
     }, 4000);
 
@@ -324,7 +340,20 @@ export const useBotLogsStream = ({
       clearTimeout(fallbackTimer);
       abortAll();
     };
+    // refreshInterval intentionally excluded - uses ref to avoid SSE reconnection
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [botId, user]);
+
+  // Reconfigure REST polling interval when refreshInterval changes
+  // without tearing down the SSE connection.
+  useEffect(() => {
+    if (!pollingRef.current) return; // No active polling, nothing to reconfigure
+    stopPolling();
+    if (refreshInterval > 0) {
+      pollingRef.current = setInterval(() => fetchLogs(), refreshInterval);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshInterval]);
 
   // -- Date filter: disconnect SSE, fetch REST, reconnect on clear --
 
@@ -346,6 +375,10 @@ export const useBotLogsStream = ({
         setConnected(false);
         fetchLogs(updatedQuery);
       } else {
+        // Reconnecting to SSE - abort any in-flight REST request and reset
+        restAbortRef.current?.abort();
+        restAbortRef.current = null;
+        setHasMore(false);
         connectSSE();
       }
     },
@@ -384,9 +417,29 @@ export const useBotLogsStream = ({
     const date =
       query.date ||
       new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    await fetchLogs({ date, limit: 1000, offset: 0 }, true);
+    await fetchLogs({ date, limit: 1000, offset: 0 }, "prepend");
     setHasEarlierLogs(false);
   }, [botId, user, loadingEarlier, fetchLogs, query.date]);
+
+  // -- Load more (pagination for REST date-range fetches) --
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMore || !botId || !user) return;
+    loadingMoreRef.current = true;
+
+    const nextQuery = {
+      ...query,
+      offset: (query.offset || 0) + (query.limit || 100),
+    };
+
+    try {
+      await fetchLogs(nextQuery, "append");
+      // Only advance offset after successful fetch
+      setQuery(nextQuery);
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [hasMore, botId, user, query, fetchLogs]);
 
   // -- Refresh: reconnect or re-fetch depending on mode --
 
@@ -398,6 +451,19 @@ export const useBotLogsStream = ({
       connectSSE();
     }
   }, [fetchLogs, abortAll, connectSSE]);
+
+  // -- Update query (for sort changes, etc.) --
+
+  const updateQuery = useCallback(
+    (params: Partial<LogsQuery>) => {
+      const updatedQuery = { ...query, ...params, offset: 0 };
+      setQuery(updatedQuery);
+      if (dateFilterActiveRef.current) {
+        fetchLogs(updatedQuery);
+      }
+    },
+    [query, fetchLogs],
+  );
 
   // -- Export logs as downloadable file --
 
@@ -425,7 +491,7 @@ export const useBotLogsStream = ({
     logs,
     loading,
     error,
-    hasMore: false,
+    hasMore,
     total: totalSeen,
     refresh,
     exportLogs,
@@ -436,5 +502,7 @@ export const useBotLogsStream = ({
     hasEarlierLogs,
     loadingEarlier,
     loadEarlierLogs,
+    loadMore: hasMore ? loadMore : undefined,
+    updateQuery,
   };
 };

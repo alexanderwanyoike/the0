@@ -186,8 +186,8 @@ describe("useBotLogs", () => {
   });
 
   it("should cap logs at MAX_LOG_ENTRIES when loadMore accumulates too many", async () => {
-    // Initial fetch returns 1500 entries
-    const initialLogs = Array.from({ length: 1500 }, (_, i) => ({
+    // Initial fetch returns 8000 entries
+    const initialLogs = Array.from({ length: 8000 }, (_, i) => ({
       date: "2024-01-01",
       content: `Line ${i}`,
     }));
@@ -196,47 +196,47 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: initialLogs,
-          total: 2100,
+          total: 11000,
           hasMore: true,
         }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: Array.from({ length: 600 }, (_, i) => ({
+          data: Array.from({ length: 3000 }, (_, i) => ({
             date: "2024-01-01",
             content: `Extra ${i}`,
           })),
-          total: 2100,
+          total: 11000,
           hasMore: false,
         }),
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1500, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 8000, offset: 0 } }),
     );
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.logs).toHaveLength(1500);
+    expect(result.current.logs).toHaveLength(8000);
 
     await act(async () => {
       await result.current.loadMore();
     });
 
-    // Should be capped at 2000, oldest trimmed
-    expect(result.current.logs).toHaveLength(2000);
-    // First entry should be Line 100 (100 oldest trimmed from 1500 + 600 = 2100)
-    expect(result.current.logs[0].content).toBe("Line 100");
+    // Should be capped at 10000, oldest trimmed (8000 + 3000 = 11000 -> 10000)
+    expect(result.current.logs).toHaveLength(10000);
+    // First entry should be Line 1000 (1000 oldest trimmed from 11000 -> 10000)
+    expect(result.current.logs[0].content).toBe("Line 1000");
     expect(result.current.logs[result.current.logs.length - 1].content).toBe(
-      "Extra 599",
+      "Extra 2999",
     );
   });
 
   it("should cap logs on initial fetch if response is very large", async () => {
-    const hugeLogs = Array.from({ length: 2500 }, (_, i) => ({
+    const hugeLogs = Array.from({ length: 12000 }, (_, i) => ({
       date: "2024-01-01",
       content: `Huge ${i}`,
     }));
@@ -244,21 +244,50 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: hugeLogs,
-        total: 2500,
+        total: 12000,
         hasMore: false,
       }),
     } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 3000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 15000, offset: 0 } }),
     );
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(result.current.logs).toHaveLength(2000);
-    expect(result.current.logs[0].content).toBe("Huge 500");
+    // Capped at 10000 (MAX_LOG_ENTRIES), oldest trimmed
+    expect(result.current.logs).toHaveLength(10000);
+    expect(result.current.logs[0].content).toBe("Huge 2000");
+  });
+
+  it("should preserve timestamp field when expanding log entries", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            date: "20260403",
+            content: "line1\nline2",
+            timestamp: "2026-04-03T10:00:00Z",
+          },
+        ],
+        total: 2,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Both expanded lines should carry the original timestamp
+    expect(result.current.logs).toHaveLength(2);
+    expect(result.current.logs[0].timestamp).toBe("2026-04-03T10:00:00Z");
+    expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:00:00Z");
   });
 
   // ---- Navigation bugs ----
@@ -406,6 +435,264 @@ describe("useBotLogs", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("should not trigger extra fetches when date filter changes during auto-refresh", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ date: "20260401", content: "Log" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogs({
+        botId: "bot-1",
+        autoRefresh: true,
+        refreshInterval: 60000,
+      }),
+    );
+
+    // Wait for initial fetch to complete
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const callsAfterInit = mockAuthFetch.mock.calls.length;
+
+    // Change the date range filter
+    act(() => {
+      result.current.setDateRangeFilter("20260401", "20260403");
+    });
+
+    // Wait for the filter-triggered fetch to settle
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Brief pause to catch any spurious extra fetches
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    const callsAfterFilter = mockAuthFetch.mock.calls.length;
+    // Expect exactly one additional fetch from the filter change, not multiple
+    expect(callsAfterFilter - callsAfterInit).toBe(1);
+  });
+
+  it("should use latest query when polling interval fires after filter change", async () => {
+    // This tests the stale closure bug: the polling interval captures fetchLogs
+    // at setup time. If fetchLogs changes (because query changed), the interval
+    // should still call the latest version, not the stale one.
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20260401", content: "Log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as Response);
+
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          autoRefresh: true,
+          refreshInterval: 5000,
+        }),
+      );
+
+      // Flush initial fetch
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Change date range filter - this updates the query state and calls fetchLogs
+      await act(async () => {
+        result.current.setDateRangeFilter("20260401", "20260403");
+      });
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Clear call history so we can inspect what the next interval tick sends
+      mockAuthFetch.mockClear();
+
+      // Advance past the polling interval so it fires
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      // The polling fetch should have fired
+      expect(mockAuthFetch).toHaveBeenCalled();
+
+      // The polling fetch should use the UPDATED date range, not the original query.
+      // If the closure is stale, it will use the default query (today's date, no dateRange).
+      const pollingUrl = mockAuthFetch.mock.calls[0][0] as string;
+      expect(pollingUrl).toContain("dateRange=20260401-20260403");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // ---- Load more with full buffer ----
+
+  it("should grow buffer past 2000 when loadMore appends", async () => {
+    // Initial fetch fills to exactly 2000 entries (old MAX_LOG_ENTRIES)
+    const initialLogs = Array.from({ length: 2000 }, (_, i) => ({
+      date: "2024-01-01",
+      content: `Line ${i}`,
+    }));
+    mockAuthFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: initialLogs,
+          total: 4000,
+          hasMore: true,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: Array.from({ length: 2000 }, (_, i) => ({
+            date: "2024-01-01",
+            content: `Extra ${i}`,
+          })),
+          total: 4000,
+          hasMore: false,
+        }),
+      } as Response);
+
+    const { result } = renderHook(() =>
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 2000, offset: 0 } }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.logs).toHaveLength(2000);
+    expect(result.current.hasMore).toBe(true);
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    // After loadMore, buffer should grow beyond 2000
+    expect(result.current.logs.length).toBeGreaterThan(2000);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it("should advance offset on consecutive loadMore calls", async () => {
+    let callCount = 0;
+    mockAuthFetch.mockImplementation(async () => {
+      callCount++;
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "2024-01-01", content: `Page ${callCount}` }],
+          total: 10,
+          hasMore: true,
+        }),
+      } as Response;
+    });
+
+    const { result } = renderHook(() =>
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // First loadMore: offset should be 1
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    const firstLoadMoreUrl = mockAuthFetch.mock.calls[1][0] as string;
+    expect(firstLoadMoreUrl).toContain("offset=1");
+
+    // Second loadMore: offset should be 2 (not 1 again)
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    const secondLoadMoreUrl = mockAuthFetch.mock.calls[2][0] as string;
+    expect(secondLoadMoreUrl).toContain("offset=2");
+  });
+
+  it("should not overwrite paginated data when auto-refresh fires", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "2024-01-01", content: "Page 1" }],
+          total: 2,
+          hasMore: true,
+        }),
+      } as Response);
+
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          autoRefresh: true,
+          refreshInterval: 5000,
+          initialQuery: { limit: 1, offset: 0 },
+        }),
+      );
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.logs[0].content).toBe("Page 1");
+
+      // loadMore appends page 2
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "2024-01-01", content: "Page 2" }],
+          total: 2,
+          hasMore: false,
+        }),
+      } as Response);
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(result.current.logs).toHaveLength(2);
+
+      // Auto-refresh fires - should NOT overwrite paginated data
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      // Both pages should still be present
+      expect(result.current.logs.length).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   // ---- Existing tests ----
 
   it("should build correct URL with query parameters", async () => {
@@ -429,5 +716,128 @@ describe("useBotLogs", () => {
     expect(calledUrl).toContain("/api/logs/bot-1");
     expect(calledUrl).toContain("limit=50");
     expect(calledUrl).toContain("offset=10");
+  });
+
+  it("should include sort=desc in URL by default", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 0, hasMore: false }),
+    } as Response);
+
+    renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(mockAuthFetch).toHaveBeenCalled();
+    });
+
+    const url = mockAuthFetch.mock.calls[0][0] as string;
+    expect(url).toContain("sort=desc");
+  });
+
+  it("should pass sort=asc when query sort is changed", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [], total: 0, hasMore: false }),
+    } as Response);
+
+    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    mockAuthFetch.mockClear();
+
+    act(() => {
+      result.current.updateQuery({ sort: "asc" });
+    });
+
+    await waitFor(() => {
+      expect(mockAuthFetch).toHaveBeenCalled();
+    });
+
+    const url = mockAuthFetch.mock.calls[0][0] as string;
+    expect(url).toContain("sort=asc");
+  });
+
+  it("should reconfigure polling when refreshInterval changes", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20260406", content: "Log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as Response);
+
+      const { rerender } = renderHook(
+        ({ interval }) =>
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: interval,
+          }),
+        { initialProps: { interval: 60000 } },
+      );
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      mockAuthFetch.mockClear();
+
+      // Change refresh interval to 5000ms
+      rerender({ interval: 5000 });
+
+      // Advance 5 seconds - should fire with new interval
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      // Should have fetched with the new interval
+      expect(mockAuthFetch).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("should not poll when refreshInterval is 0 (Off)", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20260406", content: "Log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as Response);
+
+      renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          autoRefresh: true,
+          refreshInterval: 0,
+        }),
+      );
+
+      // Flush initial fetch
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+
+      mockAuthFetch.mockClear();
+
+      // Advance 60 seconds - should NOT poll
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60000);
+      });
+
+      expect(mockAuthFetch).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

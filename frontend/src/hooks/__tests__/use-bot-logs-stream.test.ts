@@ -346,8 +346,8 @@ describe("useBotLogsStream", () => {
 
     await waitFor(() => expect(result.current.connected).toBe(true));
 
-    // Send 2500 entries (over 2000 cap)
-    const entries = Array.from({ length: 2500 }, (_, i) => ({
+    // Send 12000 entries (over 10000 cap)
+    const entries = Array.from({ length: 12000 }, (_, i) => ({
       date: "2024-01-01T10:00:00Z",
       content: `Entry ${i}`,
     }));
@@ -357,7 +357,7 @@ describe("useBotLogsStream", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.logs.length).toBeLessThanOrEqual(2000);
+      expect(result.current.logs.length).toBeLessThanOrEqual(10000);
       expect(result.current.hasEarlierLogs).toBe(true);
     });
   });
@@ -370,7 +370,7 @@ describe("useBotLogsStream", () => {
     await waitFor(() => expect(result.current.connected).toBe(true));
 
     // Fill to cap with history
-    const entries = Array.from({ length: 2000 }, (_, i) => ({
+    const entries = Array.from({ length: 10000 }, (_, i) => ({
       date: "2024-01-01T10:00:00Z",
       content: `Entry ${i}`,
     }));
@@ -379,7 +379,7 @@ describe("useBotLogsStream", () => {
       currentMockStream!.controller.push("history", entries);
     });
 
-    await waitFor(() => expect(result.current.logs).toHaveLength(2000));
+    await waitFor(() => expect(result.current.logs).toHaveLength(10000));
 
     // Push one more update
     act(() => {
@@ -390,7 +390,7 @@ describe("useBotLogsStream", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.logs.length).toBeLessThanOrEqual(2000);
+      expect(result.current.logs.length).toBeLessThanOrEqual(10000);
       expect(result.current.logs[result.current.logs.length - 1].content).toBe(
         "New entry",
       );
@@ -561,6 +561,485 @@ describe("useBotLogsStream", () => {
         expect.stringContaining("bot%2Fwith%20special%26chars"),
         expect.any(Object),
       );
+    });
+  });
+
+  it("should preserve timestamp from SSE history events", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        {
+          date: "2026-04-03T10:00:00Z",
+          content: "Log line 1",
+          timestamp: "2026-04-03T10:00:00Z",
+        },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.logs[0].timestamp).toBe("2026-04-03T10:00:00Z");
+    });
+  });
+
+  it("should preserve timestamp from SSE update events", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2026-04-03T10:00:00Z", content: "Initial", timestamp: "2026-04-03T10:00:00Z" },
+      ]);
+    });
+
+    await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+    act(() => {
+      currentMockStream!.controller.push("update", {
+        content: "New entry",
+        timestamp: "2026-04-03T10:05:00Z",
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(2);
+      expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:05:00Z");
+    });
+  });
+
+  it("should not start polling when refreshInterval is 0 and SSE fails", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockImplementation(async (url: string) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          throw new Error("SSE failed");
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ date: "20260406", content: "log" }],
+            total: 1,
+            hasMore: false,
+          }),
+        } as any;
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogsStream({ botId: "bot-1", refreshInterval: 0 }),
+      );
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      const callsAfterFallback = mockAuthFetch.mock.calls.filter(
+        (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+      ).length;
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60000);
+      });
+
+      const callsAfterWait = mockAuthFetch.mock.calls.filter(
+        (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+      ).length;
+
+      expect(callsAfterWait).toBe(callsAfterFallback);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("should not reconnect SSE when refreshInterval changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ interval }) =>
+        useBotLogsStream({ botId: "bot-1", refreshInterval: interval }),
+      { initialProps: { interval: 30000 } },
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    // Push some history via SSE
+    act(() => {
+      currentMockStream!.controller.push("history", [
+        { date: "2024-01-01T10:00:00Z", content: "SSE log" },
+      ]);
+    });
+
+    await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+    // Count how many times authFetch was called for the /stream endpoint
+    const streamCallsBefore = mockAuthFetch.mock.calls.filter(
+      (call) => typeof call[0] === "string" && call[0].includes("/stream"),
+    ).length;
+
+    // Change refreshInterval - should NOT cause SSE reconnection
+    rerender({ interval: 10000 });
+
+    // Wait a bit for any potential reconnection
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    const streamCallsAfter = mockAuthFetch.mock.calls.filter(
+      (call) => typeof call[0] === "string" && call[0].includes("/stream"),
+    ).length;
+
+    // SSE should NOT have reconnected (no new stream calls)
+    expect(streamCallsAfter).toBe(streamCallsBefore);
+    // Should still be connected
+    expect(result.current.connected).toBe(true);
+  });
+
+  it("should reconfigure polling interval when refreshInterval prop changes", async () => {
+    jest.useFakeTimers();
+    try {
+      mockAuthFetch.mockImplementation(async (url: string) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          throw new Error("SSE failed");
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ date: "20260406", content: "log" }],
+            total: 1,
+            hasMore: false,
+          }),
+        } as any;
+      });
+
+      const { rerender } = renderHook(
+        ({ interval }) =>
+          useBotLogsStream({ botId: "bot-1", refreshInterval: interval }),
+        { initialProps: { interval: 60000 } },
+      );
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      mockAuthFetch.mockClear();
+
+      rerender({ interval: 5000 });
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+
+      const restCalls = mockAuthFetch.mock.calls.filter(
+        (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+      );
+      expect(restCalls.length).toBeGreaterThan(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // ---- Pagination on date range (REST mode) ----
+
+  it("should expose hasMore and loadMore from REST when date range is set", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      const parsedUrl = new URL(url, "http://localhost");
+      const offset = parseInt(parsedUrl.searchParams.get("offset") || "0");
+      if (offset === 0) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ date: "20240101", content: "Page 1 log" }],
+            total: 2,
+            hasMore: true,
+          }),
+        } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: "Page 2 log" }],
+          total: 2,
+          hasMore: false,
+        }),
+      } as any;
+    });
+
+    act(() => {
+      result.current.setDateRangeFilter("20240101", "20240102");
+    });
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(false);
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    expect(typeof result.current.loadMore).toBe("function");
+
+    await act(async () => {
+      await result.current.loadMore!();
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasMore).toBe(false);
+      expect(result.current.logs.length).toBe(2);
+    });
+  });
+
+  it("should not reset hasMore when loading earlier logs via prepend", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    // Switch to REST with hasMore=true
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: "Log" }],
+          total: 5000,
+          hasMore: true,
+        }),
+      } as any;
+    });
+
+    act(() => {
+      result.current.setDateRangeFilter("20240101", "20240102");
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    // Now loadEarlierLogs returns hasMore=false
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: "Earlier log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as any;
+    });
+
+    await act(async () => {
+      result.current.loadEarlierLogs();
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs.length).toBeGreaterThan(1);
+    });
+
+    // hasMore should still be true - the prepend fetch should not overwrite it
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("should not allow duplicate loadMore calls while fetch is in-flight", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    let fetchCount = 0;
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      fetchCount++;
+      // Slow response to test duplicate guard
+      await new Promise((r) => setTimeout(r, 50));
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: `Page ${fetchCount}` }],
+          total: 100,
+          hasMore: true,
+        }),
+      } as any;
+    });
+
+    act(() => {
+      result.current.setDateRangeFilter("20240101", "20240102");
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    fetchCount = 0;
+
+    // Call loadMore twice rapidly
+    act(() => {
+      result.current.loadMore!();
+      result.current.loadMore!();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    // Should only have fetched once, not twice
+    expect(fetchCount).toBe(1);
+  });
+
+  it("should not advance offset when loadMore fetch fails", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: "Page 1" }],
+          total: 100,
+          hasMore: true,
+        }),
+      } as any;
+    });
+
+    act(() => {
+      result.current.setDateRangeFilter("20240101", "20240102");
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    // Make next fetch fail
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      throw new Error("Network error");
+    });
+
+    await act(async () => {
+      await result.current.loadMore!();
+    });
+
+    // hasMore should still be true - offset not advanced
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("should keep prepended logs when buffer is full", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    // Fill buffer to MAX_LOG_ENTRIES with history
+    const entries = Array.from({ length: 2000 }, (_, i) => ({
+      date: "2024-01-01T10:00:00Z",
+      content: `Entry ${i}`,
+    }));
+
+    act(() => {
+      currentMockStream!.controller.push("history", entries);
+    });
+
+    await waitFor(() => {
+      expect(result.current.logs).toHaveLength(2000);
+    });
+
+    // Now prepend earlier logs via REST
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: "Earlier log" }],
+          total: 1,
+          hasMore: false,
+        }),
+      } as any;
+    });
+
+    await act(async () => {
+      result.current.loadEarlierLogs();
+    });
+
+    await waitFor(() => {
+      // The earlier log should be at the start, not dropped
+      expect(result.current.logs[0].content).toBe("Earlier log");
+    });
+  });
+
+  it("should reset hasMore when reconnecting SSE after clearing date filter", async () => {
+    const { result } = renderHook(() =>
+      useBotLogsStream({ botId: "bot-1" }),
+    );
+
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    mockAuthFetch.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/stream")) {
+        currentMockStream = createMockSSEStream();
+        return { ok: true, body: currentMockStream.stream } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ date: "20240101", content: "Historical" }],
+          total: 100,
+          hasMore: true,
+        }),
+      } as any;
+    });
+
+    act(() => {
+      result.current.setDateRangeFilter("20240101", "20240102");
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    act(() => {
+      result.current.setDateFilter(null);
+    });
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+      expect(result.current.hasMore).toBe(false);
     });
   });
 });

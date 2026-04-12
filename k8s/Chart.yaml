@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.7.9
-appVersion: "1.12.5"
+version: 0.8.0
+appVersion: "1.13.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,18 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: Configurable refresh interval (10s/30s/60s/Off) for console and dashboard
+    - kind: added
+      description: Load more pagination for realtime bots on non-live intervals
     - kind: fixed
-      description: Dashboard refetches metrics when interval picker changes
+      description: Default interval changed from 1d to 1h for scheduled bots
+    - kind: fixed
+      description: Preserve timestamp field in log expansion (shared expandLogEntries)
+    - kind: fixed
+      description: Prevent console refresh loop on interval change (stale closure fix)
+    - kind: fixed
+      description: Correct prepend/append merge direction for pagination
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

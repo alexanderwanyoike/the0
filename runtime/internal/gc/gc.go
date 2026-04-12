@@ -15,11 +15,20 @@ type ObjectInfo struct {
 	LastModified time.Time
 }
 
+// IncompleteUploadInfo holds metadata for a single incomplete multipart upload.
+type IncompleteUploadInfo struct {
+	Key       string
+	UploadID  string
+	Initiated time.Time
+}
+
 // MinIOClient abstracts the MinIO operations needed by the GC.
 type MinIOClient interface {
 	ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error)
 	ListObjectsWithInfo(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error)
 	RemoveObject(ctx context.Context, bucket, name string) error
+	ListIncompleteUploads(ctx context.Context, bucket, prefix string) ([]IncompleteUploadInfo, error)
+	AbortIncompleteUpload(ctx context.Context, bucket, key, uploadID string) error
 }
 
 // BotStore abstracts the database query for existing bot IDs.
@@ -29,9 +38,10 @@ type BotStore interface {
 
 // RunResult contains the outcome of a GC sweep.
 type RunResult struct {
-	OrphanedBots     int
-	DeletedObjects   int
-	StaleTempFiles   int
+	OrphanedBots            int
+	DeletedObjects          int
+	StaleTempFiles          int
+	AbortedMultipartUploads int
 }
 
 // GarbageCollector removes MinIO artifacts for bots that no longer exist.
@@ -71,6 +81,11 @@ func NewGarbageCollector(opts GarbageCollectorOptions) *GarbageCollector {
 // crash and are safe to delete.
 const staleTempFileAge = 1 * time.Hour
 
+// staleIncompleteUploadAge is the minimum age for an incomplete multipart
+// upload to be considered stale. Comfortably exceeds the longest sync upload
+// timeout (state: 180s) so no in-flight upload can ever be older.
+const staleIncompleteUploadAge = 1 * time.Hour
+
 // Run performs a single GC sweep: cleans up stale temp files, then finds
 // orphaned bot IDs in MinIO and deletes their artifacts.
 func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
@@ -78,6 +93,13 @@ func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
 
 	// 0. Clean up stale temp files (leaked by the old fire-and-forget goroutine bug)
 	result.StaleTempFiles = gc.cleanupStaleTempFiles(ctx)
+
+	// 0a. Clean up stale incomplete multipart uploads on both buckets. These
+	// leak when an upload context is cancelled mid-stream (e.g. tail latency
+	// hitting the per-sync timeout, pod OOM, etc.) without an abort reaching
+	// the server. Filtered by Initiated age so we never touch an in-flight op.
+	result.AbortedMultipartUploads += gc.cleanupStaleIncompleteUploads(ctx, gc.logsBucket)
+	result.AbortedMultipartUploads += gc.cleanupStaleIncompleteUploads(ctx, gc.stateBucket)
 
 	// 1. Collect bot IDs from MinIO
 	minioBotIDs, err := gc.collectMinIOBotIDs(ctx)
@@ -189,6 +211,42 @@ func (gc *GarbageCollector) cleanupBot(ctx context.Context, botID string) int {
 	}
 
 	return deleted
+}
+
+// cleanupStaleIncompleteUploads lists incomplete multipart uploads in the
+// given bucket and aborts any whose Initiated timestamp is older than
+// staleIncompleteUploadAge. Errors are logged, not returned, because this
+// is best-effort and should not block the rest of the sweep. Returns the
+// number of uploads successfully aborted.
+func (gc *GarbageCollector) cleanupStaleIncompleteUploads(ctx context.Context, bucket string) int {
+	if bucket == "" {
+		return 0
+	}
+	uploads, err := gc.minio.ListIncompleteUploads(ctx, bucket, "")
+	if err != nil {
+		gc.logger.Error("GC: failed to list incomplete uploads in %s: %v", bucket, err)
+		return 0
+	}
+
+	cutoff := time.Now().Add(-staleIncompleteUploadAge)
+	aborted := 0
+
+	for _, u := range uploads {
+		if !u.Initiated.Before(cutoff) {
+			continue
+		}
+		if err := gc.minio.AbortIncompleteUpload(ctx, bucket, u.Key, u.UploadID); err != nil {
+			gc.logger.Error("GC: failed to abort incomplete upload %s (%s/%s): %v", u.UploadID, bucket, u.Key, err)
+			continue
+		}
+		aborted++
+	}
+
+	if aborted > 0 {
+		gc.logger.Info("GC: aborted %d stale incomplete upload(s) in %s", aborted, bucket)
+	}
+
+	return aborted
 }
 
 // cleanupStaleTempFiles lists all objects under logs/ and deletes any temp

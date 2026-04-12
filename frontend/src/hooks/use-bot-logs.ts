@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { LogEntry } from "@/components/bot/console-interface";
+import { expandLogEntries } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 
@@ -12,6 +13,7 @@ interface LogsQuery {
   limit?: number;
   offset?: number;
   type?: string;
+  sort?: "asc" | "desc";
 }
 
 interface LogsResponse {
@@ -27,13 +29,13 @@ interface UseBotLogsProps {
   initialQuery?: LogsQuery;
 }
 
-const MAX_LOG_ENTRIES = 2000;
+const MAX_LOG_ENTRIES = 10000;
 
 export const useBotLogs = ({
   botId,
   autoRefresh = false,
   refreshInterval = 30000, // 30 seconds
-  initialQuery = { limit: 2000, offset: 0 },
+  initialQuery = { limit: 2000, offset: 0, sort: "desc" },
 }: UseBotLogsProps) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,6 +48,13 @@ export const useBotLogs = ({
   const { toast } = useToast();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Ref to always hold the latest fetchLogs so the polling interval
+  // never calls a stale closure after query/filter changes.
+  const fetchLogsRef = useRef<typeof fetchLogs>(null!);
+  // Track whether the user has explicitly paginated (loadMore).
+  // When true, auto-refresh polling is skipped to avoid overwriting paginated data.
+  const paginatedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
 
   const fetchLogs = useCallback(
     async (queryParams: LogsQuery = query, append: boolean = false) => {
@@ -82,6 +91,7 @@ export const useBotLogs = ({
         if (queryParams.offset)
           searchParams.set("offset", queryParams.offset.toString());
         if (queryParams.type) searchParams.set("type", queryParams.type);
+        if (queryParams.sort) searchParams.set("sort", queryParams.sort);
 
         const response = await authFetch(
           `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
@@ -96,20 +106,7 @@ export const useBotLogs = ({
 
         const result: LogsResponse = await response.json();
 
-        // Split each log entry's content into individual lines
-        const expandedLogs: LogEntry[] = [];
-        result.data.forEach((logEntry) => {
-          // Split content by newlines and create individual entries
-          const lines = logEntry.content
-            .split("\n")
-            .filter((line) => line.trim() !== "");
-          lines.forEach((line) => {
-            expandedLogs.push({
-              date: logEntry.date,
-              content: line,
-            });
-          });
-        });
+        const expandedLogs = expandLogEntries(result.data);
 
         if (append) {
           setLogs((prev) => {
@@ -153,18 +150,27 @@ export const useBotLogs = ({
     },
     [botId, query, toast, user],
   );
+  fetchLogsRef.current = fetchLogs;
 
   // Load more logs (pagination)
   const loadMore = useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loadingMoreRef.current || !hasMore) return;
+    loadingMoreRef.current = true;
 
     const nextQuery = {
       ...query,
       offset: (query.offset || 0) + (query.limit || 100),
     };
 
-    await fetchLogs(nextQuery, true);
-  }, [fetchLogs, loading, hasMore, query]);
+    try {
+      await fetchLogs(nextQuery, true);
+      // Advance offset so consecutive loadMore calls use the correct offset
+      setQuery(nextQuery);
+      paginatedRef.current = true;
+    } finally {
+      loadingMoreRef.current = false;
+    }
+  }, [fetchLogs, hasMore, query]);
 
   // Refresh logs
   const refresh = useCallback(() => {
@@ -250,19 +256,26 @@ export const useBotLogs = ({
     setHasMore(false);
     setTotal(0);
     setLoading(true);
+    paginatedRef.current = false;
 
     fetchLogs(initialQuery);
 
     let interval: NodeJS.Timeout | null = null;
     if (autoRefresh && refreshInterval > 0) {
-      interval = setInterval(() => fetchLogs(), refreshInterval);
+      // Use the ref so the interval always calls the latest fetchLogs
+      // without needing to recreate the timer on every query change.
+      // Skip polling when the user has explicitly paginated (loadMore)
+      // to avoid overwriting their paginated data with offset=0 results.
+      interval = setInterval(() => {
+        if (!paginatedRef.current) fetchLogsRef.current();
+      }, refreshInterval);
     }
 
     return () => {
       if (interval) clearInterval(interval);
       abortControllerRef.current?.abort();
     };
-  }, [botId, user]);
+  }, [botId, user, autoRefresh, refreshInterval]);
 
   return {
     logs,

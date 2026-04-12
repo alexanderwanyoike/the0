@@ -181,6 +181,7 @@ describe("LogsService", () => {
         dateRange: "20260401-20260402",
         limit: 3,
         offset: 5,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -230,6 +231,7 @@ describe("LogsService", () => {
         limit: 10,
         offset: 1,
         type: "metrics",
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -366,6 +368,7 @@ describe("LogsService", () => {
         dateRange: "20260401-20260402",
         limit: 4,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -387,6 +390,7 @@ describe("LogsService", () => {
         dateRange: "20260401-20260402",
         limit: 2,
         offset: 1,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -710,6 +714,7 @@ describe("LogsService", () => {
         dateRange: "20260401-20260402",
         limit: 10,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -736,6 +741,7 @@ describe("LogsService", () => {
         limit: 10,
         offset: 0,
         type: "metrics",
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -862,6 +868,7 @@ describe("LogsService", () => {
         dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -884,6 +891,7 @@ describe("LogsService", () => {
         dateRange: "20260401-20260403",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -911,6 +919,7 @@ describe("LogsService", () => {
         dateRange: "2026-04-02T23:00:00Z--2026-04-03T01:00:00Z",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -933,6 +942,7 @@ describe("LogsService", () => {
         dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -971,6 +981,121 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(1);
       expect(result.data!.entries[0].content).toBe("mid-morning");
+    });
+  });
+
+  describe("getLogs - sort parameter", () => {
+    it("should return newest-first by default for single date (tail path)", async () => {
+      const lines = Array.from(
+        { length: 10 },
+        (_, i) => `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
+      ).join("\n") + "\n";
+
+      mockMinioClient.statObject.mockResolvedValue({ size: 100 });
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 5,
+        offset: 0,
+        sort: "desc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toHaveLength(5);
+      // Tail already returns newest-first; sort=desc should keep that order
+      expect(result.data!.entries[0].content).toBe("line-5");
+      expect(result.data!.entries[4].content).toBe("line-9");
+    });
+
+    it("should return oldest-first when sort=asc for single date", async () => {
+      const lines = Array.from(
+        { length: 10 },
+        (_, i) => `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
+      ).join("\n") + "\n";
+
+      mockMinioClient.statObject.mockResolvedValue({ size: 100 });
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 5,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toHaveLength(5);
+      // sort=asc on tail path: reverse the newest-first to oldest-first
+      expect(result.data!.entries[0].content).toBe("line-9");
+      expect(result.data!.entries[4].content).toBe("line-5");
+    });
+
+    it("should return newest-first for date range when sort=desc", async () => {
+      const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
+      const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
+
+      mockMinioClient.getObject
+        .mockResolvedValueOnce(stringStream(day1))
+        .mockResolvedValueOnce(stringStream(day2));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 6,
+        offset: 0,
+        sort: "desc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toHaveLength(6);
+      // Reversed: newest (d2-l3) first, oldest (d1-l1) last
+      expect(result.data!.entries[0].content).toContain("d2-l3");
+      expect(result.data!.entries[5].content).toContain("d1-l1");
+    });
+
+    it("should handle offset with sort=desc on date range", async () => {
+      // 6 entries total, sort=desc, offset=2, limit=2
+      // desc order: d2-l3, d2-l2, d2-l1, d1-l3, d1-l2, d1-l1
+      // offset=2 skips first 2, returns d2-l1 and d1-l3
+      const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
+      const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
+
+      mockMinioClient.getObject
+        .mockResolvedValueOnce(stringStream(day1))
+        .mockResolvedValueOnce(stringStream(day2));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 2,
+        offset: 2,
+        sort: "desc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toHaveLength(2);
+      expect(result.data!.entries[0].content).toContain("d2-l1");
+      expect(result.data!.entries[1].content).toContain("d1-l3");
+    });
+
+    it("should default to desc when sort is not specified", async () => {
+      const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
+      const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
+
+      mockMinioClient.getObject
+        .mockResolvedValueOnce(stringStream(day1))
+        .mockResolvedValueOnce(stringStream(day2));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 10,
+        offset: 0,
+        // no sort specified
+      });
+
+      expect(result.success).toBe(true);
+      // Should default to desc (newest-first)
+      expect(result.data!.entries[0].content).toContain("d2-l2");
+      expect(result.data!.entries[3].content).toContain("d1-l1");
     });
   });
 

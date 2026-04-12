@@ -492,7 +492,7 @@ describe("ConsoleInterface", () => {
       return buttons.find((btn) => btn.querySelector(".lucide-arrow-down-up"));
     };
 
-    it("defaults to newest-first order (reversed)", () => {
+    it("displays logs in received order (no client-side reversal)", () => {
       const logs: LogEntry[] = [
         { date: "20251227", content: "First log" },
         { date: "20251227", content: "Second log" },
@@ -503,70 +503,68 @@ describe("ConsoleInterface", () => {
 
       const container = screen.getByTestId("virtuoso-container");
       const items = container.querySelectorAll(":scope > div");
-      // In newest-first mode, Third log should appear before First log
-      const texts = Array.from(items).map((el) => el.textContent);
-      const thirdIdx = texts.findIndex((t) => t?.includes("Third log"));
-      const firstIdx = texts.findIndex((t) => t?.includes("First log"));
-      expect(thirdIdx).toBeLessThan(firstIdx);
-    });
-
-    it("toggles to oldest-first (chronological) when clicked", () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "First log" },
-        { date: "20251227", content: "Second log" },
-        { date: "20251227", content: "Third log" },
-      ];
-
-      render(<ConsoleInterface {...defaultProps} logs={logs} />);
-
-      const sortButton = findSortToggle();
-      expect(sortButton).toBeDefined();
-      fireEvent.click(sortButton!);
-
-      const container = screen.getByTestId("virtuoso-container");
-      const items = container.querySelectorAll(":scope > div");
       const texts = Array.from(items).map((el) => el.textContent);
       const firstIdx = texts.findIndex((t) => t?.includes("First log"));
       const thirdIdx = texts.findIndex((t) => t?.includes("Third log"));
-      // In oldest-first mode, First log should appear before Third log
+      // Logs displayed in the order received from the API (no reversal)
       expect(firstIdx).toBeLessThan(thirdIdx);
     });
 
-    it("toggles back to newest-first on second click", () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "First log" },
-        { date: "20251227", content: "Third log" },
-      ];
+    it("calls onSortChange when sort toggle is clicked", () => {
+      const onSortChange = jest.fn();
 
-      render(<ConsoleInterface {...defaultProps} logs={logs} />);
-
-      const sortButton = findSortToggle()!;
-
-      // First click: switch to oldest-first
-      fireEvent.click(sortButton);
-      // Second click: switch back to newest-first
-      fireEvent.click(sortButton);
-
-      const container = screen.getByTestId("virtuoso-container");
-      const items = container.querySelectorAll(":scope > div");
-      const texts = Array.from(items).map((el) => el.textContent);
-      const thirdIdx = texts.findIndex((t) => t?.includes("Third log"));
-      const firstIdx = texts.findIndex((t) => t?.includes("First log"));
-      expect(thirdIdx).toBeLessThan(firstIdx);
-    });
-
-    it("has correct tooltip for sort order", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
           logs={[{ date: "20251227", content: "Log" }]}
+          sort="desc"
+          onSortChange={onSortChange}
+        />,
+      );
+
+      const sortButton = findSortToggle()!;
+      fireEvent.click(sortButton);
+
+      expect(onSortChange).toHaveBeenCalledWith("asc");
+    });
+
+    it("calls onSortChange with desc when currently asc", () => {
+      const onSortChange = jest.fn();
+
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "20251227", content: "Log" }]}
+          sort="asc"
+          onSortChange={onSortChange}
+        />,
+      );
+
+      const sortButton = findSortToggle()!;
+      fireEvent.click(sortButton);
+
+      expect(onSortChange).toHaveBeenCalledWith("desc");
+    });
+
+    it("has correct tooltip for sort order", () => {
+      const { rerender } = render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "20251227", content: "Log" }]}
+          sort="desc"
         />,
       );
 
       const sortButton = findSortToggle()!;
       expect(sortButton).toHaveAttribute("title", "Newest first");
 
-      fireEvent.click(sortButton);
+      rerender(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "20251227", content: "Log" }]}
+          sort="asc"
+        />,
+      );
       expect(sortButton).toHaveAttribute("title", "Oldest first");
     });
 
