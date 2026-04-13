@@ -202,8 +202,12 @@ func (r *SyncRunner) run() {
 			r.DoSync()
 		case <-r.ctx.Done():
 			r.logger.Info("Sync runner stopping, performing final sync")
-			// Use fresh context for final sync since r.ctx is canceled
-			finalCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			// Use fresh context for final sync since r.ctx is canceled.
+			// Must be >= the per-chunk upload timeout (120s for logs, 180s
+			// for state) otherwise the parent deadline overrides the child
+			// and the compose path still times out at 30s, leaking multipart
+			// uploads on R2.
+			finalCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			r.doSyncWithContext(finalCtx)
 			cancel()
 			if r.cleanup != nil {
