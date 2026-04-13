@@ -59,6 +59,11 @@ func NewLogsSyncer(botID, logsPath string, logUploader miniologger.MinIOLogger, 
 	return l
 }
 
+// FinalSyncTimeout returns the context deadline for the shutdown final sync.
+func (l *LogsSyncer) FinalSyncTimeout() time.Duration {
+	return l.uploadTimeout
+}
+
 // Sync reads new log content from the bot's log file and uploads it to MinIO
 // in bounded chunks. It drains all available content (up to the file size at
 // call time) so large bursts are fully caught up in a single Sync call.
