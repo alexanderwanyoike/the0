@@ -47,19 +47,24 @@ Remove saved credentials:
 the0 auth logout
 ```
 
-## Configure API Endpoint
+## Pointing at a Different API
 
-For self-hosted deployments, configure the API URL:
+Use named environments to target multiple API endpoints (local dev, staging, prod) without clobbering credentials. See [Environments](./environments) for the full reference.
 
 ```bash
-the0 auth config https://api.your-domain.com
+the0 env add local --url http://localhost:3000
+the0 env add prod  --url https://api.the0.app
+the0 env use prod
 ```
 
-The default endpoint is `http://localhost:3000` for local development. You can also set the `THE0_API_URL` environment variable.
+`the0 auth login` writes the key to the active environment. Use `--env <name>` on any command to override for a single invocation.
 
 ## Credential Storage
 
-The CLI stores credentials in `~/.the0/auth.json`. This file is created automatically on first login.
+The CLI stores credentials under `~/.the0/`:
+
+- `~/.the0/environments.json` - named environments and their API keys (created on first `the0 env add`).
+- `~/.the0/auth.json` - legacy single-environment credential file. Still honoured when no named environments exist, so existing users are not logged out.
 
 If you encounter permission errors, ensure the directory exists with appropriate permissions:
 
@@ -70,5 +75,6 @@ chmod 700 ~/.the0
 
 ## Next Steps
 
+- [Environments](./environments) - Manage multiple API endpoints
 - [Secrets](./secrets) - Configure private dependency access
 - [Custom Bot Commands](./custom-bot-commands) - Deploy your first bot

@@ -19,7 +19,6 @@ func NewAuthCmd() *cobra.Command {
 	cmd.AddCommand(NewLoginCmd())
 	cmd.AddCommand(NewStatusCmd())
 	cmd.AddCommand(NewLogoutCmd())
-	cmd.AddCommand(NewConfigCmd())
 	cmd.AddCommand(NewSecretsCmd())
 	return cmd
 }
@@ -49,24 +48,6 @@ func NewLogoutCmd() *cobra.Command {
 		Long:  "Clear your saved credentials from this device",
 		Run:   authLogout,
 	}
-}
-
-func NewConfigCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "config [api-url]",
-		Short: "Configure API endpoint",
-		Long: `Configure the API endpoint for the0 CLI.
-
-If no URL is provided, shows the current API endpoint.
-The API URL can also be set via THE0_API_URL environment variable.
-
-Examples:
-  the0 auth config                           # Show current API URL
-  the0 auth config http://localhost:3001     # Set API URL to localhost
-  the0 auth config http://the0-api:3001      # Set API URL to Docker service`,
-		Run: authConfig,
-	}
-	return cmd
 }
 
 func authLogin(cmd *cobra.Command, args []string) {
@@ -128,42 +109,6 @@ func authLogout(cmd *cobra.Command, args []string) {
 		logger.Success("Logged out successfully")
 		logger.Verbose("Credentials removed from ~/.the0/auth.json")
 	}
-}
-
-func authConfig(cmd *cobra.Command, args []string) {
-	if len(args) == 0 {
-		// Show current API URL
-		currentURL := internal.GetAPIBaseURL()
-		envURL := os.Getenv("THE0_API_URL")
-
-		logger.Print("Current API Configuration:")
-		logger.Print("  API URL: %s", currentURL)
-
-		if envURL != "" {
-			logger.Print("  Source: THE0_API_URL environment variable")
-		} else {
-			logger.Print("  Source: Default (http://localhost:3000)")
-		}
-
-		logger.Newline()
-		logger.Print("To change the API URL:")
-		logger.Print("  the0 auth config <new-url>")
-		logger.Print("  export THE0_API_URL=<new-url>")
-		return
-	}
-
-	// Set API URL via environment variable hint
-	newURL := args[0]
-	logger.Print("To set API URL to %s, use one of these methods:", newURL)
-	logger.Newline()
-	logger.Print("1. Environment variable (recommended):")
-	logger.Print("   export THE0_API_URL=%s", newURL)
-	logger.Newline()
-	logger.Print("2. For this session only:")
-	logger.Print("   THE0_API_URL=%s the0 <command>", newURL)
-	logger.Newline()
-	logger.Print("3. Add to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
-	logger.Print("   echo 'export THE0_API_URL=%s' >> ~/.bashrc", newURL)
 }
 
 // NewSecretsCmd creates the secrets subcommand for managing build secrets

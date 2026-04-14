@@ -13,65 +13,96 @@ import (
 	"the0/internal/logger"
 )
 
-const AUTH_FILE = ".the0/auth.json"
-
 // Auth represents the authentication structure
 type Auth struct {
 	APIKey    string    `json:"api_key"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// LoadAuth loads authentication from file
-func LoadAuth() (*Auth, error) {
-	homeDir, err := os.UserHomeDir()
+func authFilePath() (string, error) {
+	dir, err := ConfigDir()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-
-	authPath := filepath.Join(homeDir, AUTH_FILE)
-	data, err := os.ReadFile(authPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var auth Auth
-	if err := json.Unmarshal(data, &auth); err != nil {
-		return nil, err
-	}
-
-	return &auth, nil
+	return filepath.Join(dir, "auth.json"), nil
 }
 
-// SaveAuth saves authentication to file
+// LoadAuth returns the API key for the active environment (named environment
+// if one is active, otherwise the legacy auth.json). Returns an error if no
+// API key can be resolved.
+func LoadAuth() (*Auth, error) {
+	env, err := ResolveActive("")
+	if err != nil {
+		return nil, err
+	}
+	if env == nil || env.APIKey == "" {
+		return nil, fmt.Errorf("no API key configured (run `the0 auth login` or `the0 env add`)")
+	}
+	return &Auth{APIKey: env.APIKey, CreatedAt: env.CreatedAt}, nil
+}
+
+// SaveAuth persists the API key. If a named environment is active, the key is
+// stored on that environment. Otherwise it is written to the legacy
+// ~/.the0/auth.json so brand-new users don't need to set up environments
+// before their first login.
 func SaveAuth(auth *Auth) error {
-	homeDir, err := os.UserHomeDir()
+	envs, err := LoadEnvironments()
 	if err != nil {
 		return err
 	}
-
-	authDir := filepath.Join(homeDir, ".the0")
-	if err := os.MkdirAll(authDir, 0700); err != nil {
-		return err
+	if envs.Active != "" {
+		if active, ok := envs.Environments[envs.Active]; ok {
+			active.APIKey = auth.APIKey
+			if auth.CreatedAt.IsZero() {
+				active.CreatedAt = time.Now().UTC()
+			} else {
+				active.CreatedAt = auth.CreatedAt
+			}
+			envs.Environments[envs.Active] = active
+			return SaveEnvironments(envs)
+		}
 	}
 
-	authPath := filepath.Join(homeDir, AUTH_FILE)
+	// Legacy fallback.
+	dir, err := ConfigDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	path, err := authFilePath()
+	if err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(auth, "", "  ")
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(authPath, data, 0600)
+	return os.WriteFile(path, data, 0600)
 }
 
-// RemoveAuth removes the saved authentication
+// RemoveAuth clears the API key. If a named environment is active, the key on
+// that environment is cleared (the environment itself is retained). Otherwise
+// the legacy auth.json file is removed.
 func RemoveAuth() error {
-	homeDir, err := os.UserHomeDir()
+	envs, err := LoadEnvironments()
 	if err != nil {
 		return err
 	}
+	if envs.Active != "" {
+		if active, ok := envs.Environments[envs.Active]; ok && active.APIKey != "" {
+			active.APIKey = ""
+			envs.Environments[envs.Active] = active
+			return SaveEnvironments(envs)
+		}
+	}
 
-	authPath := filepath.Join(homeDir, AUTH_FILE)
-	return os.Remove(authPath)
+	path, err := authFilePath()
+	if err != nil {
+		return err
+	}
+	return os.Remove(path)
 }
 
 // PromptForNewAPIKey prompts the user for a new API key
