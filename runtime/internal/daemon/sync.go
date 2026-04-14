@@ -20,6 +20,11 @@ import (
 // Syncer defines the interface for sync components.
 type Syncer interface {
 	Sync(ctx context.Context) bool
+	// FinalSyncTimeout returns the context deadline to use for the final
+	// sync on shutdown. Each syncer knows its own upload timeout; the
+	// shutdown path creates a fresh per-syncer context so serialized
+	// syncers don't starve each other from a shared parent deadline.
+	FinalSyncTimeout() time.Duration
 }
 
 // SyncOptions configures the sync command.
@@ -202,10 +207,16 @@ func (r *SyncRunner) run() {
 			r.DoSync()
 		case <-r.ctx.Done():
 			r.logger.Info("Sync runner stopping, performing final sync")
-			// Use fresh context for final sync since r.ctx is canceled
-			finalCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			r.doSyncWithContext(finalCtx)
-			cancel()
+			// Each syncer gets its own fresh context sized to its upload
+			// timeout. This prevents serialized syncers from starving each
+			// other via a shared parent deadline.
+			r.syncMu.Lock()
+			for _, syncer := range r.syncers {
+				ctx, cancel := context.WithTimeout(context.Background(), syncer.FinalSyncTimeout())
+				syncer.Sync(ctx)
+				cancel()
+			}
+			r.syncMu.Unlock()
 			if r.cleanup != nil {
 				r.cleanup()
 			}

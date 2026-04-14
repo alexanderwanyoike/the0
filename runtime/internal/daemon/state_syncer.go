@@ -52,6 +52,11 @@ func NewStateSyncer(botID, statePath string, stateManager storage.StateManager, 
 	return s
 }
 
+// FinalSyncTimeout returns the context deadline for the shutdown final sync.
+func (s *StateSyncer) FinalSyncTimeout() time.Duration {
+	return s.uploadTimeout
+}
+
 // Sync checks for state changes and uploads if changed.
 // Returns true if state was synced, false otherwise.
 func (s *StateSyncer) Sync(ctx context.Context) bool {
