@@ -95,6 +95,10 @@ func (m *mockSyncerImpl) Sync(ctx context.Context) bool {
 	return true
 }
 
+func (m *mockSyncerImpl) FinalSyncTimeout() time.Duration {
+	return 120 * time.Second
+}
+
 func TestSyncRunner_DoSync_CallsSyncers(t *testing.T) {
 	runner := NewSyncRunner(SyncOptions{
 		BotID: "test-bot",
@@ -272,4 +276,8 @@ func (s *contextTrackingSyncer) Sync(ctx context.Context) bool {
 		s.onSync(ctx)
 	}
 	return true
+}
+
+func (s *contextTrackingSyncer) FinalSyncTimeout() time.Duration {
+	return 120 * time.Second
 }
