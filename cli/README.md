@@ -21,27 +21,26 @@ Download the latest binary from the [releases page](https://github.com/the0platf
 
 ### API Endpoint Setup
 
-The CLI needs to connect to the0 API server. Set the API URL based on your deployment:
+The CLI connects to an API server via named environments. Each environment stores its own URL and API key, so you can switch between local dev and a remote cluster without juggling env vars or clobbering credentials.
 
 **For Docker Compose deployment:**
 ```bash
-export THE0_API_URL=http://localhost:3000
+the0 env add local --url http://localhost:3000
 ```
 
 **For Kubernetes deployment:**
 ```bash
-export THE0_API_URL=http://api.the0.local:3000
+the0 env add cluster --url http://api.the0.local:3000
 ```
+
+Switch the active environment with `the0 env use <name>`, or override a single command with `--env <name>`. See [Environments](#-environment-commands) below.
 
 ## Quick Start
 
-1. **Set up your API endpoint and authenticate:**
+1. **Add an environment and authenticate:**
    ```bash
-   # Set API endpoint (if using local deployment)
-   export THE0_API_URL=http://localhost:3000
-   
-   # Authenticate
-   the0 auth login
+   the0 env add local --url http://localhost:3000
+   # You will be prompted for the API key and it will be validated before saving.
    ```
 
 2. **Deploy a bot instance:**
@@ -72,9 +71,21 @@ export THE0_API_URL=http://api.the0.local:3000
 Manage your API credentials and authentication status.
 
 ```bash
-the0 auth login          # Set or update API key
-the0 auth status         # Check API key validity  
+the0 auth login          # Set or update API key for the active environment
+the0 auth status         # Check API key validity
 the0 auth logout         # Remove saved API key
+```
+
+### 🌐 Environment Commands
+Manage named API environments (local, prod, ...). Each stores its own URL and API key.
+
+```bash
+the0 env add <name> --url <url> [--api-key <key>]   # key validated before save
+the0 env use <name>                                  # switch active environment
+the0 env list                                        # show all; active marked with *
+the0 env remove <name>                               # delete an environment
+the0 env current                                     # show active env + URL
+the0 <any-command> --env <name>                      # one-off override
 ```
 
 **Examples:**
@@ -430,7 +441,7 @@ the0 self-update --force --yes
 ## Configuration
 
 ### Environment Variables
-- `THE0_API_URL` - Override API base URL (default: `https://api.the0.app`)
+- `THE0_API_URL` - **Deprecated legacy fallback** for API base URL. Use `the0 env` instead. Only honoured when no named environments are defined.
 - `THE0_CLI_UPDATE_CHANNEL` - Set update channel (`production` or `staging`, default: `production`)
 - `THE0_QUIET` - Suppress startup update notifications when set to any value
 

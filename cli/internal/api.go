@@ -129,12 +129,15 @@ func NewAPIClient(baseURL string) *APIClient {
 	}
 }
 
-// GetAPIBaseURL returns the API base URL from environment or default
+// GetAPIBaseURL returns the API base URL for the active environment. It
+// consults ResolveActive so the --env flag, active named environment, legacy
+// THE0_API_URL env var, and default URL all compose through a single path.
 func GetAPIBaseURL() string {
-	if url := os.Getenv("THE0_API_URL"); url != "" {
-		return url
+	env, err := ResolveActive("")
+	if err != nil || env == nil || env.URL == "" {
+		return DEFAULT_API_URL
 	}
-	return DEFAULT_API_URL
+	return env.URL
 }
 
 // APIKeyValidationResponse represents the response from the API key validation endpoint

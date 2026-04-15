@@ -12,14 +12,23 @@ The `the0` CLI is the primary interface for deploying custom bots and managing b
 
 The CLI is organized into the following command groups:
 
-**auth** - Manage authentication and configuration
+**auth** - Manage authentication
 
 ```bash
-the0 auth login          # Set API key
-the0 auth logout         # Remove API key
+the0 auth login          # Set API key for the active environment
+the0 auth logout         # Remove the API key for the active environment
 the0 auth status         # Check authentication status
-the0 auth config <url>   # Configure API endpoint
 the0 auth secrets        # Manage build secrets
+```
+
+**env** - Manage named API environments
+
+```bash
+the0 env add <name> --url <url>  # Add a new environment (validates key)
+the0 env use <name>              # Switch active environment
+the0 env list                    # List all environments
+the0 env remove <name>           # Delete an environment
+the0 env current                 # Show the active environment
 ```
 
 **custom-bot** - Deploy and manage custom bot definitions
@@ -63,14 +72,16 @@ the0 update                # Update to latest version
 All commands support the following flags:
 
 ```bash
--v, --verbose    Enable verbose output
--h, --help       Show help for any command
+-v, --verbose      Enable verbose output
+    --env <name>   Use the named environment for this command
+-h, --help         Show help for any command
 ```
 
 ## Documentation
 
 - [Installation](./installation) - Install the CLI
 - [Authentication](./authentication) - Configure API credentials
+- [Environments](./environments) - Manage multiple API endpoints (local, prod, ...)
 - [Bot Commands](./bot-commands) - Bot instance management reference
 - [Custom Bot Commands](./custom-bot-commands) - Custom bot deployment reference
 - [Local Development](./local-development) - Local environment management reference

@@ -15,7 +15,8 @@ import (
 var VERSION string
 
 var (
-	verbose bool
+	verbose       bool
+	envOverride   string
 )
 
 func main() {
@@ -35,6 +36,9 @@ the0 CLI - Terminal-based trading bot management`,
 				Verbose:   verbose,
 				NoSpinner: os.Getenv("THE0_NO_SPINNER") != "",
 			}))
+			// Wire the --env flag through to the internal resolver so the rest
+			// of the CLI (GetAPIBaseURL, LoadAuth) picks up the override.
+			internal.SetActiveEnvOverride(envOverride)
 		},
 	}
 
@@ -44,11 +48,13 @@ the0 CLI - Terminal-based trading bot management`,
 
 	// Add global verbose flag
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().StringVar(&envOverride, "env", "", "Named environment to use for this command (overrides active env)")
 
 	// Add command groups
 	rootCmd.AddCommand(cmd.NewCustomBotCmd())
 	rootCmd.AddCommand(cmd.NewBotCmd())
 	rootCmd.AddCommand(cmd.NewAuthCmd())
+	rootCmd.AddCommand(cmd.NewEnvCmd())
 	rootCmd.AddCommand(cmd.NewLocalCmd())
 	if VERSION != "" {
 		rootCmd.AddCommand(cmd.NewUpdateCmd(VERSION))
