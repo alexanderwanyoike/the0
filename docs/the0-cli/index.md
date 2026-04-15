@@ -16,7 +16,7 @@ The CLI is organized into the following command groups:
 
 ```bash
 the0 auth login          # Set API key for the active environment
-the0 auth logout         # Remove saved API key
+the0 auth logout         # Remove the API key for the active environment
 the0 auth status         # Check authentication status
 the0 auth secrets        # Manage build secrets
 ```

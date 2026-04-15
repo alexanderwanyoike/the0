@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"the0/internal"
 	"the0/internal/logger"
 )
@@ -68,6 +69,7 @@ func newEnvAddCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&url, "url", "", "API base URL (e.g. http://localhost:3000)")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key (prompted if omitted)")
+	_ = cmd.MarkFlagRequired("url")
 	return cmd
 }
 
@@ -187,12 +189,16 @@ func addEnvironment(name, url, apiKey string) error {
 		return fmt.Errorf("API key validation failed: %w", err)
 	}
 
+	// Detect first-ever opt-in to named environments by the absence of the
+	// persisted file (NOT by an empty map: removing the last env still leaves
+	// the user opted in, and we must not re-import legacy auth in that case).
+	firstRun := !internal.EnvironmentsFileExists()
+
 	envs, err := internal.LoadEnvironments()
 	if err != nil {
 		return err
 	}
-	// First env ever: migrate legacy auth so users aren't logged out.
-	if len(envs.Environments) == 0 {
+	if firstRun {
 		migrated, err := internal.MigrateLegacyAuth()
 		if err != nil {
 			return err
@@ -214,13 +220,26 @@ func addEnvironment(name, url, apiKey string) error {
 }
 
 func promptForAPIKey() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
 	logger.Printf("Enter API key: ")
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
+	fd := int(os.Stdin.Fd())
+	var key string
+	if term.IsTerminal(fd) {
+		raw, err := term.ReadPassword(fd)
+		// ReadPassword does not emit the trailing newline the user typed; add
+		// one so the next line of CLI output isn't glued to the prompt.
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", err
+		}
+		key = strings.TrimSpace(string(raw))
+	} else {
+		// Non-TTY (piped input, tests). Fall back to line read.
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		key = strings.TrimSpace(line)
 	}
-	key := strings.TrimSpace(line)
 	if key == "" {
 		return "", fmt.Errorf("API key cannot be empty")
 	}

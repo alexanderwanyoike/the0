@@ -277,6 +277,21 @@ func TestResolveActive_LegacyAuthAndEnvVar(t *testing.T) {
 	}
 }
 
+func TestResolveActive_ActiveEnvMissingFromMap_FailsFast(t *testing.T) {
+	withTempConfigDir(t)
+	envs := &Environments{
+		Active:       "ghost",
+		Environments: map[string]Environment{},
+	}
+	if err := SaveEnvironments(envs); err != nil {
+		t.Fatalf("SaveEnvironments: %v", err)
+	}
+	_, err := ResolveActive("")
+	if err == nil {
+		t.Fatal("expected error when active env is set but missing from map")
+	}
+}
+
 func TestResolveActive_DefaultWhenEmpty(t *testing.T) {
 	withTempConfigDir(t)
 	got, err := ResolveActive("")

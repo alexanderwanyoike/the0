@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -120,6 +122,54 @@ func TestAddEnvironment_SecondEnv_KeepsFirst(t *testing.T) {
 	}
 	if envs.Active != "local" {
 		t.Errorf("Active should remain 'local' after second add, got %q", envs.Active)
+	}
+}
+
+func TestAddEnvironment_RemoveLastThenAdd_DoesNotReimportLegacy(t *testing.T) {
+	dir := t.TempDir()
+	internal.SetConfigDir(dir)
+	t.Cleanup(func() { internal.SetConfigDir("") })
+
+	// Plant a legacy auth.json that would, under the old buggy logic, be
+	// re-imported every time the environments map is empty.
+	if err := os.WriteFile(filepath.Join(dir, "auth.json"),
+		[]byte(`{"api_key":"legacy_key","created_at":"2025-01-01T00:00:00Z"}`), 0600); err != nil {
+		t.Fatalf("seed legacy auth.json: %v", err)
+	}
+
+	srv := newMockAPI(t, "good_key")
+	defer srv.Close()
+
+	// First add: legitimate migration of the legacy key into "default".
+	if err := addEnvironment("local", srv.URL, "good_key"); err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+
+	// Remove every environment.
+	envs, err := internal.LoadEnvironments()
+	if err != nil {
+		t.Fatalf("LoadEnvironments: %v", err)
+	}
+	for name := range envs.Environments {
+		if err := envs.Remove(name); err != nil {
+			t.Fatalf("remove %q: %v", name, err)
+		}
+	}
+	if err := internal.SaveEnvironments(envs); err != nil {
+		t.Fatalf("SaveEnvironments: %v", err)
+	}
+
+	// Now add again. The legacy auth.json must NOT be re-imported because
+	// the user has already opted into named environments.
+	if err := addEnvironment("staging", srv.URL, "good_key"); err != nil {
+		t.Fatalf("second add: %v", err)
+	}
+	envs, _ = internal.LoadEnvironments()
+	if _, ok := envs.Environments["default"]; ok {
+		t.Errorf("legacy auth was re-imported after removing all envs; got default=%+v", envs.Environments["default"])
+	}
+	if len(envs.Environments) != 1 {
+		t.Errorf("expected exactly 1 env (staging), got %d: %v", len(envs.Environments), envs.Environments)
 	}
 }
 

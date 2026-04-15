@@ -92,6 +92,8 @@ func LoadEnvironments() (*Environments, error) {
 }
 
 // SaveEnvironments writes the environments file atomically with 0600 perms.
+// The write goes to a same-directory temp file that is fsynced and then
+// renamed over the target so a crash mid-write cannot leave a partial file.
 func SaveEnvironments(envs *Environments) error {
 	dir, err := ConfigDir()
 	if err != nil {
@@ -105,7 +107,50 @@ func SaveEnvironments(envs *Environments) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0600)
+
+	tmp, err := os.CreateTemp(dir, envFileName+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpPath) }
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return err
+	}
+	return nil
+}
+
+// EnvironmentsFileExists reports whether the persisted environments file is
+// present on disk. Used to distinguish "user has never opted in to named
+// environments" (legacy migration applies) from "user has opted in but
+// currently has zero environments" (legacy auth must NOT be re-imported).
+func EnvironmentsFileExists() bool {
+	path, err := environmentsPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
 }
 
 // Add registers a new environment. Errors if name already exists.
@@ -176,9 +221,12 @@ func ResolveActive(override string) (*Environment, error) {
 	}
 
 	if envs.Active != "" {
-		if env, ok := envs.Get(envs.Active); ok {
-			return env, nil
+		env, ok := envs.Get(envs.Active)
+		if !ok {
+			return nil, fmt.Errorf("active environment %q is not defined; pick one with `the0 env use <name>` or remove the stale entry from %s",
+				envs.Active, envFileName)
 		}
+		return env, nil
 	}
 
 	// Legacy fallback: auth.json + THE0_API_URL.
