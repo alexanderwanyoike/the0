@@ -9,31 +9,25 @@ import (
 )
 
 func TestSaveAndLoadAuth(t *testing.T) {
-	// Create test auth
+	internal.SetConfigDir(t.TempDir())
+	t.Cleanup(func() { internal.SetConfigDir("") })
+
 	testAuth := &internal.Auth{
 		APIKey:    "test-api-key-12345",
 		CreatedAt: time.Now(),
 	}
 
-	// Save auth
-	err := internal.SaveAuth(testAuth)
-	if err != nil {
+	if err := internal.SaveAuth(testAuth); err != nil {
 		t.Fatalf("SaveAuth() error = %v", err)
 	}
 
-	// Load auth
 	loadedAuth, err := internal.LoadAuth()
 	if err != nil {
 		t.Fatalf("LoadAuth() error = %v", err)
 	}
-
-	// Compare
 	if loadedAuth.APIKey != testAuth.APIKey {
 		t.Errorf("LoadAuth() APIKey = %v, want %v", loadedAuth.APIKey, testAuth.APIKey)
 	}
-
-	// Cleanup
-	defer internal.RemoveAuth()
 }
 
 func TestIsAuthError(t *testing.T) {

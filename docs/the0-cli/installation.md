@@ -73,11 +73,13 @@ The help command displays all available commands and global flags.
 
 The CLI stores configuration in `~/.the0/`:
 
-- `auth.json` - API authentication credentials
+- `environments.json` - named API environments and their credentials (see [Environments](./environments))
+- `auth.json` - legacy single-environment credential file; still honoured when no named environments exist
 
-No manual configuration is required. The CLI creates this directory automatically when you first authenticate.
+No manual configuration is required. The CLI creates this directory automatically when you first authenticate or run `the0 env add`.
 
 ## Next Steps
 
 - [Authentication](./authentication) - Configure your API credentials
+- [Environments](./environments) - Target multiple API endpoints
 - [Custom Bot Commands](./custom-bot-commands) - Deploy your first bot
