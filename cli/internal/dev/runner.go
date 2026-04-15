@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -106,6 +107,14 @@ func (r *Runner) Run(ctx context.Context) (int, error) {
 		return -1, fmt.Errorf("stderr pipe: %w", err)
 	}
 
+	// Put the child into its own process group so we can signal the whole
+	// subtree on ctx cancel. Without this, SIGINT to `sh -c "sleep 30"` kills
+	// the shell but leaves sleep orphaned to init.
+	if r.spec.Cmd.SysProcAttr == nil {
+		r.spec.Cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	r.spec.Cmd.SysProcAttr.Setpgid = true
+
 	if err := r.spec.Cmd.Start(); err != nil {
 		return -1, fmt.Errorf("start: %w", err)
 	}
@@ -115,18 +124,22 @@ func (r *Runner) Run(ctx context.Context) (int, error) {
 	go r.scan(&wg, StreamStdout, stdout)
 	go r.scan(&wg, StreamStderr, stderr)
 
-	waitErr := make(chan error, 1)
-	go func() { waitErr <- r.spec.Cmd.Wait() }()
+	// Must drain pipes before calling Cmd.Wait (per os/exec docs: it is
+	// incorrect to call Wait before reads from StdoutPipe/StderrPipe complete
+	// — Wait may close the pipe while there's still buffered data).
+	waitDone := make(chan error, 1)
+	go func() {
+		wg.Wait()
+		waitDone <- r.spec.Cmd.Wait()
+	}()
 
 	select {
-	case err := <-waitErr:
-		wg.Wait()
+	case err := <-waitDone:
 		return exitCode(err), nil
 	case <-ctx.Done():
 		r.terminate()
-		<-waitErr
-		wg.Wait()
-		return exitCode(nil), nil
+		err := <-waitDone
+		return exitCode(err), nil
 	}
 }
 
@@ -147,16 +160,19 @@ func (r *Runner) scan(wg *sync.WaitGroup, stream Stream, rc io.ReadCloser) {
 	}
 }
 
-// terminate is the SIGINT -> SIGTERM -> SIGKILL escalation used when the
-// parent context is cancelled.
+// terminate sends SIGINT to the child process group (then SIGKILL after 3s
+// if the process is still alive). Signalling the group ensures that shells
+// spawned by dispatchers propagate the signal to their own children (e.g.
+// `sh -c "sleep 30"`).
 func (r *Runner) terminate() {
 	if r.spec.Cmd.Process == nil {
 		return
 	}
-	_ = r.spec.Cmd.Process.Signal(os.Interrupt)
+	pgid := r.spec.Cmd.Process.Pid
+	_ = syscall.Kill(-pgid, syscall.SIGINT)
 	time.AfterFunc(3*time.Second, func() {
 		if r.spec.Cmd.ProcessState == nil {
-			_ = r.spec.Cmd.Process.Kill()
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		}
 	})
 }

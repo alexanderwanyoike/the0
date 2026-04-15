@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"the0/internal/dev"
@@ -27,7 +28,7 @@ type devFlags struct {
 	release    bool
 	reset      bool
 	frontend   bool
-	// watch/frontendPort wired in later steps
+	watch      bool
 }
 
 func NewDevCmd() *cobra.Command {
@@ -58,6 +59,7 @@ Examples:
 	cmd.Flags().BoolVar(&f.release, "release", false, "Compiled runtimes: build in release mode")
 	cmd.Flags().BoolVar(&f.reset, "reset", false, "Wipe .the0/dev/<bot-id>/ and exit")
 	cmd.Flags().BoolVar(&f.frontend, "frontend", false, "Also serve the custom dashboard (see docs/local-development/frontend.md)")
+	cmd.Flags().BoolVar(&f.watch, "watch", false, "Re-run the bot on source file changes")
 
 	// Convenience alias booleans — wired via PreRunE so they override --mode.
 	var native, docker bool
@@ -147,6 +149,12 @@ func runDev(ctx context.Context, f devFlags) error {
 		return err
 	}
 
+	lock, err := dev.AcquireLock(filepath.Join(devRoot, ".lock"))
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
 	jsonl, err := dev.NewJSONLSink(filepath.Join(devRoot, "events.jsonl"))
 	if err != nil {
 		return err
@@ -154,13 +162,18 @@ func runDev(ctx context.Context, f devFlags) error {
 	defer jsonl.Close()
 
 	term := dev.NewTerminalSink(os.Stdout, terminalIsTTY())
-	runner := dev.NewRunner(spec, term, jsonl)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go forwardSignals(cancel)
 
 	logger.Info("Running %s bot %q (mode=%s)", rt, botID, mode)
+
+	if f.watch {
+		return runWatch(runCtx, cwd, rt, opts, term, jsonl)
+	}
+
+	runner := dev.NewRunner(spec, term, jsonl)
 	exitCode, runErr := runner.Run(runCtx)
 	if runErr != nil {
 		return runErr
@@ -171,6 +184,89 @@ func runDev(ctx context.Context, f devFlags) error {
 	logger.Success("Bot exited cleanly")
 	return nil
 }
+
+// runWatch loops: run the bot, watch for file changes, kill the bot on change,
+// emit a restart sentinel, repeat. Only returns when ctx is cancelled (the
+// user pressed Ctrl-C).
+func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts, sinks ...dev.EventSink) error {
+	wcfg := dev.WatchConfigFor(rt)
+
+	// runOnce spawns a single bot invocation in its own cancellable ctx.
+	runOnce := func(parent context.Context) {
+		spec, err := dispatch(rt, opts)
+		if err != nil {
+			logger.Error("%v", err)
+			return
+		}
+		runner := dev.NewRunner(spec, sinks...)
+		_, _ = runner.Run(parent)
+	}
+
+	botCtx, botCancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		runOnce(botCtx)
+		close(done)
+	}()
+
+	restart := make(chan struct{}, 1)
+	go func() {
+		_ = dev.Watcher(ctx, cwd, wcfg, func() {
+			select {
+			case restart <- struct{}{}:
+			default:
+			}
+		})
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			botCancel()
+			<-done
+			return nil
+		case <-restart:
+			// Broadcast restart sentinel, kill the running bot, start a new one.
+			for _, s := range sinks {
+				s.Emit(dev.Event{Kind: dev.EventRestart, Timestamp: nowFn()})
+			}
+			botCancel()
+			<-done
+			botCtx, botCancel = context.WithCancel(ctx)
+			done = make(chan struct{})
+			go func() {
+				runOnce(botCtx)
+				close(done)
+			}()
+		case <-done:
+			// Bot exited on its own; wait for next source change or ctx cancel.
+			for _, s := range sinks {
+				s.Emit(dev.Event{Kind: dev.EventBotStopped, Timestamp: nowFn()})
+			}
+			// Rebuild done so the outer select blocks here until restart/ctx.
+			done = make(chan struct{})
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-restart:
+				for _, s := range sinks {
+					s.Emit(dev.Event{Kind: dev.EventRestart, Timestamp: nowFn()})
+				}
+				botCtx, botCancel = context.WithCancel(ctx)
+				done = make(chan struct{})
+				go func() {
+					runOnce(botCtx)
+					close(done)
+				}()
+			}
+		}
+	}
+}
+
+// nowFn is a var so tests can freeze time; runtime callers use time.Now.
+var nowFn = timeNow
+
+func timeNow() time.Time { return time.Now() }
 
 func dispatch(rt dev.Runtime, opts runtime.Opts) (*dev.RunSpec, error) {
 	switch rt {
