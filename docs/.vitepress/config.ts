@@ -61,6 +61,7 @@ export default withMermaid(defineConfig({
           { text: 'Overview', link: '/the0-cli/' },
           { text: 'Installation', link: '/the0-cli/installation' },
           { text: 'Authentication', link: '/the0-cli/authentication' },
+          { text: 'Environments', link: '/the0-cli/environments' },
           { text: 'Bot Commands', link: '/the0-cli/bot-commands' },
           { text: 'Custom Bot Commands', link: '/the0-cli/custom-bot-commands' },
           { text: 'Secrets', link: '/the0-cli/secrets' },
