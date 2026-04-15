@@ -42,4 +42,7 @@ type Opts struct {
 	Debug     bool
 	DebugPort int  // 0 → use language-specific default
 	DebugWait bool // native only; Python debugpy --wait-for-client, Node --inspect-brk
+
+	// Build profile (compiled runtimes only)
+	Release bool // false → debug build (fast iter); true → release build
 }

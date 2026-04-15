@@ -139,6 +139,7 @@ func runDev(ctx context.Context, f devFlags) error {
 		Debug:     f.debug,
 		DebugPort: f.debugPort,
 		DebugWait: f.debugWait,
+		Release:   f.release,
 	}
 
 	spec, err := dispatch(rt, opts)
@@ -177,26 +178,26 @@ func dispatch(rt dev.Runtime, opts runtime.Opts) (*dev.RunSpec, error) {
 		return runtime.Python(opts)
 	case dev.RuntimeNode:
 		return runtime.Node(opts)
-	default:
-		return nil, fmt.Errorf("runtime %q not yet supported by `the0 dev` (coming in a follow-up)", rt)
+	case dev.RuntimeRust:
+		return runtime.Rust(opts)
+	case dev.RuntimeDotnet:
+		return runtime.Dotnet(opts)
+	case dev.RuntimeCpp:
+		return runtime.Cpp(opts)
+	case dev.RuntimeScala:
+		return runtime.Scala(opts)
+	case dev.RuntimeHaskell:
+		return runtime.Haskell(opts)
 	}
+	return nil, fmt.Errorf("runtime %q is not supported", rt)
 }
 
 func resolveMode(f devFlags, rt dev.Runtime) (runtime.Mode, error) {
 	raw := strings.ToLower(f.mode)
 	if raw == "" {
-		// Native by default when the toolchain is present.
-		switch rt {
-		case dev.RuntimePython:
-			if ok, _ := runtime.DetectPythonToolchain(); ok {
-				return runtime.ModeNative, nil
-			}
-			return runtime.ModeDocker, nil
-		case dev.RuntimeNode:
-			if ok, _ := runtime.DetectNodeToolchain(); ok {
-				return runtime.ModeNative, nil
-			}
-			return runtime.ModeDocker, nil
+		// Native by default when the toolchain is present; otherwise Docker.
+		if ok, _ := detectNativeToolchain(rt); ok {
+			return runtime.ModeNative, nil
 		}
 		return runtime.ModeDocker, nil
 	}
@@ -207,6 +208,26 @@ func resolveMode(f devFlags, rt dev.Runtime) (runtime.Mode, error) {
 		return runtime.ModeDocker, nil
 	}
 	return "", fmt.Errorf("invalid --mode %q (use native or docker)", f.mode)
+}
+
+func detectNativeToolchain(rt dev.Runtime) (bool, string) {
+	switch rt {
+	case dev.RuntimePython:
+		return runtime.DetectPythonToolchain()
+	case dev.RuntimeNode:
+		return runtime.DetectNodeToolchain()
+	case dev.RuntimeRust:
+		return runtime.DetectRustToolchain()
+	case dev.RuntimeDotnet:
+		return runtime.DetectDotnetToolchain()
+	case dev.RuntimeCpp:
+		return runtime.DetectCppToolchain()
+	case dev.RuntimeScala:
+		return runtime.DetectScalaToolchain()
+	case dev.RuntimeHaskell:
+		return runtime.DetectHaskellToolchain()
+	}
+	return false, ""
 }
 
 func loadBotConfig(configPath string) (json.RawMessage, string, error) {
