@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.8.1
-appVersion: "1.13.1"
+version: 0.8.2
+appVersion: "1.13.3"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,8 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
-    - kind: fixed
-      description: Per-syncer final sync timeout to prevent R2 multipart upload leaks on pod shutdown
+    - kind: added
+      description: Environments page in the docs site CLI sidebar
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
