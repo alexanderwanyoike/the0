@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.8.2
-appVersion: "1.13.2"
+version: 0.8.1
+appVersion: "1.13.1"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,14 +30,8 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
-    - kind: added
-      description: CLI `the0 env` command to manage named API environments (local, prod, ...) each with their own URL and API key
-    - kind: added
-      description: Global `--env <name>` flag to override the active environment for a single command
-    - kind: changed
-      description: CLI auth login/logout/status now operate against the active named environment; `auth config` removed
-    - kind: changed
-      description: CLI prompts for API keys without echo when stdin is a TTY
+    - kind: fixed
+      description: Per-syncer final sync timeout to prevent R2 multipart upload leaks on pod shutdown
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
