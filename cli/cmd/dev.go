@@ -14,21 +14,23 @@ import (
 
 	"github.com/spf13/cobra"
 	"the0/internal/dev"
+	"the0/internal/dev/frontend"
 	"the0/internal/dev/runtime"
 	"the0/internal/logger"
 )
 
 type devFlags struct {
-	configPath string
-	botID      string
-	mode       string
-	debug      bool
-	debugWait  bool
-	debugPort  int
-	release    bool
-	reset      bool
-	frontend   bool
-	watch      bool
+	configPath   string
+	botID        string
+	mode         string
+	debug        bool
+	debugWait    bool
+	debugPort    int
+	release      bool
+	reset        bool
+	frontend     bool
+	frontendPort int
+	watch        bool
 }
 
 func NewDevCmd() *cobra.Command {
@@ -59,6 +61,7 @@ Examples:
 	cmd.Flags().BoolVar(&f.release, "release", false, "Compiled runtimes: build in release mode")
 	cmd.Flags().BoolVar(&f.reset, "reset", false, "Wipe .the0/dev/<bot-id>/ and exit")
 	cmd.Flags().BoolVar(&f.frontend, "frontend", false, "Also serve the custom dashboard (see docs/local-development/frontend.md)")
+	cmd.Flags().IntVar(&f.frontendPort, "frontend-port", 0, "Port for the dev dashboard (0 = OS-assigned)")
 	cmd.Flags().BoolVar(&f.watch, "watch", false, "Re-run the bot on source file changes")
 
 	// Convenience alias booleans — wired via PreRunE so they override --mode.
@@ -126,8 +129,15 @@ func runDev(ctx context.Context, f devFlags) error {
 	if err != nil {
 		return err
 	}
+	var frontendSink dev.EventSink
 	if f.frontend {
-		logger.Warning("--frontend is not yet wired (coming in a follow-up commit); proceeding without it")
+		srv, err := frontend.New(cwd, "", botID, f.frontendPort)
+		if err != nil {
+			return fmt.Errorf("frontend server: %w", err)
+		}
+		logger.Info("Dashboard: http://%s", srv.Addr())
+		go func() { _ = srv.Run(ctx) }()
+		frontendSink = srv
 	}
 
 	opts := runtime.Opts{
@@ -169,11 +179,16 @@ func runDev(ctx context.Context, f devFlags) error {
 
 	logger.Info("Running %s bot %q (mode=%s)", rt, botID, mode)
 
-	if f.watch {
-		return runWatch(runCtx, cwd, rt, opts, term, jsonl)
+	sinks := []dev.EventSink{term, jsonl}
+	if frontendSink != nil {
+		sinks = append(sinks, frontendSink)
 	}
 
-	runner := dev.NewRunner(spec, term, jsonl)
+	if f.watch {
+		return runWatch(runCtx, cwd, rt, opts, sinks...)
+	}
+
+	runner := dev.NewRunner(spec, sinks...)
 	exitCode, runErr := runner.Run(runCtx)
 	if runErr != nil {
 		return runErr
