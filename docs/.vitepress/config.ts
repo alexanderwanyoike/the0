@@ -68,6 +68,19 @@ export default withMermaid(defineConfig({
         ]
       },
       {
+        text: 'Local Development',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/local-development/' },
+          { text: 'Getting Started', link: '/local-development/getting-started' },
+          { text: 'Runtimes', link: '/local-development/runtimes' },
+          { text: 'Debugging', link: '/local-development/debugging' },
+          { text: 'Frontend Dashboard', link: '/local-development/frontend' },
+          { text: 'State and Events', link: '/local-development/state-and-events' },
+          { text: 'FAQ', link: '/local-development/faq' },
+        ]
+      },
+      {
         text: 'Language Quick Starts',
         collapsed: false,
         items: [

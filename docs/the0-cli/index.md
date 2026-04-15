@@ -31,6 +31,16 @@ the0 env remove <name>           # Delete an environment
 the0 env current                 # Show the active environment
 ```
 
+**dev** - Run a bot locally with live event streaming (see [Local Development](../local-development/))
+
+```bash
+the0 dev                         # run bot once against ./config.json
+the0 dev --watch                 # re-run on source change
+the0 dev --frontend              # also serve the custom dashboard
+the0 dev --debug                 # enable per-runtime debugger support
+the0 dev --docker                # force container execution
+```
+
 **custom-bot** - Deploy and manage custom bot definitions
 
 ```bash
@@ -82,6 +92,7 @@ All commands support the following flags:
 - [Installation](./installation) - Install the CLI
 - [Authentication](./authentication) - Configure API credentials
 - [Environments](./environments) - Manage multiple API endpoints (local, prod, ...)
+- [Local Development](../local-development/) - `the0 dev` for iterating without deploys
 - [Bot Commands](./bot-commands) - Bot instance management reference
 - [Custom Bot Commands](./custom-bot-commands) - Custom bot deployment reference
 - [Local Development](./local-development) - Local environment management reference

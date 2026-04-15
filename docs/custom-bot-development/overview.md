@@ -11,6 +11,8 @@ Custom bots are trading algorithms packaged as reusable templates. When you depl
 
 This guide walks through the structure of a custom bot project, explains how the runtime invokes your code, and outlines the development workflow from local testing to deployment.
 
+> **Tip:** Iterating on bot logic? `the0 dev` runs your bot locally with the same env-var contract as production, streams events to your terminal, and optionally renders your custom dashboard against live data. See [Local Development](../local-development/).
+
 ## Project Structure
 
 Every custom bot consists of a few essential files. The bot-config.yaml file tells the platform what runtime to use, where to find your entry point, and what schema validates user configuration. The entry point file contains your trading logic. The schema file defines what parameters users can configure when they create bot instances.
