@@ -111,6 +111,20 @@ func runDev(ctx context.Context, f devFlags) error {
 	codeDir := filepath.Join(devRoot, "code")
 	stateDir := filepath.Join(devRoot, "state")
 
+	for _, d := range []string{codeDir, stateDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
+	}
+
+	// Acquire the per-bot lock BEFORE --reset so we don't wipe state out
+	// from under an active session in another terminal.
+	lock, err := dev.AcquireLock(filepath.Join(devRoot, ".lock"))
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
 	if f.reset {
 		if err := os.RemoveAll(devRoot); err != nil {
 			return err
@@ -119,17 +133,11 @@ func runDev(ctx context.Context, f devFlags) error {
 		return nil
 	}
 
-	for _, d := range []string{codeDir, stateDir} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			return err
-		}
-	}
-
 	mode, err := resolveMode(f, rt)
 	if err != nil {
 		return err
 	}
-	var frontendSink dev.EventSink
+	var frontendSrv *frontend.Server
 	if f.frontend {
 		srv, err := frontend.New(cwd, "", botID, f.frontendPort)
 		if err != nil {
@@ -137,7 +145,7 @@ func runDev(ctx context.Context, f devFlags) error {
 		}
 		logger.Info("Dashboard: http://%s", srv.Addr())
 		go func() { _ = srv.Run(ctx) }()
-		frontendSink = srv
+		frontendSrv = srv
 	}
 
 	opts := runtime.Opts{
@@ -159,12 +167,6 @@ func runDev(ctx context.Context, f devFlags) error {
 		return err
 	}
 
-	lock, err := dev.AcquireLock(filepath.Join(devRoot, ".lock"))
-	if err != nil {
-		return err
-	}
-	defer lock.Release()
-
 	jsonl, err := dev.NewJSONLSink(filepath.Join(devRoot, "events.jsonl"))
 	if err != nil {
 		return err
@@ -180,12 +182,12 @@ func runDev(ctx context.Context, f devFlags) error {
 	logger.Info("Running %s bot %q (mode=%s)", rt, botID, mode)
 
 	sinks := []dev.EventSink{term, jsonl}
-	if frontendSink != nil {
-		sinks = append(sinks, frontendSink)
+	if frontendSrv != nil {
+		sinks = append(sinks, frontendSrv)
 	}
 
 	if f.watch {
-		return runWatch(runCtx, cwd, rt, opts, sinks...)
+		return runWatch(runCtx, cwd, rt, opts, frontendSrv, sinks...)
 	}
 
 	runner := dev.NewRunner(spec, sinks...)
@@ -203,18 +205,31 @@ func runDev(ctx context.Context, f devFlags) error {
 // runWatch loops: run the bot, watch for file changes, kill the bot on change,
 // emit a restart sentinel, repeat. Only returns when ctx is cancelled (the
 // user pressed Ctrl-C).
-func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts, sinks ...dev.EventSink) error {
+func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts, feSrv *frontend.Server, sinks ...dev.EventSink) error {
 	wcfg := dev.WatchConfigFor(rt)
 
 	// runOnce spawns a single bot invocation in its own cancellable ctx.
+	// Errors and non-zero exits are logged so they don't disappear silently.
 	runOnce := func(parent context.Context) {
 		spec, err := dispatch(rt, opts)
 		if err != nil {
-			logger.Error("%v", err)
+			logger.Error("dispatch: %v", err)
 			return
 		}
 		runner := dev.NewRunner(spec, sinks...)
-		_, _ = runner.Run(parent)
+		exitCode, runErr := runner.Run(parent)
+		if runErr != nil {
+			logger.Error("runner: %v", runErr)
+		} else if exitCode != 0 && parent.Err() == nil {
+			logger.Warning("bot exited with code %d", exitCode)
+		}
+		// Rebuild the dashboard bundle on restart so frontend edits don't
+		// stay stale behind the first cached build.
+		if feSrv != nil {
+			if err := feSrv.RebuildBundle(); err != nil {
+				logger.Warning("dashboard rebuild: %v", err)
+			}
+		}
 	}
 
 	botCtx, botCancel := context.WithCancel(ctx)
@@ -353,10 +368,14 @@ func loadBotConfig(configPath string) (json.RawMessage, string, error) {
 		}
 		return nil, "", err
 	}
+	// Fail fast if config.json isn't valid JSON rather than passing garbage
+	// to the bot as BOT_CONFIG.
 	var peek struct {
 		Name string `json:"name"`
 	}
-	_ = json.Unmarshal(raw, &peek)
+	if err := json.Unmarshal(raw, &peek); err != nil {
+		return nil, "", fmt.Errorf("%s: invalid JSON: %w", configPath, err)
+	}
 	return json.RawMessage(raw), peek.Name, nil
 }
 

@@ -57,7 +57,9 @@ func nodeNativeCmd(scriptPath string, opts Opts) *exec.Cmd {
 	if opts.DebugWait {
 		flag = "--inspect-brk"
 	}
-	return exec.Command(nodeNativeExec, flag+"=0.0.0.0:"+fmt.Sprint(port), scriptPath)
+	// Bind to localhost only; 0.0.0.0 would expose the inspector to the
+	// network, letting any remote host execute arbitrary code.
+	return exec.Command(nodeNativeExec, flag+"=127.0.0.1:"+fmt.Sprint(port), scriptPath)
 }
 
 func nodeDockerCmd(scriptPath string, opts Opts) *exec.Cmd {

@@ -98,14 +98,17 @@ func pythonDockerCmd(scriptPath string, opts Opts) *exec.Cmd {
 		if port == 0 {
 			port = pythonDebugPort
 		}
-		inner := []string{
-			"sh", "-c",
-			fmt.Sprintf(
-				"pip install --quiet debugpy && python -m debugpy --listen 0.0.0.0:%s %s",
-				strconv.Itoa(port), scriptPath,
-			),
+		// Pass port, wait flag, and script as positional args to avoid shell
+		// injection when scriptPath contains spaces or metacharacters.
+		waitFlag := ""
+		if opts.DebugWait {
+			waitFlag = "--wait-for-client"
 		}
-		args = append(args, inner...)
+		args = append(args,
+			"sh", "-c",
+			"pip install --quiet debugpy && exec python -m debugpy --listen 0.0.0.0:\"$1\" $2 \"$3\"",
+			"--", strconv.Itoa(port), waitFlag, scriptPath,
+		)
 	} else {
 		args = append(args, "python", scriptPath)
 	}

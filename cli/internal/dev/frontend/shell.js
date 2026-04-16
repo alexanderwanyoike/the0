@@ -40,6 +40,7 @@
           if (ev.kind === 'bot_stopped') return;
           setValue(function (v) {
             return { events: v.events.concat([{
+              kind: ev.kind,
               type: ev.kind,
               data: ev.data ? JSON.parse(typeof ev.data === 'string' ? ev.data : JSON.stringify(ev.data)) : ev.raw,
               metricType: ev.metric_type,

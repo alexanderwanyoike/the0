@@ -144,8 +144,8 @@ func TestNode_NativeDebug(t *testing.T) {
 
 	spec, _ := Node(opts)
 	joined := strings.Join(spec.Cmd.Args, " ")
-	if !strings.Contains(joined, "--inspect=0.0.0.0:9229") {
-		t.Errorf("expected --inspect on 9229: %v", spec.Cmd.Args)
+	if !strings.Contains(joined, "--inspect=127.0.0.1:9229") {
+		t.Errorf("expected --inspect on 127.0.0.1:9229: %v", spec.Cmd.Args)
 	}
 	if strings.Contains(joined, "--inspect-brk") {
 		t.Errorf("--inspect-brk should only appear with DebugWait")
@@ -160,7 +160,7 @@ func TestNode_NativeDebugWait(t *testing.T) {
 	opts.DebugWait = true
 
 	spec, _ := Node(opts)
-	if !strings.Contains(strings.Join(spec.Cmd.Args, " "), "--inspect-brk=0.0.0.0:9229") {
+	if !strings.Contains(strings.Join(spec.Cmd.Args, " "), "--inspect-brk=127.0.0.1:9229") {
 		t.Errorf("expected --inspect-brk: %v", spec.Cmd.Args)
 	}
 }
