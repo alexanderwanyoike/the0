@@ -57,7 +57,7 @@ It's currently pinned to React 18 via unpkg CDN inside `cli/internal/dev/fronten
 
 ## Why does `the0 dev` not run `custom-bot validate` first?
 
-It will. [Issue #9](../../.notes/personal-development.md) tracks the pre-deploy validation command; `the0 dev` will auto-run it once that ships.
+It will. A pre-deploy validation command (`custom-bot validate`) is planned; `the0 dev` will auto-run it once that ships.
 
 ## What about query bots?
 
