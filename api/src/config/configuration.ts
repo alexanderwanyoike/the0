@@ -29,4 +29,9 @@ export default () => ({
   // JWT configuration
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "24h",
+
+  // Readiness probe checks. Off by default to stay friendly to Postgres
+  // providers that bill compute time on idle connections. Enable when
+  // you want Kubernetes to gate pod traffic on deep dependency health.
+  HEALTH_CHECK_DATABASE: process.env.HEALTH_CHECK_DATABASE === "true",
 });
