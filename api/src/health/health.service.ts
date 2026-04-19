@@ -11,7 +11,7 @@ import * as Minio from "minio";
 export interface HealthStatus {
   status: "ok" | "degraded" | "unhealthy";
   checks: {
-    postgres: ComponentHealth;
+    postgres?: ComponentHealth;
     nats: ComponentHealth;
     minio: ComponentHealth;
   };
@@ -26,6 +26,7 @@ interface ComponentHealth {
 @Injectable()
 export class HealthService {
   private readonly minioBucket: string;
+  private readonly checkDatabase: boolean;
 
   constructor(
     private readonly natsService: NatsService,
@@ -35,6 +36,8 @@ export class HealthService {
   ) {
     this.minioBucket =
       this.configService.get<string>("CUSTOM_BOTS_BUCKET") || "custom-bots";
+    this.checkDatabase =
+      this.configService.get<boolean>("HEALTH_CHECK_DATABASE") === true;
   }
 
   async getLiveness(): Promise<{ status: "ok" }> {
@@ -43,14 +46,19 @@ export class HealthService {
 
   async getReadiness(): Promise<HealthStatus> {
     const [postgres, nats, minio] = await Promise.all([
-      this.checkPostgres(),
+      this.checkDatabase ? this.checkPostgres() : Promise.resolve(undefined),
       this.checkNats(),
       this.checkMinio(),
     ]);
 
-    const checks = { postgres, nats, minio };
-    const allUp = Object.values(checks).every((c) => c.status === "up");
-    const allDown = Object.values(checks).every((c) => c.status === "down");
+    const checks: HealthStatus["checks"] = { nats, minio };
+    if (postgres) {
+      checks.postgres = postgres;
+    }
+
+    const values = Object.values(checks) as ComponentHealth[];
+    const allUp = values.every((c) => c.status === "up");
+    const allDown = values.every((c) => c.status === "down");
 
     return {
       status: allUp ? "ok" : allDown ? "unhealthy" : "degraded",
