@@ -55,6 +55,16 @@ var (
 	executeQueryServerOnly bool
 	executeSkipSync        bool
 	executeSkipQueryServer bool
+	executeSkipInit        bool
+)
+
+// Function variables for the init phase: exposed at package scope so tests
+// can swap them to assert call counts without wiring a full dependency-
+// injection harness. Production callers go through runInitPhase.
+var (
+	downloadCodeFn     = downloadCode
+	downloadStateFn    = downloadState
+	ensureExecutableFn = execute.EnsureExecutable
 )
 
 func init() {
@@ -62,7 +72,30 @@ func init() {
 	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
 	executeCmd.Flags().BoolVar(&executeSkipSync, "skip-sync", false, "Skip starting sync subprocess (for K8s where sync is a sidecar)")
 	executeCmd.Flags().BoolVar(&executeSkipQueryServer, "skip-query-server", false, "Skip starting query server subprocess (for K8s where query is a sidecar)")
+	executeCmd.Flags().BoolVar(&executeSkipInit, "skip-init", false, "Skip MinIO code/state download (code already mounted, for local dev)")
 	rootCmd.AddCommand(executeCmd)
+}
+
+// runInitPhase performs the download+permissions pre-run steps unless skip
+// is true. Skip is used by local dev mode (`--skip-init`) where code is
+// already mounted into /bot and state is host-persistent at /state, so
+// reaching MinIO is both unnecessary and noisy.
+func runInitPhase(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger, skip bool) error {
+	if skip {
+		logger.Info("Skipping init (--skip-init flag set)")
+		return nil
+	}
+	if err := downloadCodeFn(ctx, cfg, logger); err != nil {
+		return err
+	}
+	if err := ensureExecutableFn(cfg); err != nil {
+		logger.Info("Warning: failed to set execute permissions: %v", err)
+	}
+	if err := downloadStateFn(ctx, cfg, logger); err != nil {
+		// State may not exist on first run - log but continue.
+		logger.Info("No existing state or download failed: %v", err)
+	}
+	return nil
 }
 
 // loadExecuteConfig loads configuration from environment variables.
@@ -176,22 +209,11 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 		cancel()
 	}()
 
-	// Step 1: Download code
-	if err := downloadCode(ctx, cfg, logger); err != nil {
-		logger.Info("Failed to download code: %v", err)
+	// Steps 1-2: code download, executable permissions, state download.
+	// Gated as a unit so `--skip-init` (local dev) bypasses all of them.
+	if err := runInitPhase(ctx, cfg, logger, executeSkipInit); err != nil {
+		logger.Info("Init phase failed: %v", err)
 		return 1
-	}
-
-	// Step 1.5: Ensure binaries are executable for compiled runtimes
-	if err := execute.EnsureExecutable(cfg); err != nil {
-		logger.Info("Warning: failed to set execute permissions: %v", err)
-		// Continue anyway - may work if permissions are already set
-	}
-
-	// Step 2: Download state
-	if err := downloadState(ctx, cfg, logger); err != nil {
-		// State may not exist on first run - log but continue
-		logger.Info("No existing state or download failed: %v", err)
 	}
 
 	// Step 2.5: Ensure logs directory exists
