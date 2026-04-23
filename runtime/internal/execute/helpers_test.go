@@ -127,6 +127,13 @@ func TestBuildBotCommand_AllRuntimes(t *testing.T) {
 	}
 }
 
+func TestBuildBotDebugCommand_Python_Basic(t *testing.T) {
+	cmd := BuildBotDebugCommand("python3.11", "main.py", constants.TestBotDir, 5678, false)
+
+	assert.Equal(t, []string{"python3", "-m", "debugpy", "--listen", "0.0.0.0:5678", "/bot/main.py"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
 func TestBuildQueryCommand_Python(t *testing.T) {
 	cmd := BuildQueryCommand("python3.11", "query.py", constants.TestBotDir)
 

@@ -67,6 +67,33 @@ func BuildBotCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 	return cmd
 }
 
+// BuildBotDebugCommand creates an exec.Cmd that runs the bot entrypoint
+// under a debugger, bypassing the Python/Node wrapper scripts.
+//
+// Used by `runtime execute --debug-port <p>` for local dev mode. The wrapper
+// scripts at /app/wrappers/ own signal handling, config parsing, and result
+// file writing in production — all of which are unnecessary for dev mode
+// where the user is attaching an IDE debugger. This escape hatch keeps the
+// wrappers themselves untouched while still delivering breakpoint debugging.
+//
+// For runtimes without breakpoint-debug support (rust, c++, haskell, .NET,
+// scala in v1), falls back to BuildBotCommand unchanged.
+func BuildBotDebugCommand(runtime, entrypoint, workDir string, port int, wait bool) *exec.Cmd {
+	switch runtime {
+	case "python3.11":
+		scriptPath := filepath.Join(workDir, entrypoint)
+		args := []string{"-m", "debugpy", "--listen", fmt.Sprintf("0.0.0.0:%d", port)}
+		if wait {
+			args = append(args, "--wait-for-client")
+		}
+		args = append(args, scriptPath)
+		cmd := exec.Command("python3", args...)
+		cmd.Dir = workDir
+		return cmd
+	}
+	return BuildBotCommand(runtime, entrypoint, workDir)
+}
+
 // BuildQueryCommand creates an exec.Cmd for query execution.
 // Queries run directly without wrappers - the SDK handles everything.
 func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
