@@ -148,6 +148,13 @@ func TestBuildBotDebugCommand_NodeJS_Basic(t *testing.T) {
 	assert.Equal(t, constants.TestBotDir, cmd.Dir)
 }
 
+func TestBuildBotDebugCommand_NodeJS_WithWait(t *testing.T) {
+	cmd := BuildBotDebugCommand("nodejs20", "main.js", constants.TestBotDir, 9229, true)
+
+	assert.Equal(t, []string{"node", "--inspect-brk=0.0.0.0:9229", "/bot/main.js"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
 func TestBuildQueryCommand_Python(t *testing.T) {
 	cmd := BuildQueryCommand("python3.11", "query.py", constants.TestBotDir)
 
