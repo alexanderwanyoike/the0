@@ -8,7 +8,10 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,16 +27,18 @@ var shellJS string
 
 // Server is the HTTP + WebSocket server that backs `the0 dev --frontend`.
 // It serves the user's bundled dashboard at /, the compiled bundle at
-// /bundle.js, and a real-time event stream at /events.
+// /bundle.js, a real-time event stream at /events, and proxies
+// /query/* to the bot's in-container query server.
 type Server struct {
-	entry   string
-	botID   string
-	addr    string
-	ln      net.Listener
-	events  *broker
-	tmpl    *template.Template
-	bundle  []byte
-	bundleM sync.RWMutex
+	entry     string
+	botID     string
+	addr      string
+	ln        net.Listener
+	events    *broker
+	tmpl      *template.Template
+	bundle    []byte
+	bundleM   sync.RWMutex
+	queryPort int // forwarded to 127.0.0.1:queryPort; defaults to dev.QueryPort
 }
 
 type shellData struct {
@@ -42,10 +47,11 @@ type shellData struct {
 	ShellJS template.JS
 }
 
-// New stands up the server, binding to a port (0 = OS-assigned).
-// The caller drives it with Run(ctx) and receives the chosen address via Addr().
+// New stands up the server, binding to loopback on the given port
+// (0 = OS-assigned). Binding only on 127.0.0.1 means LAN peers cannot
+// reach the bot's live event stream or query endpoint.
 func New(projectDir, entry, botID string, port int) (*Server, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return nil, err
 	}
@@ -57,12 +63,13 @@ func New(projectDir, entry, botID string, port int) (*Server, error) {
 		return nil, err
 	}
 	return &Server{
-		entry:  entry,
-		botID:  botID,
-		addr:   ln.Addr().String(),
-		ln:     ln,
-		events: newBroker(),
-		tmpl:   tmpl,
+		entry:     entry,
+		botID:     botID,
+		addr:      ln.Addr().String(),
+		ln:        ln,
+		events:    newBroker(),
+		tmpl:      tmpl,
+		queryPort: dev.QueryPort,
 	}, nil
 }
 
@@ -80,6 +87,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/", s.serveShell)
 	mux.HandleFunc("/bundle.js", s.serveBundle)
 	mux.HandleFunc("/events", s.serveEvents)
+	mux.HandleFunc("/query/", s.serveQuery)
 
 	srv := &http.Server{Handler: mux}
 	go func() {
@@ -134,8 +142,43 @@ func (s *Server) serveBundle(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
+// upgrader restricts WebSocket connections to origins served by the
+// local dev shell (or no Origin at all, e.g. curl). Without this check
+// any webpage in the user's browser could connect to /events while
+// `the0 dev --frontend` is running.
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(*http.Request) bool { return true }, // localhost only; CORS not applicable in dev
+	CheckOrigin: func(r *http.Request) bool {
+		o := r.Header.Get("Origin")
+		if o == "" {
+			return true
+		}
+		// Strict: scheme://host[:port], no trailing path.
+		return strings.HasPrefix(o, "http://127.0.0.1:") ||
+			strings.HasPrefix(o, "http://localhost:") ||
+			o == "http://localhost" ||
+			o == "http://127.0.0.1"
+	},
+}
+
+// serveQuery reverse-proxies /query/<path> to the bot's in-container
+// query server (127.0.0.1:queryPort), stripping the /query prefix. The
+// runtime image exposes the query subprocess on loopback so this
+// proxy gives the browser-side dashboard a same-origin path that the
+// runtime forwards to the bot's SDK-owned query router.
+func (s *Server) serveQuery(w http.ResponseWriter, r *http.Request) {
+	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", s.queryPort))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	// Default director sets scheme/host but keeps r.URL.Path; we strip the
+	// /query prefix so the upstream sees the logical path.
+	r.URL.Path = strings.TrimPrefix(r.URL.Path, "/query")
+	if r.URL.Path == "" {
+		r.URL.Path = "/"
+	}
+	proxy.ServeHTTP(w, r)
 }
 
 func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request) {
