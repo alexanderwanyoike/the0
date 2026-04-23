@@ -90,3 +90,54 @@ func TestExecuteSkipInitFlagRegistered(t *testing.T) {
 		assert.Equal(t, "false", f.DefValue)
 	}
 }
+
+// TestBuildBotCommandForMode_DebugPortPositive_UsesDebugCommand asserts that
+// when executeDebugPort is set, the runtime builds the wrapper-bypassing
+// debug command (python -m debugpy ... / node --inspect ...) instead of the
+// wrapper-based production command.
+func TestBuildBotCommandForMode_DebugPortPositive_UsesDebugCommand(t *testing.T) {
+	origPort := executeDebugPort
+	origWait := executeDebugWait
+	defer func() {
+		executeDebugPort = origPort
+		executeDebugWait = origWait
+	}()
+	executeDebugPort = 5678
+	executeDebugWait = false
+
+	cfg := &execute.Config{Runtime: "python3.11", CodePath: "/bot"}
+	cmd := buildBotCommandForMode(cfg, "main.py")
+
+	expected := execute.BuildBotDebugCommand("python3.11", "main.py", "/bot", 5678, false)
+	assert.Equal(t, expected.Args, cmd.Args)
+	assert.Equal(t, expected.Dir, cmd.Dir)
+}
+
+// TestBuildBotCommandForMode_DebugPortZero_UsesWrapperCommand is the
+// regression guard: default (0) port must still route to the production
+// wrapper invocation so real deployments are not silently debug-enabled.
+func TestBuildBotCommandForMode_DebugPortZero_UsesWrapperCommand(t *testing.T) {
+	origPort := executeDebugPort
+	defer func() { executeDebugPort = origPort }()
+	executeDebugPort = 0
+
+	cfg := &execute.Config{Runtime: "python3.11", CodePath: "/bot"}
+	cmd := buildBotCommandForMode(cfg, "main.py")
+
+	expected := execute.BuildBotCommand("python3.11", "main.py", "/bot")
+	assert.Equal(t, expected.Args, cmd.Args)
+	assert.Equal(t, expected.Dir, cmd.Dir)
+}
+
+// TestExecuteDebugFlagsRegistered asserts both --debug-port and --debug-wait
+// are registered with the expected defaults.
+func TestExecuteDebugFlagsRegistered(t *testing.T) {
+	port := executeCmd.Flags().Lookup("debug-port")
+	if assert.NotNil(t, port, "--debug-port must be registered") {
+		assert.Equal(t, "0", port.DefValue)
+	}
+	wait := executeCmd.Flags().Lookup("debug-wait")
+	if assert.NotNil(t, wait, "--debug-wait must be registered") {
+		assert.Equal(t, "false", wait.DefValue)
+	}
+}

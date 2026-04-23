@@ -56,6 +56,8 @@ var (
 	executeSkipSync        bool
 	executeSkipQueryServer bool
 	executeSkipInit        bool
+	executeDebugPort       int  // 0 = disabled
+	executeDebugWait       bool // only meaningful when executeDebugPort > 0
 )
 
 // Function variables for the init phase: exposed at package scope so tests
@@ -73,7 +75,21 @@ func init() {
 	executeCmd.Flags().BoolVar(&executeSkipSync, "skip-sync", false, "Skip starting sync subprocess (for K8s where sync is a sidecar)")
 	executeCmd.Flags().BoolVar(&executeSkipQueryServer, "skip-query-server", false, "Skip starting query server subprocess (for K8s where query is a sidecar)")
 	executeCmd.Flags().BoolVar(&executeSkipInit, "skip-init", false, "Skip MinIO code/state download (code already mounted, for local dev)")
+	executeCmd.Flags().IntVar(&executeDebugPort, "debug-port", 0, "Launch entrypoint under a debugger on this port, bypassing the wrapper (0 = disabled)")
+	executeCmd.Flags().BoolVar(&executeDebugWait, "debug-wait", false, "With --debug-port: wait for debugger attach before running (python --wait-for-client / node --inspect-brk)")
 	rootCmd.AddCommand(executeCmd)
+}
+
+// buildBotCommandForMode returns the wrapper-bypass debug command when
+// --debug-port is set, otherwise the production wrapper command. Debug
+// mode loses the wrapper's result.json writing (acceptable for local dev);
+// all other runtime concerns (state, query server, signal forwarding) are
+// unaffected because they live outside the bot command itself.
+func buildBotCommandForMode(cfg *execute.Config, entrypoint string) *exec.Cmd {
+	if executeDebugPort > 0 {
+		return execute.BuildBotDebugCommand(cfg.Runtime, entrypoint, cfg.CodePath, executeDebugPort, executeDebugWait)
+	}
+	return execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 }
 
 // runInitPhase performs the download+permissions pre-run steps unless skip
@@ -468,7 +484,7 @@ func executeProcessWithLogFile(ctx context.Context, cfg *execute.Config, entrypo
 
 // executeProcessWithDeps executes a process with injectable dependencies for testing.
 func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps execute.Dependencies) int {
-	cmd := execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+	cmd := buildBotCommandForMode(cfg, entrypoint)
 
 	// Set up output: both stdout and optionally log file
 	if logFile != nil {
