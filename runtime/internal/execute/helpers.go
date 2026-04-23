@@ -90,6 +90,15 @@ func BuildBotDebugCommand(runtime, entrypoint, workDir string, port int, wait bo
 		cmd := exec.Command("python3", args...)
 		cmd.Dir = workDir
 		return cmd
+	case "nodejs20":
+		scriptPath := filepath.Join(workDir, entrypoint)
+		flag := "--inspect"
+		if wait {
+			flag = "--inspect-brk"
+		}
+		cmd := exec.Command("node", fmt.Sprintf("%s=0.0.0.0:%d", flag, port), scriptPath)
+		cmd.Dir = workDir
+		return cmd
 	}
 	return BuildBotCommand(runtime, entrypoint, workDir)
 }
