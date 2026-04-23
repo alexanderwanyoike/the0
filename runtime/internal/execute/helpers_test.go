@@ -127,6 +127,52 @@ func TestBuildBotCommand_AllRuntimes(t *testing.T) {
 	}
 }
 
+func TestBuildBotDebugCommand_Python_Basic(t *testing.T) {
+	cmd := BuildBotDebugCommand("python3.11", "main.py", constants.TestBotDir, 5678, false)
+
+	assert.Equal(t, []string{"python3", "-m", "debugpy", "--listen", "0.0.0.0:5678", "/bot/main.py"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+func TestBuildBotDebugCommand_Python_WithWait(t *testing.T) {
+	cmd := BuildBotDebugCommand("python3.11", "main.py", constants.TestBotDir, 5678, true)
+
+	assert.Equal(t, []string{"python3", "-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", "/bot/main.py"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+func TestBuildBotDebugCommand_NodeJS_Basic(t *testing.T) {
+	cmd := BuildBotDebugCommand("nodejs20", "main.js", constants.TestBotDir, 9229, false)
+
+	assert.Equal(t, []string{"node", "--inspect=0.0.0.0:9229", "/bot/main.js"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+func TestBuildBotDebugCommand_NodeJS_WithWait(t *testing.T) {
+	cmd := BuildBotDebugCommand("nodejs20", "main.js", constants.TestBotDir, 9229, true)
+
+	assert.Equal(t, []string{"node", "--inspect-brk=0.0.0.0:9229", "/bot/main.js"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+// TestBuildBotDebugCommand_UnsupportedRuntime_FallsBack asserts that runtimes
+// without a breakpoint-debug integration in v1 (Rust, C++, Haskell, .NET,
+// Scala) produce the same command as BuildBotCommand when debug is requested.
+// This preserves the option to request debug for a compiled-language bot
+// without changing the execution shape (phase 2 will extend this).
+func TestBuildBotDebugCommand_UnsupportedRuntime_FallsBack(t *testing.T) {
+	unsupported := []string{"rust-stable", "gcc13", "cpp-gcc13", "ghc96", "dotnet8", "scala3"}
+	for _, rt := range unsupported {
+		t.Run(rt, func(t *testing.T) {
+			debug := BuildBotDebugCommand(rt, "app", constants.TestBotDir, 5678, false)
+			normal := BuildBotCommand(rt, "app", constants.TestBotDir)
+
+			assert.Equal(t, normal.Args, debug.Args, "debug argv should equal BuildBotCommand argv for unsupported runtimes")
+			assert.Equal(t, normal.Dir, debug.Dir)
+		})
+	}
+}
+
 func TestBuildQueryCommand_Python(t *testing.T) {
 	cmd := BuildQueryCommand("python3.11", "query.py", constants.TestBotDir)
 

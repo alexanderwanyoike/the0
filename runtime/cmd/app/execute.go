@@ -55,6 +55,18 @@ var (
 	executeQueryServerOnly bool
 	executeSkipSync        bool
 	executeSkipQueryServer bool
+	executeSkipInit        bool
+	executeDebugPort       int  // 0 = disabled
+	executeDebugWait       bool // only meaningful when executeDebugPort > 0
+)
+
+// Function variables for the init phase: exposed at package scope so tests
+// can swap them to assert call counts without wiring a full dependency-
+// injection harness. Production callers go through runInitPhase.
+var (
+	downloadCodeFn     = downloadCode
+	downloadStateFn    = downloadState
+	ensureExecutableFn = execute.EnsureExecutable
 )
 
 func init() {
@@ -62,7 +74,54 @@ func init() {
 	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
 	executeCmd.Flags().BoolVar(&executeSkipSync, "skip-sync", false, "Skip starting sync subprocess (for K8s where sync is a sidecar)")
 	executeCmd.Flags().BoolVar(&executeSkipQueryServer, "skip-query-server", false, "Skip starting query server subprocess (for K8s where query is a sidecar)")
+	executeCmd.Flags().BoolVar(&executeSkipInit, "skip-init", false, "Skip MinIO code/state download (code already mounted, for local dev)")
+	executeCmd.Flags().IntVar(&executeDebugPort, "debug-port", 0, "Launch entrypoint under a debugger on this port, bypassing the wrapper (0 = disabled)")
+	executeCmd.Flags().BoolVar(&executeDebugWait, "debug-wait", false, "With --debug-port: wait for debugger attach before running (python --wait-for-client / node --inspect-brk)")
 	rootCmd.AddCommand(executeCmd)
+}
+
+// buildBotCommandForMode returns the wrapper-bypass debug command when
+// --debug-port is set, otherwise the production wrapper command. Debug
+// mode loses the wrapper's result.json writing (acceptable for local dev);
+// all other runtime concerns (state, query server, signal forwarding) are
+// unaffected because they live outside the bot command itself.
+func buildBotCommandForMode(cfg *execute.Config, entrypoint string) *exec.Cmd {
+	if executeDebugPort > 0 {
+		return execute.BuildBotDebugCommand(cfg.Runtime, entrypoint, cfg.CodePath, executeDebugPort, executeDebugWait)
+	}
+	return execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+}
+
+// shouldStartQueryServer centralises the criteria for spawning the
+// in-container query-server subprocess: realtime bots with a query
+// entrypoint, unless --skip-query-server has been passed (K8s sidecar
+// mode). Debug mode intentionally does not affect this decision — local
+// dev users need queries to continue flowing while they're attached to
+// the bot with a debugger.
+func shouldStartQueryServer(cfg *execute.Config) bool {
+	return cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !executeSkipQueryServer
+}
+
+// runInitPhase performs the download+permissions pre-run steps unless skip
+// is true. Skip is used by local dev mode (`--skip-init`) where code is
+// already mounted into /bot and state is host-persistent at /state, so
+// reaching MinIO is both unnecessary and noisy.
+func runInitPhase(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger, skip bool) error {
+	if skip {
+		logger.Info("Skipping init (--skip-init flag set)")
+		return nil
+	}
+	if err := downloadCodeFn(ctx, cfg, logger); err != nil {
+		return err
+	}
+	if err := ensureExecutableFn(cfg); err != nil {
+		logger.Info("Warning: failed to set execute permissions: %v", err)
+	}
+	if err := downloadStateFn(ctx, cfg, logger); err != nil {
+		// State may not exist on first run - log but continue.
+		logger.Info("No existing state or download failed: %v", err)
+	}
+	return nil
 }
 
 // loadExecuteConfig loads configuration from environment variables.
@@ -176,22 +235,11 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 		cancel()
 	}()
 
-	// Step 1: Download code
-	if err := downloadCode(ctx, cfg, logger); err != nil {
-		logger.Info("Failed to download code: %v", err)
+	// Steps 1-2: code download, executable permissions, state download.
+	// Gated as a unit so `--skip-init` (local dev) bypasses all of them.
+	if err := runInitPhase(ctx, cfg, logger, executeSkipInit); err != nil {
+		logger.Info("Init phase failed: %v", err)
 		return 1
-	}
-
-	// Step 1.5: Ensure binaries are executable for compiled runtimes
-	if err := execute.EnsureExecutable(cfg); err != nil {
-		logger.Info("Warning: failed to set execute permissions: %v", err)
-		// Continue anyway - may work if permissions are already set
-	}
-
-	// Step 2: Download state
-	if err := downloadState(ctx, cfg, logger); err != nil {
-		// State may not exist on first run - log but continue
-		logger.Info("No existing state or download failed: %v", err)
 	}
 
 	// Step 2.5: Ensure logs directory exists
@@ -225,7 +273,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	}
 
 	// Step 4: Start query server subprocess (for realtime bots, unless skipped)
-	if cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !executeSkipQueryServer {
+	if shouldStartQueryServer(cfg) {
 		var err error
 		queryCmd, err = startQueryServerProcess(cfg, logger)
 		if err != nil {
@@ -446,7 +494,7 @@ func executeProcessWithLogFile(ctx context.Context, cfg *execute.Config, entrypo
 
 // executeProcessWithDeps executes a process with injectable dependencies for testing.
 func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps execute.Dependencies) int {
-	cmd := execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
+	cmd := buildBotCommandForMode(cfg, entrypoint)
 
 	// Set up output: both stdout and optionally log file
 	if logFile != nil {
