@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -15,18 +16,15 @@ import (
 	"github.com/spf13/cobra"
 	"the0/internal/dev"
 	"the0/internal/dev/frontend"
-	"the0/internal/dev/runtime"
 	"the0/internal/logger"
 )
 
 type devFlags struct {
 	configPath   string
 	botID        string
-	mode         string
 	debug        bool
 	debugWait    bool
 	debugPort    int
-	release      bool
 	reset        bool
 	frontend     bool
 	frontendPort int
@@ -44,42 +42,28 @@ Events (metrics, logs, print) stream to the terminal in real time. State
 persists between runs under .the0/dev/<bot-id>/state/ so re-running picks
 up where the last one left off.
 
+Delegates bot execution to the0/runtime:latest (same image production
+uses). Python and Node bots are supported in v1; compiled-language
+support (Rust, C++, Scala, .NET, Haskell) is coming in phase 2.
+
 Examples:
   the0 dev                          # run once with ./config.json
   the0 dev --config dev.json        # custom config
-  the0 dev --docker                 # compiled langs: run in container
-  the0 dev --debug                  # enable debug port forwarding
+  the0 dev --debug                  # enable debugger port forwarding
+  the0 dev --watch                  # auto-restart on source changes
+  the0 dev --frontend               # also serve the custom dashboard
   the0 dev --reset                  # wipe local dev state and exit`,
 		RunE: func(cmd *cobra.Command, args []string) error { return runDev(cmd.Context(), f) },
 	}
 	cmd.Flags().StringVar(&f.configPath, "config", "", "Path to bot config (default: ./config.json)")
 	cmd.Flags().StringVar(&f.botID, "bot-id", "", "Explicit bot ID (default: slug of config.name)")
-	cmd.Flags().StringVar(&f.mode, "mode", "", "Force runtime mode: native|docker")
-	cmd.Flags().BoolVar(&f.debug, "debug", false, "Enable debugger port (per-runtime default)")
+	cmd.Flags().BoolVar(&f.debug, "debug", false, "Enable debugger port (per-runtime default: 5678 py / 9229 node)")
 	cmd.Flags().BoolVar(&f.debugWait, "debug-wait", false, "Debugger must attach before main runs")
 	cmd.Flags().IntVar(&f.debugPort, "debug-port", 0, "Override debugger port")
-	cmd.Flags().BoolVar(&f.release, "release", false, "Compiled runtimes: build in release mode")
 	cmd.Flags().BoolVar(&f.reset, "reset", false, "Wipe .the0/dev/<bot-id>/ and exit")
 	cmd.Flags().BoolVar(&f.frontend, "frontend", false, "Also serve the custom dashboard (see docs/local-development/frontend.md)")
 	cmd.Flags().IntVar(&f.frontendPort, "frontend-port", 0, "Port for the dev dashboard (0 = OS-assigned)")
 	cmd.Flags().BoolVar(&f.watch, "watch", false, "Re-run the bot on source file changes")
-
-	// Convenience alias booleans — wired via PreRunE so they override --mode.
-	var native, docker bool
-	cmd.Flags().BoolVar(&native, "native", false, "Alias for --mode=native")
-	cmd.Flags().BoolVar(&docker, "docker", false, "Alias for --mode=docker")
-	cmd.PreRunE = func(*cobra.Command, []string) error {
-		if native && docker {
-			return fmt.Errorf("--native and --docker are mutually exclusive")
-		}
-		if native {
-			f.mode = "native"
-		}
-		if docker {
-			f.mode = "docker"
-		}
-		return nil
-	}
 	return cmd
 }
 
@@ -95,7 +79,7 @@ func runDev(ctx context.Context, f devFlags) error {
 	}
 	logger.Info("Detected runtime: %s", rt)
 
-	botConfig, botName, err := loadBotConfig(f.configPath)
+	botConfig, botName, botType, err := loadBotConfig(f.configPath)
 	if err != nil {
 		return err
 	}
@@ -108,13 +92,10 @@ func runDev(ctx context.Context, f devFlags) error {
 	}
 
 	devRoot := filepath.Join(cwd, ".the0", "dev", botID)
-	codeDir := filepath.Join(devRoot, "code")
 	stateDir := filepath.Join(devRoot, "state")
 
-	for _, d := range []string{codeDir, stateDir} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			return err
-		}
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		return err
 	}
 
 	// Acquire the per-bot lock BEFORE --reset so we don't wipe state out
@@ -133,10 +114,8 @@ func runDev(ctx context.Context, f devFlags) error {
 		return nil
 	}
 
-	mode, err := resolveMode(f, rt)
-	if err != nil {
-		return err
-	}
+	queryEntrypoint := detectQueryEntrypoint(cwd, rt)
+
 	var frontendSrv *frontend.Server
 	if f.frontend {
 		srv, err := frontend.New(cwd, "", botID, f.frontendPort)
@@ -148,30 +127,19 @@ func runDev(ctx context.Context, f devFlags) error {
 		frontendSrv = srv
 	}
 
-	opts := runtime.Opts{
-		Mode:      mode,
-		Cwd:       cwd,
-		Script:    rt.DefaultScript(),
-		BotID:     botID,
-		BotConfig: botConfig,
-		CodeDir:   codeDir,
-		StateDir:  stateDir,
-		Debug:     f.debug,
-		DebugPort: f.debugPort,
-		DebugWait: f.debugWait,
-		Release:   f.release,
+	params := dev.RunParams{
+		BotID:           botID,
+		Runtime:         rt,
+		Entrypoint:      rt.DefaultScript(),
+		BotType:         botType,
+		QueryEntrypoint: queryEntrypoint,
+		BotConfig:       botConfig,
+		CodeDir:         cwd,
+		StateDir:        stateDir,
+		Debug:           f.debug,
+		DebugPort:       f.debugPort,
+		DebugWait:       f.debugWait,
 	}
-
-	spec, err := dispatch(rt, opts)
-	if err != nil {
-		return err
-	}
-
-	jsonl, err := dev.NewJSONLSink(filepath.Join(devRoot, "events.jsonl"))
-	if err != nil {
-		return err
-	}
-	defer jsonl.Close()
 
 	term := dev.NewTerminalSink(os.Stdout, terminalIsTTY())
 
@@ -179,19 +147,32 @@ func runDev(ctx context.Context, f devFlags) error {
 	defer cancel()
 	go forwardSignals(cancel)
 
-	logger.Info("Running %s bot %q (mode=%s)", rt, botID, mode)
+	logger.Info("Running %s bot %q", rt, botID)
+	if botType == "realtime" && queryEntrypoint != "" {
+		logger.Info("Query server: %s (proxied via frontend /query/*)", queryEntrypoint)
+	}
 
-	sinks := []dev.EventSink{term, jsonl}
+	sinks := []dev.EventSink{term}
 	if frontendSrv != nil {
 		sinks = append(sinks, frontendSrv)
 	}
 
 	if f.watch {
-		return runWatch(runCtx, cwd, rt, opts, frontendSrv, sinks...)
+		return runWatch(runCtx, params, frontendSrv, sinks...)
 	}
 
-	runner := dev.NewRunner(spec, sinks...)
-	exitCode, runErr := runner.Run(runCtx)
+	return runOnce(runCtx, params, sinks...)
+}
+
+// runOnce builds the docker argv, wraps it in an exec.Cmd, and runs the
+// bot through the runner (pipe-scan + sink fan-out).
+func runOnce(ctx context.Context, params dev.RunParams, sinks ...dev.EventSink) error {
+	cmd, err := buildDockerCmd(params)
+	if err != nil {
+		return err
+	}
+	runner := dev.NewRunner(&dev.RunSpec{Cmd: cmd}, sinks...)
+	exitCode, runErr := runner.Run(ctx)
 	if runErr != nil {
 		return runErr
 	}
@@ -202,29 +183,24 @@ func runDev(ctx context.Context, f devFlags) error {
 	return nil
 }
 
-// runWatch loops: run the bot, watch for file changes, kill the bot on change,
-// emit a restart sentinel, repeat. Only returns when ctx is cancelled (the
-// user pressed Ctrl-C).
-func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts, feSrv *frontend.Server, sinks ...dev.EventSink) error {
-	wcfg := dev.WatchConfigFor(rt)
+// runWatch loops: run the bot, watch for file changes, kill on change,
+// emit a restart sentinel, repeat. Only returns when ctx is cancelled.
+func runWatch(ctx context.Context, params dev.RunParams, feSrv *frontend.Server, sinks ...dev.EventSink) error {
+	wcfg := dev.WatchConfigFor(params.Runtime)
 
-	// runOnce spawns a single bot invocation in its own cancellable ctx.
-	// Errors and non-zero exits are logged so they don't disappear silently.
-	runOnce := func(parent context.Context) {
-		spec, err := dispatch(rt, opts)
+	runBot := func(parent context.Context) {
+		cmd, err := buildDockerCmd(params)
 		if err != nil {
-			logger.Error("dispatch: %v", err)
+			logger.Error("docker argv: %v", err)
 			return
 		}
-		runner := dev.NewRunner(spec, sinks...)
+		runner := dev.NewRunner(&dev.RunSpec{Cmd: cmd}, sinks...)
 		exitCode, runErr := runner.Run(parent)
 		if runErr != nil {
 			logger.Error("runner: %v", runErr)
 		} else if exitCode != 0 && parent.Err() == nil {
 			logger.Warning("bot exited with code %d", exitCode)
 		}
-		// Rebuild the dashboard bundle on restart so frontend edits don't
-		// stay stale behind the first cached build.
 		if feSrv != nil {
 			if err := feSrv.RebuildBundle(); err != nil {
 				logger.Warning("dashboard rebuild: %v", err)
@@ -232,16 +208,9 @@ func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts
 		}
 	}
 
-	botCtx, botCancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		runOnce(botCtx)
-		close(done)
-	}()
-
 	restart := make(chan struct{}, 1)
 	go func() {
-		_ = dev.Watcher(ctx, cwd, wcfg, func() {
+		_ = dev.Watcher(ctx, params.CodeDir, wcfg, func() {
 			select {
 			case restart <- struct{}{}:
 			default:
@@ -249,32 +218,37 @@ func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts
 		})
 	}()
 
+	// Each iteration runs the bot once under its own cancellable ctx and
+	// waits for one of: user cancel, file change, bot exit on its own.
+	// The loop itself guarantees botCancel is always called before we
+	// create a new one, so no ctx leaks.
 	for {
+		botCtx, botCancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			runBot(botCtx)
+			close(done)
+		}()
+
 		select {
 		case <-ctx.Done():
 			botCancel()
 			<-done
 			return nil
+
 		case <-restart:
-			// Broadcast restart sentinel, kill the running bot, start a new one.
 			for _, s := range sinks {
 				s.Emit(dev.Event{Kind: dev.EventRestart, Timestamp: nowFn()})
 			}
 			botCancel()
 			<-done
-			botCtx, botCancel = context.WithCancel(ctx)
-			done = make(chan struct{})
-			go func() {
-				runOnce(botCtx)
-				close(done)
-			}()
+
 		case <-done:
-			// Bot exited on its own; wait for next source change or ctx cancel.
+			// Bot exited on its own; wait for either a restart or cancel.
+			botCancel()
 			for _, s := range sinks {
 				s.Emit(dev.Event{Kind: dev.EventBotStopped, Timestamp: nowFn()})
 			}
-			// Rebuild done so the outer select blocks here until restart/ctx.
-			done = make(chan struct{})
 			select {
 			case <-ctx.Done():
 				return nil
@@ -282,15 +256,34 @@ func runWatch(ctx context.Context, cwd string, rt dev.Runtime, opts runtime.Opts
 				for _, s := range sinks {
 					s.Emit(dev.Event{Kind: dev.EventRestart, Timestamp: nowFn()})
 				}
-				botCtx, botCancel = context.WithCancel(ctx)
-				done = make(chan struct{})
-				go func() {
-					runOnce(botCtx)
-					close(done)
-				}()
 			}
 		}
 	}
+}
+
+// buildDockerCmd translates RunParams into a ready-to-run *exec.Cmd.
+func buildDockerCmd(params dev.RunParams) (*exec.Cmd, error) {
+	args, err := dev.BuildRunArgs(params)
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command("docker", args...), nil
+}
+
+// detectQueryEntrypoint looks for a conventional query script alongside
+// the bot entrypoint. If present, the bot is wired as a realtime service
+// with a query endpoint.
+func detectQueryEntrypoint(cwd string, rt dev.Runtime) string {
+	candidates := map[dev.Runtime][]string{
+		dev.RuntimePython: {"query.py"},
+		dev.RuntimeNode:   {"query.js", "query.mjs"},
+	}
+	for _, name := range candidates[rt] {
+		if _, err := os.Stat(filepath.Join(cwd, name)); err == nil {
+			return name
+		}
+	}
+	return ""
 }
 
 // nowFn is a var so tests can freeze time; runtime callers use time.Now.
@@ -298,65 +291,10 @@ var nowFn = timeNow
 
 func timeNow() time.Time { return time.Now() }
 
-func dispatch(rt dev.Runtime, opts runtime.Opts) (*dev.RunSpec, error) {
-	switch rt {
-	case dev.RuntimePython:
-		return runtime.Python(opts)
-	case dev.RuntimeNode:
-		return runtime.Node(opts)
-	case dev.RuntimeRust:
-		return runtime.Rust(opts)
-	case dev.RuntimeDotnet:
-		return runtime.Dotnet(opts)
-	case dev.RuntimeCpp:
-		return runtime.Cpp(opts)
-	case dev.RuntimeScala:
-		return runtime.Scala(opts)
-	case dev.RuntimeHaskell:
-		return runtime.Haskell(opts)
-	}
-	return nil, fmt.Errorf("runtime %q is not supported", rt)
-}
-
-func resolveMode(f devFlags, rt dev.Runtime) (runtime.Mode, error) {
-	raw := strings.ToLower(f.mode)
-	if raw == "" {
-		// Native by default when the toolchain is present; otherwise Docker.
-		if ok, _ := detectNativeToolchain(rt); ok {
-			return runtime.ModeNative, nil
-		}
-		return runtime.ModeDocker, nil
-	}
-	switch raw {
-	case "native":
-		return runtime.ModeNative, nil
-	case "docker":
-		return runtime.ModeDocker, nil
-	}
-	return "", fmt.Errorf("invalid --mode %q (use native or docker)", f.mode)
-}
-
-func detectNativeToolchain(rt dev.Runtime) (bool, string) {
-	switch rt {
-	case dev.RuntimePython:
-		return runtime.DetectPythonToolchain()
-	case dev.RuntimeNode:
-		return runtime.DetectNodeToolchain()
-	case dev.RuntimeRust:
-		return runtime.DetectRustToolchain()
-	case dev.RuntimeDotnet:
-		return runtime.DetectDotnetToolchain()
-	case dev.RuntimeCpp:
-		return runtime.DetectCppToolchain()
-	case dev.RuntimeScala:
-		return runtime.DetectScalaToolchain()
-	case dev.RuntimeHaskell:
-		return runtime.DetectHaskellToolchain()
-	}
-	return false, ""
-}
-
-func loadBotConfig(configPath string) (json.RawMessage, string, error) {
+// loadBotConfig reads config.json and returns its raw contents, the bot
+// name (for slugging), and the bot type category ("realtime" or "scheduled",
+// parsed from the "type" field's "category/name" form — empty if absent).
+func loadBotConfig(configPath string) (json.RawMessage, string, string, error) {
 	if configPath == "" {
 		configPath = "config.json"
 	}
@@ -364,19 +302,23 @@ func loadBotConfig(configPath string) (json.RawMessage, string, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			logger.Warning("No %s found; using empty config", configPath)
-			return json.RawMessage(`{}`), "", nil
+			return json.RawMessage(`{}`), "", "", nil
 		}
-		return nil, "", err
+		return nil, "", "", err
 	}
-	// Fail fast if config.json isn't valid JSON rather than passing garbage
-	// to the bot as BOT_CONFIG.
 	var peek struct {
 		Name string `json:"name"`
+		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(raw, &peek); err != nil {
-		return nil, "", fmt.Errorf("%s: invalid JSON: %w", configPath, err)
+		return nil, "", "", fmt.Errorf("%s: invalid JSON: %w", configPath, err)
 	}
-	return json.RawMessage(raw), peek.Name, nil
+	// Type is "category/subtype", e.g. "scheduled/portfolio-tracker".
+	category := peek.Type
+	if slash := strings.Index(peek.Type, "/"); slash >= 0 {
+		category = peek.Type[:slash]
+	}
+	return json.RawMessage(raw), peek.Name, category, nil
 }
 
 var slugRE = regexp.MustCompile(`[^a-z0-9-]+`)
