@@ -65,19 +65,33 @@
     return R.createElement(Ctx.Provider, { value: contextValue }, props.children);
   }
 
-  // Load the user's bundle. It self-initialises (ESM top-level) and typically
-  // calls ReactDOM to render into #root; our Provider wraps the tree so any
-  // useThe0Events() call inside the bundle resolves to our live context.
+  // The Shell mounts the Provider and an inner div `the0-dev-bundle-root`.
+  // User bundles MUST render into that inner div (via the global exposed
+  // below) instead of #root — React context does not propagate across
+  // separate ReactDOM.createRoot() trees, so a bundle that creates its own
+  // root on #root would lose access to useThe0Events().
   function Shell() {
     return R.createElement(Provider, null, R.createElement('div', { id: 'the0-dev-bundle-root' }));
   }
 
+  var bundleRootId = 'the0-dev-bundle-root';
   RD.createRoot(document.getElementById('root')).render(R.createElement(Shell));
 
-  // Dynamically import the bundle. Custom bundles render into #root via the
-  // React globals; the Provider above is already mounted so their hooks work.
-  var script = document.createElement('script');
-  script.type = 'module';
-  script.src = window.__THE0_DEV_BUNDLE_URL__ || '/bundle.js';
-  document.body.appendChild(script);
+  // Expose the bundle root id + element as globals. Bundles published for
+  // `the0 dev` should render against window.__THE0_DEV_BUNDLE_ROOT__ (the
+  // DOM node, already inside the Provider) instead of document.getElementById('root').
+  // See docs/local-development/frontend.md for the exact pattern.
+  window.__THE0_DEV_BUNDLE_ROOT_ID__ = bundleRootId;
+  Object.defineProperty(window, '__THE0_DEV_BUNDLE_ROOT__', {
+    get: function () { return document.getElementById(bundleRootId); },
+  });
+
+  // Dynamically import the bundle once the shell has mounted (so the
+  // bundle root div actually exists in the DOM).
+  queueMicrotask(function () {
+    var script = document.createElement('script');
+    script.type = 'module';
+    script.src = window.__THE0_DEV_BUNDLE_URL__ || '/bundle.js';
+    document.body.appendChild(script);
+  });
 })();

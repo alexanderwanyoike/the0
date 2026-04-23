@@ -25,6 +25,23 @@ The platform frontend loads custom bot dashboards by:
 
 Result: your dashboard runs against the host-page React with the same ambient contract as production, consuming live data from your local bot.
 
+## Render into the bundle root, not `#root`
+
+**Important.** React context does not propagate across separate `ReactDOM.createRoot()` trees. The dev shell mounts its own root on `#root` containing the event-stream Provider, and then renders an inner div where your bundle should mount.
+
+Render your bundle against `window.__THE0_DEV_BUNDLE_ROOT__` (or `window.__THE0_DEV_BUNDLE_ROOT_ID__`), not `document.getElementById('root')`:
+
+```tsx
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+// Works in production (falls back to #root) and the0 dev (uses inner root).
+const rootEl = window.__THE0_DEV_BUNDLE_ROOT__ || document.getElementById('root');
+createRoot(rootEl).render(<App />);
+```
+
+Without this, `useThe0Events()` inside your bundle returns `null` because the Provider sits in a different React tree.
+
 ## Run it
 
 ```bash
@@ -36,11 +53,21 @@ Output:
 ```
 i Detected runtime: python
 i Dashboard: http://127.0.0.1:54421
-i Running python bot "my-bot" (mode=native)
+i Running python bot "my-bot"
 ...
 ```
 
 Open the URL. Your dashboard renders. As the bot emits metrics, the dashboard updates in real time.
+
+## Queries
+
+If your bot declares a `query` entrypoint (realtime bots), the dashboard can hit `/query/<path>` on the dashboard URL. The dev server proxies those requests to the bot's in-container query server on `127.0.0.1:9476` (same port production uses). This lets you debug the full metric-ingestion and query-handling integration end-to-end.
+
+```tsx
+fetch('/query/portfolio-summary').then(r => r.json()).then(setData);
+```
+
+No query entrypoint = no proxy. Scheduled bots don't expose a query server.
 
 ## Custom port
 
@@ -66,6 +93,6 @@ The dashboard WebSocket emits a `restart` sentinel on each bot restart, so your 
 
 ## Caveats
 
-- Dashboards that call `fetch('/api/...')` will 404 in dev. The dev shell doesn't proxy platform API calls. Keep dashboards event-stream-only in local mode.
+- Dashboards that call `fetch('/api/...')` will 404 in dev unless the path starts with `/query/`. The dev shell does not proxy platform API calls. Keep non-query requests behind a feature flag, or mock them in dev.
 - React versions are pinned to 18 via unpkg CDN. If your bundle targets a different major, override via a custom shell (deferred to a follow-up).
-- The WebSocket runs on `localhost` with no auth. Don't expose the dev server to your network.
+- The dashboard binds to `127.0.0.1` only and checks WebSocket origins. LAN peers and other browser tabs cannot connect.
