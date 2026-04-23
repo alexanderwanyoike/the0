@@ -1,7 +1,7 @@
 ---
 title: "FAQ"
 description: "Known rough edges and common questions"
-order: 6
+order: 7
 ---
 
 # FAQ
@@ -14,55 +14,41 @@ The SDK emits metrics as JSON objects on **stdout**, with a `_metric` key naming
 {"_metric":"price","symbol":"BTC","value":45000}
 ```
 
-`the0 dev` only classifies a line as a metric if:
+`the0 dev` classifies a line as a metric only if:
 
 - The entire line is a JSON object (after trimming whitespace and stripping ANSI codes)
 - It has `_metric` as a top-level **string** key
 
-If the metric value is a number or your SDK call stringified the object non-trivially, the line falls back to `print`. Use the SDK's `metric()` helper rather than hand-rolling JSON.
+If the `_metric` value is a number or your SDK call stringified the object non-trivially, the line falls back to `print`. Use the SDK's `metric()` helper rather than hand-rolling JSON.
 
-## ANSI escape codes in my terminal
+## First run is slow
 
-Compiled toolchains (cargo, sbt) emit colour codes that can wrap JSON output. The parser strips common CSI sequences before classification, so colourised metric lines still classify correctly. If you see escape codes in your terminal output (`\x1b[31m...`), that's the bot's own output - the shell's colour support is independent of the parser.
-
-## Scala first run is slow
-
-Expected. `sbt run` cold-starts the JVM and resolves dependencies (10-40 s). Keep a `the0 dev --watch` session running and subsequent rebuilds are fast thanks to the sbt server.
-
-## Haskell `--debug` fails
-
-Haskell (GHC) has no practical remote debugger. The dispatcher returns an explicit error rather than silently ignoring `--debug`.
-
-## Native debugging "just works" for Rust/.NET/C++
-
-For compiled languages, `--debug` on native mode is a no-op. Your IDE attaches to the running process by PID via the OS's standard debugging facilities (lldb on macOS, gdb/lldb on Linux). No port forwarding is involved.
-
-Docker mode forwards the per-runtime debug port (2345/2346/4711) so your IDE can connect remotely - but the Docker image needs the debug server preinstalled, which the stock builder images don't include. Rolling a custom debug image is documented in [Debugging](./debugging).
+Expected. The runtime image pulls ~800 MB on first use, and each restart spawns a fresh container. Cached layers bring subsequent starts down to 1–3 s. Watch mode has a per-restart container-start cost; see [Watch mode](./watch).
 
 ## Two terminals, same bot = error
 
 By design. `.the0/dev/<bot-id>/.lock` prevents concurrent invocations stomping state. Run `--bot-id <something-else>` for a second isolated instance.
 
-## `result.json` is written to a weird host path
+## Dashboards calling `fetch('/something')` 404
 
-`the0 dev` uses the host absolute path as `CODE_MOUNT_DIR` with the leading slash stripped. That's the trick that keeps the SDKs unchanged. See [State and Events](./state-and-events) for the full explanation.
+The dev shell only proxies `/query/*` (for realtime bots). Other paths aren't forwarded. Keep non-query calls behind a "production" flag or mock them in dev.
 
-## Dashboards using `fetch('/api/...')` 404
+## Where does state live?
 
-The dev shell doesn't proxy platform API calls. Keep custom dashboards event-stream-only (i.e. read from `useThe0Events()`) when running locally, or gate those fetches on a "production" flag.
+`.the0/dev/<bot-id>/state/` on your host, mounted as `/state` in the container. See [State and Events](./state-and-events) for the details.
+
+## What about compiled languages?
+
+Python and Node are supported in v1. Rust, C++, .NET, Scala, and Haskell are phase 2 — they need a builder-image or pre-built-artifact strategy that warrants its own PR.
 
 ## How do I update the shell's React version?
 
-It's currently pinned to React 18 via unpkg CDN inside `cli/internal/dev/frontend/shell.html`. Custom override is deferred to a future release.
+Pinned to React 18 via unpkg CDN inside `cli/internal/dev/frontend/shell.html`. Custom override is deferred.
 
-## Why does `the0 dev` not run `custom-bot validate` first?
+## `--debug` doesn't attach my IDE
 
-It will. A pre-deploy validation command (`custom-bot validate`) is planned; `the0 dev` will auto-run it once that ships.
+Check: the port (`5678` Python, `9229` Node) isn't already in use on your host, your IDE's attach configuration targets `127.0.0.1` (not `0.0.0.0` or a LAN IP), and you ran `the0 dev --debug` (not just `the0 dev`). See [Debugging](./debugging).
 
-## What about query bots?
+## Docker isn't running / I don't want Docker
 
-Query bots read from `QUERY_PATH` and write to `/query/result.json`. `the0 dev` is scoped to scheduled and realtime bots for now. Query-bot local mode is on the backlog.
-
-## Where are logs sent in Docker mode?
-
-Same pipe as native mode - Docker's `--init` wrapper passes stdout/stderr through, `the0 dev` reads from the `docker run` process directly.
+Docker Desktop (or any docker daemon) is required — `the0 dev` invokes `docker run` to launch the runtime image. If you can't run Docker, a native-mode path may come back in a future release, but prod parity was worth the swap.

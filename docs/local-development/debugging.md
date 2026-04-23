@@ -6,91 +6,60 @@ order: 3
 
 # Debugging
 
-`--debug` on `the0 dev` enables runtime-specific debugger support. Native mode relies on your IDE's "Attach to Process" flow; Docker mode forwards the per-runtime debug port to the host so the IDE can connect remotely.
+`the0 dev --debug` launches your bot under a debugger inside the runtime container, forwarding the debug port to `127.0.0.1` on the host so your IDE can attach.
 
-## Native vs Docker
+Python is debugged via `debugpy` (pre-installed in the runtime image). Node uses V8's built-in inspector. Both ship and work with no host-side toolchain setup.
 
-For **native mode** with interpreted runtimes (Python, Node), `--debug` injects the runtime's debug flag (`debugpy --listen`, `--inspect`). For **native mode** with compiled runtimes (Rust, C++, .NET, Scala), `--debug` is usually a no-op - your IDE attaches to the spawned process via PID without any CLI plumbing.
-
-For **Docker mode**, `--debug` forwards the debug port to the host so your IDE can connect to `localhost:<port>`.
-
-## Per-runtime recipes
-
-### Python (VSCode, PyCharm)
+## Python
 
 ```bash
 the0 dev --debug
-# or: the0 dev --debug --debug-wait    # block until debugger attaches
+# or block until the debugger attaches:
+the0 dev --debug --debug-wait
 ```
 
-VSCode `launch.json`:
+Port defaults to `5678`. VSCode `launch.json`:
 
 ```json
 {
   "name": "Attach to the0 dev",
   "type": "debugpy",
   "request": "attach",
-  "connect": { "host": "localhost", "port": 5678 }
+  "connect": { "host": "127.0.0.1", "port": 5678 }
 }
 ```
 
-### Node (VSCode, WebStorm)
+PyCharm: **Run → Edit Configurations → Python Debug Server** → host `127.0.0.1`, port `5678`.
+
+Under the hood, the CLI passes `--debug-port 5678` to the runtime's `execute` command, which runs `python3 -m debugpy --listen 0.0.0.0:5678 /bot/main.py`, bypassing the usual wrapper.
+
+## Node.js
 
 ```bash
 the0 dev --debug
+# or with --debug-wait to wait for attach
 ```
 
-Use the "Node.js: Attach" configuration pointed at port 9229. Chrome DevTools also works via `chrome://inspect`.
+Port defaults to `9229`. The runtime runs `node --inspect=0.0.0.0:9229 /bot/main.js` (or `--inspect-brk` with `--debug-wait`).
 
-### Rust (VSCode with CodeLLDB, RustRover)
+VSCode: **Run → Attach to Node Process** picks up the port automatically.
+WebStorm / JetBrains IDEs: attach to `127.0.0.1:9229` via a "Node.js Remote" run configuration.
+Chrome: open `chrome://inspect` and connect.
 
-**Native**: just run `the0 dev` and attach to the process by PID in your IDE. No flags needed.
+## Custom port
 
-**Docker**: `the0 dev --debug --docker` forwards port 2345 for `lldb-server`. You'll need to install `lldb` in a custom image; the stock `rust:latest` doesn't ship it. Recommended image override (configure via environment in a future release):
-
-```dockerfile
-FROM rust:latest
-RUN apt-get update && apt-get install -y lldb
-```
-
-### .NET (Rider, VSCode with C# Dev Kit)
-
-**Native**: IDE attaches by PID.
-
-**Docker**: `the0 dev --debug --docker` forwards port 4711 for `netcoredbg`. Install `netcoredbg` on your host (via GitHub releases) and point Rider or VSCode at `localhost:4711`.
-
-### C++ (VSCode, CLion)
-
-**Native**: attach to the PID spawned by `make run`. CLion's "Run → Attach to Process" and VSCode's "(gdb) Attach" both work.
-
-**Docker**: port 2346 is forwarded for `gdbserver`. Container needs gdb installed.
-
-### Scala (IntelliJ)
-
-```bash
-the0 dev --debug
-```
-
-Sets `JAVA_TOOL_OPTIONS=-agentlib:jdwp=...` so the JVM listens on port 5005. In IntelliJ: **Run → Attach to Process** → connect to `localhost:5005`.
-
-### Haskell
-
-No remote debugger is supported. Use `print` debugging or GHCi's interactive mode outside `the0 dev`.
-
-## Custom debug port
-
-If the default port collides with something else on your machine:
+If the default port collides with another process:
 
 ```bash
 the0 dev --debug --debug-port 5999
 ```
 
-## Wait for the debugger to attach
+The port is used for both the in-container listen address and the host-side forward.
 
-For Python (`debugpy`) and Node (`--inspect-brk`), you can block the bot until the debugger connects:
+## Why debug mode bypasses the wrapper
 
-```bash
-the0 dev --debug --debug-wait
-```
+The runtime image's Python/Node wrappers own signal handling, `BOT_CONFIG` parsing, and `result.json` writing in production. Loading `debugpy` or Node's inspector inside the wrapper would require wrapper-side changes, which we keep off-limits. Instead, `--debug-port` asks `runtime execute` to launch the entrypoint directly under the debugger, skipping the wrapper. You lose `result.json` writing in debug mode — harmless for local iteration.
 
-Useful for debugging startup-time logic. Without `--debug-wait`, the bot runs normally and you attach whenever you want.
+## Compiled languages
+
+Python and Node are the only runtimes supported in v1. Compiled-language debugging (Rust, C++, .NET, Scala, Haskell) ships in phase 2 together with the compiled-runtime image strategy.

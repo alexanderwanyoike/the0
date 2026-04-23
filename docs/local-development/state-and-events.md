@@ -1,7 +1,7 @@
 ---
 title: "State and Events"
-description: "Where the0 dev stores state between runs and how to inspect the event log"
-order: 5
+description: "Where the0 dev stores state between runs and how events are classified"
+order: 6
 ---
 
 # State and Events
@@ -13,16 +13,21 @@ order: 5
 ```
 .the0/dev/<bot-id>/
   .lock              flock file; prevents two the0 dev processes on the same bot
-  code/              CODE_MOUNT_DIR - the "mount" dir the bot writes result.json into
-  state/             STATE_DIR - SDK state.set/get backing store
-  events.jsonl       append-only newline-delimited JSON log of every event
+  state/             SDK state.set/get backing store — mounted at /state in the container
 ```
 
 `<bot-id>` defaults to a slug of `config.name`. Override with `--bot-id`.
 
 ## State persistence
 
-Every call to `the0.state.set(key, value)` writes a file under `state/`. On the next run, `the0.state.get(key)` reads it back. This lets you iterate on logic that depends on prior runs (moving averages, position history, counters) without re-priming from scratch each time.
+The runtime image mounts your host `state/` directory at `/state` and sets `STATE_DIR=/state`. Every call to `the0.state.set(key, value)` writes `/state/<key>.json`; `the0.state.get(key)` reads it back. The next `the0 dev` run sees exactly the state the previous run left behind — useful for iterating on logic that depends on history (moving averages, position counters, prior signals) without re-priming each time.
+
+You can inspect state directly on the host:
+
+```bash
+ls .the0/dev/<bot-id>/state
+cat .the0/dev/<bot-id>/state/portfolio.json | jq
+```
 
 ## Reset
 
@@ -32,39 +37,24 @@ To wipe state and start fresh:
 the0 dev --reset
 ```
 
-This removes the entire `.the0/dev/<bot-id>/` directory.
+Removes the entire `.the0/dev/<bot-id>/` directory.
 
-## Inspecting events.jsonl
+## Events
 
-Every metric, log, and print event the bot emits (plus `restart` and `bot_stopped` sentinels from `--watch`) is appended as a JSON record:
+Every line the bot writes to stdout or stderr is classified by the line parser into one of three event kinds:
 
-```jsonl
-{"kind":"metric","stream":"stdout","timestamp":"2026-04-15T21:59:54Z","metric_type":"price","data":{"_metric":"price","value":44658}}
-{"kind":"log","stream":"stderr","timestamp":"...","level":"INFO","data":{"level":"INFO","message":"bot started"}}
-{"kind":"print","stream":"stdout","timestamp":"...","raw":"debug checkpoint"}
-{"kind":"restart","timestamp":"..."}
-```
+| Kind | Triggered when | Displayed as |
+|---|---|---|
+| `metric` | Full-line JSON object with a `_metric` string field | `HH:MM:SS METRIC <name> {...payload}` in cyan |
+| `log` | Full-line JSON object with `level` and `message` fields | `HH:MM:SS LEVEL message` with per-level colour |
+| `print` | Anything else (includes plaintext, partial JSON) | `HH:MM:SS stdout/stderr raw-line` |
 
-Useful for post-hoc debugging:
+ANSI escape sequences are stripped before classification, so colourised build output (e.g. `cargo`, `sbt`) can still be recognised as logs or metrics when the JSON is embedded.
 
-```bash
-# last 20 events
-tail -n 20 .the0/dev/<bot-id>/events.jsonl | jq
+The `--watch` and `--frontend` modes add two synthetic kinds:
 
-# just the metrics
-jq 'select(.kind=="metric")' .the0/dev/<bot-id>/events.jsonl
-
-# errors only
-jq 'select(.level=="ERROR")' .the0/dev/<bot-id>/events.jsonl
-```
-
-The file grows indefinitely - it's never rotated or trimmed. For long-lived `--watch` sessions, `--reset` before starting is a good habit.
-
-## How `CODE_MOUNT_DIR` works
-
-In production, bots run in a Kubernetes pod with `/bot` mounted as `CODE_MOUNT_DIR`. The SDKs hardcode `f"/{CODE_MOUNT_DIR}/result.json"` to produce `/bot/result.json` inside the container.
-
-Locally, there is no `/bot` on your host filesystem. `the0 dev` uses a trick: it sets `CODE_MOUNT_DIR` to the host absolute path **without** its leading slash (e.g. `home/alex/.the0/dev/my-bot/code`). The SDK's `"/" + CODE_MOUNT_DIR + "/result.json"` reconstruction then produces the correct absolute host path. Zero SDK modifications needed; the dispatcher in `cli/internal/dev/runner.go` owns this translation.
+- `restart` — emitted on every source-change restart so the dashboard can clear its event buffer.
+- `bot_stopped` — emitted when the bot exits on its own and watch mode is waiting for the next change.
 
 ## Concurrent invocations
 
@@ -75,3 +65,7 @@ another `the0 dev` is running for this bot (PID 12345); stop it or use a differe
 ```
 
 Pass `--bot-id <other>` to run a second copy in parallel against an isolated state dir.
+
+## How `CODE_MOUNT_DIR` works
+
+In production, bots run in a container with `/bot` mounted as their code directory. The SDKs hardcode `f"/{CODE_MOUNT_DIR}/result.json"` to produce `/bot/result.json`. `the0 dev` sets `CODE_MOUNT_DIR=bot` (no leading slash) so the SDK's reconstruction yields the same `/bot/result.json` path inside the container. This contract is owned by `runtime/internal/execute/helpers.go:BuildBotEnv` in the runtime image; `the0 dev` just passes `STATE_DIR=/state` explicitly and lets the rest follow.

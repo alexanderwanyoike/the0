@@ -10,8 +10,14 @@ Goal: go from a fresh project to a bot producing metrics locally in under three 
 
 ## Prerequisites
 
-- A the0 bot project (see [Custom Bot Development](../custom-bot-development/overview)) with either a `main.py`, `main.js`, `Cargo.toml`, `package.json`, etc.
-- The host toolchain for your chosen runtime installed (e.g. `python3`, `node`, `cargo`). Don't have it? Use `--docker`.
+- Docker running locally (Docker Desktop, OrbStack, or a plain docker daemon).
+- A the0 bot project with a `main.py` or `main.js` and a `config.json`.
+- The runtime image. On first run, pull it:
+  ```bash
+  docker pull the0/runtime:latest
+  ```
+
+No language toolchains need to be installed on your host — the runtime image has them.
 
 ## Minimal project
 
@@ -49,34 +55,37 @@ Expected output:
 
 ```
 i Detected runtime: python
-i Running python bot "my-first-dev-bot" (mode=native)
+i Running python bot "my-first-dev-bot"
 14:02:13 METRIC heartbeat {"alive":true,"bot_id":"my-first-dev-bot"}
 v Bot exited cleanly
 ```
 
-That's it. Metrics are tagged `_metric` in the SDK output; `the0 dev` parses them back into typed events.
+The first run may be slower because Docker needs to start a container. Subsequent runs reuse the image layers.
 
 ## Keep it running
-
-Add `--watch` to re-run on every source edit:
 
 ```bash
 the0 dev --watch
 ```
 
-Edit `main.py`, save, watch it re-run automatically. A `-- restart --` separator appears between runs.
+Edit `main.py`, save, see a `-- restart --` separator, then the new run's output. File change → restart takes a few seconds because a fresh container is created per run. See [Watch mode](./watch) for the trade-off.
 
-## Also see the dashboard
+## Queries (realtime bots)
 
-If your project has a `frontend/index.tsx` that uses `useThe0Events()`:
+If your bot is `"type": "realtime/..."` and you have a `query.py` (or `query.js`) file, the dev tool detects it, keeps the in-container query server running, and forwards port `9476` to loopback. Combined with `--frontend`, the dashboard can call `fetch('/query/<path>')` against your live bot. See [Queries](./queries).
+
+## Show the dashboard
+
+If your project has `frontend/index.tsx`:
 
 ```bash
 the0 dev --frontend
 ```
 
-The CLI prints a localhost URL. Open it in a browser and your dashboard renders against the live event stream. See [Frontend Dashboard](./frontend) for the full story.
+Open the printed URL. See [Frontend Dashboard](./frontend) for the one-line pattern your bundle needs so `useThe0Events()` works in dev.
 
 ## Next steps
 
-- [Runtimes](./runtimes) - run the same flow with Node, Rust, .NET, etc.
-- [Debugging](./debugging) - wire up your IDE's debugger
+- [State and Events](./state-and-events) — where `.the0/dev/<bot-id>/state` lives
+- [Debugging](./debugging) — attach debugpy / Node inspector
+- [FAQ](./faq) — common caveats

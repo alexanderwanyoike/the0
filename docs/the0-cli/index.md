@@ -95,5 +95,5 @@ All commands support the following flags:
 - [Local Development](../local-development/) - `the0 dev` for iterating without deploys
 - [Bot Commands](./bot-commands) - Bot instance management reference
 - [Custom Bot Commands](./custom-bot-commands) - Custom bot deployment reference
-- [Local Development](./local-development) - Local environment management reference
+- [Local Environment](./local-development) - `the0 local` docker-compose environment management reference
 - [Secrets](./secrets) - Configure private dependencies

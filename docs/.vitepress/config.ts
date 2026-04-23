@@ -73,8 +73,9 @@ export default withMermaid(defineConfig({
         items: [
           { text: 'Overview', link: '/local-development/' },
           { text: 'Getting Started', link: '/local-development/getting-started' },
-          { text: 'Runtimes', link: '/local-development/runtimes' },
           { text: 'Debugging', link: '/local-development/debugging' },
+          { text: 'Queries', link: '/local-development/queries' },
+          { text: 'Watch Mode', link: '/local-development/watch' },
           { text: 'Frontend Dashboard', link: '/local-development/frontend' },
           { text: 'State and Events', link: '/local-development/state-and-events' },
           { text: 'FAQ', link: '/local-development/faq' },
