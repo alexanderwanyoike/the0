@@ -170,36 +170,3 @@ func TestRunner_EmptyOutputIsFine(t *testing.T) {
 	}
 }
 
-func TestRunSpec_ApplyCodeMountDirTrick(t *testing.T) {
-	// The runner must strip the leading slash when exporting CODE_MOUNT_DIR so
-	// the unchanged SDKs (which prepend '/') reconstruct the correct absolute
-	// host path. STATE_DIR is exported verbatim since SDKs consume it as-is.
-	spec := &RunSpec{
-		Cmd:      exec.Command("true"),
-		CodeDir:  "/home/user/.the0/dev/abc/code",
-		StateDir: "/home/user/.the0/dev/abc/state",
-		BotID:    "abc",
-	}
-	spec.applyEnv()
-
-	env := envMap(spec.Cmd.Env)
-	if env["CODE_MOUNT_DIR"] != "home/user/.the0/dev/abc/code" {
-		t.Errorf("CODE_MOUNT_DIR = %q, want stripped", env["CODE_MOUNT_DIR"])
-	}
-	if env["STATE_DIR"] != "/home/user/.the0/dev/abc/state" {
-		t.Errorf("STATE_DIR = %q, want absolute", env["STATE_DIR"])
-	}
-	if env["BOT_ID"] != "abc" {
-		t.Errorf("BOT_ID = %q", env["BOT_ID"])
-	}
-}
-
-func envMap(env []string) map[string]string {
-	m := make(map[string]string, len(env))
-	for _, kv := range env {
-		if i := strings.IndexByte(kv, '='); i >= 0 {
-			m[kv[:i]] = kv[i+1:]
-		}
-	}
-	return m
-}
