@@ -92,6 +92,16 @@ func buildBotCommandForMode(cfg *execute.Config, entrypoint string) *exec.Cmd {
 	return execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 }
 
+// shouldStartQueryServer centralises the criteria for spawning the
+// in-container query-server subprocess: realtime bots with a query
+// entrypoint, unless --skip-query-server has been passed (K8s sidecar
+// mode). Debug mode intentionally does not affect this decision — local
+// dev users need queries to continue flowing while they're attached to
+// the bot with a debugger.
+func shouldStartQueryServer(cfg *execute.Config) bool {
+	return cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !executeSkipQueryServer
+}
+
 // runInitPhase performs the download+permissions pre-run steps unless skip
 // is true. Skip is used by local dev mode (`--skip-init`) where code is
 // already mounted into /bot and state is host-persistent at /state, so
@@ -263,7 +273,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	}
 
 	// Step 4: Start query server subprocess (for realtime bots, unless skipped)
-	if cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !executeSkipQueryServer {
+	if shouldStartQueryServer(cfg) {
 		var err error
 		queryCmd, err = startQueryServerProcess(cfg, logger)
 		if err != nil {

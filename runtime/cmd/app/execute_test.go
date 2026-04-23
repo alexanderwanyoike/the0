@@ -141,3 +141,61 @@ func TestExecuteDebugFlagsRegistered(t *testing.T) {
 		assert.Equal(t, "false", wait.DefValue)
 	}
 }
+
+// TestShouldStartQueryServer_RealtimeWithQueryEntrypoint is the baseline:
+// realtime bot + query entrypoint + default flags => query server starts.
+func TestShouldStartQueryServer_RealtimeWithQueryEntrypoint(t *testing.T) {
+	origSkip := executeSkipQueryServer
+	defer func() { executeSkipQueryServer = origSkip }()
+	executeSkipQueryServer = false
+
+	cfg := &execute.Config{BotType: "realtime", QueryEntrypoint: "query.py"}
+	assert.True(t, shouldStartQueryServer(cfg))
+}
+
+// TestShouldStartQueryServer_DebugPortDoesNotInterfere locks in the
+// invariant that debug mode preserves the query server decision. This is
+// important for local dev where the user is debugging the bot/dashboard
+// integration and needs queries to still work end-to-end.
+func TestShouldStartQueryServer_DebugPortDoesNotInterfere(t *testing.T) {
+	origPort := executeDebugPort
+	origSkip := executeSkipQueryServer
+	defer func() {
+		executeDebugPort = origPort
+		executeSkipQueryServer = origSkip
+	}()
+	executeDebugPort = 5678
+	executeSkipQueryServer = false
+
+	cfg := &execute.Config{BotType: "realtime", QueryEntrypoint: "query.py"}
+	assert.True(t, shouldStartQueryServer(cfg), "debug mode must not disable query server")
+}
+
+// TestShouldStartQueryServer_SkipFlagDisables verifies the explicit skip
+// flag still works (K8s sidecar mode).
+func TestShouldStartQueryServer_SkipFlagDisables(t *testing.T) {
+	origSkip := executeSkipQueryServer
+	defer func() { executeSkipQueryServer = origSkip }()
+	executeSkipQueryServer = true
+
+	cfg := &execute.Config{BotType: "realtime", QueryEntrypoint: "query.py"}
+	assert.False(t, shouldStartQueryServer(cfg))
+}
+
+// TestShouldStartQueryServer_ScheduledBotNoServer ensures scheduled bots
+// (which don't expose a live query server) are correctly excluded.
+func TestShouldStartQueryServer_ScheduledBotNoServer(t *testing.T) {
+	cfg := &execute.Config{BotType: "scheduled", QueryEntrypoint: "query.py"}
+	assert.False(t, shouldStartQueryServer(cfg))
+}
+
+// TestShouldStartQueryServer_NoQueryEntrypoint ensures realtime bots
+// without a query entrypoint don't spin up an idle query server.
+func TestShouldStartQueryServer_NoQueryEntrypoint(t *testing.T) {
+	origSkip := executeSkipQueryServer
+	defer func() { executeSkipQueryServer = origSkip }()
+	executeSkipQueryServer = false
+
+	cfg := &execute.Config{BotType: "realtime", QueryEntrypoint: ""}
+	assert.False(t, shouldStartQueryServer(cfg))
+}
