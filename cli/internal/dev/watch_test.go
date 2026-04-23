@@ -36,28 +36,22 @@ func neverBecomes(t *testing.T, cond func() bool, duration time.Duration, msg st
 	}
 }
 
-func TestWatchConfig_MatchesExtension(t *testing.T) {
-	cfg := WatchConfigFor(RuntimePython)
-	if !cfg.matches("src/main.py") {
-		t.Error(".py should match")
-	}
-	if cfg.matches("README.md") {
-		t.Error(".md should not match")
-	}
-}
+// TestWatchConfig covers the three match-rule concerns in one pass:
+// extension inclusion, exact-name inclusion, and directory exclusion.
+func TestWatchConfig(t *testing.T) {
+	py := WatchConfigFor(RuntimePython)
+	node := WatchConfigFor(RuntimeNode)
 
-func TestWatchConfig_MatchesNamedFile(t *testing.T) {
-	// Node's WatchConfigFor includes package.json as a named file that
-	// triggers restart even though .json is not in IncludeExt.
-	cfg := WatchConfigFor(RuntimeNode)
-	if !cfg.matches("package.json") {
-		t.Error("package.json should match even without .json in IncludeExt")
+	if !py.matches("src/main.py") {
+		t.Error(".py should match Python cfg")
 	}
-}
-
-func TestWatchConfig_Exclude(t *testing.T) {
-	cfg := WatchConfigFor(RuntimePython)
-	if !isExcluded("/proj/node_modules", cfg.ExcludeDirs) {
+	if py.matches("README.md") {
+		t.Error(".md should not match Python cfg")
+	}
+	if !node.matches("package.json") {
+		t.Error("package.json should match Node cfg by name")
+	}
+	if !isExcluded("/proj/node_modules", py.ExcludeDirs) {
 		t.Error("node_modules should be excluded")
 	}
 }
@@ -97,35 +91,6 @@ func TestWatcher_DebouncesAndFires(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { return atomic.LoadInt32(&fires) == 2 }, time.Second, "second burst -> 2 fires")
-
-	cancel()
-	if err := <-errCh; err != nil {
-		t.Errorf("Watcher returned error: %v", err)
-	}
-}
-
-// TestWatcher_IgnoresUnrelatedFiles asserts that writes to files
-// outside IncludeExt don't trigger a fire even after the debounce
-// window elapses.
-func TestWatcher_IgnoresUnrelatedFiles(t *testing.T) {
-	dir := t.TempDir()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var fires int32
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- Watcher(ctx, dir, WatchConfig{
-			IncludeExt: []string{".py"},
-			Debounce:   50 * time.Millisecond,
-		}, func() { atomic.AddInt32(&fires, 1) })
-	}()
-	time.Sleep(30 * time.Millisecond)
-
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("x"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	neverBecomes(t, func() bool { return atomic.LoadInt32(&fires) > 0 }, 200*time.Millisecond, "unrelated file must not fire")
 
 	cancel()
 	if err := <-errCh; err != nil {

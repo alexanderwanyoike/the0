@@ -26,7 +26,6 @@ const (
 	ansiReset  = "\x1b[0m"
 	ansiDim    = "\x1b[2m"
 	ansiRed    = "\x1b[31m"
-	ansiGreen  = "\x1b[32m"
 	ansiYellow = "\x1b[33m"
 	ansiBlue   = "\x1b[34m"
 	ansiPurple = "\x1b[35m"
@@ -85,12 +84,6 @@ func (t *TerminalSink) Emit(ev Event) {
 			stamp,
 			t.colour(colour, string(ev.Stream)),
 			ev.Raw,
-		)
-	case EventResult:
-		fmt.Fprintf(t.w, "%s %s %s\n",
-			stamp,
-			t.colour(ansiGreen, "RESULT"),
-			string(ev.Data),
 		)
 	case EventRestart:
 		fmt.Fprintf(t.w, "\n%s %s\n\n",

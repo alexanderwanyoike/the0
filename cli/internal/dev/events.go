@@ -20,7 +20,6 @@ const (
 	EventMetric     EventKind = "metric"
 	EventLog        EventKind = "log"
 	EventPrint      EventKind = "print"
-	EventResult     EventKind = "result"
 	EventRestart    EventKind = "restart"
 	EventBotStopped EventKind = "bot_stopped"
 )

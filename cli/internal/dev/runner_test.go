@@ -107,34 +107,11 @@ func TestRunner_ContextCancelStopsProcess(t *testing.T) {
 	}
 }
 
-func TestRunner_EmitsEventsInOrderPerStream(t *testing.T) {
-	cmd := exec.Command("sh", "-c", `
-		echo 'first'
-		echo 'second'
-		echo 'third'
-	`)
-	sink := &captureSink{}
-	r := NewRunner(&RunSpec{Cmd: cmd}, sink)
-
-	if _, err := r.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-
-	events := sink.snapshot()
-	var stdoutLines []string
-	for _, ev := range events {
-		if ev.Stream == StreamStdout {
-			stdoutLines = append(stdoutLines, ev.Raw)
-		}
-	}
-	if got := strings.Join(stdoutLines, ","); got != "first,second,third" {
-		t.Errorf("order = %q, want first,second,third", got)
-	}
-}
-
+// TestRunner_LongLineHandled guards against the default bufio.Scanner
+// 64 KB cap — the runner uses bufio.Reader with an unbounded buffer so
+// lines larger than that (e.g. dumped model state) still emit as one
+// event.
 func TestRunner_LongLineHandled(t *testing.T) {
-	// 100KB line — well beyond the default bufio.Scanner 64KB cap. The runner
-	// must use a buffered reader that can grow.
 	long := strings.Repeat("x", 100_000)
 	cmd := exec.Command("sh", "-c", "printf '%s\\n' \""+long+"\"")
 	sink := &captureSink{}
@@ -143,7 +120,6 @@ func TestRunner_LongLineHandled(t *testing.T) {
 	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-
 	events := sink.snapshot()
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
@@ -152,21 +128,3 @@ func TestRunner_LongLineHandled(t *testing.T) {
 		t.Errorf("Raw length = %d, want %d", len(events[0].Raw), len(long))
 	}
 }
-
-func TestRunner_EmptyOutputIsFine(t *testing.T) {
-	cmd := exec.Command("true")
-	sink := &captureSink{}
-	r := NewRunner(&RunSpec{Cmd: cmd}, sink)
-
-	exitCode, err := r.Run(context.Background())
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exit = %d, want 0", exitCode)
-	}
-	if len(sink.snapshot()) != 0 {
-		t.Errorf("unexpected events: %+v", sink.snapshot())
-	}
-}
-

@@ -1,6 +1,6 @@
 ---
 title: "Watch Mode"
-description: "Auto-restart the bot on source changes"
+description: "Auto-restart on source change"
 order: 5
 ---
 
@@ -10,47 +10,27 @@ order: 5
 the0 dev --watch
 ```
 
-Edit a Python or Node source file. After a short debounce, you'll see:
+Edit a source file, see `-- restart --`, then a fresh run's output. Repeats until Ctrl-C.
 
-```
--- restart --
-```
+## Filters
 
-followed by the output of a fresh run. Repeat forever until you Ctrl-C.
+- **Python**: `*.py` + `requirements.txt`, `pyproject.toml`
+- **Node**: `*.js`, `*.ts`, `*.mjs` + `package.json`, `package-lock.json`
 
-## What gets watched
+Always excluded: `node_modules`, `dist`, `build`, `bin`, `.the0`, `vendor`, `__pycache__`, `.venv`, `venv`. Newly-created directories are watched recursively.
 
-Per-runtime file filters:
+## Debounce
 
-- **Python**: `*.py`, plus `requirements.txt`, `pyproject.toml`
-- **Node**: `*.js`, `*.ts`, `*.mjs`, plus `package.json`, `package-lock.json`
+File writes within a 500 ms window collapse into a single restart. Implementation is a single `time.Timer` with `Stop+drain+Reset` so the historical "double-fire on save burst" failure mode is structurally impossible.
 
-Always excluded: `node_modules`, `dist`, `build`, `bin`, `.the0`, `vendor`, `__pycache__`, `.venv`, `venv`.
+## Latency
 
-Newly created directories are watched recursively as they appear, so a `git checkout` of a branch with new packages doesn't miss nested edits.
+Each restart recreates a container. Expect **1.5 – 3 s** between save and first output. That's the cost of matching production on every iteration. Drop `--watch` if you need sub-second loops; invoke `the0 dev` by hand instead.
 
-## Debounce and restart
-
-File writes within a 500 ms window collapse into a single restart. A burst of IDE-generated saves (autoformat, linter writes) won't produce duplicate restarts — the debouncer is a single `time.Timer` with `Stop+drain+Reset` on each new event so the "double fire" failure mode is structurally impossible.
-
-## Latency expectations
-
-Watch mode restarts a whole container per source change. On a cached image, that's **1.5 – 3 seconds** before the next run's first stdout line appears. That's the honest cost of matching production's execution environment on every iteration.
-
-If that's too slow for a specific workflow, run without `--watch` and re-invoke `the0 dev` by hand; the image layer cache keeps invocation time the same.
-
-## Combined with `--frontend`
+## With `--frontend`
 
 ```bash
 the0 dev --watch --frontend
 ```
 
-On each restart:
-
-- The bot relaunches.
-- The dev shell emits a `restart` sentinel over the event WebSocket so your dashboard's Provider clears accumulated events and starts fresh.
-- The dashboard bundle is rebuilt from `frontend/index.tsx` so TSX changes land without a manual page refresh.
-
-## Signals
-
-Ctrl-C exits watch mode cleanly: the currently-running bot container stops, the watcher shuts down, and the CLI returns.
+On each restart: the bot relaunches, a `restart` sentinel goes over the event WebSocket (dashboard clears its buffer), and the TSX bundle rebuilds.

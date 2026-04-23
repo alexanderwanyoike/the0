@@ -6,22 +6,17 @@ order: 1
 
 # Getting Started
 
-Goal: go from a fresh project to a bot producing metrics locally in under three minutes.
+Go from a fresh project to a bot producing metrics locally in under three minutes.
 
 ## Prerequisites
 
-- Docker running locally (Docker Desktop, OrbStack, or a plain docker daemon).
-- A the0 bot project with a `main.py` or `main.js` and a `config.json`.
-- The runtime image. On first run, pull it:
-  ```bash
-  docker pull the0/runtime:latest
-  ```
+- Docker running locally.
+- The runtime image: `docker pull the0/runtime:latest`
+- A bot project with `main.py` (or `main.js`) and `config.json`.
 
-No language toolchains need to be installed on your host — the runtime image has them.
+No host-side language toolchain required — the runtime image ships them.
 
 ## Minimal project
-
-A Python bot that emits one metric and exits:
 
 ```python
 # main.py
@@ -32,17 +27,12 @@ def main(bot_id, config):
     success("done")
 
 if __name__ == "__main__":
-    bot_id, config = parse()
-    main(bot_id, config)
+    main(*parse())
 ```
 
 ```json
 // config.json
-{
-  "name": "my-first-dev-bot",
-  "type": "scheduled/heartbeat",
-  "version": "0.1.0"
-}
+{"name": "my-first-dev-bot", "type": "scheduled/heartbeat", "version": "0.1.0"}
 ```
 
 ## Run it
@@ -51,8 +41,6 @@ if __name__ == "__main__":
 the0 dev
 ```
 
-Expected output:
-
 ```
 i Detected runtime: python
 i Running python bot "my-first-dev-bot"
@@ -60,32 +48,17 @@ i Running python bot "my-first-dev-bot"
 v Bot exited cleanly
 ```
 
-The first run may be slower because Docker needs to start a container. Subsequent runs reuse the image layers.
+First run is slower (container start); subsequent runs reuse cached layers.
 
-## Keep it running
+## Options
 
-```bash
-the0 dev --watch
-```
+- `the0 dev --watch` — auto-restart on source change. See [Watch mode](./watch).
+- `the0 dev --debug` — attach an IDE debugger. See [Debugging](./debugging).
+- `the0 dev --frontend` — serve your dashboard. See [Frontend](./frontend).
+- `the0 dev --reset` — wipe state and exit.
 
-Edit `main.py`, save, see a `-- restart --` separator, then the new run's output. File change → restart takes a few seconds because a fresh container is created per run. See [Watch mode](./watch) for the trade-off.
+For realtime bots with a `query.py` / `query.js` file, the CLI forwards the bot's query port so [Queries](./queries) work end-to-end.
 
-## Queries (realtime bots)
+## Where things live
 
-If your bot is `"type": "realtime/..."` and you have a `query.py` (or `query.js`) file, the dev tool detects it, keeps the in-container query server running, and forwards port `9476` to loopback. Combined with `--frontend`, the dashboard can call `fetch('/query/<path>')` against your live bot. See [Queries](./queries).
-
-## Show the dashboard
-
-If your project has `frontend/index.tsx`:
-
-```bash
-the0 dev --frontend
-```
-
-Open the printed URL. See [Frontend Dashboard](./frontend) for the one-line pattern your bundle needs so `useThe0Events()` works in dev.
-
-## Next steps
-
-- [State and Events](./state-and-events) — where `.the0/dev/<bot-id>/state` lives
-- [Debugging](./debugging) — attach debugpy / Node inspector
-- [FAQ](./faq) — common caveats
+`.the0/dev/<bot-id>/state/` on your host, mounted at `/state` in the container. See [State and Events](./state-and-events).
