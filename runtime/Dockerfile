@@ -49,6 +49,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.11 /usr/bin/python
 
+# debugpy: required for `runtime execute --debug-port` to work with Python
+# bots. Pre-installed here (rather than pip-install-on-first-run) so the
+# dev experience is fast and reproducible. Node's --inspect is built in,
+# so no equivalent needed for nodejs20.
+RUN python3.11 -m ensurepip --upgrade \
+    && python3.11 -m pip install --no-cache-dir --break-system-packages debugpy
+
 # Node.js 20 LTS
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
