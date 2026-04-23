@@ -6,24 +6,22 @@ import (
 	"path/filepath"
 )
 
-// Runtime names the language backing a bot project. Detected from the on-disk
-// file layout (Cargo.toml → rust, main.py → python, etc.). Used to pick the
-// per-runtime dispatcher.
+// Runtime names the language backing a bot project. Detected from the
+// on-disk file layout (main.py → python, package.json → node).
 type Runtime string
 
 const (
-	RuntimePython  Runtime = "python"
-	RuntimeNode    Runtime = "node"
-	RuntimeRust    Runtime = "rust"
-	RuntimeCpp     Runtime = "cpp"
-	RuntimeDotnet  Runtime = "dotnet"
-	RuntimeScala   Runtime = "scala"
-	RuntimeHaskell Runtime = "haskell"
+	RuntimePython Runtime = "python"
+	RuntimeNode   Runtime = "node"
 )
 
 // DetectRuntime inspects a project directory and returns the runtime it
-// belongs to. The order of checks matches the deploy-side detection in
-// cli/internal/builder.go, so `the0 dev` agrees with `the0 custom-bot deploy`.
+// belongs to. Only Python and Node are supported in v1; compiled-language
+// layouts (Cargo.toml, *.csproj, build.sbt, CMakeLists.txt/Makefile,
+// *.cabal) return a friendly error directing users to phase 2.
+//
+// Manifest-first ordering matches the deploy-side detection in
+// cli/internal/builder.go for the runtimes supported today.
 func DetectRuntime(projectDir string) (Runtime, error) {
 	has := func(name string) bool {
 		_, err := os.Stat(filepath.Join(projectDir, name))
@@ -34,17 +32,22 @@ func DetectRuntime(projectDir string) (Runtime, error) {
 		return len(matches) > 0
 	}
 
+	// Compiled-language layouts: phase-2 scope. Reject early with an
+	// actionable message.
 	switch {
 	case has("Cargo.toml"):
-		return RuntimeRust, nil
+		return "", phase2Error("Rust (Cargo.toml)")
 	case hasGlob("*.csproj"):
-		return RuntimeDotnet, nil
+		return "", phase2Error(".NET (*.csproj)")
 	case has("build.sbt"):
-		return RuntimeScala, nil
+		return "", phase2Error("Scala (build.sbt)")
 	case has("CMakeLists.txt") || has("Makefile"):
-		return RuntimeCpp, nil
+		return "", phase2Error("C++ (CMakeLists.txt / Makefile)")
 	case hasGlob("*.cabal"):
-		return RuntimeHaskell, nil
+		return "", phase2Error("Haskell (*.cabal)")
+	}
+
+	switch {
 	case has("package.json"):
 		return RuntimeNode, nil
 	case has("main.js") || has("main.mjs"):
@@ -52,18 +55,23 @@ func DetectRuntime(projectDir string) (Runtime, error) {
 	case has("requirements.txt") || has("pyproject.toml") || has("main.py"):
 		return RuntimePython, nil
 	}
-	return "", fmt.Errorf("could not detect bot runtime in %s (no Cargo.toml, package.json, main.py, etc.)", projectDir)
+	return "", fmt.Errorf("could not detect bot runtime in %s (no package.json, main.py, etc.)", projectDir)
 }
 
-// DefaultScript is the conventional entrypoint file name per runtime. Only
-// used when the user hasn't set one explicitly.
+func phase2Error(lang string) error {
+	return fmt.Errorf(
+		"%s bots are not yet supported by `the0 dev`; Python and Node are supported in v1, compiled-language support is coming in phase 2",
+		lang,
+	)
+}
+
+// DefaultScript is the conventional entrypoint file name per runtime.
 func (r Runtime) DefaultScript() string {
 	switch r {
 	case RuntimePython:
 		return "main.py"
 	case RuntimeNode:
 		return "main.js"
-	default:
-		return ""
 	}
+	return ""
 }

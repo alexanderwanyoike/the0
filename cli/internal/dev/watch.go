@@ -10,15 +10,13 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// WatchConfig describes what to monitor for a given runtime. Each runtime
-// picks a conservative set of globs — we'd rather watch one extra file than
-// miss a change that actually matters.
+// WatchConfig describes what to monitor for a given runtime.
 type WatchConfig struct {
-	// IncludeExt is the set of file extensions (with the leading dot) that
-	// trigger a restart. Empty means "any file".
+	// IncludeExt is the set of file extensions (with the leading dot)
+	// that trigger a restart. Empty means "any file".
 	IncludeExt []string
-	// IncludeNames is an exact-match set of filenames that trigger restart
-	// even without a matching extension (e.g. Cargo.toml, build.sbt).
+	// IncludeNames is an exact-match set of filenames that trigger
+	// restart even without a matching extension (e.g. package.json).
 	IncludeNames []string
 	// ExcludeDirs are directory names that are never descended into.
 	ExcludeDirs []string
@@ -26,24 +24,26 @@ type WatchConfig struct {
 	Debounce time.Duration
 }
 
-// WatchConfigFor returns the conventional watch set for a detected runtime.
+// WatchConfigFor returns the conventional watch set for a detected
+// runtime. v1 supports Python and Node; other runtimes are rejected
+// earlier in DetectRuntime so this function is never called for them.
 func WatchConfigFor(rt Runtime) WatchConfig {
-	base := []string{"target", "node_modules", "dist", "build", "bin", "obj", ".the0", "vendor"}
+	base := []string{"node_modules", "dist", "build", "bin", ".the0", "vendor", "__pycache__", ".venv", "venv"}
 	switch rt {
 	case RuntimePython:
-		return WatchConfig{IncludeExt: []string{".py"}, IncludeNames: []string{"requirements.txt", "pyproject.toml"}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
+		return WatchConfig{
+			IncludeExt:   []string{".py"},
+			IncludeNames: []string{"requirements.txt", "pyproject.toml"},
+			ExcludeDirs:  base,
+			Debounce:     500 * time.Millisecond,
+		}
 	case RuntimeNode:
-		return WatchConfig{IncludeExt: []string{".js", ".ts", ".mjs"}, IncludeNames: []string{"package.json", "package-lock.json"}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
-	case RuntimeRust:
-		return WatchConfig{IncludeExt: []string{".rs"}, IncludeNames: []string{"Cargo.toml", "Cargo.lock"}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
-	case RuntimeDotnet:
-		return WatchConfig{IncludeExt: []string{".cs"}, IncludeNames: []string{}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
-	case RuntimeCpp:
-		return WatchConfig{IncludeExt: []string{".cpp", ".c", ".h", ".hpp"}, IncludeNames: []string{"CMakeLists.txt", "Makefile"}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
-	case RuntimeScala:
-		return WatchConfig{IncludeExt: []string{".scala"}, IncludeNames: []string{"build.sbt"}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
-	case RuntimeHaskell:
-		return WatchConfig{IncludeExt: []string{".hs"}, IncludeNames: []string{}, ExcludeDirs: base, Debounce: 500 * time.Millisecond}
+		return WatchConfig{
+			IncludeExt:   []string{".js", ".ts", ".mjs"},
+			IncludeNames: []string{"package.json", "package-lock.json"},
+			ExcludeDirs:  base,
+			Debounce:     500 * time.Millisecond,
+		}
 	}
 	return WatchConfig{ExcludeDirs: base, Debounce: 500 * time.Millisecond}
 }
@@ -69,6 +69,20 @@ func (c WatchConfig) matches(path string) bool {
 }
 
 // Watcher calls fn once per debounced file-change burst until ctx is done.
+//
+// Correctness notes:
+//
+//   - Newly-created directories are added recursively (via addRecursive),
+//     not just the single directory path. This catches subtree creation
+//     (e.g. `git checkout` of a branch with a new package dir); the prior
+//     implementation called w.Add(ev.Name) directly and missed nested
+//     dirs inside the new tree.
+//
+//   - The debouncer uses a single *time.Timer with Stop+drain+Reset on
+//     each new event, and a dedicated select case on timer.C to fire
+//     fn(). The prior implementation used time.AfterFunc which, when
+//     Stopped mid-fire, could still deliver the callback AND schedule a
+//     new one — producing back-to-back restarts for one save burst.
 func Watcher(ctx context.Context, root string, cfg WatchConfig, fn func()) error {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -80,31 +94,44 @@ func Watcher(ctx context.Context, root string, cfg WatchConfig, fn func()) error
 		return err
 	}
 
-	var timer *time.Timer
+	// Single-timer debounce: create it stopped; Reset on each event;
+	// consume on fire.
+	timer := time.NewTimer(cfg.Debounce)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+
 		case ev, ok := <-w.Events:
 			if !ok {
 				return nil
 			}
-			// Newly-created directories need to be added to the watcher so
-			// their contents are monitored too.
 			if ev.Op&fsnotify.Create != 0 {
 				if fi, err := os.Stat(ev.Name); err == nil && fi.IsDir() {
 					if !isExcluded(ev.Name, cfg.ExcludeDirs) {
-						_ = w.Add(ev.Name)
+						_ = addRecursive(w, ev.Name, cfg.ExcludeDirs)
 					}
 				}
 			}
 			if !cfg.matches(ev.Name) {
 				continue
 			}
-			if timer != nil {
-				timer.Stop()
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
 			}
-			timer = time.AfterFunc(cfg.Debounce, fn)
+			timer.Reset(cfg.Debounce)
+
+		case <-timer.C:
+			fn()
+
 		case err, ok := <-w.Errors:
 			if !ok {
 				return nil
