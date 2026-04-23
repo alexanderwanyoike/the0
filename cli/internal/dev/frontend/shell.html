@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>the0 dev — {{.BotID}}</title>
+    <style>
+      html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b0f14;color:#e6edf3}
+      #root{min-height:100vh}
+      .the0-dev-banner{position:fixed;top:0;left:0;right:0;padding:6px 12px;font-size:12px;background:#1f6feb;color:#fff;z-index:9999}
+      .the0-dev-banner code{background:rgba(0,0,0,.25);padding:1px 4px;border-radius:3px}
+    </style>
+
+    <!-- React + ReactDOM from the unpkg CDN. Pinned to the same majors the
+         platform frontend ships so custom bundles behave identically. -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <script>
+      // Mirror the platform frontend's ambient globals so the user's bundle
+      // (built with reactGlobalPlugin) resolves imports against this page's
+      // React instance.
+      window.__THE0_REACT__ = window.React;
+      window.__THE0_REACT_DOM__ = window.ReactDOM;
+
+      // JSX runtime is injected in-line (classic runtime) since UMD bundles
+      // don't expose jsx-runtime. Custom bundles that use the automatic JSX
+      // runtime will get these jsx/jsxs/Fragment functions shaped like the
+      // official runtime.
+      const R = window.React;
+      window.__THE0_REACT_JSX__ = {
+        jsx: (type, props, key) => R.createElement(type, Object.assign({key}, props)),
+        jsxs: (type, props, key) => R.createElement(type, Object.assign({key}, props)),
+        Fragment: R.Fragment,
+      };
+
+      // Events context — populated by the shell runtime (shell.js), consumed
+      // by the user's bundle via useThe0Events().
+      window.__THE0_EVENTS_CONTEXT__ = R.createContext(null);
+    </script>
+  </head>
+  <body>
+    <div class="the0-dev-banner">
+      the0 dev — bot <code>{{.BotID}}</code> — events streaming over
+      <code>{{.WsPath}}</code>
+    </div>
+    <div id="root"></div>
+
+    <!-- Shell runtime: subscribes to /events, populates the context, renders
+         the user's bundle inside the provider. -->
+    <script>{{.ShellJS}}</script>
+
+    <!-- The user's compiled dashboard bundle. Ships as ESM; the shell runtime
+         imports it dynamically once the context is ready. -->
+    <script type="module">
+      window.__THE0_DEV_BUNDLE_URL__ = "/bundle.js";
+    </script>
+  </body>
+</html>
