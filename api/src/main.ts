@@ -2,8 +2,11 @@ import "dotenv/config";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "nestjs-pino";
+import pino from "pino";
 import { AppModule } from "./app.module";
 import { runMigrations } from "./database/migrate";
+
+const bootstrapLogger = pino({ name: "bootstrap" });
 
 async function bootstrap() {
   // Fail fast if JWT_SECRET is not configured
@@ -17,10 +20,9 @@ async function bootstrap() {
   }
 
   // Run database migrations before starting the application
-  // Note: migrations run before NestJS app is created, so we use console here
-  console.log("Running database migrations...");
+  bootstrapLogger.info("Running database migrations...");
   await runMigrations();
-  console.log("Database migrations completed");
+  bootstrapLogger.info("Database migrations completed");
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
@@ -50,6 +52,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-  console.error("Failed to start the0 API:", error);
+  bootstrapLogger.error({ err: error }, "Failed to start the0 API");
   process.exit(1);
 });
