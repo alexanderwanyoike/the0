@@ -30,9 +30,18 @@ mkdir -p "${workspace}/reports" "${workspace}/summaries"
 
 osv-scanner scan source --recursive --no-ignore --format json --output "${report}" "${scan_path}" || true
 
-critical="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "CRITICAL")] | length' "${report}")"
-high="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "HIGH")] | length' "${report}")"
-other="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) != "CRITICAL" and (.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) != "HIGH")] | length' "${report}")"
+severity_filter='
+  def osv_severity:
+    ((.database_specific.severity? | strings | ascii_upcase) // "") as $label
+    | if $label == "CRITICAL" or $label == "HIGH" or $label == "MODERATE" or $label == "LOW" then $label
+      else ([.severity[]?.score? | tonumber?] | max // -1) as $score
+      | if $score >= 9 then "CRITICAL" elif $score >= 7 then "HIGH" else "OTHER" end
+      end;
+'
+
+critical="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "CRITICAL")] | length' "${report}")"
+high="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "HIGH")] | length' "${report}")"
+other="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity != "CRITICAL" and osv_severity != "HIGH")] | length' "${report}")"
 
 {
   echo "### OSV-Scanner: ${package_name}"

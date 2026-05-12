@@ -19,6 +19,8 @@ env:
   GOVULNCHECK_VERSION: v1.1.4
   OSV_GO_VERSION: '1.25.10'
   OSV_SCANNER_VERSION: v2.2.3
+  PIP_AUDIT_VERSION: 2.10.0
+  CARGO_AUDIT_VERSION: 0.22.1
 
 jobs:
   trivy-images:
@@ -235,7 +237,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install pip-audit
-        run: python -m pip install pip-audit
+        run: python -m pip install pip-audit==${{ env.PIP_AUDIT_VERSION }}
 
       - name: Run audit
         working-directory: ${{ matrix.directory }}
@@ -269,7 +271,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: cargo install cargo-audit --version ${{ env.CARGO_AUDIT_VERSION }} --locked
 
       - name: Run audit
         working-directory: ${{ matrix.directory }}

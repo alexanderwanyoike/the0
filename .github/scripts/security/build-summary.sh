@@ -69,8 +69,24 @@ for file in "${artifacts_dir}"/reports/cargo-audit-*.json; do
 done
 
 for file in "${artifacts_dir}"/reports/osv-scanner-*.json; do
-  critical="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "CRITICAL")] | length' "${file}")"
-  high="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "HIGH")] | length' "${file}")"
+  critical="$(jq '
+    def osv_severity:
+      ((.database_specific.severity? | strings | ascii_upcase) // "") as $label
+      | if $label == "CRITICAL" or $label == "HIGH" or $label == "MODERATE" or $label == "LOW" then $label
+        else ([.severity[]?.score? | tonumber?] | max // -1) as $score
+        | if $score >= 9 then "CRITICAL" elif $score >= 7 then "HIGH" else "OTHER" end
+        end;
+    [.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "CRITICAL")] | length
+  ' "${file}")"
+  high="$(jq '
+    def osv_severity:
+      ((.database_specific.severity? | strings | ascii_upcase) // "") as $label
+      | if $label == "CRITICAL" or $label == "HIGH" or $label == "MODERATE" or $label == "LOW" then $label
+        else ([.severity[]?.score? | tonumber?] | max // -1) as $score
+        | if $score >= 9 then "CRITICAL" elif $score >= 7 then "HIGH" else "OTHER" end
+        end;
+    [.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "HIGH")] | length
+  ' "${file}")"
   osv_critical=$((osv_critical + critical))
   osv_high=$((osv_high + high))
 done
