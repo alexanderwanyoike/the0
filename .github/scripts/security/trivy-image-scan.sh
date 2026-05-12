@@ -23,7 +23,7 @@ fi
 
 jq -r --arg title "Trivy image: ${service}" '
   def count_sev($sev):
-    [ .Results[]? | .Vulnerabilities[]? | select(.Severity == $sev) ] | length;
+    [ .Results[]? | .Vulnerabilities[]? | select(.Severity == $sev) | (.VulnerabilityID // .ID // .Title // "unknown") ] | unique | length;
   {
     critical: count_sev("CRITICAL"),
     high: count_sev("HIGH"),
@@ -32,7 +32,7 @@ jq -r --arg title "Trivy image: ${service}" '
     unknown: count_sev("UNKNOWN")
   }
   | "### \($title)\n\n" +
-    "| Severity | Count |\n| --- | ---: |\n" +
+    "| Severity | Unique findings |\n| --- | ---: |\n" +
     "| CRITICAL | \(.critical) |\n" +
     "| HIGH | \(.high) |\n" +
     "| MEDIUM | \(.medium) |\n" +

@@ -12,9 +12,9 @@ trivy fs \
 
 jq -r '
   def count_misconf($sev):
-    [ .Results[]? | .Misconfigurations[]? | select(.Severity == $sev) ] | length;
+    [ .Results[]? | .Misconfigurations[]? | select(.Severity == $sev) | (.ID // .RuleID // .Title // "unknown") ] | unique | length;
   def count_secret($sev):
-    [ .Results[]? | .Secrets[]? | select((.Severity // "UNKNOWN") == $sev) ] | length;
+    [ .Results[]? | .Secrets[]? | select((.Severity // "UNKNOWN") == $sev) | (.RuleID // .Title // .Target // "unknown") ] | unique | length;
   {
     critical: (count_misconf("CRITICAL") + count_secret("CRITICAL")),
     high: (count_misconf("HIGH") + count_secret("HIGH")),
@@ -23,7 +23,7 @@ jq -r '
     unknown: (count_misconf("UNKNOWN") + count_secret("UNKNOWN"))
   }
   | "### Trivy repository scan\n\n" +
-    "| Severity | Count |\n| --- | ---: |\n" +
+    "| Severity | Unique findings |\n| --- | ---: |\n" +
     "| CRITICAL | \(.critical) |\n" +
     "| HIGH | \(.high) |\n" +
     "| MEDIUM | \(.medium) |\n" +

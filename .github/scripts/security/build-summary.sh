@@ -30,66 +30,62 @@ osv_critical=0
 osv_high=0
 
 shopt -s nullglob
-for file in "${artifacts_dir}"/reports/trivy-*.json; do
-  critical="$(jq '[.Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "CRITICAL")] | length' "${file}")"
-  high="$(jq '[.Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "HIGH")] | length' "${file}")"
-  trivy_critical=$((trivy_critical + critical))
-  trivy_high=$((trivy_high + high))
-done
 
-for file in "${artifacts_dir}"/reports/yarn-audit-*.jsonl; do
-  critical="$(jq -R -s '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "critical")] | length' "${file}")"
-  high="$(jq -R -s '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "high")] | length' "${file}")"
-  yarn_critical=$((yarn_critical + critical))
-  yarn_high=$((yarn_high + high))
-done
+trivy_files=("${artifacts_dir}"/reports/trivy-*.json)
+if [[ "${#trivy_files[@]}" -gt 0 ]]; then
+  trivy_critical="$(jq -s '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "CRITICAL") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown")] | unique | length' "${trivy_files[@]}")"
+  trivy_high="$(jq -s '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "HIGH") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown")] | unique | length' "${trivy_files[@]}")"
+fi
 
-for file in "${artifacts_dir}"/reports/govulncheck-*.json; do
-  findings="$(jq -s '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv] | unique | length' "${file}")"
-  govuln_findings=$((govuln_findings + findings))
-done
+yarn_files=("${artifacts_dir}"/reports/yarn-audit-*.jsonl)
+if [[ "${#yarn_files[@]}" -gt 0 ]]; then
+  yarn_critical="$(jq -R -s '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "critical") | (.data.advisory.github_advisory_id // (.data.advisory.id | tostring))] | unique | length' "${yarn_files[@]}")"
+  yarn_high="$(jq -R -s '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "high") | (.data.advisory.github_advisory_id // (.data.advisory.id | tostring))] | unique | length' "${yarn_files[@]}")"
+fi
 
-for file in "${artifacts_dir}"/reports/dotnet-audit-*.json; do
-  critical="$(jq '[.. | objects | select(has("severity")) | select(.severity == 3 or (.severity | tostring | ascii_downcase) == "critical")] | length' "${file}")"
-  high="$(jq '[.. | objects | select(has("severity")) | select(.severity == 2 or (.severity | tostring | ascii_downcase) == "high")] | length' "${file}")"
-  dotnet_critical=$((dotnet_critical + critical))
-  dotnet_high=$((dotnet_high + high))
-done
+govuln_files=("${artifacts_dir}"/reports/govulncheck-*.json)
+if [[ "${#govuln_files[@]}" -gt 0 ]]; then
+  govuln_findings="$(jq -s '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv] | unique | length' "${govuln_files[@]}")"
+fi
 
-for file in "${artifacts_dir}"/reports/pip-audit-*.json; do
-  findings="$(jq '[.dependencies[]?.vulns[]?] | length' "${file}")"
-  python_findings=$((python_findings + findings))
-done
+dotnet_files=("${artifacts_dir}"/reports/dotnet-audit-*.json)
+if [[ "${#dotnet_files[@]}" -gt 0 ]]; then
+  dotnet_critical="$(jq -s '[.[] | .. | objects | select(has("severity")) | select(.severity == 3 or (.severity | tostring | ascii_downcase) == "critical") | (.id // .name // .package // tostring)] | unique | length' "${dotnet_files[@]}")"
+  dotnet_high="$(jq -s '[.[] | .. | objects | select(has("severity")) | select(.severity == 2 or (.severity | tostring | ascii_downcase) == "high") | (.id // .name // .package // tostring)] | unique | length' "${dotnet_files[@]}")"
+fi
 
-for file in "${artifacts_dir}"/reports/cargo-audit-*.json; do
-  critical="$(jq '[.vulnerabilities.list[]? | (.advisory.cvss // 0) as $score | select($score >= 9)] | length' "${file}")"
-  high="$(jq '[.vulnerabilities.list[]? | (.advisory.cvss // 0) as $score | select($score >= 7 and $score < 9)] | length' "${file}")"
-  cargo_critical=$((cargo_critical + critical))
-  cargo_high=$((cargo_high + high))
-done
+python_files=("${artifacts_dir}"/reports/pip-audit-*.json)
+if [[ "${#python_files[@]}" -gt 0 ]]; then
+  python_findings="$(jq -s '[.[] | .dependencies[]?.vulns[]? | (.id // .name // tostring)] | unique | length' "${python_files[@]}")"
+fi
 
-for file in "${artifacts_dir}"/reports/osv-scanner-*.json; do
-  critical="$(jq '
+cargo_files=("${artifacts_dir}"/reports/cargo-audit-*.json)
+if [[ "${#cargo_files[@]}" -gt 0 ]]; then
+  cargo_critical="$(jq -s '[.[] | .vulnerabilities.list[]? | (.advisory.cvss // 0) as $score | select($score >= 9) | (.advisory.id // .advisory.package // tostring)] | unique | length' "${cargo_files[@]}")"
+  cargo_high="$(jq -s '[.[] | .vulnerabilities.list[]? | (.advisory.cvss // 0) as $score | select($score >= 7 and $score < 9) | (.advisory.id // .advisory.package // tostring)] | unique | length' "${cargo_files[@]}")"
+fi
+
+osv_files=("${artifacts_dir}"/reports/osv-scanner-*.json)
+if [[ "${#osv_files[@]}" -gt 0 ]]; then
+  osv_critical="$(jq -s '
     def osv_severity:
       ((.database_specific.severity? | strings | ascii_upcase) // "") as $label
       | if $label == "CRITICAL" or $label == "HIGH" or $label == "MODERATE" or $label == "LOW" then $label
         else ([.severity[]?.score? | tonumber?] | max // -1) as $score
         | if $score >= 9 then "CRITICAL" elif $score >= 7 then "HIGH" else "OTHER" end
         end;
-    [.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "CRITICAL")] | length
-  ' "${file}")"
-  high="$(jq '
+    [.[] | .results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "CRITICAL") | (.id // .aliases[]? // tostring)] | unique | length
+  ' "${osv_files[@]}")"
+  osv_high="$(jq -s '
     def osv_severity:
       ((.database_specific.severity? | strings | ascii_upcase) // "") as $label
       | if $label == "CRITICAL" or $label == "HIGH" or $label == "MODERATE" or $label == "LOW" then $label
         else ([.severity[]?.score? | tonumber?] | max // -1) as $score
         | if $score >= 9 then "CRITICAL" elif $score >= 7 then "HIGH" else "OTHER" end
         end;
-    [.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "HIGH")] | length
-  ' "${file}")"
-  osv_critical=$((osv_critical + critical))
-  osv_high=$((osv_high + high))
-done
+    [.[] | .results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "HIGH") | (.id // .aliases[]? // tostring)] | unique | length
+  ' "${osv_files[@]}")"
+fi
 
 release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + govuln_findings + dotnet_critical + dotnet_high + python_findings + cargo_critical + cargo_high + osv_critical + osv_high))
 
@@ -103,7 +99,7 @@ release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + go
     echo "**Policy:** visibility-only target; findings are reported here and would block release if this targeted \`main\` or a release tag."
   fi
   echo
-  echo "| Scanner | Release-blocking findings |"
+  echo "| Scanner | Unique release-blocking findings |"
   echo "| --- | ---: |"
   echo "| Trivy CRITICAL | ${trivy_critical} |"
   echo "| Trivy HIGH | ${trivy_high} |"

@@ -16,15 +16,16 @@ yarn audit --json > "${workspace}/reports/yarn-audit-${package_name}.jsonl" || t
 jq -R -s -r --arg title "Yarn audit: ${package_name}" '
   split("\n")
   | map(select(length > 0) | fromjson?)
+  | map(select(.type == "auditAdvisory") | .data.advisory)
   | {
-      critical: ([.[] | select(.type == "auditAdvisory" and .data.advisory.severity == "critical")] | length),
-      high: ([.[] | select(.type == "auditAdvisory" and .data.advisory.severity == "high")] | length),
-      moderate: ([.[] | select(.type == "auditAdvisory" and .data.advisory.severity == "moderate")] | length),
-      low: ([.[] | select(.type == "auditAdvisory" and .data.advisory.severity == "low")] | length),
-      info: ([.[] | select(.type == "auditAdvisory" and .data.advisory.severity == "info")] | length)
+      critical: ([.[] | select(.severity == "critical") | (.github_advisory_id // (.id | tostring))] | unique | length),
+      high: ([.[] | select(.severity == "high") | (.github_advisory_id // (.id | tostring))] | unique | length),
+      moderate: ([.[] | select(.severity == "moderate") | (.github_advisory_id // (.id | tostring))] | unique | length),
+      low: ([.[] | select(.severity == "low") | (.github_advisory_id // (.id | tostring))] | unique | length),
+      info: ([.[] | select(.severity == "info") | (.github_advisory_id // (.id | tostring))] | unique | length)
     }
   | "### \($title)\n\n" +
-    "| Severity | Count |\n| --- | ---: |\n" +
+    "| Severity | Unique advisories |\n| --- | ---: |\n" +
     "| CRITICAL | \(.critical) |\n" +
     "| HIGH | \(.high) |\n" +
     "| MODERATE | \(.moderate) |\n" +
