@@ -1,0 +1,217 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, dev ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TRIVY_VERSION: 0.58.1
+  GO_VERSION: '1.24.1'
+  NODE_VERSION: '20'
+
+jobs:
+  trivy-images:
+    name: Trivy image scan (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            context: ./api
+            dockerfile: ./api/Dockerfile
+            image: the0-security-api:ci
+          - service: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+            image: the0-security-frontend:ci
+          - service: runtime
+            context: ./runtime
+            dockerfile: ./runtime/Dockerfile
+            image: the0-security-runtime:ci
+          - service: docs
+            context: ./docs
+            dockerfile: ./docs/Dockerfile
+            image: the0-security-docs:ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build local image
+        run: docker build -t "${{ matrix.image }}" -f "${{ matrix.dockerfile }}" "${{ matrix.context }}"
+
+      - name: Install Trivy
+        run: bash .github/scripts/security/install-trivy.sh
+
+      - name: Scan image
+        run: bash .github/scripts/security/trivy-image-scan.sh "${{ matrix.service }}" "${{ matrix.image }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-image-${{ matrix.service }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  trivy-repo:
+    name: Trivy repo scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: bash .github/scripts/security/install-trivy.sh
+
+      - name: Scan repository for secrets and misconfigurations
+        run: bash .github/scripts/security/trivy-repo-scan.sh
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-repo
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  yarn-audit:
+    name: Yarn audit (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: api
+            directory: api
+          - package: frontend
+            directory: frontend
+          - package: docs
+            directory: docs
+          - package: sdk-nodejs
+            directory: sdk/nodejs
+          - package: sdk-react
+            directory: sdk/react
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: ${{ matrix.directory }}/yarn.lock
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.directory }}
+        run: yarn install --frozen-lockfile
+
+      - name: Run audit
+        working-directory: ${{ matrix.directory }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/yarn-audit.sh" "${{ matrix.package }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-yarn-audit-${{ matrix.package }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  govulncheck:
+    name: Govulncheck (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: cli
+            directory: cli
+          - module: runtime
+            directory: runtime
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ matrix.directory }}/go.sum
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        working-directory: ${{ matrix.directory }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/govulncheck-scan.sh" "${{ matrix.module }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-govulncheck-${{ matrix.module }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  summary:
+    name: Security summary and release policy
+    runs-on: ubuntu-latest
+    needs: [ trivy-images, trivy-repo, yarn-audit, govulncheck ]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download scan reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: security-*
+          path: security-artifacts
+          merge-multiple: true
+
+      - name: Build summary
+        id: summary
+        run: >
+          bash .github/scripts/security/build-summary.sh
+          "${{ github.event_name }}"
+          "${{ github.base_ref }}"
+          "${{ github.ref }}"
+          security-artifacts
+          security-summary.md
+
+      - name: Append per-scan summaries
+        run: bash .github/scripts/security/append-summaries.sh security-artifacts
+
+      - name: Post sticky PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: return require('./.github/scripts/security/sticky-pr-comment.js')({ github, context });
+
+      - name: Enforce release policy
+        if: steps.summary.outputs.is_release_bound == 'true' && steps.summary.outputs.release_blockers != '0'
+        run: bash .github/scripts/security/enforce-policy.sh "${{ steps.summary.outputs.release_blockers }}"

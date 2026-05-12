@@ -1,6 +1,6 @@
 # Makefile for the0 CLI
 
-.PHONY: build test clean install lint
+.PHONY: build test clean install lint security-audit security-scan
 
 VERSION ?= dev
 LDFLAGS = -ldflags="-w -s -X main.VERSION=$(VERSION)"
@@ -49,6 +49,12 @@ fmt:
 # Verify everything is ready for release
 verify: fmt lint test build
 	@echo "✅ All checks passed!"
+
+security-audit:
+	@command -v govulncheck >/dev/null 2>&1 || { echo "govulncheck is required for Go vulnerability scanning. Install: go install golang.org/x/vuln/cmd/govulncheck@latest"; exit 1; }
+	govulncheck ./...
+
+security-scan: security-audit
 
 # Portable sha256sum (macOS ships shasum instead of sha256sum)
 SHA256SUM := $(shell command -v sha256sum 2>/dev/null || echo "shasum -a 256")

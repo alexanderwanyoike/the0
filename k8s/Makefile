@@ -6,6 +6,11 @@ help: ## Show this help message
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
+.PHONY: security-scan
+security-scan: ## Scan Kubernetes and Helm configuration for HIGH/CRITICAL findings
+	@command -v trivy >/dev/null 2>&1 || { echo "trivy is required to scan Kubernetes and Helm configuration. Install: https://aquasecurity.github.io/trivy/latest/getting-started/installation/"; exit 1; }
+	trivy config --exit-code 1 --severity HIGH,CRITICAL .
+
 # Variables
 RELEASE_NAME ?= the0
 NAMESPACE ?= the0
