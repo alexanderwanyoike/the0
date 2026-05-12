@@ -73,14 +73,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build local image
-        run: bash .github/scripts/security/docker-build-retry.sh "the0-security-api:ci" "./api/Dockerfile" "./api"
-
-      - name: Install Trivy
-        run: bash .github/scripts/security/install-trivy.sh
-
-      - name: Scan image
-        run: bash .github/scripts/security/trivy-image-scan.sh "api" "the0-security-api:ci"
+      - name: Run image scan
+        run: bash .github/scripts/security/trivy-image-job.sh "api" "the0-security-api:ci" "./api/Dockerfile" "./api"
 
       - name: Upload scan reports
         if: always()
@@ -101,14 +95,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build local image
-        run: bash .github/scripts/security/docker-build-retry.sh "the0-security-frontend:ci" "./frontend/Dockerfile" "./frontend"
-
-      - name: Install Trivy
-        run: bash .github/scripts/security/install-trivy.sh
-
-      - name: Scan image
-        run: bash .github/scripts/security/trivy-image-scan.sh "frontend" "the0-security-frontend:ci"
+      - name: Run image scan
+        run: bash .github/scripts/security/trivy-image-job.sh "frontend" "the0-security-frontend:ci" "./frontend/Dockerfile" "./frontend"
 
       - name: Upload scan reports
         if: always()
@@ -129,17 +117,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build local image
+      - name: Run image scan
         env:
           DOCKER_BUILD_ATTEMPTS: "5"
           DOCKER_BUILD_RETRY_DELAY_SECONDS: "60"
-        run: bash .github/scripts/security/docker-build-retry.sh "the0-security-runtime:ci" "./runtime/Dockerfile" "./runtime"
-
-      - name: Install Trivy
-        run: bash .github/scripts/security/install-trivy.sh
-
-      - name: Scan image
-        run: bash .github/scripts/security/trivy-image-scan.sh "runtime" "the0-security-runtime:ci"
+        run: bash .github/scripts/security/trivy-image-job.sh "runtime" "the0-security-runtime:ci" "./runtime/Dockerfile" "./runtime"
 
       - name: Upload scan reports
         if: always()
@@ -160,14 +142,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build local image
-        run: bash .github/scripts/security/docker-build-retry.sh "the0-security-docs:ci" "./docs/Dockerfile" "./docs"
-
-      - name: Install Trivy
-        run: bash .github/scripts/security/install-trivy.sh
-
-      - name: Scan image
-        run: bash .github/scripts/security/trivy-image-scan.sh "docs" "the0-security-docs:ci"
+      - name: Run image scan
+        run: bash .github/scripts/security/trivy-image-job.sh "docs" "the0-security-docs:ci" "./docs/Dockerfile" "./docs"
 
       - name: Upload scan reports
         if: always()
@@ -675,5 +651,11 @@ jobs:
           done
 
       - name: Enforce release policy
+        if: steps.summary.outputs.is_release_bound == 'true' && steps.summary.outputs.scan_errors != '0'
+        run: |
+          echo "::error::Security scan failed to complete for ${{ steps.summary.outputs.scan_errors }} target(s); failing release policy."
+          exit 1
+
+      - name: Enforce release findings policy
         if: steps.summary.outputs.is_release_bound == 'true' && steps.summary.outputs.release_blockers != '0'
         run: bash .github/scripts/security/enforce-policy.sh "${{ steps.summary.outputs.release_blockers }}"

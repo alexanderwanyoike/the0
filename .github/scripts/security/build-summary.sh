@@ -28,7 +28,9 @@ cargo_critical=0
 cargo_high=0
 osv_critical=0
 osv_high=0
+scan_errors=0
 scan_coverage_rows=""
+scan_error_rows=""
 
 shopt -s nullglob
 
@@ -103,6 +105,16 @@ if [[ "${#metadata_files[@]}" -gt 0 ]]; then
   ' "${metadata_files[@]}")"
 fi
 
+scan_error_files=("${artifacts_dir}"/reports/scan-error-*.json)
+if [[ "${#scan_error_files[@]}" -gt 0 ]]; then
+  scan_errors="$(jq -s 'length' "${scan_error_files[@]}")"
+  scan_error_rows="$(jq -s -r '
+    sort_by(.scanner, .target)
+    | .[]
+    | "| \(.scanner): \(.target) | \(.stage) | \(.message) |"
+  ' "${scan_error_files[@]}")"
+fi
+
 release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + govuln_findings + dotnet_critical + dotnet_high + python_findings + cargo_critical + cargo_high + osv_critical + osv_high))
 
 {
@@ -139,9 +151,23 @@ release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + go
     echo "${scan_coverage_rows}"
     echo
   fi
+  if [[ "${scan_errors}" -gt 0 ]]; then
+    echo "### Scan errors"
+    echo
+    echo "| Scanner | Stage | Error |"
+    echo "| --- | --- | --- |"
+    echo "${scan_error_rows}"
+    echo
+  fi
   echo "Full JSON reports and compact per-scan summaries are attached as workflow artifacts."
   echo
-  if [[ "${release_blockers}" -gt 0 ]]; then
+  if [[ "${scan_errors}" -gt 0 ]]; then
+    if [[ "${is_release_bound}" == "true" ]]; then
+      echo "**Result:** release blocked because ${scan_errors} scan job(s) did not complete."
+    else
+      echo "**Result:** ${scan_errors} scan job(s) did not complete; this must be fixed before release, but this workflow remains green for this target."
+    fi
+  elif [[ "${release_blockers}" -gt 0 ]]; then
     if [[ "${is_release_bound}" == "true" ]]; then
       echo "**Result:** release blocked."
     else
@@ -160,5 +186,6 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   {
     echo "is_release_bound=${is_release_bound}"
     echo "release_blockers=${release_blockers}"
+    echo "scan_errors=${scan_errors}"
   } >> "${GITHUB_OUTPUT}"
 fi
