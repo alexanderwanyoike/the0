@@ -38,7 +38,7 @@ for file in "${artifacts_dir}"/reports/yarn-audit-*.jsonl; do
 done
 
 for file in "${artifacts_dir}"/reports/govulncheck-*.json; do
-  findings="$(jq -s '[.[] | select(.finding? != null and .finding.osv? != null)] | length' "${file}")"
+  findings="$(jq -s '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv] | unique | length' "${file}")"
   govuln_findings=$((govuln_findings + findings))
 done
 
@@ -60,7 +60,7 @@ release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + go
   echo "| Trivy HIGH | ${trivy_high} |"
   echo "| Yarn audit CRITICAL | ${yarn_critical} |"
   echo "| Yarn audit HIGH | ${yarn_high} |"
-  echo "| Govulncheck reachable findings | ${govuln_findings} |"
+  echo "| Govulncheck reachable distinct vulnerabilities | ${govuln_findings} |"
   echo "| **Total release blockers** | **${release_blockers}** |"
   echo
   echo "Full JSON reports and compact per-scan summaries are attached as workflow artifacts."

@@ -13,9 +13,10 @@ permissions:
   pull-requests: write
 
 env:
-  TRIVY_VERSION: 0.58.1
+  TRIVY_VERSION: 0.70.0
   GO_VERSION: '1.24.1'
   NODE_VERSION: '20'
+  GOVULNCHECK_VERSION: v1.1.4
 
 jobs:
   trivy-images:
@@ -159,7 +160,7 @@ jobs:
           cache-dependency-path: ${{ matrix.directory }}/go.sum
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
 
       - name: Run govulncheck
         working-directory: ${{ matrix.directory }}
@@ -211,6 +212,23 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: return require('./.github/scripts/security/sticky-pr-comment.js')({ github, context });
+
+      - name: Enforce scan completion
+        if: steps.summary.outputs.is_release_bound == 'true'
+        env:
+          TRIVY_IMAGES_RESULT: ${{ needs.trivy-images.result }}
+          TRIVY_REPO_RESULT: ${{ needs.trivy-repo.result }}
+          YARN_AUDIT_RESULT: ${{ needs.yarn-audit.result }}
+          GOVULNCHECK_RESULT: ${{ needs.govulncheck.result }}
+        run: |
+          set -euo pipefail
+          for job in TRIVY_IMAGES TRIVY_REPO YARN_AUDIT GOVULNCHECK; do
+            result_var="${job}_RESULT"
+            if [[ "${!result_var}" != "success" ]]; then
+              echo "::error::Security scan job ${job} ended with result=${!result_var}; failing release policy."
+              exit 1
+            fi
+          done
 
       - name: Enforce release policy
         if: steps.summary.outputs.is_release_bound == 'true' && steps.summary.outputs.release_blockers != '0'

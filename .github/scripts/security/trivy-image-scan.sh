@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -z "${1:-}" || -z "${2:-}" ]]; then
+  echo "Usage: $0 <service> <image>" >&2
+  exit 1
+fi
+
 service="$1"
 image="$2"
 
 mkdir -p reports summaries
 
-trivy image \
-  --format json \
-  --output "reports/trivy-image-${service}.json" \
-  --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-  --ignore-unfixed=false \
-  "${image}"
+if ! trivy image \
+    --format json \
+    --output "reports/trivy-image-${service}.json" \
+    --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+    --ignore-unfixed=false \
+    "${image}"; then
+  echo "Trivy image scan failed for ${service}" >&2
+  exit 1
+fi
 
 jq -r --arg title "Trivy image: ${service}" '
   def count_sev($sev):
