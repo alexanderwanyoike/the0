@@ -17,6 +17,8 @@ env:
   GO_VERSION: '1.24.1'
   NODE_VERSION: '20'
   GOVULNCHECK_VERSION: v1.1.4
+  OSV_GO_VERSION: '1.25.10'
+  OSV_SCANNER_VERSION: v2.2.3
 
 jobs:
   trivy-images:
@@ -176,10 +178,164 @@ jobs:
             summaries/
           if-no-files-found: ignore
 
+  dotnet-audit:
+    name: .NET audit (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: sdk-dotnet
+            directory: sdk/dotnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        working-directory: ${{ matrix.directory }}
+        run: dotnet restore
+
+      - name: Run audit
+        working-directory: ${{ matrix.directory }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/dotnet-audit.sh" "${{ matrix.package }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-dotnet-audit-${{ matrix.package }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  python-audit:
+    name: pip-audit (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: sdk-python
+            directory: sdk/python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: python -m pip install pip-audit
+
+      - name: Run audit
+        working-directory: ${{ matrix.directory }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/python-audit.sh" "${{ matrix.package }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-pip-audit-${{ matrix.package }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  cargo-audit:
+    name: cargo-audit (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: sdk-rust
+            directory: sdk/rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run audit
+        working-directory: ${{ matrix.directory }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/cargo-audit.sh" "${{ matrix.package }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-cargo-audit-${{ matrix.package }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  osv-scanner:
+    name: OSV-Scanner (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: sdk-scala
+            directory: sdk/scala
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Setup Go for OSV-Scanner
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.OSV_GO_VERSION }}
+
+      - name: Install OSV-Scanner
+        run: |
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@${{ env.OSV_SCANNER_VERSION }}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run audit
+        working-directory: ${{ matrix.directory }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/scala-osv-audit.sh" "${{ matrix.package }}"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-osv-scanner-${{ matrix.package }}
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
   summary:
     name: Security summary and release policy
     runs-on: ubuntu-latest
-    needs: [ trivy-images, trivy-repo, yarn-audit, govulncheck ]
+    needs: [ trivy-images, trivy-repo, yarn-audit, govulncheck, dotnet-audit, python-audit, cargo-audit, osv-scanner ]
     if: always()
 
     steps:
@@ -220,9 +376,13 @@ jobs:
           TRIVY_REPO_RESULT: ${{ needs.trivy-repo.result }}
           YARN_AUDIT_RESULT: ${{ needs.yarn-audit.result }}
           GOVULNCHECK_RESULT: ${{ needs.govulncheck.result }}
+          DOTNET_AUDIT_RESULT: ${{ needs.dotnet-audit.result }}
+          PYTHON_AUDIT_RESULT: ${{ needs.python-audit.result }}
+          CARGO_AUDIT_RESULT: ${{ needs.cargo-audit.result }}
+          OSV_SCANNER_RESULT: ${{ needs.osv-scanner.result }}
         run: |
           set -euo pipefail
-          for job in TRIVY_IMAGES TRIVY_REPO YARN_AUDIT GOVULNCHECK; do
+          for job in TRIVY_IMAGES TRIVY_REPO YARN_AUDIT GOVULNCHECK DOTNET_AUDIT PYTHON_AUDIT CARGO_AUDIT OSV_SCANNER; do
             result_var="${job}_RESULT"
             if [[ "${!result_var}" != "success" ]]; then
               echo "::error::Security scan job ${job} ended with result=${!result_var}; failing release policy."

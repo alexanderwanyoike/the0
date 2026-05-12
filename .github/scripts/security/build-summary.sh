@@ -21,6 +21,13 @@ trivy_high=0
 yarn_critical=0
 yarn_high=0
 govuln_findings=0
+dotnet_critical=0
+dotnet_high=0
+python_findings=0
+cargo_critical=0
+cargo_high=0
+osv_critical=0
+osv_high=0
 
 shopt -s nullglob
 for file in "${artifacts_dir}"/reports/trivy-*.json; do
@@ -42,7 +49,33 @@ for file in "${artifacts_dir}"/reports/govulncheck-*.json; do
   govuln_findings=$((govuln_findings + findings))
 done
 
-release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + govuln_findings))
+for file in "${artifacts_dir}"/reports/dotnet-audit-*.json; do
+  critical="$(jq '[.. | objects | select(has("severity")) | select(.severity == 3 or (.severity | tostring | ascii_downcase) == "critical")] | length' "${file}")"
+  high="$(jq '[.. | objects | select(has("severity")) | select(.severity == 2 or (.severity | tostring | ascii_downcase) == "high")] | length' "${file}")"
+  dotnet_critical=$((dotnet_critical + critical))
+  dotnet_high=$((dotnet_high + high))
+done
+
+for file in "${artifacts_dir}"/reports/pip-audit-*.json; do
+  findings="$(jq '[.dependencies[]?.vulns[]?] | length' "${file}")"
+  python_findings=$((python_findings + findings))
+done
+
+for file in "${artifacts_dir}"/reports/cargo-audit-*.json; do
+  critical="$(jq '[.vulnerabilities.list[]? | (.advisory.cvss // 0) as $score | select($score >= 9)] | length' "${file}")"
+  high="$(jq '[.vulnerabilities.list[]? | (.advisory.cvss // 0) as $score | select($score >= 7 and $score < 9)] | length' "${file}")"
+  cargo_critical=$((cargo_critical + critical))
+  cargo_high=$((cargo_high + high))
+done
+
+for file in "${artifacts_dir}"/reports/osv-scanner-*.json; do
+  critical="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "CRITICAL")] | length' "${file}")"
+  high="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "HIGH")] | length' "${file}")"
+  osv_critical=$((osv_critical + critical))
+  osv_high=$((osv_high + high))
+done
+
+release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + govuln_findings + dotnet_critical + dotnet_high + python_findings + cargo_critical + cargo_high + osv_critical + osv_high))
 
 {
   echo "<!-- the0-security-summary -->"
@@ -61,6 +94,13 @@ release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + go
   echo "| Yarn audit CRITICAL | ${yarn_critical} |"
   echo "| Yarn audit HIGH | ${yarn_high} |"
   echo "| Govulncheck reachable distinct vulnerabilities | ${govuln_findings} |"
+  echo "| .NET audit CRITICAL | ${dotnet_critical} |"
+  echo "| .NET audit HIGH | ${dotnet_high} |"
+  echo "| pip-audit known vulnerabilities | ${python_findings} |"
+  echo "| cargo-audit CRITICAL | ${cargo_critical} |"
+  echo "| cargo-audit HIGH | ${cargo_high} |"
+  echo "| OSV-Scanner CRITICAL | ${osv_critical} |"
+  echo "| OSV-Scanner HIGH | ${osv_high} |"
   echo "| **Total release blockers** | **${release_blockers}** |"
   echo
   echo "Full JSON reports and compact per-scan summaries are attached as workflow artifacts."
