@@ -21,4 +21,8 @@ if [[ -z "${pom_file}" ]]; then
   exit 1
 fi
 
-bash "${script_dir}/osv-scanner-scan.sh" "${package_name}" "${pom_file}"
+scan_dir="target/security-osv"
+mkdir -p "${scan_dir}"
+cp "${pom_file}" "${scan_dir}/pom.xml"
+
+bash "${script_dir}/osv-scanner-scan.sh" "${package_name}" "${scan_dir}"

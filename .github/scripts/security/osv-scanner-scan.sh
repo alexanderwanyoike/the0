@@ -2,12 +2,12 @@
 set -euo pipefail
 
 if [[ -z "${1:-}" || -z "${2:-}" ]]; then
-  echo "Usage: $0 <package_name> <lockfile_or_manifest>" >&2
+  echo "Usage: $0 <package_name> <source_path>" >&2
   exit 1
 fi
 
 package_name="$1"
-scan_file="$2"
+scan_path="$2"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 report="${workspace}/reports/osv-scanner-${package_name}.json"
 summary="${workspace}/summaries/osv-scanner-${package_name}.md"
@@ -21,14 +21,14 @@ command -v jq >/dev/null 2>&1 || {
   exit 1
 }
 
-if [[ ! -f "${scan_file}" ]]; then
-  echo "OSV scan input not found: ${scan_file}" >&2
+if [[ ! -e "${scan_path}" ]]; then
+  echo "OSV scan input not found: ${scan_path}" >&2
   exit 1
 fi
 
 mkdir -p "${workspace}/reports" "${workspace}/summaries"
 
-osv-scanner scan source --lockfile "${scan_file}" --format json --output "${report}" || true
+osv-scanner scan source --recursive --no-ignore --format json --output "${report}" "${scan_path}" || true
 
 critical="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "CRITICAL")] | length' "${report}")"
 high="$(jq '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // .severity[0]?.score // "" | tostring | ascii_upcase) == "HIGH")] | length' "${report}")"
