@@ -20,9 +20,29 @@ case "${arch}" in
 esac
 
 trap 'rm -rf "${tmp_dir}"' EXIT
+mkdir -p "${install_dir}"
+
+checksum_file="trivy_${version}_checksums.txt"
+archive_file="trivy_${version}_${os}-${arch}.tar.gz"
+
+if command -v sha256sum >/dev/null 2>&1; then
+  hash_cmd=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  hash_cmd=(shasum -a 256)
+else
+  echo "sha256sum or shasum is required to verify Trivy downloads" >&2
+  exit 1
+fi
 
 curl -fsSL \
-  "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_${os}-${arch}.tar.gz" \
-  -o "${tmp_dir}/trivy.tar.gz"
-tar -xzf "${tmp_dir}/trivy.tar.gz" -C "${tmp_dir}" trivy
+  "https://github.com/aquasecurity/trivy/releases/download/v${version}/${archive_file}" \
+  -o "${tmp_dir}/${archive_file}"
+curl -fsSL \
+  "https://github.com/aquasecurity/trivy/releases/download/v${version}/${checksum_file}" \
+  -o "${tmp_dir}/${checksum_file}"
+
+grep " ${archive_file}$" "${tmp_dir}/${checksum_file}" > "${tmp_dir}/trivy.sha256"
+(cd "${tmp_dir}" && "${hash_cmd[@]}" -c trivy.sha256)
+
+tar -xzf "${tmp_dir}/${archive_file}" -C "${tmp_dir}" trivy
 install -m 0755 "${tmp_dir}/trivy" "${install_dir}/trivy"
