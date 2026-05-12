@@ -65,12 +65,12 @@ target_bool() {
 
 write_bool all "${set_all}"
 write_bool any_changed "${changed_any}"
-write_bool trivy_repo true
 
 target_bool api '^api/'
 target_bool frontend '^frontend/'
 target_bool runtime '^runtime/'
 target_bool docs '^docs/'
+target_bool trivy_repo '(^k8s/|^\.github/workflows/|(^|/)Dockerfile$|(^|/)docker-compose[^/]*\.ya?ml$|(^|/)compose[^/]*\.ya?ml$)'
 target_bool cli '^cli/'
 target_bool sdk_nodejs '^sdk/nodejs/'
 target_bool sdk_react '^sdk/react/'
