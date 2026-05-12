@@ -10,6 +10,7 @@ package_name="$1"
 scan_path="$2"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 report="${workspace}/reports/osv-scanner-${package_name}.json"
+metadata="${workspace}/reports/scan-metadata-osv-scanner-${package_name}.json"
 summary="${workspace}/summaries/osv-scanner-${package_name}.md"
 
 command -v osv-scanner >/dev/null 2>&1 || {
@@ -42,9 +43,50 @@ severity_filter='
 critical="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "CRITICAL")] | length' "${report}")"
 high="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "HIGH")] | length' "${report}")"
 other="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity != "CRITICAL" and osv_severity != "HIGH")] | length' "${report}")"
+vulnerable_package_count="$(jq '[.results[]?.packages[]? | .package.name? // empty] | unique | length' "${report}")"
+package_count="${OSV_SCAN_PACKAGE_COUNT:-${vulnerable_package_count}}"
+source_file="${OSV_SCAN_SOURCE_FILE:-${scan_path}}"
+tool_version="$(osv-scanner --version | awk '{print $NF}')"
+
+jq -n \
+  --arg scanner "OSV-Scanner" \
+  --arg package "${package_name}" \
+  --arg tool_version "${tool_version}" \
+  --arg report "reports/osv-scanner-${package_name}.json" \
+  --arg source_file "${source_file}" \
+  --argjson package_count "${package_count}" \
+  --argjson vulnerable_package_count "${vulnerable_package_count}" \
+  --argjson critical "${critical}" \
+  --argjson high "${high}" \
+  --argjson other "${other}" \
+  '{
+    scanner: $scanner,
+    target: $package,
+    status: "completed",
+    tool_version: $tool_version,
+    reports: [$report],
+    source: $source_file,
+    scanned: {
+      packages: $package_count,
+      packages_with_vulnerabilities: $vulnerable_package_count
+    },
+    findings: {
+      critical: $critical,
+      high: $high,
+      other: $other
+    },
+    diagnostics: {
+      problems: 0
+    }
+  }' > "${metadata}"
 
 {
   echo "### OSV-Scanner: ${package_name}"
+  echo
+  echo "| Scan coverage | Count |"
+  echo "| --- | ---: |"
+  echo "| Packages scanned | ${package_count} |"
+  echo "| Packages with vulnerabilities | ${vulnerable_package_count} |"
   echo
   echo "| Severity | Count |"
   echo "| --- | ---: |"

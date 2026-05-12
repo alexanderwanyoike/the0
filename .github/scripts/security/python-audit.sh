@@ -9,6 +9,7 @@ fi
 package_name="$1"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 report="${workspace}/reports/pip-audit-${package_name}.json"
+metadata="${workspace}/reports/scan-metadata-pip-audit-${package_name}.json"
 summary="${workspace}/summaries/pip-audit-${package_name}.md"
 
 command -v python >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1 || {
@@ -31,9 +32,62 @@ mkdir -p "${workspace}/reports" "${workspace}/summaries"
 "${python_bin}" -m pip_audit --format json --progress-spinner off --desc off --aliases on . > "${report}" || true
 
 vulnerabilities="$(jq '[.dependencies[]?.vulns[]?] | length' "${report}")"
+dependency_count="$(jq '.dependencies // [] | length' "${report}")"
+fix_count="$(jq '.fixes // [] | length' "${report}")"
+project_dependency_count="$("${python_bin}" - <<'PY'
+import pathlib
+import tomllib
+
+path = pathlib.Path("pyproject.toml")
+if not path.exists():
+    print(0)
+    raise SystemExit
+
+data = tomllib.loads(path.read_text())
+project = data.get("project", {})
+count = len(project.get("dependencies", []) or [])
+for values in (project.get("optional-dependencies", {}) or {}).values():
+    count += len(values or [])
+print(count)
+PY
+)"
+tool_version="$("${python_bin}" -m pip_audit --version | awk '{print $NF}')"
+
+jq -n \
+  --arg scanner "pip-audit" \
+  --arg package "${package_name}" \
+  --arg tool_version "${tool_version}" \
+  --arg report "reports/pip-audit-${package_name}.json" \
+  --argjson dependency_count "${dependency_count}" \
+  --argjson project_dependency_count "${project_dependency_count}" \
+  --argjson fix_count "${fix_count}" \
+  --argjson vulnerabilities "${vulnerabilities}" \
+  '{
+    scanner: $scanner,
+    target: $package,
+    status: "completed",
+    tool_version: $tool_version,
+    reports: [$report],
+    scanned: {
+      dependencies: $dependency_count,
+      declared_project_dependencies: $project_dependency_count
+    },
+    findings: {
+      vulnerabilities: $vulnerabilities,
+      fixes: $fix_count
+    },
+    diagnostics: {
+      problems: 0
+    }
+  }' > "${metadata}"
 
 {
   echo "### pip-audit: ${package_name}"
+  echo
+  echo "| Scan coverage | Count |"
+  echo "| --- | ---: |"
+  echo "| Dependencies scanned | ${dependency_count} |"
+  echo "| Declared project dependencies | ${project_dependency_count} |"
   echo
   echo "| Finding type | Count |"
   echo "| --- | ---: |"

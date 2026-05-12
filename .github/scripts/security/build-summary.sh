@@ -28,6 +28,7 @@ cargo_critical=0
 cargo_high=0
 osv_critical=0
 osv_high=0
+scan_coverage_rows=""
 
 shopt -s nullglob
 
@@ -87,6 +88,21 @@ if [[ "${#osv_files[@]}" -gt 0 ]]; then
   ' "${osv_files[@]}")"
 fi
 
+metadata_files=("${artifacts_dir}"/reports/scan-metadata-*.json)
+if [[ "${#metadata_files[@]}" -gt 0 ]]; then
+  scan_coverage_rows="$(jq -s -r '
+    def field_label:
+      gsub("_"; " ");
+    def kv_rows:
+      to_entries
+      | map("\(.key | field_label): \(.value)")
+      | join("<br>");
+    sort_by(.scanner, .target)
+    | .[]
+    | "| \(.scanner): \(.target) | \((.scanned // {}) | kv_rows) | \((.diagnostics // {}) | kv_rows) |"
+  ' "${metadata_files[@]}")"
+fi
+
 release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + govuln_findings + dotnet_critical + dotnet_high + python_findings + cargo_critical + cargo_high + osv_critical + osv_high))
 
 {
@@ -115,6 +131,14 @@ release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + go
   echo "| OSV-Scanner HIGH | ${osv_high} |"
   echo "| **Total release blockers** | **${release_blockers}** |"
   echo
+  if [[ -n "${scan_coverage_rows}" ]]; then
+    echo "### Scan coverage"
+    echo
+    echo "| Scanner | Coverage | Diagnostics |"
+    echo "| --- | --- | --- |"
+    echo "${scan_coverage_rows}"
+    echo
+  fi
   echo "Full JSON reports and compact per-scan summaries are attached as workflow artifacts."
   echo
   if [[ "${release_blockers}" -gt 0 ]]; then
