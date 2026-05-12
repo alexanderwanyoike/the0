@@ -29,7 +29,7 @@ fi
 
 mkdir -p "${workspace}/reports" "${workspace}/summaries"
 
-osv-scanner scan source --recursive --no-ignore --format json --output "${report}" "${scan_path}" || true
+osv-scanner scan source --recursive --no-ignore --all-packages --format json --output "${report}" "${scan_path}" || true
 
 severity_filter='
   def osv_severity:
@@ -43,8 +43,12 @@ severity_filter='
 critical="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "CRITICAL")] | length' "${report}")"
 high="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity == "HIGH")] | length' "${report}")"
 other="$(jq "${severity_filter}"'[.results[]?.packages[]?.vulnerabilities[]? | select(osv_severity != "CRITICAL" and osv_severity != "HIGH")] | length' "${report}")"
-vulnerable_package_count="$(jq '[.results[]?.packages[]? | .package.name? // empty] | unique | length' "${report}")"
-package_count="${OSV_SCAN_PACKAGE_COUNT:-${vulnerable_package_count}}"
+reported_package_count="$(jq '[.results[]?.packages[]? | .package.name? // empty] | unique | length' "${report}")"
+vulnerable_package_count="$(jq '[.results[]?.packages[]? | select((.vulnerabilities // []) | length > 0) | .package.name? // empty] | unique | length' "${report}")"
+package_count="${reported_package_count}"
+if [[ "${package_count}" -eq 0 && -n "${OSV_SCAN_PACKAGE_COUNT:-}" ]]; then
+  package_count="${OSV_SCAN_PACKAGE_COUNT}"
+fi
 source_file="${OSV_SCAN_SOURCE_FILE:-${scan_path}}"
 tool_version="$(osv-scanner --version | awk '{print $NF}')"
 
