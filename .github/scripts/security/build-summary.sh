@@ -31,13 +31,19 @@ osv_high=0
 scan_errors=0
 scan_coverage_rows=""
 scan_error_rows=""
+accepted_file=".github/security/accepted-vulnerabilities.txt"
+accepted_ids='[]'
 
 shopt -s nullglob
 
+if [[ -f "${accepted_file}" ]]; then
+  accepted_ids="$(grep -vE '^\s*(#|$)' "${accepted_file}" | jq -R -s 'split("\n") | map(select(length > 0))')"
+fi
+
 trivy_files=("${artifacts_dir}"/reports/trivy-*.json)
 if [[ "${#trivy_files[@]}" -gt 0 ]]; then
-  trivy_critical="$(jq -s '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "CRITICAL") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown")] | unique | length' "${trivy_files[@]}")"
-  trivy_high="$(jq -s '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "HIGH") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown")] | unique | length' "${trivy_files[@]}")"
+  trivy_critical="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "CRITICAL") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown") | select(($accepted | index(.)) | not)] | unique | length' "${trivy_files[@]}")"
+  trivy_high="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "HIGH") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown") | select(($accepted | index(.)) | not)] | unique | length' "${trivy_files[@]}")"
 fi
 
 yarn_files=("${artifacts_dir}"/reports/yarn-audit-*.jsonl)
@@ -48,7 +54,7 @@ fi
 
 govuln_files=("${artifacts_dir}"/reports/govulncheck-*.json)
 if [[ "${#govuln_files[@]}" -gt 0 ]]; then
-  govuln_findings="$(jq -s '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv] | unique | length' "${govuln_files[@]}")"
+  govuln_findings="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv | select(($accepted | index(.)) | not)] | unique | length' "${govuln_files[@]}")"
 fi
 
 dotnet_files=("${artifacts_dir}"/reports/dotnet-audit-*.json)
@@ -143,6 +149,11 @@ release_blockers=$((trivy_critical + trivy_high + yarn_critical + yarn_high + go
   echo "| OSV-Scanner HIGH | ${osv_high} |"
   echo "| **Total release blockers** | **${release_blockers}** |"
   echo
+  if [[ "$(jq 'length' <<< "${accepted_ids}")" -gt 0 ]]; then
+    echo "Accepted residual findings listed in \`${accepted_file}\` are excluded from release-blocker totals."
+    echo
+  fi
+
   if [[ -n "${scan_coverage_rows}" ]]; then
     echo "### Scan coverage"
     echo
