@@ -1,4 +1,4 @@
-import type { Config } from 'drizzle-kit';
+import { defineConfig } from 'drizzle-kit';
 
 // Load config directly from environment variables
 const databaseUrl = process.env.DATABASE_URL;
@@ -17,7 +17,7 @@ if (databaseType === 'postgresql' && databaseUrl) {
   };
 }
 
-export default (databaseType === 'sqlite' 
+export default defineConfig(databaseType === 'sqlite'
   ? {
       schema: [
         './src/database/schema/users.ts',
@@ -25,7 +25,7 @@ export default (databaseType === 'sqlite'
         './src/database/schema/bots.ts',
       ],
       out: './src/database/migrations',
-      driver: 'better-sqlite' as const,
+      dialect: 'sqlite',
       dbCredentials: { url: databaseUrl || './data/the0.db' },
       verbose: true,
       strict: true,
@@ -36,11 +36,11 @@ export default (databaseType === 'sqlite'
         './src/database/schema/custom-bots.ts',
         './src/database/schema/bots.ts',
       ],
-      out: './src/database/migrations', 
-      driver: 'pg' as const,
+      out: './src/database/migrations',
+      dialect: 'postgresql',
       dbCredentials: {
-        connectionString: databaseUrl || `postgresql://${dbConfig.user}:${dbConfig.password}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`,
+        url: databaseUrl || `postgresql://${dbConfig.user}:${dbConfig.password}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`,
       },
       verbose: true,
       strict: true,
-    }) satisfies Config;
+    });

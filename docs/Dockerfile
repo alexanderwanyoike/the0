@@ -27,4 +27,12 @@ COPY --from=builder /app/.vitepress/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+USER 0
+
+RUN mkdir -p /var/cache/nginx /var/run/nginx \
+    && touch /var/run/nginx.pid \
+    && chown -R 1000:1000 /var/cache/nginx /var/run/nginx /var/run/nginx.pid
+
+USER 1000:1000
+
 EXPOSE 8080

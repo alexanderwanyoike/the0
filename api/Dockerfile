@@ -10,6 +10,13 @@ RUN apk add --no-cache libc6-compat python3 make g++
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
+# Install only runtime dependencies for the production image
+FROM base AS prod-deps
+RUN apk add --no-cache libc6-compat python3 make g++
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile --production=true \
+  && yarn cache clean
+
 # Build stage
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -26,7 +33,7 @@ WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app/dist ./dist
 COPY --from=builder --chown=1000:1000 /app/src/database/migrations ./dist/src/database/migrations
 COPY --from=builder --chown=1000:1000 /app/src/database/schema ./src/database/schema
-COPY --from=builder --chown=1000:1000 /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=1000:1000 /app/node_modules ./node_modules
 COPY --from=builder --chown=1000:1000 /app/package.json ./package.json
 COPY --from=builder --chown=1000:1000 /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=1000:1000 /app/uploads ./uploads
