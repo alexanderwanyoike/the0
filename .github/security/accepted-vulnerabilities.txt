@@ -1,0 +1,9 @@
+# Moby/Docker Engine advisories reported through github.com/docker/docker.
+# Docker Engine/Moby advisories list 29.3.1 as fixed, but the current
+# github.com/docker/docker Go module path only publishes up to v28.5.2.
+# Revisit when a fixed module tag is available or the client migrates to a
+# fixed supported module path.
+CVE-2026-34040
+CVE-2026-33997
+GO-2026-4887
+GO-2026-4883

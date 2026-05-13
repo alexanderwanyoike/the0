@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -41,7 +42,7 @@ func setupMinIOTestContainer(t *testing.T) *testMinIOServer {
 			"MINIO_SECRET_KEY": secretKey,
 		},
 		Cmd:        []string{"server", "/data"},
-		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp"),
+		WaitingFor: wait.ForHTTP("/minio/health/ready").WithPort("9000/tcp"),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -63,6 +64,7 @@ func setupMinIOTestContainer(t *testing.T) *testMinIOServer {
 		Secure: false,
 	})
 	require.NoError(t, err)
+	require.NoError(t, waitForMinIOReady(ctx, client, 30*time.Second))
 
 	return &testMinIOServer{
 		container: container,
@@ -71,6 +73,24 @@ func setupMinIOTestContainer(t *testing.T) *testMinIOServer {
 		secretKey: secretKey,
 		client:    client,
 	}
+}
+
+func waitForMinIOReady(ctx context.Context, client *minio.Client, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		_, lastErr = client.ListBuckets(ctx)
+		if lastErr == nil {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("minio did not become ready: %w", lastErr)
+	}
+	return fmt.Errorf("minio did not become ready within %s", timeout)
 }
 
 func (s *testMinIOServer) cleanup(t *testing.T) {
