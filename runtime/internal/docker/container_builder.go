@@ -12,6 +12,7 @@ import (
 	"runtime/internal/model"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/strslice"
 )
 
 // ContainerBuilder provides a fluent interface for building Docker container configurations.
@@ -25,6 +26,7 @@ func NewContainerBuilder(imageName string) *ContainerBuilder {
 	return &ContainerBuilder{
 		config: &container.Config{
 			Image:      imageName,
+			User:       "1000:1000",
 			StopSignal: "SIGTERM",
 			WorkingDir: "/tmp",
 			Labels:     make(map[string]string),
@@ -32,7 +34,17 @@ func NewContainerBuilder(imageName string) *ContainerBuilder {
 		},
 		hostConfig: &container.HostConfig{
 			// Default to bridge mode; use WithNetwork to join a specific network
-			NetworkMode: "bridge",
+			NetworkMode:    "bridge",
+			ReadonlyRootfs: true,
+			CapDrop:        strslice.StrSlice{"ALL"},
+			SecurityOpt:    []string{"no-new-privileges:true"},
+			Tmpfs: map[string]string{
+				"/bot":      "rw,exec,nosuid,nodev,uid=1000,gid=1000",
+				"/state":    "rw,nosuid,nodev,uid=1000,gid=1000",
+				"/query":    "rw,nosuid,nodev,uid=1000,gid=1000",
+				"/tmp":      "rw,nosuid,nodev,uid=1000,gid=1000,mode=1777",
+				"/var/the0": "rw,nosuid,nodev,uid=1000,gid=1000",
+			},
 		},
 	}
 }

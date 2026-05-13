@@ -43,6 +43,11 @@ spec:
         {{- include "the0.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
     spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
           image: {{ .Values.the0Api.image.repository }}:{{ .Values.the0Api.image.tag | default .Chart.AppVersion }}
@@ -102,4 +107,23 @@ spec:
             timeoutSeconds: 5
           resources:
             {{- toYaml .Values.the0Api.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: uploads
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 {{- end }}

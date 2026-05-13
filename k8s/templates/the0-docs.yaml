@@ -42,6 +42,11 @@ spec:
         {{- include "the0.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: docs
     spec:
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: docs
           image: {{ .Values.the0Docs.image.repository }}:{{ .Values.the0Docs.image.tag | default .Chart.AppVersion }}
@@ -72,3 +77,26 @@ spec:
             timeoutSeconds: 3
           resources:
             {{- toYaml .Values.the0Docs.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

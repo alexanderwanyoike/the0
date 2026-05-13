@@ -96,10 +96,20 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	assert.Equal(t, DefaultCPULimit, botContainer.Resources.Limits.Cpu().String())
 
 	// Check volumes
-	require.Len(t, pod.Spec.Volumes, 3)
+	require.Len(t, pod.Spec.Volumes, 4)
 	assert.Equal(t, "bot-code", pod.Spec.Volumes[0].Name)
 	assert.Equal(t, "bot-state", pod.Spec.Volumes[1].Name)
 	assert.Equal(t, "the0", pod.Spec.Volumes[2].Name)
+	assert.Equal(t, "tmp", pod.Spec.Volumes[3].Name)
+
+	require.NotNil(t, pod.Spec.SecurityContext)
+	assert.Equal(t, int64(1000), *pod.Spec.SecurityContext.FSGroup)
+	assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, pod.Spec.SecurityContext.SeccompProfile.Type)
+	require.NotNil(t, botContainer.SecurityContext)
+	assert.True(t, *botContainer.SecurityContext.RunAsNonRoot)
+	assert.True(t, *botContainer.SecurityContext.ReadOnlyRootFilesystem)
+	assert.False(t, *botContainer.SecurityContext.AllowPrivilegeEscalation)
+	assert.Contains(t, botContainer.SecurityContext.Capabilities.Drop, corev1.Capability("ALL"))
 }
 
 func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
