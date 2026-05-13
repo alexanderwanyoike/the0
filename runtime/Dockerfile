@@ -15,7 +15,7 @@
 #   - ghc96: Pre-compiled Haskell binaries
 
 # Stage 1: Build the runtime binary from Go source
-FROM dhi.io/golang:1.24-alpine3.22-dev AS runtime-builder
+FROM dhi.io/golang:1.25-alpine3.22-dev AS runtime-builder
 RUN apk --no-cache add make git
 WORKDIR /build
 COPY go.mod go.sum ./
