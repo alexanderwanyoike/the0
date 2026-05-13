@@ -584,9 +584,14 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 		payload, _ := json.Marshal(event)
 		sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
 	}
+	sharedInfra.natsConn.Flush()
 
-	// Wait longer to ensure all messages are processed
-	time.Sleep(800 * time.Millisecond)
+	collection := db.Collection(collectionName)
+	err = waitFor(20*time.Second, func() bool {
+		count, _ := collection.CountDocuments(ctx, bson.M{"id": bson.M{"$regex": "^shutdown-schedule-"}})
+		return count == 5
+	})
+	require.NoError(t, err, "Messages before shutdown should be processed")
 
 	// Graceful shutdown
 	err = subscriber.Stop()
@@ -600,13 +605,12 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// "after-shutdown" should not exist because subscriber was stopped
-	collection := db.Collection(collectionName)
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), count, "Message after shutdown should not be processed")
 
 	// But the 5 messages before shutdown should exist
-	totalCount, err := collection.CountDocuments(ctx, bson.M{})
+	totalCount, err := collection.CountDocuments(ctx, bson.M{"id": bson.M{"$regex": "^shutdown-schedule-"}})
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), totalCount, "Messages before shutdown should be processed")
 }
