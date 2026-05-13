@@ -73,6 +73,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
       - name: Run image scan
         run: bash .github/scripts/security/trivy-image-job.sh "api" "the0-security-api:ci" "./api/Dockerfile" "./api"
 
@@ -95,6 +102,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
       - name: Run image scan
         run: bash .github/scripts/security/trivy-image-job.sh "frontend" "the0-security-frontend:ci" "./frontend/Dockerfile" "./frontend"
 
@@ -116,6 +130,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
 
       - name: Run image scan
         env:
@@ -141,6 +162,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
 
       - name: Run image scan
         run: bash .github/scripts/security/trivy-image-job.sh "docs" "the0-security-docs:ci" "./docs/Dockerfile" "./docs"

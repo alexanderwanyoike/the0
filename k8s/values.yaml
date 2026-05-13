@@ -202,7 +202,7 @@ the0Docs:
   # GHCR image (uncomment for production)
   # image:
   #   repository: ghcr.io/alexanderwanyoike/the0/docs
-  port: 80  # nginx serves on port 80
+  port: 8080  # DHI nginx serves on unprivileged port 8080
   env:
     # Documentation configuration
     NEXT_PUBLIC_APP_NAME: "the0"

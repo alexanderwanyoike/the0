@@ -96,6 +96,11 @@ spec:
         app.kubernetes.io/component: bot-controller
     spec:
       serviceAccountName: {{ include "the0.fullname" . }}-bot-controller
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: bot-controller
           image: {{ .Values.botController.image.repository }}:{{ .Values.botController.image.tag | default .Chart.AppVersion }}
@@ -163,6 +168,7 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
+            runAsGroup: 1000
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:

@@ -18,11 +18,18 @@ func TestNewContainerBuilder(t *testing.T) {
 
 	// Verify defaults
 	assert.Equal(t, "python:3.11", cfg.Image)
+	assert.Equal(t, "1000:1000", cfg.User)
 	assert.Equal(t, "SIGTERM", cfg.StopSignal)
 	assert.Equal(t, "/tmp", cfg.WorkingDir)
 	assert.NotNil(t, cfg.Labels)
 	assert.Contains(t, cfg.Env, "PYTHONDONTWRITEBYTECODE=1")
 	assert.Equal(t, container.NetworkMode("bridge"), hostCfg.NetworkMode)
+	assert.True(t, hostCfg.ReadonlyRootfs)
+	assert.Contains(t, hostCfg.CapDrop, "ALL")
+	assert.Contains(t, hostCfg.SecurityOpt, "no-new-privileges:true")
+	assert.Contains(t, hostCfg.Tmpfs, "/bot")
+	assert.Contains(t, hostCfg.Tmpfs, "/state")
+	assert.Contains(t, hostCfg.Tmpfs, "/var/the0")
 }
 
 func TestContainerBuilder_WithNetwork(t *testing.T) {
@@ -134,7 +141,7 @@ func TestContainerBuilder_WithExecutable(t *testing.T) {
 			"bot": "main.py",
 		},
 		Config: map[string]interface{}{
-			"symbol": "BTC/USD",
+			"symbol":    "BTC/USD",
 			"threshold": 100,
 		},
 		Segment: 5,
@@ -316,9 +323,9 @@ func TestContainerBuilder_WithDaemonConfigFull(t *testing.T) {
 
 func TestContainerBuilder_WithDevRuntime(t *testing.T) {
 	tests := []struct {
-		name        string
-		hostPath    string
-		expectBind  bool
+		name         string
+		hostPath     string
+		expectBind   bool
 		expectedBind string
 	}{
 		{
@@ -352,9 +359,9 @@ func TestContainerBuilder_WithDevRuntime(t *testing.T) {
 
 func TestContainerBuilder_WithQueryConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		queryPath   string
-		queryParams string
+		name         string
+		queryPath    string
+		queryParams  string
 		expectedEnvs []string
 	}{
 		{

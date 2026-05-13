@@ -42,6 +42,11 @@ spec:
         {{- include "the0.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
     spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: {{ .Values.the0Frontend.image.repository }}:{{ .Values.the0Frontend.image.tag | default .Chart.AppVersion }}
@@ -82,3 +87,18 @@ spec:
             timeoutSeconds: 3
           resources:
             {{- toYaml .Values.the0Frontend.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

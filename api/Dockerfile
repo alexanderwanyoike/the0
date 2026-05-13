@@ -1,5 +1,5 @@
-# Use Node.js 20 as specified in package.json
-FROM node:20-alpine AS base
+# Use Docker Hardened Images for build and runtime stages.
+FROM dhi.io/node:20-alpine3.22-dev AS base
 
 # Set working directory
 WORKDIR /app
@@ -16,34 +16,29 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN yarn build
+RUN mkdir -p uploads/custom-bots
 
 # Production stage
-FROM base AS runner
-RUN apk add --no-cache dumb-init
-
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nestjs
+FROM dhi.io/node:20-alpine3.22 AS runner
+WORKDIR /app
 
 # Copy built application
-COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nestjs:nodejs /app/src/database/migrations ./dist/src/database/migrations
-COPY --from=builder --chown=nestjs:nodejs /app/src/database/schema ./src/database/schema
-COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nestjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder --chown=1000:1000 /app/dist ./dist
+COPY --from=builder --chown=1000:1000 /app/src/database/migrations ./dist/src/database/migrations
+COPY --from=builder --chown=1000:1000 /app/src/database/schema ./src/database/schema
+COPY --from=builder --chown=1000:1000 /app/node_modules ./node_modules
+COPY --from=builder --chown=1000:1000 /app/package.json ./package.json
+COPY --from=builder --chown=1000:1000 /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder --chown=1000:1000 /app/uploads ./uploads
 
-# Create uploads directory
-RUN mkdir -p uploads/custom-bots && chown -R nestjs:nodejs uploads
-
-USER nestjs
+USER 1000:1000
 
 # Expose port
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+  CMD ["node", "-e", "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
 
 # Start the application
-CMD ["dumb-init", "node", "dist/src/main.js"]
+CMD ["node", "dist/src/main.js"]
