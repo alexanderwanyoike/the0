@@ -227,6 +227,7 @@ func TestGenerateEnvFile_CreatesFile(t *testing.T) {
 		"API_PORT=",
 		"FRONTEND_PORT=",
 		"DOCS_PORT=",
+		"DOCKER_GID=",
 	}
 
 	for _, key := range expectedKeys {
@@ -236,7 +237,7 @@ func TestGenerateEnvFile_CreatesFile(t *testing.T) {
 	}
 }
 
-func TestGenerateEnvFile_DoesNotOverwriteExisting(t *testing.T) {
+func TestGenerateEnvFile_PreservesExistingAndAddsDockerGID(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -250,20 +251,22 @@ func TestGenerateEnvFile_DoesNotOverwriteExisting(t *testing.T) {
 		t.Fatalf("Failed to write custom .env: %v", err)
 	}
 
-	// GenerateEnvFile should skip the existing file
 	err = local.GenerateEnvFile(tmpDir)
 	if err != nil {
 		t.Fatalf("GenerateEnvFile failed: %v", err)
 	}
 
-	// Verify original content is preserved
 	data, err := os.ReadFile(envPath)
 	if err != nil {
 		t.Fatalf("Failed to read .env file: %v", err)
 	}
 
-	if string(data) != customContent {
-		t.Errorf("Expected original content to be preserved, got: %s", string(data))
+	content := string(data)
+	if !strings.Contains(content, customContent) {
+		t.Errorf("Expected original content to be preserved, got: %s", content)
+	}
+	if !strings.Contains(content, "DOCKER_GID=") {
+		t.Errorf("Expected existing .env to be updated with DOCKER_GID, got: %s", content)
 	}
 }
 
@@ -841,6 +844,7 @@ func TestExtractComposeFiles_PrebuiltMode(t *testing.T) {
 		t.Error("Prebuilt compose file should contain GHCR image references")
 	}
 	assertHardenedComposeHealthchecks(t, composeContent)
+	assertDockerSocketGroup(t, composeContent)
 
 	// docker-compose.dev.yml should NOT exist
 	devPath := filepath.Join(composeDir, "docker-compose.dev.yml")
@@ -897,6 +901,7 @@ func TestExtractComposeFiles_SourceMode(t *testing.T) {
 		t.Error("Source compose file should contain the resolved repo path")
 	}
 	assertHardenedComposeHealthchecks(t, string(composeData))
+	assertDockerSocketGroup(t, string(composeData))
 
 	// docker-compose.dev.yml should exist
 	devData, err := os.ReadFile(filepath.Join(composeDir, "docker-compose.dev.yml"))
@@ -917,6 +922,17 @@ func TestExtractComposeFiles_SourceMode(t *testing.T) {
 	}
 	if state.RepoPath != repoPath {
 		t.Errorf("State.RepoPath: expected %q, got %q", repoPath, state.RepoPath)
+	}
+}
+
+func assertDockerSocketGroup(t *testing.T, composeContent string) {
+	t.Helper()
+
+	if count := strings.Count(composeContent, `- /var/run/docker.sock:/var/run/docker.sock`); count != 3 {
+		t.Errorf("Compose content should mount Docker socket for runner, scheduler, and query server (want 3, got %d)", count)
+	}
+	if count := strings.Count(composeContent, `- "${DOCKER_GID:-0}"`); count != 3 {
+		t.Errorf("Compose content should add Docker socket group for runner, scheduler, and query server (want 3, got %d)", count)
 	}
 }
 
