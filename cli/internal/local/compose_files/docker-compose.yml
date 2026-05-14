@@ -138,7 +138,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.js"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -385,7 +385,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.js"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -401,10 +401,10 @@ services:
       dockerfile: Dockerfile
     pull_policy: always
     ports:
-      - "3002:80"
+      - "3002:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
