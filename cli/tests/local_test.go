@@ -954,3 +954,39 @@ func assertHardenedComposeHealthchecks(t *testing.T, composeContent string) {
 		}
 	}
 }
+
+func TestExtractComposeFiles_SourceModeUsesLocalRuntimeBuilds(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "source-runtime-build-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", origHome)
+
+	repoPath := filepath.Join(tmpDir, "repo")
+	for _, dir := range []string{"api", "frontend", "runtime", "docker"} {
+		if err := os.MkdirAll(filepath.Join(repoPath, dir), 0755); err != nil {
+			t.Fatalf("Failed to create repo dir %q: %v", dir, err)
+		}
+	}
+
+	if err := local.ExtractComposeFiles(repoPath, false); err != nil {
+		t.Fatalf("ExtractComposeFiles failed: %v", err)
+	}
+
+	composeData, err := os.ReadFile(filepath.Join(tmpDir, ".the0", "compose", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("Failed to read docker-compose.yml: %v", err)
+	}
+
+	composeContent := string(composeData)
+	if count := strings.Count(composeContent, "image: the0/runtime:latest"); count != 4 {
+		t.Errorf("Source compose should define four local runtime services (want 4, got %d)", count)
+	}
+	if count := strings.Count(composeContent, "pull_policy: build"); count != 4 {
+		t.Errorf("Source compose should build local runtime images instead of pulling Docker Hub image (want 4, got %d)", count)
+	}
+}

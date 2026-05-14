@@ -19,6 +19,8 @@ type mockMinIOClient struct {
 	deleted        []string     // track deleted object paths (bucket:name)
 	listErr        error
 	removeErr      error
+	ensureErr      error
+	ensured        []string
 
 	// Incomplete multipart uploads, keyed by bucket.
 	incompleteUploads map[string][]IncompleteUploadInfo
@@ -30,6 +32,14 @@ type mockMinIOClient struct {
 	// If set, AbortIncompleteUpload returns this error for keys matching abortErrKey.
 	abortErr    error
 	abortErrKey string
+}
+
+func (m *mockMinIOClient) EnsureBucket(ctx context.Context, bucket string) error {
+	if m.ensureErr != nil {
+		return m.ensureErr
+	}
+	m.ensured = append(m.ensured, bucket)
+	return nil
 }
 
 func (m *mockMinIOClient) ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error) {
@@ -198,6 +208,18 @@ func TestGC_EmptyMinIO(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.OrphanedBots)
 	assert.Equal(t, 0, result.DeletedObjects)
+	assert.Equal(t, []string{"bot-logs", "bot-state"}, minio.ensured)
+}
+
+func TestGC_EnsureBucketError(t *testing.T) {
+	minio := &mockMinIOClient{ensureErr: assert.AnError}
+	store := &mockBotStore{existingIDs: map[string]bool{}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	_, err := gc.Run(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to ensure MinIO bucket bot-logs")
 }
 
 func TestGC_MinIOListError(t *testing.T) {

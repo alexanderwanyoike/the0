@@ -155,6 +155,21 @@ func newLocalStartCmd() *cobra.Command {
 				}
 				logger.StopSpinnerWithSuccess("Images pulled")
 			} else {
+				// Source mode uses embedded compose templates. Refresh them on
+				// every start so local config follows CLI updates after git pulls.
+				logger.StartSpinner("Refreshing compose files")
+				if err := local.ExtractComposeFiles(runner.State.RepoPath, false); err != nil {
+					logger.StopSpinnerWithError("Failed to refresh compose files")
+					return fmt.Errorf("failed to refresh compose files: %w", err)
+				}
+				logger.StopSpinnerWithSuccess("Compose files refreshed")
+
+				var err error
+				runner, err = local.NewComposeRunner()
+				if err != nil {
+					return err
+				}
+
 				// Source mode: build from local Dockerfiles
 				logger.StartSpinner("Building services")
 				if err := runner.Build(); err != nil {

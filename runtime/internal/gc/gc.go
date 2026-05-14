@@ -24,6 +24,7 @@ type IncompleteUploadInfo struct {
 
 // MinIOClient abstracts the MinIO operations needed by the GC.
 type MinIOClient interface {
+	EnsureBucket(ctx context.Context, bucket string) error
 	ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error)
 	ListObjectsWithInfo(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error)
 	RemoveObject(ctx context.Context, bucket, name string) error
@@ -91,6 +92,10 @@ const staleIncompleteUploadAge = 1 * time.Hour
 func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
 	result := &RunResult{}
 
+	if err := gc.ensureBuckets(ctx); err != nil {
+		return nil, err
+	}
+
 	// 0. Clean up stale temp files (leaked by the old fire-and-forget goroutine bug)
 	result.StaleTempFiles = gc.cleanupStaleTempFiles(ctx)
 
@@ -145,6 +150,18 @@ func (gc *GarbageCollector) Run(ctx context.Context) (*RunResult, error) {
 	result.OrphanedBots = len(orphanIDs)
 	result.DeletedObjects = totalDeleted
 	return result, nil
+}
+
+func (gc *GarbageCollector) ensureBuckets(ctx context.Context) error {
+	for _, bucket := range []string{gc.logsBucket, gc.stateBucket} {
+		if bucket == "" {
+			continue
+		}
+		if err := gc.minio.EnsureBucket(ctx, bucket); err != nil {
+			return fmt.Errorf("failed to ensure MinIO bucket %s: %w", bucket, err)
+		}
+	}
+	return nil
 }
 
 // collectMinIOBotIDs lists all unique bot IDs that have artifacts in MinIO.
