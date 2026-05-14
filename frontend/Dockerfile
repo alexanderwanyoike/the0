@@ -59,6 +59,7 @@ COPY --from=builder --chown=1000:1000 /app/public ./public
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=1000:1000 /app/.next/standalone ./
 COPY --from=builder --chown=1000:1000 /app/.next/static ./.next/static
+COPY --chown=1000:1000 scripts/docker-healthcheck.js ./scripts/docker-healthcheck.js
 
 USER 1000:1000
 
@@ -70,4 +71,7 @@ ENV HOSTNAME="0.0.0.0"
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["node", "/app/scripts/docker-healthcheck.js"]
+
 CMD ["node", "server.js"]

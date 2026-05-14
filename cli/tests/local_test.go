@@ -836,9 +836,11 @@ func TestExtractComposeFiles_PrebuiltMode(t *testing.T) {
 	}
 
 	// Should contain GHCR image references
-	if !strings.Contains(string(composeData), "ghcr.io/alexanderwanyoike/the0/") {
+	composeContent := string(composeData)
+	if !strings.Contains(composeContent, "ghcr.io/alexanderwanyoike/the0/") {
 		t.Error("Prebuilt compose file should contain GHCR image references")
 	}
+	assertHardenedComposeHealthchecks(t, composeContent)
 
 	// docker-compose.dev.yml should NOT exist
 	devPath := filepath.Join(composeDir, "docker-compose.dev.yml")
@@ -894,6 +896,7 @@ func TestExtractComposeFiles_SourceMode(t *testing.T) {
 	if !strings.Contains(string(composeData), repoPath) {
 		t.Error("Source compose file should contain the resolved repo path")
 	}
+	assertHardenedComposeHealthchecks(t, string(composeData))
 
 	// docker-compose.dev.yml should exist
 	devData, err := os.ReadFile(filepath.Join(composeDir, "docker-compose.dev.yml"))
@@ -914,5 +917,40 @@ func TestExtractComposeFiles_SourceMode(t *testing.T) {
 	}
 	if state.RepoPath != repoPath {
 		t.Errorf("State.RepoPath: expected %q, got %q", repoPath, state.RepoPath)
+	}
+}
+
+func assertHardenedComposeHealthchecks(t *testing.T, composeContent string) {
+	t.Helper()
+
+	nodeHealthcheck := `test: ["CMD", "node", "/app/scripts/docker-healthcheck.js"]`
+	if count := strings.Count(composeContent, nodeHealthcheck); count != 2 {
+		t.Errorf("Compose content should contain hardened node healthcheck for API and frontend (want 2, got %d)", count)
+	}
+
+	expected := []string{
+		`- "3002:8080"`,
+		`http://127.0.0.1:8080/health`,
+	}
+
+	for _, want := range expected {
+		if !strings.Contains(composeContent, want) {
+			t.Errorf("Compose content should contain %q", want)
+		}
+	}
+
+	unexpected := []string{
+		`node", "-e"`,
+		`require("http").get`,
+		`http://127.0.0.1:3000/health`,
+		`wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1`,
+		`- "3002:80"`,
+		`http://127.0.0.1/health`,
+	}
+
+	for _, notWant := range unexpected {
+		if strings.Contains(composeContent, notWant) {
+			t.Errorf("Compose content should not contain stale config %q", notWant)
+		}
 	}
 }
