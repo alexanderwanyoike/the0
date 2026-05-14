@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"the0/internal/logger"
 )
@@ -76,16 +75,4 @@ func GenerateEnvFile(composeDir string) error {
 
 	logger.Verbose("Generated .env file at %s", envPath)
 	return nil
-}
-
-func detectDockerSocketGID() string {
-	info, err := os.Stat("/var/run/docker.sock")
-	if err != nil {
-		return "0"
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		return "0"
-	}
-	return fmt.Sprintf("%d", stat.Gid)
 }
