@@ -45,6 +45,10 @@ Kubernetes mode is for deployments that need multi-node scaling or high availabi
 
 See [Kubernetes Deployment](./kubernetes) for setup instructions.
 
+### Admin Bootstrap
+
+Public signup is disabled. Fresh deployments create the first administrator through `/setup`; upgrades should use an explicit admin email when no admin exists. See [Admin Bootstrap](./admin-bootstrap).
+
 ## When to Use Each Mode
 
 | Scenario | Recommended Deployment |
@@ -89,8 +93,9 @@ Before deploying to production:
 
 1. **Change default credentials** - All services ship with development passwords that must be changed
 2. **Configure JWT secrets** - Generate strong secrets for API authentication
-3. **Enable TLS** - Use HTTPS for all external endpoints
-4. **Network isolation** - Infrastructure services should not be publicly accessible
-5. **Resource limits** - Configure appropriate limits to prevent runaway bots
+3. **Bootstrap an admin explicitly** - Configure first-admin setup or `THE0_ADMIN_EMAIL`
+4. **Enable TLS** - Use HTTPS for all external endpoints
+5. **Network isolation** - Infrastructure services should not be publicly accessible
+6. **Resource limits** - Configure appropriate limits to prevent runaway bots
 
 See the deployment-specific pages for detailed security configuration.

@@ -31,6 +31,9 @@ MINIO_ROOT_PASSWORD=the0password
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=24h
 
+# Admin bootstrap
+THE0_ADMIN_EMAIL=
+
 # API
 API_PORT=3000
 FRONTEND_PORT=3001
@@ -52,7 +55,14 @@ func GenerateEnvFile(composeDir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read existing env file: %w", err)
 		}
-		if !hasEnvKey(string(data), "DOCKER_GID") {
+		content := string(data)
+		if !hasEnvKey(content, "THE0_ADMIN_EMAIL") {
+			if err := appendEnvBlock(envPath, "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=\n"); err != nil {
+				return err
+			}
+			logger.Verbose("Updated .env file with THE0_ADMIN_EMAIL")
+		}
+		if !hasEnvKey(content, "DOCKER_GID") {
 			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				return fmt.Errorf("failed to update env file: %w", err)
@@ -85,4 +95,54 @@ func hasEnvKey(content, key string) bool {
 		}
 	}
 	return false
+}
+
+// SetAdminEmail updates THE0_ADMIN_EMAIL in the local compose .env file.
+func SetAdminEmail(composeDir string, email string) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+
+	envPath := filepath.Join(composeDir, ".env")
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		return fmt.Errorf("failed to read .env file: %w", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	found := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "THE0_ADMIN_EMAIL=") {
+			lines[i] = "THE0_ADMIN_EMAIL=" + email
+			found = true
+		}
+	}
+
+	content := strings.Join(lines, "\n")
+	if !found {
+		if strings.TrimSpace(content) != "" && !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		content += "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=" + email + "\n"
+	}
+
+	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write .env file: %w", err)
+	}
+
+	return nil
+}
+
+func appendEnvBlock(envPath string, block string) error {
+	f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to update env file: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(block); err != nil {
+		return fmt.Errorf("failed to append to env file: %w", err)
+	}
+	return nil
 }

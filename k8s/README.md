@@ -230,6 +230,16 @@ service:
 
 All services use environment variables that match the docker-compose configuration exactly. These are defined in the `env` sections of each service in `values.yaml`.
 
+For upgrades with existing users and no admin, set the exact active user to promote:
+
+```yaml
+the0Api:
+  env:
+    THE0_ADMIN_EMAIL: "admin@example.com"
+```
+
+See `docs/deployment/admin-bootstrap.md` for the full bootstrap flow and last-admin protection.
+
 ### Resource Limits
 
 Default resource limits are conservative. Adjust in `values.yaml` based on your cluster capacity:

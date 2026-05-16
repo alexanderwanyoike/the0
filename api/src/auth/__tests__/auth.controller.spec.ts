@@ -11,7 +11,8 @@ describe("AuthController", () => {
 
   const mockAuthService = {
     login: jest.fn(),
-    register: jest.fn(),
+    getSetupStatus: jest.fn(),
+    createFirstAdmin: jest.fn(),
     validateToken: jest.fn(),
   };
 
@@ -64,6 +65,7 @@ describe("AuthController", () => {
           email: "test@example.com",
           isActive: true,
           isEmailVerified: false,
+          role: "user",
         },
       });
 
@@ -94,9 +96,9 @@ describe("AuthController", () => {
     });
   });
 
-  describe("register", () => {
-    it("should register user successfully", async () => {
-      const registerDto = {
+  describe("setup", () => {
+    it("should create first admin successfully", async () => {
+      const setupDto = {
         username: "newuser",
         email: "new@example.com",
         password: "password123",
@@ -110,16 +112,17 @@ describe("AuthController", () => {
           email: "new@example.com",
           isActive: true,
           isEmailVerified: false,
+          role: "admin",
         },
       });
 
-      mockAuthService.register.mockResolvedValue(mockResult);
+      mockAuthService.createFirstAdmin.mockResolvedValue(mockResult);
 
-      const result = await controller.register(registerDto);
+      const result = await controller.setup(setupDto);
 
       expect(result.success).toBe(true);
       expect(result.data.token).toBe("test-token");
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
+      expect(authService.createFirstAdmin).toHaveBeenCalledWith(setupDto);
     });
   });
 
@@ -133,6 +136,7 @@ describe("AuthController", () => {
         email: "test@example.com",
         isActive: true,
         isEmailVerified: false,
+        role: "user",
       });
 
       mockAuthService.validateToken.mockResolvedValue(mockResult);

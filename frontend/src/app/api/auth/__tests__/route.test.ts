@@ -8,7 +8,8 @@ global.fetch = mockFetch;
 jest.spyOn(console, "error").mockImplementation(() => {});
 
 import { POST as loginPOST } from "../login/route";
-import { POST as registerPOST } from "../register/route";
+import { POST as setupPOST } from "../setup/route";
+import { GET as setupStatusGET } from "../setup-status/route";
 import { POST as validatePOST } from "../validate/route";
 import { GET as meGET } from "../me/route";
 
@@ -93,7 +94,7 @@ describe("POST /api/auth/login", () => {
   });
 });
 
-describe("POST /api/auth/register", () => {
+describe("POST /api/auth/setup", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.BOT_API_URL = "http://localhost:3000";
@@ -105,7 +106,7 @@ describe("POST /api/auth/register", () => {
       new Response(JSON.stringify(mockData), { status: 200 }),
     );
 
-    const req = new NextRequest("http://localhost:3001/api/auth/register", {
+    const req = new NextRequest("http://localhost:3001/api/auth/setup", {
       method: "POST",
       body: JSON.stringify({
         username: "testuser",
@@ -115,44 +116,44 @@ describe("POST /api/auth/register", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await registerPOST(req);
+    const response = await setupPOST(req);
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body).toEqual(mockData);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(getCalledUrl(mockFetch.mock.calls[0])).toBe(
-      "http://localhost:3000/auth/register",
+      "http://localhost:3000/auth/setup",
     );
   });
 
   it("forwards error status from upstream", async () => {
     mockFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ message: "User already exists" }), {
+      new Response(JSON.stringify({ message: "Setup unavailable" }), {
         status: 400,
       }),
     );
 
-    const req = new NextRequest("http://localhost:3001/api/auth/register", {
+    const req = new NextRequest("http://localhost:3001/api/auth/setup", {
       method: "POST",
       body: JSON.stringify({ email: "existing@example.com", password: "pass" }),
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await registerPOST(req);
+    const response = await setupPOST(req);
     expect(response.status).toBe(400);
   });
 
   it("returns 500 on network/fetch error", async () => {
     mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-    const req = new NextRequest("http://localhost:3001/api/auth/register", {
+    const req = new NextRequest("http://localhost:3001/api/auth/setup", {
       method: "POST",
       body: JSON.stringify({ email: "test@example.com", password: "pass" }),
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await registerPOST(req);
+    const response = await setupPOST(req);
     expect(response.status).toBe(500);
     const body = await response.json();
     expect(body.success).toBe(false);
@@ -160,7 +161,7 @@ describe("POST /api/auth/register", () => {
 
   it("returns 500 when BOT_API_URL is not configured", async () => {
     delete process.env.BOT_API_URL;
-    const req = new NextRequest("http://localhost:3001/api/auth/register", {
+    const req = new NextRequest("http://localhost:3001/api/auth/setup", {
       method: "POST",
       body: JSON.stringify({
         username: "testuser",
@@ -169,10 +170,33 @@ describe("POST /api/auth/register", () => {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const response = await registerPOST(req);
+    const response = await setupPOST(req);
     expect(response.status).toBe(500);
     const data = await response.json();
     expect(data.message).toContain("misconfigured");
+  });
+});
+
+describe("GET /api/auth/setup-status", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.BOT_API_URL = "http://localhost:3000";
+  });
+
+  it("proxies setup status requests", async () => {
+    const mockData = { success: true, data: { setupRequired: true } };
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify(mockData), { status: 200 }),
+    );
+
+    const response = await setupStatusGET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual(mockData);
+    expect(getCalledUrl(mockFetch.mock.calls[0])).toBe(
+      "http://localhost:3000/auth/setup-status",
+    );
   });
 });
 

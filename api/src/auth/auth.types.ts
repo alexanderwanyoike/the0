@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   lastName: string | null;
   isActive: boolean;
   isEmailVerified: boolean;
+  role: "admin" | "user";
   authType: "jwt" | "apikey";
 }
 

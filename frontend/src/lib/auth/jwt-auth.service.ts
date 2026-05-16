@@ -1,7 +1,7 @@
 import {
   AuthUser,
   LoginCredentials,
-  RegisterCredentials,
+  SetupCredentials,
   AuthResponse,
   ApiResponse,
   Result,
@@ -55,14 +55,9 @@ export class JwtAuthService {
     }
   }
 
-  /**
-   * Register new user
-   */
-  async register(
-    credentials: RegisterCredentials,
-  ): Promise<Result<AuthResponse>> {
+  async setup(credentials: SetupCredentials): Promise<Result<AuthResponse>> {
     try {
-      const response = await fetch(`/api/auth/register`, {
+      const response = await fetch(`/api/auth/setup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -75,7 +70,7 @@ export class JwtAuthService {
       if (!response.ok) {
         return {
           success: false,
-          error: data.message || "Registration failed",
+          error: data.message || "Setup failed",
         };
       }
 
@@ -94,10 +89,10 @@ export class JwtAuthService {
         error: "Invalid response format",
       };
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("Setup error:", error);
       return {
         success: false,
-        error: "Registration failed. Please try again.",
+        error: "Setup failed. Please try again.",
       };
     }
   }

@@ -58,6 +58,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         lastName: user.lastName || null,
         isActive: Boolean(user.isActive),
         isEmailVerified: Boolean(user.isEmailVerified),
+        role: user.role === "admin" ? "admin" : "user",
         authType: "jwt" as const,
       };
     } catch (error) {

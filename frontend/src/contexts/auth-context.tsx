@@ -16,7 +16,7 @@ interface AuthContextType {
     email: string;
     password: string;
   }) => Promise<{ success: boolean; error?: string }>;
-  register: (credentials: {
+  setup: (credentials: {
     username: string;
     email: string;
     password: string;
@@ -31,7 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   userData: null,
   loading: true,
   login: async () => ({ success: false, error: "Not initialized" }),
-  register: async () => ({ success: false, error: "Not initialized" }),
+  setup: async () => ({ success: false, error: "Not initialized" }),
   logout: async () => {},
   token: null,
   authService: new JwtAuthService(),
@@ -88,9 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Initialize auth state on mount and register with all auth utilities
+  // Initialize auth state on mount and connect all auth utilities
   useEffect(() => {
-    // Register auth service with all API utilities
+    // Connect auth service with all API utilities
     setAuthService(authService, logout);
     setAuthFetchService(authService, logout);
     setApiClientService(authService, logout);
@@ -119,13 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (credentials: {
+  const setup = async (credentials: {
     username: string;
     email: string;
     password: string;
   }) => {
     try {
-      const result = await authService.register(credentials);
+      const result = await authService.setup(credentials);
       if (result.success && result.data) {
         setUser(result.data.user);
         setToken(result.data.token);
@@ -134,13 +134,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push("/dashboard");
         return { success: true };
       } else {
-        return { success: false, error: result.error || "Registration failed" };
+        return { success: false, error: result.error || "Setup failed" };
       }
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("Setup error:", error);
       return {
         success: false,
-        error: "Registration failed. Please try again.",
+        error: "Setup failed. Please try again.",
       };
     }
   };
@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         login,
-        register,
+        setup,
         logout,
         userData: user,
         token,

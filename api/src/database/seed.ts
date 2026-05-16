@@ -22,6 +22,7 @@ async function seedDatabase() {
       passwordHash: adminPasswordHash,
       firstName: "Admin",
       lastName: "User",
+      role: "admin",
       isActive: true,
       isEmailVerified: true,
       metadata: { role: "admin", createdBy: "seed" },

@@ -40,6 +40,7 @@ Building from source:
 		newLocalStartCmd(),
 		newLocalStopCmd(),
 		newLocalRestartCmd(),
+		newLocalAdminCmd(),
 		newLocalStatusCmd(),
 		newLocalLogsCmd(),
 		newLocalDevCmd(),
@@ -173,12 +174,63 @@ func newLocalStartCmd() *cobra.Command {
 			logger.StopSpinnerWithSuccess("Services started")
 
 			local.PrintServiceURLs()
+			logger.Info("Fresh install: open http://localhost:3001/setup to create the first admin")
+			logger.Info("Upgrade with users but no admin: the0 local admin set --email you@example.com")
 			logger.Info("Use 'the0 local status' to check container health")
 			logger.Info("Use 'the0 local logs [service]' to view logs")
 
 			return nil
 		},
 	}
+}
+
+// --- admin ---
+
+func newLocalAdminCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "admin",
+		Short: "Manage local admin bootstrap settings",
+	}
+
+	cmd.AddCommand(newLocalAdminSetCmd())
+	return cmd
+}
+
+func newLocalAdminSetCmd() *cobra.Command {
+	var email string
+
+	cmd := &cobra.Command{
+		Use:     "set",
+		Short:   "Set the local admin bootstrap email",
+		Example: `  the0 local admin set --email you@example.com`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			email = strings.TrimSpace(email)
+			if email == "" || !strings.Contains(email, "@") {
+				return fmt.Errorf("--email must be a valid email address")
+			}
+
+			runner, err := local.NewComposeRunner()
+			if err != nil {
+				return err
+			}
+
+			if err := local.SetAdminEmail(runner.ComposeDir, email); err != nil {
+				return err
+			}
+
+			logger.Success("Set THE0_ADMIN_EMAIL=%s", email)
+			logger.StartSpinner("Restarting API")
+			if err := runner.Run("up", "-d", "--no-deps", "--force-recreate", "the0-api"); err != nil {
+				logger.StopSpinnerWithError("API restart failed")
+				return fmt.Errorf("failed to restart the0-api: %w", err)
+			}
+			logger.StopSpinnerWithSuccess("API restarted")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&email, "email", "", "Email address of an existing user to promote to admin")
+	return cmd
 }
 
 // --- stop ---

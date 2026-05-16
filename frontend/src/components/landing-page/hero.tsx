@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight, Code, Zap, BarChart3 } from "lucide-react";
+import { Code, Zap, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function HeroSection() {
@@ -24,12 +24,6 @@ export function HeroSection() {
             <Link href="/login">
               <Button size="lg" variant="outline">
                 Sign In
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button size="lg" className="gap-2">
-                Get Started
-                <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>

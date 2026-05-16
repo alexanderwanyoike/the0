@@ -41,7 +41,7 @@ const mockRouter = {
 
 const mockAuthService = {
   login: jest.fn(),
-  register: jest.fn(),
+  setup: jest.fn(),
   validateToken: jest.fn(),
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
@@ -57,12 +57,12 @@ const mockUser: AuthUser = {
   lastName: "User",
   isActive: true,
   isEmailVerified: true,
+  role: "user",
 };
 
 // Test component to access auth context
 function TestComponent() {
-  const { user, loading, login, register, logout, token, authService } =
-    useAuth();
+  const { user, loading, login, setup, logout, token, authService } = useAuth();
 
   return (
     <div>
@@ -78,14 +78,14 @@ function TestComponent() {
       </button>
       <button
         onClick={() =>
-          register({
+          setup({
             username: "test",
             email: "test@example.com",
             password: "password",
           })
         }
       >
-        Register
+        Setup
       </button>
       <button onClick={() => logout()}>Logout</button>
       <div data-testid="auth-service">
@@ -272,10 +272,10 @@ describe("AuthContext", () => {
     });
   });
 
-  describe("register", () => {
-    it("should handle successful registration", async () => {
+  describe("setup", () => {
+    it("should handle successful setup", async () => {
       mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.register.mockResolvedValue({
+      mockAuthService.setup.mockResolvedValue({
         success: true,
         data: {
           token: "new-token",
@@ -294,7 +294,7 @@ describe("AuthContext", () => {
       });
 
       await act(async () => {
-        screen.getByText("Register").click();
+        screen.getByText("Setup").click();
       });
 
       await waitFor(() => {
@@ -303,11 +303,11 @@ describe("AuthContext", () => {
       });
     });
 
-    it("should handle failed registration", async () => {
+    it("should handle failed setup", async () => {
       mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.register.mockResolvedValue({
+      mockAuthService.setup.mockResolvedValue({
         success: false,
-        error: "User already exists",
+        error: "Setup is only available before users exist",
       });
 
       render(
@@ -321,7 +321,7 @@ describe("AuthContext", () => {
       });
 
       await act(async () => {
-        screen.getByText("Register").click();
+        screen.getByText("Setup").click();
       });
 
       expect(mockRouter.push).not.toHaveBeenCalled();
