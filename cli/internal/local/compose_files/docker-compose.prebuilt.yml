@@ -176,6 +176,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - bot_runner_data:/app/data
       - /tmp/bot-runner:/tmp/bot-runner
+    group_add:
+      - "${DOCKER_GID:-0}"
     depends_on:
       mongo:
         condition: service_healthy
@@ -227,6 +229,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - bot_scheduler_data:/app/data
       - /tmp/bot-scheduler:/tmp/bot-scheduler
+    group_add:
+      - "${DOCKER_GID:-0}"
     depends_on:
       mongo:
         condition: service_healthy
@@ -301,6 +305,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/query-server:/tmp/query-server
+    group_add:
+      - "${DOCKER_GID:-0}"
     depends_on:
       mongo:
         condition: service_healthy
