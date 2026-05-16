@@ -6,6 +6,7 @@ GEMINI.md
 **/PRPs/
 **/stories/
 
+.claude/
 **/*/.claude
 .claude/agents/
 .notes/
