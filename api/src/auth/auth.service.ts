@@ -15,7 +15,7 @@ import {
 } from "../database/schema/users";
 import { and, count, eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
-import { Result } from "../common/result";
+import { Failure, Result } from "../common/result";
 import { getDatabaseConfig } from "../database/connection";
 import { hashPassword } from "@/common/password";
 import { USER_ROLES, UserRole } from "@/user/user.constants";
@@ -206,7 +206,7 @@ export class AuthService {
         const userCount = await this.getUserCount();
 
         if (userCount > 0) {
-          return failure("Setup is only available before users exist");
+          return Failure("Setup is only available before users exist");
         }
 
         const configuredAdminEmail = this.getConfiguredAdminEmail();
@@ -214,19 +214,19 @@ export class AuthService {
           configuredAdminEmail &&
           credentials.email.trim() !== configuredAdminEmail
         ) {
-          return failure("Setup email does not match configured admin email");
+          return Failure("Setup email does not match configured admin email");
         }
 
         const passwordHash = await hashPassword(credentials.password);
         setupLockClaimed = await this.acquireSetupLock();
         if (!setupLockClaimed) {
-          return failure("Setup is already in progress");
+          return Failure("Setup is already in progress");
         }
 
         const usersBeforeInsert = await this.getUserCount();
         if (usersBeforeInsert > 0) {
           await this.releaseSetupLock().catch((): void => undefined);
-          return failure("Setup is only available before users exist");
+          return Failure("Setup is only available before users exist");
         }
 
         const newUsers = (await db
@@ -260,7 +260,7 @@ export class AuthService {
         if (setupLockClaimed) {
           await this.releaseSetupLock().catch((): void => undefined);
         }
-        return failure("Setup failed");
+        return Failure("Setup failed");
       }
     });
   }
@@ -480,8 +480,4 @@ export class AuthService {
       };
     }
   }
-}
-
-function failure<T>(error: string): Result<T, string> {
-  return { success: false, error, data: null };
 }
