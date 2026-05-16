@@ -233,6 +233,35 @@ func TestBuildBotEnv_QueryParams(t *testing.T) {
 	assert.Contains(t, env, "QUERY_PARAM_offset=20")
 }
 
+func TestBuildBotEnv_PythonPathIncludesVendor(t *testing.T) {
+	os.Unsetenv("PYTHONPATH")
+
+	cfg := &Config{
+		BotID:    "test-bot",
+		Runtime:  "python3.11",
+		CodePath: "/bot",
+	}
+
+	env := BuildBotEnv(cfg)
+
+	assert.Contains(t, env, "PYTHONPATH=/bot/vendor:/bot")
+}
+
+func TestBuildBotEnv_PythonPathPreservesExisting(t *testing.T) {
+	os.Setenv("PYTHONPATH", "/existing")
+	defer os.Unsetenv("PYTHONPATH")
+
+	cfg := &Config{
+		BotID:    "test-bot",
+		Runtime:  "python3.11",
+		CodePath: "/bot",
+	}
+
+	env := BuildBotEnv(cfg)
+
+	assert.Contains(t, env, "PYTHONPATH=/bot/vendor:/bot:/existing")
+}
+
 func TestBuildBotEnv_BotType(t *testing.T) {
 	cfg := &Config{
 		BotID:   "test-bot",

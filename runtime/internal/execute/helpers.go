@@ -131,6 +131,14 @@ func BuildBotEnv(cfg *Config) []string {
 		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
 	)
 
+	if cfg.Runtime == "python3.11" {
+		pythonPath := strings.Join([]string{filepath.Join(cfg.CodePath, "vendor"), cfg.CodePath}, string(os.PathListSeparator))
+		if existing := os.Getenv("PYTHONPATH"); existing != "" {
+			pythonPath = pythonPath + string(os.PathListSeparator) + existing
+		}
+		env = append(env, "PYTHONPATH="+pythonPath)
+	}
+
 	// Add query-specific env vars if applicable
 	if cfg.QueryPath != "" {
 		env = append(env, "QUERY_PATH="+cfg.QueryPath)
