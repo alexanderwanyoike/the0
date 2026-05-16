@@ -4,6 +4,56 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: security
+          description: Harden container images and generated runtime pod security contexts
+        - kind: security
+          description: Remediate API, frontend, SDK, and Go dependency vulnerability findings
+        - kind: security
+          description: Add targeted multi-ecosystem security scanning with release-bound policy gates
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.13.5
+    created: "2026-05-16T16:07:04.496881996Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 4274357d804a6bcabdc4bbd20458208d4b6c7fff979f46d3608935a8134f87a0
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.8.4/the0-0.8.4.tgz
+    version: 0.8.4
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: added
           description: HEALTH_CHECK_DATABASE env var to opt in to database readiness probe (off by default)
       artifacthub.io/images: |
@@ -1429,4 +1479,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-04-19T19:38:55.407852203Z"
+generated: "2026-05-16T16:07:04.497148837Z"
