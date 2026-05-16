@@ -270,6 +270,65 @@ func TestGenerateEnvFile_PreservesExistingAndAddsDockerGID(t *testing.T) {
 	}
 }
 
+func TestGenerateEnvFile_IgnoresSimilarDockerGIDKeys(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	customContent := "MY_DOCKER_GID=1234\n"
+	if err := os.WriteFile(envPath, []byte(customContent), 0600); err != nil {
+		t.Fatalf("Failed to write custom .env: %v", err)
+	}
+
+	if err := local.GenerateEnvFile(tmpDir); err != nil {
+		t.Fatalf("GenerateEnvFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env file: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, customContent) {
+		t.Errorf("Expected original content to be preserved, got: %s", content)
+	}
+	if !strings.Contains(content, "\nDOCKER_GID=") {
+		t.Errorf("Expected exact DOCKER_GID key to be added, got: %s", content)
+	}
+}
+
+func TestGenerateEnvFile_DoesNotDuplicateExistingDockerGID(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	customContent := "CUSTOM_KEY=custom_value\nDOCKER_GID=1234\n"
+	if err := os.WriteFile(envPath, []byte(customContent), 0600); err != nil {
+		t.Fatalf("Failed to write custom .env: %v", err)
+	}
+
+	if err := local.GenerateEnvFile(tmpDir); err != nil {
+		t.Fatalf("GenerateEnvFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env file: %v", err)
+	}
+
+	content := string(data)
+	if content != customContent {
+		t.Errorf("Expected existing DOCKER_GID content to be unchanged, got: %s", content)
+	}
+}
+
 func TestGenerateEnvFile_CorrectPermissions(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {

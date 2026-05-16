@@ -52,7 +52,7 @@ func GenerateEnvFile(composeDir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read existing env file: %w", err)
 		}
-		if !strings.Contains(string(data), "DOCKER_GID=") {
+		if !hasEnvKey(string(data), "DOCKER_GID") {
 			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				return fmt.Errorf("failed to update env file: %w", err)
@@ -75,4 +75,14 @@ func GenerateEnvFile(composeDir string) error {
 
 	logger.Verbose("Generated .env file at %s", envPath)
 	return nil
+}
+
+func hasEnvKey(content, key string) bool {
+	prefix := key + "="
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+			return true
+		}
+	}
+	return false
 }
