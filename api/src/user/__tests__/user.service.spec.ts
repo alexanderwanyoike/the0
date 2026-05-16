@@ -1,14 +1,10 @@
 import { ForbiddenException } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
-import { getDatabase, getDatabaseConfig } from "@/database/connection";
 import { AuthenticatedUser } from "@/auth/auth.types";
+import { AdminMutationLockRepository } from "../admin-mutation-lock.repository";
 import { USER_ROLES } from "../user.constants";
+import { UserRepository } from "../user.repository";
 import { UserService } from "../user.service";
-
-jest.mock("@/database/connection", () => ({
-  getDatabase: jest.fn(),
-  getDatabaseConfig: jest.fn(),
-}));
 
 jest.mock("bcrypt", () => ({
   compare: jest.fn(),
@@ -53,55 +49,10 @@ function makeUser(overrides: Partial<TestUser> = {}): TestUser {
   };
 }
 
-function createMockDb() {
-  const whereResults: unknown[][] = [];
-  const allResults: unknown[][] = [];
-  const updateResults: TestUser[][] = [];
-  const insertValues = jest.fn();
-  const updateSet = jest.fn();
-  const deleteWhere = jest.fn().mockResolvedValue(undefined);
-
-  const db = {
-    select: jest.fn(() => ({
-      from: jest.fn(() => ({
-        where: jest.fn(() => Promise.resolve(whereResults.shift() ?? [])),
-        then: (
-          resolve: (value: TestUser[]) => unknown,
-          reject: (reason: unknown) => unknown,
-        ) => Promise.resolve(allResults.shift() ?? []).then(resolve, reject),
-      })),
-    })),
-    update: jest.fn(() => ({
-      set: updateSet.mockImplementation(() => ({
-        where: jest.fn(() => ({
-          returning: jest.fn(() =>
-            Promise.resolve(updateResults.shift() ?? []),
-          ),
-        })),
-      })),
-    })),
-    insert: jest.fn(() => ({
-      values: insertValues.mockResolvedValue(undefined),
-    })),
-    delete: jest.fn(() => ({
-      where: deleteWhere,
-    })),
-  };
-
-  return {
-    db,
-    whereResults,
-    allResults,
-    updateResults,
-    insertValues,
-    updateSet,
-    deleteWhere,
-  };
-}
-
 describe("UserService", () => {
   let service: UserService;
-  let mockDb: ReturnType<typeof createMockDb>;
+  let users: jest.Mocked<UserRepository>;
+  let adminMutationLock: jest.Mocked<AdminMutationLockRepository>;
 
   const actor: AuthenticatedUser = {
     uid: "actor-admin",
@@ -118,16 +69,34 @@ describe("UserService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDb = createMockDb();
-    (getDatabase as jest.Mock).mockReturnValue(mockDb.db);
-    (getDatabaseConfig as jest.Mock).mockReturnValue({ type: "sqlite" });
+    users = {
+      findById: jest.fn(),
+      countActiveAdmins: jest.fn(),
+      update: jest.fn(),
+      deactivate: jest.fn(),
+      findByEmail: jest.fn(),
+      findByUsername: jest.fn(),
+      findAnotherByUsername: jest.fn(),
+      list: jest.fn(),
+      createUser: jest.fn(),
+      updatePassword: jest.fn(),
+      updateProfile: jest.fn(),
+      updateLastLogin: jest.fn(),
+      count: jest.fn(),
+      hasActiveAdmin: jest.fn(),
+      createFirstAdmin: jest.fn(),
+      promoteToAdmin: jest.fn(),
+    } as unknown as jest.Mocked<UserRepository>;
+    adminMutationLock = {
+      withLock: jest.fn((callback: () => Promise<unknown>) => callback()),
+    } as unknown as jest.Mocked<AdminMutationLockRepository>;
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    service = new UserService();
+    service = new UserService(users, adminMutationLock);
   });
 
   it("blocks self-demotion", async () => {
     const admin = makeUser();
-    mockDb.whereResults.push([admin]);
+    users.findById.mockResolvedValue(admin);
 
     await expect(
       service.updateUser(
@@ -143,7 +112,7 @@ describe("UserService", () => {
 
   it("blocks self-deactivation", async () => {
     const admin = makeUser();
-    mockDb.whereResults.push([admin]);
+    users.findById.mockResolvedValue(admin);
 
     await expect(
       service.updateUser(
@@ -159,8 +128,8 @@ describe("UserService", () => {
 
   it("blocks demoting the final active admin", async () => {
     const admin = makeUser();
-    mockDb.whereResults.push([admin]);
-    mockDb.whereResults.push([{ value: 1 }]);
+    users.findById.mockResolvedValue(admin);
+    users.countActiveAdmins.mockResolvedValue(1);
 
     await expect(
       service.updateUser(admin.id, { role: USER_ROLES.USER }, actor),
@@ -169,8 +138,8 @@ describe("UserService", () => {
 
   it("blocks deactivating the final active admin", async () => {
     const admin = makeUser();
-    mockDb.whereResults.push([admin]);
-    mockDb.whereResults.push([{ value: 1 }]);
+    users.findById.mockResolvedValue(admin);
+    users.countActiveAdmins.mockResolvedValue(1);
 
     await expect(
       service.updateUser(admin.id, { isActive: false }, actor),
@@ -179,15 +148,10 @@ describe("UserService", () => {
 
   it("allows demoting an admin when another active admin remains", async () => {
     const target = makeUser();
-    const remainingAdmin = makeUser({
-      id: "admin-2",
-      username: "admin2",
-      email: "admin2@example.com",
-    });
     const demoted = makeUser({ role: USER_ROLES.USER });
-    mockDb.whereResults.push([target]);
-    mockDb.whereResults.push([{ value: 2 }]);
-    mockDb.updateResults.push([demoted]);
+    users.findById.mockResolvedValue(target);
+    users.countActiveAdmins.mockResolvedValue(2);
+    users.update.mockResolvedValue(demoted);
 
     const result = await service.updateUser(
       target.id,
@@ -200,8 +164,8 @@ describe("UserService", () => {
 
   it("blocks deleting the final active admin account", async () => {
     const admin = makeUser();
-    mockDb.whereResults.push([admin]);
-    mockDb.whereResults.push([{ value: 1 }]);
+    users.findById.mockResolvedValue(admin);
+    users.countActiveAdmins.mockResolvedValue(1);
 
     await expect(
       service.deleteAccount({ ...actor, id: admin.id }, "password"),

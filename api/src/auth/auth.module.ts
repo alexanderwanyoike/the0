@@ -9,7 +9,9 @@ import { AdminJwtGuard } from "./admin-jwt.guard";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { JwtStrategy } from "./jwt.strategy";
+import { SetupLockRepository } from "./setup-lock.repository";
 import { ApiKeyModule } from "@/api-key/api-key.module";
+import { UserModule } from "@/user/user.module";
 
 @Global()
 @Module({
@@ -28,15 +30,23 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
       }),
     }),
     ApiKeyModule,
+    UserModule,
   ],
   providers: [
     JwtStrategy,
     AuthService,
     AdminBootstrapService,
+    SetupLockRepository,
     AdminJwtGuard,
     JwtAuthGuard,
   ],
-  exports: [PassportModule, JwtModule, AuthService, AdminJwtGuard, JwtAuthGuard],
+  exports: [
+    PassportModule,
+    JwtModule,
+    AuthService,
+    AdminJwtGuard,
+    JwtAuthGuard,
+  ],
   controllers: [AuthController],
 })
 export class AuthModule {}
