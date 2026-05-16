@@ -8,6 +8,7 @@ import (
 
 	"runtime/internal/model"
 	"runtime/internal/query"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
@@ -17,13 +18,15 @@ import (
 type QueryHandler struct {
 	runner           DockerRunner
 	realtimeExecutor *query.RealtimeExecutor
+	resultManager    storage.QueryResultManager
 	logger           util.Logger
 }
 
 // QueryHandlerConfig contains configuration for the QueryHandler.
 type QueryHandlerConfig struct {
-	Runner DockerRunner
-	Logger util.Logger
+	Runner        DockerRunner
+	ResultManager storage.QueryResultManager
+	Logger        util.Logger
 }
 
 // NewQueryHandler creates a new QueryHandler instance.
@@ -34,6 +37,7 @@ func NewQueryHandler(config QueryHandlerConfig) *QueryHandler {
 	return &QueryHandler{
 		runner:           config.Runner,
 		realtimeExecutor: query.NewRealtimeExecutor(query.DefaultQueryPort, config.Logger),
+		resultManager:    config.ResultManager,
 		logger:           config.Logger,
 	}
 }
@@ -71,7 +75,8 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	queryExecutable.QueryPath = req.QueryPath
 	queryExecutable.QueryParams = req.Params
 	queryExecutable.IsLongRunning = false
-	queryExecutable.ResultFilePath = "/query/result.json"
+	queryExecutable.ResultFilePath = ""
+	queryExecutable.QueryResultKey = fmt.Sprintf("%s/%d/result.json", executable.ID, time.Now().UnixNano())
 
 	// Add query entrypoint file if not present
 	if queryExecutable.EntrypointFiles == nil {
@@ -85,19 +90,27 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 
 	h.logger.Info("Executing scheduled query: bot=%s path=%s", req.BotID, req.QueryPath)
 
+	if h.resultManager == nil {
+		err := fmt.Errorf("query result manager is not configured")
+		return query.ErrorResponse(err.Error(), start), err
+	}
+
 	// Execute the container
 	result, err := h.runner.StartContainer(ctx, queryExecutable)
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to execute query container: %v", err), start), err
 	}
+	if result.ExitCode != 0 {
+		return query.ErrorResponse(fmt.Sprintf("query container exited with code %d: %s", result.ExitCode, result.Output), start), nil
+	}
 
-	// Parse the result from the result file
-	var resultData []byte
-	if len(result.ResultFileContents) > 0 {
-		resultData = result.ResultFileContents
-	} else {
-		// Fallback to stdout if no result file
-		resultData = []byte(result.Output)
+	resultData, err := h.resultManager.Download(ctx, queryExecutable.QueryResultKey)
+	if err != nil {
+		return query.ErrorResponse(fmt.Sprintf("failed to download query result: %v", err), start), nil
+	}
+
+	if err := h.resultManager.Delete(ctx, queryExecutable.QueryResultKey); err != nil {
+		h.logger.Info("Warning: failed to delete query result from MinIO: %v", err)
 	}
 
 	return query.ParseQueryOutput(resultData, start), nil

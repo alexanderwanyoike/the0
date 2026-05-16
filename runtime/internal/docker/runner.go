@@ -103,8 +103,8 @@ type dockerRunner struct {
 
 // DockerRunnerOptions contains configuration options for creating a DockerRunner.
 type DockerRunnerOptions struct {
-	Logger       util.Logger   // Optional logger, defaults to util.DefaultLogger if nil
-	ConfigLoader ConfigLoader  // Optional config loader, defaults to EnvConfigLoader if nil
+	Logger       util.Logger         // Optional logger, defaults to util.DefaultLogger if nil
+	ConfigLoader ConfigLoader        // Optional config loader, defaults to EnvConfigLoader if nil
 	Config       *DockerRunnerConfig // Optional pre-loaded config, takes precedence over ConfigLoader
 }
 
@@ -228,6 +228,7 @@ func (r *dockerRunner) buildContainerConfig(
 			r.config.MinIOSecretAccessKey,
 			r.config.MinIOUseSSL,
 		).
+		WithQueryResultBucket(r.config.MinIOQueryResultsBucket).
 		WithDaemonConfigFull(DaemonConfig{
 			BotID:           executable.ID,
 			CodeFile:        executable.FilePath, // Path to code.zip in MinIO
@@ -250,6 +251,9 @@ func (r *dockerRunner) buildContainerConfig(
 		}
 		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", queryParamsJSON)
 		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
+		if executable.QueryResultKey != "" {
+			builder = builder.WithQueryResultKey(executable.QueryResultKey)
+		}
 	}
 
 	// Pass NATS URL so the daemon can publish logs to NATS for real-time streaming

@@ -80,9 +80,15 @@ func TestQueryServer_HandleQuery_Success(t *testing.T) {
 		Runner: &mockDockerRunner{
 			startContainerFunc: func(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
 				return &ExecutionResult{
-					Status: "success",
-					Output: `{"status":"ok","data":{"positions":[{"symbol":"BTC","amount":1.5}]}}`,
+					Status:   "success",
+					Output:   "container logs are not the result path",
+					ExitCode: 0,
 				}, nil
+			},
+		},
+		ResultManager: &mockQueryResultManager{
+			downloadFunc: func(ctx context.Context, key string) ([]byte, error) {
+				return []byte(`{"status":"ok","data":{"positions":[{"symbol":"BTC","amount":1.5}]}}`), nil
 			},
 		},
 		Logger: &util.DefaultLogger{},

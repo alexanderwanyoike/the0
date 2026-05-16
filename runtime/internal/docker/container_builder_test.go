@@ -410,6 +410,24 @@ func TestContainerBuilder_WithQueryConfig(t *testing.T) {
 	}
 }
 
+func TestContainerBuilder_WithQueryResultKey(t *testing.T) {
+	builder := NewContainerBuilder("python:3.11").
+		WithQueryResultKey("bot-1/123/result.json")
+
+	cfg, _ := builder.Build()
+
+	assert.Contains(t, cfg.Env, "QUERY_RESULT_KEY=bot-1/123/result.json")
+}
+
+func TestContainerBuilder_WithQueryResultBucket(t *testing.T) {
+	builder := NewContainerBuilder("python:3.11").
+		WithQueryResultBucket("custom-query-results")
+
+	cfg, _ := builder.Build()
+
+	assert.Contains(t, cfg.Env, "MINIO_QUERY_RESULTS_BUCKET=custom-query-results")
+}
+
 func TestContainerBuilder_WithExtraHosts(t *testing.T) {
 	builder := NewContainerBuilder("python:3.11").
 		WithExtraHosts("host.docker.internal:host-gateway").
@@ -433,8 +451,10 @@ func TestContainerBuilder_ChainedCalls(t *testing.T) {
 		WithResources(1024*1024*1024, 2048).
 		WithAutoRemove(true).
 		WithMinIOConfig("minio:9000", "admin", "secret", false).
+		WithQueryResultBucket("query-results").
 		WithDaemonConfig("bot-1", "code.zip", "python3.11", "main.py", "{}", false).
 		WithQueryConfig("/query", `{"param":"value"}`).
+		WithQueryResultKey("bot-1/123/result.json").
 		WithExtraHosts("host.docker.internal:host-gateway")
 
 	cfg, hostCfg := builder.Build()
@@ -446,8 +466,10 @@ func TestContainerBuilder_ChainedCalls(t *testing.T) {
 	assert.Equal(t, "/app/start.sh", cfg.Cmd[1])
 	assert.Contains(t, cfg.Env, "KEY1=value1")
 	assert.Contains(t, cfg.Env, "MINIO_ENDPOINT=minio:9000")
+	assert.Contains(t, cfg.Env, "MINIO_QUERY_RESULTS_BUCKET=query-results")
 	assert.Contains(t, cfg.Env, "BOT_ID=bot-1")
 	assert.Contains(t, cfg.Env, "QUERY_PATH=/query")
+	assert.Contains(t, cfg.Env, "QUERY_RESULT_KEY=bot-1/123/result.json")
 
 	// Verify host config
 	assert.Equal(t, container.NetworkMode("the0-network"), hostCfg.NetworkMode)

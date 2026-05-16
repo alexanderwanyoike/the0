@@ -132,6 +132,14 @@ func (b *ContainerBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string
 	return b
 }
 
+// WithQueryResultBucket sets the MinIO bucket used for ephemeral query results.
+func (b *ContainerBuilder) WithQueryResultBucket(bucket string) *ContainerBuilder {
+	if bucket != "" {
+		b.config.Env = append(b.config.Env, fmt.Sprintf("MINIO_QUERY_RESULTS_BUCKET=%s", bucket))
+	}
+	return b
+}
+
 // DaemonConfig holds configuration for daemon init/sync.
 type DaemonConfig struct {
 	BotID           string
@@ -207,6 +215,14 @@ func (b *ContainerBuilder) WithQueryConfig(queryPath string, queryParams string)
 				fmt.Sprintf("QUERY_PARAMS=%s", queryParams),
 			)
 		}
+	}
+	return b
+}
+
+// WithQueryResultKey sets the MinIO object key where an ephemeral query writes its result.
+func (b *ContainerBuilder) WithQueryResultKey(resultKey string) *ContainerBuilder {
+	if resultKey != "" {
+		b.config.Env = append(b.config.Env, fmt.Sprintf("QUERY_RESULT_KEY=%s", resultKey))
 	}
 	return b
 }

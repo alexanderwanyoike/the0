@@ -25,22 +25,23 @@ func (e *EnvConfigLoader) LoadConfig() (*DockerRunnerConfig, error) {
 // DockerRunnerConfig holds all configuration needed to run containers
 // including MinIO credentials, resource limits, and directory paths.
 type DockerRunnerConfig struct {
-	MinIOEndpoint          string // MinIO server endpoint for runner's client (e.g., "localhost:9000")
-	MinIOContainerEndpoint string // MinIO endpoint for containers (e.g., "host.docker.internal:9000"). If empty, uses MinIOEndpoint.
-	MinIOAccessKeyID       string // MinIO access key
-	MinIOSecretAccessKey   string // MinIO secret key
-	MinIOUseSSL            bool   // Whether to use SSL/TLS for MinIO connections
-	MinIOCodeBucket        string // Bucket containing bot code archives
-	MinioLogsBucket        string // Bucket for storing logs
-	MinioStateBucket       string // Bucket for storing persistent bot state
-	MaxStateSizeBytes      int64  // Maximum total size of bot state folder (default: 8GB)
-	MaxStateFileSizeBytes  int64  // Maximum size of individual state file (default: 10MB)
-	TempDir                string // Temporary directory for extracted bot code
-	MemoryLimitMB          int64  // Memory limit in bytes for containers
-	CPUShares              int64  // CPU shares allocated to containers
-	DevRuntimePath         string // Optional: host path to runtime binary for dev mode
-	DockerNetwork          string // Docker network to connect containers to (e.g., "the0-oss-network")
-	NatsURL                string // NATS URL for log publishing inside containers (optional)
+	MinIOEndpoint           string // MinIO server endpoint for runner's client (e.g., "localhost:9000")
+	MinIOContainerEndpoint  string // MinIO endpoint for containers (e.g., "host.docker.internal:9000"). If empty, uses MinIOEndpoint.
+	MinIOAccessKeyID        string // MinIO access key
+	MinIOSecretAccessKey    string // MinIO secret key
+	MinIOUseSSL             bool   // Whether to use SSL/TLS for MinIO connections
+	MinIOCodeBucket         string // Bucket containing bot code archives
+	MinioLogsBucket         string // Bucket for storing logs
+	MinioStateBucket        string // Bucket for storing persistent bot state
+	MinIOQueryResultsBucket string // Bucket for ephemeral query results
+	MaxStateSizeBytes       int64  // Maximum total size of bot state folder (default: 8GB)
+	MaxStateFileSizeBytes   int64  // Maximum size of individual state file (default: 10MB)
+	TempDir                 string // Temporary directory for extracted bot code
+	MemoryLimitMB           int64  // Memory limit in bytes for containers
+	CPUShares               int64  // CPU shares allocated to containers
+	DevRuntimePath          string // Optional: host path to runtime binary for dev mode
+	DockerNetwork           string // Docker network to connect containers to (e.g., "the0-oss-network")
+	NatsURL                 string // NATS URL for log publishing inside containers (optional)
 }
 
 // GetContainerEndpoint returns the MinIO endpoint for containers.
@@ -54,8 +55,8 @@ func (c *DockerRunnerConfig) GetContainerEndpoint() string {
 
 // LoadConfigFromEnv loads configuration from environment variables.
 // Required env vars: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
-// Optional env vars: MINIO_SSL, TEMP_DIR, MINIO_CODE_BUCKET,
-// MINIO_STATE_BUCKET, MINIO_LOGS_BUCKET, BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES,
+// Optional env vars: MINIO_USE_SSL, MINIO_SSL, TEMP_DIR, MINIO_CODE_BUCKET,
+// MINIO_STATE_BUCKET, MINIO_LOGS_BUCKET, MINIO_QUERY_RESULTS_BUCKET, BOT_MEMORY_LIMIT_MB, BOT_CPU_SHARES,
 // MAX_STATE_SIZE_MB (default: 8192 = 8GB), MAX_STATE_FILE_SIZE_MB (default: 10),
 // DEV_RUNTIME_PATH (optional: host path to runtime binary for dev mode),
 // DOCKER_NETWORK (optional: Docker network for bot containers, e.g., "the0-oss-network")
@@ -75,7 +76,7 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		return nil, fmt.Errorf("MINIO_SECRET_KEY environment variable is required")
 	}
 
-	useSSL := os.Getenv("MINIO_SSL") == "true"
+	useSSL := os.Getenv("MINIO_USE_SSL") == "true" || os.Getenv("MINIO_SSL") == "true"
 
 	logsBucket := os.Getenv("MINIO_LOGS_BUCKET")
 	if logsBucket == "" {
@@ -90,6 +91,11 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	stateBucket := os.Getenv("MINIO_STATE_BUCKET")
 	if stateBucket == "" {
 		stateBucket = "bot-state"
+	}
+
+	queryResultsBucket := os.Getenv("MINIO_QUERY_RESULTS_BUCKET")
+	if queryResultsBucket == "" {
+		queryResultsBucket = "query-results"
 	}
 
 	tempDir := os.Getenv("TEMP_DIR")
@@ -110,22 +116,23 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 	natsURL := os.Getenv("NATS_URL")
 
 	return &DockerRunnerConfig{
-		MinIOEndpoint:          endpoint,
-		MinIOContainerEndpoint: containerEndpoint,
-		MinIOAccessKeyID:       accessKey,
-		MinIOSecretAccessKey:   secretKey,
-		MinIOUseSSL:            useSSL,
-		MinIOCodeBucket:        codeBucket,
-		MinioLogsBucket:        logsBucket,
-		MinioStateBucket:       stateBucket,
-		MaxStateSizeBytes:      getMaxStateSize(),
-		MaxStateFileSizeBytes:  getMaxStateFileSize(),
-		TempDir:                tempDir,
-		MemoryLimitMB:          getMemoryLimit(),
-		CPUShares:              getCPUShares(),
-		DevRuntimePath:         devRuntimePath,
-		DockerNetwork:          dockerNetwork,
-		NatsURL:                natsURL,
+		MinIOEndpoint:           endpoint,
+		MinIOContainerEndpoint:  containerEndpoint,
+		MinIOAccessKeyID:        accessKey,
+		MinIOSecretAccessKey:    secretKey,
+		MinIOUseSSL:             useSSL,
+		MinIOCodeBucket:         codeBucket,
+		MinioLogsBucket:         logsBucket,
+		MinioStateBucket:        stateBucket,
+		MinIOQueryResultsBucket: queryResultsBucket,
+		MaxStateSizeBytes:       getMaxStateSize(),
+		MaxStateFileSizeBytes:   getMaxStateFileSize(),
+		TempDir:                 tempDir,
+		MemoryLimitMB:           getMemoryLimit(),
+		CPUShares:               getCPUShares(),
+		DevRuntimePath:          devRuntimePath,
+		DockerNetwork:           dockerNetwork,
+		NatsURL:                 natsURL,
 	}, nil
 }
 

@@ -293,12 +293,12 @@ func runEphemeralQuery(cfg *execute.Config, logger *util.DefaultLogger) int {
 	exitCode := executeQueryProcess(ctx, cfg, entrypoint, logger)
 	logger.Info("Query process completed with exit code: %d", exitCode)
 
-	// If QUERY_RESULT_KEY is set (K8s mode), upload result to MinIO
+	// If QUERY_RESULT_KEY is set, upload the result for the query server to retrieve.
 	if cfg.QueryResultKey != "" {
 		logger.Info("Uploading query result to MinIO key: %s", cfg.QueryResultKey)
 		if err := uploadQueryResult(ctx, cfg, logger); err != nil {
 			logger.Info("Failed to upload query result: %v", err)
-			// Don't fail the whole query if upload fails
+			return 1
 		}
 	}
 
