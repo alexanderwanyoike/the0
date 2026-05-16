@@ -13,5 +13,6 @@ type Executable struct {
 	// Query execution fields (used when Entrypoint == "query")
 	QueryPath      string                 // The query path to execute (e.g., "/portfolio")
 	QueryParams    map[string]interface{} // Query parameters as key-value pairs
+	QueryResultKey string                 // MinIO key for ephemeral query result handoff
 	ResultFilePath string                 // Custom result file path (default: /bot/result.json)
 }

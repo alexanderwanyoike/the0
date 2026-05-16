@@ -13,15 +13,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 
+	"runtime/internal/constants"
 	dockerrunner "runtime/internal/docker"
-	"runtime/internal/gc"
-	"runtime/internal/runtime/storage"
 	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
 	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
-	"runtime/internal/constants"
+	"runtime/internal/gc"
 	"runtime/internal/k8s/controller"
 	"runtime/internal/k8s/detect"
 	"runtime/internal/k8s/health"
+	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
 
@@ -461,13 +461,24 @@ func runQueryServer() {
 		os.Exit(1)
 	}
 
+	var resultManager storage.QueryResultManager
+	storageCfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		util.LogMaster("Warning: storage config unavailable; scheduled queries will fail: %v", err)
+	} else if minioClient, err := storage.NewMinioClient(storageCfg); err != nil {
+		util.LogMaster("Warning: MinIO unavailable; scheduled queries will fail: %v", err)
+	} else {
+		resultManager = storage.NewQueryResultManager(minioClient, storageCfg, &util.DefaultLogger{})
+	}
+
 	// Create multi-collection bot resolver
 	resolver := dockerrunner.NewMultiBotResolver(mongoClient, runner)
 
 	// Create query handler
 	handler := dockerrunner.NewQueryHandler(dockerrunner.QueryHandlerConfig{
-		Runner: runner,
-		Logger: &util.DefaultLogger{},
+		Runner:        runner,
+		ResultManager: resultManager,
+		Logger:        &util.DefaultLogger{},
 	})
 
 	// Create and start query server
