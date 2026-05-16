@@ -131,10 +131,16 @@ export default function UserManagementPage() {
   const createUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    const username = createForm.username.trim();
+    if (!username) {
+      setError("Username is required");
+      return;
+    }
+
     try {
       const response = await authFetch("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({ ...createForm, username }),
       });
       if (!response.ok) {
         setError(await readErrorMessage(response, "Failed to create user"));
@@ -216,6 +222,7 @@ export default function UserManagementPage() {
                       username: event.target.value,
                     })
                   }
+                  required
                 />
               </div>
               <div className="grid gap-2">
@@ -330,9 +337,17 @@ export default function UserManagementPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
+                      <Label
+                        htmlFor={`reset-password-${managedUser.id}`}
+                        className="sr-only"
+                      >
+                        New password for {managedUser.email}
+                      </Label>
                       <Input
+                        id={`reset-password-${managedUser.id}`}
                         type="password"
                         placeholder="New password"
+                        aria-label={`New password for ${managedUser.email}`}
                         value={resetPasswords[managedUser.id] || ""}
                         onChange={(event) =>
                           setResetPasswords((current) => ({
@@ -343,6 +358,7 @@ export default function UserManagementPage() {
                       />
                       <Button
                         variant="outline"
+                        aria-label={`Reset password for ${managedUser.email}`}
                         onClick={() => resetPassword(managedUser.id)}
                       >
                         Reset

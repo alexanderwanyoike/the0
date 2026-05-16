@@ -71,6 +71,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         authType: "jwt" as const,
       };
     } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       this.logger.error({ err: error }, "JWT validation error");
       throw new UnauthorizedException("Token validation failed");
     }

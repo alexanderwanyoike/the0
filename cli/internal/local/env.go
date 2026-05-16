@@ -110,6 +110,9 @@ func SetAdminEmail(composeDir string, email string) error {
 	envPath := filepath.Join(composeDir, ".env")
 	data, err := os.ReadFile(envPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf(".env not found in %s; run `the0 local init` first", composeDir)
+		}
 		return fmt.Errorf("failed to read .env file: %w", err)
 	}
 

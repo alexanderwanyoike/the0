@@ -108,7 +108,7 @@ export class UserController {
     return {
       success: true,
       data: await this.userService.deleteAccount(user, body.password),
-      message: "Account deleted successfully",
+      message: "Account deactivated successfully",
     };
   }
 }

@@ -218,7 +218,7 @@ func newLocalAdminSetCmd() *cobra.Command {
 				return err
 			}
 
-			logger.Success("Set THE0_ADMIN_EMAIL=%s", email)
+			logger.Success("Set THE0_ADMIN_EMAIL")
 			logger.StartSpinner("Restarting API")
 			if err := runner.Run("up", "-d", "--no-deps", "--force-recreate", "the0-api"); err != nil {
 				logger.StopSpinnerWithError("API restart failed")

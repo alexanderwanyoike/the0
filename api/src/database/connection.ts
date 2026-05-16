@@ -20,6 +20,7 @@ export const pgSchema = {
 export const sqliteSchema = {
   usersTable: usersSchema.usersTableSqlite,
   setupLocksTable: usersSchema.setupLocksTableSqlite,
+  adminMutationLocksTable: usersSchema.adminMutationLocksTableSqlite,
   apiKeysTable: usersSchema.apiKeysTableSqlite,
   customBotsTable: customBotsSchema.customBotsTableSqlite,
   botsTable: botsSchema.botsTableSqlite,
@@ -31,6 +32,9 @@ export interface TableRegistry {
   setupLocks:
     | typeof usersSchema.setupLocksTable
     | typeof usersSchema.setupLocksTableSqlite;
+  adminMutationLocks:
+    | typeof usersSchema.adminMutationLocksTable
+    | typeof usersSchema.adminMutationLocksTableSqlite;
   apiKeys:
     | typeof usersSchema.apiKeysTable
     | typeof usersSchema.apiKeysTableSqlite;
@@ -62,6 +66,7 @@ export function getDatabase() {
     tablesCache = {
       users: usersSchema.usersTableSqlite,
       setupLocks: usersSchema.setupLocksTableSqlite,
+      adminMutationLocks: usersSchema.adminMutationLocksTableSqlite,
       apiKeys: usersSchema.apiKeysTableSqlite,
       customBots: customBotsSchema.customBotsTableSqlite,
       bots: botsSchema.botsTableSqlite,
@@ -100,6 +105,7 @@ export function getDatabase() {
     tablesCache = {
       users: usersSchema.usersTable,
       setupLocks: usersSchema.setupLocksTable,
+      adminMutationLocks: usersSchema.adminMutationLocksTable,
       apiKeys: usersSchema.apiKeysTable,
       customBots: customBotsSchema.customBotsTable,
       bots: botsSchema.botsTable,

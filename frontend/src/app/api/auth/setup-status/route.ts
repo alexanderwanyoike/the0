@@ -9,14 +9,14 @@ export async function GET() {
     );
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
     const response = await fetch(`${botApiUrl}/auth/setup-status`, {
       method: "GET",
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
@@ -25,5 +25,7 @@ export async function GET() {
       { success: false, message: "Authentication service unavailable" },
       { status: 500 },
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }

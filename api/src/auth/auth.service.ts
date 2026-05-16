@@ -7,12 +7,13 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { getDatabase } from "../database/connection";
 import {
+  type SetupLock,
   setupLocksTable,
   setupLocksTableSqlite,
   usersTable,
   usersTableSqlite,
 } from "../database/schema/users";
-import { eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import { Result } from "../common/result";
 import { getDatabaseConfig } from "../database/connection";
@@ -30,6 +31,7 @@ const CONNECTION_ERROR_CODES = new Set([
 ]);
 
 const SETUP_LOCK_ID = "first-admin";
+const SETUP_LOCK_STALE_MS = 5 * 60 * 1000;
 
 function isConnectionError(error: unknown): boolean {
   if (error instanceof AggregateError) {
@@ -152,22 +154,41 @@ export class AuthService {
     return email || undefined;
   }
 
-  async getSetupStatus(): Promise<SetupStatus> {
+  private async getUserCount(): Promise<number> {
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = (await db.select().from(userTable)) as UserRecord[];
-    const activeUsers = users.filter((user) => Boolean(user.isActive));
-    const hasAdmin = activeUsers.some((user) => user.role === USER_ROLES.ADMIN);
+    const rows = (await db.select({ value: count() }).from(userTable)) as {
+      value: number;
+    }[];
+    return Number(rows[0]?.value ?? 0);
+  }
+
+  private async hasActiveAdmin(): Promise<boolean> {
+    const db = getDatabase();
+    const userTable = this.getUserTable();
+    const rows = (await db
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(
+        and(eq(userTable.isActive, true), eq(userTable.role, USER_ROLES.ADMIN)),
+      )
+      .limit(1)) as { id: string }[];
+    return rows.length > 0;
+  }
+
+  async getSetupStatus(): Promise<SetupStatus> {
+    const userCount = await this.getUserCount();
+    const hasAdmin = await this.hasActiveAdmin();
     const adminEmail = this.getConfiguredAdminEmail();
 
     return {
-      setupRequired: users.length === 0,
-      userCount: users.length,
+      setupRequired: userCount === 0,
+      userCount,
       hasAdmin,
       adminConfigured: hasAdmin,
       adminEmailRequired: Boolean(adminEmail),
       warning:
-        users.length > 0 && !hasAdmin
+        userCount > 0 && !hasAdmin
           ? "No admin configured. See docs/deployment/admin-bootstrap.md"
           : undefined,
       docsUrl: "/deployment/admin-bootstrap",
@@ -182,10 +203,9 @@ export class AuthService {
       try {
         const db = getDatabase();
         const userTable = this.getUserTable();
-        const setupLockTable = this.getSetupLockTable();
-        const users = (await db.select().from(userTable)) as UserRecord[];
+        const userCount = await this.getUserCount();
 
-        if (users.length > 0) {
+        if (userCount > 0) {
           return failure("Setup is only available before users exist");
         }
 
@@ -198,20 +218,13 @@ export class AuthService {
         }
 
         const passwordHash = await hashPassword(credentials.password);
-        try {
-          await db.insert(setupLockTable).values({ id: SETUP_LOCK_ID });
-          setupLockClaimed = true;
-        } catch (error) {
-          if (isConnectionError(error)) {
-            throw error;
-          }
-          return failure("Setup is only available before users exist");
+        setupLockClaimed = await this.acquireSetupLock();
+        if (!setupLockClaimed) {
+          return failure("Setup is already in progress");
         }
 
-        const usersBeforeInsert = (await db
-          .select()
-          .from(userTable)) as UserRecord[];
-        if (usersBeforeInsert.length > 0) {
+        const usersBeforeInsert = await this.getUserCount();
+        if (usersBeforeInsert > 0) {
           await this.releaseSetupLock().catch((): void => undefined);
           return failure("Setup is only available before users exist");
         }
@@ -247,6 +260,36 @@ export class AuthService {
         return failure("Setup failed");
       }
     });
+  }
+
+  private async acquireSetupLock(): Promise<boolean> {
+    const db = getDatabase();
+    const setupLockTable = this.getSetupLockTable();
+    try {
+      await db
+        .insert(setupLockTable)
+        .values({ id: SETUP_LOCK_ID, lockedAt: Date.now() });
+      return true;
+    } catch (error) {
+      if (isConnectionError(error)) {
+        throw error;
+      }
+
+      const locks = (await db
+        .select()
+        .from(setupLockTable)
+        .where(eq(setupLockTable.id, SETUP_LOCK_ID))) as SetupLock[];
+      const existingLock = locks[0];
+      if (
+        existingLock &&
+        Date.now() - Number(existingLock.lockedAt) > SETUP_LOCK_STALE_MS
+      ) {
+        await this.releaseSetupLock();
+        return this.acquireSetupLock();
+      }
+
+      return false;
+    }
   }
 
   private async releaseSetupLock(): Promise<void> {

@@ -36,6 +36,12 @@ export const usersTable = pgTable("users", {
 
 export const setupLocksTable = pgTable("setup_locks", {
   id: varchar("id", { length: 50 }).primaryKey(),
+  lockedAt: pgInteger("locked_at").notNull(),
+});
+
+export const adminMutationLocksTable = pgTable("admin_mutation_locks", {
+  id: varchar("id", { length: 50 }).primaryKey(),
+  lockedAt: pgInteger("locked_at").notNull(),
 });
 
 // SQLite Users table
@@ -68,7 +74,16 @@ export const usersTableSqlite = sqliteTable("users", {
 
 export const setupLocksTableSqlite = sqliteTable("setup_locks", {
   id: text("id").primaryKey(),
+  lockedAt: integer("locked_at").notNull(),
 });
+
+export const adminMutationLocksTableSqlite = sqliteTable(
+  "admin_mutation_locks",
+  {
+    id: text("id").primaryKey(),
+    lockedAt: integer("locked_at").notNull(),
+  },
+);
 
 // PostgreSQL API Keys table
 export const apiKeysTable = pgTable(
@@ -119,5 +134,6 @@ export const apiKeysTableSqlite = sqliteTable("api_keys", {
 export type User = typeof usersTable.$inferSelect;
 export type NewUser = typeof usersTable.$inferInsert;
 export type SetupLock = typeof setupLocksTable.$inferSelect;
+export type AdminMutationLock = typeof adminMutationLocksTable.$inferSelect;
 export type ApiKey = typeof apiKeysTable.$inferSelect;
 export type NewApiKey = typeof apiKeysTable.$inferInsert;

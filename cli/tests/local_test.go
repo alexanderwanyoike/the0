@@ -426,6 +426,22 @@ func TestSetAdminEmail_RejectsUnsafeEmail(t *testing.T) {
 	}
 }
 
+func TestSetAdminEmail_MissingEnvIsActionable(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	err = local.SetAdminEmail(tmpDir, "admin@example.com")
+	if err == nil {
+		t.Fatal("Expected missing .env to return an error")
+	}
+	if !strings.Contains(err.Error(), "the0 local init") {
+		t.Fatalf("Expected actionable init guidance, got: %v", err)
+	}
+}
+
 func TestGenerateEnvFile_CorrectPermissions(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {

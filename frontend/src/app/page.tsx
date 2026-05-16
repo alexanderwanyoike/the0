@@ -16,16 +16,28 @@ export default function AppEntryPage() {
       return;
     }
 
-    fetch("/api/auth/setup-status")
+    const controller = new AbortController();
+    let active = true;
+
+    fetch("/api/auth/setup-status", { signal: controller.signal })
       .then((response) => response.json())
       .then((body) => {
+        if (!active) return;
         if (body.data?.setupRequired) {
           router.replace("/setup");
         } else {
           router.replace("/login");
         }
       })
-      .catch(() => router.replace("/login"));
+      .catch((error) => {
+        if (!active || error?.name === "AbortError") return;
+        router.replace("/login");
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [loading, router, user]);
 
   return null;

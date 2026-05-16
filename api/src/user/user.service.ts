@@ -3,13 +3,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { and, eq, ne, sql, type AnyColumn } from "drizzle-orm";
+import { and, count, eq, ne, sql, type AnyColumn } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import { hashPassword } from "@/common/password";
 import { getDatabase, getDatabaseConfig } from "@/database/connection";
-import { usersTable, usersTableSqlite } from "@/database/schema/users";
+import {
+  type AdminMutationLock,
+  adminMutationLocksTable,
+  adminMutationLocksTableSqlite,
+  usersTable,
+  usersTableSqlite,
+} from "@/database/schema/users";
 import { AuthenticatedUser } from "@/auth/auth.types";
 import { USER_ROLES, UserRole } from "./user.constants";
 import {
@@ -20,6 +27,9 @@ import {
   UserRecord,
 } from "./user.types";
 
+const ADMIN_MUTATION_LOCK_ID = "admin-users";
+const ADMIN_MUTATION_LOCK_STALE_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class UserService {
   private adminMutationLock = Promise.resolve();
@@ -27,6 +37,13 @@ export class UserService {
   private getUserTable() {
     const config = getDatabaseConfig();
     return config.type === "sqlite" ? usersTableSqlite : usersTable;
+  }
+
+  private getAdminMutationLockTable() {
+    const config = getDatabaseConfig();
+    return config.type === "sqlite"
+      ? adminMutationLocksTableSqlite
+      : adminMutationLocksTable;
   }
 
   private serializeUser(user: UserRecord): SerializedUser {
@@ -56,10 +73,57 @@ export class UserService {
 
     await previousLock;
     try {
-      return await callback();
+      await this.acquireAdminMutationLock();
+      try {
+        return await callback();
+      } finally {
+        await this.releaseAdminMutationLock().catch((): void => undefined);
+      }
     } finally {
       releaseLock();
     }
+  }
+
+  private async acquireAdminMutationLock(): Promise<void> {
+    const db = getDatabase();
+    const lockTable = this.getAdminMutationLockTable();
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try {
+        await db
+          .insert(lockTable)
+          .values({ id: ADMIN_MUTATION_LOCK_ID, lockedAt: Date.now() });
+        return;
+      } catch {
+        const locks = (await db
+          .select()
+          .from(lockTable)
+          .where(
+            eq(lockTable.id, ADMIN_MUTATION_LOCK_ID),
+          )) as AdminMutationLock[];
+        const existingLock = locks[0];
+        if (
+          existingLock &&
+          Date.now() - Number(existingLock.lockedAt) >
+            ADMIN_MUTATION_LOCK_STALE_MS
+        ) {
+          await this.releaseAdminMutationLock();
+          continue;
+        }
+
+        await wait(50);
+      }
+    }
+
+    throw new ServiceUnavailableException(
+      "Admin user management is temporarily locked",
+    );
+  }
+
+  private async releaseAdminMutationLock(): Promise<void> {
+    const db = getDatabase();
+    const lockTable = this.getAdminMutationLockTable();
+    await db.delete(lockTable).where(eq(lockTable.id, ADMIN_MUTATION_LOCK_ID));
   }
 
   private defaultUsername(email: string): string {
@@ -303,7 +367,14 @@ export class UserService {
 
     await this.assertAdminWillRemain(user, { isActive: false });
 
-    await db.delete(userTable).where(eq(userTable.id, actor.id));
+    await db
+      .update(userTable)
+      .set({
+        isActive: false,
+        sessionVersion: sqlIncrement(userTable.sessionVersion),
+        updatedAt: new Date(),
+      })
+      .where(eq(userTable.id, actor.id));
     return { success: true };
   }
 
@@ -336,10 +407,13 @@ export class UserService {
 
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = (await db.select().from(userTable)) as UserRecord[];
-    const activeAdminCount = users.filter(
-      (user) => user.isActive && user.role === USER_ROLES.ADMIN,
-    ).length;
+    const rows = (await db
+      .select({ value: count() })
+      .from(userTable)
+      .where(
+        and(eq(userTable.isActive, true), eq(userTable.role, USER_ROLES.ADMIN)),
+      )) as { value: number }[];
+    const activeAdminCount = Number(rows[0]?.value ?? 0);
 
     if (activeAdminCount <= 1) {
       throw new ForbiddenException("At least one active admin is required");
@@ -349,4 +423,8 @@ export class UserService {
 
 function sqlIncrement(column: AnyColumn) {
   return sql`${column} + 1`;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

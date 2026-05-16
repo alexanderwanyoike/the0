@@ -54,9 +54,10 @@ function makeUser(overrides: Partial<TestUser> = {}): TestUser {
 }
 
 function createMockDb() {
-  const whereResults: TestUser[][] = [];
-  const allResults: TestUser[][] = [];
+  const whereResults: unknown[][] = [];
+  const allResults: unknown[][] = [];
   const updateResults: TestUser[][] = [];
+  const insertValues = jest.fn();
   const updateSet = jest.fn();
   const deleteWhere = jest.fn().mockResolvedValue(undefined);
 
@@ -79,6 +80,9 @@ function createMockDb() {
         })),
       })),
     })),
+    insert: jest.fn(() => ({
+      values: insertValues.mockResolvedValue(undefined),
+    })),
     delete: jest.fn(() => ({
       where: deleteWhere,
     })),
@@ -89,6 +93,7 @@ function createMockDb() {
     whereResults,
     allResults,
     updateResults,
+    insertValues,
     updateSet,
     deleteWhere,
   };
@@ -155,7 +160,7 @@ describe("UserService", () => {
   it("blocks demoting the final active admin", async () => {
     const admin = makeUser();
     mockDb.whereResults.push([admin]);
-    mockDb.allResults.push([admin]);
+    mockDb.whereResults.push([{ value: 1 }]);
 
     await expect(
       service.updateUser(admin.id, { role: USER_ROLES.USER }, actor),
@@ -165,7 +170,7 @@ describe("UserService", () => {
   it("blocks deactivating the final active admin", async () => {
     const admin = makeUser();
     mockDb.whereResults.push([admin]);
-    mockDb.allResults.push([admin]);
+    mockDb.whereResults.push([{ value: 1 }]);
 
     await expect(
       service.updateUser(admin.id, { isActive: false }, actor),
@@ -181,7 +186,7 @@ describe("UserService", () => {
     });
     const demoted = makeUser({ role: USER_ROLES.USER });
     mockDb.whereResults.push([target]);
-    mockDb.allResults.push([target, remainingAdmin]);
+    mockDb.whereResults.push([{ value: 2 }]);
     mockDb.updateResults.push([demoted]);
 
     const result = await service.updateUser(
@@ -196,12 +201,10 @@ describe("UserService", () => {
   it("blocks deleting the final active admin account", async () => {
     const admin = makeUser();
     mockDb.whereResults.push([admin]);
-    mockDb.allResults.push([admin]);
+    mockDb.whereResults.push([{ value: 1 }]);
 
     await expect(
       service.deleteAccount({ ...actor, id: admin.id }, "password"),
     ).rejects.toThrow("At least one active admin is required");
-
-    expect(mockDb.deleteWhere).not.toHaveBeenCalled();
   });
 });
