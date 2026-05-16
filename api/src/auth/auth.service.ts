@@ -250,6 +250,9 @@ export class AuthService {
         };
       } catch (error) {
         if (isConnectionError(error)) {
+          if (setupLockClaimed) {
+            await this.releaseSetupLock().catch((): void => undefined);
+          }
           throw new ServiceUnavailableException(
             "Database temporarily unavailable",
           );

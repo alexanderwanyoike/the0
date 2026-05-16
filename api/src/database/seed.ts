@@ -13,10 +13,11 @@ function getSeedAdminPassword(): string {
     return password;
   }
 
-  const nodeEnv = process.env.NODE_ENV ?? "development";
-  if (nodeEnv === "production" || nodeEnv === "staging") {
+  const nodeEnv = process.env.NODE_ENV;
+  const allowDefaultPassword = nodeEnv === "development" || nodeEnv === "test";
+  if (!allowDefaultPassword) {
     throw new Error(
-      "THE0_SEED_ADMIN_PASSWORD is required when seeding outside development",
+      "THE0_SEED_ADMIN_PASSWORD is required when seeding outside development/test",
     );
   }
 
