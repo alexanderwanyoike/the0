@@ -75,7 +75,7 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	// Bot container
 	botContainer := pod.Spec.Containers[0]
 	assert.Equal(t, "bot", botContainer.Name)
-	assert.Equal(t, "ghcr.io/alexanderwanyoike/the0/runtime:latest", botContainer.Image)
+	assert.Equal(t, "the0/runtime:latest", botContainer.Image)
 	assert.Equal(t, []string{"/app/runtime", "execute", "--skip-sync", "--skip-query-server"}, botContainer.Command)
 	assert.Equal(t, "/bot", botContainer.WorkingDir)
 
@@ -150,7 +150,9 @@ func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
 	// Should have 2 containers: bot + query-server
 	require.Len(t, pod.Spec.Containers, 2)
 	assert.Equal(t, "bot", pod.Spec.Containers[0].Name)
+	assert.Equal(t, "the0/runtime:latest", pod.Spec.Containers[0].Image)
 	assert.Equal(t, "query-server", pod.Spec.Containers[1].Name)
+	assert.Equal(t, "the0/runtime:latest", pod.Spec.Containers[1].Image)
 
 	// Query server should have correct command
 	queryContainer := pod.Spec.Containers[1]
@@ -195,6 +197,7 @@ func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
 	// Sync runs inline as part of the execute command
 	require.Len(t, podSpec.Containers, 1)
 	assert.Equal(t, "bot", podSpec.Containers[0].Name)
+	assert.Equal(t, "the0/runtime:latest", podSpec.Containers[0].Image)
 
 	// Bot should use inline sync (no --skip-sync flag)
 	botCommand := podSpec.Containers[0].Command
@@ -246,6 +249,7 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 	// Should have only 1 container: bot (no sidecars)
 	require.Len(t, pod.Spec.Containers, 1)
 	assert.Equal(t, "bot", pod.Spec.Containers[0].Name)
+	assert.Equal(t, "the0/runtime:latest", pod.Spec.Containers[0].Image)
 
 	// Should have QUERY_PATH and QUERY_PARAMS env vars
 	envMap := make(map[string]string)

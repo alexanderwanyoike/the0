@@ -100,10 +100,9 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		return nil, err
 	}
 
-	// Get the runtime image
-	image, err := runtimepkg.GetDockerImage(botConfig.runtime)
+	image, err := g.runtimeImageFor(botConfig.runtime)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Docker image: %w", err)
+		return nil, err
 	}
 
 	// Build the pod using the fluent builder
@@ -146,10 +145,9 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 		return nil, err
 	}
 
-	// Get the runtime image
-	image, err := runtimepkg.GetDockerImage(botConfig.runtime)
+	image, err := g.runtimeImageFor(botConfig.runtime)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Docker image: %w", err)
+		return nil, err
 	}
 
 	// Build the pod for scheduled execution - NO sidecars
@@ -187,10 +185,9 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 		return nil, err
 	}
 
-	// Get the runtime image
-	image, err := runtimepkg.GetDockerImage(botConfig.runtime)
+	image, err := g.runtimeImageFor(botConfig.runtime)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Docker image: %w", err)
+		return nil, err
 	}
 
 	// Use query entrypoint if available, otherwise fall back to bot entrypoint
@@ -216,6 +213,13 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 		ForQuery(queryPath, queryParams)
 
 	return builder.Build()
+}
+
+func (g *PodGenerator) runtimeImageFor(runtime string) (string, error) {
+	if _, err := runtimepkg.GetDockerImage(runtime); err != nil {
+		return "", fmt.Errorf("failed to validate runtime image: %w", err)
+	}
+	return g.config.RuntimeImage, nil
 }
 
 // botConfig holds extracted and validated bot configuration.

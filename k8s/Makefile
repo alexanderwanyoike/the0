@@ -63,6 +63,9 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		--set the0Docs.imagePullPolicy=Never \
 		--set botController.image.tag=latest \
 		--set botController.runtimeImage=runtime:latest \
+		--set gc.image.repository=runtime \
+		--set gc.image.tag=latest \
+		--set gc.image.pullPolicy=Never \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""
@@ -157,6 +160,9 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 		--set botController.imagePullPolicy=Never \
 		--set botController.runtimeImage=runtime:latest \
 		--set botController.imageBuilder.registry=localhost:5000 \
+		--set gc.image.repository=runtime \
+		--set gc.image.tag=latest \
+		--set gc.image.pullPolicy=Never \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""

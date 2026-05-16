@@ -38,7 +38,7 @@ spec:
                 - name: MINIO_ENDPOINT
                   value: {{ include "the0.minioEndpointWithPort" . | quote }}
                 - name: MINIO_USE_SSL
-                  value: {{ .Values.minio.external.useSSL | default false | quote }}
+                  value: {{ include "the0.minioUseSSL" . | quote }}
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
