@@ -76,7 +76,7 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		return nil, fmt.Errorf("MINIO_SECRET_KEY environment variable is required")
 	}
 
-	useSSL := os.Getenv("MINIO_USE_SSL") == "true" || os.Getenv("MINIO_SSL") == "true"
+	useSSL := parseBoolEnv("MINIO_USE_SSL") || parseBoolEnv("MINIO_SSL")
 
 	logsBucket := os.Getenv("MINIO_LOGS_BUCKET")
 	if logsBucket == "" {
@@ -134,6 +134,15 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 		DockerNetwork:           dockerNetwork,
 		NatsURL:                 natsURL,
 	}, nil
+}
+
+func parseBoolEnv(key string) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return false
+	}
+	parsed, err := strconv.ParseBool(value)
+	return err == nil && parsed
 }
 
 // getCPUShares returns the CPU shares from environment variable BOT_CPU_SHARES.

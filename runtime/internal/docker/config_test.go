@@ -82,6 +82,7 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 	os.Setenv("MINIO_ACCESS_KEY", "access-key")
 	os.Setenv("MINIO_SECRET_KEY", "secret-key")
 	os.Setenv("MINIO_SSL", "true")
+	os.Unsetenv("MINIO_USE_SSL")
 	os.Setenv("MINIO_CODE_BUCKET", "custom-code-bucket")
 	os.Setenv("MINIO_STATE_BUCKET", "custom-state-bucket")
 	os.Setenv("MINIO_LOGS_BUCKET", "custom-logs-bucket")
@@ -98,6 +99,7 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 		os.Unsetenv("MINIO_ACCESS_KEY")
 		os.Unsetenv("MINIO_SECRET_KEY")
 		os.Unsetenv("MINIO_SSL")
+		os.Unsetenv("MINIO_USE_SSL")
 		os.Unsetenv("MINIO_CODE_BUCKET")
 		os.Unsetenv("MINIO_STATE_BUCKET")
 		os.Unsetenv("MINIO_LOGS_BUCKET")
@@ -131,6 +133,25 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 	assert.Equal(t, "custom-network", cfg.DockerNetwork)
 }
 
+func TestLoadConfigFromEnv_MinIOUseSSL(t *testing.T) {
+	os.Setenv("MINIO_ENDPOINT", "localhost:9000")
+	os.Setenv("MINIO_ACCESS_KEY", "test-key")
+	os.Setenv("MINIO_SECRET_KEY", "test-secret")
+	os.Setenv("MINIO_USE_SSL", "1")
+	os.Unsetenv("MINIO_SSL")
+	defer func() {
+		os.Unsetenv("MINIO_ENDPOINT")
+		os.Unsetenv("MINIO_ACCESS_KEY")
+		os.Unsetenv("MINIO_SECRET_KEY")
+		os.Unsetenv("MINIO_USE_SSL")
+	}()
+
+	cfg, err := LoadConfigFromEnv()
+
+	require.NoError(t, err)
+	assert.True(t, cfg.MinIOUseSSL)
+}
+
 func TestLoadConfigFromEnv_DefaultValues(t *testing.T) {
 	// Only set required fields
 	os.Setenv("MINIO_ENDPOINT", "localhost:9000")
@@ -138,6 +159,7 @@ func TestLoadConfigFromEnv_DefaultValues(t *testing.T) {
 	os.Setenv("MINIO_SECRET_KEY", "test-secret")
 	// Clear optional fields
 	os.Unsetenv("MINIO_SSL")
+	os.Unsetenv("MINIO_USE_SSL")
 	os.Unsetenv("BOT_MEMORY_LIMIT_MB")
 	os.Unsetenv("BOT_CPU_SHARES")
 	os.Unsetenv("MAX_STATE_SIZE_MB")

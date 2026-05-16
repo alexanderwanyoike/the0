@@ -202,6 +202,7 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 			if tt.expectedError != "" {
 				assert.Equal(t, tt.expectedError, response.Error)
 			}
+			assert.NotEmpty(t, resultManager.downloadKey)
 			assert.Equal(t, resultManager.downloadKey, resultManager.deleteKey)
 			assert.True(t, response.Duration > 0)
 			assert.False(t, response.Timestamp.IsZero())

@@ -461,17 +461,15 @@ func runQueryServer() {
 		os.Exit(1)
 	}
 
+	var resultManager storage.QueryResultManager
 	storageCfg, err := storage.LoadConfigFromEnv()
 	if err != nil {
-		util.LogMaster("Failed to load storage config: %v", err)
-		os.Exit(1)
+		util.LogMaster("Warning: storage config unavailable; scheduled queries will fail: %v", err)
+	} else if minioClient, err := storage.NewMinioClient(storageCfg); err != nil {
+		util.LogMaster("Warning: MinIO unavailable; scheduled queries will fail: %v", err)
+	} else {
+		resultManager = storage.NewQueryResultManager(minioClient, storageCfg, &util.DefaultLogger{})
 	}
-	minioClient, err := storage.NewMinioClient(storageCfg)
-	if err != nil {
-		util.LogMaster("Failed to create MinIO client: %v", err)
-		os.Exit(1)
-	}
-	resultManager := storage.NewQueryResultManager(minioClient, storageCfg, &util.DefaultLogger{})
 
 	// Create multi-collection bot resolver
 	resolver := dockerrunner.NewMultiBotResolver(mongoClient, runner)

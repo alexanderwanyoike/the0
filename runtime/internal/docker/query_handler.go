@@ -3,6 +3,8 @@ package docker
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -76,7 +78,11 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	queryExecutable.QueryParams = req.Params
 	queryExecutable.IsLongRunning = false
 	queryExecutable.ResultFilePath = ""
-	queryExecutable.QueryResultKey = fmt.Sprintf("%s/%d/result.json", executable.ID, time.Now().UnixNano())
+	resultKey, err := newQueryResultKey(executable.ID)
+	if err != nil {
+		return query.ErrorResponse(fmt.Sprintf("failed to generate query result key: %v", err), start), err
+	}
+	queryExecutable.QueryResultKey = resultKey
 
 	// Add query entrypoint file if not present
 	if queryExecutable.EntrypointFiles == nil {
@@ -109,11 +115,21 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 		return query.ErrorResponse(fmt.Sprintf("failed to download query result: %v", err), start), nil
 	}
 
-	if err := h.resultManager.Delete(ctx, queryExecutable.QueryResultKey); err != nil {
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cleanupCancel()
+	if err := h.resultManager.Delete(cleanupCtx, queryExecutable.QueryResultKey); err != nil {
 		h.logger.Info("Warning: failed to delete query result from MinIO: %v", err)
 	}
 
 	return query.ParseQueryOutput(resultData, start), nil
+}
+
+func newQueryResultKey(botID string) (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%d-%s/result.json", botID, time.Now().UnixNano(), hex.EncodeToString(suffix[:])), nil
 }
 
 // executeRealtimeQuery proxies the query to the bot's HTTP server.
