@@ -96,11 +96,12 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	assert.Equal(t, DefaultCPULimit, botContainer.Resources.Limits.Cpu().String())
 
 	// Check volumes
-	require.Len(t, pod.Spec.Volumes, 4)
+	require.Len(t, pod.Spec.Volumes, 5)
 	assert.Equal(t, "bot-code", pod.Spec.Volumes[0].Name)
 	assert.Equal(t, "bot-state", pod.Spec.Volumes[1].Name)
 	assert.Equal(t, "the0", pod.Spec.Volumes[2].Name)
 	assert.Equal(t, "tmp", pod.Spec.Volumes[3].Name)
+	assert.Equal(t, "query", pod.Spec.Volumes[4].Name)
 
 	require.NotNil(t, pod.Spec.SecurityContext)
 	assert.Equal(t, int64(1000), *pod.Spec.SecurityContext.FSGroup)
@@ -154,6 +155,7 @@ func TestPodGenerator_GeneratePod_WithQueryEntrypoint(t *testing.T) {
 	// Query server should have correct command
 	queryContainer := pod.Spec.Containers[1]
 	assert.Equal(t, []string{"/app/runtime", "execute", "--query-server-only"}, queryContainer.Command)
+	assert.Contains(t, queryContainer.VolumeMounts, corev1.VolumeMount{Name: "query", MountPath: "/query"})
 }
 
 func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
@@ -255,6 +257,7 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 
 	// Should use query entrypoint when available
 	assert.Equal(t, "query.py", envMap["ENTRYPOINT"])
+	assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "query", MountPath: "/query"})
 }
 
 func TestPodGenerator_ValidationErrors(t *testing.T) {

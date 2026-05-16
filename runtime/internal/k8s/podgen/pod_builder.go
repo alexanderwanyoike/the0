@@ -54,12 +54,14 @@ func NewPodBuilder(name, namespace string) *PodBuilder {
 			{Name: "bot-state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			{Name: "the0", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "query", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		},
 		volumeMounts: []corev1.VolumeMount{
 			{Name: "bot-code", MountPath: "/bot"},
 			{Name: "bot-state", MountPath: "/state"},
 			{Name: "the0", MountPath: "/var/the0"},
 			{Name: "tmp", MountPath: "/tmp"},
+			{Name: "query", MountPath: "/query"},
 		},
 		botResources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
@@ -320,10 +322,7 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 		ImagePullPolicy: b.botImagePullPolicy,
 		Command:         []string{"/app/runtime", "execute", "--query-server-only"},
 		Env:             b.botEnv, // Share env with bot container
-		VolumeMounts: []corev1.VolumeMount{
-			{Name: "bot-code", MountPath: "/bot"},
-			{Name: "bot-state", MountPath: "/state"},
-		},
+		VolumeMounts:    b.volumeMounts,
 		Ports: []corev1.ContainerPort{
 			{Name: "query", ContainerPort: 9476, Protocol: corev1.ProtocolTCP},
 		},
