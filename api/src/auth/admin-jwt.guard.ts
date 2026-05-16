@@ -8,6 +8,7 @@ import {
 import { Request } from "express";
 import { AuthService } from "./auth.service";
 import { AuthenticatedRequest } from "./auth.types";
+import { USER_ROLES } from "@/user/user.constants";
 
 @Injectable()
 export class AdminJwtGuard implements CanActivate {
@@ -26,7 +27,7 @@ export class AdminJwtGuard implements CanActivate {
       throw new UnauthorizedException(result.error);
     }
 
-    if (result.data.role !== "admin") {
+    if (result.data.role !== USER_ROLES.ADMIN) {
       throw new ForbiddenException("Admin role required");
     }
 

@@ -9,111 +9,17 @@ import {
   Put,
   UseGuards,
 } from "@nestjs/common";
-import {
-  IsBoolean,
-  IsEmail,
-  IsIn,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MinLength,
-} from "class-validator";
 import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { AuthenticatedUser } from "@/auth/auth.types";
 import { UserService } from "./user.service";
-
-class CreateAdminUserDto {
-  @IsString()
-  @IsOptional()
-  username?: string;
-
-  @IsEmail()
-  email: string;
-
-  @IsString()
-  @MinLength(6)
-  password: string;
-
-  @IsString()
-  @IsOptional()
-  firstName?: string;
-
-  @IsString()
-  @IsOptional()
-  lastName?: string;
-
-  @IsIn(["admin", "user"])
-  @IsOptional()
-  role?: "admin" | "user";
-
-  @IsBoolean()
-  @IsOptional()
-  isActive?: boolean;
-}
-
-class UpdateAdminUserDto {
-  @IsString()
-  @IsOptional()
-  username?: string;
-
-  @IsEmail()
-  @IsOptional()
-  email?: string;
-
-  @IsString()
-  @IsOptional()
-  firstName?: string;
-
-  @IsString()
-  @IsOptional()
-  lastName?: string;
-
-  @IsIn(["admin", "user"])
-  @IsOptional()
-  role?: "admin" | "user";
-
-  @IsBoolean()
-  @IsOptional()
-  isActive?: boolean;
-}
-
-class ResetPasswordDto {
-  @IsString()
-  @MinLength(6)
-  password: string;
-}
-
-class UpdateProfileDto {
-  @IsString()
-  @IsOptional()
-  username?: string;
-
-  @IsString()
-  @IsOptional()
-  firstName?: string;
-
-  @IsString()
-  @IsOptional()
-  lastName?: string;
-}
-
-class ChangePasswordDto {
-  @IsString()
-  @IsNotEmpty()
-  currentPassword: string;
-
-  @IsString()
-  @MinLength(6)
-  newPassword: string;
-}
-
-class DeleteAccountDto {
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-}
+import { ChangePasswordDto } from "./dto/change-password.dto";
+import { CreateAdminUserDto } from "./dto/create-admin-user.dto";
+import { DeleteAccountDto } from "./dto/delete-account.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { UpdateAdminUserDto } from "./dto/update-admin-user.dto";
+import { UpdateProfileDto } from "./dto/update-profile.dto";
 
 @Controller()
 export class UserController {

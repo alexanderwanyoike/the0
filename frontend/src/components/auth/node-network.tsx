@@ -69,6 +69,9 @@ export function NodeNetwork() {
 
     let w = 0;
     let h = 0;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
 
     const initCode = () => {
       codeRef.current = Array.from({ length: 24 }, () => ({
@@ -266,18 +269,22 @@ export function NodeNetwork() {
       ctx.textBaseline = "middle";
       ctx.textAlign = "left";
       codeRef.current.forEach((c) => {
-        c.x += c.vx;
-        c.y += c.vy;
-        if (c.x < -300) c.x = w + 50;
-        if (c.x > w + 50) c.x = -300;
-        if (c.y < -30) c.y = h + 30;
-        if (c.y > h + 30) c.y = -30;
+        if (!reduceMotion) {
+          c.x += c.vx;
+          c.y += c.vy;
+          if (c.x < -300) c.x = w + 50;
+          if (c.x > w + 50) c.x = -300;
+          if (c.y < -30) c.y = h + 30;
+          if (c.y > h + 30) c.y = -30;
+        }
         ctx.font = `${c.size}px ${TERM_FONT}`;
         ctx.fillStyle = `rgba(${BRIGHT.r}, ${BRIGHT.g}, ${BRIGHT.b}, ${c.opacity})`;
         ctx.fillText(c.text, c.x, c.y);
       });
 
-      animationRef.current = requestAnimationFrame(animate);
+      if (!reduceMotion) {
+        animationRef.current = requestAnimationFrame(animate);
+      }
     };
 
     resize();

@@ -1,6 +1,6 @@
 import { getDatabase, getDatabaseConfig } from "./connection";
 import { usersTable, usersTableSqlite } from "./schema/users";
-import { hash } from "bcrypt";
+import { hashPassword } from "@/common/password";
 import { createId } from "@paralleldrive/cuid2";
 import pino from "pino";
 
@@ -14,7 +14,7 @@ async function seedDatabase() {
 
   try {
     // Create default admin user
-    const adminPasswordHash = await hash("admin123", 10);
+    const adminPasswordHash = await hashPassword("admin123");
     const adminUser = {
       id: createId(),
       username: "admin",

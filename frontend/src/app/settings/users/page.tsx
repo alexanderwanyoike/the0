@@ -47,6 +47,18 @@ const emptyCreateForm = {
   role: "user" as "admin" | "user",
 };
 
+async function readErrorMessage(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const body = await response.json();
+    return body.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function UserManagementPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -74,8 +86,8 @@ export default function UserManagementPage() {
         throw new Error(body.message || "Failed to load users");
       }
       setUsers(body.data || []);
-    } catch (err: any) {
-      setError(err.message || "Failed to load users");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load users");
     } finally {
       setIsFetching(false);
     }
@@ -96,53 +108,67 @@ export default function UserManagementPage() {
 
   const updateUser = async (id: string, body: Partial<ManagedUser>) => {
     setError(null);
-    const response = await authFetch(`/api/admin/users/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.message || "Failed to update user");
-      return;
+    try {
+      const response = await authFetch(`/api/admin/users/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, "Failed to update user"));
+        return;
+      }
+      const data = await response.json();
+      setUsers((current) =>
+        current.map((managedUser) =>
+          managedUser.id === id ? data.data : managedUser,
+        ),
+      );
+    } catch {
+      setError("Failed to update user");
     }
-    setUsers((current) =>
-      current.map((managedUser) =>
-        managedUser.id === id ? data.data : managedUser,
-      ),
-    );
   };
 
   const createUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    const response = await authFetch("/api/admin/users", {
-      method: "POST",
-      body: JSON.stringify(createForm),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setError(body.message || "Failed to create user");
-      return;
+    try {
+      const response = await authFetch("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify(createForm),
+      });
+      if (!response.ok) {
+        setError(await readErrorMessage(response, "Failed to create user"));
+        return;
+      }
+      const body = await response.json();
+      setUsers((current) => [...current, body.data]);
+      setCreateForm(emptyCreateForm);
+      setCreateOpen(false);
+    } catch {
+      setError("Failed to create user");
     }
-    setUsers((current) => [...current, body.data]);
-    setCreateForm(emptyCreateForm);
-    setCreateOpen(false);
   };
 
   const resetPassword = async (id: string) => {
     const password = resetPasswords[id];
     if (!password) return;
     setError(null);
-    const response = await authFetch(`/api/admin/users/${id}/reset-password`, {
-      method: "POST",
-      body: JSON.stringify({ password }),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setError(body.message || "Failed to reset password");
-      return;
+    try {
+      const response = await authFetch(
+        `/api/admin/users/${id}/reset-password`,
+        {
+          method: "POST",
+          body: JSON.stringify({ password }),
+        },
+      );
+      if (!response.ok) {
+        setError(await readErrorMessage(response, "Failed to reset password"));
+        return;
+      }
+      setResetPasswords((current) => ({ ...current, [id]: "" }));
+    } catch {
+      setError("Failed to reset password");
     }
-    setResetPasswords((current) => ({ ...current, [id]: "" }));
   };
 
   if (loading || !user || user.role !== "admin") {

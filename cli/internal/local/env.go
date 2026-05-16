@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"the0/internal/logger"
 )
+
+var adminEmailPattern = regexp.MustCompile(`^[A-Za-z0-9.!#$%&'*+/=?^_{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$`)
 
 // defaultEnvContent contains the default .env values matching the compose file
 const defaultEnvContent = `# the0 Local Environment Configuration
@@ -100,8 +103,8 @@ func hasEnvKey(content, key string) bool {
 // SetAdminEmail updates THE0_ADMIN_EMAIL in the local compose .env file.
 func SetAdminEmail(composeDir string, email string) error {
 	email = strings.TrimSpace(email)
-	if email == "" {
-		return fmt.Errorf("email is required")
+	if err := ValidateAdminEmail(email); err != nil {
+		return err
 	}
 
 	envPath := filepath.Join(composeDir, ".env")
@@ -132,6 +135,17 @@ func SetAdminEmail(composeDir string, email string) error {
 		return fmt.Errorf("failed to write .env file: %w", err)
 	}
 
+	return nil
+}
+
+// ValidateAdminEmail checks that an admin email can be safely written to .env.
+func ValidateAdminEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if strings.ContainsAny(email, "\r\n=") || !adminEmailPattern.MatchString(email) {
+		return fmt.Errorf("email must be a valid single-line email address")
+	}
 	return nil
 }
 

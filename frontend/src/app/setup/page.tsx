@@ -8,7 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface SetupStatus {
   setupRequired: boolean;
-  adminEmail?: string;
 }
 
 export default function SetupPage() {
@@ -47,7 +46,7 @@ export default function SetupPage() {
 
   return (
     <AuthBackground>
-      <SetupForm requiredEmail={status.adminEmail} />
+      <SetupForm />
     </AuthBackground>
   );
 }

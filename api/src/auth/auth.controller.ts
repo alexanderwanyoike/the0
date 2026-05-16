@@ -8,42 +8,11 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
+import { LoginDto } from "./dto/login.dto";
+import { SetupDto } from "./dto/setup.dto";
 import { ValidateTokenDto } from "./dto/validate-token.dto";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
-import { IsEmail, IsString, IsNotEmpty, IsOptional } from "class-validator";
 import { ApiKeyService } from "@/api-key/api-key.service";
-
-export class LoginDto {
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-}
-
-export class SetupDto {
-  @IsString()
-  @IsNotEmpty()
-  username: string;
-
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @IsString()
-  @IsOptional()
-  firstName?: string;
-
-  @IsString()
-  @IsOptional()
-  lastName?: string;
-}
 
 @ApiTags("auth")
 @Controller("auth")

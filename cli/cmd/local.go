@@ -205,8 +205,8 @@ func newLocalAdminSetCmd() *cobra.Command {
 		Example: `  the0 local admin set --email you@example.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			email = strings.TrimSpace(email)
-			if email == "" || !strings.Contains(email, "@") {
-				return fmt.Errorf("--email must be a valid email address")
+			if err := local.ValidateAdminEmail(email); err != nil {
+				return fmt.Errorf("--email %w", err)
 			}
 
 			runner, err := local.NewComposeRunner()

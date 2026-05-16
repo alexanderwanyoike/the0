@@ -5,6 +5,7 @@ import {
   boolean,
   jsonb,
   index,
+  integer as pgInteger,
 } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
@@ -20,16 +21,21 @@ export const usersTable = pgTable("users", {
   firstName: varchar("first_name", { length: 255 }),
   lastName: varchar("last_name", { length: 255 }),
   role: varchar("role", { length: 50 }).default("user").notNull(),
+  sessionVersion: pgInteger("session_version").default(0).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   isEmailVerified: boolean("is_email_verified").default(false).notNull(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-  metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
+});
+
+export const setupLocksTable = pgTable("setup_locks", {
+  id: varchar("id", { length: 50 }).primaryKey(),
 });
 
 // SQLite Users table
@@ -43,13 +49,14 @@ export const usersTableSqlite = sqliteTable("users", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   role: text("role").default("user").notNull(),
+  sessionVersion: integer("session_version").default(0).notNull(),
   isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
   isEmailVerified: integer("is_email_verified", { mode: "boolean" })
     .default(false)
     .notNull(),
   lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
   metadata: text("metadata", { mode: "json" })
-    .$type<Record<string, any>>()
+    .$type<Record<string, unknown>>()
     .default({}),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -57,6 +64,10 @@ export const usersTableSqlite = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
+});
+
+export const setupLocksTableSqlite = sqliteTable("setup_locks", {
+  id: text("id").primaryKey(),
 });
 
 // PostgreSQL API Keys table
@@ -107,5 +118,6 @@ export const apiKeysTableSqlite = sqliteTable("api_keys", {
 
 export type User = typeof usersTable.$inferSelect;
 export type NewUser = typeof usersTable.$inferInsert;
+export type SetupLock = typeof setupLocksTable.$inferSelect;
 export type ApiKey = typeof apiKeysTable.$inferSelect;
 export type NewApiKey = typeof apiKeysTable.$inferInsert;

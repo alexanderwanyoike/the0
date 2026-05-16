@@ -396,6 +396,36 @@ func TestSetAdminEmail_AppendsMissingKey(t *testing.T) {
 	}
 }
 
+func TestSetAdminEmail_RejectsUnsafeEmail(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminEmail(tmpDir, "admin@example.com\nJWT_SECRET=bad"); err == nil {
+		t.Fatal("Expected unsafe email to be rejected")
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if strings.Contains(content, "JWT_SECRET=bad") {
+		t.Errorf("Expected unsafe value not to be written, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=old@example.com") {
+		t.Errorf("Expected original email to be preserved, got: %s", content)
+	}
+}
+
 func TestGenerateEnvFile_CorrectPermissions(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {

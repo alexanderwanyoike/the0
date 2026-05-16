@@ -6,11 +6,19 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { getDatabase } from "../database/connection";
-import { usersTable, usersTableSqlite } from "../database/schema/users";
+import {
+  setupLocksTable,
+  setupLocksTableSqlite,
+  usersTable,
+  usersTableSqlite,
+} from "../database/schema/users";
 import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import { Result } from "../common/result";
 import { getDatabaseConfig } from "../database/connection";
+import { hashPassword } from "@/common/password";
+import { USER_ROLES, UserRole } from "@/user/user.constants";
+import { UserRecord } from "@/user/user.types";
 
 const CONNECTION_ERROR_CODES = new Set([
   "ETIMEDOUT",
@@ -21,11 +29,14 @@ const CONNECTION_ERROR_CODES = new Set([
   "CONNECT_TIMEOUT",
 ]);
 
+const SETUP_LOCK_ID = "first-admin";
+
 function isConnectionError(error: unknown): boolean {
   if (error instanceof AggregateError) {
     return error.errors.some(isConnectionError);
   }
-  return CONNECTION_ERROR_CODES.has((error as any)?.code);
+  const code = (error as { code?: unknown })?.code;
+  return typeof code === "string" && CONNECTION_ERROR_CODES.has(code);
 }
 
 export interface AuthUser {
@@ -36,7 +47,7 @@ export interface AuthUser {
   lastName?: string;
   isActive: boolean;
   isEmailVerified: boolean;
-  role: "admin" | "user";
+  role: UserRole;
 }
 
 export interface LoginCredentials {
@@ -58,14 +69,30 @@ export interface SetupStatus {
   hasAdmin: boolean;
   adminConfigured: boolean;
   adminEmailRequired: boolean;
-  adminEmail?: string;
   warning?: string;
   docsUrl: string;
+}
+
+interface JwtPayload {
+  sub: string;
+  username?: string;
+  email?: string;
+  role?: UserRole;
+  sessionVersion?: number;
+}
+
+function metadataRole(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== "object") {
+    return undefined;
+  }
+  const role = (metadata as { role?: unknown }).role;
+  return typeof role === "string" ? role : undefined;
 }
 
 @Injectable({ scope: Scope.DEFAULT })
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private setupLock = Promise.resolve();
 
   constructor(private jwtService: JwtService) {}
 
@@ -74,29 +101,50 @@ export class AuthService {
     return config.type === "sqlite" ? usersTableSqlite : usersTable;
   }
 
-  private toAuthUser(user: any): AuthUser {
+  private getSetupLockTable() {
+    const config = getDatabaseConfig();
+    return config.type === "sqlite" ? setupLocksTableSqlite : setupLocksTable;
+  }
+
+  private toAuthUser(user: UserRecord): AuthUser {
     return {
       id: user.id,
       username: user.username,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      firstName: user.firstName ?? undefined,
+      lastName: user.lastName ?? undefined,
       isActive: Boolean(user.isActive),
       isEmailVerified: Boolean(user.isEmailVerified),
-      role: user.role === "admin" ? "admin" : "user",
+      role: user.role === USER_ROLES.ADMIN ? USER_ROLES.ADMIN : USER_ROLES.USER,
     };
   }
 
-  private signUser(user: any): { token: string; user: AuthUser } {
+  private signUser(user: UserRecord): { token: string; user: AuthUser } {
     const authUser = this.toAuthUser(user);
     const token = this.jwtService.sign({
       sub: authUser.id,
       username: authUser.username,
       email: authUser.email,
       role: authUser.role,
+      sessionVersion: user.sessionVersion,
     });
 
     return { token, user: authUser };
+  }
+
+  private async withSetupLock<T>(callback: () => Promise<T>): Promise<T> {
+    const previousLock = this.setupLock;
+    let releaseLock: () => void = () => undefined;
+    this.setupLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+
+    await previousLock;
+    try {
+      return await callback();
+    } finally {
+      releaseLock();
+    }
   }
 
   private getConfiguredAdminEmail(): string | undefined {
@@ -107,9 +155,9 @@ export class AuthService {
   async getSetupStatus(): Promise<SetupStatus> {
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = await db.select().from(userTable);
-    const activeUsers = users.filter((user: any) => Boolean(user.isActive));
-    const hasAdmin = activeUsers.some((user: any) => user.role === "admin");
+    const users = (await db.select().from(userTable)) as UserRecord[];
+    const activeUsers = users.filter((user) => Boolean(user.isActive));
+    const hasAdmin = activeUsers.some((user) => user.role === USER_ROLES.ADMIN);
     const adminEmail = this.getConfiguredAdminEmail();
 
     return {
@@ -118,7 +166,6 @@ export class AuthService {
       hasAdmin,
       adminConfigured: hasAdmin,
       adminEmailRequired: Boolean(adminEmail),
-      adminEmail,
       warning:
         users.length > 0 && !hasAdmin
           ? "No admin configured. See docs/deployment/admin-bootstrap.md"
@@ -130,75 +177,109 @@ export class AuthService {
   async createFirstAdmin(
     credentials: SetupCredentials,
   ): Promise<Result<{ token: string; user: AuthUser }, string>> {
-    try {
-      const db = getDatabase();
-      const userTable = this.getUserTable();
-      const users = await db.select().from(userTable);
+    return this.withSetupLock(async () => {
+      let setupLockClaimed = false;
+      try {
+        const db = getDatabase();
+        const userTable = this.getUserTable();
+        const setupLockTable = this.getSetupLockTable();
+        const users = (await db.select().from(userTable)) as UserRecord[];
 
-      if (users.length > 0) {
-        return Failure("Setup is only available before users exist");
+        if (users.length > 0) {
+          return failure("Setup is only available before users exist");
+        }
+
+        const configuredAdminEmail = this.getConfiguredAdminEmail();
+        if (
+          configuredAdminEmail &&
+          credentials.email.trim() !== configuredAdminEmail
+        ) {
+          return failure("Setup email does not match configured admin email");
+        }
+
+        const passwordHash = await hashPassword(credentials.password);
+        try {
+          await db.insert(setupLockTable).values({ id: SETUP_LOCK_ID });
+          setupLockClaimed = true;
+        } catch (error) {
+          if (isConnectionError(error)) {
+            throw error;
+          }
+          return failure("Setup is only available before users exist");
+        }
+
+        const usersBeforeInsert = (await db
+          .select()
+          .from(userTable)) as UserRecord[];
+        if (usersBeforeInsert.length > 0) {
+          await this.releaseSetupLock().catch((): void => undefined);
+          return failure("Setup is only available before users exist");
+        }
+
+        const newUsers = (await db
+          .insert(userTable)
+          .values({
+            username: credentials.username.trim(),
+            email: credentials.email.trim(),
+            passwordHash,
+            firstName: credentials.firstName,
+            lastName: credentials.lastName,
+            role: USER_ROLES.ADMIN,
+            isActive: true,
+            isEmailVerified: true,
+          })
+          .returning()) as UserRecord[];
+
+        return {
+          success: true,
+          error: null,
+          data: this.signUser(newUsers[0]),
+        };
+      } catch (error) {
+        if (isConnectionError(error)) {
+          throw new ServiceUnavailableException(
+            "Database temporarily unavailable",
+          );
+        }
+        if (setupLockClaimed) {
+          await this.releaseSetupLock().catch((): void => undefined);
+        }
+        return failure("Setup failed");
       }
+    });
+  }
 
-      const configuredAdminEmail = this.getConfiguredAdminEmail();
-      if (
-        configuredAdminEmail &&
-        credentials.email.trim() !== configuredAdminEmail
-      ) {
-        return Failure(`Setup must use ${configuredAdminEmail}`);
-      }
-
-      const passwordHash = await bcrypt.hash(credentials.password, 10);
-      const newUsers = await db
-        .insert(userTable)
-        .values({
-          username: credentials.username,
-          email: credentials.email,
-          passwordHash,
-          firstName: credentials.firstName,
-          lastName: credentials.lastName,
-          role: "admin",
-          isActive: true,
-          isEmailVerified: true,
-        })
-        .returning();
-
-      return {
-        success: true,
-        error: null,
-        data: this.signUser(newUsers[0]),
-      };
-    } catch (error) {
-      if (isConnectionError(error)) {
-        throw new ServiceUnavailableException(
-          "Database temporarily unavailable",
-        );
-      }
-      return Failure("Setup failed");
-    }
+  private async releaseSetupLock(): Promise<void> {
+    const db = getDatabase();
+    const setupLockTable = this.getSetupLockTable();
+    await db.delete(setupLockTable).where(eq(setupLockTable.id, SETUP_LOCK_ID));
   }
 
   async bootstrapAdminFromExistingUsers(): Promise<void> {
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = await db.select().from(userTable);
+    const users = (await db.select().from(userTable)) as UserRecord[];
 
     if (users.length === 0) {
       return;
     }
 
     for (const user of users) {
-      const metadataRole = (user as any).metadata?.role;
-      if (metadataRole === "admin" && (user as any).role !== "admin") {
+      const roleFromMetadata = metadataRole(user.metadata);
+      if (
+        roleFromMetadata === USER_ROLES.ADMIN &&
+        user.role !== USER_ROLES.ADMIN
+      ) {
         await db
           .update(userTable)
-          .set({ role: "admin", updatedAt: new Date() })
-          .where(eq(userTable.id, (user as any).id));
+          .set({ role: USER_ROLES.ADMIN, updatedAt: new Date() })
+          .where(eq(userTable.id, user.id));
       }
     }
 
-    const refreshedUsers = await db.select().from(userTable);
+    const refreshedUsers = (await db.select().from(userTable)) as UserRecord[];
     const activeAdmins = refreshedUsers.filter(
-      (user: any) => user.isActive && user.role === "admin",
+      (user) => user.isActive && user.role === USER_ROLES.ADMIN,
     );
     if (activeAdmins.length > 0) {
       return;
@@ -207,14 +288,13 @@ export class AuthService {
     const configuredAdminEmail = this.getConfiguredAdminEmail();
     if (configuredAdminEmail) {
       const matchingActiveUser = refreshedUsers.find(
-        (user: any) =>
-          user.isActive === true && user.email === configuredAdminEmail,
+        (user) => user.isActive === true && user.email === configuredAdminEmail,
       );
 
       if (matchingActiveUser) {
         await db
           .update(userTable)
-          .set({ role: "admin", updatedAt: new Date() })
+          .set({ role: USER_ROLES.ADMIN, updatedAt: new Date() })
           .where(eq(userTable.id, matchingActiveUser.id));
         this.logger.log(
           `Promoted configured admin user ${configuredAdminEmail}`,
@@ -230,16 +310,16 @@ export class AuthService {
 
   async validateToken(token: string): Promise<Result<AuthUser, string>> {
     try {
-      const payload = this.jwtService.verify(token);
+      const payload = this.jwtService.verify<JwtPayload>(token);
       const db = getDatabase();
       const config = getDatabaseConfig();
 
       const userTable =
         config.type === "sqlite" ? usersTableSqlite : usersTable;
-      const users = await db
+      const users = (await db
         .select()
         .from(userTable)
-        .where(eq(userTable.id, payload.sub));
+        .where(eq(userTable.id, payload.sub))) as UserRecord[];
 
       if (users.length === 0) {
         return {
@@ -254,6 +334,14 @@ export class AuthService {
         return {
           success: false,
           error: "User account is inactive",
+          data: null,
+        };
+      }
+
+      if ((payload.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+        return {
+          success: false,
+          error: "Invalid token",
           data: null,
         };
       }
@@ -288,10 +376,10 @@ export class AuthService {
 
       const userTable =
         config.type === "sqlite" ? usersTableSqlite : usersTable;
-      const users = await db
+      const users = (await db
         .select()
         .from(userTable)
-        .where(eq(userTable.email, credentials.email));
+        .where(eq(userTable.email, credentials.email))) as UserRecord[];
 
       if (users.length === 0) {
         return {
@@ -348,6 +436,6 @@ export class AuthService {
   }
 }
 
-function Failure(error: string): Result<any, string> {
+function failure<T>(error: string): Result<T, string> {
   return { success: false, error, data: null };
 }

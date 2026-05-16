@@ -5,48 +5,38 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql, type AnyColumn } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
+import { hashPassword } from "@/common/password";
 import { getDatabase, getDatabaseConfig } from "@/database/connection";
 import { usersTable, usersTableSqlite } from "@/database/schema/users";
 import { AuthenticatedUser } from "@/auth/auth.types";
-
-type UserRole = "admin" | "user";
-
-export interface CreateAdminUserInput {
-  username?: string;
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
-  role?: UserRole;
-  isActive?: boolean;
-}
-
-export interface UpdateAdminUserInput {
-  username?: string;
-  email?: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  role?: UserRole;
-  isActive?: boolean;
-}
+import { USER_ROLES, UserRole } from "./user.constants";
+import {
+  CreateAdminUserInput,
+  SerializedUser,
+  UpdateAdminUserInput,
+  UpdateProfileInput,
+  UserRecord,
+} from "./user.types";
 
 @Injectable()
 export class UserService {
+  private adminMutationLock = Promise.resolve();
+
   private getUserTable() {
     const config = getDatabaseConfig();
     return config.type === "sqlite" ? usersTableSqlite : usersTable;
   }
 
-  private serializeUser(user: any) {
+  private serializeUser(user: UserRecord): SerializedUser {
     return {
       id: user.id,
       username: user.username,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: user.role === "admin" ? "admin" : "user",
+      role: user.role === USER_ROLES.ADMIN ? USER_ROLES.ADMIN : USER_ROLES.USER,
       isActive: Boolean(user.isActive),
       isEmailVerified: Boolean(user.isEmailVerified),
       lastLoginAt: user.lastLoginAt,
@@ -55,26 +45,49 @@ export class UserService {
     };
   }
 
+  private async withAdminMutationLock<T>(
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    const previousLock = this.adminMutationLock;
+    let releaseLock: () => void = () => undefined;
+    this.adminMutationLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+
+    await previousLock;
+    try {
+      return await callback();
+    } finally {
+      releaseLock();
+    }
+  }
+
   private defaultUsername(email: string): string {
     return email.split("@")[0] || email;
+  }
+
+  private normalizeUsername(username: string | undefined, email: string) {
+    const candidate = username?.trim() || this.defaultUsername(email);
+    return candidate.trim();
   }
 
   async listUsers() {
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = await db.select().from(userTable);
-    return users.map((user: any) => this.serializeUser(user));
+    const users = (await db.select().from(userTable)) as UserRecord[];
+    return users.map((user) => this.serializeUser(user));
   }
 
   async createUser(input: CreateAdminUserInput) {
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const username = input.username || this.defaultUsername(input.email);
+    const email = input.email.trim();
+    const username = this.normalizeUsername(input.username, email);
 
     const existingByEmail = await db
       .select()
       .from(userTable)
-      .where(eq(userTable.email, input.email));
+      .where(eq(userTable.email, email));
     if (existingByEmail.length > 0) {
       throw new BadRequestException("Email is already in use");
     }
@@ -87,20 +100,20 @@ export class UserService {
       throw new BadRequestException("Username is already in use");
     }
 
-    const passwordHash = await bcrypt.hash(input.password, 10);
-    const users = await db
+    const passwordHash = await hashPassword(input.password);
+    const users = (await db
       .insert(userTable)
       .values({
         username,
-        email: input.email,
+        email,
         passwordHash,
         firstName: input.firstName,
         lastName: input.lastName,
-        role: input.role || "user",
+        role: input.role || USER_ROLES.USER,
         isActive: input.isActive ?? true,
         isEmailVerified: true,
       })
-      .returning();
+      .returning()) as UserRecord[];
 
     return this.serializeUser(users[0]);
   }
@@ -110,11 +123,21 @@ export class UserService {
     input: UpdateAdminUserInput,
     actor: AuthenticatedUser,
   ) {
+    return this.withAdminMutationLock(() =>
+      this.updateUserWithAdminMutationLock(id, input, actor),
+    );
+  }
+
+  private async updateUserWithAdminMutationLock(
+    id: string,
+    input: UpdateAdminUserInput,
+    actor: AuthenticatedUser,
+  ) {
     const db = getDatabase();
     const userTable = this.getUserTable();
     const user = await this.requireUser(id);
 
-    if (id === actor.id && input.role && input.role !== "admin") {
+    if (id === actor.id && input.role && input.role !== USER_ROLES.ADMIN) {
       throw new ForbiddenException("You cannot demote your own admin account");
     }
     if (id === actor.id && input.isActive === false) {
@@ -125,21 +148,24 @@ export class UserService {
 
     await this.assertAdminWillRemain(user, input);
 
-    if (input.email && input.email !== user.email) {
+    const nextEmail = input.email?.trim();
+    const nextUsername = input.username?.trim();
+
+    if (nextEmail && nextEmail !== user.email) {
       const existing = await db
         .select()
         .from(userTable)
-        .where(eq(userTable.email, input.email));
+        .where(eq(userTable.email, nextEmail));
       if (existing.length > 0) {
         throw new BadRequestException("Email is already in use");
       }
     }
 
-    if (input.username && input.username !== user.username) {
+    if (nextUsername && nextUsername !== user.username) {
       const existing = await db
         .select()
         .from(userTable)
-        .where(eq(userTable.username, input.username));
+        .where(eq(userTable.username, nextUsername));
       if (existing.length > 0) {
         throw new BadRequestException("Username is already in use");
       }
@@ -148,20 +174,30 @@ export class UserService {
     const updates: Record<string, unknown> = {
       updatedAt: new Date(),
     };
-    for (const key of ["username", "email", "firstName", "lastName", "role"]) {
-      if ((input as any)[key] !== undefined) {
-        updates[key] = (input as any)[key];
-      }
+    if (nextUsername !== undefined) {
+      updates.username = nextUsername;
+    }
+    if (nextEmail !== undefined) {
+      updates.email = nextEmail;
+    }
+    if (input.firstName !== undefined) {
+      updates.firstName = input.firstName;
+    }
+    if (input.lastName !== undefined) {
+      updates.lastName = input.lastName;
+    }
+    if (input.role !== undefined) {
+      updates.role = input.role;
     }
     if (input.isActive !== undefined) {
       updates.isActive = input.isActive;
     }
 
-    const updated = await db
+    const updated = (await db
       .update(userTable)
       .set(updates)
       .where(eq(userTable.id, id))
-      .returning();
+      .returning()) as UserRecord[];
 
     return this.serializeUser(updated[0]);
   }
@@ -171,47 +207,47 @@ export class UserService {
     const userTable = this.getUserTable();
     await this.requireUser(id);
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const updated = await db
+    const passwordHash = await hashPassword(password);
+    const updated = (await db
       .update(userTable)
-      .set({ passwordHash, updatedAt: new Date() })
+      .set({
+        passwordHash,
+        sessionVersion: sqlIncrement(userTable.sessionVersion),
+        updatedAt: new Date(),
+      })
       .where(eq(userTable.id, id))
-      .returning();
+      .returning()) as UserRecord[];
 
     return this.serializeUser(updated[0]);
   }
 
-  async updateProfile(
-    actor: AuthenticatedUser,
-    input: { username?: string; firstName?: string; lastName?: string },
-  ) {
+  async updateProfile(actor: AuthenticatedUser, input: UpdateProfileInput) {
     const db = getDatabase();
     const userTable = this.getUserTable();
     const updates: Record<string, unknown> = { updatedAt: new Date() };
 
-    if (input.username) {
+    const nextUsername = input.username?.trim();
+
+    if (nextUsername) {
       const existing = await db
         .select()
         .from(userTable)
         .where(
-          and(
-            eq(userTable.username, input.username),
-            ne(userTable.id, actor.id),
-          ),
+          and(eq(userTable.username, nextUsername), ne(userTable.id, actor.id)),
         );
       if (existing.length > 0) {
         throw new BadRequestException("Username is already in use");
       }
-      updates.username = input.username;
+      updates.username = nextUsername;
     }
     if (input.firstName !== undefined) updates.firstName = input.firstName;
     if (input.lastName !== undefined) updates.lastName = input.lastName;
 
-    const updated = await db
+    const updated = (await db
       .update(userTable)
       .set(updates)
       .where(eq(userTable.id, actor.id))
-      .returning();
+      .returning()) as UserRecord[];
 
     return this.serializeUser(updated[0]);
   }
@@ -233,16 +269,29 @@ export class UserService {
       throw new UnauthorizedException("Current password is incorrect");
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     await db
       .update(userTable)
-      .set({ passwordHash, updatedAt: new Date() })
+      .set({
+        passwordHash,
+        sessionVersion: sqlIncrement(userTable.sessionVersion),
+        updatedAt: new Date(),
+      })
       .where(eq(userTable.id, actor.id));
 
     return { success: true };
   }
 
   async deleteAccount(actor: AuthenticatedUser, password: string) {
+    return this.withAdminMutationLock(() =>
+      this.deleteAccountWithAdminMutationLock(actor, password),
+    );
+  }
+
+  private async deleteAccountWithAdminMutationLock(
+    actor: AuthenticatedUser,
+    password: string,
+  ) {
     const db = getDatabase();
     const userTable = this.getUserTable();
     const user = await this.requireUser(actor.id);
@@ -258,38 +307,46 @@ export class UserService {
     return { success: true };
   }
 
-  private async requireUser(id: string) {
+  private async requireUser(id: string): Promise<UserRecord> {
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = await db.select().from(userTable).where(eq(userTable.id, id));
+    const users = (await db
+      .select()
+      .from(userTable)
+      .where(eq(userTable.id, id))) as UserRecord[];
     if (users.length === 0) {
       throw new NotFoundException("User not found");
     }
-    return users[0] as any;
+    return users[0];
   }
 
   private async assertAdminWillRemain(
-    currentUser: any,
+    currentUser: UserRecord,
     input: { role?: UserRole; isActive?: boolean },
   ) {
-    if (currentUser.role !== "admin" || !currentUser.isActive) {
+    if (currentUser.role !== USER_ROLES.ADMIN || !currentUser.isActive) {
       return;
     }
 
-    const wouldRemoveAdmin = input.role === "user" || input.isActive === false;
+    const wouldRemoveAdmin =
+      input.role === USER_ROLES.USER || input.isActive === false;
     if (!wouldRemoveAdmin) {
       return;
     }
 
     const db = getDatabase();
     const userTable = this.getUserTable();
-    const users = await db.select().from(userTable);
+    const users = (await db.select().from(userTable)) as UserRecord[];
     const activeAdminCount = users.filter(
-      (user: any) => user.isActive && user.role === "admin",
+      (user) => user.isActive && user.role === USER_ROLES.ADMIN,
     ).length;
 
     if (activeAdminCount <= 1) {
       throw new ForbiddenException("At least one active admin is required");
     }
   }
+}
+
+function sqlIncrement(column: AnyColumn) {
+  return sql`${column} + 1`;
 }

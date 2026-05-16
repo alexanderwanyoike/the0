@@ -11,7 +11,8 @@ export class AdminBootstrapService implements OnModuleInit {
     try {
       await this.authService.bootstrapAdminFromExistingUsers();
     } catch (error) {
-      this.logger.error({ err: error }, "Admin bootstrap check failed");
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error("Admin bootstrap check failed", stack);
     }
   }
 }

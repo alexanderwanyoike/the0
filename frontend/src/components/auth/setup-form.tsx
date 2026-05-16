@@ -15,9 +15,9 @@ import { Label } from "@/components/ui/label";
 import { APP_NAME } from "@/lib/constants";
 import { useAuth } from "@/contexts/auth-context";
 
-export function SetupForm({ requiredEmail }: { requiredEmail?: string }) {
+export function SetupForm() {
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState(requiredEmail || "");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export function SetupForm({ requiredEmail }: { requiredEmail?: string }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isLoading || Boolean(requiredEmail)}
+              disabled={isLoading}
             />
           </div>
           <div className="space-y-2">
