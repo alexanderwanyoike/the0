@@ -42,22 +42,26 @@ type PodBuilder struct {
 // NewPodBuilder creates a new PodBuilder with sensible defaults.
 func NewPodBuilder(name, namespace string) *PodBuilder {
 	return &PodBuilder{
-		name:          name,
-		namespace:     namespace,
-		labels:        make(map[string]string),
-		annotations:   make(map[string]string),
-		restartPolicy: corev1.RestartPolicyAlways,
-		botCommand:    []string{"/app/runtime", "execute", "--skip-sync", "--skip-query-server"},
+		name:               name,
+		namespace:          namespace,
+		labels:             make(map[string]string),
+		annotations:        make(map[string]string),
+		restartPolicy:      corev1.RestartPolicyAlways,
+		botCommand:         []string{"/app/runtime", "execute", "--skip-sync", "--skip-query-server"},
 		botImagePullPolicy: corev1.PullIfNotPresent,
 		volumes: []corev1.Volume{
 			{Name: "bot-code", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			{Name: "bot-state", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			{Name: "the0", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "query", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		},
 		volumeMounts: []corev1.VolumeMount{
 			{Name: "bot-code", MountPath: "/bot"},
 			{Name: "bot-state", MountPath: "/state"},
 			{Name: "the0", MountPath: "/var/the0"},
+			{Name: "tmp", MountPath: "/tmp"},
+			{Name: "query", MountPath: "/query"},
 		},
 		botResources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
@@ -69,7 +73,46 @@ func NewPodBuilder(name, namespace string) *PodBuilder {
 				corev1.ResourceCPU:    resource.MustParse(DefaultCPURequest),
 			},
 		},
+		errors: []error{},
 	}
+}
+
+func hardenedContainerSecurityContext() *corev1.SecurityContext {
+	runAsUser := int64(1000)
+	runAsGroup := int64(1000)
+	readOnlyRootFilesystem := true
+	allowPrivilegeEscalation := false
+
+	return &corev1.SecurityContext{
+		RunAsNonRoot:             boolPtr(true),
+		RunAsUser:                &runAsUser,
+		RunAsGroup:               &runAsGroup,
+		ReadOnlyRootFilesystem:   &readOnlyRootFilesystem,
+		AllowPrivilegeEscalation: &allowPrivilegeEscalation,
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+	}
+}
+
+func hardenedPodSecurityContext() *corev1.PodSecurityContext {
+	runAsUser := int64(1000)
+	runAsGroup := int64(1000)
+	fsGroup := int64(1000)
+
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot: boolPtr(true),
+		RunAsUser:    &runAsUser,
+		RunAsGroup:   &runAsGroup,
+		FSGroup:      &fsGroup,
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 // WithImage sets the container image for the bot.
@@ -266,6 +309,7 @@ func (b *PodBuilder) WithSyncSidecar(image string, botID string, watchDone bool)
 				corev1.ResourceCPU:    resource.MustParse("100m"),
 			},
 		},
+		SecurityContext: hardenedContainerSecurityContext(),
 	}
 	return b
 }
@@ -278,10 +322,7 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 		ImagePullPolicy: b.botImagePullPolicy,
 		Command:         []string{"/app/runtime", "execute", "--query-server-only"},
 		Env:             b.botEnv, // Share env with bot container
-		VolumeMounts: []corev1.VolumeMount{
-			{Name: "bot-code", MountPath: "/bot"},
-			{Name: "bot-state", MountPath: "/state"},
-		},
+		VolumeMounts:    b.volumeMounts,
 		Ports: []corev1.ContainerPort{
 			{Name: "query", ContainerPort: 9476, Protocol: corev1.ProtocolTCP},
 		},
@@ -295,6 +336,7 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 				corev1.ResourceCPU:    resource.MustParse("200m"),
 			},
 		},
+		SecurityContext: hardenedContainerSecurityContext(),
 	}
 	return b
 }
@@ -356,6 +398,7 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 			Env:             b.botEnv,
 			VolumeMounts:    b.volumeMounts,
 			Resources:       b.botResources,
+			SecurityContext: hardenedContainerSecurityContext(),
 		},
 	}
 
@@ -379,10 +422,11 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 			Annotations: b.annotations,
 		},
 		Spec: corev1.PodSpec{
-			RestartPolicy:  b.restartPolicy,
-			InitContainers: initContainers,
-			Containers:     containers,
-			Volumes:        b.volumes,
+			SecurityContext: hardenedPodSecurityContext(),
+			RestartPolicy:   b.restartPolicy,
+			InitContainers:  initContainers,
+			Containers:      containers,
+			Volumes:         b.volumes,
 		},
 	}, nil
 }

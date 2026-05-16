@@ -15,7 +15,7 @@
 #   - ghc96: Pre-compiled Haskell binaries
 
 # Stage 1: Build the runtime binary from Go source
-FROM golang:1.24-alpine AS runtime-builder
+FROM dhi.io/golang:1.25-alpine3.22-dev AS runtime-builder
 RUN apk --no-cache add make git
 WORKDIR /build
 COPY go.mod go.sum ./
@@ -89,10 +89,13 @@ RUN chmod 755 /app/wrappers/*.py /app/wrappers/*.js
 # /state - Bot persistent state (synced to MinIO)
 # /query - Query results (for ephemeral queries)
 # /var/the0/logs - Bot logs (synced to MinIO)
-RUN mkdir -p /bot /state /query /var/the0/logs
+RUN mkdir -p /bot /state /query /var/the0/logs \
+    && chown -R 1000:1000 /app /bot /state /query /var/the0
 
 # Set working directory to bot code location
 WORKDIR /bot
+
+USER 1000:1000
 
 # The execute command handles everything:
 # - Downloads code from MinIO

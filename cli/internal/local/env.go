@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"the0/internal/logger"
 )
@@ -34,24 +35,54 @@ JWT_EXPIRES_IN=24h
 API_PORT=3000
 FRONTEND_PORT=3001
 DOCS_PORT=3002
+
+# Docker socket access for non-root runtime services
+DOCKER_GID={{DOCKER_GID}}
 `
 
 // GenerateEnvFile writes a .env file with default values to the compose directory.
-// It does not overwrite an existing .env file.
+// It preserves existing values and appends newly required defaults.
 func GenerateEnvFile(composeDir string) error {
 	envPath := filepath.Join(composeDir, ".env")
+	dockerGID := detectDockerSocketGID()
+	defaults := strings.ReplaceAll(defaultEnvContent, "{{DOCKER_GID}}", dockerGID)
 
 	if _, err := os.Stat(envPath); err == nil {
+		data, err := os.ReadFile(envPath)
+		if err != nil {
+			return fmt.Errorf("failed to read existing env file: %w", err)
+		}
+		if !hasEnvKey(string(data), "DOCKER_GID") {
+			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				return fmt.Errorf("failed to update env file: %w", err)
+			}
+			defer f.Close()
+			if _, err := fmt.Fprintf(f, "\n# Docker socket access for non-root runtime services\nDOCKER_GID=%s\n", dockerGID); err != nil {
+				return fmt.Errorf("failed to append Docker GID to env file: %w", err)
+			}
+			logger.Verbose("Updated .env file with DOCKER_GID")
+		}
 		logger.Verbose("Skipping .env generation (already exists)")
 		return nil
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to check env file: %w", err)
 	}
 
-	if err := os.WriteFile(envPath, []byte(defaultEnvContent), 0600); err != nil {
+	if err := os.WriteFile(envPath, []byte(defaults), 0600); err != nil {
 		return err
 	}
 
 	logger.Verbose("Generated .env file at %s", envPath)
 	return nil
+}
+
+func hasEnvKey(content, key string) bool {
+	prefix := key + "="
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+			return true
+		}
+	}
+	return false
 }

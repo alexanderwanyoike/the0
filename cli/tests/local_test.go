@@ -227,6 +227,7 @@ func TestGenerateEnvFile_CreatesFile(t *testing.T) {
 		"API_PORT=",
 		"FRONTEND_PORT=",
 		"DOCS_PORT=",
+		"DOCKER_GID=",
 	}
 
 	for _, key := range expectedKeys {
@@ -236,7 +237,7 @@ func TestGenerateEnvFile_CreatesFile(t *testing.T) {
 	}
 }
 
-func TestGenerateEnvFile_DoesNotOverwriteExisting(t *testing.T) {
+func TestGenerateEnvFile_PreservesExistingAndAddsDockerGID(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -250,20 +251,81 @@ func TestGenerateEnvFile_DoesNotOverwriteExisting(t *testing.T) {
 		t.Fatalf("Failed to write custom .env: %v", err)
 	}
 
-	// GenerateEnvFile should skip the existing file
 	err = local.GenerateEnvFile(tmpDir)
 	if err != nil {
 		t.Fatalf("GenerateEnvFile failed: %v", err)
 	}
 
-	// Verify original content is preserved
 	data, err := os.ReadFile(envPath)
 	if err != nil {
 		t.Fatalf("Failed to read .env file: %v", err)
 	}
 
-	if string(data) != customContent {
-		t.Errorf("Expected original content to be preserved, got: %s", string(data))
+	content := string(data)
+	if !strings.Contains(content, customContent) {
+		t.Errorf("Expected original content to be preserved, got: %s", content)
+	}
+	if !strings.Contains(content, "DOCKER_GID=") {
+		t.Errorf("Expected existing .env to be updated with DOCKER_GID, got: %s", content)
+	}
+}
+
+func TestGenerateEnvFile_IgnoresSimilarDockerGIDKeys(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	customContent := "MY_DOCKER_GID=1234\n"
+	if err := os.WriteFile(envPath, []byte(customContent), 0600); err != nil {
+		t.Fatalf("Failed to write custom .env: %v", err)
+	}
+
+	if err := local.GenerateEnvFile(tmpDir); err != nil {
+		t.Fatalf("GenerateEnvFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env file: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, customContent) {
+		t.Errorf("Expected original content to be preserved, got: %s", content)
+	}
+	if !strings.Contains(content, "\nDOCKER_GID=") {
+		t.Errorf("Expected exact DOCKER_GID key to be added, got: %s", content)
+	}
+}
+
+func TestGenerateEnvFile_DoesNotDuplicateExistingDockerGID(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	customContent := "CUSTOM_KEY=custom_value\nDOCKER_GID=1234\n"
+	if err := os.WriteFile(envPath, []byte(customContent), 0600); err != nil {
+		t.Fatalf("Failed to write custom .env: %v", err)
+	}
+
+	if err := local.GenerateEnvFile(tmpDir); err != nil {
+		t.Fatalf("GenerateEnvFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env file: %v", err)
+	}
+
+	content := string(data)
+	if content != customContent {
+		t.Errorf("Expected existing DOCKER_GID content to be unchanged, got: %s", content)
 	}
 }
 
@@ -836,9 +898,12 @@ func TestExtractComposeFiles_PrebuiltMode(t *testing.T) {
 	}
 
 	// Should contain GHCR image references
-	if !strings.Contains(string(composeData), "ghcr.io/alexanderwanyoike/the0/") {
+	composeContent := string(composeData)
+	if !strings.Contains(composeContent, "ghcr.io/alexanderwanyoike/the0/") {
 		t.Error("Prebuilt compose file should contain GHCR image references")
 	}
+	assertHardenedComposeHealthchecks(t, composeContent)
+	assertDockerSocketGroup(t, composeContent)
 
 	// docker-compose.dev.yml should NOT exist
 	devPath := filepath.Join(composeDir, "docker-compose.dev.yml")
@@ -894,6 +959,8 @@ func TestExtractComposeFiles_SourceMode(t *testing.T) {
 	if !strings.Contains(string(composeData), repoPath) {
 		t.Error("Source compose file should contain the resolved repo path")
 	}
+	assertHardenedComposeHealthchecks(t, string(composeData))
+	assertDockerSocketGroup(t, string(composeData))
 
 	// docker-compose.dev.yml should exist
 	devData, err := os.ReadFile(filepath.Join(composeDir, "docker-compose.dev.yml"))
@@ -914,5 +981,51 @@ func TestExtractComposeFiles_SourceMode(t *testing.T) {
 	}
 	if state.RepoPath != repoPath {
 		t.Errorf("State.RepoPath: expected %q, got %q", repoPath, state.RepoPath)
+	}
+}
+
+func assertDockerSocketGroup(t *testing.T, composeContent string) {
+	t.Helper()
+
+	if count := strings.Count(composeContent, `- /var/run/docker.sock:/var/run/docker.sock`); count != 3 {
+		t.Errorf("Compose content should mount Docker socket for runner, scheduler, and query server (want 3, got %d)", count)
+	}
+	if count := strings.Count(composeContent, `- "${DOCKER_GID:-0}"`); count != 3 {
+		t.Errorf("Compose content should add Docker socket group for runner, scheduler, and query server (want 3, got %d)", count)
+	}
+}
+
+func assertHardenedComposeHealthchecks(t *testing.T, composeContent string) {
+	t.Helper()
+
+	nodeHealthcheck := `test: ["CMD", "node", "/app/scripts/docker-healthcheck.js"]`
+	if count := strings.Count(composeContent, nodeHealthcheck); count != 2 {
+		t.Errorf("Compose content should contain hardened node healthcheck for API and frontend (want 2, got %d)", count)
+	}
+
+	expected := []string{
+		`- "3002:8080"`,
+		`http://127.0.0.1:8080/health`,
+	}
+
+	for _, want := range expected {
+		if !strings.Contains(composeContent, want) {
+			t.Errorf("Compose content should contain %q", want)
+		}
+	}
+
+	unexpected := []string{
+		`node", "-e"`,
+		`require("http").get`,
+		`http://127.0.0.1:3000/health`,
+		`wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1`,
+		`- "3002:80"`,
+		`http://127.0.0.1/health`,
+	}
+
+	for _, notWant := range unexpected {
+		if strings.Contains(composeContent, notWant) {
+			t.Errorf("Compose content should not contain stale config %q", notWant)
+		}
 	}
 }

@@ -233,6 +233,52 @@ func TestBuildBotEnv_QueryParams(t *testing.T) {
 	assert.Contains(t, env, "QUERY_PARAM_offset=20")
 }
 
+func TestBuildBotEnv_PythonPathIncludesVendor(t *testing.T) {
+	old, hadOld := os.LookupEnv("PYTHONPATH")
+	os.Unsetenv("PYTHONPATH")
+	defer func() {
+		if hadOld {
+			_ = os.Setenv("PYTHONPATH", old)
+		} else {
+			os.Unsetenv("PYTHONPATH")
+		}
+	}()
+
+	cfg := &Config{
+		BotID:    "test-bot",
+		Runtime:  "python3.11",
+		CodePath: "/bot",
+	}
+
+	env := BuildBotEnv(cfg)
+
+	sep := string(os.PathListSeparator)
+	assert.Contains(t, env, "PYTHONPATH=/bot/vendor"+sep+"/bot")
+}
+
+func TestBuildBotEnv_PythonPathPreservesExisting(t *testing.T) {
+	old, hadOld := os.LookupEnv("PYTHONPATH")
+	_ = os.Setenv("PYTHONPATH", "/existing")
+	defer func() {
+		if hadOld {
+			_ = os.Setenv("PYTHONPATH", old)
+		} else {
+			os.Unsetenv("PYTHONPATH")
+		}
+	}()
+
+	cfg := &Config{
+		BotID:    "test-bot",
+		Runtime:  "python3.11",
+		CodePath: "/bot",
+	}
+
+	env := BuildBotEnv(cfg)
+
+	sep := string(os.PathListSeparator)
+	assert.Contains(t, env, "PYTHONPATH=/bot/vendor"+sep+"/bot"+sep+"/existing")
+}
+
 func TestBuildBotEnv_BotType(t *testing.T) {
 	cfg := &Config{
 		BotID:   "test-bot",

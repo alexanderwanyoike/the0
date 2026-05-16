@@ -1,0 +1,689 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, dev ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TRIVY_VERSION: 0.70.0
+  GO_VERSION: '1.25.10'
+  NODE_VERSION: '20'
+  GOVULNCHECK_VERSION: v1.3.0
+  OSV_GO_VERSION: '1.25.10'
+  OSV_SCANNER_VERSION: v2.2.3
+  PIP_AUDIT_VERSION: 2.10.0
+  CARGO_AUDIT_VERSION: 0.22.1
+
+jobs:
+  changes:
+    name: Detect security scan targets
+    runs-on: ubuntu-latest
+    outputs:
+      all: ${{ steps.targets.outputs.all }}
+      any_changed: ${{ steps.targets.outputs.any_changed }}
+      trivy_repo: ${{ steps.targets.outputs.trivy_repo }}
+      api: ${{ steps.targets.outputs.api }}
+      frontend: ${{ steps.targets.outputs.frontend }}
+      runtime: ${{ steps.targets.outputs.runtime }}
+      docs: ${{ steps.targets.outputs.docs }}
+      cli: ${{ steps.targets.outputs.cli }}
+      sdk_nodejs: ${{ steps.targets.outputs.sdk_nodejs }}
+      sdk_react: ${{ steps.targets.outputs.sdk_react }}
+      sdk_dotnet: ${{ steps.targets.outputs.sdk_dotnet }}
+      sdk_python: ${{ steps.targets.outputs.sdk_python }}
+      sdk_rust: ${{ steps.targets.outputs.sdk_rust }}
+      sdk_scala: ${{ steps.targets.outputs.sdk_scala }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed scan targets
+        id: targets
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/scripts/security/changed-targets.sh
+
+      - name: Show changed files
+        env:
+          CHANGED_FILES: ${{ steps.targets.outputs.changed_files }}
+        run: |
+          if [[ -n "${CHANGED_FILES}" ]]; then
+            printf '%s\n' "${CHANGED_FILES}"
+          else
+            echo "No changed files detected."
+          fi
+
+  trivy_image_api:
+    name: Trivy image scan (api)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
+      - name: Run image scan
+        run: bash .github/scripts/security/trivy-image-job.sh "api" "the0-security-api:ci" "./api/Dockerfile" "./api"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-image-api
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  trivy_image_frontend:
+    name: Trivy image scan (frontend)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
+      - name: Run image scan
+        run: bash .github/scripts/security/trivy-image-job.sh "frontend" "the0-security-frontend:ci" "./frontend/Dockerfile" "./frontend"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-image-frontend
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  trivy_image_runtime:
+    name: Trivy image scan (runtime)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
+      - name: Run image scan
+        env:
+          DOCKER_BUILD_ATTEMPTS: "5"
+          DOCKER_BUILD_RETRY_DELAY_SECONDS: "60"
+        run: bash .github/scripts/security/trivy-image-job.sh "runtime" "the0-security-runtime:ci" "./runtime/Dockerfile" "./runtime"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-image-runtime
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  trivy_image_docs:
+    name: Trivy image scan (docs)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hardened Images
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_TOKEN }}
+
+      - name: Run image scan
+        run: bash .github/scripts/security/trivy-image-job.sh "docs" "the0-security-docs:ci" "./docs/Dockerfile" "./docs"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-image-docs
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  trivy_repo:
+    name: Trivy repo scan
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.trivy_repo == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: bash .github/scripts/security/install-trivy.sh
+
+      - name: Scan repository for secrets and misconfigurations
+        run: bash .github/scripts/security/trivy-repo-scan.sh
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trivy-repo
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  yarn_audit_api:
+    name: Yarn audit (api)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: api/yarn.lock
+
+      - name: Install dependencies
+        working-directory: api
+        run: yarn install --frozen-lockfile
+
+      - name: Run audit
+        working-directory: api
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/yarn-audit.sh" "api"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-yarn-audit-api
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  yarn_audit_frontend:
+    name: Yarn audit (frontend)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Run audit
+        working-directory: frontend
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/yarn-audit.sh" "frontend"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-yarn-audit-frontend
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  yarn_audit_docs:
+    name: Yarn audit (docs)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: docs/yarn.lock
+
+      - name: Install dependencies
+        working-directory: docs
+        run: yarn install --frozen-lockfile
+
+      - name: Run audit
+        working-directory: docs
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/yarn-audit.sh" "docs"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-yarn-audit-docs
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  yarn_audit_sdk_nodejs:
+    name: Yarn audit (sdk-nodejs)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sdk_nodejs == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: sdk/nodejs/yarn.lock
+
+      - name: Install dependencies
+        working-directory: sdk/nodejs
+        run: yarn install --frozen-lockfile
+
+      - name: Run audit
+        working-directory: sdk/nodejs
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/yarn-audit.sh" "sdk-nodejs"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-yarn-audit-sdk-nodejs
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  yarn_audit_sdk_react:
+    name: Yarn audit (sdk-react)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sdk_react == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: sdk/react/yarn.lock
+
+      - name: Install dependencies
+        working-directory: sdk/react
+        run: yarn install --frozen-lockfile
+
+      - name: Run audit
+        working-directory: sdk/react
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/yarn-audit.sh" "sdk-react"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-yarn-audit-sdk-react
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  govulncheck_cli:
+    name: Govulncheck (cli)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: cli/go.sum
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+
+      - name: Run govulncheck
+        working-directory: cli
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/govulncheck-scan.sh" "cli"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-govulncheck-cli
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  govulncheck_runtime:
+    name: Govulncheck (runtime)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: runtime/go.sum
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+
+      - name: Run govulncheck
+        working-directory: runtime
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/govulncheck-scan.sh" "runtime"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-govulncheck-runtime
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  dotnet_audit:
+    name: .NET audit (sdk-dotnet)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sdk_dotnet == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        working-directory: sdk/dotnet
+        run: dotnet restore
+
+      - name: Run audit
+        working-directory: sdk/dotnet
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/dotnet-audit.sh" "sdk-dotnet"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-dotnet-audit-sdk-dotnet
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  python_audit:
+    name: pip-audit (sdk-python)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sdk_python == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: python -m pip install pip-audit==${{ env.PIP_AUDIT_VERSION }}
+
+      - name: Run audit
+        working-directory: sdk/python
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/python-audit.sh" "sdk-python"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-pip-audit-sdk-python
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  cargo_audit:
+    name: cargo-audit (sdk-rust)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sdk_rust == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version ${{ env.CARGO_AUDIT_VERSION }} --locked
+
+      - name: Run audit
+        working-directory: sdk/rust
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/cargo-audit.sh" "sdk-rust"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-cargo-audit-sdk-rust
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  osv_scanner:
+    name: OSV-Scanner (sdk-scala)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sdk_scala == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Setup Go for OSV-Scanner
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.OSV_GO_VERSION }}
+
+      - name: Install OSV-Scanner
+        run: |
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@${{ env.OSV_SCANNER_VERSION }}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run audit
+        working-directory: sdk/scala
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/security/scala-osv-audit.sh" "sdk-scala"
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-osv-scanner-sdk-scala
+          path: |
+            reports/
+            summaries/
+          if-no-files-found: ignore
+
+  summary:
+    name: Security summary and release policy
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - trivy_image_api
+      - trivy_image_frontend
+      - trivy_image_runtime
+      - trivy_image_docs
+      - trivy_repo
+      - yarn_audit_api
+      - yarn_audit_frontend
+      - yarn_audit_docs
+      - yarn_audit_sdk_nodejs
+      - yarn_audit_sdk_react
+      - govulncheck_cli
+      - govulncheck_runtime
+      - dotnet_audit
+      - python_audit
+      - cargo_audit
+      - osv_scanner
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download scan reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: security-*
+          path: security-artifacts
+          merge-multiple: true
+
+      - name: Build summary
+        id: summary
+        run: >
+          bash .github/scripts/security/build-summary.sh
+          "${{ github.event_name }}"
+          "${{ github.base_ref }}"
+          "${{ github.ref }}"
+          security-artifacts
+          security-summary.md
+
+      - name: Append per-scan summaries
+        run: bash .github/scripts/security/append-summaries.sh security-artifacts
+
+      - name: Post sticky PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: return require('./.github/scripts/security/sticky-pr-comment.js')({ github, context });
+
+      - name: Enforce scan completion
+        if: steps.summary.outputs.is_release_bound == 'true'
+        env:
+          TRIVY_IMAGE_API_RESULT: ${{ needs.trivy_image_api.result }}
+          TRIVY_IMAGE_FRONTEND_RESULT: ${{ needs.trivy_image_frontend.result }}
+          TRIVY_IMAGE_RUNTIME_RESULT: ${{ needs.trivy_image_runtime.result }}
+          TRIVY_IMAGE_DOCS_RESULT: ${{ needs.trivy_image_docs.result }}
+          TRIVY_REPO_RESULT: ${{ needs.trivy_repo.result }}
+          YARN_AUDIT_API_RESULT: ${{ needs.yarn_audit_api.result }}
+          YARN_AUDIT_FRONTEND_RESULT: ${{ needs.yarn_audit_frontend.result }}
+          YARN_AUDIT_DOCS_RESULT: ${{ needs.yarn_audit_docs.result }}
+          YARN_AUDIT_SDK_NODEJS_RESULT: ${{ needs.yarn_audit_sdk_nodejs.result }}
+          YARN_AUDIT_SDK_REACT_RESULT: ${{ needs.yarn_audit_sdk_react.result }}
+          GOVULNCHECK_CLI_RESULT: ${{ needs.govulncheck_cli.result }}
+          GOVULNCHECK_RUNTIME_RESULT: ${{ needs.govulncheck_runtime.result }}
+          DOTNET_AUDIT_RESULT: ${{ needs.dotnet_audit.result }}
+          PYTHON_AUDIT_RESULT: ${{ needs.python_audit.result }}
+          CARGO_AUDIT_RESULT: ${{ needs.cargo_audit.result }}
+          OSV_SCANNER_RESULT: ${{ needs.osv_scanner.result }}
+        run: |
+          set -euo pipefail
+          for job in \
+            TRIVY_IMAGE_API \
+            TRIVY_IMAGE_FRONTEND \
+            TRIVY_IMAGE_RUNTIME \
+            TRIVY_IMAGE_DOCS \
+            TRIVY_REPO \
+            YARN_AUDIT_API \
+            YARN_AUDIT_FRONTEND \
+            YARN_AUDIT_DOCS \
+            YARN_AUDIT_SDK_NODEJS \
+            YARN_AUDIT_SDK_REACT \
+            GOVULNCHECK_CLI \
+            GOVULNCHECK_RUNTIME \
+            DOTNET_AUDIT \
+            PYTHON_AUDIT \
+            CARGO_AUDIT \
+            OSV_SCANNER; do
+            result_var="${job}_RESULT"
+            case "${!result_var}" in
+              success|skipped)
+                ;;
+              *)
+                echo "::error::Security scan job ${job} ended with result=${!result_var}; failing release policy."
+                exit 1
+                ;;
+            esac
+          done
+
+      - name: Enforce release policy
+        if: steps.summary.outputs.is_release_bound == 'true' && steps.summary.outputs.scan_errors != '0'
+        run: |
+          echo "::error::Security scan failed to complete for ${{ steps.summary.outputs.scan_errors }} target(s); failing release policy."
+          exit 1
+
+      - name: Enforce release findings policy
+        if: steps.summary.outputs.is_release_bound == 'true' && steps.summary.outputs.release_blockers != '0'
+        run: bash .github/scripts/security/enforce-policy.sh "${{ steps.summary.outputs.release_blockers }}"

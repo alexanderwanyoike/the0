@@ -1,5 +1,5 @@
 # Build stage
-FROM node:22-alpine AS builder
+FROM dhi.io/node:22-alpine3.22-dev AS builder
 
 # Install git (required by VitePress for last updated timestamps)
 RUN apk add --no-cache git
@@ -19,7 +19,7 @@ COPY . .
 RUN yarn build
 
 # Production stage
-FROM nginx:alpine AS production
+FROM dhi.io/nginx:1.30-alpine3.23 AS production
 
 # Copy built files to nginx
 COPY --from=builder /app/.vitepress/dist /usr/share/nginx/html
@@ -27,6 +27,12 @@ COPY --from=builder /app/.vitepress/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+USER 0
 
-CMD ["nginx", "-g", "daemon off;"]
+RUN mkdir -p /var/cache/nginx /var/run/nginx \
+    && touch /var/run/nginx.pid \
+    && chown -R 1000:1000 /var/cache/nginx /var/run/nginx /var/run/nginx.pid
+
+USER 1000:1000
+
+EXPOSE 8080

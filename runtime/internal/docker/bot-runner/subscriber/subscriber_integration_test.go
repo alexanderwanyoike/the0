@@ -633,13 +633,10 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	sharedInfra.natsConn.Publish(SubjectBotCreated, validPayload)
 	sharedInfra.natsConn.Flush()
 
-	time.Sleep(200 * time.Millisecond)
-
 	// Verify valid message was processed
 	collection := db.Collection(collectionName)
-	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-invalid"})
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), count, "Subscriber should recover from invalid JSON")
+	err = WaitForDocument(collection, bson.M{"id": "after-invalid"}, 10*time.Second)
+	require.NoError(t, err, "Subscriber should recover from invalid JSON")
 }
 
 // TestSubscriber_GracefulShutdown verifies clean shutdown behavior

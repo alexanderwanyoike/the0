@@ -133,7 +133,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.js"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -176,6 +176,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - bot_runner_data:/app/data
       - /tmp/bot-runner:/tmp/bot-runner
+    group_add:
+      - "${DOCKER_GID:-0}"
     depends_on:
       mongo:
         condition: service_healthy
@@ -227,6 +229,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - bot_scheduler_data:/app/data
       - /tmp/bot-scheduler:/tmp/bot-scheduler
+    group_add:
+      - "${DOCKER_GID:-0}"
     depends_on:
       mongo:
         condition: service_healthy
@@ -301,6 +305,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/query-server:/tmp/query-server
+    group_add:
+      - "${DOCKER_GID:-0}"
     depends_on:
       mongo:
         condition: service_healthy
@@ -346,7 +352,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://0.0.0.0:3000/ || exit 1"]
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.js"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -360,10 +366,10 @@ services:
     image: ghcr.io/alexanderwanyoike/the0/docs:latest
     pull_policy: always
     ports:
-      - "3002:80"
+      - "3002:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

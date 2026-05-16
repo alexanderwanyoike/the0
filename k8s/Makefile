@@ -6,6 +6,11 @@ help: ## Show this help message
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
+.PHONY: security-scan
+security-scan: ## Scan Kubernetes and Helm configuration for HIGH/CRITICAL findings
+	@command -v trivy >/dev/null 2>&1 || { echo "trivy is required to scan Kubernetes and Helm configuration. Install: https://aquasecurity.github.io/trivy/latest/getting-started/installation/"; exit 1; }
+	trivy config --exit-code 1 --severity HIGH,CRITICAL .
+
 # Variables
 RELEASE_NAME ?= the0
 NAMESPACE ?= the0
@@ -58,6 +63,9 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 		--set the0Docs.imagePullPolicy=Never \
 		--set botController.image.tag=latest \
 		--set botController.runtimeImage=runtime:latest \
+		--set gc.image.repository=runtime \
+		--set gc.image.tag=latest \
+		--set gc.image.pullPolicy=Never \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""
@@ -152,6 +160,9 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 		--set botController.imagePullPolicy=Never \
 		--set botController.runtimeImage=runtime:latest \
 		--set botController.imageBuilder.registry=localhost:5000 \
+		--set gc.image.repository=runtime \
+		--set gc.image.tag=latest \
+		--set gc.image.pullPolicy=Never \
 		--set minikube.enabled=true \
 		--set externalServices.enabled=true
 	@echo ""

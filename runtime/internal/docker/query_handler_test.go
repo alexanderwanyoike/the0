@@ -23,6 +23,33 @@ type mockDockerRunner struct {
 	getContainerLogsFunc func(ctx context.Context, containerID string, tail int) (string, error)
 }
 
+type mockQueryResultManager struct {
+	downloadFunc func(ctx context.Context, key string) ([]byte, error)
+	deleteFunc   func(ctx context.Context, key string) error
+	downloadKey  string
+	deleteKey    string
+}
+
+func (m *mockQueryResultManager) Upload(ctx context.Context, key string, data []byte) error {
+	return nil
+}
+
+func (m *mockQueryResultManager) Download(ctx context.Context, key string) ([]byte, error) {
+	m.downloadKey = key
+	if m.downloadFunc != nil {
+		return m.downloadFunc(ctx, key)
+	}
+	return []byte(`{"status":"ok","data":{}}`), nil
+}
+
+func (m *mockQueryResultManager) Delete(ctx context.Context, key string) error {
+	m.deleteKey = key
+	if m.deleteFunc != nil {
+		return m.deleteFunc(ctx, key)
+	}
+	return nil
+}
+
 func (m *mockDockerRunner) StartContainer(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
 	if m.startContainerFunc != nil {
 		return m.startContainerFunc(ctx, exec)
@@ -134,6 +161,13 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			resultManager := &mockQueryResultManager{
+				downloadFunc: func(ctx context.Context, key string) ([]byte, error) {
+					assert.Contains(t, key, tt.executable.ID+"/")
+					assert.Contains(t, key, "/result.json")
+					return []byte(tt.mockOutput), nil
+				},
+			}
 			runner := &mockDockerRunner{
 				startContainerFunc: func(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
 					// Verify query mode is set correctly
@@ -141,17 +175,22 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 					assert.Equal(t, tt.request.QueryPath, exec.QueryPath)
 					assert.Equal(t, tt.request.Params, exec.QueryParams)
 					assert.False(t, exec.IsLongRunning)
+					assert.Empty(t, exec.ResultFilePath)
+					assert.Contains(t, exec.QueryResultKey, tt.executable.ID+"/")
+					assert.Contains(t, exec.QueryResultKey, "/result.json")
 
 					return &ExecutionResult{
-						Status: "success",
-						Output: tt.mockOutput,
+						Status:   "success",
+						Output:   `{"status":"error","error":"stdout should not be parsed"}`,
+						ExitCode: 0,
 					}, nil
 				},
 			}
 
 			handler := NewQueryHandler(QueryHandlerConfig{
-				Runner: runner,
-				Logger: &util.DefaultLogger{},
+				Runner:        runner,
+				ResultManager: resultManager,
+				Logger:        &util.DefaultLogger{},
 			})
 
 			ctx := context.Background()
@@ -163,6 +202,8 @@ func TestQueryHandler_ExecuteScheduledQuery(t *testing.T) {
 			if tt.expectedError != "" {
 				assert.Equal(t, tt.expectedError, response.Error)
 			}
+			assert.NotEmpty(t, resultManager.downloadKey)
+			assert.Equal(t, resultManager.downloadKey, resultManager.deleteKey)
 			assert.True(t, response.Duration > 0)
 			assert.False(t, response.Timestamp.IsZero())
 		})
@@ -199,8 +240,9 @@ func TestQueryHandler_ExecuteRealtimeQuery(t *testing.T) {
 	}
 
 	handler := NewQueryHandler(QueryHandlerConfig{
-		Runner: runner,
-		Logger: &util.DefaultLogger{},
+		Runner:        runner,
+		ResultManager: &mockQueryResultManager{},
+		Logger:        &util.DefaultLogger{},
 	})
 
 	// Note: This test won't work directly because the handler appends :9476
@@ -244,8 +286,9 @@ func TestQueryHandler_Timeout(t *testing.T) {
 	}
 
 	handler := NewQueryHandler(QueryHandlerConfig{
-		Runner: runner,
-		Logger: &util.DefaultLogger{},
+		Runner:        runner,
+		ResultManager: &mockQueryResultManager{},
+		Logger:        &util.DefaultLogger{},
 	})
 
 	request := query.Request{
@@ -275,14 +318,20 @@ func TestQueryHandler_InvalidJSONResponse(t *testing.T) {
 	runner := &mockDockerRunner{
 		startContainerFunc: func(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
 			return &ExecutionResult{
-				Status: "success",
-				Output: "not valid json",
+				Status:   "success",
+				Output:   `{"status":"ok","data":"stdout ignored"}`,
+				ExitCode: 0,
 			}, nil
 		},
 	}
 
 	handler := NewQueryHandler(QueryHandlerConfig{
 		Runner: runner,
+		ResultManager: &mockQueryResultManager{
+			downloadFunc: func(ctx context.Context, key string) ([]byte, error) {
+				return []byte("not valid json"), nil
+			},
+		},
 		Logger: &util.DefaultLogger{},
 	})
 
@@ -315,15 +364,17 @@ func TestQueryHandler_EntrypointFilesCopied(t *testing.T) {
 		startContainerFunc: func(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
 			capturedExec = exec
 			return &ExecutionResult{
-				Status: "success",
-				Output: `{"status":"ok","data":{}}`,
+				Status:   "success",
+				Output:   "logs only",
+				ExitCode: 0,
 			}, nil
 		},
 	}
 
 	handler := NewQueryHandler(QueryHandlerConfig{
-		Runner: runner,
-		Logger: &util.DefaultLogger{},
+		Runner:        runner,
+		ResultManager: &mockQueryResultManager{},
+		Logger:        &util.DefaultLogger{},
 	})
 
 	request := query.Request{
@@ -347,4 +398,5 @@ func TestQueryHandler_EntrypointFilesCopied(t *testing.T) {
 	assert.Equal(t, "query", capturedExec.Entrypoint)
 	assert.Equal(t, "main.py", capturedExec.EntrypointFiles["query"])
 	assert.Equal(t, "main.py", capturedExec.EntrypointFiles["bot"])
+	assert.NotEmpty(t, capturedExec.QueryResultKey)
 }

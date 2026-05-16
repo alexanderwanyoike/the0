@@ -82,9 +82,11 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 	os.Setenv("MINIO_ACCESS_KEY", "access-key")
 	os.Setenv("MINIO_SECRET_KEY", "secret-key")
 	os.Setenv("MINIO_SSL", "true")
+	os.Unsetenv("MINIO_USE_SSL")
 	os.Setenv("MINIO_CODE_BUCKET", "custom-code-bucket")
 	os.Setenv("MINIO_STATE_BUCKET", "custom-state-bucket")
 	os.Setenv("MINIO_LOGS_BUCKET", "custom-logs-bucket")
+	os.Setenv("MINIO_QUERY_RESULTS_BUCKET", "custom-query-results-bucket")
 	os.Setenv("TEMP_DIR", "/custom/temp")
 	os.Setenv("BOT_MEMORY_LIMIT_MB", "2048")
 	os.Setenv("BOT_CPU_SHARES", "512")
@@ -97,9 +99,11 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 		os.Unsetenv("MINIO_ACCESS_KEY")
 		os.Unsetenv("MINIO_SECRET_KEY")
 		os.Unsetenv("MINIO_SSL")
+		os.Unsetenv("MINIO_USE_SSL")
 		os.Unsetenv("MINIO_CODE_BUCKET")
 		os.Unsetenv("MINIO_STATE_BUCKET")
 		os.Unsetenv("MINIO_LOGS_BUCKET")
+		os.Unsetenv("MINIO_QUERY_RESULTS_BUCKET")
 		os.Unsetenv("TEMP_DIR")
 		os.Unsetenv("BOT_MEMORY_LIMIT_MB")
 		os.Unsetenv("BOT_CPU_SHARES")
@@ -119,6 +123,7 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 	assert.Equal(t, "custom-code-bucket", cfg.MinIOCodeBucket)
 	assert.Equal(t, "custom-state-bucket", cfg.MinioStateBucket)
 	assert.Equal(t, "custom-logs-bucket", cfg.MinioLogsBucket)
+	assert.Equal(t, "custom-query-results-bucket", cfg.MinIOQueryResultsBucket)
 	assert.Equal(t, "/custom/temp", cfg.TempDir)
 	assert.Equal(t, int64(2048*1024*1024), cfg.MemoryLimitMB)
 	assert.Equal(t, int64(512), cfg.CPUShares)
@@ -128,6 +133,25 @@ func TestLoadConfigFromEnv_WithOptionalFields(t *testing.T) {
 	assert.Equal(t, "custom-network", cfg.DockerNetwork)
 }
 
+func TestLoadConfigFromEnv_MinIOUseSSL(t *testing.T) {
+	os.Setenv("MINIO_ENDPOINT", "localhost:9000")
+	os.Setenv("MINIO_ACCESS_KEY", "test-key")
+	os.Setenv("MINIO_SECRET_KEY", "test-secret")
+	os.Setenv("MINIO_USE_SSL", "1")
+	os.Unsetenv("MINIO_SSL")
+	defer func() {
+		os.Unsetenv("MINIO_ENDPOINT")
+		os.Unsetenv("MINIO_ACCESS_KEY")
+		os.Unsetenv("MINIO_SECRET_KEY")
+		os.Unsetenv("MINIO_USE_SSL")
+	}()
+
+	cfg, err := LoadConfigFromEnv()
+
+	require.NoError(t, err)
+	assert.True(t, cfg.MinIOUseSSL)
+}
+
 func TestLoadConfigFromEnv_DefaultValues(t *testing.T) {
 	// Only set required fields
 	os.Setenv("MINIO_ENDPOINT", "localhost:9000")
@@ -135,10 +159,12 @@ func TestLoadConfigFromEnv_DefaultValues(t *testing.T) {
 	os.Setenv("MINIO_SECRET_KEY", "test-secret")
 	// Clear optional fields
 	os.Unsetenv("MINIO_SSL")
+	os.Unsetenv("MINIO_USE_SSL")
 	os.Unsetenv("BOT_MEMORY_LIMIT_MB")
 	os.Unsetenv("BOT_CPU_SHARES")
 	os.Unsetenv("MAX_STATE_SIZE_MB")
 	os.Unsetenv("MAX_STATE_FILE_SIZE_MB")
+	os.Unsetenv("MINIO_QUERY_RESULTS_BUCKET")
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")
@@ -150,9 +176,10 @@ func TestLoadConfigFromEnv_DefaultValues(t *testing.T) {
 	require.NoError(t, err)
 	// Check defaults
 	assert.False(t, cfg.MinIOUseSSL)
-	assert.Equal(t, int64(512*1024*1024), cfg.MemoryLimitMB) // Default 512MB
-	assert.Equal(t, int64(512), cfg.CPUShares)                // Default 512
-	assert.Equal(t, int64(8192*1024*1024), cfg.MaxStateSizeBytes) // Default 8GB
+	assert.Equal(t, "query-results", cfg.MinIOQueryResultsBucket)
+	assert.Equal(t, int64(512*1024*1024), cfg.MemoryLimitMB)        // Default 512MB
+	assert.Equal(t, int64(512), cfg.CPUShares)                      // Default 512
+	assert.Equal(t, int64(8192*1024*1024), cfg.MaxStateSizeBytes)   // Default 8GB
 	assert.Equal(t, int64(10*1024*1024), cfg.MaxStateFileSizeBytes) // Default 10MB
 }
 

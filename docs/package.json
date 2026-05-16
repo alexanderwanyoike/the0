@@ -14,5 +14,10 @@
     "vitepress-plugin-mermaid": "^2.0.17",
     "vue": "^3.5.13"
   },
+  "resolutions": {
+    "lodash-es": "^4.18.0",
+    "preact": "^10.28.2",
+    "rollup": "^4.59.0"
+  },
   "packageManager": "yarn@1.22.22"
 }
