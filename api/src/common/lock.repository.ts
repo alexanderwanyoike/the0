@@ -1,18 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, type AnyColumn } from "drizzle-orm";
 import { isConnectionError } from "@/common/database-errors";
 import { getDatabase } from "@/database/connection";
-import {
-  adminMutationLocksTable,
-  adminMutationLocksTableSqlite,
-  setupLocksTable,
-  setupLocksTableSqlite,
-} from "@/database/schema/users";
 
-type LockTable =
-  | typeof setupLocksTable
-  | typeof setupLocksTableSqlite
-  | typeof adminMutationLocksTable
-  | typeof adminMutationLocksTableSqlite;
+export interface LockTable {
+  id: AnyColumn;
+  lockedAt: AnyColumn;
+}
 
 type AcquireResult =
   | { status: "acquired"; lockedAt: number }
