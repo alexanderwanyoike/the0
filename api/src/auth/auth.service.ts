@@ -4,21 +4,14 @@ import * as bcrypt from "bcrypt";
 import { isConnectionError } from "@/common/database-errors";
 import { Failure, Result } from "../common/result";
 import { hashPassword } from "@/common/password";
-import { USER_ROLES, UserRole } from "@/user/user.constants";
+import { UserRole } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
+import { toAuthUser } from "./auth-user.mapper";
+import { AuthUser } from "./auth.types";
 import { SetupLockRepository } from "./setup-lock.repository";
 
-export interface AuthUser {
-  id: string;
-  username: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  isActive: boolean;
-  isEmailVerified: boolean;
-  role: UserRole;
-}
+export type { AuthUser } from "./auth.types";
 
 export interface LoginCredentials {
   email: string;
@@ -59,21 +52,8 @@ export class AuthService {
     private readonly setupLocks: SetupLockRepository,
   ) {}
 
-  private toAuthUser(user: UserRecord): AuthUser {
-    return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName ?? undefined,
-      lastName: user.lastName ?? undefined,
-      isActive: Boolean(user.isActive),
-      isEmailVerified: Boolean(user.isEmailVerified),
-      role: user.role === USER_ROLES.ADMIN ? USER_ROLES.ADMIN : USER_ROLES.USER,
-    };
-  }
-
   private signUser(user: UserRecord): { token: string; user: AuthUser } {
-    const authUser = this.toAuthUser(user);
+    const authUser = toAuthUser(user);
     const token = this.jwtService.sign({
       sub: authUser.id,
       username: authUser.username,
@@ -200,9 +180,7 @@ export class AuthService {
       return {
         success: true,
         error: null,
-        data: {
-          ...this.toAuthUser(user),
-        },
+        data: toAuthUser(user),
       };
     } catch (error) {
       if (isConnectionError(error)) {

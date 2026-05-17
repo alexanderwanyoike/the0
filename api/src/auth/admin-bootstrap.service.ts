@@ -63,9 +63,7 @@ export class AdminBootstrapService implements OnModuleInit {
 
       if (matchingActiveUser) {
         await this.users.promoteToAdmin(matchingActiveUser.id);
-        this.logger.log(
-          `Promoted configured admin user ${configuredAdminEmail}`,
-        );
+        this.logger.log("Promoted configured admin user");
         return;
       }
     }

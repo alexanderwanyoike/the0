@@ -1,4 +1,16 @@
 import { Request } from "express";
+import { UserRole } from "@/user/user.constants";
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  isActive: boolean;
+  isEmailVerified: boolean;
+  role: UserRole;
+}
 
 /** User payload attached to the request by auth guards */
 export interface AuthenticatedUser {

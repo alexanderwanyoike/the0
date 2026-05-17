@@ -1,9 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
-import { isConnectionError } from "@/common/database-errors";
-import { getDatabase, getDatabaseConfig } from "@/database/connection";
+import { LockRepository } from "@/common/lock.repository";
+import { getDatabaseConfig } from "@/database/connection";
 import {
-  type SetupLock,
   setupLocksTable,
   setupLocksTableSqlite,
 } from "@/database/schema/users";
@@ -16,71 +14,38 @@ type LockResult<T> =
   | { acquired: false; value: null };
 
 @Injectable()
-export class SetupLockRepository {
-  private localLock = Promise.resolve();
+export class SetupLockRepository extends LockRepository {
+  protected readonly lockId = SETUP_LOCK_ID;
+  protected readonly staleMs = SETUP_LOCK_STALE_MS;
 
-  private getSetupLockTable() {
+  protected getLockTable() {
     const config = getDatabaseConfig();
     return config.type === "sqlite" ? setupLocksTableSqlite : setupLocksTable;
   }
 
   async withLock<T>(callback: () => Promise<T>): Promise<LockResult<T>> {
-    const previousLock = this.localLock;
-    let releaseLocalLock: () => void = () => undefined;
-    this.localLock = new Promise<void>((resolve) => {
-      releaseLocalLock = resolve;
-    });
+    return this.withLocalLock(async (): Promise<LockResult<T>> => {
+      let lockedAt: number | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const lock = await this.tryAcquire();
+        if (lock.status === "acquired") {
+          lockedAt = lock.lockedAt;
+          break;
+        }
+        if (lock.status === "busy") {
+          return { acquired: false, value: null };
+        }
+      }
 
-    await previousLock;
-    let setupLockClaimed = false;
-    try {
-      setupLockClaimed = await this.acquire();
-      if (!setupLockClaimed) {
+      if (lockedAt === null) {
         return { acquired: false, value: null };
       }
 
-      return { acquired: true, value: await callback() };
-    } finally {
-      if (setupLockClaimed) {
-        await this.release().catch((): void => undefined);
+      try {
+        return { acquired: true, value: await callback() };
+      } finally {
+        await this.release(lockedAt).catch((): void => undefined);
       }
-      releaseLocalLock();
-    }
-  }
-
-  private async acquire(): Promise<boolean> {
-    const db = getDatabase();
-    const setupLockTable = this.getSetupLockTable();
-    try {
-      await db
-        .insert(setupLockTable)
-        .values({ id: SETUP_LOCK_ID, lockedAt: Date.now() });
-      return true;
-    } catch (error) {
-      if (isConnectionError(error)) {
-        throw error;
-      }
-
-      const locks = (await db
-        .select()
-        .from(setupLockTable)
-        .where(eq(setupLockTable.id, SETUP_LOCK_ID))) as SetupLock[];
-      const existingLock = locks[0];
-      if (
-        existingLock &&
-        Date.now() - Number(existingLock.lockedAt) > SETUP_LOCK_STALE_MS
-      ) {
-        await this.release();
-        return this.acquire();
-      }
-
-      return false;
-    }
-  }
-
-  private async release(): Promise<void> {
-    const db = getDatabase();
-    const setupLockTable = this.getSetupLockTable();
-    await db.delete(setupLockTable).where(eq(setupLockTable.id, SETUP_LOCK_ID));
+    });
   }
 }
