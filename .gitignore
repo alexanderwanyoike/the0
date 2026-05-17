@@ -9,6 +9,7 @@ GEMINI.md
 .claude/
 **/*/.claude
 .claude/agents/
+.agents/
 .notes/
 PR_MESSAGE.md
 
