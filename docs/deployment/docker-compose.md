@@ -56,6 +56,8 @@ On a fresh database, open `http://localhost:3001/setup` to create the first admi
 the0 local admin set --email you@example.com
 ```
 
+The command prompts for the admin password, writes both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`, and restarts `the0-api`. Remove `THE0_ADMIN_PASSWORD` from `~/.the0/compose/.env` after the password has been applied.
+
 See [Admin Bootstrap](./admin-bootstrap) for the full flow.
 
 ## Service Architecture
@@ -110,7 +112,7 @@ the0 local logs -f api
 # Check service health
 the0 local status
 
-# Promote an existing local user to admin on restart
+# Promote an existing local user to admin on restart and set their password
 the0 local admin set --email you@example.com
 ```
 
@@ -141,6 +143,7 @@ environment:
   JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
   JWT_EXPIRES_IN: 24h
   THE0_ADMIN_EMAIL: admin@example.com
+  THE0_ADMIN_PASSWORD: temporary-admin-password
 ```
 
 ### Storage Configuration

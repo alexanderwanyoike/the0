@@ -19,15 +19,32 @@ On a new database, open the frontend and complete `/setup`. The setup form creat
 
 If `THE0_ADMIN_EMAIL` is set, setup only accepts that exact email address.
 
+If both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` are set before the API starts, the API creates the first admin automatically. The username is derived from the email local part. Remove `THE0_ADMIN_PASSWORD` after the admin has been created.
+
 ## Upgrades
 
 Existing users are kept active and default to the `user` role. During startup, the API preserves any existing `metadata.role = "admin"` value by promoting that user to the new `admin` role.
 
-If no active admin exists, set `THE0_ADMIN_EMAIL` to the email of one existing active user. On startup, the API promotes exactly that matching user. If the variable is unset or does not match an active user, normal login still works, but admin-only user management is unavailable and the API logs:
+If no active admin exists, set both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`. On startup, the API promotes exactly that matching active user and sets the configured password. Email-only configuration warns and does not promote anyone.
+
+If an admin was already promoted but the password is unknown, set `THE0_ADMIN_EMAIL` to that admin and add `THE0_ADMIN_PASSWORD`. On startup, the API updates that admin password only if it does not already match, then increments `session_version` so old tokens are invalidated. Remove `THE0_ADMIN_PASSWORD` after the password has been applied.
+
+If no admin can be created or promoted, normal login still works, but admin-only user management is unavailable and the API logs:
 
 ```text
-No admin configured. Set THE0_ADMIN_EMAIL to an existing active user or see docs/deployment/admin-bootstrap.md
+No admin configured. Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD for an existing active user or see docs/deployment/admin-bootstrap.md
 ```
+
+## Behavior Matrix
+
+| State | Configuration | Startup behavior |
+|-------|---------------|------------------|
+| Fresh install, no config | none | `/setup` creates the first admin |
+| Fresh install, email/password | `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` | Creates the first admin automatically |
+| Upgrade, users exist, no admin | email/password for an active user | Promotes that user and sets the password |
+| Upgrade, admin email only | `THE0_ADMIN_EMAIL` only | Warns and does not promote |
+| Already-promoted admin, unknown password | matching admin email/password | Updates the password once and increments `session_version` |
+| Active admin already working | no password config | No startup mutation |
 
 ### Upgrade Checklist
 
@@ -35,21 +52,23 @@ Before upgrading an existing deployment to v1.14.0 or later:
 
 1. Choose one existing active user who should become the first admin.
 2. Set `THE0_ADMIN_EMAIL` to that exact email address in your deployment configuration.
-3. Upgrade or restart the API so admin bootstrap runs at startup.
-4. Log in as that user and confirm `/settings/users` is available.
-5. Create or promote any additional admins from `/settings/users`.
+3. Set `THE0_ADMIN_PASSWORD` to the temporary password to apply.
+4. Upgrade or restart the API so admin bootstrap runs at startup.
+5. Log in as that user and confirm `/settings/users` is available.
+6. Create or promote any additional admins from `/settings/users`.
+7. Remove `THE0_ADMIN_PASSWORD` from the deployment configuration and restart or redeploy.
 
-After an admin role is stored in the database, `THE0_ADMIN_EMAIL` is no longer required for that deployment. Leaving it configured is safe; the API only uses it when no active admin exists.
+After an admin role is stored in the database, `THE0_ADMIN_EMAIL` is usually no longer required. Leaving the email configured is safe, but do not leave `THE0_ADMIN_PASSWORD` configured after recovery.
 
 ## Docker Compose
 
-For `the0 local`, set the admin email with:
+For `the0 local`, set the admin email and password with:
 
 ```bash
 the0 local admin set --email you@example.com
 ```
 
-The command updates `~/.the0/compose/.env` idempotently and restarts `the0-api`.
+The command prompts for the password, updates `~/.the0/compose/.env` idempotently, and restarts `the0-api`. Automation can pass `--password`, but prompt mode avoids shell history exposure.
 
 Fresh local installs should use:
 
@@ -59,15 +78,21 @@ http://localhost:3001/setup
 
 ## Kubernetes
 
-Set the admin email in Helm values before upgrading:
+Set the admin email as a normal environment variable and the password from a Secret before upgrading:
 
 ```yaml
 the0Api:
   env:
     THE0_ADMIN_EMAIL: "admin@example.com"
+  extraEnv:
+    - name: THE0_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: the0-admin-bootstrap
+          key: password
 ```
 
-Apply the values through your normal Helm upgrade workflow. Avoid shell-based recovery flows inside running pods; admin bootstrap is controlled by configuration.
+`extraEnv` accepts full Kubernetes `EnvVar` entries, so it works with Sealed Secrets or any controller that creates the referenced Secret. Do not put admin passwords in plaintext Helm values. Apply the values through your normal Helm upgrade workflow. Avoid shell-based recovery flows inside running pods; admin bootstrap is controlled by configuration.
 
 ## Last Admin Protection
 

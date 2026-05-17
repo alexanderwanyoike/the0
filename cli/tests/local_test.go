@@ -225,6 +225,7 @@ func TestGenerateEnvFile_CreatesFile(t *testing.T) {
 		"MINIO_ROOT_PASSWORD=",
 		"JWT_SECRET=",
 		"THE0_ADMIN_EMAIL=",
+		"THE0_ADMIN_PASSWORD=",
 		"API_PORT=",
 		"FRONTEND_PORT=",
 		"DOCS_PORT=",
@@ -271,6 +272,9 @@ func TestGenerateEnvFile_PreservesExistingAndAddsDockerGID(t *testing.T) {
 	}
 	if !strings.Contains(content, "THE0_ADMIN_EMAIL=") {
 		t.Errorf("Expected existing .env to be updated with THE0_ADMIN_EMAIL, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=") {
+		t.Errorf("Expected existing .env to be updated with THE0_ADMIN_PASSWORD, got: %s", content)
 	}
 }
 
@@ -466,6 +470,136 @@ func TestSetAdminEmail_MissingEnvIsActionable(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "the0 local init") {
 		t.Fatalf("Expected actionable init guidance, got: %v", err)
+	}
+}
+
+func TestSetAdminCredentials_UpdatesEmailAndPasswordIdempotently(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\nTHE0_ADMIN_PASSWORD=oldsecret\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminCredentials(tmpDir, "admin@example.com", "newsecret"); err != nil {
+		t.Fatalf("SetAdminCredentials failed: %v", err)
+	}
+	if err := local.SetAdminCredentials(tmpDir, "admin@example.com", "newsecret"); err != nil {
+		t.Fatalf("SetAdminCredentials failed on second run: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com") {
+		t.Errorf("Expected admin email to be updated, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=newsecret") {
+		t.Errorf("Expected admin password to be updated, got: %s", content)
+	}
+	if strings.Count(content, "THE0_ADMIN_EMAIL=") != 1 {
+		t.Errorf("Expected admin email key to be idempotent, got: %s", content)
+	}
+	if strings.Count(content, "THE0_ADMIN_PASSWORD=") != 1 {
+		t.Errorf("Expected admin password key to be idempotent, got: %s", content)
+	}
+}
+
+func TestSetAdminCredentials_PreservesInlineComments(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	content := "THE0_ADMIN_EMAIL=old@example.com # selected admin\nTHE0_ADMIN_PASSWORD=oldsecret # temporary recovery secret\n"
+	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminCredentials(tmpDir, "admin@example.com", "newsecret"); err != nil {
+		t.Fatalf("SetAdminCredentials failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	updated := string(data)
+	if !strings.Contains(updated, "THE0_ADMIN_EMAIL=admin@example.com # selected admin") {
+		t.Errorf("Expected email inline comment to be preserved, got: %s", updated)
+	}
+	if !strings.Contains(updated, "THE0_ADMIN_PASSWORD=newsecret # temporary recovery secret") {
+		t.Errorf("Expected password inline comment to be preserved, got: %s", updated)
+	}
+}
+
+func TestSetAdminCredentials_AppendsMissingPassword(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminCredentials(tmpDir, "admin@example.com", "newsecret"); err != nil {
+		t.Fatalf("SetAdminCredentials failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com") {
+		t.Errorf("Expected admin email to be updated, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=newsecret") {
+		t.Errorf("Expected admin password to be appended, got: %s", content)
+	}
+}
+
+func TestSetAdminCredentials_RejectsInvalidPassword(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\nTHE0_ADMIN_PASSWORD=oldsecret\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminCredentials(tmpDir, "admin@example.com", "bad\nJWT_SECRET=oops"); err == nil {
+		t.Fatal("Expected invalid password to be rejected")
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if strings.Contains(content, "JWT_SECRET=oops") {
+		t.Errorf("Expected unsafe password not to be written, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=oldsecret") {
+		t.Errorf("Expected original password to be preserved, got: %s", content)
 	}
 }
 

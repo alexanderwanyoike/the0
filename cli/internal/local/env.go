@@ -36,6 +36,7 @@ JWT_EXPIRES_IN=24h
 
 # Admin bootstrap
 THE0_ADMIN_EMAIL=
+THE0_ADMIN_PASSWORD=
 
 # API
 API_PORT=3000
@@ -59,11 +60,23 @@ func GenerateEnvFile(composeDir string) error {
 			return fmt.Errorf("failed to read existing env file: %w", err)
 		}
 		content := string(data)
-		if !hasEnvKey(content, "THE0_ADMIN_EMAIL") {
-			if err := appendEnvBlock(envPath, "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=\n"); err != nil {
+		missingAdminEmail := !hasEnvKey(content, "THE0_ADMIN_EMAIL")
+		missingAdminPassword := !hasEnvKey(content, "THE0_ADMIN_PASSWORD")
+		if missingAdminEmail {
+			block := "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=\n"
+			if missingAdminPassword {
+				block += "THE0_ADMIN_PASSWORD=\n"
+			}
+			if err := appendEnvBlock(envPath, block); err != nil {
 				return err
 			}
 			logger.Verbose("Updated .env file with THE0_ADMIN_EMAIL")
+		}
+		if !missingAdminEmail && missingAdminPassword {
+			if err := appendEnvBlock(envPath, "\nTHE0_ADMIN_PASSWORD=\n"); err != nil {
+				return err
+			}
+			logger.Verbose("Updated .env file with THE0_ADMIN_PASSWORD")
 		}
 		if !hasEnvKey(content, "DOCKER_GID") {
 			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
@@ -102,9 +115,20 @@ func hasEnvKey(content, key string) bool {
 
 // SetAdminEmail updates THE0_ADMIN_EMAIL in the local compose .env file.
 func SetAdminEmail(composeDir string, email string) error {
+	return SetAdminCredentials(composeDir, email, "")
+}
+
+// SetAdminCredentials updates THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD in the
+// local compose .env file.
+func SetAdminCredentials(composeDir string, email string, password string) error {
 	email = strings.TrimSpace(email)
 	if err := ValidateAdminEmail(email); err != nil {
 		return err
+	}
+	if password != "" {
+		if err := ValidateAdminPassword(password); err != nil {
+			return err
+		}
 	}
 
 	envPath := filepath.Join(composeDir, ".env")
@@ -116,22 +140,9 @@ func SetAdminEmail(composeDir string, email string) error {
 		return fmt.Errorf("failed to read .env file: %w", err)
 	}
 
-	lines := strings.Split(string(data), "\n")
-	found := false
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "THE0_ADMIN_EMAIL=") {
-			lines[i] = "THE0_ADMIN_EMAIL=" + email + trailingInlineComment(line)
-			found = true
-		}
-	}
-
-	content := strings.Join(lines, "\n")
-	if !found {
-		if strings.TrimSpace(content) != "" && !strings.HasSuffix(content, "\n") {
-			content += "\n"
-		}
-		content += "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=" + email + "\n"
+	content := upsertEnvValue(string(data), "THE0_ADMIN_EMAIL", email)
+	if password != "" {
+		content = upsertEnvValue(content, "THE0_ADMIN_PASSWORD", password)
 	}
 
 	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
@@ -139,6 +150,32 @@ func SetAdminEmail(composeDir string, email string) error {
 	}
 
 	return nil
+}
+
+func upsertEnvValue(content string, key string, value string) string {
+	lines := strings.Split(content, "\n")
+	found := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+"=") {
+			lines[i] = key + "=" + value + trailingInlineComment(line)
+			found = true
+		}
+	}
+
+	updated := strings.Join(lines, "\n")
+	if found {
+		return updated
+	}
+
+	if strings.TrimSpace(updated) != "" && !strings.HasSuffix(updated, "\n") {
+		updated += "\n"
+	}
+	if !hasEnvKey(updated, "THE0_ADMIN_EMAIL") && !hasEnvKey(updated, "THE0_ADMIN_PASSWORD") {
+		updated += "\n# Admin bootstrap\n"
+	}
+	updated += key + "=" + value + "\n"
+	return updated
 }
 
 func trailingInlineComment(line string) string {
@@ -156,6 +193,23 @@ func ValidateAdminEmail(email string) error {
 	}
 	if strings.ContainsAny(email, "\r\n=") || !adminEmailPattern.MatchString(email) {
 		return fmt.Errorf("email must be a valid single-line email address")
+	}
+	return nil
+}
+
+// ValidateAdminPassword checks that an admin password can be safely written to .env.
+func ValidateAdminPassword(password string) error {
+	if password == "" {
+		return fmt.Errorf("password is required")
+	}
+	if strings.TrimSpace(password) != password {
+		return fmt.Errorf("password must not start or end with whitespace")
+	}
+	if len(password) < 6 {
+		return fmt.Errorf("password must be at least 6 characters")
+	}
+	if strings.ContainsAny(password, "\r\n=#") {
+		return fmt.Errorf("password must be a single-line .env value")
 	}
 	return nil
 }

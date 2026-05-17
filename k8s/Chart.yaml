@@ -33,11 +33,11 @@ annotations:
     - kind: changed
       description: Replace public landing and signup flows with app-first setup, login, and dashboard routing
     - kind: added
-      description: Add first-admin bootstrap with explicit upgrade promotion through THE0_ADMIN_EMAIL
+      description: Add first-admin bootstrap with configured email and password recovery
     - kind: added
       description: Add admin user management, self-service profile routes, and last-admin protection
     - kind: added
-      description: Add local admin email configuration command and admin bootstrap deployment documentation
+      description: Add local admin credential configuration command and admin bootstrap deployment documentation
     - kind: changed
       description: Refactor auth and user persistence behind repository boundaries
   artifacthub.io/images: |

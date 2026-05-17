@@ -10,6 +10,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"the0/internal/local"
 	"the0/internal/logger"
@@ -198,15 +199,26 @@ func newLocalAdminCmd() *cobra.Command {
 
 func newLocalAdminSetCmd() *cobra.Command {
 	var email string
+	var password string
 
 	cmd := &cobra.Command{
 		Use:     "set",
-		Short:   "Set the local admin bootstrap email",
+		Short:   "Set the local admin bootstrap credentials",
 		Example: `  the0 local admin set --email you@example.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			email = strings.TrimSpace(email)
 			if err := local.ValidateAdminEmail(email); err != nil {
 				return fmt.Errorf("--email %w", err)
+			}
+			if !cmd.Flags().Changed("password") {
+				promptedPassword, err := promptForAdminPassword()
+				if err != nil {
+					return err
+				}
+				password = promptedPassword
+			}
+			if err := local.ValidateAdminPassword(password); err != nil {
+				return fmt.Errorf("--password %w", err)
 			}
 
 			runner, err := local.NewComposeRunner()
@@ -214,11 +226,11 @@ func newLocalAdminSetCmd() *cobra.Command {
 				return err
 			}
 
-			if err := local.SetAdminEmail(runner.ComposeDir, email); err != nil {
+			if err := local.SetAdminCredentials(runner.ComposeDir, email, password); err != nil {
 				return err
 			}
 
-			logger.Success("Set THE0_ADMIN_EMAIL")
+			logger.Success("Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD")
 			logger.StartSpinner("Restarting API")
 			if err := runner.Run("up", "-d", "--no-deps", "--force-recreate", "the0-api"); err != nil {
 				logger.StopSpinnerWithError("API restart failed")
@@ -230,7 +242,32 @@ func newLocalAdminSetCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&email, "email", "", "Email address of an existing user to promote to admin")
+	cmd.Flags().StringVar(&password, "password", "", "Admin password (prompted if omitted)")
 	return cmd
+}
+
+func promptForAdminPassword() (string, error) {
+	logger.Printf("Enter admin password: ")
+	fd := int(os.Stdin.Fd())
+	var password string
+	if term.IsTerminal(fd) {
+		raw, err := term.ReadPassword(fd)
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", err
+		}
+		password = strings.TrimSpace(string(raw))
+	} else {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		password = strings.TrimSpace(line)
+	}
+	if password == "" {
+		return "", fmt.Errorf("admin password cannot be empty")
+	}
+	return password, nil
 }
 
 // --- stop ---

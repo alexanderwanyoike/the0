@@ -230,15 +230,21 @@ service:
 
 All services use environment variables that match the docker-compose configuration exactly. These are defined in the `env` sections of each service in `values.yaml`.
 
-For upgrades with existing users and no admin, set the exact active user to promote:
+For upgrades with existing users and no admin, set the exact active user to promote and provide the password from a Secret:
 
 ```yaml
 the0Api:
   env:
     THE0_ADMIN_EMAIL: "admin@example.com"
+  extraEnv:
+    - name: THE0_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: the0-admin-bootstrap
+          key: password
 ```
 
-See `docs/deployment/admin-bootstrap.md` for the full bootstrap flow and last-admin protection.
+`the0Api.env` remains a string map for simple values. `the0Api.extraEnv` accepts full Kubernetes `EnvVar` entries for `secretKeyRef`, including Sealed Secrets generated secrets. Remove `THE0_ADMIN_PASSWORD` after it has been applied. See `docs/deployment/admin-bootstrap.md` for the full bootstrap flow and last-admin protection.
 
 ### Resource Limits
 
