@@ -121,7 +121,7 @@ func SetAdminEmail(composeDir string, email string) error {
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "THE0_ADMIN_EMAIL=") {
-			lines[i] = "THE0_ADMIN_EMAIL=" + email
+			lines[i] = "THE0_ADMIN_EMAIL=" + email + trailingInlineComment(line)
 			found = true
 		}
 	}
@@ -139,6 +139,14 @@ func SetAdminEmail(composeDir string, email string) error {
 	}
 
 	return nil
+}
+
+func trailingInlineComment(line string) string {
+	hashIndex := strings.Index(line, "#")
+	if hashIndex == -1 {
+		return ""
+	}
+	return " " + strings.TrimSpace(line[hashIndex:])
 }
 
 // ValidateAdminEmail checks that an admin email can be safely written to .env.

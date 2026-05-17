@@ -366,6 +366,33 @@ func TestSetAdminEmail_UpdatesExistingKey(t *testing.T) {
 	}
 }
 
+func TestSetAdminEmail_PreservesInlineComment(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com # selected admin\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminEmail(tmpDir, "admin@example.com"); err != nil {
+		t.Fatalf("SetAdminEmail failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com # selected admin") {
+		t.Errorf("Expected inline comment to be preserved, got: %s", content)
+	}
+}
+
 func TestSetAdminEmail_AppendsMissingKey(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {
