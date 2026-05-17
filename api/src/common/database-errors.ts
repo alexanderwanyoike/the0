@@ -14,3 +14,13 @@ export function isConnectionError(error: unknown): boolean {
   const code = (error as { code?: unknown })?.code;
   return typeof code === "string" && CONNECTION_ERROR_CODES.has(code);
 }
+
+export function isUniqueConstraintError(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  return (
+    code === "23505" ||
+    code === "SQLITE_CONSTRAINT" ||
+    code === "SQLITE_CONSTRAINT_PRIMARYKEY" ||
+    code === "SQLITE_CONSTRAINT_UNIQUE"
+  );
+}

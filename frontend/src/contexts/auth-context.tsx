@@ -22,6 +22,7 @@ interface AuthContextType {
     password: string;
   }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   token: string | null;
   authService: JwtAuthService; // Expose the centralized auth service
 }
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => ({ success: false, error: "Not initialized" }),
   setup: async () => ({ success: false, error: "Not initialized" }),
   logout: async () => {},
+  refreshUser: async () => {},
   token: null,
   authService: new JwtAuthService(),
 });
@@ -160,6 +162,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    const currentUser = await authService.getCurrentUser();
+    if (currentUser.success && currentUser.data) {
+      setUser(currentUser.data);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -168,6 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         setup,
         logout,
+        refreshUser,
         userData: user,
         token,
         authService,

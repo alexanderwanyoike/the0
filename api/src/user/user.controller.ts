@@ -61,10 +61,14 @@ export class UserController {
 
   @Post("admin/users/:id/reset-password")
   @UseGuards(AdminJwtGuard)
-  async resetPassword(@Param("id") id: string, @Body() body: ResetPasswordDto) {
+  async resetPassword(
+    @Param("id") id: string,
+    @Body() body: ResetPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return {
       success: true,
-      data: await this.userService.resetPassword(id, body.password),
+      data: await this.userService.resetPassword(id, body.password, user),
       message: "Password reset successfully",
     };
   }

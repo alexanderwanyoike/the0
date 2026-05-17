@@ -64,6 +64,7 @@ export default function UserManagementPage() {
   const router = useRouter();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
@@ -131,19 +132,22 @@ export default function UserManagementPage() {
   const createUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setCreateError(null);
     const username = createForm.username.trim();
-    if (!username) {
-      setError("Username is required");
-      return;
-    }
+    const payload = {
+      ...createForm,
+      username: username || undefined,
+    };
 
     try {
       const response = await authFetch("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ ...createForm, username }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        setError(await readErrorMessage(response, "Failed to create user"));
+        setCreateError(
+          await readErrorMessage(response, "Failed to create user"),
+        );
         return;
       }
       const body = await response.json();
@@ -151,7 +155,7 @@ export default function UserManagementPage() {
       setCreateForm(emptyCreateForm);
       setCreateOpen(false);
     } catch {
-      setError("Failed to create user");
+      setCreateError("Failed to create user");
     }
   };
 
@@ -190,7 +194,13 @@ export default function UserManagementPage() {
             Create accounts, reset passwords, and manage admin access.
           </p>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open);
+            if (!open) setCreateError(null);
+          }}
+        >
           <DialogTrigger asChild>
             <Button>Create user</Button>
           </DialogTrigger>
@@ -199,6 +209,11 @@ export default function UserManagementPage() {
               <DialogTitle>Create user</DialogTitle>
             </DialogHeader>
             <form onSubmit={createUser} className="space-y-4">
+              {createError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{createError}</AlertDescription>
+                </Alert>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="new-email">Email</Label>
                 <Input
@@ -222,7 +237,6 @@ export default function UserManagementPage() {
                       username: event.target.value,
                     })
                   }
-                  required
                 />
               </div>
               <div className="grid gap-2">
@@ -241,7 +255,7 @@ export default function UserManagementPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Role</Label>
+                <Label id="new-role-label">Role</Label>
                 <Select
                   value={createForm.role}
                   onValueChange={(role) =>
@@ -251,7 +265,7 @@ export default function UserManagementPage() {
                     })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-labelledby="new-role-label">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -309,7 +323,10 @@ export default function UserManagementPage() {
                         })
                       }
                     >
-                      <SelectTrigger className="w-28">
+                      <SelectTrigger
+                        className="w-28"
+                        aria-label={`Role for ${managedUser.email}`}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

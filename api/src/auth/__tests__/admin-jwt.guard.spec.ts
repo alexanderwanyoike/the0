@@ -81,6 +81,15 @@ describe("AdminJwtGuard", () => {
     );
   });
 
+  it("rejects API keys", async () => {
+    const { context } = contextWithAuthHeader("ApiKey the0_key");
+
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(mockAuthService.validateToken).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid tokens", async () => {
     const { context } = contextWithAuthHeader("Bearer invalid-token");
     mockAuthService.validateToken.mockResolvedValue(Failure("Invalid token"));

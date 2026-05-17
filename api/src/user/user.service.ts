@@ -151,7 +151,13 @@ export class UserService {
     return this.serializeUser(updated);
   }
 
-  async resetPassword(id: string, password: string) {
+  async resetPassword(id: string, password: string, actor?: AuthenticatedUser) {
+    if (actor?.id === id) {
+      throw new ForbiddenException(
+        "Use change password for your own admin account",
+      );
+    }
+
     await this.requireUser(id);
 
     const passwordHash = await hashPassword(password);
@@ -201,7 +207,7 @@ export class UserService {
     const passwordHash = await hashPassword(newPassword);
     await this.users.updatePassword(actor.id, passwordHash);
 
-    return { success: true };
+    return { success: true, requiresLogin: true };
   }
 
   async deleteAccount(actor: AuthenticatedUser, password: string) {

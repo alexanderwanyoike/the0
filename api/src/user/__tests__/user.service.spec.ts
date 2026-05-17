@@ -171,4 +171,11 @@ describe("UserService", () => {
       service.deleteAccount({ ...actor, id: admin.id }, "password"),
     ).rejects.toThrow("At least one active admin is required");
   });
+
+  it("blocks admin self password reset", async () => {
+    await expect(
+      service.resetPassword(actor.id, "new-password", actor),
+    ).rejects.toThrow("Use change password for your own admin account");
+    expect(users.updatePassword).not.toHaveBeenCalled();
+  });
 });

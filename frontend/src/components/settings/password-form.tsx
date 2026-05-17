@@ -11,7 +11,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
 
 export function PasswordForm() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -62,7 +62,8 @@ export function PasswordForm() {
 
       toast({
         title: "Password updated",
-        description: "Your password has been updated successfully.",
+        description:
+          "Your password has been updated. Sign in again to continue.",
       });
 
       // Clear the form
@@ -71,6 +72,7 @@ export function PasswordForm() {
         newPassword: "",
         confirmPassword: "",
       });
+      await logout();
     } catch (error: any) {
       console.error("Error updating password:", error);
       toast({

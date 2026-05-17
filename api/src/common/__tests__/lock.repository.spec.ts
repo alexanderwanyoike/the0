@@ -60,6 +60,12 @@ function flushPromises(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function uniqueConstraintError() {
+  return Object.assign(new Error("duplicate lock"), {
+    code: "SQLITE_CONSTRAINT_PRIMARYKEY",
+  });
+}
+
 describe("Lock repositories", () => {
   let dateNow: jest.SpyInstance<number, []>;
 
@@ -74,7 +80,7 @@ describe("Lock repositories", () => {
 
   it("does not run setup callback when another fresh setup lock exists", async () => {
     const { insertValues, selectWhere, deleteWhere } = createLockDb();
-    insertValues.mockRejectedValueOnce(new Error("duplicate lock"));
+    insertValues.mockRejectedValueOnce(uniqueConstraintError());
     selectWhere.mockResolvedValueOnce([
       { id: "first-admin", lockedAt: 1_000 },
     ] satisfies FakeLockRecord[]);
@@ -93,7 +99,7 @@ describe("Lock repositories", () => {
     const acquiredLockedAt = 400_000;
     const { insertValues, selectWhere, deleteWhere } = createLockDb();
     insertValues
-      .mockRejectedValueOnce(new Error("duplicate lock"))
+      .mockRejectedValueOnce(uniqueConstraintError())
       .mockResolvedValueOnce(undefined);
     selectWhere.mockResolvedValueOnce([
       { id: "first-admin", lockedAt: staleLockedAt },
@@ -122,7 +128,7 @@ describe("Lock repositories", () => {
     const acquiredLockedAt = 500_000;
     const { insertValues, selectWhere, deleteWhere } = createLockDb();
     insertValues
-      .mockRejectedValueOnce(new Error("duplicate lock"))
+      .mockRejectedValueOnce(uniqueConstraintError())
       .mockResolvedValueOnce(undefined);
     selectWhere.mockResolvedValueOnce([
       { id: "admin-users", lockedAt: staleLockedAt },
@@ -187,5 +193,19 @@ describe("Lock repositories", () => {
       "first finished",
       "second started",
     ]);
+  });
+
+  it("does not treat non-constraint insert errors as lock contention", async () => {
+    const { insertValues, selectWhere } = createLockDb();
+    insertValues.mockRejectedValueOnce(
+      Object.assign(new Error("integer out of range"), {
+        code: "22003",
+      }),
+    );
+
+    await expect(new SetupLockRepository().withLock(jest.fn())).rejects.toThrow(
+      "integer out of range",
+    );
+    expect(selectWhere).not.toHaveBeenCalled();
   });
 });

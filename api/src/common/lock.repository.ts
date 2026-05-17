@@ -1,5 +1,8 @@
 import { and, eq, type AnyColumn } from "drizzle-orm";
-import { isConnectionError } from "@/common/database-errors";
+import {
+  isConnectionError,
+  isUniqueConstraintError,
+} from "@/common/database-errors";
 import { getDatabase } from "@/database/connection";
 
 export interface LockTable {
@@ -50,6 +53,9 @@ export abstract class LockRepository {
       return { status: "acquired", lockedAt };
     } catch (error) {
       if (isConnectionError(error)) {
+        throw error;
+      }
+      if (!isUniqueConstraintError(error)) {
         throw error;
       }
 

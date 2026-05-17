@@ -5,6 +5,7 @@ import {
   boolean,
   jsonb,
   index,
+  bigint as pgBigInt,
   integer as pgInteger,
 } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
@@ -36,12 +37,12 @@ export const usersTable = pgTable("users", {
 
 export const setupLocksTable = pgTable("setup_locks", {
   id: varchar("id", { length: 50 }).primaryKey(),
-  lockedAt: pgInteger("locked_at").notNull(),
+  lockedAt: pgBigInt("locked_at", { mode: "number" }).notNull(),
 });
 
 export const adminMutationLocksTable = pgTable("admin_mutation_locks", {
   id: varchar("id", { length: 50 }).primaryKey(),
-  lockedAt: pgInteger("locked_at").notNull(),
+  lockedAt: pgBigInt("locked_at", { mode: "number" }).notNull(),
 });
 
 // SQLite Users table

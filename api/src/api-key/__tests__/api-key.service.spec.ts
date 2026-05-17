@@ -3,10 +3,14 @@ import { ApiKeyService } from "@/api-key/api-key.service";
 import { ApiKeyRepository } from "@/api-key/api-key.repository";
 import { CreateApiKeyDto } from "../dto/create-api-key.dto";
 import { Ok, Failure } from "@/common/result";
+import { UserRepository } from "@/user/user.repository";
+import { USER_ROLES } from "@/user/user.constants";
+import { UserRecord } from "@/user/user.types";
 
 describe("ApiKeyService", () => {
   let service: ApiKeyService;
   let repository: jest.Mocked<ApiKeyRepository>;
+  let users: jest.Mocked<UserRepository>;
 
   const mockApiKey = {
     id: "test-id",
@@ -14,6 +18,23 @@ describe("ApiKeyService", () => {
     name: "Test API Key",
     key: "the0_abcdef123456789abcdef123456789abcdef123456789abcdef123456789",
     isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const mockUser: UserRecord = {
+    id: "user-123",
+    username: "testuser",
+    email: "test@example.com",
+    passwordHash: "hashed-password",
+    firstName: null,
+    lastName: null,
+    role: USER_ROLES.USER,
+    sessionVersion: 0,
+    isActive: true,
+    isEmailVerified: true,
+    lastLoginAt: null,
+    metadata: {},
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -27,6 +48,9 @@ describe("ApiKeyService", () => {
       findByKey: jest.fn(),
       updateLastUsed: jest.fn(),
     };
+    const mockUserRepository = {
+      findById: jest.fn().mockResolvedValue(mockUser),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,11 +59,16 @@ describe("ApiKeyService", () => {
           provide: ApiKeyRepository,
           useValue: mockRepository,
         },
+        {
+          provide: UserRepository,
+          useValue: mockUserRepository,
+        },
       ],
     }).compile();
 
     service = module.get<ApiKeyService>(ApiKeyService);
     repository = module.get(ApiKeyRepository);
+    users = module.get(UserRepository);
   });
 
   describe("createApiKey", () => {
@@ -154,12 +183,25 @@ describe("ApiKeyService", () => {
     it("should validate API key and update last used", async () => {
       repository.findByKey.mockResolvedValue(Ok(mockApiKey));
       repository.updateLastUsed.mockResolvedValue(Ok(null));
+      users.findById.mockResolvedValue(mockUser);
 
       const result = await service.validateApiKey("the0_abcdef123456789");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockApiKey);
+      expect(users.findById).toHaveBeenCalledWith("user-123");
       expect(repository.updateLastUsed).toHaveBeenCalledWith("test-id");
+    });
+
+    it("should reject API keys for inactive users", async () => {
+      repository.findByKey.mockResolvedValue(Ok(mockApiKey));
+      users.findById.mockResolvedValue({ ...mockUser, isActive: false });
+
+      const result = await service.validateApiKey("the0_abcdef123456789");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("API key owner is inactive");
+      expect(repository.updateLastUsed).not.toHaveBeenCalled();
     });
 
     it("should handle invalid API key", async () => {

@@ -28,12 +28,6 @@ export interface SetupCredentials {
 
 export interface SetupStatus {
   setupRequired: boolean;
-  userCount: number;
-  hasAdmin: boolean;
-  adminConfigured: boolean;
-  adminEmailRequired: boolean;
-  warning?: string;
-  docsUrl: string;
 }
 
 interface JwtPayload {
@@ -72,20 +66,9 @@ export class AuthService {
 
   async getSetupStatus(): Promise<SetupStatus> {
     const userCount = await this.users.count();
-    const hasAdmin = await this.users.hasActiveAdmin();
-    const adminEmail = this.getConfiguredAdminEmail();
 
     return {
       setupRequired: userCount === 0,
-      userCount,
-      hasAdmin,
-      adminConfigured: hasAdmin,
-      adminEmailRequired: Boolean(adminEmail),
-      warning:
-        userCount > 0 && !hasAdmin
-          ? "No admin configured. See docs/deployment/admin-bootstrap.md"
-          : undefined,
-      docsUrl: "/deployment/admin-bootstrap",
     };
   }
 
