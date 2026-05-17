@@ -1,11 +1,8 @@
 "use client";
+
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { JwtAuthService } from "@/lib/auth/jwt-auth.service";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,87 +10,74 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { APP_NAME } from "@/lib/constants";
 import { useAuth } from "@/contexts/auth-context";
 
-export function RegisterForm() {
+export function SetupForm() {
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  const { register } = useAuth();
+  const { setup } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
-      setIsLoading(false);
       return;
     }
 
-    try {
-      // Need to add username for JWT auth registration
-      const username = email.split("@")[0]; // Simple username from email
-      const result = await register({
-        username,
-        email,
-        password,
-      });
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
 
+    setIsLoading(true);
+    try {
+      const result = await setup({ username, email, password });
       if (!result.success) {
-        setError(result.error || "Registration failed");
+        setError(result.error || "Setup failed");
       }
-      // Success navigation is handled by the auth context
-    } catch (error) {
-      const errorMessage = formatErrorMessages(error);
-      setError(errorMessage);
+    } catch {
+      setError("An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const formatErrorMessages = (error: any) => {
-    if (error instanceof Error) {
-      // Format Firebase error messages to be more user-friendly
-      let errorMessage = error.message;
-      if (errorMessage.includes("email-already-in-use")) {
-        errorMessage =
-          "This email is already registered. Please try logging in instead.";
-      } else if (errorMessage.includes("weak-password")) {
-        errorMessage = "Password should be at least 6 characters long.";
-      } else if (errorMessage.includes("invalid-email")) {
-        errorMessage = "Please enter a valid email address.";
-      }
-      return errorMessage;
-    } else {
-      // Handle other types of errors
-      return "An unknown error occurred. Please try again later.";
-    }
-  };
-
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md border-border/70 bg-background/95 shadow-xl backdrop-blur">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">
-          {APP_NAME} Registration
+        <CardTitle className="text-center text-2xl font-bold">
+          Set up {APP_NAME}
         </CardTitle>
         <CardDescription className="text-center">
-          Create a new account to get started
+          Create the first administrator account
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
               type="email"
-              placeholder="name@quanttrader.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -105,7 +89,6 @@ export function RegisterForm() {
             <Input
               id="password"
               type="password"
-              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -113,11 +96,10 @@ export function RegisterForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm Password</Label>
+            <Label htmlFor="confirm-password">Confirm password</Label>
             <Input
               id="confirm-password"
               type="password"
-              placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
@@ -132,19 +114,8 @@ export function RegisterForm() {
           )}
 
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Creating account..." : "Create Account"}
+            {isLoading ? "Creating admin..." : "Create admin"}
           </Button>
-
-          <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Button
-              variant="link"
-              className="p-0"
-              onClick={() => router.push("/login")}
-            >
-              Login here
-            </Button>
-          </p>
         </form>
       </CardContent>
     </Card>

@@ -31,6 +31,7 @@ const mockUser: AuthUser = {
   lastName: "User",
   isActive: true,
   isEmailVerified: true,
+  role: "user",
 };
 
 describe("withAuth HOC", () => {

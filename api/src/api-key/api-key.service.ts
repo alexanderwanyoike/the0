@@ -6,10 +6,14 @@ import { ApiKey } from "./models/api-key.model";
 import { CreateApiKeyDto } from "./dto/create-api-key.dto";
 import { ApiKeyCreatedResponseDto } from "./dto/api-key-created-response.dto";
 import { ApiKeyResponseDto } from "./dto/api-key-response.dto";
+import { UserRepository } from "@/user/user.repository";
 
 @Injectable()
 export class ApiKeyService {
-  constructor(private readonly apiKeyRepository: ApiKeyRepository) {}
+  constructor(
+    private readonly apiKeyRepository: ApiKeyRepository,
+    private readonly users: UserRepository,
+  ) {}
 
   /**
    * Create a new API key
@@ -130,6 +134,11 @@ export class ApiKeyService {
     const result = await this.apiKeyRepository.findByKey(key);
     if (!result.success) {
       return Failure(result.error);
+    }
+
+    const user = await this.users.findById(result.data.userId);
+    if (!user?.isActive) {
+      return Failure("API key owner is inactive");
     }
 
     // Update last used timestamp

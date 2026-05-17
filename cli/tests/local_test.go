@@ -224,6 +224,7 @@ func TestGenerateEnvFile_CreatesFile(t *testing.T) {
 		"MINIO_ROOT_USER=",
 		"MINIO_ROOT_PASSWORD=",
 		"JWT_SECRET=",
+		"THE0_ADMIN_EMAIL=",
 		"API_PORT=",
 		"FRONTEND_PORT=",
 		"DOCS_PORT=",
@@ -267,6 +268,9 @@ func TestGenerateEnvFile_PreservesExistingAndAddsDockerGID(t *testing.T) {
 	}
 	if !strings.Contains(content, "DOCKER_GID=") {
 		t.Errorf("Expected existing .env to be updated with DOCKER_GID, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=") {
+		t.Errorf("Expected existing .env to be updated with THE0_ADMIN_EMAIL, got: %s", content)
 	}
 }
 
@@ -324,8 +328,144 @@ func TestGenerateEnvFile_DoesNotDuplicateExistingDockerGID(t *testing.T) {
 	}
 
 	content := string(data)
-	if content != customContent {
-		t.Errorf("Expected existing DOCKER_GID content to be unchanged, got: %s", content)
+	if strings.Count(content, "DOCKER_GID=") != 1 {
+		t.Errorf("Expected existing DOCKER_GID not to be duplicated, got: %s", content)
+	}
+	if !strings.Contains(content, customContent) {
+		t.Errorf("Expected existing content to be preserved, got: %s", content)
+	}
+}
+
+func TestSetAdminEmail_UpdatesExistingKey(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminEmail(tmpDir, "admin@example.com"); err != nil {
+		t.Fatalf("SetAdminEmail failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com") {
+		t.Errorf("Expected admin email to be updated, got: %s", content)
+	}
+	if strings.Count(content, "THE0_ADMIN_EMAIL=") != 1 {
+		t.Errorf("Expected admin email key to be idempotent, got: %s", content)
+	}
+}
+
+func TestSetAdminEmail_PreservesInlineComment(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com # selected admin\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminEmail(tmpDir, "admin@example.com"); err != nil {
+		t.Fatalf("SetAdminEmail failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com # selected admin") {
+		t.Errorf("Expected inline comment to be preserved, got: %s", content)
+	}
+}
+
+func TestSetAdminEmail_AppendsMissingKey(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("CUSTOM_KEY=value\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminEmail(tmpDir, "admin@example.com"); err != nil {
+		t.Fatalf("SetAdminEmail failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "CUSTOM_KEY=value") {
+		t.Errorf("Expected existing content to be preserved, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com") {
+		t.Errorf("Expected admin email to be appended, got: %s", content)
+	}
+}
+
+func TestSetAdminEmail_RejectsUnsafeEmail(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminEmail(tmpDir, "admin@example.com\nJWT_SECRET=bad"); err == nil {
+		t.Fatal("Expected unsafe email to be rejected")
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if strings.Contains(content, "JWT_SECRET=bad") {
+		t.Errorf("Expected unsafe value not to be written, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=old@example.com") {
+		t.Errorf("Expected original email to be preserved, got: %s", content)
+	}
+}
+
+func TestSetAdminEmail_MissingEnvIsActionable(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	err = local.SetAdminEmail(tmpDir, "admin@example.com")
+	if err == nil {
+		t.Fatal("Expected missing .env to return an error")
+	}
+	if !strings.Contains(err.Error(), "the0 local init") {
+		t.Fatalf("Expected actionable init guidance, got: %v", err)
 	}
 }
 

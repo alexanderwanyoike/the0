@@ -117,13 +117,6 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
                 <Button variant="ghost" asChild size="sm">
                   <Link href="/login">Log in</Link>
                 </Button>
-                <Button
-                  asChild
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  <Link href="/register">Sign up</Link>
-                </Button>
               </div>
             )}
           </div>
@@ -216,13 +209,6 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
                         onClick={() => setOpen(false)}
                       >
                         <Link href="/login">Log in</Link>
-                      </Button>
-                      <Button
-                        asChild
-                        className="w-full"
-                        onClick={() => setOpen(false)}
-                      >
-                        <Link href="/register">Sign up</Link>
                       </Button>
                     </div>
                   )}

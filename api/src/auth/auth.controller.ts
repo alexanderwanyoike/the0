@@ -5,48 +5,14 @@ import {
   Get,
   Headers,
   UnauthorizedException,
+  BadRequestException,
 } from "@nestjs/common";
-import {
-  AuthService,
-  LoginCredentials,
-  RegisterCredentials,
-} from "./auth.service";
+import { AuthService } from "./auth.service";
+import { LoginDto } from "./dto/login.dto";
+import { SetupDto } from "./dto/setup.dto";
 import { ValidateTokenDto } from "./dto/validate-token.dto";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
-import { IsEmail, IsString, IsNotEmpty, IsOptional } from "class-validator";
 import { ApiKeyService } from "@/api-key/api-key.service";
-
-export class LoginDto {
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-}
-
-export class RegisterDto {
-  @IsString()
-  @IsNotEmpty()
-  username: string;
-
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @IsString()
-  @IsOptional()
-  firstName?: string;
-
-  @IsString()
-  @IsOptional()
-  lastName?: string;
-}
 
 @ApiTags("auth")
 @Controller("auth")
@@ -71,18 +37,29 @@ export class AuthController {
     };
   }
 
-  @Post("register")
-  async register(@Body() registerDto: RegisterDto) {
-    const result = await this.authService.register(registerDto);
+  @Get("setup-status")
+  async setupStatus() {
+    const status = await this.authService.getSetupStatus();
+
+    return {
+      success: true,
+      data: status,
+      message: "Setup status retrieved successfully",
+    };
+  }
+
+  @Post("setup")
+  async setup(@Body() setupDto: SetupDto) {
+    const result = await this.authService.createFirstAdmin(setupDto);
 
     if (!result.success) {
-      throw new UnauthorizedException(result.error);
+      throw new BadRequestException(result.error);
     }
 
     return {
       success: true,
       data: result.data,
-      message: "Registration successful",
+      message: "Setup completed successfully",
     };
   }
 

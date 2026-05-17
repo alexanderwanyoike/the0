@@ -4,6 +4,7 @@ import Link from "next/link";
 import DashboardLayout from "@/components/layouts/dashboard-layout";
 import { cn } from "@/lib/utils";
 import React from "react";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function SettingsLayout({
   children,
@@ -11,6 +12,7 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   const segment = useSelectedLayoutSegment();
+  const { user } = useAuth();
 
   return (
     <DashboardLayout>
@@ -48,6 +50,19 @@ export default function SettingsLayout({
             >
               API
             </Link>
+            {user?.role === "admin" && (
+              <Link
+                href="/settings/users"
+                className={cn(
+                  "px-3 sm:px-4 py-2 text-sm whitespace-nowrap transition-colors hover:text-primary",
+                  segment === "users"
+                    ? "border-b-2 border-primary font-medium text-primary"
+                    : "text-muted-foreground",
+                )}
+              >
+                Users
+              </Link>
+            )}
           </nav>
         </div>
 

@@ -41,7 +41,7 @@ const mockRouter = {
 
 const mockAuthService = {
   login: jest.fn(),
-  register: jest.fn(),
+  setup: jest.fn(),
   validateToken: jest.fn(),
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
@@ -57,12 +57,21 @@ const mockUser: AuthUser = {
   lastName: "User",
   isActive: true,
   isEmailVerified: true,
+  role: "user",
 };
 
 // Test component to access auth context
 function TestComponent() {
-  const { user, loading, login, register, logout, token, authService } =
-    useAuth();
+  const {
+    user,
+    loading,
+    login,
+    setup,
+    logout,
+    refreshUser,
+    token,
+    authService,
+  } = useAuth();
 
   return (
     <div>
@@ -78,16 +87,17 @@ function TestComponent() {
       </button>
       <button
         onClick={() =>
-          register({
+          setup({
             username: "test",
             email: "test@example.com",
             password: "password",
           })
         }
       >
-        Register
+        Setup
       </button>
       <button onClick={() => logout()}>Logout</button>
+      <button onClick={() => refreshUser()}>Refresh User</button>
       <div data-testid="auth-service">
         {authService ? "service available" : "no service"}
       </div>
@@ -272,10 +282,10 @@ describe("AuthContext", () => {
     });
   });
 
-  describe("register", () => {
-    it("should handle successful registration", async () => {
+  describe("setup", () => {
+    it("should handle successful setup", async () => {
       mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.register.mockResolvedValue({
+      mockAuthService.setup.mockResolvedValue({
         success: true,
         data: {
           token: "new-token",
@@ -294,7 +304,7 @@ describe("AuthContext", () => {
       });
 
       await act(async () => {
-        screen.getByText("Register").click();
+        screen.getByText("Setup").click();
       });
 
       await waitFor(() => {
@@ -303,11 +313,11 @@ describe("AuthContext", () => {
       });
     });
 
-    it("should handle failed registration", async () => {
+    it("should handle failed setup", async () => {
       mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.register.mockResolvedValue({
+      mockAuthService.setup.mockResolvedValue({
         success: false,
-        error: "User already exists",
+        error: "Setup is only available before users exist",
       });
 
       render(
@@ -321,7 +331,7 @@ describe("AuthContext", () => {
       });
 
       await act(async () => {
-        screen.getByText("Register").click();
+        screen.getByText("Setup").click();
       });
 
       expect(mockRouter.push).not.toHaveBeenCalled();
@@ -350,6 +360,42 @@ describe("AuthContext", () => {
 
       await act(async () => {
         screen.getByText("Logout").click();
+      });
+
+      await waitFor(() => {
+        expect(mockAuthService.logout).toHaveBeenCalled();
+        expect(mockRouter.push).toHaveBeenCalledWith("/login");
+        expect(screen.getByTestId("user")).toHaveTextContent("no user");
+      });
+    });
+  });
+
+  describe("refreshUser", () => {
+    it("logs out when the current user can no longer be resolved", async () => {
+      mockAuthService.getToken.mockReturnValue("valid-token");
+      mockAuthService.validateToken.mockResolvedValue({ success: true });
+      mockAuthService.getCurrentUser
+        .mockResolvedValueOnce({
+          success: true,
+          data: mockUser,
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          error: "Token has been invalidated",
+        });
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("user")).toHaveTextContent("testuser");
+      });
+
+      await act(async () => {
+        screen.getByText("Refresh User").click();
       });
 
       await waitFor(() => {

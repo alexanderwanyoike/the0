@@ -120,6 +120,7 @@ export default withMermaid(defineConfig({
           { text: 'Overview', link: '/deployment/' },
           { text: 'Docker Compose', link: '/deployment/docker-compose' },
           { text: 'Kubernetes', link: '/deployment/kubernetes' },
+          { text: 'Admin Bootstrap', link: '/deployment/admin-bootstrap' },
         ]
       }
     ],

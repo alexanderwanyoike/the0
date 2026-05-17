@@ -1,12 +1,13 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, SVGProps, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { Sidebar } from "@/components/main-navigation";
 import { ModeToggle } from "@/components/mode-toggle";
 import { config } from "@/lib/config";
+import { Users } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -60,6 +61,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </svg>
             ),
           },
+          ...(user?.role === "admin"
+            ? [
+                {
+                  name: "Users",
+                  href: "/settings/users",
+                  icon: (props: SVGProps<SVGSVGElement>) => (
+                    <Users {...props} />
+                  ),
+                },
+              ]
+            : []),
         ]}
         user={user}
         onLogout={logout}

@@ -12,6 +12,7 @@ export interface ApiUser {
   lastLogin?: string; // ISO string instead of Timestamp
   isActive: boolean;
   isEmailVerified: boolean;
+  role: "admin" | "user";
 }
 
 // User operation request types

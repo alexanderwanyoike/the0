@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"the0/internal/logger"
 )
+
+var adminEmailPattern = regexp.MustCompile(`^[A-Za-z0-9.!#$%&'*+/=?^_{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$`)
 
 // defaultEnvContent contains the default .env values matching the compose file
 const defaultEnvContent = `# the0 Local Environment Configuration
@@ -31,6 +34,9 @@ MINIO_ROOT_PASSWORD=the0password
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=24h
 
+# Admin bootstrap
+THE0_ADMIN_EMAIL=
+
 # API
 API_PORT=3000
 FRONTEND_PORT=3001
@@ -52,7 +58,14 @@ func GenerateEnvFile(composeDir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read existing env file: %w", err)
 		}
-		if !hasEnvKey(string(data), "DOCKER_GID") {
+		content := string(data)
+		if !hasEnvKey(content, "THE0_ADMIN_EMAIL") {
+			if err := appendEnvBlock(envPath, "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=\n"); err != nil {
+				return err
+			}
+			logger.Verbose("Updated .env file with THE0_ADMIN_EMAIL")
+		}
+		if !hasEnvKey(content, "DOCKER_GID") {
 			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				return fmt.Errorf("failed to update env file: %w", err)
@@ -85,4 +98,76 @@ func hasEnvKey(content, key string) bool {
 		}
 	}
 	return false
+}
+
+// SetAdminEmail updates THE0_ADMIN_EMAIL in the local compose .env file.
+func SetAdminEmail(composeDir string, email string) error {
+	email = strings.TrimSpace(email)
+	if err := ValidateAdminEmail(email); err != nil {
+		return err
+	}
+
+	envPath := filepath.Join(composeDir, ".env")
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf(".env not found in %s; run `the0 local init` first", composeDir)
+		}
+		return fmt.Errorf("failed to read .env file: %w", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	found := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "THE0_ADMIN_EMAIL=") {
+			lines[i] = "THE0_ADMIN_EMAIL=" + email + trailingInlineComment(line)
+			found = true
+		}
+	}
+
+	content := strings.Join(lines, "\n")
+	if !found {
+		if strings.TrimSpace(content) != "" && !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		content += "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=" + email + "\n"
+	}
+
+	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write .env file: %w", err)
+	}
+
+	return nil
+}
+
+func trailingInlineComment(line string) string {
+	hashIndex := strings.Index(line, "#")
+	if hashIndex == -1 {
+		return ""
+	}
+	return " " + strings.TrimSpace(line[hashIndex:])
+}
+
+// ValidateAdminEmail checks that an admin email can be safely written to .env.
+func ValidateAdminEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if strings.ContainsAny(email, "\r\n=") || !adminEmailPattern.MatchString(email) {
+		return fmt.Errorf("email must be a valid single-line email address")
+	}
+	return nil
+}
+
+func appendEnvBlock(envPath string, block string) error {
+	f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to update env file: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(block); err != nil {
+		return fmt.Errorf("failed to append to env file: %w", err)
+	}
+	return nil
 }

@@ -39,7 +39,7 @@ export function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md border-border/70 bg-background/95 shadow-xl backdrop-blur">
       <CardHeader className="space-y-1">
         <CardTitle className="text-2xl font-bold text-center">
           {APP_NAME} Login

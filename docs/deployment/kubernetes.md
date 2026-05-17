@@ -127,6 +127,16 @@ the0Api:
     # ... other configuration
 ```
 
+If you are upgrading an existing deployment and no admin exists yet, configure the exact active user to promote:
+
+```yaml
+the0Api:
+  env:
+    THE0_ADMIN_EMAIL: "admin@example.com"
+```
+
+See [Admin Bootstrap](./admin-bootstrap) for fresh install, upgrade, and warning states.
+
 ## Helm Configuration
 
 The chart is configured through `values.yaml`. Key sections:

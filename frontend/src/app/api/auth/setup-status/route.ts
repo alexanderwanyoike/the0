@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
+export async function GET() {
   const botApiUrl = process.env.BOT_API_URL;
   if (!botApiUrl) {
     return NextResponse.json(
@@ -8,24 +8,24 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
   try {
-    const body = await req.json();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(`${botApiUrl}/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    const response = await fetch(`${botApiUrl}/auth/setup-status`, {
+      method: "GET",
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error("Error proxying auth register:", error);
+    console.error("Error proxying auth setup status:", error);
     return NextResponse.json(
       { success: false, message: "Authentication service unavailable" },
       { status: 500 },
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }

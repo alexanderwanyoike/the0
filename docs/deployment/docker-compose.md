@@ -50,6 +50,14 @@ Once running, access the platform at:
 
 MinIO credentials: `the0admin` / `the0password`
 
+On a fresh database, open `http://localhost:3001/setup` to create the first administrator. For upgrades with existing users and no admin, run:
+
+```bash
+the0 local admin set --email you@example.com
+```
+
+See [Admin Bootstrap](./admin-bootstrap) for the full flow.
+
 ## Service Architecture
 
 The Docker Compose configuration starts these services:
@@ -101,6 +109,9 @@ the0 local logs -f api
 
 # Check service health
 the0 local status
+
+# Promote an existing local user to admin on restart
+the0 local admin set --email you@example.com
 ```
 
 For development with hot reload:
@@ -129,6 +140,7 @@ environment:
 environment:
   JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
   JWT_EXPIRES_IN: 24h
+  THE0_ADMIN_EMAIL: admin@example.com
 ```
 
 ### Storage Configuration

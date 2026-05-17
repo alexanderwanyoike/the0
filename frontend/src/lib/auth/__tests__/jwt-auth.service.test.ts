@@ -41,6 +41,7 @@ describe("JwtAuthService", () => {
     lastName: "User",
     isActive: true,
     isEmailVerified: true,
+    role: "user",
   };
 
   beforeEach(() => {
@@ -114,15 +115,15 @@ describe("JwtAuthService", () => {
     });
   });
 
-  describe("register", () => {
-    it("should register successfully with valid data", async () => {
+  describe("setup", () => {
+    it("should complete setup successfully with valid data", async () => {
       const mockResponse = {
         success: true,
         data: {
           token: "mock-jwt-token",
           user: mockUser,
         },
-        message: "Registration successful",
+        message: "Setup completed successfully",
       };
 
       const mockResponseObj = createMockResponse({
@@ -131,7 +132,7 @@ describe("JwtAuthService", () => {
       });
       mockFetch.mockResolvedValueOnce(mockResponseObj);
 
-      const result = await authService.register({
+      const result = await authService.setup({
         username: "testuser",
         email: "test@example.com",
         password: "password123",
@@ -144,25 +145,27 @@ describe("JwtAuthService", () => {
       expect(result.data?.user).toEqual(mockUser);
       expect(localStorage.getItem("auth-token")).toBe("mock-jwt-token");
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/register");
+      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/setup");
     });
 
-    it("should handle registration failure", async () => {
+    it("should handle setup failure", async () => {
       const mockResponseObj = createMockResponse({
         ok: false,
         status: 400,
-        json: jest.fn().mockResolvedValue({ message: "User already exists" }),
+        json: jest.fn().mockResolvedValue({
+          message: "Setup is only available before users exist",
+        }),
       });
       mockFetch.mockResolvedValueOnce(mockResponseObj);
 
-      const result = await authService.register({
+      const result = await authService.setup({
         username: "existinguser",
         email: "existing@example.com",
         password: "password123",
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("User already exists");
+      expect(result.error).toBe("Setup is only available before users exist");
     });
   });
 

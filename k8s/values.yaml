@@ -147,6 +147,8 @@ the0Api:
     FRONTEND_URL: "http://the0.local:30001"
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"
+    # Set this during upgrades to promote exactly one existing active user.
+    # THE0_ADMIN_EMAIL: "admin@example.com"
     RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
     # Database pool lifecycle (prevents stale connections)
     DB_POOL_MAX: "10"

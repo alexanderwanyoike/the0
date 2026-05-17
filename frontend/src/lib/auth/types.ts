@@ -6,6 +6,7 @@ export interface AuthUser {
   lastName?: string;
   isActive: boolean;
   isEmailVerified: boolean;
+  role: "admin" | "user";
 }
 
 export interface LoginCredentials {
@@ -13,7 +14,7 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface RegisterCredentials {
+export interface SetupCredentials {
   username: string;
   email: string;
   password: string;

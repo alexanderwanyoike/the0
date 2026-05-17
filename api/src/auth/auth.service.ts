@@ -1,44 +1,24 @@
-import { Injectable, Scope, ServiceUnavailableException } from "@nestjs/common";
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { getDatabase } from "../database/connection";
-import { usersTable, usersTableSqlite } from "../database/schema/users";
-import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
-import { Result } from "../common/result";
-import { getDatabaseConfig } from "../database/connection";
+import { isConnectionError } from "@/common/database-errors";
+import { Failure, Result } from "../common/result";
+import { hashPassword } from "@/common/password";
+import { UserRole } from "@/user/user.constants";
+import { UserRepository } from "@/user/user.repository";
+import { UserRecord } from "@/user/user.types";
+import { toAuthUser } from "./auth-user.mapper";
+import { AuthUser } from "./auth.types";
+import { SetupLockRepository } from "./setup-lock.repository";
 
-const CONNECTION_ERROR_CODES = new Set([
-  "ETIMEDOUT",
-  "ENETUNREACH",
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ENOTFOUND",
-  "CONNECT_TIMEOUT",
-]);
-
-function isConnectionError(error: unknown): boolean {
-  if (error instanceof AggregateError) {
-    return error.errors.some(isConnectionError);
-  }
-  return CONNECTION_ERROR_CODES.has((error as any)?.code);
-}
-
-export interface AuthUser {
-  id: string;
-  username: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  isActive: boolean;
-  isEmailVerified: boolean;
-}
+export type { AuthUser } from "./auth.types";
 
 export interface LoginCredentials {
   email: string;
   password: string;
 }
 
-export interface RegisterCredentials {
+export interface SetupCredentials {
   username: string;
   email: string;
   password: string;
@@ -46,24 +26,117 @@ export interface RegisterCredentials {
   lastName?: string;
 }
 
-@Injectable({ scope: Scope.DEFAULT })
+export interface SetupStatus {
+  setupRequired: boolean;
+}
+
+interface JwtPayload {
+  sub: string;
+  username?: string;
+  email?: string;
+  role?: UserRole;
+  sessionVersion?: number;
+}
+
+@Injectable()
 export class AuthService {
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private readonly users: UserRepository,
+    private readonly setupLocks: SetupLockRepository,
+  ) {}
+
+  private signUser(user: UserRecord): { token: string; user: AuthUser } {
+    const authUser = toAuthUser(user);
+    const token = this.jwtService.sign({
+      sub: authUser.id,
+      username: authUser.username,
+      email: authUser.email,
+      role: authUser.role,
+      sessionVersion: user.sessionVersion,
+    });
+
+    return { token, user: authUser };
+  }
+
+  private getConfiguredAdminEmail(): string | undefined {
+    const email = process.env.THE0_ADMIN_EMAIL?.trim();
+    return email || undefined;
+  }
+
+  async getSetupStatus(): Promise<SetupStatus> {
+    const userCount = await this.users.count();
+
+    return {
+      setupRequired: userCount === 0,
+    };
+  }
+
+  async createFirstAdmin(
+    credentials: SetupCredentials,
+  ): Promise<Result<{ token: string; user: AuthUser }, string>> {
+    try {
+      const userCount = await this.users.count();
+
+      if (userCount > 0) {
+        return Failure("Setup is only available before users exist");
+      }
+
+      const configuredAdminEmail = this.getConfiguredAdminEmail();
+      if (
+        configuredAdminEmail &&
+        credentials.email.trim() !== configuredAdminEmail
+      ) {
+        return Failure("Setup email does not match configured admin email");
+      }
+
+      const lockResult = await this.setupLocks.withLock(async () => {
+        const usersBeforeInsert = await this.users.count();
+        if (usersBeforeInsert > 0) {
+          return Failure<{ token: string; user: AuthUser }, string>(
+            "Setup is only available before users exist",
+          );
+        }
+
+        const passwordHash = await hashPassword(credentials.password);
+        const user = await this.users.createFirstAdmin(
+          {
+            username: credentials.username,
+            email: credentials.email,
+            firstName: credentials.firstName,
+            lastName: credentials.lastName,
+          },
+          passwordHash,
+        );
+
+        return {
+          success: true,
+          error: null,
+          data: this.signUser(user),
+        };
+      });
+
+      if (!lockResult.acquired) {
+        return Failure("Setup is already in progress");
+      }
+
+      return lockResult.value;
+    } catch (error) {
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
+      }
+      return Failure("Setup failed");
+    }
+  }
 
   async validateToken(token: string): Promise<Result<AuthUser, string>> {
     try {
-      const payload = this.jwtService.verify(token);
-      const db = getDatabase();
-      const config = getDatabaseConfig();
+      const payload = this.jwtService.verify<JwtPayload>(token);
+      const user = await this.users.findById(payload.sub);
 
-      const userTable =
-        config.type === "sqlite" ? usersTableSqlite : usersTable;
-      const users = await db
-        .select()
-        .from(userTable)
-        .where(eq(userTable.id, payload.sub));
-
-      if (users.length === 0) {
+      if (!user) {
         return {
           success: false,
           error: "User not found",
@@ -71,7 +144,6 @@ export class AuthService {
         };
       }
 
-      const user = users[0];
       if (!user.isActive) {
         return {
           success: false,
@@ -80,18 +152,18 @@ export class AuthService {
         };
       }
 
+      if ((payload.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+        return {
+          success: false,
+          error: "Invalid token",
+          data: null,
+        };
+      }
+
       return {
         success: true,
         error: null,
-        data: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          isActive: user.isActive,
-          isEmailVerified: user.isEmailVerified,
-        },
+        data: toAuthUser(user),
       };
     } catch (error) {
       if (isConnectionError(error)) {
@@ -111,17 +183,9 @@ export class AuthService {
     credentials: LoginCredentials,
   ): Promise<Result<{ token: string; user: AuthUser }, string>> {
     try {
-      const db = getDatabase();
-      const config = getDatabaseConfig();
+      const user = await this.users.findByEmail(credentials.email);
 
-      const userTable =
-        config.type === "sqlite" ? usersTableSqlite : usersTable;
-      const users = await db
-        .select()
-        .from(userTable)
-        .where(eq(userTable.email, credentials.email));
-
-      if (users.length === 0) {
+      if (!user) {
         return {
           success: false,
           error: "Invalid credentials",
@@ -129,7 +193,6 @@ export class AuthService {
         };
       }
 
-      const user = users[0];
       if (!user.isActive) {
         return {
           success: false,
@@ -150,35 +213,12 @@ export class AuthService {
         };
       }
 
-      // Update last login
-      await db
-        .update(userTable)
-        .set({ lastLoginAt: new Date() })
-        .where(eq(userTable.id, user.id));
-
-      const payload = {
-        sub: user.id,
-        username: user.username,
-        email: user.email,
-      };
-
-      const token = this.jwtService.sign(payload);
+      await this.users.updateLastLogin(user.id);
 
       return {
         success: true,
         error: null,
-        data: {
-          token,
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            isActive: user.isActive,
-            isEmailVerified: user.isEmailVerified,
-          },
-        },
+        data: this.signUser(user),
       };
     } catch (error) {
       if (isConnectionError(error)) {
@@ -189,87 +229,6 @@ export class AuthService {
       return {
         success: false,
         error: "Login failed",
-        data: null,
-      };
-    }
-  }
-
-  async register(
-    credentials: RegisterCredentials,
-  ): Promise<Result<{ token: string; user: AuthUser }, string>> {
-    try {
-      const db = getDatabase();
-      const config = getDatabaseConfig();
-
-      const userTable =
-        config.type === "sqlite" ? usersTableSqlite : usersTable;
-
-      // Check if user already exists
-      const existingUsers = await db
-        .select()
-        .from(userTable)
-        .where(eq(userTable.email, credentials.email));
-
-      if (existingUsers.length > 0) {
-        return {
-          success: false,
-          error: "User already exists",
-          data: null,
-        };
-      }
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(credentials.password, 10);
-
-      // Create user
-      const newUsers = await db
-        .insert(userTable)
-        .values({
-          username: credentials.username,
-          email: credentials.email,
-          passwordHash,
-          firstName: credentials.firstName,
-          lastName: credentials.lastName,
-          isActive: true,
-          isEmailVerified: false,
-        })
-        .returning();
-
-      const newUser = newUsers[0];
-
-      const payload = {
-        sub: newUser.id,
-        username: newUser.username,
-        email: newUser.email,
-      };
-
-      const token = this.jwtService.sign(payload);
-
-      return {
-        success: true,
-        error: null,
-        data: {
-          token,
-          user: {
-            id: newUser.id,
-            username: newUser.username,
-            email: newUser.email,
-            firstName: newUser.firstName,
-            lastName: newUser.lastName,
-            isActive: newUser.isActive,
-            isEmailVerified: newUser.isEmailVerified,
-          },
-        },
-      };
-    } catch (error) {
-      if (isConnectionError(error)) {
-        throw new ServiceUnavailableException(
-          "Database temporarily unavailable",
-        );
-      }
-      return {
-        success: false,
-        error: "Registration failed",
         data: null,
       };
     }

@@ -15,6 +15,7 @@ import { BotQueryModule } from "./bot-query/bot-query.module";
 import { HealthModule } from "./health/health.module";
 import { MinioModule } from "./minio";
 import configuration from "./config/configuration";
+import { UserModule } from "./user/user.module";
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import configuration from "./config/configuration";
     BotStateModule,
     BotQueryModule,
     HealthModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -56,6 +56,7 @@ export class AuthCombinedGuard implements CanActivate {
       lastName: result.data.lastName,
       isActive: result.data.isActive,
       isEmailVerified: result.data.isEmailVerified,
+      role: result.data.role,
       authType: "jwt",
     };
 
@@ -82,6 +83,7 @@ export class AuthCombinedGuard implements CanActivate {
       lastName: null,
       isActive: true,
       isEmailVerified: true,
+      role: "user",
       authType: "apikey",
     };
 
