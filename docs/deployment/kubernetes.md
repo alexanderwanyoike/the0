@@ -50,6 +50,29 @@ helm install the0 the0/the0 --namespace the0 --create-namespace
 
 This installs the latest chart version. The chart's `appVersion` determines the default image tags, so you don't need to specify tags manually.
 
+## Upgrading Existing Installations
+
+Before upgrading to v1.14.0 or later, make sure the deployment has an explicit admin bootstrap path.
+
+If an existing active user should become the first admin, set `THE0_ADMIN_EMAIL` in your Helm values before the upgrade:
+
+```yaml
+the0Api:
+  env:
+    THE0_ADMIN_EMAIL: "admin@example.com"
+```
+
+Then upgrade through Helm:
+
+```bash
+helm repo update
+helm upgrade the0 the0/the0 --namespace the0 -f values.yaml
+```
+
+On startup, the API promotes exactly the active user matching `THE0_ADMIN_EMAIL` when no admin exists. If an admin already exists, no promotion is needed. Normal login continues to work even when no admin is configured, but admin-only user management remains unavailable until an admin is created.
+
+See [Admin Bootstrap](./admin-bootstrap) for the full fresh install, upgrade, warning, and last-admin protection behavior.
+
 ## Quick Start with Minikube
 
 For local development, minikube provides the simplest path to a running cluster:
@@ -135,7 +158,7 @@ the0Api:
     THE0_ADMIN_EMAIL: "admin@example.com"
 ```
 
-See [Admin Bootstrap](./admin-bootstrap) for fresh install, upgrade, and warning states.
+See [Admin Bootstrap](./admin-bootstrap) for fresh install, upgrade, warning states, and last-admin protection.
 
 ## Helm Configuration
 

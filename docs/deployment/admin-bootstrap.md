@@ -29,6 +29,18 @@ If no active admin exists, set `THE0_ADMIN_EMAIL` to the email of one existing a
 No admin configured. Set THE0_ADMIN_EMAIL to an existing active user or see docs/deployment/admin-bootstrap.md
 ```
 
+### Upgrade Checklist
+
+Before upgrading an existing deployment to v1.14.0 or later:
+
+1. Choose one existing active user who should become the first admin.
+2. Set `THE0_ADMIN_EMAIL` to that exact email address in your deployment configuration.
+3. Upgrade or restart the API so admin bootstrap runs at startup.
+4. Log in as that user and confirm `/settings/users` is available.
+5. Create or promote any additional admins from `/settings/users`.
+
+After an admin role is stored in the database, `THE0_ADMIN_EMAIL` is no longer required for that deployment. Leaving it configured is safe; the API only uses it when no active admin exists.
+
 ## Docker Compose
 
 For `the0 local`, set the admin email with:
