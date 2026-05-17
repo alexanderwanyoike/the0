@@ -190,6 +190,14 @@ export class AdminBootstrapService implements OnModuleInit {
       return;
     }
 
+    if (!configuredUser.passwordHash) {
+      const passwordHash = await hashPassword(configuredAdminPassword);
+      await this.users.updatePassword(configuredUser.id, passwordHash);
+      this.logger.log("Set configured admin password");
+      this.warnRemoveConfiguredPassword();
+      return;
+    }
+
     const passwordMatches = await bcrypt.compare(
       configuredAdminPassword,
       configuredUser.passwordHash,

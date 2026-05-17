@@ -7,6 +7,14 @@ import { UserRecord } from "@/user/user.types";
 import { AdminBootstrapService } from "../admin-bootstrap.service";
 import { SetupLockRepository } from "../setup-lock.repository";
 
+jest.mock("bcrypt", () => ({
+  compare: jest.fn(),
+}));
+
+jest.mock("@/common/password", () => ({
+  hashPassword: jest.fn().mockResolvedValue("hashed_password"),
+}));
+
 describe("AdminBootstrapService", () => {
   let users: jest.Mocked<UserRepository>;
   let setupLocks: jest.Mocked<SetupLockRepository>;
@@ -156,6 +164,28 @@ describe("AdminBootstrapService", () => {
 
     await service.onModuleInit();
 
+    expect(users.updatePassword).toHaveBeenCalledWith(
+      "admin-id",
+      "hashed_password",
+    );
+  });
+
+  it("updates an existing matching admin when the current password hash is missing", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
+    users.count.mockResolvedValue(1);
+    users.list.mockResolvedValue([
+      user({
+        id: "admin-id",
+        email: "admin@example.com",
+        passwordHash: "",
+        role: USER_ROLES.ADMIN,
+      }),
+    ]);
+
+    await service.onModuleInit();
+
+    expect(bcrypt.compare).not.toHaveBeenCalled();
     expect(users.updatePassword).toHaveBeenCalledWith(
       "admin-id",
       "hashed_password",
