@@ -24,11 +24,7 @@ export class AdminMutationLockRepository extends LockRepository {
   async withLock<T>(callback: () => Promise<T>): Promise<T> {
     return this.withLocalLock(async () => {
       const lockedAt = await this.acquireWithRetries();
-      try {
-        return await callback();
-      } finally {
-        await this.release(lockedAt).catch((): void => undefined);
-      }
+      return this.runWithRelease(lockedAt, callback, "admin mutation lock");
     });
   }
 

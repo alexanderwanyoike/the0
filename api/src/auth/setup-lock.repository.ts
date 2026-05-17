@@ -41,11 +41,8 @@ export class SetupLockRepository extends LockRepository {
         return { acquired: false, value: null };
       }
 
-      try {
-        return { acquired: true, value: await callback() };
-      } finally {
-        await this.release(lockedAt).catch((): void => undefined);
-      }
+      const value = await this.runWithRelease(lockedAt, callback, "setup lock");
+      return { acquired: true, value };
     });
   }
 }

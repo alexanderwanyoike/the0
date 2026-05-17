@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { SetupLockRepository } from "@/auth/setup-lock.repository";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { getDatabase, getDatabaseConfig } from "@/database/connection";
@@ -207,5 +208,69 @@ describe("Lock repositories", () => {
       "integer out of range",
     );
     expect(selectWhere).not.toHaveBeenCalled();
+  });
+
+  it("surfaces setup lock release errors after successful callbacks", async () => {
+    const releaseError = new Error("release failed");
+    const loggerError = jest
+      .spyOn(Logger.prototype, "error")
+      .mockImplementation();
+    const { insertValues, deleteWhere } = createLockDb();
+    insertValues.mockResolvedValueOnce(undefined);
+    deleteWhere.mockRejectedValueOnce(releaseError);
+    dateNow.mockReturnValueOnce(100);
+
+    await expect(
+      new SetupLockRepository().withLock(async () => "created"),
+    ).rejects.toThrow("release failed");
+    expect(loggerError).toHaveBeenCalledWith(
+      "setup lock: failed to release lock",
+      releaseError.stack,
+    );
+    loggerError.mockRestore();
+  });
+
+  it("preserves callback errors and logs setup lock release failures", async () => {
+    const callbackError = new Error("callback failed");
+    const releaseError = new Error("release failed");
+    const loggerError = jest
+      .spyOn(Logger.prototype, "error")
+      .mockImplementation();
+    const { insertValues, deleteWhere } = createLockDb();
+    insertValues.mockResolvedValueOnce(undefined);
+    deleteWhere.mockRejectedValueOnce(releaseError);
+    dateNow.mockReturnValueOnce(100);
+
+    await expect(
+      new SetupLockRepository().withLock(async () => {
+        throw callbackError;
+      }),
+    ).rejects.toThrow("callback failed");
+
+    expect(loggerError).toHaveBeenCalledWith(
+      "setup lock: failed to release lock after callback error",
+      releaseError.stack,
+    );
+    loggerError.mockRestore();
+  });
+
+  it("surfaces admin mutation lock release errors after successful callbacks", async () => {
+    const releaseError = new Error("release failed");
+    const loggerError = jest
+      .spyOn(Logger.prototype, "error")
+      .mockImplementation();
+    const { insertValues, deleteWhere } = createLockDb();
+    insertValues.mockResolvedValueOnce(undefined);
+    deleteWhere.mockRejectedValueOnce(releaseError);
+    dateNow.mockReturnValueOnce(100);
+
+    await expect(
+      new AdminMutationLockRepository().withLock(async () => "updated"),
+    ).rejects.toThrow("release failed");
+    expect(loggerError).toHaveBeenCalledWith(
+      "admin mutation lock: failed to release lock",
+      releaseError.stack,
+    );
+    loggerError.mockRestore();
   });
 });

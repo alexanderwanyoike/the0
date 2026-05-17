@@ -52,7 +52,9 @@ export function DeleteAccount() {
         description: "Your account has been deactivated.",
       });
 
-      await logout();
+      await logout().catch((logoutError) => {
+        console.error("Account deactivated, but logout failed:", logoutError);
+      });
     } catch (error: any) {
       console.error("Error deleting account:", error);
       toast({

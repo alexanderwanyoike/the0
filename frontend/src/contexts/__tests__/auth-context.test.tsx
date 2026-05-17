@@ -62,7 +62,16 @@ const mockUser: AuthUser = {
 
 // Test component to access auth context
 function TestComponent() {
-  const { user, loading, login, setup, logout, token, authService } = useAuth();
+  const {
+    user,
+    loading,
+    login,
+    setup,
+    logout,
+    refreshUser,
+    token,
+    authService,
+  } = useAuth();
 
   return (
     <div>
@@ -88,6 +97,7 @@ function TestComponent() {
         Setup
       </button>
       <button onClick={() => logout()}>Logout</button>
+      <button onClick={() => refreshUser()}>Refresh User</button>
       <div data-testid="auth-service">
         {authService ? "service available" : "no service"}
       </div>
@@ -350,6 +360,42 @@ describe("AuthContext", () => {
 
       await act(async () => {
         screen.getByText("Logout").click();
+      });
+
+      await waitFor(() => {
+        expect(mockAuthService.logout).toHaveBeenCalled();
+        expect(mockRouter.push).toHaveBeenCalledWith("/login");
+        expect(screen.getByTestId("user")).toHaveTextContent("no user");
+      });
+    });
+  });
+
+  describe("refreshUser", () => {
+    it("logs out when the current user can no longer be resolved", async () => {
+      mockAuthService.getToken.mockReturnValue("valid-token");
+      mockAuthService.validateToken.mockResolvedValue({ success: true });
+      mockAuthService.getCurrentUser
+        .mockResolvedValueOnce({
+          success: true,
+          data: mockUser,
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          error: "Token has been invalidated",
+        });
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("user")).toHaveTextContent("testuser");
+      });
+
+      await act(async () => {
+        screen.getByText("Refresh User").click();
       });
 
       await waitFor(() => {

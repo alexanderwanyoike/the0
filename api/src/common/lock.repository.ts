@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { and, eq, type AnyColumn } from "drizzle-orm";
 import {
   isConnectionError,
@@ -21,6 +22,7 @@ interface LockRecord {
 }
 
 export abstract class LockRepository {
+  private readonly logger = new Logger(LockRepository.name);
   private localLock = Promise.resolve();
 
   protected abstract readonly lockId: string;
@@ -79,6 +81,39 @@ export abstract class LockRepository {
 
   protected async release(lockedAt: number): Promise<void> {
     await this.releaseIfMatches(lockedAt);
+  }
+
+  protected async runWithRelease<T>(
+    lockedAt: number,
+    callback: () => Promise<T>,
+    context: string,
+  ): Promise<T> {
+    let value: T;
+    try {
+      value = await callback();
+    } catch (callbackError) {
+      try {
+        await this.release(lockedAt);
+      } catch (releaseError) {
+        this.logger.error(
+          `${context}: failed to release lock after callback error`,
+          releaseError instanceof Error ? releaseError.stack : undefined,
+        );
+      }
+      throw callbackError;
+    }
+
+    try {
+      await this.release(lockedAt);
+    } catch (releaseError) {
+      this.logger.error(
+        `${context}: failed to release lock`,
+        releaseError instanceof Error ? releaseError.stack : undefined,
+      );
+      throw releaseError;
+    }
+
+    return value;
   }
 
   private async releaseIfMatches(lockedAt: number): Promise<void> {
