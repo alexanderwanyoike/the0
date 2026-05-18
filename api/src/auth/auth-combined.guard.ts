@@ -4,10 +4,10 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from "@nestjs/common";
-import { Request } from "express";
 import { AuthService } from "./auth.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthenticatedRequest } from "./auth.types";
+import { extractAuthHeaderToken, toAuthenticatedJwtUser } from "./request-auth";
 
 @Injectable()
 export class AuthCombinedGuard implements CanActivate {
@@ -19,14 +19,12 @@ export class AuthCombinedGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    // Check if request has JWT token
-    const jwtToken = this.extractJwtFromHeader(request);
+    const jwtToken = extractAuthHeaderToken(request, "Bearer");
     if (jwtToken) {
       return this.validateJwtToken(request, jwtToken);
     }
 
-    // Check if request has API key
-    const apiKey = this.extractApiKeyFromHeader(request);
+    const apiKey = extractAuthHeaderToken(request, "ApiKey");
     if (apiKey) {
       return this.validateApiKey(request, apiKey);
     }
@@ -46,19 +44,7 @@ export class AuthCombinedGuard implements CanActivate {
       throw new UnauthorizedException(result.error);
     }
 
-    // Attach user info to request for downstream use
-    request.user = {
-      uid: result.data.id,
-      id: result.data.id,
-      username: result.data.username,
-      email: result.data.email,
-      firstName: result.data.firstName,
-      lastName: result.data.lastName,
-      isActive: result.data.isActive,
-      isEmailVerified: result.data.isEmailVerified,
-      role: result.data.role,
-      authType: "jwt",
-    };
+    request.user = toAuthenticatedJwtUser(result.data);
 
     return true;
   }
@@ -73,12 +59,11 @@ export class AuthCombinedGuard implements CanActivate {
       throw new UnauthorizedException(result.error);
     }
 
-    // Attach user info to request for downstream use
     request.user = {
       uid: result.data.userId,
       id: result.data.userId,
-      username: "", // API keys don't have username
-      email: "", // API keys don't have email
+      username: "",
+      email: "",
       firstName: null,
       lastName: null,
       isActive: true,
@@ -88,31 +73,5 @@ export class AuthCombinedGuard implements CanActivate {
     };
 
     return true;
-  }
-
-  private extractJwtFromHeader(request: Request): string | null {
-    const authHeader = request.headers.authorization;
-
-    if (authHeader) {
-      const [type, token] = authHeader.split(" ");
-      if (type === "Bearer" && token) {
-        return token;
-      }
-    }
-
-    return null;
-  }
-
-  private extractApiKeyFromHeader(request: Request): string | null {
-    const authHeader = request.headers.authorization;
-
-    if (authHeader) {
-      const [type, key] = authHeader.split(" ");
-      if (type === "ApiKey" && key) {
-        return key;
-      }
-    }
-
-    return null;
   }
 }

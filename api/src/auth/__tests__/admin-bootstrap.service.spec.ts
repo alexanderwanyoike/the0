@@ -5,7 +5,6 @@ import { USER_ROLES } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
 import { AdminBootstrapService } from "../admin-bootstrap.service";
-import { SetupLockRepository } from "../setup-lock.repository";
 
 jest.mock("bcrypt", () => ({
   compare: jest.fn(),
@@ -23,10 +22,8 @@ jest.mock("@/common/password-policy", () => ({
 
 describe("AdminBootstrapService", () => {
   let users: jest.Mocked<UserRepository>;
-  let setupLocks: jest.Mocked<SetupLockRepository>;
   let adminMutationLocks: jest.Mocked<AdminMutationLockRepository>;
   let service: AdminBootstrapService;
-  let loggerWarn: jest.SpyInstance;
   let loggerLog: jest.SpyInstance;
 
   const originalAdminEmail = process.env.THE0_ADMIN_EMAIL;
@@ -62,24 +59,17 @@ describe("AdminBootstrapService", () => {
       updatePassword: jest.fn(),
       update: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
-    setupLocks = {
-      withLock: jest.fn(async (callback) => ({
-        acquired: true,
-        value: await callback(),
-      })),
-    } as unknown as jest.Mocked<SetupLockRepository>;
     adminMutationLocks = {
       withLock: jest.fn(async (callback) => callback()),
     } as unknown as jest.Mocked<AdminMutationLockRepository>;
 
-    loggerWarn = jest.spyOn(Logger.prototype, "warn").mockImplementation();
     loggerLog = jest.spyOn(Logger.prototype, "log").mockImplementation();
     (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
     delete process.env.THE0_ADMIN_EMAIL;
     delete process.env.THE0_ADMIN_PASSWORD;
 
-    service = new AdminBootstrapService(users, setupLocks, adminMutationLocks);
+    service = new AdminBootstrapService(users, adminMutationLocks);
   });
 
   afterEach(() => {
@@ -93,7 +83,6 @@ describe("AdminBootstrapService", () => {
     } else {
       process.env.THE0_ADMIN_PASSWORD = originalAdminPassword;
     }
-    loggerWarn.mockRestore();
     loggerLog.mockRestore();
     jest.clearAllMocks();
   });
@@ -101,17 +90,19 @@ describe("AdminBootstrapService", () => {
   it("auto-creates a configured admin on a fresh database", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
-    users.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+    users.count.mockResolvedValueOnce(0);
     users.createFirstAdmin.mockResolvedValue(user({ role: USER_ROLES.ADMIN }));
 
     await service.onModuleInit();
 
-    expect(setupLocks.withLock).toHaveBeenCalledTimes(1);
+    expect(adminMutationLocks.withLock).toHaveBeenCalledTimes(1);
     expect(users.createFirstAdmin).toHaveBeenCalledWith(
       { username: "admin", email: "admin@example.com" },
       "hashed_password",
     );
-    expect(loggerLog).toHaveBeenCalledWith("Created configured first admin user");
+    expect(loggerLog).toHaveBeenCalledWith(
+      "Created configured first admin user",
+    );
   });
 
   it("fails startup when admin email is missing", async () => {
@@ -121,7 +112,7 @@ describe("AdminBootstrapService", () => {
     await expect(service.onModuleInit()).rejects.toThrow(
       "THE0_ADMIN_EMAIL must be configured",
     );
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(adminMutationLocks.withLock).not.toHaveBeenCalled();
   });
 
   it("fails startup when admin password is missing", async () => {
@@ -132,7 +123,7 @@ describe("AdminBootstrapService", () => {
       "THE0_ADMIN_PASSWORD must be configured",
     );
 
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(adminMutationLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
@@ -145,7 +136,7 @@ describe("AdminBootstrapService", () => {
       "THE0_ADMIN_EMAIL must be a valid email address",
     );
 
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(adminMutationLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
@@ -158,7 +149,7 @@ describe("AdminBootstrapService", () => {
       "THE0_ADMIN_PASSWORD is invalid: Password must be at least 6 characters long",
     );
 
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(adminMutationLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
@@ -245,7 +236,11 @@ describe("AdminBootstrapService", () => {
       user({ id: "user-id", username: "root", email: "user@example.com" }),
     ]);
     users.createUser.mockResolvedValue(
-      user({ id: "root-id", email: "root@example.com", role: USER_ROLES.ADMIN }),
+      user({
+        id: "root-id",
+        email: "root@example.com",
+        role: USER_ROLES.ADMIN,
+      }),
     );
 
     await service.onModuleInit();
