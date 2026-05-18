@@ -1,5 +1,12 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { JwtAuthService } from "@/lib/auth/jwt-auth.service";
 import { AuthUser } from "@/lib/auth/types";
@@ -10,7 +17,7 @@ import { setSSEAuthService } from "@/lib/sse/sse-auth";
 
 interface AuthContextType {
   user: AuthUser | null;
-  userData: AuthUser | null; // Keep userData for backward compatibility, maps to user
+  userData: AuthUser | null;
   loading: boolean;
   login: (credentials: {
     email: string;
@@ -19,7 +26,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   token: string | null;
-  authService: JwtAuthService; // Expose the centralized auth service
+  authService: JwtAuthService;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -38,11 +45,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const authService = useMemo(() => new JwtAuthService(), []);
 
-  // Centralized auth service instance
-  const authService = new JwtAuthService();
+  const clearAuthState = useCallback(() => {
+    authService.logout();
+    setUser(null);
+    setToken(null);
+    document.cookie =
+      "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  }, [authService]);
 
-  const initializeAuth = async () => {
+  const initializeAuth = useCallback(async () => {
     setLoading(true);
     try {
       const storedToken = authService.getToken();
@@ -53,23 +66,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (currentUser.success && currentUser.data) {
             setUser(currentUser.data);
             setToken(storedToken);
-            // Set cookie for server-side auth
             document.cookie = `auth-token=${storedToken}; path=/`;
           } else {
-            // Token invalid, clear it
-            authService.logout();
-            setUser(null);
-            setToken(null);
-            document.cookie =
-              "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            clearAuthState();
           }
         } else {
-          // Token invalid, clear it
-          authService.logout();
-          setUser(null);
-          setToken(null);
-          document.cookie =
-            "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          clearAuthState();
         }
       } else {
         setUser(null);
@@ -82,19 +84,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authService, clearAuthState]);
 
-  // Initialize auth state on mount and connect all auth utilities
+  const logout = useCallback(async () => {
+    try {
+      clearAuthState();
+      router.push("/login");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  }, [clearAuthState, router]);
+
   useEffect(() => {
-    // Connect auth service with all API utilities
     setAuthService(authService, logout);
     setAuthFetchService(authService, logout);
     setApiClientService(authService, logout);
     setSSEAuthService(authService, logout);
 
-    // Initialize auth state
     initializeAuth();
-  }, []);
+  }, [authService, initializeAuth, logout]);
 
   const login = async (credentials: { email: string; password: string }) => {
     try {
@@ -102,7 +110,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.data) {
         setUser(result.data.user);
         setToken(result.data.token);
-        // Set cookie for server-side auth
         document.cookie = `auth-token=${result.data.token}; path=/`;
         router.push("/dashboard");
         return { success: true };
@@ -112,21 +119,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Login error:", error);
       return { success: false, error: "Login failed. Please try again." };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      authService.logout();
-      setUser(null);
-      setToken(null);
-      // Remove cookie when logged out
-      document.cookie =
-        "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      // Use proper React routing instead of window.location
-      router.push("/login");
-    } catch (error) {
-      console.error("Error signing out:", error);
     }
   };
 

@@ -5,7 +5,7 @@ import { USER_ROLES } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
 import { AdminBootstrapService } from "../admin-bootstrap.service";
-import { SetupLockRepository } from "../setup-lock.repository";
+import { RootAdminCreationLockRepository } from "../root-admin-creation-lock.repository";
 
 jest.mock("bcrypt", () => ({
   compare: jest.fn(),
@@ -23,7 +23,7 @@ jest.mock("@/common/password-policy", () => ({
 
 describe("AdminBootstrapService", () => {
   let users: jest.Mocked<UserRepository>;
-  let setupLocks: jest.Mocked<SetupLockRepository>;
+  let rootAdminCreationLocks: jest.Mocked<RootAdminCreationLockRepository>;
   let adminMutationLocks: jest.Mocked<AdminMutationLockRepository>;
   let service: AdminBootstrapService;
   let loggerWarn: jest.SpyInstance;
@@ -62,12 +62,12 @@ describe("AdminBootstrapService", () => {
       updatePassword: jest.fn(),
       update: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
-    setupLocks = {
+    rootAdminCreationLocks = {
       withLock: jest.fn(async (callback) => ({
         acquired: true,
         value: await callback(),
       })),
-    } as unknown as jest.Mocked<SetupLockRepository>;
+    } as unknown as jest.Mocked<RootAdminCreationLockRepository>;
     adminMutationLocks = {
       withLock: jest.fn(async (callback) => callback()),
     } as unknown as jest.Mocked<AdminMutationLockRepository>;
@@ -79,7 +79,11 @@ describe("AdminBootstrapService", () => {
     delete process.env.THE0_ADMIN_EMAIL;
     delete process.env.THE0_ADMIN_PASSWORD;
 
-    service = new AdminBootstrapService(users, setupLocks, adminMutationLocks);
+    service = new AdminBootstrapService(
+      users,
+      rootAdminCreationLocks,
+      adminMutationLocks,
+    );
   });
 
   afterEach(() => {
@@ -106,12 +110,14 @@ describe("AdminBootstrapService", () => {
 
     await service.onModuleInit();
 
-    expect(setupLocks.withLock).toHaveBeenCalledTimes(1);
+    expect(rootAdminCreationLocks.withLock).toHaveBeenCalledTimes(1);
     expect(users.createFirstAdmin).toHaveBeenCalledWith(
       { username: "admin", email: "admin@example.com" },
       "hashed_password",
     );
-    expect(loggerLog).toHaveBeenCalledWith("Created configured first admin user");
+    expect(loggerLog).toHaveBeenCalledWith(
+      "Created configured first admin user",
+    );
   });
 
   it("fails startup when admin email is missing", async () => {
@@ -121,7 +127,7 @@ describe("AdminBootstrapService", () => {
     await expect(service.onModuleInit()).rejects.toThrow(
       "THE0_ADMIN_EMAIL must be configured",
     );
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(rootAdminCreationLocks.withLock).not.toHaveBeenCalled();
   });
 
   it("fails startup when admin password is missing", async () => {
@@ -132,7 +138,7 @@ describe("AdminBootstrapService", () => {
       "THE0_ADMIN_PASSWORD must be configured",
     );
 
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(rootAdminCreationLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
@@ -145,7 +151,7 @@ describe("AdminBootstrapService", () => {
       "THE0_ADMIN_EMAIL must be a valid email address",
     );
 
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(rootAdminCreationLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
@@ -158,7 +164,7 @@ describe("AdminBootstrapService", () => {
       "THE0_ADMIN_PASSWORD is invalid: Password must be at least 6 characters long",
     );
 
-    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(rootAdminCreationLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
@@ -245,7 +251,11 @@ describe("AdminBootstrapService", () => {
       user({ id: "user-id", username: "root", email: "user@example.com" }),
     ]);
     users.createUser.mockResolvedValue(
-      user({ id: "root-id", email: "root@example.com", role: USER_ROLES.ADMIN }),
+      user({
+        id: "root-id",
+        email: "root@example.com",
+        role: USER_ROLES.ADMIN,
+      }),
     );
 
     await service.onModuleInit();

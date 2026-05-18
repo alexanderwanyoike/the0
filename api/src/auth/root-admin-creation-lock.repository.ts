@@ -6,17 +6,17 @@ import {
   setupLocksTableSqlite,
 } from "@/database/schema/users";
 
-const SETUP_LOCK_ID = "first-admin";
-const SETUP_LOCK_STALE_MS = 5 * 60 * 1000;
+const ROOT_ADMIN_CREATION_LOCK_ID = "first-admin";
+const ROOT_ADMIN_CREATION_LOCK_STALE_MS = 5 * 60 * 1000;
 
 type LockResult<T> =
   | { acquired: true; value: T }
   | { acquired: false; value: null };
 
 @Injectable()
-export class SetupLockRepository extends LockRepository {
-  protected readonly lockId = SETUP_LOCK_ID;
-  protected readonly staleMs = SETUP_LOCK_STALE_MS;
+export class RootAdminCreationLockRepository extends LockRepository {
+  protected readonly lockId = ROOT_ADMIN_CREATION_LOCK_ID;
+  protected readonly staleMs = ROOT_ADMIN_CREATION_LOCK_STALE_MS;
 
   protected getLockTable() {
     const config = getDatabaseConfig();
@@ -41,7 +41,11 @@ export class SetupLockRepository extends LockRepository {
         return { acquired: false, value: null };
       }
 
-      const value = await this.runWithRelease(lockedAt, callback, "setup lock");
+      const value = await this.runWithRelease(
+        lockedAt,
+        callback,
+        "root admin creation lock",
+      );
       return { acquired: true, value };
     });
   }

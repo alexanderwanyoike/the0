@@ -1,5 +1,5 @@
 import { Logger } from "@nestjs/common";
-import { SetupLockRepository } from "@/auth/setup-lock.repository";
+import { RootAdminCreationLockRepository } from "@/auth/root-admin-creation-lock.repository";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { getDatabase, getDatabaseConfig } from "@/database/connection";
 
@@ -79,7 +79,7 @@ describe("Lock repositories", () => {
     dateNow.mockRestore();
   });
 
-  it("does not run setup callback when another fresh setup lock exists", async () => {
+  it("does not run creation callback when another fresh root admin creation lock exists", async () => {
     const { insertValues, selectWhere, deleteWhere } = createLockDb();
     insertValues.mockRejectedValueOnce(uniqueConstraintError());
     selectWhere.mockResolvedValueOnce([
@@ -88,14 +88,16 @@ describe("Lock repositories", () => {
     dateNow.mockReturnValueOnce(1_100).mockReturnValueOnce(1_200);
 
     const callback = jest.fn();
-    const result = await new SetupLockRepository().withLock(callback);
+    const result = await new RootAdminCreationLockRepository().withLock(
+      callback,
+    );
 
     expect(result).toEqual({ acquired: false, value: null });
     expect(callback).not.toHaveBeenCalled();
     expect(deleteWhere).not.toHaveBeenCalled();
   });
 
-  it("removes only the observed stale setup lock before acquiring its own lock", async () => {
+  it("removes only the observed stale root admin creation lock before acquiring its own lock", async () => {
     const staleLockedAt = 1_000;
     const acquiredLockedAt = 400_000;
     const { insertValues, selectWhere, deleteWhere } = createLockDb();
@@ -111,7 +113,9 @@ describe("Lock repositories", () => {
       .mockReturnValueOnce(acquiredLockedAt);
 
     const callback = jest.fn().mockResolvedValue("created");
-    const result = await new SetupLockRepository().withLock(callback);
+    const result = await new RootAdminCreationLockRepository().withLock(
+      callback,
+    );
 
     expect(result).toEqual({ acquired: true, value: "created" });
     expect(callback).toHaveBeenCalledTimes(1);
@@ -158,7 +162,7 @@ describe("Lock repositories", () => {
     insertValues.mockResolvedValue(undefined);
     dateNow.mockReturnValueOnce(100).mockReturnValueOnce(200);
 
-    const repository = new SetupLockRepository();
+    const repository = new RootAdminCreationLockRepository();
     const events: string[] = [];
     let releaseFirstLock: () => void = () => undefined;
     const firstCallbackStarted = new Promise<void>((resolve) => {
@@ -204,13 +208,13 @@ describe("Lock repositories", () => {
       }),
     );
 
-    await expect(new SetupLockRepository().withLock(jest.fn())).rejects.toThrow(
-      "integer out of range",
-    );
+    await expect(
+      new RootAdminCreationLockRepository().withLock(jest.fn()),
+    ).rejects.toThrow("integer out of range");
     expect(selectWhere).not.toHaveBeenCalled();
   });
 
-  it("surfaces setup lock release errors after successful callbacks", async () => {
+  it("surfaces root admin creation lock release errors after successful callbacks", async () => {
     const releaseError = new Error("release failed");
     const loggerError = jest
       .spyOn(Logger.prototype, "error")
@@ -221,16 +225,16 @@ describe("Lock repositories", () => {
     dateNow.mockReturnValueOnce(100);
 
     await expect(
-      new SetupLockRepository().withLock(async () => "created"),
+      new RootAdminCreationLockRepository().withLock(async () => "created"),
     ).rejects.toThrow("release failed");
     expect(loggerError).toHaveBeenCalledWith(
-      "setup lock: failed to release lock",
+      "root admin creation lock: failed to release lock",
       releaseError.stack,
     );
     loggerError.mockRestore();
   });
 
-  it("preserves callback errors and logs setup lock release failures", async () => {
+  it("preserves callback errors and logs root admin creation lock release failures", async () => {
     const callbackError = new Error("callback failed");
     const releaseError = new Error("release failed");
     const loggerError = jest
@@ -242,13 +246,13 @@ describe("Lock repositories", () => {
     dateNow.mockReturnValueOnce(100);
 
     await expect(
-      new SetupLockRepository().withLock(async () => {
+      new RootAdminCreationLockRepository().withLock(async () => {
         throw callbackError;
       }),
     ).rejects.toThrow("callback failed");
 
     expect(loggerError).toHaveBeenCalledWith(
-      "setup lock: failed to release lock after callback error",
+      "root admin creation lock: failed to release lock after callback error",
       releaseError.stack,
     );
     loggerError.mockRestore();

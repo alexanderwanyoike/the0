@@ -1,16 +1,7 @@
-import { normalizeEmailForComparison } from "@/common/email";
+import { isConfiguredRootAdminEmail } from "@/common/root-admin";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRecord } from "@/user/user.types";
 import { AuthUser } from "./auth.types";
-
-function isConfiguredRootAdmin(user: UserRecord): boolean {
-  const configuredEmail = process.env.THE0_ADMIN_EMAIL?.trim();
-  return Boolean(
-    configuredEmail &&
-      normalizeEmailForComparison(user.email) ===
-        normalizeEmailForComparison(configuredEmail),
-  );
-}
 
 export function toAuthUser(user: UserRecord): AuthUser {
   return {
@@ -22,6 +13,6 @@ export function toAuthUser(user: UserRecord): AuthUser {
     isActive: Boolean(user.isActive),
     isEmailVerified: Boolean(user.isEmailVerified),
     role: user.role === USER_ROLES.ADMIN ? USER_ROLES.ADMIN : USER_ROLES.USER,
-    isConfiguredRootAdmin: isConfiguredRootAdmin(user),
+    isConfiguredRootAdmin: isConfiguredRootAdminEmail(user.email),
   };
 }
