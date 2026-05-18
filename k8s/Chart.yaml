@@ -33,7 +33,7 @@ annotations:
     - kind: changed
       description: Replace public landing and signup flows with app-first setup, login, and dashboard routing
     - kind: added
-      description: Add first-admin bootstrap with configured email and password recovery
+      description: Add first-admin bootstrap with configured email and password
     - kind: added
       description: Add admin user management, self-service profile routes, and last-admin protection
     - kind: added

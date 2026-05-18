@@ -56,7 +56,7 @@ On a fresh database, open `http://localhost:3001/setup` to create the first admi
 the0 local admin set --email you@example.com
 ```
 
-The command prompts for the admin password, writes both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`, and restarts `the0-api`. Remove `THE0_ADMIN_PASSWORD` from `~/.the0/compose/.env` after the password has been applied.
+The command prompts for the admin password, writes both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`, and restarts `the0-api`. Remove `THE0_ADMIN_PASSWORD` from `~/.the0/compose/.env` after the password has been applied. If an active admin already exists, the configured password is ignored on startup.
 
 If the password is not applied, inspect `the0 local logs api`; password policy validation happens in the API at startup. See [Admin Bootstrap](./admin-bootstrap) for the full flow.
 

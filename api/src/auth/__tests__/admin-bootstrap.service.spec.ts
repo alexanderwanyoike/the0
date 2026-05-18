@@ -1,4 +1,3 @@
-import * as bcrypt from "bcrypt";
 import { Logger } from "@nestjs/common";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { USER_ROLES } from "@/user/user.constants";
@@ -6,10 +5,6 @@ import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
 import { AdminBootstrapService } from "../admin-bootstrap.service";
 import { SetupLockRepository } from "../setup-lock.repository";
-
-jest.mock("bcrypt", () => ({
-  compare: jest.fn(),
-}));
 
 jest.mock("@/common/password", () => ({
   hashPassword: jest.fn().mockResolvedValue("hashed_password"),
@@ -169,53 +164,9 @@ describe("AdminBootstrapService", () => {
     );
   });
 
-  it("updates an existing matching admin password once", async () => {
+  it("ignores configured admin password when an active admin already exists", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
-    (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
-    users.count.mockResolvedValue(1);
-    users.list.mockResolvedValue([
-      user({
-        id: "admin-id",
-        email: "admin@example.com",
-        role: USER_ROLES.ADMIN,
-      }),
-    ]);
-
-    await service.onModuleInit();
-
-    expect(users.updatePassword).toHaveBeenCalledWith(
-      "admin-id",
-      "hashed_password",
-    );
-  });
-
-  it("updates an existing matching admin when the current password hash is missing", async () => {
-    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
-    process.env.THE0_ADMIN_PASSWORD = "secret123";
-    users.count.mockResolvedValue(1);
-    users.list.mockResolvedValue([
-      user({
-        id: "admin-id",
-        email: "admin@example.com",
-        passwordHash: "",
-        role: USER_ROLES.ADMIN,
-      }),
-    ]);
-
-    await service.onModuleInit();
-
-    expect(bcrypt.compare).not.toHaveBeenCalled();
-    expect(users.updatePassword).toHaveBeenCalledWith(
-      "admin-id",
-      "hashed_password",
-    );
-  });
-
-  it("does not update an existing matching admin when the password already matches", async () => {
-    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
-    process.env.THE0_ADMIN_PASSWORD = "secret123";
-    (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
     users.count.mockResolvedValue(1);
     users.list.mockResolvedValue([
       user({
@@ -229,9 +180,12 @@ describe("AdminBootstrapService", () => {
 
     expect(users.updatePassword).not.toHaveBeenCalled();
     expect(users.promoteToAdminAndSetPassword).not.toHaveBeenCalled();
+    expect(loggerWarn).toHaveBeenCalledWith(
+      "THE0_ADMIN_PASSWORD is configured but ignored because an active admin already exists. Remove it from the deployment configuration.",
+    );
   });
 
-  it("warns and does not mutate when configured email points to a non-admin", async () => {
+  it("does not apply configured password to a non-admin when another active admin exists", async () => {
     process.env.THE0_ADMIN_EMAIL = "user@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
     users.count.mockResolvedValue(1);
@@ -249,7 +203,7 @@ describe("AdminBootstrapService", () => {
     expect(users.updatePassword).not.toHaveBeenCalled();
     expect(users.promoteToAdminAndSetPassword).not.toHaveBeenCalled();
     expect(loggerWarn).toHaveBeenCalledWith(
-      "Configured admin email does not match an active admin; skipping password update",
+      "THE0_ADMIN_PASSWORD is configured but ignored because an active admin already exists. Remove it from the deployment configuration.",
     );
   });
 

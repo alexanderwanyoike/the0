@@ -244,7 +244,7 @@ the0Api:
           key: password
 ```
 
-`the0Api.env` remains a string map for simple values. `the0Api.extraEnv` accepts full Kubernetes `EnvVar` entries for `secretKeyRef`, including secrets created by Sealed Secrets. Remove `THE0_ADMIN_PASSWORD` after it has been applied. See `docs/deployment/admin-bootstrap.md` for the full bootstrap flow and last-admin protection.
+`the0Api.env` remains a string map for simple values. `the0Api.extraEnv` accepts full Kubernetes `EnvVar` entries for `secretKeyRef`, including secrets created by Sealed Secrets. Remove `THE0_ADMIN_PASSWORD` after it has been applied. If an active admin already exists, the configured password is ignored. See `docs/deployment/admin-bootstrap.md` for the full bootstrap flow and last-admin protection.
 
 ### Resource Limits
 

@@ -1,6 +1,6 @@
 ---
 title: "Admin Bootstrap"
-description: "Create and recover the first the0 administrator"
+description: "Create the first the0 administrator"
 tags: ["deployment", "auth", "admin"]
 order: 3
 ---
@@ -29,7 +29,7 @@ Existing users are kept active and default to the `user` role. During startup, t
 
 If no active admin exists, set both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`. On startup, the API promotes exactly that matching active user and sets the configured password. Email-only configuration warns and does not promote anyone.
 
-If an admin was already promoted but the password is unknown, set `THE0_ADMIN_EMAIL` to that admin and add `THE0_ADMIN_PASSWORD`. On startup, the API updates that admin password only if it does not already match, then increments `session_version` so old tokens are invalidated. Remove `THE0_ADMIN_PASSWORD` after the password has been applied.
+Once an active admin exists, startup never changes an admin password from `THE0_ADMIN_PASSWORD`. This prevents a forgotten recovery variable from overwriting a password that an admin changed later in the UI. If `THE0_ADMIN_PASSWORD` is still configured after an active admin exists, the API logs a warning and ignores it.
 
 If no admin can be created or promoted, normal login still works, but admin-only user management is unavailable and the API logs:
 
@@ -45,8 +45,8 @@ No admin configured. Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD for an existin
 | Fresh install, email/password | `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` | Creates the first admin automatically |
 | Upgrade, users exist, no admin | email/password for an active user | Promotes that user and sets the password |
 | Upgrade, admin email only | `THE0_ADMIN_EMAIL` only | Warns and does not promote |
-| Already-promoted admin, unknown password | matching admin email/password | Updates the password once and increments `session_version` |
 | Active admin already working | no password config | No startup mutation |
+| Active admin already working | password config present | Warns and ignores the password config |
 
 ### Upgrade Checklist
 
@@ -60,7 +60,7 @@ Before upgrading an existing deployment to v1.14.0 or later:
 6. Create or promote any additional admins from `/settings/users`.
 7. Remove `THE0_ADMIN_PASSWORD` from the deployment configuration and restart or redeploy.
 
-After an admin role is stored in the database, `THE0_ADMIN_EMAIL` is usually no longer required. Leaving the email configured is safe, but do not leave `THE0_ADMIN_PASSWORD` configured after recovery.
+After an admin role is stored in the database, `THE0_ADMIN_EMAIL` is usually no longer required. Leaving the email configured is safe, but do not leave `THE0_ADMIN_PASSWORD` configured after bootstrap.
 
 ## Docker Compose
 
@@ -70,7 +70,7 @@ For `the0 local`, set the admin email and password with:
 the0 local admin set --email you@example.com
 ```
 
-The command prompts for the password, updates `~/.the0/compose/.env` idempotently, and restarts `the0-api`. Automation can pass `--password`, but prompt mode avoids shell history exposure.
+The command prompts for the password, updates `~/.the0/compose/.env` idempotently, and restarts `the0-api`. Automation can pass `--password`, but prompt mode avoids shell history exposure. The configured password is ignored when an active admin already exists.
 
 The CLI only checks that the value can be written safely to `.env`; the API validates the password policy at startup. If the configured password is not applied, inspect the API logs with `the0 local logs api`.
 

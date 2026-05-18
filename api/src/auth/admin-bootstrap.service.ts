@@ -1,5 +1,4 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import * as bcrypt from "bcrypt";
 import { hashPassword } from "@/common/password";
 import { validatePasswordPolicy } from "@/common/password-policy";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
@@ -125,7 +124,7 @@ export class AdminBootstrapService implements OnModuleInit {
       (user) => user.isActive && user.role === USER_ROLES.ADMIN,
     );
     if (activeAdmins.length > 0) {
-      await this.applyConfiguredPasswordToExistingAdmin(refreshedUsers);
+      this.warnConfiguredPasswordIgnored();
       return;
     }
 
@@ -180,59 +179,15 @@ export class AdminBootstrapService implements OnModuleInit {
     this.warnRemoveConfiguredPassword();
   }
 
-  private async applyConfiguredPasswordToExistingAdmin(
-    users: UserRecord[],
-  ): Promise<void> {
-    const configuredAdminEmail = this.getConfiguredAdminEmail();
+  private warnConfiguredPasswordIgnored(): void {
     const configuredAdminPassword = this.getConfiguredAdminPassword();
-
-    if (!configuredAdminEmail) {
-      return;
-    }
-
-    const configuredUser = users.find(
-      (user) => user.email === configuredAdminEmail,
-    );
-    if (
-      !configuredUser ||
-      !configuredUser.isActive ||
-      configuredUser.role !== USER_ROLES.ADMIN
-    ) {
-      this.logger.warn(
-        "Configured admin email does not match an active admin; skipping password update",
-      );
-      return;
-    }
-
     if (!configuredAdminPassword) {
       return;
     }
 
-    if (!this.validateConfiguredPassword(configuredAdminPassword)) {
-      return;
-    }
-
-    if (!configuredUser.passwordHash) {
-      const passwordHash = await hashPassword(configuredAdminPassword);
-      await this.users.updatePassword(configuredUser.id, passwordHash);
-      this.logger.log("Set configured admin password");
-      this.warnRemoveConfiguredPassword();
-      return;
-    }
-
-    const passwordMatches = await bcrypt.compare(
-      configuredAdminPassword,
-      configuredUser.passwordHash,
+    this.logger.warn(
+      "THE0_ADMIN_PASSWORD is configured but ignored because an active admin already exists. Remove it from the deployment configuration.",
     );
-    if (passwordMatches) {
-      this.warnRemoveConfiguredPassword();
-      return;
-    }
-
-    const passwordHash = await hashPassword(configuredAdminPassword);
-    await this.users.updatePassword(configuredUser.id, passwordHash);
-    this.logger.log("Updated configured admin password");
-    this.warnRemoveConfiguredPassword();
   }
 
   private warnRemoveConfiguredPassword(): void {
