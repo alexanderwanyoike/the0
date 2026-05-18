@@ -21,6 +21,8 @@ If `THE0_ADMIN_EMAIL` is set, setup only accepts that exact email address.
 
 If both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` are set before the API starts, the API creates the first admin automatically. The username is derived from the email local part. Remove `THE0_ADMIN_PASSWORD` after the admin has been created.
 
+`THE0_ADMIN_PASSWORD` must satisfy the same password policy as normal setup and password reset flows. If the configured password is invalid, the API logs a warning and skips the bootstrap mutation. Bootstrap warnings are not exposed through the frontend.
+
 ## Upgrades
 
 Existing users are kept active and default to the `user` role. During startup, the API preserves any existing `metadata.role = "admin"` value by promoting that user to the new `admin` role.
@@ -69,6 +71,8 @@ the0 local admin set --email you@example.com
 ```
 
 The command prompts for the password, updates `~/.the0/compose/.env` idempotently, and restarts `the0-api`. Automation can pass `--password`, but prompt mode avoids shell history exposure.
+
+The CLI only checks that the value can be written safely to `.env`; the API validates the password policy at startup. If the configured password is not applied, inspect the API logs with `the0 local logs api`.
 
 Fresh local installs should use:
 

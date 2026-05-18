@@ -79,6 +79,7 @@ On startup:
 
 - When no admin exists and both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` are configured, the API promotes exactly the matching active user.
 - When an admin already exists and the configured email matches that admin, `THE0_ADMIN_PASSWORD` repairs or rotates that admin password once.
+- If the configured password is invalid, the API logs a warning and skips the bootstrap mutation.
 - Remove `THE0_ADMIN_PASSWORD` after it has been applied.
 - Normal login continues to work even when no admin is configured, but admin-only user management remains unavailable until an admin is created.
 

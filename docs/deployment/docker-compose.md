@@ -58,7 +58,7 @@ the0 local admin set --email you@example.com
 
 The command prompts for the admin password, writes both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`, and restarts `the0-api`. Remove `THE0_ADMIN_PASSWORD` from `~/.the0/compose/.env` after the password has been applied.
 
-See [Admin Bootstrap](./admin-bootstrap) for the full flow.
+If the password is not applied, inspect `the0 local logs api`; password policy validation happens in the API at startup. See [Admin Bootstrap](./admin-bootstrap) for the full flow.
 
 ## Service Architecture
 
