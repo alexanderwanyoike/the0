@@ -30,12 +30,14 @@ docker compose version
 Initialize and start all services:
 
 ```bash
-# Initialize (first time only — point to your repo clone)
-the0 local init --repo-path /path/to/the0
+# Initialize and configure the local root admin
+the0 local init --email you@example.com --password testuse123
 
 # Start all services
 the0 local start
 ```
+
+If you omit `--email` or `--password`, `the0 local init` prompts interactively. For source builds, pass `--source /path/to/the0`.
 
 Initial startup takes several minutes as images are built. Subsequent starts are much faster.
 
@@ -50,15 +52,17 @@ Once running, access the platform at:
 
 MinIO credentials: `the0admin` / `the0password`
 
-On a fresh database, open `http://localhost:3001/setup` to create the first administrator. For upgrades with existing users and no admin, run:
+Sign in at `http://localhost:3001/login` with the configured root admin.
+
+To rotate the local root admin password, run:
 
 ```bash
-the0 local admin set --email you@example.com
+the0 local reset-admin-password new-password
 ```
 
-The command prompts for the admin password, writes both `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`, and restarts `the0-api`. Remove `THE0_ADMIN_PASSWORD` from `~/.the0/compose/.env` after the password has been applied. If an active admin already exists, the configured password is ignored on startup.
+The command updates `THE0_ADMIN_PASSWORD` in `~/.the0/compose/.env` and restarts `the0-api`. The root admin email and password are managed by configuration, not by the UI.
 
-If the password is not applied, inspect `the0 local logs api`; password policy validation happens in the API at startup. See [Admin Bootstrap](./admin-bootstrap) for the full flow.
+If the API does not start, inspect `the0 local logs api`; password policy validation happens in the API at startup. See [Root Admin Configuration](./admin-bootstrap) for the full flow.
 
 ## Service Architecture
 
@@ -112,8 +116,11 @@ the0 local logs -f api
 # Check service health
 the0 local status
 
-# Promote an existing local user to admin on restart and set their password
+# Set local root admin credentials and restart the API
 the0 local admin set --email you@example.com
+
+# Rotate the configured local root admin password
+the0 local reset-admin-password new-password
 ```
 
 For development with hot reload:
@@ -143,7 +150,7 @@ environment:
   JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
   JWT_EXPIRES_IN: 24h
   THE0_ADMIN_EMAIL: admin@example.com
-  THE0_ADMIN_PASSWORD: temporary-admin-password
+  THE0_ADMIN_PASSWORD: root-admin-password
 ```
 
 ### Storage Configuration
@@ -178,7 +185,7 @@ To reset all data and start fresh:
 
 ```bash
 the0 local uninstall
-the0 local init --repo-path /path/to/the0
+the0 local init --email you@example.com --password testuse123
 the0 local start
 ```
 

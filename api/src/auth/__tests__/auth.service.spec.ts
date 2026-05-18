@@ -2,7 +2,6 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ServiceUnavailableException } from "@nestjs/common";
 import { AuthService } from "../auth.service";
 import { JwtService } from "@nestjs/jwt";
-import { SetupLockRepository } from "../setup-lock.repository";
 import { UserRepository } from "@/user/user.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRecord } from "@/user/user.types";
@@ -16,8 +15,6 @@ describe("AuthService", () => {
   let service: AuthService;
   let jwtService: JwtService;
   let userRepository: jest.Mocked<UserRepository>;
-  let setupLockRepository: jest.Mocked<SetupLockRepository>;
-  const originalAdminEmail = process.env.THE0_ADMIN_EMAIL;
 
   const testUser: UserRecord = {
     id: "test-id",
@@ -62,32 +59,12 @@ describe("AuthService", () => {
           provide: UserRepository,
           useValue: mockUserRepository,
         },
-        {
-          provide: SetupLockRepository,
-          useValue: {
-            withLock: jest.fn(),
-          },
-        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     jwtService = module.get<JwtService>(JwtService);
     userRepository = module.get(UserRepository);
-    setupLockRepository = module.get(SetupLockRepository);
-    delete process.env.THE0_ADMIN_EMAIL;
-    setupLockRepository.withLock.mockImplementation(async (callback) => ({
-      acquired: true,
-      value: await callback(),
-    }));
-  });
-
-  afterEach(() => {
-    if (originalAdminEmail === undefined) {
-      delete process.env.THE0_ADMIN_EMAIL;
-    } else {
-      process.env.THE0_ADMIN_EMAIL = originalAdminEmail;
-    }
   });
 
   it("should be defined", () => {
@@ -179,45 +156,6 @@ describe("AuthService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Invalid token");
-    });
-  });
-
-  describe("createFirstAdmin", () => {
-    it("enforces the configured admin email during setup", async () => {
-      process.env.THE0_ADMIN_EMAIL = "admin@example.com";
-      userRepository.count.mockResolvedValue(0);
-
-      const result = await service.createFirstAdmin({
-        username: "other",
-        email: "other@example.com",
-        password: "secret123",
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe(
-        "Setup email does not match configured admin email",
-      );
-      expect(userRepository.createFirstAdmin).not.toHaveBeenCalled();
-    });
-
-    it("allows setup with the configured admin email when no password config is set", async () => {
-      process.env.THE0_ADMIN_EMAIL = "admin@example.com";
-      userRepository.count.mockResolvedValue(0);
-      userRepository.createFirstAdmin.mockResolvedValue({
-        ...testUser,
-        username: "admin",
-        email: "admin@example.com",
-        role: USER_ROLES.ADMIN,
-      });
-
-      const result = await service.createFirstAdmin({
-        username: "admin",
-        email: "admin@example.com",
-        password: "secret123",
-      });
-
-      expect(result.success).toBe(true);
-      expect(userRepository.createFirstAdmin).toHaveBeenCalled();
     });
   });
 });

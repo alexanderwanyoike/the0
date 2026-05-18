@@ -140,6 +140,10 @@ make minikube-up
 Or if `make minikube-up` handles image building automatically, just run:
 
 ```bash
+minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
+kubectl create namespace the0
+kubectl -n the0 create secret generic the0-root-admin --from-literal=password='testuse123'
+# Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml first.
 make minikube-up
 ```
 
@@ -154,7 +158,7 @@ The command will:
 1. Check prerequisites (minikube, docker, helm, kubectl)
 2. Start minikube (if not running) with 4GB RAM and 4 CPUs
 3. Build all Docker images in minikube environment  
-4. Deploy all services with Helm using NodePort
+4. Deploy all services with Helm using NodePort and values.yaml
 5. Show service URLs for access
 
 **Required setup step:**
@@ -230,7 +234,7 @@ service:
 
 All services use environment variables that match the docker-compose configuration exactly. These are defined in the `env` sections of each service in `values.yaml`.
 
-For upgrades with existing users and no admin, set the exact active user to promote and provide the password from a Secret:
+Set the deployment-managed root admin email and provide the password from a Secret:
 
 ```yaml
 the0Api:
@@ -240,11 +244,11 @@ the0Api:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:
         secretKeyRef:
-          name: the0-admin-bootstrap
+          name: the0-root-admin
           key: password
 ```
 
-`the0Api.env` remains a string map for simple values. `the0Api.extraEnv` accepts full Kubernetes `EnvVar` entries for `secretKeyRef`, including secrets created by Sealed Secrets. Remove `THE0_ADMIN_PASSWORD` after it has been applied. If an active admin already exists, the configured password is ignored. See `docs/deployment/admin-bootstrap.md` for the full bootstrap flow and last-admin protection.
+`the0Api.env` remains a string map for simple values. `the0Api.extraEnv` accepts full Kubernetes `EnvVar` entries for `secretKeyRef`, including secrets created by Sealed Secrets. Keep `THE0_ADMIN_PASSWORD` configured as the root admin password source; rotating the Secret and rolling out the API rotates the root admin password. See `docs/deployment/admin-bootstrap.md` for the full root admin flow and last-admin protection.
 
 ### Resource Limits
 
@@ -509,7 +513,7 @@ All deployment pod templates include a `checksum/chart-version` annotation that 
 |---------|----------------|------------|
 | **Command** | `make up` | `make minikube-up` |
 | **Endpoints** | localhost:3000/3001 | the0.local:30001, api.the0.local:30000 |
-| **Setup** | Single command | Single command + hosts setup |
+| **Setup** | CLI init + start | Root admin secret + values.yaml + hosts setup |
 | **Infrastructure** | Included | Included (configurable) |
 | **Scaling** | Manual | Automatic + manual |
 | **Health checks** | Basic | Advanced (liveness/readiness) |

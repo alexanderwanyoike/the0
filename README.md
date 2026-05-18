@@ -54,11 +54,14 @@ Deploy the0 locally:
 # Install the CLI
 curl -sSL https://install.the0.app | sh
 
+# Initialize local compose and configure the root admin
+the0 local init --email you@example.com --password testuse123
+
 # Start all services
 the0 local start
 
 # Access the platform
-open http://localhost:3001  # Frontend
+open http://localhost:3001/login  # Frontend
 open http://localhost:3000  # API
 open http://localhost:9001  # MinIO Console (admin/the0password)
 ```

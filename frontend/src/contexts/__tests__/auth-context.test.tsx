@@ -41,7 +41,6 @@ const mockRouter = {
 
 const mockAuthService = {
   login: jest.fn(),
-  setup: jest.fn(),
   validateToken: jest.fn(),
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
@@ -66,7 +65,6 @@ function TestComponent() {
     user,
     loading,
     login,
-    setup,
     logout,
     refreshUser,
     token,
@@ -84,17 +82,6 @@ function TestComponent() {
         }
       >
         Login
-      </button>
-      <button
-        onClick={() =>
-          setup({
-            username: "test",
-            email: "test@example.com",
-            password: "password",
-          })
-        }
-      >
-        Setup
       </button>
       <button onClick={() => logout()}>Logout</button>
       <button onClick={() => refreshUser()}>Refresh User</button>
@@ -275,63 +262,6 @@ describe("AuthContext", () => {
 
       await act(async () => {
         screen.getByText("Login").click();
-      });
-
-      expect(mockRouter.push).not.toHaveBeenCalled();
-      expect(screen.getByTestId("user")).toHaveTextContent("no user");
-    });
-  });
-
-  describe("setup", () => {
-    it("should handle successful setup", async () => {
-      mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.setup.mockResolvedValue({
-        success: true,
-        data: {
-          token: "new-token",
-          user: mockUser,
-        },
-      });
-
-      render(
-        <AuthProvider>
-          <TestComponent />
-        </AuthProvider>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("loading")).toHaveTextContent("loaded");
-      });
-
-      await act(async () => {
-        screen.getByText("Setup").click();
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId("user")).toHaveTextContent("testuser");
-        expect(mockRouter.push).toHaveBeenCalledWith("/dashboard");
-      });
-    });
-
-    it("should handle failed setup", async () => {
-      mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.setup.mockResolvedValue({
-        success: false,
-        error: "Setup is only available before users exist",
-      });
-
-      render(
-        <AuthProvider>
-          <TestComponent />
-        </AuthProvider>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("loading")).toHaveTextContent("loaded");
-      });
-
-      await act(async () => {
-        screen.getByText("Setup").click();
       });
 
       expect(mockRouter.push).not.toHaveBeenCalled();

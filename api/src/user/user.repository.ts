@@ -206,6 +206,7 @@ export class UserRepository {
     return this.updateRaw(id, {
       role: USER_ROLES.ADMIN,
       passwordHash,
+      isActive: true,
       sessionVersion: sqlIncrement(this.getUserTable().sessionVersion),
       updatedAt: new Date(),
     });

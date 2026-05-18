@@ -603,7 +603,7 @@ func TestSetAdminCredentials_RejectsInvalidPassword(t *testing.T) {
 	}
 }
 
-func TestSetAdminCredentials_RejectsPasswordBelowApiMinimum(t *testing.T) {
+func TestSetAdminCredentials_AllowsPolicyValidationToHappenInApi(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -615,12 +615,8 @@ func TestSetAdminCredentials_RejectsPasswordBelowApiMinimum(t *testing.T) {
 		t.Fatalf("Failed to write .env: %v", err)
 	}
 
-	err = local.SetAdminCredentials(tmpDir, "admin@example.com", "short")
-	if err == nil {
-		t.Fatal("Expected short password to be rejected")
-	}
-	if !strings.Contains(err.Error(), "password must be at least 6 characters") {
-		t.Fatalf("Expected password length error, got: %v", err)
+	if err := local.SetAdminCredentials(tmpDir, "admin@example.com", "short"); err != nil {
+		t.Fatalf("Expected short single-line password to be written for API validation, got: %v", err)
 	}
 
 	data, err := os.ReadFile(envPath)
@@ -629,11 +625,80 @@ func TestSetAdminCredentials_RejectsPasswordBelowApiMinimum(t *testing.T) {
 	}
 
 	content := string(data)
-	if strings.Contains(content, "THE0_ADMIN_PASSWORD=short") {
-		t.Errorf("Expected short password not to be written, got: %s", content)
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=short") {
+		t.Errorf("Expected password to be written for API validation, got: %s", content)
 	}
-	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=oldsecret") {
-		t.Errorf("Expected original password to be preserved, got: %s", content)
+}
+
+func TestSetAdminPassword_UpdatesPasswordOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=admin@example.com\nTHE0_ADMIN_PASSWORD=oldsecret\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	if err := local.SetAdminPassword(tmpDir, "newsecret"); err != nil {
+		t.Fatalf("SetAdminPassword failed: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "THE0_ADMIN_EMAIL=admin@example.com") {
+		t.Errorf("Expected admin email to be preserved, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=newsecret") {
+		t.Errorf("Expected admin password to be updated, got: %s", content)
+	}
+}
+
+func TestAdminCredentialsConfigured(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=admin@example.com\nTHE0_ADMIN_PASSWORD=secret123\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	configured, err := local.AdminCredentialsConfigured(tmpDir)
+	if err != nil {
+		t.Fatalf("AdminCredentialsConfigured failed: %v", err)
+	}
+	if !configured {
+		t.Fatal("Expected admin credentials to be configured")
+	}
+}
+
+func TestAdminCredentialsConfigured_EmptyPassword(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=admin@example.com\nTHE0_ADMIN_PASSWORD=\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	configured, err := local.AdminCredentialsConfigured(tmpDir)
+	if err != nil {
+		t.Fatalf("AdminCredentialsConfigured failed: %v", err)
+	}
+	if configured {
+		t.Fatal("Expected admin credentials to be incomplete")
 	}
 }
 

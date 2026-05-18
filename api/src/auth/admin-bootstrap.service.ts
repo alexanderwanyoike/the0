@@ -1,4 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import * as bcrypt from "bcrypt";
+import { isEmail } from "class-validator";
 import { hashPassword } from "@/common/password";
 import { validatePasswordPolicy } from "@/common/password-policy";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
@@ -15,6 +17,11 @@ function metadataRole(metadata: unknown): string | undefined {
   return typeof role === "string" ? role : undefined;
 }
 
+interface ConfiguredRootAdmin {
+  email: string;
+  password: string;
+}
+
 @Injectable()
 export class AdminBootstrapService implements OnModuleInit {
   private readonly logger = new Logger(AdminBootstrapService.name);
@@ -26,87 +33,103 @@ export class AdminBootstrapService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    try {
-      await this.bootstrapAdminFromExistingUsers();
-    } catch (error) {
-      const stack = error instanceof Error ? error.stack : undefined;
-      this.logger.error("Admin bootstrap check failed", stack);
-    }
+    await this.bootstrapConfiguredRootAdmin();
   }
 
-  private getConfiguredAdminEmail(): string | undefined {
+  private getConfiguredAdminEmail(): string {
     const email = process.env.THE0_ADMIN_EMAIL?.trim();
-    return email || undefined;
+    if (!email) {
+      throw new Error("THE0_ADMIN_EMAIL must be configured");
+    }
+    if (!isEmail(email)) {
+      throw new Error("THE0_ADMIN_EMAIL must be a valid email address");
+    }
+    return email;
   }
 
-  private getConfiguredAdminPassword(): string | undefined {
+  private getConfiguredAdminPassword(): string {
     const password = process.env.THE0_ADMIN_PASSWORD;
-    return password === undefined || password === "" ? undefined : password;
+    if (password === undefined || password === "") {
+      throw new Error("THE0_ADMIN_PASSWORD must be configured");
+    }
+    return password;
   }
 
   private deriveUsername(email: string): string {
     return email.split("@")[0]?.trim() || email;
   }
 
-  private validateConfiguredPassword(password: string): boolean {
-    const error = validatePasswordPolicy(password);
-    if (!error) {
-      return true;
+  private uniqueUsername(email: string, users: UserRecord[]): string {
+    const baseUsername = this.deriveUsername(email);
+    const usernames = new Set(users.map((user) => user.username));
+    if (!usernames.has(baseUsername)) {
+      return baseUsername;
     }
 
-    this.logger.warn(`THE0_ADMIN_PASSWORD is invalid: ${error}`);
-    return false;
+    let suffix = 1;
+    let candidate = `${baseUsername}-admin`;
+    while (usernames.has(candidate)) {
+      suffix += 1;
+      candidate = `${baseUsername}-admin-${suffix}`;
+    }
+    return candidate;
   }
 
-  private async bootstrapAdminFromExistingUsers(): Promise<void> {
+  private getConfiguredRootAdmin(): ConfiguredRootAdmin {
+    const email = this.getConfiguredAdminEmail();
+    const password = this.getConfiguredAdminPassword();
+    const error = validatePasswordPolicy(password);
+    if (error) {
+      throw new Error(`THE0_ADMIN_PASSWORD is invalid: ${error}`);
+    }
+
+    return { email, password };
+  }
+
+  private async bootstrapConfiguredRootAdmin(): Promise<void> {
+    const configuredAdmin = this.getConfiguredRootAdmin();
     const userCount = await this.users.count();
     if (userCount === 0) {
-      await this.createConfiguredFirstAdmin();
+      await this.createConfiguredFirstAdmin(configuredAdmin);
       return;
     }
 
     await this.adminMutationLocks.withLock(async () => {
-      await this.bootstrapExistingUsersWithAdminMutationLock();
+      await this.syncConfiguredRootAdminWithLock(configuredAdmin);
     });
   }
 
-  private async createConfiguredFirstAdmin(): Promise<void> {
-    const configuredAdminEmail = this.getConfiguredAdminEmail();
-    const configuredAdminPassword = this.getConfiguredAdminPassword();
-
-    if (!configuredAdminEmail || !configuredAdminPassword) {
-      return;
-    }
-
-    if (!this.validateConfiguredPassword(configuredAdminPassword)) {
-      return;
-    }
-
+  private async createConfiguredFirstAdmin(
+    configuredAdmin: ConfiguredRootAdmin,
+  ): Promise<void> {
     const lockResult = await this.setupLocks.withLock(async () => {
       const usersBeforeInsert = await this.users.count();
       if (usersBeforeInsert > 0) {
         return;
       }
 
-      const passwordHash = await hashPassword(configuredAdminPassword);
+      const passwordHash = await hashPassword(configuredAdmin.password);
       await this.users.createFirstAdmin(
         {
-          username: this.deriveUsername(configuredAdminEmail),
-          email: configuredAdminEmail,
+          username: this.deriveUsername(configuredAdmin.email),
+          email: configuredAdmin.email,
         },
         passwordHash,
       );
 
       this.logger.log("Created configured first admin user");
-      this.warnRemoveConfiguredPassword();
     });
 
     if (!lockResult.acquired) {
-      this.logger.warn("Configured admin creation skipped; setup is locked");
+      this.logger.warn(
+        "Configured root admin creation skipped; creation lock is held",
+      );
     }
   }
 
-  private async bootstrapExistingUsersWithAdminMutationLock(): Promise<void> {
+  private async syncConfiguredRootAdminWithLock(
+    configuredAdmin: ConfiguredRootAdmin,
+  ): Promise<void> {
     const users = await this.users.list();
 
     for (const user of users) {
@@ -120,79 +143,58 @@ export class AdminBootstrapService implements OnModuleInit {
     }
 
     const refreshedUsers = await this.users.list();
-    const activeAdmins = refreshedUsers.filter(
-      (user) => user.isActive && user.role === USER_ROLES.ADMIN,
+    const configuredUser = refreshedUsers.find(
+      (user) => user.email === configuredAdmin.email,
     );
-    if (activeAdmins.length > 0) {
-      this.warnConfiguredPasswordIgnored();
+
+    if (!configuredUser) {
+      await this.createConfiguredRootAdmin(refreshedUsers, configuredAdmin);
       return;
     }
 
-    const configuredAdminEmail = this.getConfiguredAdminEmail();
-    const configuredAdminPassword = this.getConfiguredAdminPassword();
-    if (configuredAdminEmail && !configuredAdminPassword) {
-      this.logger.warn(
-        "No admin configured. Set THE0_ADMIN_PASSWORD with THE0_ADMIN_EMAIL to promote the configured active user",
-      );
-      return;
-    }
-
-    if (configuredAdminEmail && configuredAdminPassword) {
-      if (!this.validateConfiguredPassword(configuredAdminPassword)) {
-        return;
-      }
-      await this.promoteConfiguredActiveUser(
-        refreshedUsers,
-        configuredAdminEmail,
-        configuredAdminPassword,
-      );
-      return;
-    }
-
-    const reason =
-      "No admin configured. Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD for an existing active user or see docs/deployment/admin-bootstrap.md";
-    this.logger.warn(reason);
+    await this.syncConfiguredRootAdmin(configuredUser, configuredAdmin.password);
   }
 
-  private async promoteConfiguredActiveUser(
+  private async createConfiguredRootAdmin(
     users: UserRecord[],
-    configuredAdminEmail: string,
-    configuredAdminPassword: string,
+    configuredAdmin: ConfiguredRootAdmin,
   ): Promise<void> {
-    const matchingActiveUser = users.find(
-      (user) => user.isActive === true && user.email === configuredAdminEmail,
-    );
-
-    if (!matchingActiveUser) {
-      this.logger.warn(
-        "Configured admin email does not match an active user; no admin was promoted",
-      );
-      return;
-    }
-
-    const passwordHash = await hashPassword(configuredAdminPassword);
-    await this.users.promoteToAdminAndSetPassword(
-      matchingActiveUser.id,
+    const passwordHash = await hashPassword(configuredAdmin.password);
+    await this.users.createUser(
+      {
+        email: configuredAdmin.email,
+        password: "",
+        role: USER_ROLES.ADMIN,
+        isActive: true,
+      },
+      this.uniqueUsername(configuredAdmin.email, users),
+      configuredAdmin.email,
       passwordHash,
     );
-    this.logger.log("Promoted configured admin user and set password");
-    this.warnRemoveConfiguredPassword();
+    this.logger.log("Created configured root admin user");
   }
 
-  private warnConfiguredPasswordIgnored(): void {
-    const configuredAdminPassword = this.getConfiguredAdminPassword();
-    if (!configuredAdminPassword) {
+  private async syncConfiguredRootAdmin(
+    user: UserRecord,
+    configuredPassword: string,
+  ): Promise<void> {
+    const passwordMatches =
+      user.passwordHash &&
+      (await bcrypt.compare(configuredPassword, user.passwordHash));
+
+    if (!passwordMatches) {
+      const passwordHash = await hashPassword(configuredPassword);
+      await this.users.promoteToAdminAndSetPassword(user.id, passwordHash);
+      this.logger.log("Synced configured root admin password");
       return;
     }
 
-    this.logger.warn(
-      "THE0_ADMIN_PASSWORD is configured but ignored because an active admin already exists. Remove it from the deployment configuration.",
-    );
-  }
-
-  private warnRemoveConfiguredPassword(): void {
-    this.logger.warn(
-      "THE0_ADMIN_PASSWORD is configured. Remove it after the admin password has been applied.",
-    );
+    if (!user.isActive || user.role !== USER_ROLES.ADMIN) {
+      await this.users.update(user.id, {
+        role: USER_ROLES.ADMIN,
+        isActive: true,
+      });
+      this.logger.log("Synced configured root admin role");
+    }
   }
 }

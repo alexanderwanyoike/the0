@@ -53,12 +53,14 @@ the0 bot logs <id>               # View instance logs
 **local** - Manage local Docker Compose development environment
 
 ```bash
-the0 local init            # Initialize local environment
-the0 local start           # Start all services
-the0 local stop            # Stop all services
-the0 local status          # Show service status
-the0 local logs [service]  # View service logs
-the0 local dev             # Start in development mode
+the0 local init                         # Initialize local environment and prompt for root admin credentials
+the0 local init --email <email> --password <password>
+the0 local start                        # Start all services
+the0 local reset-admin-password <password>
+the0 local stop                         # Stop all services
+the0 local status                       # Show service status
+the0 local logs [service]               # View service logs
+the0 local dev                          # Start in development mode
 ```
 
 **update** - Self-update the CLI

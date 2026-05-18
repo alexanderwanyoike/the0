@@ -11,8 +11,6 @@ describe("AuthController", () => {
 
   const mockAuthService = {
     login: jest.fn(),
-    getSetupStatus: jest.fn(),
-    createFirstAdmin: jest.fn(),
     validateToken: jest.fn(),
   };
 
@@ -93,36 +91,6 @@ describe("AuthController", () => {
       await expect(controller.login(loginDto)).rejects.toThrow(
         "Invalid credentials",
       );
-    });
-  });
-
-  describe("setup", () => {
-    it("should create first admin successfully", async () => {
-      const setupDto = {
-        username: "newuser",
-        email: "new@example.com",
-        password: "password123",
-      };
-
-      const mockResult = Ok({
-        token: "test-token",
-        user: {
-          id: "test-id",
-          username: "newuser",
-          email: "new@example.com",
-          isActive: true,
-          isEmailVerified: false,
-          role: "admin",
-        },
-      });
-
-      mockAuthService.createFirstAdmin.mockResolvedValue(mockResult);
-
-      const result = await controller.setup(setupDto);
-
-      expect(result.success).toBe(true);
-      expect(result.data.token).toBe("test-token");
-      expect(authService.createFirstAdmin).toHaveBeenCalledWith(setupDto);
     });
   });
 

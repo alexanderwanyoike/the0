@@ -1,10 +1,15 @@
 import { Logger } from "@nestjs/common";
+import * as bcrypt from "bcrypt";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
 import { AdminBootstrapService } from "../admin-bootstrap.service";
 import { SetupLockRepository } from "../setup-lock.repository";
+
+jest.mock("bcrypt", () => ({
+  compare: jest.fn(),
+}));
 
 jest.mock("@/common/password", () => ({
   hashPassword: jest.fn().mockResolvedValue("hashed_password"),
@@ -51,9 +56,11 @@ describe("AdminBootstrapService", () => {
       count: jest.fn(),
       list: jest.fn(),
       createFirstAdmin: jest.fn(),
+      createUser: jest.fn(),
       promoteToAdmin: jest.fn(),
       promoteToAdminAndSetPassword: jest.fn(),
       updatePassword: jest.fn(),
+      update: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;
     setupLocks = {
       withLock: jest.fn(async (callback) => ({
@@ -67,6 +74,7 @@ describe("AdminBootstrapService", () => {
 
     loggerWarn = jest.spyOn(Logger.prototype, "warn").mockImplementation();
     loggerLog = jest.spyOn(Logger.prototype, "log").mockImplementation();
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
     delete process.env.THE0_ADMIN_EMAIL;
     delete process.env.THE0_ADMIN_PASSWORD;
@@ -103,36 +111,58 @@ describe("AdminBootstrapService", () => {
       { username: "admin", email: "admin@example.com" },
       "hashed_password",
     );
-    expect(loggerWarn).toHaveBeenCalledWith(
-      "THE0_ADMIN_PASSWORD is configured. Remove it after the admin password has been applied.",
-    );
+    expect(loggerLog).toHaveBeenCalledWith("Created configured first admin user");
   });
 
-  it("does not auto-create on a fresh database without a complete config", async () => {
+  it("fails startup when admin email is missing", async () => {
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
+    users.count.mockResolvedValue(0);
+
+    await expect(service.onModuleInit()).rejects.toThrow(
+      "THE0_ADMIN_EMAIL must be configured",
+    );
+    expect(setupLocks.withLock).not.toHaveBeenCalled();
+  });
+
+  it("fails startup when admin password is missing", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     users.count.mockResolvedValue(0);
 
-    await service.onModuleInit();
+    await expect(service.onModuleInit()).rejects.toThrow(
+      "THE0_ADMIN_PASSWORD must be configured",
+    );
 
     expect(setupLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
   });
 
-  it("blocks configured bootstrap when the password fails API policy", async () => {
+  it("fails startup when admin email is invalid", async () => {
+    process.env.THE0_ADMIN_EMAIL = "not-an-email";
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
+    users.count.mockResolvedValue(0);
+
+    await expect(service.onModuleInit()).rejects.toThrow(
+      "THE0_ADMIN_EMAIL must be a valid email address",
+    );
+
+    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(users.createFirstAdmin).not.toHaveBeenCalled();
+  });
+
+  it("fails startup when the password fails API policy", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "short";
     users.count.mockResolvedValue(0);
 
-    await service.onModuleInit();
+    await expect(service.onModuleInit()).rejects.toThrow(
+      "THE0_ADMIN_PASSWORD is invalid: Password must be at least 6 characters long",
+    );
 
     expect(setupLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
-    expect(loggerWarn).toHaveBeenCalledWith(
-      "THE0_ADMIN_PASSWORD is invalid: Password must be at least 6 characters long",
-    );
   });
 
-  it("promotes a matching active user and sets their password when no admin exists", async () => {
+  it("promotes a matching user and sets their password", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
     const matchingUser = user({ id: "target", email: "admin@example.com" });
@@ -149,24 +179,25 @@ describe("AdminBootstrapService", () => {
     expect(users.promoteToAdmin).not.toHaveBeenCalled();
   });
 
-  it("requires a password before promoting a configured email", async () => {
+  it("does not update the configured root admin password when it already matches", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     users.count.mockResolvedValue(1);
     users.list.mockResolvedValue([
-      user({ id: "target", email: "admin@example.com" }),
+      user({ id: "admin", email: "admin@example.com", role: USER_ROLES.ADMIN }),
     ]);
 
     await service.onModuleInit();
 
     expect(users.promoteToAdminAndSetPassword).not.toHaveBeenCalled();
-    expect(loggerWarn).toHaveBeenCalledWith(
-      "No admin configured. Set THE0_ADMIN_PASSWORD with THE0_ADMIN_EMAIL to promote the configured active user",
-    );
+    expect(users.update).not.toHaveBeenCalled();
   });
 
-  it("ignores configured admin password when an active admin already exists", async () => {
+  it("updates the configured root admin password when config changes", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
     users.count.mockResolvedValue(1);
     users.list.mockResolvedValue([
       user({
@@ -178,15 +209,14 @@ describe("AdminBootstrapService", () => {
 
     await service.onModuleInit();
 
-    expect(users.updatePassword).not.toHaveBeenCalled();
-    expect(users.promoteToAdminAndSetPassword).not.toHaveBeenCalled();
-    expect(loggerWarn).toHaveBeenCalledWith(
-      "THE0_ADMIN_PASSWORD is configured but ignored because an active admin already exists. Remove it from the deployment configuration.",
+    expect(users.promoteToAdminAndSetPassword).toHaveBeenCalledWith(
+      "admin-id",
+      "hashed_password",
     );
   });
 
-  it("does not apply configured password to a non-admin when another active admin exists", async () => {
-    process.env.THE0_ADMIN_EMAIL = "user@example.com";
+  it("creates the configured root admin when users exist but the configured email is absent", async () => {
+    process.env.THE0_ADMIN_EMAIL = "root@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
     users.count.mockResolvedValue(1);
     users.list.mockResolvedValue([
@@ -195,19 +225,30 @@ describe("AdminBootstrapService", () => {
         email: "admin@example.com",
         role: USER_ROLES.ADMIN,
       }),
-      user({ id: "user-id", email: "user@example.com", role: USER_ROLES.USER }),
+      user({ id: "user-id", username: "root", email: "user@example.com" }),
     ]);
+    users.createUser.mockResolvedValue(
+      user({ id: "root-id", email: "root@example.com", role: USER_ROLES.ADMIN }),
+    );
 
     await service.onModuleInit();
 
-    expect(users.updatePassword).not.toHaveBeenCalled();
-    expect(users.promoteToAdminAndSetPassword).not.toHaveBeenCalled();
-    expect(loggerWarn).toHaveBeenCalledWith(
-      "THE0_ADMIN_PASSWORD is configured but ignored because an active admin already exists. Remove it from the deployment configuration.",
+    expect(users.createUser).toHaveBeenCalledWith(
+      {
+        email: "root@example.com",
+        password: "",
+        role: USER_ROLES.ADMIN,
+        isActive: true,
+      },
+      "root-admin",
+      "root@example.com",
+      "hashed_password",
     );
   });
 
   it("preserves metadata admin users before configured bootstrap", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
     users.count.mockResolvedValue(1);
     users.list
       .mockResolvedValueOnce([
@@ -219,26 +260,60 @@ describe("AdminBootstrapService", () => {
       ])
       .mockResolvedValueOnce([
         user({ id: "legacy-admin", role: USER_ROLES.ADMIN }),
+        user({ id: "configured", email: "admin@example.com" }),
       ]);
 
     await service.onModuleInit();
 
     expect(users.promoteToAdmin).toHaveBeenCalledWith("legacy-admin");
+    expect(users.promoteToAdminAndSetPassword).toHaveBeenCalledWith(
+      "configured",
+      "hashed_password",
+    );
   });
 
-  it("does not promote inactive or unmatched configured users", async () => {
+  it("reactivates and promotes the configured root admin when the password matches", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     users.count.mockResolvedValue(1);
     users.list.mockResolvedValue([
-      user({ id: "inactive", email: "admin@example.com", isActive: false }),
+      user({
+        id: "configured",
+        email: "admin@example.com",
+        role: USER_ROLES.USER,
+        isActive: false,
+      }),
     ]);
 
     await service.onModuleInit();
 
     expect(users.promoteToAdminAndSetPassword).not.toHaveBeenCalled();
-    expect(loggerWarn).toHaveBeenCalledWith(
-      "Configured admin email does not match an active user; no admin was promoted",
+    expect(users.update).toHaveBeenCalledWith("configured", {
+      role: USER_ROLES.ADMIN,
+      isActive: true,
+    });
+  });
+
+  it("sets password for the configured root admin when the existing hash is missing", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
+    users.count.mockResolvedValue(1);
+    users.list.mockResolvedValue([
+      user({
+        id: "configured",
+        email: "admin@example.com",
+        role: USER_ROLES.ADMIN,
+        passwordHash: "",
+      }),
+    ]);
+
+    await service.onModuleInit();
+
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(users.promoteToAdminAndSetPassword).toHaveBeenCalledWith(
+      "configured",
+      "hashed_password",
     );
   });
 });

@@ -15,14 +15,6 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface SetupCredentials {
-  username: string;
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
-}
-
 export interface AuthResponse {
   token: string;
   user: AuthUser;
