@@ -72,7 +72,7 @@ the0 local admin set --email you@example.com
 
 The command prompts for the password, updates `~/.the0/compose/.env` idempotently, and restarts `the0-api`. Automation can pass `--password`, but prompt mode avoids shell history exposure. The configured password is ignored when an active admin already exists.
 
-The CLI only checks that the value can be written safely to `.env`; the API validates the password policy at startup. If the configured password is not applied, inspect the API logs with `the0 local logs api`.
+The CLI rejects passwords that are too short or unsafe to write to `.env`; the API still validates the authoritative password policy at startup. If the configured password is not applied, inspect the API logs with `the0 local logs api`.
 
 Fresh local installs should use:
 

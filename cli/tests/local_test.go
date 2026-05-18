@@ -603,6 +603,40 @@ func TestSetAdminCredentials_RejectsInvalidPassword(t *testing.T) {
 	}
 }
 
+func TestSetAdminCredentials_RejectsPasswordBelowApiMinimum(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("THE0_ADMIN_EMAIL=old@example.com\nTHE0_ADMIN_PASSWORD=oldsecret\n"), 0600); err != nil {
+		t.Fatalf("Failed to write .env: %v", err)
+	}
+
+	err = local.SetAdminCredentials(tmpDir, "admin@example.com", "short")
+	if err == nil {
+		t.Fatal("Expected short password to be rejected")
+	}
+	if !strings.Contains(err.Error(), "password must be at least 6 characters") {
+		t.Fatalf("Expected password length error, got: %v", err)
+	}
+
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("Failed to read .env: %v", err)
+	}
+
+	content := string(data)
+	if strings.Contains(content, "THE0_ADMIN_PASSWORD=short") {
+		t.Errorf("Expected short password not to be written, got: %s", content)
+	}
+	if !strings.Contains(content, "THE0_ADMIN_PASSWORD=oldsecret") {
+		t.Errorf("Expected original password to be preserved, got: %s", content)
+	}
+}
+
 func TestGenerateEnvFile_CorrectPermissions(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "env-test")
 	if err != nil {
