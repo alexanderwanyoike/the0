@@ -5,8 +5,8 @@ import {
   boolean,
   jsonb,
   index,
-  bigint as pgBigInt,
   integer as pgInteger,
+  bigint as pgBigInt,
 } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
@@ -33,11 +33,6 @@ export const usersTable = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
-
-export const setupLocksTable = pgTable("setup_locks", {
-  id: varchar("id", { length: 50 }).primaryKey(),
-  lockedAt: pgBigInt("locked_at", { mode: "number" }).notNull(),
 });
 
 export const adminMutationLocksTable = pgTable("admin_mutation_locks", {
@@ -71,11 +66,6 @@ export const usersTableSqlite = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
-});
-
-export const setupLocksTableSqlite = sqliteTable("setup_locks", {
-  id: text("id").primaryKey(),
-  lockedAt: integer("locked_at").notNull(),
 });
 
 export const adminMutationLocksTableSqlite = sqliteTable(
@@ -134,7 +124,6 @@ export const apiKeysTableSqlite = sqliteTable("api_keys", {
 
 export type User = typeof usersTable.$inferSelect;
 export type NewUser = typeof usersTable.$inferInsert;
-export type SetupLock = typeof setupLocksTable.$inferSelect;
 export type AdminMutationLock = typeof adminMutationLocksTable.$inferSelect;
 export type ApiKey = typeof apiKeysTable.$inferSelect;
 export type NewApiKey = typeof apiKeysTable.$inferInsert;

@@ -10,7 +10,6 @@ import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.reposito
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
-import { RootAdminCreationLockRepository } from "./root-admin-creation-lock.repository";
 
 function metadataRole(metadata: unknown): string | undefined {
   if (!metadata || typeof metadata !== "object") {
@@ -26,7 +25,6 @@ export class AdminBootstrapService implements OnModuleInit {
 
   constructor(
     private readonly users: UserRepository,
-    private readonly rootAdminCreationLocks: RootAdminCreationLockRepository,
     private readonly adminMutationLocks: AdminMutationLockRepository,
   ) {}
 
@@ -56,12 +54,6 @@ export class AdminBootstrapService implements OnModuleInit {
 
   private async bootstrapConfiguredRootAdmin(): Promise<void> {
     const configuredAdmin = getRequiredConfiguredRootAdmin();
-    const userCount = await this.users.count();
-    if (userCount === 0) {
-      await this.createConfiguredFirstAdmin(configuredAdmin);
-      return;
-    }
-
     await this.adminMutationLocks.withLock(async () => {
       await this.syncConfiguredRootAdminWithLock(configuredAdmin);
     });
@@ -70,34 +62,26 @@ export class AdminBootstrapService implements OnModuleInit {
   private async createConfiguredFirstAdmin(
     configuredAdmin: ConfiguredRootAdmin,
   ): Promise<void> {
-    const lockResult = await this.rootAdminCreationLocks.withLock(async () => {
-      const usersBeforeInsert = await this.users.count();
-      if (usersBeforeInsert > 0) {
-        return;
-      }
-
-      const passwordHash = await hashPassword(configuredAdmin.password);
-      await this.users.createFirstAdmin(
-        {
-          username: this.deriveUsername(configuredAdmin.email),
-          email: configuredAdmin.email,
-        },
-        passwordHash,
-      );
-
-      this.logger.log("Created configured first admin user");
-    });
-
-    if (!lockResult.acquired) {
-      this.logger.warn(
-        "Configured root admin creation skipped; creation lock is held",
-      );
-    }
+    const passwordHash = await hashPassword(configuredAdmin.password);
+    await this.users.createFirstAdmin(
+      {
+        username: this.deriveUsername(configuredAdmin.email),
+        email: configuredAdmin.email,
+      },
+      passwordHash,
+    );
+    this.logger.log("Created configured first admin user");
   }
 
   private async syncConfiguredRootAdminWithLock(
     configuredAdmin: ConfiguredRootAdmin,
   ): Promise<void> {
+    const userCount = await this.users.count();
+    if (userCount === 0) {
+      await this.createConfiguredFirstAdmin(configuredAdmin);
+      return;
+    }
+
     const users = await this.users.list();
 
     for (const user of users) {
