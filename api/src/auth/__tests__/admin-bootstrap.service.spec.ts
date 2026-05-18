@@ -15,6 +15,12 @@ jest.mock("@/common/password", () => ({
   hashPassword: jest.fn().mockResolvedValue("hashed_password"),
 }));
 
+jest.mock("@/common/password-policy", () => ({
+  validatePasswordPolicy: jest.fn((password: string) =>
+    password.length < 6 ? "Password must be at least 6 characters long" : null,
+  ),
+}));
+
 describe("AdminBootstrapService", () => {
   let users: jest.Mocked<UserRepository>;
   let setupLocks: jest.Mocked<SetupLockRepository>;
@@ -115,6 +121,20 @@ describe("AdminBootstrapService", () => {
 
     expect(setupLocks.withLock).not.toHaveBeenCalled();
     expect(users.createFirstAdmin).not.toHaveBeenCalled();
+  });
+
+  it("blocks configured bootstrap when the password fails API policy", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    process.env.THE0_ADMIN_PASSWORD = "short";
+    users.count.mockResolvedValue(0);
+
+    await service.onModuleInit();
+
+    expect(setupLocks.withLock).not.toHaveBeenCalled();
+    expect(users.createFirstAdmin).not.toHaveBeenCalled();
+    expect(loggerWarn).toHaveBeenCalledWith(
+      "THE0_ADMIN_PASSWORD is invalid: Password must be at least 6 characters long",
+    );
   });
 
   it("promotes a matching active user and sets their password when no admin exists", async () => {

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import { hashPassword } from "@/common/password";
+import { validatePasswordPolicy } from "@/common/password-policy";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
@@ -40,12 +41,22 @@ export class AdminBootstrapService implements OnModuleInit {
   }
 
   private getConfiguredAdminPassword(): string | undefined {
-    const password = process.env.THE0_ADMIN_PASSWORD?.trim();
-    return password || undefined;
+    const password = process.env.THE0_ADMIN_PASSWORD;
+    return password === undefined || password === "" ? undefined : password;
   }
 
   private deriveUsername(email: string): string {
     return email.split("@")[0]?.trim() || email;
+  }
+
+  private validateConfiguredPassword(password: string): boolean {
+    const error = validatePasswordPolicy(password);
+    if (!error) {
+      return true;
+    }
+
+    this.logger.warn(`THE0_ADMIN_PASSWORD is invalid: ${error}`);
+    return false;
   }
 
   private async bootstrapAdminFromExistingUsers(): Promise<void> {
@@ -65,6 +76,10 @@ export class AdminBootstrapService implements OnModuleInit {
     const configuredAdminPassword = this.getConfiguredAdminPassword();
 
     if (!configuredAdminEmail || !configuredAdminPassword) {
+      return;
+    }
+
+    if (!this.validateConfiguredPassword(configuredAdminPassword)) {
       return;
     }
 
@@ -124,6 +139,9 @@ export class AdminBootstrapService implements OnModuleInit {
     }
 
     if (configuredAdminEmail && configuredAdminPassword) {
+      if (!this.validateConfiguredPassword(configuredAdminPassword)) {
+        return;
+      }
       await this.promoteConfiguredActiveUser(
         refreshedUsers,
         configuredAdminEmail,
@@ -132,9 +150,9 @@ export class AdminBootstrapService implements OnModuleInit {
       return;
     }
 
-    this.logger.warn(
-      "No admin configured. Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD for an existing active user or see docs/deployment/admin-bootstrap.md",
-    );
+    const reason =
+      "No admin configured. Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD for an existing active user or see docs/deployment/admin-bootstrap.md";
+    this.logger.warn(reason);
   }
 
   private async promoteConfiguredActiveUser(
@@ -187,6 +205,10 @@ export class AdminBootstrapService implements OnModuleInit {
     }
 
     if (!configuredAdminPassword) {
+      return;
+    }
+
+    if (!this.validateConfiguredPassword(configuredAdminPassword)) {
       return;
     }
 

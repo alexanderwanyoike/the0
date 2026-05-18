@@ -205,9 +205,6 @@ func ValidateAdminPassword(password string) error {
 	if strings.TrimSpace(password) != password {
 		return fmt.Errorf("password must not start or end with whitespace")
 	}
-	if len(password) < 6 {
-		return fmt.Errorf("password must be at least 6 characters")
-	}
 	if strings.ContainsAny(password, "\r\n=#") {
 		return fmt.Errorf("password must be a single-line .env value")
 	}

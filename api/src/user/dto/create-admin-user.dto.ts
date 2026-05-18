@@ -8,6 +8,7 @@ import {
   IsString,
   MinLength,
 } from "class-validator";
+import { MIN_PASSWORD_LENGTH } from "@/common/password-policy";
 import { USER_ROLE_VALUES, UserRole } from "../user.constants";
 
 export class CreateAdminUserDto {
@@ -22,7 +23,7 @@ export class CreateAdminUserDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(MIN_PASSWORD_LENGTH)
   password: string;
 
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))

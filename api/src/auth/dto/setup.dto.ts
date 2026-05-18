@@ -6,6 +6,7 @@ import {
   IsString,
   MinLength,
 } from "class-validator";
+import { MIN_PASSWORD_LENGTH } from "@/common/password-policy";
 
 export class SetupDto {
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -19,7 +20,7 @@ export class SetupDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(MIN_PASSWORD_LENGTH)
   password: string;
 
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))

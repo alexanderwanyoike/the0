@@ -256,13 +256,13 @@ func promptForAdminPassword() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		password = strings.TrimSpace(string(raw))
+		password = string(raw)
 	} else {
 		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 		if err != nil {
 			return "", err
 		}
-		password = strings.TrimSpace(line)
+		password = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
 	}
 	if password == "" {
 		return "", fmt.Errorf("admin password cannot be empty")
