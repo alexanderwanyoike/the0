@@ -121,8 +121,8 @@ func ValidateAdminPassword(password string) error {
 	if strings.TrimSpace(password) != password {
 		return fmt.Errorf("password must not start or end with whitespace")
 	}
-	if strings.ContainsAny(password, "\r\n=#") {
-		return fmt.Errorf("password must be a single-line .env value")
+	if strings.ContainsAny(password, "\r\n#") {
+		return fmt.Errorf("password must not contain newlines or #")
 	}
 	return nil
 }

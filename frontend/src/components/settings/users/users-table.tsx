@@ -91,7 +91,9 @@ export function UsersTable({
                 <TableCell>
                   <Select
                     value={managedUser.role}
+                    disabled={managedUser.isConfiguredRootAdmin}
                     onValueChange={(role) =>
+                      !managedUser.isConfiguredRootAdmin &&
                       onUpdateUser(managedUser.id, {
                         role: role as ManagedUserRole,
                       })
@@ -113,7 +115,9 @@ export function UsersTable({
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={managedUser.isConfiguredRootAdmin}
                     onClick={() =>
+                      !managedUser.isConfiguredRootAdmin &&
                       onUpdateUser(managedUser.id, {
                         isActive: !managedUser.isActive,
                       })

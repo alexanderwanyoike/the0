@@ -46,20 +46,25 @@ export function CreateUserDialog({ onCreate }: CreateUserDialogProps) {
     setError(null);
     setIsSubmitting(true);
 
-    const username = form.username.trim();
-    const createError = await onCreate({
-      ...form,
-      username: username || undefined,
-    });
+    try {
+      const username = form.username.trim();
+      const createError = await onCreate({
+        ...form,
+        username: username || undefined,
+      });
 
-    setIsSubmitting(false);
-    if (createError) {
-      setError(createError);
-      return;
+      if (createError) {
+        setError(createError);
+        return;
+      }
+
+      setForm(emptyForm);
+      setOpen(false);
+    } catch {
+      setError("Failed to create user");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setForm(emptyForm);
-    setOpen(false);
   };
 
   return (
