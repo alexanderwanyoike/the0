@@ -53,6 +53,7 @@ describe("UserService", () => {
   let service: UserService;
   let users: jest.Mocked<UserRepository>;
   let adminMutationLock: jest.Mocked<AdminMutationLockRepository>;
+  const originalAdminEmail = process.env.THE0_ADMIN_EMAIL;
 
   const actor: AuthenticatedUser = {
     uid: "actor-admin",
@@ -69,6 +70,7 @@ describe("UserService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.THE0_ADMIN_EMAIL;
     users = {
       findById: jest.fn(),
       countActiveAdmins: jest.fn(),
@@ -92,6 +94,14 @@ describe("UserService", () => {
     } as unknown as jest.Mocked<AdminMutationLockRepository>;
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     service = new UserService(users, adminMutationLock);
+  });
+
+  afterEach(() => {
+    if (originalAdminEmail === undefined) {
+      delete process.env.THE0_ADMIN_EMAIL;
+    } else {
+      process.env.THE0_ADMIN_EMAIL = originalAdminEmail;
+    }
   });
 
   it("blocks self-demotion", async () => {
@@ -176,6 +186,46 @@ describe("UserService", () => {
     await expect(
       service.resetPassword(actor.id, "new-password", actor),
     ).rejects.toThrow("Use change password for your own admin account");
+    expect(users.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it("blocks changing the configured root admin email", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    const admin = makeUser({ email: "admin@example.com" });
+    users.findById.mockResolvedValue(admin);
+
+    await expect(
+      service.updateUser(admin.id, { email: "new-admin@example.com" }, actor),
+    ).rejects.toThrow(
+      "Configured root admin email is managed by deployment configuration",
+    );
+    expect(users.update).not.toHaveBeenCalled();
+  });
+
+  it("blocks admin password reset for the configured root admin", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    const admin = makeUser({ email: "admin@example.com" });
+    users.findById.mockResolvedValue(admin);
+
+    await expect(
+      service.resetPassword(admin.id, "new-password", actor),
+    ).rejects.toThrow(
+      "Configured root admin password is managed by deployment configuration",
+    );
+    expect(users.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it("blocks self-service password change for the configured root admin", async () => {
+    process.env.THE0_ADMIN_EMAIL = "admin@example.com";
+    const admin = makeUser({ id: actor.id, email: "admin@example.com" });
+    users.findById.mockResolvedValue(admin);
+
+    await expect(
+      service.changePassword(actor, "current-password", "new-password"),
+    ).rejects.toThrow(
+      "Configured root admin password is managed by deployment configuration",
+    );
+    expect(bcrypt.compare).not.toHaveBeenCalled();
     expect(users.updatePassword).not.toHaveBeenCalled();
   });
 });

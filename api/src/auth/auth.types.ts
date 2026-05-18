@@ -10,6 +10,7 @@ export interface AuthUser {
   isActive: boolean;
   isEmailVerified: boolean;
   role: UserRole;
+  isConfiguredRootAdmin?: boolean;
 }
 
 /** User payload attached to the request by auth guards */

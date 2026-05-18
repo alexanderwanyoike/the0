@@ -7,6 +7,7 @@ export interface AuthUser {
   isActive: boolean;
   isEmailVerified: boolean;
   role: "admin" | "user";
+  isConfiguredRootAdmin?: boolean;
 }
 
 export interface LoginCredentials {

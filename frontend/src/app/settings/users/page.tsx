@@ -38,6 +38,7 @@ interface ManagedUser {
   email: string;
   role: "admin" | "user";
   isActive: boolean;
+  isConfiguredRootAdmin?: boolean;
 }
 
 const emptyCreateForm = {
@@ -366,6 +367,7 @@ export default function UserManagementPage() {
                         placeholder="New password"
                         aria-label={`New password for ${managedUser.email}`}
                         value={resetPasswords[managedUser.id] || ""}
+                        disabled={managedUser.isConfiguredRootAdmin}
                         onChange={(event) =>
                           setResetPasswords((current) => ({
                             ...current,
@@ -376,6 +378,7 @@ export default function UserManagementPage() {
                       <Button
                         variant="outline"
                         aria-label={`Reset password for ${managedUser.email}`}
+                        disabled={managedUser.isConfiguredRootAdmin}
                         onClick={() => resetPassword(managedUser.id)}
                       >
                         Reset

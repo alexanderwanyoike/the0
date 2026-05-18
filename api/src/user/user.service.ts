@@ -36,6 +36,7 @@ export class UserService {
       role: user.role === USER_ROLES.ADMIN ? USER_ROLES.ADMIN : USER_ROLES.USER,
       isActive: Boolean(user.isActive),
       isEmailVerified: Boolean(user.isEmailVerified),
+      isConfiguredRootAdmin: this.isConfiguredRootAdmin(user),
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -49,6 +50,39 @@ export class UserService {
   private normalizeUsername(username: string | undefined, email: string) {
     const candidate = username?.trim() || this.defaultUsername(email);
     return candidate.trim();
+  }
+
+  private getConfiguredRootAdminEmail(): string | undefined {
+    const email = process.env.THE0_ADMIN_EMAIL?.trim();
+    return email || undefined;
+  }
+
+  private isConfiguredRootAdmin(user: Pick<UserRecord, "email">): boolean {
+    const configuredEmail = this.getConfiguredRootAdminEmail();
+    return Boolean(configuredEmail && user.email === configuredEmail);
+  }
+
+  private assertRootAdminEmailUnchanged(
+    user: UserRecord,
+    nextEmail: string | undefined,
+  ): void {
+    if (
+      nextEmail !== undefined &&
+      nextEmail !== user.email &&
+      this.isConfiguredRootAdmin(user)
+    ) {
+      throw new ForbiddenException(
+        "Configured root admin email is managed by deployment configuration",
+      );
+    }
+  }
+
+  private assertRootAdminPasswordUnchanged(user: UserRecord): void {
+    if (this.isConfiguredRootAdmin(user)) {
+      throw new ForbiddenException(
+        "Configured root admin password is managed by deployment configuration",
+      );
+    }
   }
 
   async listUsers() {
@@ -111,6 +145,7 @@ export class UserService {
 
     const nextEmail = input.email?.trim();
     const nextUsername = input.username?.trim();
+    this.assertRootAdminEmailUnchanged(user, nextEmail);
 
     if (nextEmail && nextEmail !== user.email) {
       const existing = await this.users.findByEmail(nextEmail);
@@ -158,7 +193,8 @@ export class UserService {
       );
     }
 
-    await this.requireUser(id);
+    const user = await this.requireUser(id);
+    this.assertRootAdminPasswordUnchanged(user);
 
     const passwordHash = await hashPassword(password);
     const updated = await this.users.updatePassword(id, passwordHash);
@@ -195,6 +231,7 @@ export class UserService {
     newPassword: string,
   ) {
     const user = await this.requireUser(actor.id);
+    this.assertRootAdminPasswordUnchanged(user);
 
     const passwordMatches = await bcrypt.compare(
       currentPassword,

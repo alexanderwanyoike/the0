@@ -38,6 +38,7 @@ export interface SerializedUser {
   role: UserRole;
   isActive: boolean;
   isEmailVerified: boolean;
+  isConfiguredRootAdmin?: boolean;
   lastLoginAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
