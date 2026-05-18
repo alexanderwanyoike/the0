@@ -439,8 +439,14 @@ func TestSetAdminEmail_RejectsUnsafeEmail(t *testing.T) {
 		t.Fatalf("Failed to write .env: %v", err)
 	}
 
-	if err := local.SetAdminEmail(tmpDir, "admin@example.com\nJWT_SECRET=bad"); err == nil {
-		t.Fatal("Expected unsafe email to be rejected")
+	unsafeEmails := []string{
+		"admin@example.com\nJWT_SECRET=bad",
+		"admin#tag@example.com",
+	}
+	for _, email := range unsafeEmails {
+		if err := local.SetAdminEmail(tmpDir, email); err == nil {
+			t.Fatalf("Expected unsafe email %q to be rejected", email)
+		}
 	}
 
 	data, err := os.ReadFile(envPath)

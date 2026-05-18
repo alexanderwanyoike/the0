@@ -253,7 +253,7 @@ func ValidateAdminEmail(email string) error {
 	if email == "" {
 		return fmt.Errorf("email is required")
 	}
-	if strings.ContainsAny(email, "\r\n=") || !adminEmailPattern.MatchString(email) {
+	if strings.ContainsAny(email, "\r\n=#") || !adminEmailPattern.MatchString(email) {
 		return fmt.Errorf("email must be a valid single-line email address")
 	}
 	return nil

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import { isEmail } from "class-validator";
+import { normalizeEmailForComparison } from "@/common/email";
 import { hashPassword } from "@/common/password";
 import { validatePasswordPolicy } from "@/common/password-policy";
 import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
@@ -44,7 +45,7 @@ export class AdminBootstrapService implements OnModuleInit {
     if (!isEmail(email)) {
       throw new Error("THE0_ADMIN_EMAIL must be a valid email address");
     }
-    return email;
+    return normalizeEmailForComparison(email);
   }
 
   private getConfiguredAdminPassword(): string {
@@ -144,7 +145,8 @@ export class AdminBootstrapService implements OnModuleInit {
 
     const refreshedUsers = await this.users.list();
     const configuredUser = refreshedUsers.find(
-      (user) => user.email === configuredAdmin.email,
+      (user) =>
+        normalizeEmailForComparison(user.email) === configuredAdmin.email,
     );
 
     if (!configuredUser) {

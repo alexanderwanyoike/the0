@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import { hashPassword } from "@/common/password";
+import { normalizeEmailForComparison } from "@/common/email";
 import { AuthenticatedUser } from "@/auth/auth.types";
 import { AdminMutationLockRepository } from "./admin-mutation-lock.repository";
 import { USER_ROLES, UserRole } from "./user.constants";
@@ -54,12 +55,15 @@ export class UserService {
 
   private getConfiguredRootAdminEmail(): string | undefined {
     const email = process.env.THE0_ADMIN_EMAIL?.trim();
-    return email || undefined;
+    return email ? normalizeEmailForComparison(email) : undefined;
   }
 
   private isConfiguredRootAdmin(user: Pick<UserRecord, "email">): boolean {
     const configuredEmail = this.getConfiguredRootAdminEmail();
-    return Boolean(configuredEmail && user.email === configuredEmail);
+    return Boolean(
+      configuredEmail &&
+        normalizeEmailForComparison(user.email) === configuredEmail,
+    );
   }
 
   private assertRootAdminEmailUnchanged(

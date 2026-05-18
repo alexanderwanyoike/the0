@@ -46,9 +46,15 @@ The simplest way to deploy on any Kubernetes cluster:
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
 kubectl create namespace the0
-kubectl -n the0 create secret generic the0-root-admin --from-literal=password='change-me-before-use'
+read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
+printf '%s' "$THE0_ADMIN_PASSWORD" \
+  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
+  | kubectl apply -f -
+unset THE0_ADMIN_PASSWORD
 helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
+
+Avoid passing root admin passwords with command-line literals; use stdin, a Secret manifest, Sealed Secrets, External Secrets, or your cluster's normal secret workflow.
 
 Your `values.yaml` must include the configured root admin email and reference the password Secret:
 
@@ -96,7 +102,11 @@ cd k8s
 # Configure the root admin password secret once
 minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
 kubectl create namespace the0
-kubectl -n the0 create secret generic the0-root-admin --from-literal=password='testuse123'
+read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
+printf '%s' "$THE0_ADMIN_PASSWORD" \
+  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
+  | kubectl apply -f -
+unset THE0_ADMIN_PASSWORD
 
 # Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml,
 # then start minikube, build images, and deploy

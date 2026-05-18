@@ -179,6 +179,23 @@ describe("AdminBootstrapService", () => {
     expect(users.promoteToAdmin).not.toHaveBeenCalled();
   });
 
+  it("matches the configured root admin email case-insensitively", async () => {
+    process.env.THE0_ADMIN_EMAIL = "Admin@Example.COM";
+    process.env.THE0_ADMIN_PASSWORD = "secret123";
+    users.count.mockResolvedValue(1);
+    users.list.mockResolvedValue([
+      user({ id: "target", email: "admin@example.com" }),
+    ]);
+
+    await service.onModuleInit();
+
+    expect(users.promoteToAdminAndSetPassword).toHaveBeenCalledWith(
+      "target",
+      "hashed_password",
+    );
+    expect(users.createUser).not.toHaveBeenCalled();
+  });
+
   it("does not update the configured root admin password when it already matches", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     process.env.THE0_ADMIN_PASSWORD = "secret123";

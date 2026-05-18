@@ -202,6 +202,27 @@ describe("UserService", () => {
     expect(users.update).not.toHaveBeenCalled();
   });
 
+  it("detects the configured root admin case-insensitively", async () => {
+    process.env.THE0_ADMIN_EMAIL = "Admin@Example.COM";
+    users.list.mockResolvedValue([
+      makeUser({ id: "admin-1", email: "admin@example.com" }),
+      makeUser({ id: "user-1", email: "user@example.com" }),
+    ]);
+
+    const result = await service.listUsers();
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "admin-1",
+        isConfiguredRootAdmin: true,
+      }),
+      expect.objectContaining({
+        id: "user-1",
+        isConfiguredRootAdmin: false,
+      }),
+    ]);
+  });
+
   it("blocks admin password reset for the configured root admin", async () => {
     process.env.THE0_ADMIN_EMAIL = "admin@example.com";
     const admin = makeUser({ email: "admin@example.com" });

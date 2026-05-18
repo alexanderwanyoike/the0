@@ -142,7 +142,11 @@ Or if `make minikube-up` handles image building automatically, just run:
 ```bash
 minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
 kubectl create namespace the0
-kubectl -n the0 create secret generic the0-root-admin --from-literal=password='testuse123'
+read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
+printf '%s' "$THE0_ADMIN_PASSWORD" \
+  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
+  | kubectl apply -f -
+unset THE0_ADMIN_PASSWORD
 # Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml first.
 make minikube-up
 ```
