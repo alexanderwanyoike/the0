@@ -10,6 +10,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"the0/internal/local"
 	"the0/internal/logger"
@@ -26,11 +27,11 @@ Start, stop, and monitor the full Docker Compose stack from anywhere,
 without needing to cd into the docker/ directory.
 
 Quick start (prebuilt images):
-  the0 local init
+  the0 local init --email you@example.com --password testuse123
   the0 local start
 
 Building from source:
-  the0 local init --source
+  the0 local init --source --email you@example.com --password testuse123
   the0 local start
   the0 local status`,
 	}
@@ -41,6 +42,7 @@ Building from source:
 		newLocalStopCmd(),
 		newLocalRestartCmd(),
 		newLocalAdminCmd(),
+		newLocalResetAdminPasswordCmd(),
 		newLocalStatusCmd(),
 		newLocalLogsCmd(),
 		newLocalDevCmd(),
@@ -54,6 +56,8 @@ Building from source:
 
 func newLocalInitCmd() *cobra.Command {
 	var source string
+	var adminEmail string
+	var adminPassword string
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -66,10 +70,10 @@ Use --source to build from a local repository clone instead.
 
 This must be run before 'the0 local start'.
 
-Examples:
-  the0 local init                       # Use prebuilt GHCR images
-  the0 local init --source              # Build from source (current directory)
-  the0 local init --source /path/to/the0  # Build from source (explicit path)`,
+	Examples:
+	  the0 local init --email you@example.com --password testuse123
+	  the0 local init --source --email you@example.com --password testuse123
+	  the0 local init --source /path/to/the0 --email you@example.com --password testuse123`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			useSource := cmd.Flags().Changed("source")
 
@@ -119,6 +123,25 @@ Examples:
 			if err := local.GenerateEnvFile(dir); err != nil {
 				logger.Warning("Failed to generate .env file: %v", err)
 			}
+			adminEmail = strings.TrimSpace(adminEmail)
+			if !cmd.Flags().Changed("email") {
+				promptedEmail, err := promptForAdminEmail()
+				if err != nil {
+					return err
+				}
+				adminEmail = promptedEmail
+			}
+			if !cmd.Flags().Changed("password") {
+				promptedPassword, err := promptForAdminPassword()
+				if err != nil {
+					return err
+				}
+				adminPassword = promptedPassword
+			}
+			if err := local.SetAdminCredentials(dir, adminEmail, adminPassword); err != nil {
+				return err
+			}
+			logger.Success("Configured local root admin")
 
 			logger.Newline()
 			logger.Success("Local environment initialized!")
@@ -129,6 +152,8 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&source, "source", "", "Build from local source code instead of using prebuilt images (defaults to current directory)")
+	cmd.Flags().StringVar(&adminEmail, "email", "", "Root admin email")
+	cmd.Flags().StringVar(&adminPassword, "password", "", "Root admin password")
 	cmd.Flag("source").NoOptDefVal = "."
 
 	return cmd
@@ -145,6 +170,13 @@ func newLocalStartCmd() *cobra.Command {
 			runner, err := local.NewComposeRunner()
 			if err != nil {
 				return err
+			}
+			configured, err := local.AdminCredentialsConfigured(runner.ComposeDir)
+			if err != nil {
+				return err
+			}
+			if !configured {
+				return fmt.Errorf("local root admin credentials are not configured; run `the0 local admin set --email you@example.com`")
 			}
 
 			if runner.State.Prebuilt {
@@ -174,8 +206,7 @@ func newLocalStartCmd() *cobra.Command {
 			logger.StopSpinnerWithSuccess("Services started")
 
 			local.PrintServiceURLs()
-			logger.Info("Fresh install: open http://localhost:3001/setup to create the first admin")
-			logger.Info("Upgrade with users but no admin: the0 local admin set --email you@example.com")
+			logger.Info("Open http://localhost:3001/login and sign in with the configured root admin")
 			logger.Info("Use 'the0 local status' to check container health")
 			logger.Info("Use 'the0 local logs [service]' to view logs")
 
@@ -189,24 +220,36 @@ func newLocalStartCmd() *cobra.Command {
 func newLocalAdminCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "admin",
-		Short: "Manage local admin bootstrap settings",
+		Short: "Manage local root admin settings",
 	}
 
 	cmd.AddCommand(newLocalAdminSetCmd())
+	cmd.AddCommand(newLocalAdminResetPasswordCmd())
 	return cmd
 }
 
 func newLocalAdminSetCmd() *cobra.Command {
 	var email string
+	var password string
 
 	cmd := &cobra.Command{
 		Use:     "set",
-		Short:   "Set the local admin bootstrap email",
+		Short:   "Set the local root admin credentials",
 		Example: `  the0 local admin set --email you@example.com`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			email = strings.TrimSpace(email)
 			if err := local.ValidateAdminEmail(email); err != nil {
 				return fmt.Errorf("--email %w", err)
+			}
+			if !cmd.Flags().Changed("password") {
+				promptedPassword, err := promptForAdminPassword()
+				if err != nil {
+					return err
+				}
+				password = promptedPassword
+			}
+			if err := local.ValidateAdminPassword(password); err != nil {
+				return fmt.Errorf("--password %w", err)
 			}
 
 			runner, err := local.NewComposeRunner()
@@ -214,11 +257,11 @@ func newLocalAdminSetCmd() *cobra.Command {
 				return err
 			}
 
-			if err := local.SetAdminEmail(runner.ComposeDir, email); err != nil {
+			if err := local.SetAdminCredentials(runner.ComposeDir, email, password); err != nil {
 				return err
 			}
 
-			logger.Success("Set THE0_ADMIN_EMAIL")
+			logger.Success("Set THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD")
 			logger.StartSpinner("Restarting API")
 			if err := runner.Run("up", "-d", "--no-deps", "--force-recreate", "the0-api"); err != nil {
 				logger.StopSpinnerWithError("API restart failed")
@@ -230,7 +273,92 @@ func newLocalAdminSetCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&email, "email", "", "Email address of an existing user to promote to admin")
+	cmd.Flags().StringVar(&password, "password", "", "Admin password (prompted if omitted)")
 	return cmd
+}
+
+func newLocalAdminResetPasswordCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "reset-password PASSWORD",
+		Short: "Reset the local root admin password",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return resetLocalAdminPassword(args[0])
+		},
+	}
+	return cmd
+}
+
+func newLocalResetAdminPasswordCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reset-admin-password PASSWORD",
+		Short: "Reset the local root admin password",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return resetLocalAdminPassword(args[0])
+		},
+	}
+}
+
+func resetLocalAdminPassword(password string) error {
+	if err := local.ValidateAdminPassword(password); err != nil {
+		return fmt.Errorf("password %w", err)
+	}
+
+	runner, err := local.NewComposeRunner()
+	if err != nil {
+		return err
+	}
+
+	if err := local.SetAdminPassword(runner.ComposeDir, password); err != nil {
+		return err
+	}
+
+	logger.Success("Updated THE0_ADMIN_PASSWORD")
+	logger.StartSpinner("Restarting API")
+	if err := runner.Run("up", "-d", "--no-deps", "--force-recreate", "the0-api"); err != nil {
+		logger.StopSpinnerWithError("API restart failed")
+		return fmt.Errorf("failed to restart the0-api: %w", err)
+	}
+	logger.StopSpinnerWithSuccess("API restarted")
+	return nil
+}
+
+func promptForAdminEmail() (string, error) {
+	logger.Printf("Enter root admin email: ")
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	email := strings.TrimSpace(line)
+	if err := local.ValidateAdminEmail(email); err != nil {
+		return "", err
+	}
+	return email, nil
+}
+
+func promptForAdminPassword() (string, error) {
+	logger.Printf("Enter root admin password: ")
+	fd := int(os.Stdin.Fd())
+	var password string
+	if term.IsTerminal(fd) {
+		raw, err := term.ReadPassword(fd)
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", err
+		}
+		password = string(raw)
+	} else {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		password = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
+	}
+	if password == "" {
+		return "", fmt.Errorf("admin password cannot be empty")
+	}
+	return password, nil
 }
 
 // --- stop ---

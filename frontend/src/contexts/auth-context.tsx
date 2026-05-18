@@ -16,11 +16,6 @@ interface AuthContextType {
     email: string;
     password: string;
   }) => Promise<{ success: boolean; error?: string }>;
-  setup: (credentials: {
-    username: string;
-    email: string;
-    password: string;
-  }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   token: string | null;
@@ -32,7 +27,6 @@ const AuthContext = createContext<AuthContextType>({
   userData: null,
   loading: true,
   login: async () => ({ success: false, error: "Not initialized" }),
-  setup: async () => ({ success: false, error: "Not initialized" }),
   logout: async () => {},
   refreshUser: async () => {},
   token: null,
@@ -121,32 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const setup = async (credentials: {
-    username: string;
-    email: string;
-    password: string;
-  }) => {
-    try {
-      const result = await authService.setup(credentials);
-      if (result.success && result.data) {
-        setUser(result.data.user);
-        setToken(result.data.token);
-        // Set cookie for server-side auth
-        document.cookie = `auth-token=${result.data.token}; path=/`;
-        router.push("/dashboard");
-        return { success: true };
-      } else {
-        return { success: false, error: result.error || "Setup failed" };
-      }
-    } catch (error) {
-      console.error("Setup error:", error);
-      return {
-        success: false,
-        error: "Setup failed. Please try again.",
-      };
-    }
-  };
-
   const logout = async () => {
     try {
       authService.logout();
@@ -182,7 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         login,
-        setup,
         logout,
         refreshUser,
         userData: user,

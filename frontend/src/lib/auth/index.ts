@@ -5,7 +5,6 @@ export { JwtAuthService } from "./jwt-auth.service";
 export type {
   AuthUser,
   LoginCredentials,
-  SetupCredentials,
   AuthResponse,
   ApiResponse,
   ApiError,

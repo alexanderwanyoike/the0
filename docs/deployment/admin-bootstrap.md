@@ -1,73 +1,84 @@
 ---
-title: "Admin Bootstrap"
-description: "Create and recover the first the0 administrator"
+title: "Root Admin Configuration"
+description: "Configure the the0 root administrator"
 tags: ["deployment", "auth", "admin"]
 order: 3
 ---
 
-# Admin Bootstrap
+# Root Admin Configuration
 
-the0 does not allow public signup. The first screen is one of:
+the0 does not allow public signup and no longer has a browser setup flow. Every deployment must configure one root admin with:
 
-- `/setup` when no users exist
-- `/login` when users already exist
-- `/dashboard` when you are already authenticated
+- `THE0_ADMIN_EMAIL`
+- `THE0_ADMIN_PASSWORD`
 
-## Fresh Installs
+The frontend always starts at login. If either variable is missing, empty, or invalid, the API fails startup. The error is written to API logs and is not exposed through the frontend.
 
-On a new database, open the frontend and complete `/setup`. The setup form creates the first user with the `admin` role.
+## How It Works
 
-If `THE0_ADMIN_EMAIL` is set, setup only accepts that exact email address.
+On startup, the API treats the configured root admin as deployment-managed state:
 
-## Upgrades
+1. If the database has no users, the API creates the root admin automatically.
+2. If users exist and the configured email matches a user, the API promotes that user to `admin`, activates the account, and applies the configured password when the hash differs.
+3. If users exist and the configured email does not match a user, the API creates a new active admin for that email.
+4. If the configured password already matches, the API does not update the user or increment `session_version`.
 
-Existing users are kept active and default to the `user` role. During startup, the API preserves any existing `metadata.role = "admin"` value by promoting that user to the new `admin` role.
+The configured root admin's email and password cannot be changed through the UI or API. Rotate the root admin password by updating `THE0_ADMIN_PASSWORD` in deployment configuration and restarting or rolling out the API.
 
-If no active admin exists, set `THE0_ADMIN_EMAIL` to the email of one existing active user. On startup, the API promotes exactly that matching user. If the variable is unset or does not match an active user, normal login still works, but admin-only user management is unavailable and the API logs:
+Additional admins and normal users are managed from `/settings/users` after login.
 
-```text
-No admin configured. Set THE0_ADMIN_EMAIL to an existing active user or see docs/deployment/admin-bootstrap.md
-```
+## Behavior Matrix
 
-### Upgrade Checklist
+| State | Configuration | Startup behavior |
+|-------|---------------|------------------|
+| Fresh install, no config | none | API fails startup |
+| Fresh install, email/password config | `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` | Creates the root admin automatically |
+| Upgrade, users exist, no admin | email/password for an existing user | Promotes and activates that user, then sets the password |
+| Upgrade, admin email only | `THE0_ADMIN_EMAIL` only | API fails startup |
+| Already-promoted admin with unknown password | same admin email plus a new password | Updates that admin password and invalidates old sessions |
+| Active admin already working | same email and same password | No mutation |
+| Active admin password rotated in config | same email and changed password | Updates password once and increments `session_version` |
 
-Before upgrading an existing deployment to v1.14.0 or later:
-
-1. Choose one existing active user who should become the first admin.
-2. Set `THE0_ADMIN_EMAIL` to that exact email address in your deployment configuration.
-3. Upgrade or restart the API so admin bootstrap runs at startup.
-4. Log in as that user and confirm `/settings/users` is available.
-5. Create or promote any additional admins from `/settings/users`.
-
-After an admin role is stored in the database, `THE0_ADMIN_EMAIL` is no longer required for that deployment. Leaving it configured is safe; the API only uses it when no active admin exists.
+During upgrades, the API also preserves legacy `metadata.role = "admin"` by promoting those users before syncing the configured root admin.
 
 ## Docker Compose
 
-For `the0 local`, set the admin email with:
+For local Docker Compose installs, initialize with root admin credentials:
 
 ```bash
-the0 local admin set --email you@example.com
+the0 local init --email you@example.com --password testuse123
+the0 local start
 ```
 
-The command updates `~/.the0/compose/.env` idempotently and restarts `the0-api`.
+If flags are omitted, `the0 local init` prompts for the email and password interactively.
 
-Fresh local installs should use:
+To rotate the local root admin password:
 
-```text
-http://localhost:3001/setup
+```bash
+the0 local reset-admin-password new-password
 ```
+
+This updates `~/.the0/compose/.env` and restarts `the0-api`. The CLI only validates that values can be safely written to `.env`; password policy validation happens in the API at startup.
 
 ## Kubernetes
 
-Set the admin email in Helm values before upgrading:
+Set the root admin email as a normal environment variable and the password from a Secret:
 
 ```yaml
 the0Api:
   env:
     THE0_ADMIN_EMAIL: "admin@example.com"
+  extraEnv:
+    - name: THE0_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: the0-root-admin
+          key: password
 ```
 
-Apply the values through your normal Helm upgrade workflow. Avoid shell-based recovery flows inside running pods; admin bootstrap is controlled by configuration.
+`the0Api.extraEnv` accepts full Kubernetes `EnvVar` entries, so it works with normal Secrets, External Secrets, Sealed Secrets, and similar controllers. Do not put admin passwords in plaintext Helm values.
+
+To rotate the root admin password, update the referenced Secret and restart or roll out the API deployment.
 
 ## Last Admin Protection
 
@@ -78,4 +89,4 @@ the0 prevents changes that would leave the platform without an active admin:
 - The final active admin cannot be demoted, deactivated, or deleted.
 - API keys cannot call admin user-management endpoints.
 
-Use `/settings/users` as an admin to create users, assign roles, deactivate accounts, and reset passwords.
+Use `/settings/users` as an admin to create users, assign roles, deactivate accounts, and reset passwords for non-root users.

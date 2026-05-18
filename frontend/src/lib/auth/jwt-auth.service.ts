@@ -1,7 +1,6 @@
 import {
   AuthUser,
   LoginCredentials,
-  SetupCredentials,
   AuthResponse,
   ApiResponse,
   Result,
@@ -51,48 +50,6 @@ export class JwtAuthService {
       return {
         success: false,
         error: "Login failed. Please try again.",
-      };
-    }
-  }
-
-  async setup(credentials: SetupCredentials): Promise<Result<AuthResponse>> {
-    try {
-      const response = await fetch(`/api/auth/setup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      const data: ApiResponse<AuthResponse> = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.message || "Setup failed",
-        };
-      }
-
-      if (data.success && data.data) {
-        // Store token in localStorage
-        this.setToken(data.data.token);
-
-        return {
-          success: true,
-          data: data.data,
-        };
-      }
-
-      return {
-        success: false,
-        error: "Invalid response format",
-      };
-    } catch (error) {
-      console.error("Setup error:", error);
-      return {
-        success: false,
-        error: "Setup failed. Please try again.",
       };
     }
   }

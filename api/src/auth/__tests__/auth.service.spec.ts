@@ -2,7 +2,6 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ServiceUnavailableException } from "@nestjs/common";
 import { AuthService } from "../auth.service";
 import { JwtService } from "@nestjs/jwt";
-import { SetupLockRepository } from "../setup-lock.repository";
 import { UserRepository } from "@/user/user.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRecord } from "@/user/user.types";
@@ -59,12 +58,6 @@ describe("AuthService", () => {
         {
           provide: UserRepository,
           useValue: mockUserRepository,
-        },
-        {
-          provide: SetupLockRepository,
-          useValue: {
-            withLock: jest.fn(),
-          },
         },
       ],
     }).compile();

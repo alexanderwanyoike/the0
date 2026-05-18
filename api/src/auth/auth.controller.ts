@@ -1,15 +1,13 @@
 import {
   Body,
   Controller,
-  Post,
   Get,
+  Post,
   Headers,
   UnauthorizedException,
-  BadRequestException,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
-import { SetupDto } from "./dto/setup.dto";
 import { ValidateTokenDto } from "./dto/validate-token.dto";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import { ApiKeyService } from "@/api-key/api-key.service";
@@ -34,32 +32,6 @@ export class AuthController {
       success: true,
       data: result.data,
       message: "Login successful",
-    };
-  }
-
-  @Get("setup-status")
-  async setupStatus() {
-    const status = await this.authService.getSetupStatus();
-
-    return {
-      success: true,
-      data: status,
-      message: "Setup status retrieved successfully",
-    };
-  }
-
-  @Post("setup")
-  async setup(@Body() setupDto: SetupDto) {
-    const result = await this.authService.createFirstAdmin(setupDto);
-
-    if (!result.success) {
-      throw new BadRequestException(result.error);
-    }
-
-    return {
-      success: true,
-      data: result.data,
-      message: "Setup completed successfully",
     };
   }
 

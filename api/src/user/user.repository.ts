@@ -199,6 +199,19 @@ export class UserRepository {
     });
   }
 
+  async promoteToAdminAndSetPassword(
+    id: string,
+    passwordHash: string,
+  ): Promise<UserRecord> {
+    return this.updateRaw(id, {
+      role: USER_ROLES.ADMIN,
+      passwordHash,
+      isActive: true,
+      sessionVersion: sqlIncrement(this.getUserTable().sessionVersion),
+      updatedAt: new Date(),
+    });
+  }
+
   async deactivate(id: string): Promise<void> {
     const db = getDatabase();
     const userTable = this.getUserTable();

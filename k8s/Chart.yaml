@@ -31,13 +31,13 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: changed
-      description: Replace public landing and signup flows with app-first setup, login, and dashboard routing
+      description: Replace public landing, signup, and setup flows with login-first app routing
     - kind: added
-      description: Add first-admin bootstrap with explicit upgrade promotion through THE0_ADMIN_EMAIL
+      description: Add deployment-managed root admin configuration with secret-backed password support
     - kind: added
       description: Add admin user management, self-service profile routes, and last-admin protection
     - kind: added
-      description: Add local admin email configuration command and admin bootstrap deployment documentation
+      description: Add local root admin credential commands and deployment documentation
     - kind: changed
       description: Refactor auth and user persistence behind repository boundaries
   artifacthub.io/images: |

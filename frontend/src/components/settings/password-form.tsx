@@ -87,6 +87,22 @@ export function PasswordForm() {
     }
   };
 
+  if (user?.isConfiguredRootAdmin) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-start sm:items-center gap-3">
+          <Lock className="h-5 w-5 text-muted-foreground mt-0.5 sm:mt-0 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-medium">Change Password</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              This root admin password is managed by deployment configuration.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-start sm:items-center gap-3">

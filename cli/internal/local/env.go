@@ -34,8 +34,9 @@ MINIO_ROOT_PASSWORD=the0password
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=24h
 
-# Admin bootstrap
+# Root admin
 THE0_ADMIN_EMAIL=
+THE0_ADMIN_PASSWORD=
 
 # API
 API_PORT=3000
@@ -59,11 +60,23 @@ func GenerateEnvFile(composeDir string) error {
 			return fmt.Errorf("failed to read existing env file: %w", err)
 		}
 		content := string(data)
-		if !hasEnvKey(content, "THE0_ADMIN_EMAIL") {
-			if err := appendEnvBlock(envPath, "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=\n"); err != nil {
+		missingAdminEmail := !hasEnvKey(content, "THE0_ADMIN_EMAIL")
+		missingAdminPassword := !hasEnvKey(content, "THE0_ADMIN_PASSWORD")
+		if missingAdminEmail {
+			block := "\n# Root admin\nTHE0_ADMIN_EMAIL=\n"
+			if missingAdminPassword {
+				block += "THE0_ADMIN_PASSWORD=\n"
+			}
+			if err := appendEnvBlock(envPath, block); err != nil {
 				return err
 			}
 			logger.Verbose("Updated .env file with THE0_ADMIN_EMAIL")
+		}
+		if !missingAdminEmail && missingAdminPassword {
+			if err := appendEnvBlock(envPath, "\nTHE0_ADMIN_PASSWORD=\n"); err != nil {
+				return err
+			}
+			logger.Verbose("Updated .env file with THE0_ADMIN_PASSWORD")
 		}
 		if !hasEnvKey(content, "DOCKER_GID") {
 			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
@@ -102,8 +115,13 @@ func hasEnvKey(content, key string) bool {
 
 // SetAdminEmail updates THE0_ADMIN_EMAIL in the local compose .env file.
 func SetAdminEmail(composeDir string, email string) error {
-	email = strings.TrimSpace(email)
-	if err := ValidateAdminEmail(email); err != nil {
+	return SetAdminCredentials(composeDir, email, "")
+}
+
+// SetAdminPassword updates THE0_ADMIN_PASSWORD while preserving the configured
+// admin email.
+func SetAdminPassword(composeDir string, password string) error {
+	if err := ValidateAdminPassword(password); err != nil {
 		return err
 	}
 
@@ -116,22 +134,44 @@ func SetAdminEmail(composeDir string, email string) error {
 		return fmt.Errorf("failed to read .env file: %w", err)
 	}
 
-	lines := strings.Split(string(data), "\n")
-	found := false
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "THE0_ADMIN_EMAIL=") {
-			lines[i] = "THE0_ADMIN_EMAIL=" + email + trailingInlineComment(line)
-			found = true
+	content := string(data)
+	if envValue(content, "THE0_ADMIN_EMAIL") == "" {
+		return fmt.Errorf("THE0_ADMIN_EMAIL is not configured; run `the0 local admin set --email you@example.com` first")
+	}
+
+	content = upsertEnvValue(content, "THE0_ADMIN_PASSWORD", password)
+	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write .env file: %w", err)
+	}
+
+	return nil
+}
+
+// SetAdminCredentials updates THE0_ADMIN_EMAIL and THE0_ADMIN_PASSWORD in the
+// local compose .env file.
+func SetAdminCredentials(composeDir string, email string, password string) error {
+	email = strings.TrimSpace(email)
+	if err := ValidateAdminEmail(email); err != nil {
+		return err
+	}
+	if password != "" {
+		if err := ValidateAdminPassword(password); err != nil {
+			return err
 		}
 	}
 
-	content := strings.Join(lines, "\n")
-	if !found {
-		if strings.TrimSpace(content) != "" && !strings.HasSuffix(content, "\n") {
-			content += "\n"
+	envPath := filepath.Join(composeDir, ".env")
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf(".env not found in %s; run `the0 local init` first", composeDir)
 		}
-		content += "\n# Admin bootstrap\nTHE0_ADMIN_EMAIL=" + email + "\n"
+		return fmt.Errorf("failed to read .env file: %w", err)
+	}
+
+	content := upsertEnvValue(string(data), "THE0_ADMIN_EMAIL", email)
+	if password != "" {
+		content = upsertEnvValue(content, "THE0_ADMIN_PASSWORD", password)
 	}
 
 	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
@@ -139,6 +179,65 @@ func SetAdminEmail(composeDir string, email string) error {
 	}
 
 	return nil
+}
+
+// AdminCredentialsConfigured returns whether local compose has both root admin
+// credentials set.
+func AdminCredentialsConfigured(composeDir string) (bool, error) {
+	envPath := filepath.Join(composeDir, ".env")
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, fmt.Errorf(".env not found in %s; run `the0 local init` first", composeDir)
+		}
+		return false, fmt.Errorf("failed to read .env file: %w", err)
+	}
+
+	content := string(data)
+	return envValue(content, "THE0_ADMIN_EMAIL") != "" &&
+		envValue(content, "THE0_ADMIN_PASSWORD") != "", nil
+}
+
+func envValue(content string, key string) string {
+	prefix := key + "="
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, prefix) {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+		if hashIndex := strings.Index(value, "#"); hashIndex >= 0 {
+			value = strings.TrimSpace(value[:hashIndex])
+		}
+		return value
+	}
+	return ""
+}
+
+func upsertEnvValue(content string, key string, value string) string {
+	lines := strings.Split(content, "\n")
+	found := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+"=") {
+			lines[i] = key + "=" + value + trailingInlineComment(line)
+			found = true
+		}
+	}
+
+	updated := strings.Join(lines, "\n")
+	if found {
+		return updated
+	}
+
+	if strings.TrimSpace(updated) != "" && !strings.HasSuffix(updated, "\n") {
+		updated += "\n"
+	}
+	if !hasEnvKey(updated, "THE0_ADMIN_EMAIL") && !hasEnvKey(updated, "THE0_ADMIN_PASSWORD") {
+		updated += "\n# Root admin\n"
+	}
+	updated += key + "=" + value + "\n"
+	return updated
 }
 
 func trailingInlineComment(line string) string {
@@ -154,8 +253,24 @@ func ValidateAdminEmail(email string) error {
 	if email == "" {
 		return fmt.Errorf("email is required")
 	}
-	if strings.ContainsAny(email, "\r\n=") || !adminEmailPattern.MatchString(email) {
+	if strings.ContainsAny(email, "\r\n=#") || !adminEmailPattern.MatchString(email) {
 		return fmt.Errorf("email must be a valid single-line email address")
+	}
+	return nil
+}
+
+// ValidateAdminPassword checks that an admin password can be safely written to .env.
+// The API owns password policy validation and fails startup when the configured
+// root admin password is invalid.
+func ValidateAdminPassword(password string) error {
+	if password == "" {
+		return fmt.Errorf("password is required")
+	}
+	if strings.TrimSpace(password) != password {
+		return fmt.Errorf("password must not start or end with whitespace")
+	}
+	if strings.ContainsAny(password, "\r\n=#") {
+		return fmt.Errorf("password must be a single-line .env value")
 	}
 	return nil
 }
