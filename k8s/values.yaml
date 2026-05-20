@@ -147,6 +147,9 @@ the0Api:
     FRONTEND_URL: "http://the0.local:30001"
     JWT_SECRET: "your-jwt-secret-key"
     JWT_EXPIRES_IN: "7d"
+    # Required root admin email. Set THE0_ADMIN_PASSWORD through extraEnv with
+    # a Secret reference; the API fails startup when either value is missing.
+    # THE0_ADMIN_EMAIL: "admin@example.com"
     RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
     # Database pool lifecycle (prevents stale connections)
     DB_POOL_MAX: "10"
@@ -154,6 +157,14 @@ the0Api:
     DB_POOL_CONNECT_TIMEOUT: "10"
     DB_POOL_MAX_LIFETIME: "1800"
     DB_AUTO_SELECT_FAMILY: "true"
+  # Full Kubernetes EnvVar entries. Use this for secretKeyRef/configMapKeyRef.
+  extraEnv: []
+  # Example:
+  # - name: THE0_ADMIN_PASSWORD
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: the0-root-admin
+  #       key: password
   resources:
     requests:
       memory: 512Mi

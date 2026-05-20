@@ -11,7 +11,6 @@ describe("AuthController", () => {
 
   const mockAuthService = {
     login: jest.fn(),
-    register: jest.fn(),
     validateToken: jest.fn(),
   };
 
@@ -64,6 +63,7 @@ describe("AuthController", () => {
           email: "test@example.com",
           isActive: true,
           isEmailVerified: false,
+          role: "user",
         },
       });
 
@@ -94,35 +94,6 @@ describe("AuthController", () => {
     });
   });
 
-  describe("register", () => {
-    it("should register user successfully", async () => {
-      const registerDto = {
-        username: "newuser",
-        email: "new@example.com",
-        password: "password123",
-      };
-
-      const mockResult = Ok({
-        token: "test-token",
-        user: {
-          id: "test-id",
-          username: "newuser",
-          email: "new@example.com",
-          isActive: true,
-          isEmailVerified: false,
-        },
-      });
-
-      mockAuthService.register.mockResolvedValue(mockResult);
-
-      const result = await controller.register(registerDto);
-
-      expect(result.success).toBe(true);
-      expect(result.data.token).toBe("test-token");
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
-    });
-  });
-
   describe("validate", () => {
     it("should validate token successfully", async () => {
       const validateDto = { token: "valid-token" };
@@ -133,6 +104,7 @@ describe("AuthController", () => {
         email: "test@example.com",
         isActive: true,
         isEmailVerified: false,
+        role: "user",
       });
 
       mockAuthService.validateToken.mockResolvedValue(mockResult);

@@ -2,40 +2,9 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ServiceUnavailableException } from "@nestjs/common";
 import { AuthService } from "../auth.service";
 import { JwtService } from "@nestjs/jwt";
-
-jest.mock("../../database/connection", () => ({
-  getDatabase: jest.fn().mockReturnValue({
-    select: jest.fn().mockReturnValue({
-      from: jest.fn().mockReturnValue({
-        where: jest.fn().mockReturnValue([
-          {
-            id: "test-id",
-            username: "testuser",
-            email: "test@example.com",
-            firstName: "Test",
-            lastName: "User",
-            isActive: true,
-            isEmailVerified: false,
-          },
-        ]),
-      }),
-    }),
-    insert: jest.fn().mockReturnValue({
-      values: jest.fn().mockReturnValue({
-        returning: jest.fn().mockReturnValue([
-          {
-            id: "test-id",
-            username: "testuser",
-            email: "test@example.com",
-            isActive: true,
-            isEmailVerified: false,
-          },
-        ]),
-      }),
-    }),
-  }),
-  getDatabaseConfig: jest.fn().mockReturnValue({ type: "sqlite" }),
-}));
+import { UserRepository } from "@/user/user.repository";
+import { USER_ROLES } from "@/user/user.constants";
+import { UserRecord } from "@/user/user.types";
 
 jest.mock("bcrypt", () => ({
   hash: jest.fn().mockResolvedValue("hashed-password"),
@@ -45,8 +14,35 @@ jest.mock("bcrypt", () => ({
 describe("AuthService", () => {
   let service: AuthService;
   let jwtService: JwtService;
+  let userRepository: jest.Mocked<UserRepository>;
+
+  const testUser: UserRecord = {
+    id: "test-id",
+    username: "testuser",
+    email: "test@example.com",
+    passwordHash: "hashed-password",
+    firstName: "Test",
+    lastName: "User",
+    role: USER_ROLES.USER,
+    sessionVersion: 0,
+    isActive: true,
+    isEmailVerified: false,
+    lastLoginAt: null,
+    metadata: {},
+    createdAt: new Date("2026-05-16T00:00:00Z"),
+    updatedAt: new Date("2026-05-16T00:00:00Z"),
+  };
 
   beforeEach(async () => {
+    const mockUserRepository = {
+      findById: jest.fn().mockResolvedValue(testUser),
+      findByEmail: jest.fn().mockResolvedValue(testUser),
+      updateLastLogin: jest.fn().mockResolvedValue(undefined),
+      count: jest.fn(),
+      hasActiveAdmin: jest.fn(),
+      createFirstAdmin: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -59,11 +55,16 @@ describe("AuthService", () => {
             sign: jest.fn().mockReturnValue("test-token"),
           },
         },
+        {
+          provide: UserRepository,
+          useValue: mockUserRepository,
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     jwtService = module.get<JwtService>(JwtService);
+    userRepository = module.get(UserRepository);
   });
 
   it("should be defined", () => {
@@ -92,14 +93,7 @@ describe("AuthService", () => {
 
   describe("validateToken - DB connection errors", () => {
     function mockDbError(error: Error) {
-      const { getDatabase } = require("../../database/connection");
-      (getDatabase as jest.Mock).mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          from: jest.fn().mockReturnValue({
-            where: jest.fn().mockRejectedValue(error),
-          }),
-        }),
-      });
+      userRepository.findById.mockRejectedValue(error);
     }
 
     beforeEach(() => {

@@ -31,6 +31,10 @@ MINIO_ROOT_PASSWORD=the0password
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=24h
 
+# Root admin
+THE0_ADMIN_EMAIL=
+THE0_ADMIN_PASSWORD=
+
 # API
 API_PORT=3000
 FRONTEND_PORT=3001
@@ -52,7 +56,26 @@ func GenerateEnvFile(composeDir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read existing env file: %w", err)
 		}
-		if !hasEnvKey(string(data), "DOCKER_GID") {
+		content := string(data)
+		missingAdminEmail := !hasEnvKey(content, "THE0_ADMIN_EMAIL")
+		missingAdminPassword := !hasEnvKey(content, "THE0_ADMIN_PASSWORD")
+		if missingAdminEmail {
+			block := "\n# Root admin\nTHE0_ADMIN_EMAIL=\n"
+			if missingAdminPassword {
+				block += "THE0_ADMIN_PASSWORD=\n"
+			}
+			if err := appendEnvBlock(envPath, block); err != nil {
+				return err
+			}
+			logger.Verbose("Updated .env file with THE0_ADMIN_EMAIL")
+		}
+		if !missingAdminEmail && missingAdminPassword {
+			if err := appendEnvBlock(envPath, "\nTHE0_ADMIN_PASSWORD=\n"); err != nil {
+				return err
+			}
+			logger.Verbose("Updated .env file with THE0_ADMIN_PASSWORD")
+		}
+		if !hasEnvKey(content, "DOCKER_GID") {
 			f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				return fmt.Errorf("failed to update env file: %w", err)
@@ -85,4 +108,66 @@ func hasEnvKey(content, key string) bool {
 		}
 	}
 	return false
+}
+
+func envValue(content string, key string) string {
+	prefix := key + "="
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, prefix) {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+		if hashIndex := strings.Index(value, "#"); hashIndex >= 0 {
+			value = strings.TrimSpace(value[:hashIndex])
+		}
+		return value
+	}
+	return ""
+}
+
+func upsertEnvValue(content string, key string, value string) string {
+	lines := strings.Split(content, "\n")
+	found := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+"=") {
+			lines[i] = key + "=" + value + trailingInlineComment(line)
+			found = true
+		}
+	}
+
+	updated := strings.Join(lines, "\n")
+	if found {
+		return updated
+	}
+
+	if strings.TrimSpace(updated) != "" && !strings.HasSuffix(updated, "\n") {
+		updated += "\n"
+	}
+	if !hasEnvKey(updated, "THE0_ADMIN_EMAIL") && !hasEnvKey(updated, "THE0_ADMIN_PASSWORD") {
+		updated += "\n# Root admin\n"
+	}
+	updated += key + "=" + value + "\n"
+	return updated
+}
+
+func trailingInlineComment(line string) string {
+	hashIndex := strings.Index(line, "#")
+	if hashIndex == -1 {
+		return ""
+	}
+	return " " + strings.TrimSpace(line[hashIndex:])
+}
+
+func appendEnvBlock(envPath string, block string) error {
+	f, err := os.OpenFile(envPath, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to update env file: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(block); err != nil {
+		return fmt.Errorf("failed to append to env file: %w", err)
+	}
+	return nil
 }

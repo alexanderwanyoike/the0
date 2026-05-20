@@ -1,19 +1,23 @@
-import { NavigationMenu } from "@/components/landing-page/navigation-menu";
-import { HeroSection } from "@/components/landing-page/hero";
-import { FeaturesSection } from "@/components/landing-page/features";
-import { HowItWorksSection } from "@/components/landing-page/how-it-works";
-import { Footer } from "@/components/landing-page/footer";
+"use client";
 
-export default function LandingPage() {
-  return (
-    <div className="min-h-screen">
-      <NavigationMenu showSearch={true} />
-      <main>
-        <HeroSection />
-        <FeaturesSection />
-        <HowItWorksSection />
-      </main>
-      <Footer />
-    </div>
-  );
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
+
+export default function AppEntryPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (user) {
+      router.replace("/dashboard");
+      return;
+    }
+
+    router.replace("/login");
+  }, [loading, router, user]);
+
+  return null;
 }

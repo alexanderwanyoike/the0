@@ -43,6 +43,13 @@
       "when": 1774080000000,
       "tag": "0005_add_foreign_key_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1778889600000,
+      "tag": "0006_add_user_roles",
+      "breakpoints": true
     }
   ]
 }

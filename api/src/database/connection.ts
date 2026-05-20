@@ -19,6 +19,7 @@ export const pgSchema = {
 // Combined schema for SQLite
 export const sqliteSchema = {
   usersTable: usersSchema.usersTableSqlite,
+  adminMutationLocksTable: usersSchema.adminMutationLocksTableSqlite,
   apiKeysTable: usersSchema.apiKeysTableSqlite,
   customBotsTable: customBotsSchema.customBotsTableSqlite,
   botsTable: botsSchema.botsTableSqlite,
@@ -27,6 +28,9 @@ export const sqliteSchema = {
 // Table registry for clean access
 export interface TableRegistry {
   users: typeof usersSchema.usersTable | typeof usersSchema.usersTableSqlite;
+  adminMutationLocks:
+    | typeof usersSchema.adminMutationLocksTable
+    | typeof usersSchema.adminMutationLocksTableSqlite;
   apiKeys:
     | typeof usersSchema.apiKeysTable
     | typeof usersSchema.apiKeysTableSqlite;
@@ -57,6 +61,7 @@ export function getDatabase() {
 
     tablesCache = {
       users: usersSchema.usersTableSqlite,
+      adminMutationLocks: usersSchema.adminMutationLocksTableSqlite,
       apiKeys: usersSchema.apiKeysTableSqlite,
       customBots: customBotsSchema.customBotsTableSqlite,
       bots: botsSchema.botsTableSqlite,
@@ -94,6 +99,7 @@ export function getDatabase() {
 
     tablesCache = {
       users: usersSchema.usersTable,
+      adminMutationLocks: usersSchema.adminMutationLocksTable,
       apiKeys: usersSchema.apiKeysTable,
       customBots: customBotsSchema.customBotsTable,
       bots: botsSchema.botsTable,

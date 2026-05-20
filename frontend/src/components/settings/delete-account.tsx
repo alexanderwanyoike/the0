@@ -19,12 +19,10 @@ import { Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
 
 export function DeleteAccount() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -46,29 +44,24 @@ export function DeleteAccount() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to delete account");
+        throw new Error(errorData.message || "Failed to deactivate account");
       }
 
       toast({
-        title: "Account deleted",
-        description: "Your account has been permanently deleted.",
+        title: "Account deactivated",
+        description: "Your account has been deactivated.",
       });
 
-      // Clear auth state and redirect to home page
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("auth-token");
-        document.cookie =
-          "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      }
-
-      router.push("/");
+      await logout().catch((logoutError) => {
+        console.error("Account deactivated, but logout failed:", logoutError);
+      });
     } catch (error: any) {
       console.error("Error deleting account:", error);
       toast({
         title: "Error",
         description:
           error.message ||
-          "Failed to delete account. Please check your password and try again.",
+          "Failed to deactivate account. Please check your password and try again.",
         variant: "destructive",
       });
     } finally {
@@ -83,10 +76,10 @@ export function DeleteAccount() {
         <Trash2 className="h-5 w-5 text-destructive mt-0.5 sm:mt-0 flex-shrink-0" />
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-medium text-destructive">
-            Delete Account
+            Deactivate Account
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Permanently delete your account and all associated data
+            Deactivate your account and sign out of this workspace
           </p>
         </div>
       </div>
@@ -94,7 +87,7 @@ export function DeleteAccount() {
       <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <AlertDialogTrigger asChild>
           <Button variant="destructive" className="w-full sm:w-auto">
-            Delete Account
+            Deactivate Account
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent className="mx-4 max-w-md sm:mx-auto sm:max-w-lg">
@@ -103,14 +96,15 @@ export function DeleteAccount() {
               Are you absolutely sure?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              This action cannot be undone. This will permanently delete your
-              account and remove all associated data from our servers.
+              This will deactivate your account and sign you out immediately. An
+              administrator must reactivate the account before you can sign in
+              again.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="delete-password" className="text-sm">
-                Enter your password to confirm deletion
+                Enter your password to confirm deactivation
               </Label>
               <Input
                 id="delete-password"
@@ -131,7 +125,7 @@ export function DeleteAccount() {
               onClick={handleDelete}
               disabled={loading || !password}
             >
-              {loading ? "Deleting..." : "Delete Account"}
+              {loading ? "Deactivating..." : "Deactivate Account"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

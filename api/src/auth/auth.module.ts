@@ -4,9 +4,13 @@ import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import type { SignOptions } from "jsonwebtoken";
 import { AuthController } from "./auth.controller";
+import { AdminBootstrapService } from "./admin-bootstrap.service";
+import { AdminJwtGuard } from "./admin-jwt.guard";
 import { AuthService } from "./auth.service";
+import { JwtAuthGuard } from "./jwt-auth.guard";
 import { JwtStrategy } from "./jwt.strategy";
 import { ApiKeyModule } from "@/api-key/api-key.module";
+import { UserModule } from "@/user/user.module";
 
 @Global()
 @Module({
@@ -25,9 +29,22 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
       }),
     }),
     ApiKeyModule,
+    UserModule,
   ],
-  providers: [JwtStrategy, AuthService],
-  exports: [PassportModule, JwtModule, AuthService],
+  providers: [
+    JwtStrategy,
+    AuthService,
+    AdminBootstrapService,
+    AdminJwtGuard,
+    JwtAuthGuard,
+  ],
+  exports: [
+    PassportModule,
+    JwtModule,
+    AuthService,
+    AdminJwtGuard,
+    JwtAuthGuard,
+  ],
   controllers: [AuthController],
 })
 export class AuthModule {}

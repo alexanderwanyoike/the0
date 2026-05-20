@@ -6,19 +6,13 @@ export interface AuthUser {
   lastName?: string;
   isActive: boolean;
   isEmailVerified: boolean;
+  role: "admin" | "user";
+  isConfiguredRootAdmin?: boolean;
 }
 
 export interface LoginCredentials {
   email: string;
   password: string;
-}
-
-export interface RegisterCredentials {
-  username: string;
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
 }
 
 export interface AuthResponse {

@@ -6,8 +6,10 @@ GEMINI.md
 **/PRPs/
 **/stories/
 
+.claude/
 **/*/.claude
 .claude/agents/
+.agents/
 .notes/
 PR_MESSAGE.md
 

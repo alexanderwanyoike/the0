@@ -45,6 +45,12 @@ Kubernetes mode is for deployments that need multi-node scaling or high availabi
 
 See [Kubernetes Deployment](./kubernetes) for setup instructions.
 
+### Root Admin
+
+Public registration is disabled. Every deployment must configure `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`; the API creates or syncs that root admin on startup. See [Root Admin Configuration](./admin-bootstrap).
+
+Upgrading from an older deployment requires an explicit migration step. See the [v1.14.0 Root Admin Migration Guide](/migration-guides/v1-14-root-admin).
+
 ## When to Use Each Mode
 
 | Scenario | Recommended Deployment |
@@ -89,8 +95,9 @@ Before deploying to production:
 
 1. **Change default credentials** - All services ship with development passwords that must be changed
 2. **Configure JWT secrets** - Generate strong secrets for API authentication
-3. **Enable TLS** - Use HTTPS for all external endpoints
-4. **Network isolation** - Infrastructure services should not be publicly accessible
-5. **Resource limits** - Configure appropriate limits to prevent runaway bots
+3. **Configure the root admin explicitly** - Set `THE0_ADMIN_EMAIL` and provide `THE0_ADMIN_PASSWORD` from protected deployment configuration
+4. **Enable TLS** - Use HTTPS for all external endpoints
+5. **Network isolation** - Infrastructure services should not be publicly accessible
+6. **Resource limits** - Configure appropriate limits to prevent runaway bots
 
 See the deployment-specific pages for detailed security configuration.

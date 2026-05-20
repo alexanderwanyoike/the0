@@ -41,7 +41,6 @@ const mockRouter = {
 
 const mockAuthService = {
   login: jest.fn(),
-  register: jest.fn(),
   validateToken: jest.fn(),
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
@@ -57,12 +56,20 @@ const mockUser: AuthUser = {
   lastName: "User",
   isActive: true,
   isEmailVerified: true,
+  role: "user",
 };
 
 // Test component to access auth context
 function TestComponent() {
-  const { user, loading, login, register, logout, token, authService } =
-    useAuth();
+  const {
+    user,
+    loading,
+    login,
+    logout,
+    refreshUser,
+    token,
+    authService,
+  } = useAuth();
 
   return (
     <div>
@@ -76,18 +83,8 @@ function TestComponent() {
       >
         Login
       </button>
-      <button
-        onClick={() =>
-          register({
-            username: "test",
-            email: "test@example.com",
-            password: "password",
-          })
-        }
-      >
-        Register
-      </button>
       <button onClick={() => logout()}>Logout</button>
+      <button onClick={() => refreshUser()}>Refresh User</button>
       <div data-testid="auth-service">
         {authService ? "service available" : "no service"}
       </div>
@@ -272,63 +269,6 @@ describe("AuthContext", () => {
     });
   });
 
-  describe("register", () => {
-    it("should handle successful registration", async () => {
-      mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.register.mockResolvedValue({
-        success: true,
-        data: {
-          token: "new-token",
-          user: mockUser,
-        },
-      });
-
-      render(
-        <AuthProvider>
-          <TestComponent />
-        </AuthProvider>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("loading")).toHaveTextContent("loaded");
-      });
-
-      await act(async () => {
-        screen.getByText("Register").click();
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId("user")).toHaveTextContent("testuser");
-        expect(mockRouter.push).toHaveBeenCalledWith("/dashboard");
-      });
-    });
-
-    it("should handle failed registration", async () => {
-      mockAuthService.getToken.mockReturnValue(null);
-      mockAuthService.register.mockResolvedValue({
-        success: false,
-        error: "User already exists",
-      });
-
-      render(
-        <AuthProvider>
-          <TestComponent />
-        </AuthProvider>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId("loading")).toHaveTextContent("loaded");
-      });
-
-      await act(async () => {
-        screen.getByText("Register").click();
-      });
-
-      expect(mockRouter.push).not.toHaveBeenCalled();
-      expect(screen.getByTestId("user")).toHaveTextContent("no user");
-    });
-  });
-
   describe("logout", () => {
     it("should handle logout", async () => {
       mockAuthService.getToken.mockReturnValue("existing-token");
@@ -350,6 +290,42 @@ describe("AuthContext", () => {
 
       await act(async () => {
         screen.getByText("Logout").click();
+      });
+
+      await waitFor(() => {
+        expect(mockAuthService.logout).toHaveBeenCalled();
+        expect(mockRouter.push).toHaveBeenCalledWith("/login");
+        expect(screen.getByTestId("user")).toHaveTextContent("no user");
+      });
+    });
+  });
+
+  describe("refreshUser", () => {
+    it("logs out when the current user can no longer be resolved", async () => {
+      mockAuthService.getToken.mockReturnValue("valid-token");
+      mockAuthService.validateToken.mockResolvedValue({ success: true });
+      mockAuthService.getCurrentUser
+        .mockResolvedValueOnce({
+          success: true,
+          data: mockUser,
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          error: "Token has been invalidated",
+        });
+
+      render(
+        <AuthProvider>
+          <TestComponent />
+        </AuthProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("user")).toHaveTextContent("testuser");
+      });
+
+      await act(async () => {
+        screen.getByText("Refresh User").click();
       });
 
       await waitFor(() => {

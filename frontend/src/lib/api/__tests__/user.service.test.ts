@@ -23,6 +23,7 @@ describe("UserService", () => {
     updatedAt: "2024-01-02T00:00:00.000Z",
     isActive: true,
     isEmailVerified: true,
+    role: "user",
   };
 
   beforeEach(() => {

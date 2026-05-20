@@ -9,7 +9,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
 
 export function ProfileForm() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -36,6 +36,8 @@ export function ProfileForm() {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to update profile");
       }
+
+      await refreshUser();
 
       toast({
         title: "Profile updated",

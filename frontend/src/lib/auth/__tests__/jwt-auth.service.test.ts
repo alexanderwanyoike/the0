@@ -41,6 +41,7 @@ describe("JwtAuthService", () => {
     lastName: "User",
     isActive: true,
     isEmailVerified: true,
+    role: "user",
   };
 
   beforeEach(() => {
@@ -111,58 +112,6 @@ describe("JwtAuthService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Login failed. Please try again.");
-    });
-  });
-
-  describe("register", () => {
-    it("should register successfully with valid data", async () => {
-      const mockResponse = {
-        success: true,
-        data: {
-          token: "mock-jwt-token",
-          user: mockUser,
-        },
-        message: "Registration successful",
-      };
-
-      const mockResponseObj = createMockResponse({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResponse),
-      });
-      mockFetch.mockResolvedValueOnce(mockResponseObj);
-
-      const result = await authService.register({
-        username: "testuser",
-        email: "test@example.com",
-        password: "password123",
-        firstName: "Test",
-        lastName: "User",
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data?.token).toBe("mock-jwt-token");
-      expect(result.data?.user).toEqual(mockUser);
-      expect(localStorage.getItem("auth-token")).toBe("mock-jwt-token");
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(getFetchCallUrl(mockFetch)).toContain("/api/auth/register");
-    });
-
-    it("should handle registration failure", async () => {
-      const mockResponseObj = createMockResponse({
-        ok: false,
-        status: 400,
-        json: jest.fn().mockResolvedValue({ message: "User already exists" }),
-      });
-      mockFetch.mockResolvedValueOnce(mockResponseObj);
-
-      const result = await authService.register({
-        username: "existinguser",
-        email: "existing@example.com",
-        password: "password123",
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("User already exists");
     });
   });
 

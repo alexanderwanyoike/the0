@@ -63,6 +63,7 @@ describe("AuthCombinedGuard", () => {
       email: "test@example.com",
       isActive: true,
       isEmailVerified: false,
+      role: "user",
     };
 
     mockAuthService.validateToken.mockResolvedValue(Ok(mockUser));

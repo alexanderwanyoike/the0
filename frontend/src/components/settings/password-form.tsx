@@ -11,7 +11,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { useToast } from "@/hooks/use-toast";
 
 export function PasswordForm() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -62,7 +62,8 @@ export function PasswordForm() {
 
       toast({
         title: "Password updated",
-        description: "Your password has been updated successfully.",
+        description:
+          "Your password has been updated. Sign in again to continue.",
       });
 
       // Clear the form
@@ -71,6 +72,7 @@ export function PasswordForm() {
         newPassword: "",
         confirmPassword: "",
       });
+      await logout();
     } catch (error: any) {
       console.error("Error updating password:", error);
       toast({
@@ -84,6 +86,22 @@ export function PasswordForm() {
       setLoading(false);
     }
   };
+
+  if (user?.isConfiguredRootAdmin) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-start sm:items-center gap-3">
+          <Lock className="h-5 w-5 text-muted-foreground mt-0.5 sm:mt-0 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-medium">Change Password</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              This root admin password is managed by deployment configuration.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
