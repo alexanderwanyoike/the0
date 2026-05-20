@@ -7,7 +7,7 @@ order: 3
 
 # Root Admin Configuration
 
-the0 does not allow public signup and no longer has a browser setup flow. Every deployment must configure one root admin with:
+the0 does not allow public registration. Every deployment must configure one root admin with:
 
 - `THE0_ADMIN_EMAIL`
 - `THE0_ADMIN_PASSWORD`
@@ -27,19 +27,21 @@ The configured root admin's email and password cannot be changed through the UI 
 
 Additional admins and normal users are managed from `/settings/users` after login.
 
+If you are upgrading an existing deployment, follow the [v1.14.0 Root Admin Migration Guide](/migration-guides/v1-14-root-admin) before rolling out the new API.
+
 ## Behavior Matrix
 
 | State | Configuration | Startup behavior |
 |-------|---------------|------------------|
 | Fresh install, no config | none | API fails startup |
 | Fresh install, email/password config | `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD` | Creates the root admin automatically |
-| Upgrade, users exist, no admin | email/password for an existing user | Promotes and activates that user, then sets the password |
-| Upgrade, admin email only | `THE0_ADMIN_EMAIL` only | API fails startup |
-| Already-promoted admin with unknown password | same admin email plus a new password | Updates that admin password and invalidates old sessions |
-| Active admin already working | same email and same password | No mutation |
-| Active admin password rotated in config | same email and changed password | Updates password once and increments `session_version` |
+| Upgrade, users exist, configured email matches a user | email/password for that existing user | Promotes and activates that user, then sets the password |
+| Upgrade, users exist, configured email does not match a user | email/password for a new root admin | Creates a new active root admin |
+| Upgrade or startup with email only | `THE0_ADMIN_EMAIL` only | API fails startup |
+| Configured root admin already matches config | same email and same password | No mutation |
+| Configured root admin password rotated in config | same email and changed password | Updates password once and increments `session_version` |
 
-During upgrades, the API also preserves legacy `metadata.role = "admin"` by promoting those users before syncing the configured root admin.
+v1.14.0 introduces the enforced admin role column. During upgrades, the API also preserves the old seed-script `metadata.role = "admin"` marker by promoting those users before syncing the configured root admin.
 
 ## Docker Compose
 

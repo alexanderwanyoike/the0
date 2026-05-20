@@ -122,6 +122,14 @@ export default withMermaid(defineConfig({
           { text: 'Kubernetes', link: '/deployment/kubernetes' },
           { text: 'Admin Bootstrap', link: '/deployment/admin-bootstrap' },
         ]
+      },
+      {
+        text: 'Migration Guides',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/migration-guides/' },
+          { text: 'v1.14.0 Root Admin', link: '/migration-guides/v1-14-root-admin' },
+        ]
       }
     ],
 

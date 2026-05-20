@@ -47,7 +47,9 @@ See [Kubernetes Deployment](./kubernetes) for setup instructions.
 
 ### Root Admin
 
-Public signup is disabled and the browser setup flow has been removed. Every deployment must configure `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`; the API creates or syncs that root admin on startup. See [Root Admin Configuration](./admin-bootstrap).
+Public registration is disabled. Every deployment must configure `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`; the API creates or syncs that root admin on startup. See [Root Admin Configuration](./admin-bootstrap).
+
+Upgrading from an older deployment requires an explicit migration step. See the [v1.14.0 Root Admin Migration Guide](/migration-guides/v1-14-root-admin).
 
 ## When to Use Each Mode
 
