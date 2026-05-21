@@ -45,7 +45,7 @@ The simplest way to deploy on any Kubernetes cluster:
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-kubectl create namespace the0
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
@@ -101,7 +101,7 @@ cd k8s
 
 # Configure the root admin password secret once
 minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
-kubectl create namespace the0
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \

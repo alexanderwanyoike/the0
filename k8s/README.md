@@ -1,4 +1,4 @@
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/helm/the0/the0)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
 
 # the0 Kubernetes Deployment
 
@@ -8,11 +8,39 @@ This directory contains Helm charts and configuration for deploying the0 platfor
 
 ### Install from Helm Repository
 
+Create a values file with the deployment-managed root admin email and a
+Secret-backed password reference:
+
+```yaml
+# values.yaml
+the0Api:
+  env:
+    THE0_ADMIN_EMAIL: "admin@example.com"
+  extraEnv:
+    - name: THE0_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: the0-root-admin
+          key: password
+```
+
+Then install the chart:
+
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-helm install the0 the0/the0 --namespace the0 --create-namespace
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
+read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
+printf '%s' "$THE0_ADMIN_PASSWORD" \
+  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
+  | kubectl apply -f -
+unset THE0_ADMIN_PASSWORD
+helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
+
+The API fails startup if `THE0_ADMIN_EMAIL` or `THE0_ADMIN_PASSWORD` is
+missing. For production, use your normal secret workflow such as Sealed Secrets,
+External Secrets, or a protected Secret manifest.
 
 ### Minikube (Local Development)
 
@@ -141,7 +169,7 @@ Or if `make minikube-up` handles image building automatically, just run:
 
 ```bash
 minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
-kubectl create namespace the0
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
