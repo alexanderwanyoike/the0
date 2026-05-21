@@ -1,4 +1,4 @@
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/helm/the0/the0)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
 
 # the0 Kubernetes Deployment
 
@@ -8,11 +8,22 @@ This directory contains Helm charts and configuration for deploying the0 platfor
 
 ### Install from Helm Repository
 
+The chart is available from the public Helm repository:
+
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-helm install the0 the0/the0 --namespace the0 --create-namespace
 ```
+
+Do not install it into a production cluster without a real values file. the0
+needs operator-managed PostgreSQL, MongoDB, S3-compatible object storage, JWT
+signing configuration, and a deployment-managed root admin. The chart can run
+NATS in the cluster, or you can point it at an external NATS service. Use a
+Secret workflow such as Sealed Secrets or External Secrets.
+
+See [Kubernetes Deployment](../docs/deployment/kubernetes.md) for the full
+production guide and [Root Admin Configuration](../docs/deployment/admin-bootstrap.md)
+for the root admin behavior.
 
 ### Minikube (Local Development)
 
@@ -141,7 +152,7 @@ Or if `make minikube-up` handles image building automatically, just run:
 
 ```bash
 minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
-kubectl create namespace the0
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \

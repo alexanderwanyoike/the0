@@ -15,7 +15,7 @@
 [![C#](https://img.shields.io/badge/C%23-.NET%208-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![Scala](https://img.shields.io/badge/Scala-3-DC322F?logo=scala)](https://www.scala-lang.org/)
 [![Haskell](https://img.shields.io/badge/Haskell-GHC%209.6-5D4F85?logo=haskell)](https://www.haskell.org/)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/helm/the0/the0)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
 
 </div>
 
@@ -68,11 +68,18 @@ open http://localhost:9001  # MinIO Console (admin/the0password)
 
 ### Option 2: Kubernetes (Helm)
 
+Kubernetes is not a one-command install. A production deployment needs
+operator-managed backing services and secrets for PostgreSQL, MongoDB,
+S3-compatible object storage, JWT signing, and the deployment-managed root
+admin. The chart can run NATS in the cluster, or you can point it at an
+external NATS service.
+
+The Helm chart is published for production use, but prepare a values file and
+Secret workflow first:
+
 ```bash
-# Install from the Helm repository
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-helm install the0 the0/the0 --namespace the0 --create-namespace
 ```
 
 **Local development with Minikube:**
@@ -83,7 +90,8 @@ make minikube-up
 make setup-hosts
 ```
 
-See [k8s/README.md](k8s/README.md) for full Kubernetes deployment documentation.
+See [Kubernetes Deployment](docs/deployment/kubernetes.md) for the full guide,
+including the external services and root admin configuration the chart expects.
 
 ---
 
