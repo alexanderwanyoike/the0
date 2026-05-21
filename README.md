@@ -68,32 +68,16 @@ open http://localhost:9001  # MinIO Console (admin/the0password)
 
 ### Option 2: Kubernetes (Helm)
 
-Create `values.yaml` with the deployment-managed root admin email and a
-Secret-backed password reference:
+Kubernetes is not a one-command install. A production deployment needs backing
+services and secrets for PostgreSQL, MongoDB, NATS, S3-compatible object
+storage, JWT signing, and the deployment-managed root admin.
 
-```yaml
-the0Api:
-  env:
-    THE0_ADMIN_EMAIL: "admin@example.com"
-  extraEnv:
-    - name: THE0_ADMIN_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: the0-root-admin
-          key: password
-```
+The Helm chart is published for production use, but prepare a values file and
+Secret workflow first:
 
 ```bash
-# Install from the Helm repository
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
-read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
-printf '%s' "$THE0_ADMIN_PASSWORD" \
-  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
-  | kubectl apply -f -
-unset THE0_ADMIN_PASSWORD
-helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
 
 **Local development with Minikube:**
@@ -104,7 +88,8 @@ make minikube-up
 make setup-hosts
 ```
 
-See [k8s/README.md](k8s/README.md) for full Kubernetes deployment documentation.
+See [Kubernetes Deployment](docs/deployment/kubernetes.md) for the full guide,
+including the external services and root admin configuration the chart expects.
 
 ---
 

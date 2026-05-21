@@ -40,34 +40,121 @@ The runtime uses a **controller pattern** in Kubernetes mode: each bot becomes i
 
 ## Install from Helm Repository
 
-The simplest way to deploy on any Kubernetes cluster:
+The Helm repository gives you the chart, not a complete production
+environment. A real Kubernetes deployment must provide:
+
+- PostgreSQL for users, bots, settings, and application data
+- MongoDB for runtime desired state
+- NATS for runtime coordination and streaming
+- S3-compatible object storage for bot packages, logs, and backtests
+- JWT signing configuration
+- `THE0_ADMIN_EMAIL` and a Secret-backed `THE0_ADMIN_PASSWORD`
+
+Start by adding the chart repository:
 
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
+```
+
+Then prepare your backing services and values file before installing. For a
+small production deployment, the current reference shape is:
+
+- Hetzner Cloud or another small Kubernetes host
+- Neon PostgreSQL
+- MongoDB Atlas
+- Cloudflare R2
+- In-cluster NATS with persistence
+- Sealed Secrets or External Secrets for credentials
+
+Create the namespace and root admin password Secret:
+
+```bash
 kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
   | kubectl apply -f -
 unset THE0_ADMIN_PASSWORD
-helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
 
 Avoid passing root admin passwords with command-line literals; use stdin, a Secret manifest, Sealed Secrets, External Secrets, or your cluster's normal secret workflow.
 
-Your `values.yaml` must include the configured root admin email and reference the password Secret:
+Your `values.yaml` must include external service configuration, the configured
+root admin email, and a reference to the password Secret:
 
 ```yaml
+global:
+  imagePullPolicy: Always
+  existingSecret: "the0-secrets"
+
+postgresql:
+  enabled: false
+  external:
+    host: "your-neon-host.example.com"
+    port: 5432
+    database: "the0"
+    username: "the0"
+    sslmode: "require"
+
+mongodb:
+  enabled: false
+  external:
+    host: "your-atlas-cluster.mongodb.net"
+    port: 27017
+    database: "the0"
+
+minio:
+  enabled: false
+  external:
+    endpoint: "your-account-id.r2.cloudflarestorage.com"
+    port: 443
+    useSSL: true
+
+nats:
+  enabled: true
+
 the0Api:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/api
   env:
     THE0_ADMIN_EMAIL: "admin@example.com"
+    NODE_ENV: "production"
+    FRONTEND_URL: "https://the0.example.com"
+    API_BASE_URL: "https://api.the0.example.com"
   extraEnv:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:
         secretKeyRef:
           name: the0-root-admin
           key: password
+
+the0Frontend:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/frontend
+
+the0Docs:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/docs
+
+botController:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/runtime
+  runtimeImagePullPolicy: Always
+
+gc:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/runtime
+```
+
+The `global.existingSecret` Secret must contain the keys described in
+[Helm Configuration](#helm-configuration), including database URLs, object store
+keys, and `jwt-secret`.
+
+Install only after the values and Secrets exist:
+
+```bash
+helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
 
 This installs the latest chart version. The chart's `appVersion` determines the default image tags, so you don't need to specify tags manually.
