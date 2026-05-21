@@ -2,7 +2,7 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.0
+version: 0.9.1
 appVersion: "1.14.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
@@ -30,6 +30,8 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: changed
+      description: Clarify Helm install documentation for deployment-managed root admin credentials
     - kind: changed
       description: Replace public landing, signup, and setup flows with login-first app routing
     - kind: added

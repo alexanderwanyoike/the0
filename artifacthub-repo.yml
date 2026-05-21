@@ -1,4 +1,6 @@
-repositoryID: # Auto-populated after ArtifactHub registration
+# Add this after the repository is registered in Artifact Hub to enable the
+# Verified publisher badge. Artifact Hub exposes the ID on the repository card.
+# repositoryID: 00000000-0000-0000-0000-000000000000
 owners:
   - name: Alexander Wanyoike
     email: team@the0.com
