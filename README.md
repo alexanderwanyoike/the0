@@ -68,9 +68,11 @@ open http://localhost:9001  # MinIO Console (admin/the0password)
 
 ### Option 2: Kubernetes (Helm)
 
-Kubernetes is not a one-command install. A production deployment needs backing
-services and secrets for PostgreSQL, MongoDB, NATS, S3-compatible object
-storage, JWT signing, and the deployment-managed root admin.
+Kubernetes is not a one-command install. A production deployment needs
+operator-managed backing services and secrets for PostgreSQL, MongoDB,
+S3-compatible object storage, JWT signing, and the deployment-managed root
+admin. The chart can run NATS in the cluster, or you can point it at an
+external NATS service.
 
 The Helm chart is published for production use, but prepare a values file and
 Secret workflow first:

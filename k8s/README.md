@@ -16,8 +16,9 @@ helm repo update
 ```
 
 Do not install it into a production cluster without a real values file. the0
-needs PostgreSQL, MongoDB, NATS, S3-compatible object storage, JWT signing
-configuration, and a deployment-managed root admin. Use managed services and a
+needs operator-managed PostgreSQL, MongoDB, S3-compatible object storage, JWT
+signing configuration, and a deployment-managed root admin. The chart can run
+NATS in the cluster, or you can point it at an external NATS service. Use a
 Secret workflow such as Sealed Secrets or External Secrets.
 
 See [Kubernetes Deployment](../docs/deployment/kubernetes.md) for the full
