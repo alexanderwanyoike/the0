@@ -87,7 +87,7 @@ the0Api:
 # Install from the Helm repository
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-kubectl create namespace the0
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
