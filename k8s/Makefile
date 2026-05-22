@@ -53,6 +53,7 @@ minikube-up: check-minikube-deps ## Build, deploy and show service URLs (simplif
 	@echo "🚀 Deploying to minikube..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
+		$(if $(VALUES),-f "$(VALUES)") \
 		--namespace $(NAMESPACE) \
 		--set global.imagePullPolicy=IfNotPresent \
 		--set the0Api.image.tag=latest \
@@ -147,6 +148,7 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 	@echo "🚀 Deploying to minikube in controller mode..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
+		$(if $(VALUES),-f "$(VALUES)") \
 		--namespace $(NAMESPACE) \
 		--set global.imagePullPolicy=IfNotPresent \
 		--set the0Api.image.tag=latest \

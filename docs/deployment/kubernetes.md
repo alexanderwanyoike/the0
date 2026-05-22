@@ -36,38 +36,160 @@ The runtime uses a **controller pattern** in Kubernetes mode: each bot becomes i
 - 8+ CPU cores across nodes
 - 16GB+ RAM
 - 100GB+ disk for persistent volumes
-- Worker nodes with Docker socket access
+- Enough capacity to run the API, frontend, docs, runtime controller, and bot Pods
 
 ## Install from Helm Repository
 
-The simplest way to deploy on any Kubernetes cluster:
+The Helm repository gives you the chart, not a complete production
+environment. A real Kubernetes deployment must provide:
+
+- PostgreSQL for users, bots, settings, and application data
+- MongoDB for runtime desired state
+- NATS for runtime coordination and streaming
+- S3-compatible object storage for bot packages, logs, and backtests
+- JWT signing configuration
+- `THE0_ADMIN_EMAIL` and a Secret-backed `THE0_ADMIN_PASSWORD`
+
+Start by adding the chart repository:
 
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-kubectl create namespace the0
-read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
-printf '%s' "$THE0_ADMIN_PASSWORD" \
-  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
-  | kubectl apply -f -
-unset THE0_ADMIN_PASSWORD
-helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
 
-Avoid passing root admin passwords with command-line literals; use stdin, a Secret manifest, Sealed Secrets, External Secrets, or your cluster's normal secret workflow.
+Then prepare your backing services and values file before installing. The chart
+does not provision production-grade PostgreSQL, MongoDB, or object storage for
+you. Use the providers you trust, then pass their connection details to the
+chart through Kubernetes Secrets.
 
-Your `values.yaml` must include the configured root admin email and reference the password Secret:
+Create the namespace and credentials Secret. This example uses one Secret named
+`the0-secrets` for database, object storage, JWT, and root admin credentials.
+For production, create the same Secret through your normal secret workflow such
+as Sealed Secrets, External Secrets, or a protected Secret manifest.
+
+Use connection strings from your backing services. The expected formats are:
+
+```text
+postgresql://<user>:<password>@<postgres-host>:5432/<database>?sslmode=require
+mongodb://<user>:<password>@<mongo-host>:27017/<database>?authSource=admin
+```
+
+If your MongoDB provider gives you a `mongodb+srv://...` connection string, use
+that full string for `MONGO_URL`.
+
+```bash
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
+
+read -rsp "PostgreSQL DATABASE_URL: " DATABASE_URL; echo
+read -rsp "MongoDB connection URL: " MONGO_URL; echo
+read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
+read -rsp "JWT secret: " JWT_SECRET; echo
+read -rsp "Object storage access key: " S3_ACCESS_KEY; echo
+read -rsp "Object storage secret key: " S3_SECRET_KEY; echo
+
+kubectl -n the0 create secret generic the0-secrets \
+  --from-literal=database-url="$DATABASE_URL" \
+  --from-literal=mongo-url="$MONGO_URL" \
+  --from-literal=minio-access-key="$S3_ACCESS_KEY" \
+  --from-literal=minio-secret-key="$S3_SECRET_KEY" \
+  --from-literal=jwt-secret="$JWT_SECRET" \
+  --from-literal=admin-password="$THE0_ADMIN_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+unset DATABASE_URL
+unset MONGO_URL
+unset THE0_ADMIN_PASSWORD
+unset JWT_SECRET
+unset S3_ACCESS_KEY
+unset S3_SECRET_KEY
+```
+
+Avoid passing passwords with command-line literals in shell history. The command
+above prompts interactively for generated secrets, but production GitOps
+deployments should usually create `the0-secrets` from encrypted or external
+secret sources.
+
+Create `values.yaml`. This example assumes PostgreSQL, MongoDB, and object
+storage are external, while NATS runs in the cluster with persistence:
 
 ```yaml
+global:
+  imagePullPolicy: Always
+  existingSecret: "the0-secrets"
+
+postgresql:
+  enabled: false
+
+mongodb:
+  enabled: false
+
+minio:
+  enabled: false
+  external:
+    endpoint: "s3-compatible-endpoint.example.com"
+    port: 443
+    useSSL: true
+
+nats:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 5Gi
+
 the0Api:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/api
   env:
     THE0_ADMIN_EMAIL: "admin@example.com"
+    NODE_ENV: "production"
+    FRONTEND_URL: "https://the0.example.com"
+    API_BASE_URL: "https://api.the0.example.com"
   extraEnv:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:
         secretKeyRef:
-          name: the0-root-admin
-          key: password
+          name: the0-secrets
+          key: admin-password
+
+the0Frontend:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/frontend
+
+the0Docs:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/docs
+
+botController:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/runtime
+  runtimeImagePullPolicy: Always
+
+gc:
+  image:
+    repository: ghcr.io/alexanderwanyoike/the0/runtime
+```
+
+For this external-services configuration, `the0-secrets` must contain:
+
+| Key | Purpose |
+| --- | --- |
+| `database-url` | PostgreSQL connection string used by the API |
+| `mongo-url` | MongoDB connection string used by the runtime controller and GC |
+| `minio-access-key` | S3-compatible object storage access key |
+| `minio-secret-key` | S3-compatible object storage secret key |
+| `jwt-secret` | JWT signing secret shared by API and frontend |
+| `admin-password` | Password exposed to the API as `THE0_ADMIN_PASSWORD` |
+
+Your object storage endpoint must be S3-compatible. Create the buckets expected
+by your values before deploying, or keep the defaults from `k8s/values.yaml`:
+`custom-bots`, `bot-logs`, and `backtests`. Set `minio.external.endpoint` to
+the endpoint host only, without `https://`; `minio.external.port` and
+`minio.external.useSSL` provide the connection scheme details.
+
+Install only after the values and Secrets exist:
+
+```bash
+helm install the0 the0/the0 --namespace the0 -f values.yaml
 ```
 
 This installs the latest chart version. The chart's `appVersion` determines the default image tags, so you don't need to specify tags manually.
@@ -96,38 +218,105 @@ See [Root Admin Configuration](./admin-bootstrap) for the full fresh install, up
 
 For local development, minikube provides the simplest path to a running cluster:
 
+If you need a completely fresh local environment, delete the minikube profile
+first. Otherwise, persistent volumes from earlier runs may preserve database and
+object storage state:
+
+```bash
+minikube delete
+```
+
 ```bash
 cd k8s
 
-# Configure the root admin password secret once
-minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
-kubectl create namespace the0
+# Create local-only root admin values
+cat > minikube-values.local.yaml <<'YAML'
+the0Api:
+  env:
+    THE0_ADMIN_EMAIL: "admin@example.com"
+  extraEnv:
+    - name: THE0_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: the0-root-admin
+          key: password
+YAML
+
+# Create the root admin password Secret
 read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
+minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
   | kubectl apply -f -
 unset THE0_ADMIN_PASSWORD
 
-# Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml,
-# then start minikube, build images, and deploy
-make minikube-up
+# Build local images inside minikube's Docker daemon
+eval "$(minikube docker-env)"
+docker build -t the0-api:latest ../api
+docker build \
+  --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 \
+  --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30004 \
+  -t the0-frontend:latest ../frontend
+docker build -t the0-docs:latest ../docs
+docker build -t runtime:latest ../runtime
+
+# Deploy chart-managed PostgreSQL, MongoDB, NATS, and MinIO
+helm upgrade --install the0 . \
+  --namespace the0 \
+  -f minikube-values.local.yaml \
+  --set global.imagePullPolicy=IfNotPresent \
+  --set the0Api.image.tag=latest \
+  --set the0Api.imagePullPolicy=Never \
+  --set the0Frontend.image.tag=latest \
+  --set the0Frontend.imagePullPolicy=Never \
+  --set the0Docs.image.tag=latest \
+  --set the0Docs.imagePullPolicy=Never \
+  --set botController.image.tag=latest \
+  --set botController.runtimeImage=runtime:latest \
+  --set gc.image.repository=runtime \
+  --set gc.image.tag=latest \
+  --set gc.image.pullPolicy=Never \
+  --set minikube.enabled=true \
+  --set externalServices.enabled=true
+
+kubectl wait --for=condition=available deployment --all -n the0 --timeout=240s
+kubectl get pods -n the0
 ```
 
-The command performs these steps:
+These commands perform these steps:
 
-1. Checks prerequisites (minikube, docker, helm, kubectl)
-2. Starts minikube with appropriate resources
-3. Builds all Docker images in minikube's environment
-4. Deploys all services via Helm using `values.yaml`
-5. Shows service URLs
+1. Start minikube with appropriate resources
+2. Build all Docker images in minikube's Docker daemon
+3. Create the root admin password Secret
+4. Deploy all services with Helm using chart defaults plus `minikube-values.local.yaml`
+5. Wait for all deployments to become available
 
 After deployment, configure local DNS:
 
 ```bash
-make setup-hosts
+MINIKUBE_IP="$(minikube ip)"
+sudo tee -a /etc/hosts >/dev/null <<EOF
+$MINIKUBE_IP the0.local
+$MINIKUBE_IP api.the0.local
+$MINIKUBE_IP minio.the0.local
+$MINIKUBE_IP docs.the0.local
+EOF
 ```
 
 This adds entries to `/etc/hosts` for the `.local` domains.
+
+Verify the API and root admin login:
+
+```bash
+curl -fsS http://api.the0.local:30000/health
+curl -fsS http://api.the0.local:30000/health/ready
+
+curl -i \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"<password you entered>"}' \
+  http://api.the0.local:30000/auth/login
+```
 
 ### Minikube Endpoints
 
@@ -143,40 +332,46 @@ This adds entries to `/etc/hosts` for the `.local` domains.
 For production clusters, deploy with external infrastructure:
 
 ```bash
-cd k8s
-
-# Deploy with a values file (required)
-make deploy VALUES=examples/aws-production.yaml
-
-# Example values files are provided in k8s/examples/
+helm repo add the0 https://alexanderwanyoike.github.io/the0
+helm repo update
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install the0 the0/the0 --namespace the0 -f production-values.yaml
 ```
 
-The `deploy` target requires a `VALUES` file to prevent accidental production deployments with default settings. See `k8s/examples/` for AWS and GCP production configurations.
+Do not run production with the chart defaults. Prepare `production-values.yaml`
+and the referenced Secrets first.
 
 ### Using External Infrastructure
 
-In production, use managed services for databases and storage. Disable internal infrastructure in `values.yaml`:
+In production, you are responsible for providing PostgreSQL, MongoDB, and
+S3-compatible object storage. Disable the chart-managed development services in
+`values.yaml`:
 
 ```yaml
 postgresql:
   enabled: false
 mongodb:
   enabled: false
-nats:
-  enabled: false
 minio:
   enabled: false
+nats:
+  enabled: true
 ```
 
-Configure connection strings for external services:
+Put database connection strings, object storage credentials, and JWT signing
+material in the Secret named by `global.existingSecret`. Do not put these
+credentials directly in Helm values.
 
 ```yaml
-the0Api:
-  env:
-    DATABASE_URL: "postgresql://user:pass@your-rds-instance:5432/the0"
-    NATS_URLS: "nats://your-nats-cluster:4222"
-    MINIO_ENDPOINT: "your-s3-endpoint"
-    # ... other configuration
+global:
+  existingSecret: "the0-secrets"
+
+minio:
+  enabled: false
+  external:
+    endpoint: "s3-compatible-endpoint.example.com"
+    port: 443
+    useSSL: true
 ```
 
 Configure the root admin email and set the password from a Secret:
@@ -189,8 +384,8 @@ the0Api:
     - name: THE0_ADMIN_PASSWORD
       valueFrom:
         secretKeyRef:
-          name: the0-root-admin
-          key: password
+          name: the0-secrets
+          key: admin-password
 ```
 
 Do not put admin passwords in plaintext Helm values. `extraEnv` supports full Kubernetes `EnvVar` entries, including `secretKeyRef` values generated by Sealed Secrets. See [Root Admin Configuration](./admin-bootstrap) for fresh install, upgrade, password rotation, and last-admin protection.
@@ -208,7 +403,7 @@ global:
   existingSecret: ""      # Name of an existing K8s Secret with credentials
 ```
 
-Set `global.existingSecret` to the name of a pre-existing Kubernetes Secret containing your database passwords, MinIO keys, and JWT secret. When set, the chart skips creating its own Secret and uses yours instead.
+Set `global.existingSecret` to the name of a pre-existing Kubernetes Secret containing your database URLs, object storage keys, and JWT secret. When set, the chart skips creating its own Secret and uses yours instead.
 
 ### Infrastructure Services
 
@@ -313,32 +508,34 @@ ingress:
 
 ## Management Commands
 
-The Makefile provides commands for cluster management:
+Use `kubectl`, `helm`, and `minikube` directly while learning the deployment:
 
 ```bash
 # Check deployment status
-make status
+kubectl get deploy -n the0
+kubectl get pods -n the0
 
 # View service URLs
-make services
+kubectl get svc -n the0
+minikube service list
 
-# View logs from all services
-make logs
+# View logs
+kubectl logs -n the0 deploy/the0-api
+kubectl logs -n the0 deploy/the0-bot-controller
 
-# Pause minikube (preserves state)
-make minikube-pause
+# Pause or resume minikube
+minikube pause
+minikube unpause
 
-# Resume paused minikube
-make minikube-resume
+# Stop minikube but preserve state
+minikube stop
 
-# Stop minikube
-make minikube-stop
+# Remove the Helm release and namespace
+helm uninstall the0 -n the0
+kubectl delete namespace the0
 
-# Remove deployment, keep cluster
-make minikube-down
-
-# Full cleanup
-make clean
+# Full local cleanup
+minikube delete
 ```
 
 ## Scaling
@@ -397,7 +594,7 @@ Services communicate internally via Kubernetes DNS:
 
 **Minikube**: Uses NodePort services with fixed ports, accessed via `.local` domains after configuring `/etc/hosts`.
 
-**Production**: Use an Ingress controller (nginx, traefik, AWS ALB) for external access. Configure TLS termination at the Ingress level.
+**Production**: Use an Ingress controller or cloud load balancer for external access. Configure TLS termination at the Ingress level.
 
 ## Troubleshooting
 
@@ -447,7 +644,7 @@ kubectl logs <pod-name> -n the0 --previous  # Previous container logs
 
 | Feature | Docker Compose | Kubernetes |
 |---------|----------------|------------|
-| Setup command | `make up` | `make minikube-up` |
+| Setup command | `the0 local start` | `minikube` + `kubectl` + `helm` |
 | Bot model | Containers on single host | Pod per bot |
 | Recommended for | Single-host deployments | Multi-node, HA |
 | Infrastructure | Included | Included (configurable) |

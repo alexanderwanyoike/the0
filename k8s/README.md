@@ -1,4 +1,4 @@
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/helm/the0/the0)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
 
 # the0 Kubernetes Deployment
 
@@ -8,52 +8,44 @@ This directory contains Helm charts and configuration for deploying the0 platfor
 
 ### Install from Helm Repository
 
+The chart is available from the public Helm repository:
+
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
 helm repo update
-helm install the0 the0/the0 --namespace the0 --create-namespace
 ```
+
+Do not install it into a production cluster without a real values file. the0
+needs operator-managed PostgreSQL, MongoDB, S3-compatible object storage, JWT
+signing configuration, and a deployment-managed root admin. The chart can run
+NATS in the cluster, or you can point it at an external NATS service. Use a
+Secret workflow such as Sealed Secrets or External Secrets.
+
+See [Kubernetes Deployment](../docs/deployment/kubernetes.md) for the full
+production guide and [Root Admin Configuration](../docs/deployment/admin-bootstrap.md)
+for the root admin behavior.
 
 ### Minikube (Local Development)
 
-**Starting from absolute zero (minikube not running):**
+Use the docs guide for the tested minikube walkthrough. It uses direct
+`minikube`, `docker`, `kubectl`, and `helm` commands, and runs PostgreSQL,
+MongoDB, NATS, and MinIO inside minikube:
 
-```bash
-# Single command - starts minikube, builds images, deploys everything
-make minikube-up
-
-# Services will be available at:
-# - Frontend:    http://the0.local:30001
-# - API:         http://api.the0.local:30000  
-# - MinIO Console: http://minio.the0.local:30002
-
-# Set up local domain names (required once)
-make setup-hosts
-
-# That's it! No tunnel required.
-```
-
-**If you already have minikube running:**
-```bash
-# Just deploy (faster, skips minikube start)
-make minikube-up
-```
-
+[Kubernetes Minikube Quick Start](../docs/deployment/kubernetes.md#quick-start-with-minikube)
 
 ### Production Cluster
-```bash
-# Deploy with external infrastructure
-make deploy
 
-# Or deploy with included infrastructure for dev clusters
-make dev
-```
+Use the docs guide for production. You provide PostgreSQL, MongoDB, and
+S3-compatible object storage, then install the chart with your values and
+Secrets:
+
+[Kubernetes Production Deployment](../docs/deployment/kubernetes.md#production-deployment)
 
 ## Prerequisites
 
 ### Required Tools
 
-The `make minikube-up` command will check for these tools and provide install links if missing:
+The docs walkthrough uses these tools directly:
 
 - **Docker** - For building local images ([install guide](https://docs.docker.com/get-docker/))
 - **kubectl** - Kubernetes CLI tool ([install guide](https://kubernetes.io/docs/tasks/tools/))
@@ -65,18 +57,22 @@ The `make minikube-up` command will check for these tools and provide install li
 - 20GB+ disk space
 - Docker driver (recommended)
 
-### Runtime Images
+### Runtime Image
 
-Bot execution requires runtime images (`the0/python311`, `the0/nodejs20`, etc.) to be available. For minikube:
+Bot execution in Kubernetes mode uses the runtime image configured by
+`botController.runtimeImage`. The minikube guide builds that image directly
+inside minikube's Docker daemon:
 
 ```bash
-cd docker/images
-make minikube-build-all
+eval "$(minikube docker-env)"
+docker build -t runtime:latest ../runtime
 ```
 
-This builds the images directly into minikube's cache - no registry required.
+For production, publish the runtime image to a registry your cluster can pull
+from and set `botController.runtimeImage` or `botController.image.repository`
+in your values file.
 
-**Don't have these installed?** Run `make minikube-up` anyway - it will tell you exactly what to install!
+**Don't have these installed?** Install them first, then follow the docs guide.
 
 ## Project Structure
 
@@ -92,9 +88,9 @@ k8s/
 │   ├── minio.yaml          # MinIO S3-compatible storage
 │   ├── the0-api.yaml       # Main API service
 │   ├── the0-frontend.yaml  # Frontend web application
-│   ├── the0-analyzer.yaml  # Security analyzer service
-│   ├── bot-runner.yaml     # Bot execution service (master + workers)
-│   ├── bot-scheduler.yaml  # Bot scheduling service (master + workers)
+│   ├── the0-docs.yaml      # Documentation site
+│   ├── bot-controller.yaml # Kubernetes-native bot controller
+│   ├── gc-cronjob.yaml     # Bot garbage collection CronJob
 │   ├── external-services.yaml # NodePort services for .local access
 │   ├── ingress.yaml        # Ingress configuration (optional)
 │   └── _helpers.tpl        # Helm template helpers
@@ -112,9 +108,8 @@ k8s/
 **Application Services**:
 - **the0-api** - REST API server (NestJS/TypeScript) - port 3000
 - **the0-frontend** - Web interface (Next.js/React) - port 3000
-- **the0-analyzer** - Security analysis service (Python) - background service
-- **bot-runner** - Bot execution runtime (Go) - HTTP port 8080, gRPC port 50051
-- **bot-scheduler** - Bot scheduling service (Go) - HTTP port 8080, gRPC port 50053
+- **the0-docs** - Documentation site - port 8080
+- **bot-controller** - Kubernetes-native bot and schedule controller - port 9477
 
 **External Access** (via NodePort):
 - Frontend: NodePort 30001 → the0.local:30001
@@ -125,66 +120,29 @@ k8s/
 
 ### 1. Minikube (Recommended for Development)
 
-Deploy with NodePort services for easy access:
+Use the docs guide for a tested minikube walkthrough with chart-managed
+PostgreSQL, MongoDB, NATS, and MinIO:
 
-```bash
-# Build runtime images into minikube (required for bot execution)
-cd docker/images
-make minikube-build-all
-
-# Then deploy
-cd ../../k8s
-make minikube-up
-```
-
-Or if `make minikube-up` handles image building automatically, just run:
-
-```bash
-minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
-kubectl create namespace the0
-read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
-printf '%s' "$THE0_ADMIN_PASSWORD" \
-  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
-  | kubectl apply -f -
-unset THE0_ADMIN_PASSWORD
-# Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml first.
-make minikube-up
-```
+[Kubernetes Minikube Quick Start](../docs/deployment/kubernetes.md#quick-start-with-minikube)
 
 **Endpoints (via .local domains):**
 - Frontend: http://the0.local:30001
 - API: http://api.the0.local:30000
 - MinIO Console: http://minio.the0.local:30002
 
-**Note:** Runtime services (bot-runner, bot-scheduler) are internal services accessed via the API.
+**Note:** The runtime controller is an internal service accessed via the API.
 
-The command will:
-1. Check prerequisites (minikube, docker, helm, kubectl)
-2. Start minikube (if not running) with 4GB RAM and 4 CPUs
-3. Build all Docker images in minikube environment  
-4. Deploy all services with Helm using NodePort and values.yaml
-5. Show service URLs for access
+The docs walkthrough starts minikube, builds local images in minikube's Docker
+daemon, creates the root admin Secret, deploys the chart with Helm, and shows
+the checks to run with `kubectl`.
 
 **Required setup step:**
-```bash
-# Add .local domains to /etc/hosts (required once)
-make setup-hosts
-```
+Follow the `/etc/hosts` step in the [Kubernetes Minikube Quick Start](../docs/deployment/kubernetes.md#quick-start-with-minikube).
 
 ### 2. Production Cluster with External Infrastructure
 
-For production deployments where you provide your own databases and services:
-
-```bash
-# Deploy application services only
-make deploy
-
-# Configure external services in values.yaml:
-# postgresql.enabled: false
-# mongodb.enabled: false  
-# nats.enabled: false
-# minio.enabled: false
-```
+For production deployments where you provide your own databases and services,
+follow [Kubernetes Production Deployment](../docs/deployment/kubernetes.md#production-deployment).
 
 ### 3. Manual Helm Deployment
 
@@ -273,34 +231,38 @@ the0Api:
 
 ```bash
 # Check deployment status
-make status
+kubectl get deploy -n the0
+kubectl get pods -n the0
 
-# View logs from all services
-make logs
+# View service URLs
+kubectl get svc -n the0
+minikube service list
 
-# Show service URLs
-make services
+# View logs
+kubectl logs -n the0 deploy/the0-api
+kubectl logs -n the0 deploy/the0-bot-controller
 
 # Pause minikube (saves resources, preserves everything)
-make minikube-pause
+minikube pause
 
 # Resume paused minikube
-make minikube-resume
+minikube unpause
 
 # Stop minikube (saves more resources than pause)
-make minikube-stop
+minikube stop
 
 # Start stopped minikube
-make minikube-start
+minikube start --driver=docker
 
-# Remove deployment but keep minikube
-make minikube-down
+# Remove deployment but keep minikube and the namespace
+helm uninstall the0 -n the0
 
 # Remove deployment and namespace
-make clean
+helm uninstall the0 -n the0 --ignore-not-found
+kubectl delete namespace the0
 
-# Check prerequisites
-make check-deps
+# Full local cleanup
+minikube delete
 ```
 
 ## Networking
@@ -311,7 +273,8 @@ make check-deps
   - Frontend: the0.local:30001 (NodePort 30001)
   - API: api.the0.local:30000 (NodePort 30000) 
   - MinIO Console: minio.the0.local:30002 (NodePort 30002)
-- Requires `/etc/hosts` setup via `make setup-hosts`
+- Requires `/etc/hosts` entries for the minikube IP. Follow the
+  [docs step](../docs/deployment/kubernetes.md#quick-start-with-minikube).
 - No tunnels or port forwarding needed
 
 ### Production Clusters
@@ -346,10 +309,7 @@ sudo usermod -aG docker $USER
 
 **Network issues / Docker Hub timeouts:**
 ```bash
-# Wait for network to improve and try again
-make minikube-up
-
-# Or check your internet connection and Docker daemon
+# Check your internet connection and Docker daemon
 docker run hello-world
 ```
 
@@ -374,11 +334,14 @@ docker build -t the0-api:latest ../api
 
 **Can't access services (domains don't resolve):**
 ```bash
-# Run the hosts setup command
-make setup-hosts
-
-# Or manually add to /etc/hosts:
-echo "$(minikube ip) the0.local api.the0.local minio.the0.local" | sudo tee -a /etc/hosts
+# Manually add to /etc/hosts:
+MINIKUBE_IP="$(minikube ip)"
+sudo tee -a /etc/hosts >/dev/null <<EOF
+$MINIKUBE_IP the0.local
+$MINIKUBE_IP api.the0.local
+$MINIKUBE_IP minio.the0.local
+$MINIKUBE_IP docs.the0.local
+EOF
 ```
 
 **Pods stuck in ImagePullBackOff:**
@@ -408,60 +371,46 @@ kubectl run debug --image=busybox -it --rm --restart=Never -- sh
 
 ## Development Workflow
 
-1. **Local Development**: Run `make minikube-up` - automatically builds, deploys, and shows service URLs
-2. **Code Changes**: Run `make minikube-restart` to rebuild and redeploy
-3. **Testing**: Use `make logs`, `make status`, and `make services` to monitor
-4. **Production**: Use `make deploy` with external infrastructure
+1. **Local Development**: Follow the [minikube guide](../docs/deployment/kubernetes.md#quick-start-with-minikube) to build images, deploy with Helm, and verify with `kubectl`.
+2. **Code Changes**: Rebuild the changed image inside minikube's Docker daemon, then run `helm upgrade --install` with the same values and `--set` flags from the guide.
+3. **Testing**: Use `kubectl get pods`, `kubectl logs`, `kubectl get svc`, and the HTTP health checks from the docs.
+4. **Production**: Follow the [production guide](../docs/deployment/kubernetes.md#production-deployment) with external infrastructure and Secret-backed credentials.
 
 ## Kubernetes-Native Controller Mode
 
-The0 supports two runtime modes for bot execution:
+Kubernetes deployments use the runtime controller by default. The controller
+manages bots directly:
 
-### Docker Mode (Default)
-The traditional master-worker architecture using Docker-in-Docker:
-- Workers run bot containers inside Kubernetes pods
-- Requires privileged pods with Docker socket access
-- Good for development and testing
-
-```bash
-make minikube-up  # Uses Docker mode by default
-```
-
-### Controller Mode (Kubernetes-Native)
-A Kubernetes-native approach where the controller manages bots directly:
 - Each bot runs as its own Kubernetes Pod
 - Scheduled bots use native Kubernetes CronJobs
 - Kaniko builds bot images automatically (no Docker-in-Docker)
 - No privileged containers required
 - Better security and Kubernetes integration
 
-```bash
-make minikube-controller  # Deploys in controller mode
-```
+The chart enables controller mode through `botController.enabled`.
 
 ### Controller Mode Benefits
 
-| Feature | Docker Mode | Controller Mode |
-|---------|-------------|-----------------|
-| **Privileged Pods** | Required | Not required |
-| **Bot Isolation** | Docker containers | K8s Pods |
-| **Scheduled Bots** | Cron in worker | K8s CronJobs |
-| **Image Building** | Docker in worker | Kaniko Jobs |
-| **Resource Limits** | Docker limits | K8s ResourceQuota |
-| **Monitoring** | Docker logs | kubectl logs |
-| **Scaling** | Add workers | K8s handles it |
+| Feature | Kubernetes Controller |
+|---------|-----------------------|
+| **Bot Isolation** | K8s Pods |
+| **Scheduled Bots** | K8s CronJobs |
+| **Image Building** | Kaniko Jobs |
+| **Resource Limits** | K8s ResourceQuota |
+| **Monitoring** | `kubectl logs` |
+| **Scaling** | Kubernetes handles scheduling |
 
 ### Controller Mode Commands
 
+Deploy controller mode with the full `helm upgrade --install` command in the
+[minikube guide](../docs/deployment/kubernetes.md#quick-start-with-minikube).
+
 ```bash
-# Deploy in controller mode
-make minikube-controller
-
 # View controller logs
-make logs-controller
+kubectl logs -n the0 deploy/the0-bot-controller
 
-# Enable registry addon (for bot images)
-make enable-registry
+# Enable the minikube registry addon if your values use it
+minikube addons enable registry
 ```
 
 ### How Controller Mode Works
@@ -515,7 +464,7 @@ All deployment pod templates include a `checksum/chart-version` annotation that 
 
 | Feature | Docker Compose | Kubernetes |
 |---------|----------------|------------|
-| **Command** | `make up` | `make minikube-up` |
+| **Command** | `the0 local start` | `minikube` + `kubectl` + `helm` |
 | **Endpoints** | localhost:3000/3001 | the0.local:30001, api.the0.local:30000 |
 | **Setup** | CLI init + start | Root admin secret + values.yaml + hosts setup |
 | **Infrastructure** | Included | Included (configurable) |
@@ -527,4 +476,6 @@ All deployment pod templates include a `checksum/chart-version` annotation that 
 | **Resource limits** | Manual | Automatic |
 | **Restart policies** | Basic | Advanced |
 
-The Kubernetes deployment provides **similar developer experience** to docker-compose with predictable endpoints and single-command deployment, while adding production-ready features like automatic restarts, health checks, horizontal scaling, and deployment flexibility.
+The Kubernetes deployment provides predictable endpoints for local development,
+while adding production-ready features like automatic restarts, health checks,
+horizontal scaling, and deployment flexibility.
