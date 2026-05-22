@@ -218,21 +218,41 @@ See [Root Admin Configuration](./admin-bootstrap) for the full fresh install, up
 
 For local development, minikube provides the simplest path to a running cluster:
 
+If you need a completely fresh local environment, delete the minikube profile
+first. Otherwise, persistent volumes from earlier runs may preserve database and
+object storage state:
+
+```bash
+minikube delete
+```
+
 ```bash
 cd k8s
 
-# Configure the root admin password secret once
+# Create local-only root admin values
+cat > minikube-values.local.yaml <<'YAML'
+the0Api:
+  env:
+    THE0_ADMIN_EMAIL: "admin@example.com"
+  extraEnv:
+    - name: THE0_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: the0-root-admin
+          key: password
+YAML
+
+# Create the root admin password Secret
+read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
 kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
-read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
 printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
   | kubectl apply -f -
 unset THE0_ADMIN_PASSWORD
 
-# Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml,
-# then start minikube, build images, and deploy
-make minikube-up
+# Build local images and deploy chart-managed PostgreSQL, MongoDB, NATS, and MinIO
+make minikube-up VALUES=minikube-values.local.yaml
 ```
 
 The command performs these steps:
@@ -240,7 +260,7 @@ The command performs these steps:
 1. Checks prerequisites (minikube, docker, helm, kubectl)
 2. Starts minikube with appropriate resources
 3. Builds all Docker images in minikube's environment
-4. Deploys all services via Helm using `values.yaml`
+4. Deploys all services via Helm using chart defaults plus `minikube-values.local.yaml`
 5. Shows service URLs
 
 After deployment, configure local DNS:

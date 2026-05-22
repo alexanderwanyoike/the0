@@ -136,31 +136,10 @@ k8s/
 
 ### 1. Minikube (Recommended for Development)
 
-Deploy with NodePort services for easy access:
+Use the docs guide for a tested minikube walkthrough with chart-managed
+PostgreSQL, MongoDB, NATS, and MinIO:
 
-```bash
-# Build runtime images into minikube (required for bot execution)
-cd docker/images
-make minikube-build-all
-
-# Then deploy
-cd ../../k8s
-make minikube-up
-```
-
-Or if `make minikube-up` handles image building automatically, just run:
-
-```bash
-minikube start --memory=4096 --cpus=4 --disk-size=20g --driver=docker
-kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
-read -rsp "Root admin password: " THE0_ADMIN_PASSWORD; echo
-printf '%s' "$THE0_ADMIN_PASSWORD" \
-  | kubectl -n the0 create secret generic the0-root-admin --from-file=password=/dev/stdin --dry-run=client -o yaml \
-  | kubectl apply -f -
-unset THE0_ADMIN_PASSWORD
-# Set the0Api.env.THE0_ADMIN_EMAIL and the0Api.extraEnv in values.yaml first.
-make minikube-up
-```
+[Kubernetes Minikube Quick Start](../docs/deployment/kubernetes.md#quick-start-with-minikube)
 
 **Endpoints (via .local domains):**
 - Frontend: http://the0.local:30001
