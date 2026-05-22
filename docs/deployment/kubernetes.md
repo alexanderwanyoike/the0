@@ -36,7 +36,7 @@ The runtime uses a **controller pattern** in Kubernetes mode: each bot becomes i
 - 8+ CPU cores across nodes
 - 16GB+ RAM
 - 100GB+ disk for persistent volumes
-- Worker nodes with Docker socket access
+- Enough capacity to run the API, frontend, docs, runtime controller, and bot Pods
 
 ## Install from Helm Repository
 
@@ -251,25 +251,72 @@ printf '%s' "$THE0_ADMIN_PASSWORD" \
   | kubectl apply -f -
 unset THE0_ADMIN_PASSWORD
 
-# Build local images and deploy chart-managed PostgreSQL, MongoDB, NATS, and MinIO
-make minikube-up VALUES=minikube-values.local.yaml
+# Build local images inside minikube's Docker daemon
+eval "$(minikube docker-env)"
+docker build -t the0-api:latest ../api
+docker build \
+  --build-arg NEXT_PUBLIC_API_URL=http://api.the0.local:30000 \
+  --build-arg NEXT_PUBLIC_DOCS_URL=http://docs.the0.local:30004 \
+  -t the0-frontend:latest ../frontend
+docker build -t the0-docs:latest ../docs
+docker build -t runtime:latest ../runtime
+
+# Deploy chart-managed PostgreSQL, MongoDB, NATS, and MinIO
+helm upgrade --install the0 . \
+  --namespace the0 \
+  -f minikube-values.local.yaml \
+  --set global.imagePullPolicy=IfNotPresent \
+  --set the0Api.image.tag=latest \
+  --set the0Api.imagePullPolicy=Never \
+  --set the0Frontend.image.tag=latest \
+  --set the0Frontend.imagePullPolicy=Never \
+  --set the0Docs.image.tag=latest \
+  --set the0Docs.imagePullPolicy=Never \
+  --set botController.image.tag=latest \
+  --set botController.runtimeImage=runtime:latest \
+  --set gc.image.repository=runtime \
+  --set gc.image.tag=latest \
+  --set gc.image.pullPolicy=Never \
+  --set minikube.enabled=true \
+  --set externalServices.enabled=true
+
+kubectl wait --for=condition=available deployment --all -n the0 --timeout=240s
+kubectl get pods -n the0
 ```
 
-The command performs these steps:
+These commands perform these steps:
 
-1. Checks prerequisites (minikube, docker, helm, kubectl)
-2. Starts minikube with appropriate resources
-3. Builds all Docker images in minikube's environment
-4. Deploys all services via Helm using chart defaults plus `minikube-values.local.yaml`
-5. Shows service URLs
+1. Start minikube with appropriate resources
+2. Build all Docker images in minikube's Docker daemon
+3. Create the root admin password Secret
+4. Deploy all services with Helm using chart defaults plus `minikube-values.local.yaml`
+5. Wait for all deployments to become available
 
 After deployment, configure local DNS:
 
 ```bash
-make setup-hosts
+MINIKUBE_IP="$(minikube ip)"
+sudo tee -a /etc/hosts >/dev/null <<EOF
+$MINIKUBE_IP the0.local
+$MINIKUBE_IP api.the0.local
+$MINIKUBE_IP minio.the0.local
+$MINIKUBE_IP docs.the0.local
+EOF
 ```
 
 This adds entries to `/etc/hosts` for the `.local` domains.
+
+Verify the API and root admin login:
+
+```bash
+curl -fsS http://api.the0.local:30000/health
+curl -fsS http://api.the0.local:30000/health/ready
+
+curl -i \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"<password you entered>"}' \
+  http://api.the0.local:30000/auth/login
+```
 
 ### Minikube Endpoints
 
@@ -285,13 +332,14 @@ This adds entries to `/etc/hosts` for the `.local` domains.
 For production clusters, deploy with external infrastructure:
 
 ```bash
-cd k8s
-
-# Deploy with a values file (required)
-make deploy VALUES=/path/to/production-values.yaml
+helm repo add the0 https://alexanderwanyoike.github.io/the0
+helm repo update
+kubectl create namespace the0 --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install the0 the0/the0 --namespace the0 -f production-values.yaml
 ```
 
-The `deploy` target requires a `VALUES` file to prevent accidental production deployments with default settings.
+Do not run production with the chart defaults. Prepare `production-values.yaml`
+and the referenced Secrets first.
 
 ### Using External Infrastructure
 
@@ -460,32 +508,34 @@ ingress:
 
 ## Management Commands
 
-The Makefile provides commands for cluster management:
+Use `kubectl`, `helm`, and `minikube` directly while learning the deployment:
 
 ```bash
 # Check deployment status
-make status
+kubectl get deploy -n the0
+kubectl get pods -n the0
 
 # View service URLs
-make services
+kubectl get svc -n the0
+minikube service list
 
-# View logs from all services
-make logs
+# View logs
+kubectl logs -n the0 deploy/the0-api
+kubectl logs -n the0 deploy/the0-bot-controller
 
-# Pause minikube (preserves state)
-make minikube-pause
+# Pause or resume minikube
+minikube pause
+minikube unpause
 
-# Resume paused minikube
-make minikube-resume
+# Stop minikube but preserve state
+minikube stop
 
-# Stop minikube
-make minikube-stop
+# Remove the Helm release and namespace
+helm uninstall the0 -n the0
+kubectl delete namespace the0
 
-# Remove deployment, keep cluster
-make minikube-down
-
-# Full cleanup
-make clean
+# Full local cleanup
+minikube delete
 ```
 
 ## Scaling
@@ -594,7 +644,7 @@ kubectl logs <pod-name> -n the0 --previous  # Previous container logs
 
 | Feature | Docker Compose | Kubernetes |
 |---------|----------------|------------|
-| Setup command | `make up` | `make minikube-up` |
+| Setup command | `the0 local start` | `minikube` + `kubectl` + `helm` |
 | Bot model | Containers on single host | Pod per bot |
 | Recommended for | Single-host deployments | Multi-node, HA |
 | Infrastructure | Included | Included (configurable) |
