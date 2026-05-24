@@ -174,7 +174,7 @@ minikube-controller: check-minikube-deps ## Deploy in K8s-native controller mode
 	@echo "   - No Docker-in-Docker (no privileged pods)"
 	@echo "   - Each bot runs as its own K8s Pod"
 	@echo "   - Scheduled bots use K8s CronJobs"
-	@echo "   - Kaniko builds bot images automatically"
+	@echo "   - Bot Pods use the configured runtime image"
 	@echo ""
 	@echo "🌐 NodePort URLs (no tunnel required):"
 	@echo "   Frontend:  http://the0.local:30001"

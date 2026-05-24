@@ -383,7 +383,7 @@ manages bots directly:
 
 - Each bot runs as its own Kubernetes Pod
 - Scheduled bots use native Kubernetes CronJobs
-- Kaniko builds bot images automatically (no Docker-in-Docker)
+- Uses the configured runtime image for bot execution
 - No privileged containers required
 - Better security and Kubernetes integration
 
@@ -395,7 +395,7 @@ The chart enables controller mode through `botController.enabled`.
 |---------|-----------------------|
 | **Bot Isolation** | K8s Pods |
 | **Scheduled Bots** | K8s CronJobs |
-| **Image Building** | Kaniko Jobs |
+| **Runtime Image** | Configured runtime image |
 | **Resource Limits** | K8s ResourceQuota |
 | **Monitoring** | `kubectl logs` |
 | **Scaling** | Kubernetes handles scheduling |
@@ -417,7 +417,7 @@ minikube addons enable registry
 
 1. **Bot Controller** reads enabled bots from MongoDB
 2. For each bot, it ensures a matching Pod exists
-3. If the bot image doesn't exist, Kaniko builds it automatically
+3. Bot Pods use the configured runtime image
 4. Config changes trigger Pod recreation
 5. Deleted bots have their Pods removed
 
