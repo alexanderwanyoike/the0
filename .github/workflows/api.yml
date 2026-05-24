@@ -41,6 +41,10 @@ jobs:
       working-directory: ./api
       run: yarn test
 
+    - name: Verify build
+      working-directory: ./api
+      run: yarn build
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
