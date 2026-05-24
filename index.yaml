@@ -5,6 +5,58 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: changed
+          description: Raise the shared password policy minimum length to 8 characters
+        - kind: fixed
+          description: Validate REST log bot IDs before querying storage
+        - kind: added
+          description: Verify the API TypeScript build in CI before Docker image publishing
+        - kind: added
+          description: Add local getting-started, production checklist, and secret rotation deployment runbooks
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.14.1
+    created: "2026-05-24T10:57:30.262656633Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 83b3eea370ffba84a880b8293237f40123fd02e7f5a8f35d38646c0027b8a3ad
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.9.2/the0-0.9.2.tgz
+    version: 0.9.2
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: changed
           description: Clarify Helm install documentation for deployment-managed root admin credentials
         - kind: changed
           description: Replace public landing, signup, and setup flows with login-first app routing
@@ -1589,4 +1641,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-05-22T18:22:51.975202408Z"
+generated: "2026-05-24T10:57:30.262901742Z"
