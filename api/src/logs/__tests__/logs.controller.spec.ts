@@ -91,6 +91,18 @@ describe("LogsController", () => {
       ).rejects.toThrow("Invalid date format");
     });
 
+    it("should reject invalid bot IDs before querying logs", async () => {
+      await expect(
+        controller.getLogs(
+          "../../etc/passwd",
+          { limit: 100, offset: 0 } as any,
+          mockUser,
+        ),
+      ).rejects.toThrow("Invalid bot ID");
+
+      expect(mockLogsService.getLogs).not.toHaveBeenCalled();
+    });
+
     it("should pass type parameter to service", async () => {
       const mockLogs = [
         { date: "20260210", content: '{"_metric":true,"value":42}' },

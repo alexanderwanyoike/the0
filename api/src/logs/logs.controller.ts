@@ -69,6 +69,10 @@ export class LogsController {
     @Query() query: GetLogsQueryDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
+    if (!VALID_BOT_ID.test(botId)) {
+      throw new BadRequestException("Invalid bot ID");
+    }
+
     const result = await this.logsService.getLogs(botId, {
       date: query.date,
       dateRange: query.dateRange,
