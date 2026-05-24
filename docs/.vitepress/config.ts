@@ -118,9 +118,12 @@ export default withMermaid(defineConfig({
         collapsed: false,
         items: [
           { text: 'Overview', link: '/deployment/' },
+          { text: 'Local Getting Started', link: '/deployment/local-getting-started' },
           { text: 'Docker Compose', link: '/deployment/docker-compose' },
           { text: 'Kubernetes', link: '/deployment/kubernetes' },
           { text: 'Admin Bootstrap', link: '/deployment/admin-bootstrap' },
+          { text: 'Production Checklist', link: '/deployment/production-checklist' },
+          { text: 'Secret Rotation', link: '/deployment/secret-rotation' },
         ]
       },
       {

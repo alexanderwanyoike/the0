@@ -39,6 +39,8 @@ Docker Compose provides the simplest and most tested path to running the0. A sin
 
 See [Docker Compose Deployment](./docker-compose) for setup instructions.
 
+For the CLI-managed local workflow, see [Local Getting Started](./local-getting-started).
+
 ### Kubernetes (Multi-Node & HA)
 
 Kubernetes mode is for deployments that need multi-node scaling or high availability. The runtime controller manages bots as individual Pods, leveraging K8s for scheduling, health checks, and automatic restarts.
@@ -50,6 +52,11 @@ See [Kubernetes Deployment](./kubernetes) for setup instructions.
 Public registration is disabled. Every deployment must configure `THE0_ADMIN_EMAIL` and `THE0_ADMIN_PASSWORD`; the API creates or syncs that root admin on startup. See [Root Admin Configuration](./admin-bootstrap).
 
 Upgrading from an older deployment requires an explicit migration step. See the [v1.14.0 Root Admin Migration Guide](/migration-guides/v1-14-root-admin).
+
+## Operator Runbooks
+
+- [Production Checklist](./production-checklist) covers the preflight checks for credentials, TLS, storage, backups, runtime limits, and upgrades.
+- [Secret Rotation](./secret-rotation) covers local root admin rotation, Kubernetes Secret updates, Sealed Secrets, and external service credentials.
 
 ## When to Use Each Mode
 
