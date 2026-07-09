@@ -320,6 +320,10 @@ export { state };
 import * as query from './query';
 export { query };
 
+// Export FXMacroData API helper as namespace
+import * as fxmacrodata from './fxmacrodata';
+export { fxmacrodata };
+
 // Default export for convenience
 export default {
   parse,
@@ -331,4 +335,5 @@ export default {
   sleep,
   state,
   query,
+  fxmacrodata,
 };
