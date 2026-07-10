@@ -929,9 +929,9 @@ describe("useBotLogs", () => {
     }
   });
 
-  // ---- CodeRabbit findings (PR #301) ----
+  // ---- Pagination fetches in flight ----
 
-  describe("review findings", () => {
+  describe("pagination in flight", () => {
     it("exposes a dedicated loadingMore state while loadMore is in flight", async () => {
       let resolveSecond: (value: any) => void;
       let callCount = 0;
@@ -1044,115 +1044,6 @@ describe("useBotLogs", () => {
       } finally {
         jest.useRealTimers();
       }
-    });
-
-    it("starts fallback polling when the SSE stream ends cleanly", async () => {
-      jest.useFakeTimers();
-      try {
-        let stream: ReturnType<typeof createMockSSEStream> | null = null;
-        mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
-          if (typeof url === "string" && url.includes("/stream")) {
-            stream = createMockSSEStream(opts?.signal);
-            return { ok: true, body: stream.stream } as any;
-          }
-          return restResponse();
-        });
-
-        const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
-        );
-
-        await act(async () => {
-          await jest.advanceTimersByTimeAsync(100);
-        });
-        expect(result.current.connected).toBe(true);
-        const restCallsBefore = restCallCount();
-
-        // Server closes the stream cleanly (e.g. API restart, proxy recycle)
-        act(() => {
-          stream!.controller.close();
-        });
-        await act(async () => {
-          await jest.advanceTimersByTimeAsync(100);
-        });
-        expect(result.current.connected).toBe(false);
-
-        // Live updates are gone - polling must take over
-        await act(async () => {
-          await jest.advanceTimersByTimeAsync(11000);
-        });
-        expect(restCallCount()).toBeGreaterThanOrEqual(restCallsBefore + 2);
-      } finally {
-        jest.useRealTimers();
-      }
-    });
-
-    it("buffers SSE updates during a refresh replace fetch and merges them after", async () => {
-      let currentStream: ReturnType<typeof createMockSSEStream> | null = null;
-      const restResolvers: ((value: any) => void)[] = [];
-      let restCall = 0;
-      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
-        if (typeof url === "string" && url.includes("/stream")) {
-          currentStream = createMockSSEStream(opts?.signal);
-          return { ok: true, body: currentStream.stream } as any;
-        }
-        restCall++;
-        if (restCall === 1) {
-          return restResponse({
-            data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
-          });
-        }
-        return new Promise((resolve) => {
-          restResolvers.push(resolve);
-        });
-      });
-
-      const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", streaming: true }),
-      );
-
-      await waitFor(() => {
-        expect(result.current.connected).toBe(true);
-        expect(result.current.logs).toHaveLength(1);
-      });
-
-      // refresh() starts a replace fetch (which hangs) and reconnects SSE
-      act(() => {
-        result.current.refresh();
-      });
-
-      await waitFor(() => expect(result.current.connected).toBe(true));
-
-      // An update arrives while the replace fetch is still in flight
-      act(() => {
-        currentStream!.controller.push("update", {
-          content: "mid-refresh line",
-          timestamp: "2024-01-01T10:05:00Z",
-        });
-      });
-
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 20));
-      });
-
-      // The replace resolves WITHOUT the mid-refresh line (it raced the read)
-      await act(async () => {
-        restResolvers.forEach((resolve) =>
-          resolve(
-            restResponse({
-              data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
-            }),
-          ),
-        );
-      });
-
-      // The buffered update must survive the replace, not be overwritten
-      await waitFor(() => {
-        expect(result.current.logs.map((l) => l.content)).toEqual([
-          "history line",
-          "mid-refresh line",
-        ]);
-      });
     });
   });
 
@@ -1408,6 +1299,115 @@ describe("useBotLogs", () => {
         "overlap line",
         "fresh line",
       ]);
+    });
+
+    it("buffers SSE updates during a refresh replace fetch and merges them after", async () => {
+      let liveStream: ReturnType<typeof createMockSSEStream> | null = null;
+      const restResolvers: ((value: any) => void)[] = [];
+      let restCall = 0;
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          liveStream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: liveStream.stream } as any;
+        }
+        restCall++;
+        if (restCall === 1) {
+          return restResponse({
+            data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
+          });
+        }
+        return new Promise((resolve) => {
+          restResolvers.push(resolve);
+        });
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(1);
+      });
+
+      // refresh() starts a replace fetch (which hangs) and reconnects SSE
+      act(() => {
+        result.current.refresh();
+      });
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      // An update arrives while the replace fetch is still in flight
+      act(() => {
+        liveStream!.controller.push("update", {
+          content: "mid-refresh line",
+          timestamp: "2024-01-01T10:05:00Z",
+        });
+      });
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+
+      // The replace resolves WITHOUT the mid-refresh line (it raced the read)
+      await act(async () => {
+        restResolvers.forEach((resolve) =>
+          resolve(
+            restResponse({
+              data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
+            }),
+          ),
+        );
+      });
+
+      // The buffered update must survive the replace, not be overwritten
+      await waitFor(() => {
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "history line",
+          "mid-refresh line",
+        ]);
+      });
+    });
+
+    it("starts fallback polling when the SSE stream ends cleanly", async () => {
+      jest.useFakeTimers();
+      try {
+        let liveStream: ReturnType<typeof createMockSSEStream> | null = null;
+        mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+          if (typeof url === "string" && url.includes("/stream")) {
+            liveStream = createMockSSEStream(opts?.signal);
+            return { ok: true, body: liveStream.stream } as any;
+          }
+          return restResponse();
+        });
+
+        const { result } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        expect(result.current.connected).toBe(true);
+        const restCallsBefore = restCallCount();
+
+        // Server closes the stream cleanly (e.g. API restart, proxy recycle)
+        act(() => {
+          liveStream!.controller.close();
+        });
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        expect(result.current.connected).toBe(false);
+
+        // Live updates are gone - polling must take over
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(11000);
+        });
+        expect(restCallCount()).toBeGreaterThanOrEqual(restCallsBefore + 2);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it("falls back to polling when SSE fails with a network error", async () => {
