@@ -929,6 +929,233 @@ describe("useBotLogs", () => {
     }
   });
 
+  // ---- CodeRabbit findings (PR #301) ----
+
+  describe("review findings", () => {
+    it("exposes a dedicated loadingMore state while loadMore is in flight", async () => {
+      let resolveSecond: (value: any) => void;
+      let callCount = 0;
+      mockAuthFetch.mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return restResponse({
+            data: [{ date: "20240101", content: "Page 1" }],
+            total: 2,
+            hasMore: true,
+          });
+        }
+        return new Promise((resolve) => {
+          resolveSecond = resolve;
+        });
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+      );
+
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+      expect(result.current.loadingMore).toBe(false);
+
+      let loadMorePromise: Promise<void>;
+      act(() => {
+        loadMorePromise = result.current.loadMore();
+      });
+
+      await waitFor(() => expect(result.current.loadingMore).toBe(true));
+      // The full-replace loading flag must NOT flip for append fetches
+      expect(result.current.loading).toBe(false);
+
+      await act(async () => {
+        resolveSecond!(
+          restResponse({
+            data: [{ date: "20240101", content: "Page 2" }],
+            total: 2,
+            hasMore: false,
+          }),
+        );
+        await loadMorePromise!;
+      });
+
+      expect(result.current.loadingMore).toBe(false);
+      expect(result.current.logs).toHaveLength(2);
+    });
+
+    it("does not let a polling tick abort an in-flight loadMore", async () => {
+      jest.useFakeTimers();
+      try {
+        let slowResolve: (value: any) => void;
+        let callCount = 0;
+        mockAuthFetch.mockImplementation(async () => {
+          callCount++;
+          if (callCount === 1) {
+            return restResponse({
+              data: [{ date: "20240101", content: "Page 1" }],
+              total: 2,
+              hasMore: true,
+            });
+          }
+          return new Promise((resolve) => {
+            slowResolve = resolve;
+          });
+        });
+
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: 5000,
+            initialQuery: { limit: 1, offset: 0 },
+          }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(0);
+        });
+        await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+        // Start loadMore (its fetch hangs), then let the poll interval fire
+        let loadMorePromise: Promise<void>;
+        act(() => {
+          loadMorePromise = result.current.loadMore();
+        });
+        const callsBeforeTick = mockAuthFetch.mock.calls.length;
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(5000);
+        });
+
+        // The tick must be skipped while pagination is in flight - firing
+        // would abort the pending loadMore request with no user feedback.
+        expect(mockAuthFetch.mock.calls.length).toBe(callsBeforeTick);
+
+        await act(async () => {
+          slowResolve!(
+            restResponse({
+              data: [{ date: "20240101", content: "Page 2" }],
+              total: 2,
+              hasMore: false,
+            }),
+          );
+          await loadMorePromise!;
+        });
+
+        expect(result.current.logs).toHaveLength(2);
+        expect(result.current.logs[1].content).toBe("Page 2");
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("starts fallback polling when the SSE stream ends cleanly", async () => {
+      jest.useFakeTimers();
+      try {
+        let stream: ReturnType<typeof createMockSSEStream> | null = null;
+        mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+          if (typeof url === "string" && url.includes("/stream")) {
+            stream = createMockSSEStream(opts?.signal);
+            return { ok: true, body: stream.stream } as any;
+          }
+          return restResponse();
+        });
+
+        const { result } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        expect(result.current.connected).toBe(true);
+        const restCallsBefore = restCallCount();
+
+        // Server closes the stream cleanly (e.g. API restart, proxy recycle)
+        act(() => {
+          stream!.controller.close();
+        });
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        expect(result.current.connected).toBe(false);
+
+        // Live updates are gone - polling must take over
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(11000);
+        });
+        expect(restCallCount()).toBeGreaterThanOrEqual(restCallsBefore + 2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("buffers SSE updates during a refresh replace fetch and merges them after", async () => {
+      let currentStream: ReturnType<typeof createMockSSEStream> | null = null;
+      const restResolvers: ((value: any) => void)[] = [];
+      let restCall = 0;
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          currentStream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: currentStream.stream } as any;
+        }
+        restCall++;
+        if (restCall === 1) {
+          return restResponse({
+            data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
+          });
+        }
+        return new Promise((resolve) => {
+          restResolvers.push(resolve);
+        });
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(1);
+      });
+
+      // refresh() starts a replace fetch (which hangs) and reconnects SSE
+      act(() => {
+        result.current.refresh();
+      });
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      // An update arrives while the replace fetch is still in flight
+      act(() => {
+        currentStream!.controller.push("update", {
+          content: "mid-refresh line",
+          timestamp: "2024-01-01T10:05:00Z",
+        });
+      });
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+
+      // The replace resolves WITHOUT the mid-refresh line (it raced the read)
+      await act(async () => {
+        restResolvers.forEach((resolve) =>
+          resolve(
+            restResponse({
+              data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
+            }),
+          ),
+        );
+      });
+
+      // The buffered update must survive the replace, not be overwritten
+      await waitFor(() => {
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "history line",
+          "mid-refresh line",
+        ]);
+      });
+    });
+  });
+
   // ---- Abort correctness (REST mode) ----
 
   describe("abort correctness", () => {

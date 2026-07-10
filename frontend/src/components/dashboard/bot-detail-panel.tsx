@@ -450,7 +450,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           loadEarlierLogs={loadEarlierLogs}
           hasMore={hasMoreLogs}
           loadMore={loadMoreLogs}
-          loadingMore={hasMoreLogs ? logsLoading : undefined}
+          loadingMore={logsHook.loadingMore}
           isUpdatingEnabled={isUpdatingEnabled}
           isDeleting={isDeleting}
           onToggleEnabled={handleToggleEnabled}
@@ -613,7 +613,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 onLoadEarlier={loadEarlierLogs}
                 hasMore={hasMoreLogs}
                 loadMore={loadMoreLogs}
-                loadingMore={hasMoreLogs ? logsLoading : undefined}
+                loadingMore={logsHook.loadingMore}
                 sort={sortOrder}
                 onSortChange={(s) => { setSortOrder(s); logsHook.updateQuery({ sort: s }); }}
                 className="h-full"

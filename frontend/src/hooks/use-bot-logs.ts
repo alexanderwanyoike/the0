@@ -65,6 +65,7 @@ export interface UseBotLogsReturn {
   lastUpdate: Date | null;
   hasEarlierLogs: boolean;
   loadingEarlier: boolean;
+  loadingMore: boolean;
   refresh: () => void;
   loadMore: () => Promise<void>;
   loadEarlierLogs: () => Promise<void>;
@@ -108,6 +109,7 @@ export const useBotLogs = ({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   // Bumped by refresh() to force an SSE reconnect in live mode
   const [sseNonce, setSseNonce] = useState(0);
 
@@ -121,6 +123,7 @@ export const useBotLogs = ({
   // Skip polling overwrites while the user has explicitly paginated
   const paginatedRef = useRef(false);
   const loadingMoreRef = useRef(false);
+  const loadingEarlierRef = useRef(false);
   // Live mode: SSE updates arriving before the REST history resolves are
   // buffered here, then merged (deduped) once history lands.
   const historyLoadedRef = useRef(false);
@@ -154,10 +157,32 @@ export const useBotLogs = ({
     stopPolling();
     if (refreshIntervalRef.current > 0) {
       pollingRef.current = setInterval(() => {
-        if (!paginatedRef.current) fetchLogsRef.current();
+        // Skip the tick while the user has paginated or a pagination fetch
+        // is in flight - fetchLogs aborts the previous request, so firing
+        // here would silently cancel their load-more/load-earlier click.
+        if (
+          !paginatedRef.current &&
+          !loadingMoreRef.current &&
+          !loadingEarlierRef.current
+        ) {
+          fetchLogsRef.current();
+        }
       }, refreshIntervalRef.current);
     }
   }, [stopPolling]);
+
+  // -- Pending live updates (SSE lines buffered while history is in flight) --
+
+  const flushPendingUpdates = useCallback(() => {
+    if (pendingUpdatesRef.current.length === 0) return;
+    const pending = pendingUpdatesRef.current;
+    pendingUpdatesRef.current = [];
+    setLogs((prev) => {
+      const existing = new Set(prev.map(entryKey));
+      const fresh = pending.filter((l) => !existing.has(entryKey(l)));
+      return [...prev, ...fresh].slice(-MAX_LOG_ENTRIES);
+    });
+  }, []);
 
   // -- REST fetch (history, filters, pagination, polling) --
 
@@ -171,6 +196,12 @@ export const useBotLogs = ({
       restAbortRef.current?.abort();
       const controller = new AbortController();
       restAbortRef.current = controller;
+
+      // Buffer live updates while a replace fetch is in flight: an SSE line
+      // that arrives after the server snapshots the response would otherwise
+      // be appended and then overwritten when the fetch resolves.
+      const wasHistoryLoaded = historyLoadedRef.current;
+      if (!merge) historyLoadedRef.current = false;
 
       try {
         if (!merge) setLoading(true);
@@ -235,17 +266,10 @@ export const useBotLogs = ({
         } else {
           historyLoadedRef.current = true;
           earlierOffsetRef.current = queryParams.limit || 100;
-          let next = expanded.slice(-MAX_LOG_ENTRIES);
-          // Merge in any live updates that arrived while history was in flight
-          if (pendingUpdatesRef.current.length > 0) {
-            const existing = new Set(next.map(entryKey));
-            const fresh = pendingUpdatesRef.current.filter(
-              (l) => !existing.has(entryKey(l)),
-            );
-            pendingUpdatesRef.current = [];
-            next = [...next, ...fresh].slice(-MAX_LOG_ENTRIES);
-          }
-          setLogs(next);
+          setLogs(expanded.slice(-MAX_LOG_ENTRIES));
+          // Merge in any live updates that arrived while the fetch was in
+          // flight (React applies the updater after the set above).
+          flushPendingUpdates();
           if (live) {
             setHasEarlierLogs(result.hasMore);
             setHasMore(false);
@@ -262,8 +286,19 @@ export const useBotLogs = ({
         // Intentional aborts (unmount, bot switch, filter change) are silent.
         // Check signal.aborted first: browsers may reject an aborted request
         // with TypeError("Failed to fetch") rather than AbortError.
+        // historyLoadedRef is deliberately NOT restored on abort: whatever
+        // superseded this fetch (a newer replace, or an unmount reset) now
+        // owns that state.
         if (controller.signal.aborted || err?.name === "AbortError") {
           return false;
+        }
+
+        if (!merge) {
+          // A genuine failure means no newer fetch superseded us (it would
+          // have aborted this one), so restore buffering state and release
+          // any updates captured while the fetch was in flight.
+          historyLoadedRef.current = wasHistoryLoaded;
+          if (wasHistoryLoaded) flushPendingUpdates();
         }
 
         const errorMessage = err?.message || "Failed to fetch logs";
@@ -283,7 +318,7 @@ export const useBotLogs = ({
         }
       }
     },
-    [botId, query, user, toast],
+    [botId, query, user, toast, flushPendingUpdates],
   );
   fetchLogsRef.current = fetchLogs;
 
@@ -422,8 +457,13 @@ export const useBotLogs = ({
           }
         }
 
-        // Stream ended cleanly (server closed it, e.g. access denied)
+        // Stream ended cleanly (server restart, proxy recycle, access
+        // denied). Live updates are gone either way, so unless this was our
+        // own teardown, fall back to polling to keep data flowing.
         setConnected(false);
+        if (!controller.signal.aborted) {
+          startPolling();
+        }
       })
       .catch((err) => {
         // Intentional teardown (unmount, filter change, refresh) must not
@@ -490,6 +530,7 @@ export const useBotLogs = ({
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore) return;
     loadingMoreRef.current = true;
+    setLoadingMore(true);
 
     const nextQuery = {
       ...query,
@@ -504,18 +545,25 @@ export const useBotLogs = ({
       }
     } finally {
       loadingMoreRef.current = false;
+      setLoadingMore(false);
     }
   }, [fetchLogs, hasMore, query]);
 
   const loadEarlierLogs = useCallback(async () => {
     if (!botId || !user || loadingEarlier) return;
+    loadingEarlierRef.current = true;
     setLoadingEarlier(true);
 
-    const limit = query.limit || 100;
-    const offset = earlierOffsetRef.current || limit;
-    const ok = await fetchLogs({ ...query, offset }, "prepend");
-    if (ok) {
-      earlierOffsetRef.current = offset + limit;
+    try {
+      const limit = query.limit || 100;
+      const offset = earlierOffsetRef.current || limit;
+      const ok = await fetchLogs({ ...query, offset }, "prepend");
+      if (ok) {
+        earlierOffsetRef.current = offset + limit;
+      }
+    } finally {
+      loadingEarlierRef.current = false;
+      setLoadingEarlier(false);
     }
   }, [botId, user, loadingEarlier, fetchLogs, query]);
 
@@ -550,6 +598,7 @@ export const useBotLogs = ({
     lastUpdate,
     hasEarlierLogs,
     loadingEarlier,
+    loadingMore,
     refresh,
     loadMore,
     loadEarlierLogs,
