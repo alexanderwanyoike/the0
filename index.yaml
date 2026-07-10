@@ -4,6 +4,62 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: added
+          description: Stream custom dashboard metrics live over SSE instead of 30s polling
+        - kind: changed
+          description: Unify frontend bot log hooks into one REST-history plus SSE-updates implementation
+        - kind: fixed
+          description: Stop intentional request aborts surfacing as Failed to fetch errors and leaking polling intervals
+        - kind: fixed
+          description: Fall back to polling when the SSE log stream closes so live views recover from API restarts
+        - kind: fixed
+          description: Pin npm to v10 in the runtime image to unbreak source builds on Node 20
+        - kind: changed
+          description: Remove outdated Kaniko references from the Kubernetes docs
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.14.2
+    created: "2026-07-10T09:12:09.246045118Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 187d5843ff16c2e51ab10b6c013f81a8618df64684cb1b1a4b80d49cac98a164
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.9.3/the0-0.9.3.tgz
+    version: 0.9.3
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: changed
           description: Raise the shared password policy minimum length to 8 characters
         - kind: fixed
@@ -1641,4 +1697,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-05-24T10:57:30.262901742Z"
+generated: "2026-07-10T09:12:09.246376467Z"
