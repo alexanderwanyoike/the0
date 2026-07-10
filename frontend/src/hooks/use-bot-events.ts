@@ -12,6 +12,8 @@ import * as eventUtils from "@/lib/events/event-utils";
 
 interface UseBotEventsOptions {
   botId: string;
+  /** Stream events live via SSE (realtime bots) instead of polling */
+  streaming?: boolean;
   autoRefresh?: boolean;
   refreshInterval?: number;
   dateRange?: { start: string; end: string };
@@ -78,6 +80,7 @@ interface UseBotEventsReturn {
  */
 export function useBotEvents({
   botId,
+  streaming = false,
   autoRefresh = false,
   refreshInterval = 30000,
   dateRange,
@@ -94,6 +97,9 @@ export function useBotEvents({
       }
     : { limit: 100, offset: 0, type: "metrics" as const };
 
+  // With streaming, metric history still loads via REST (type=metrics) and
+  // new lines append live over SSE; non-metric lines are filtered out by
+  // parseEvents below. With a dateRange active the hook stays REST-only.
   const {
     logs: rawLogs,
     loading,
@@ -104,6 +110,7 @@ export function useBotEvents({
     exportLogs,
   } = useBotLogs({
     botId,
+    streaming,
     autoRefresh,
     refreshInterval,
     initialQuery,

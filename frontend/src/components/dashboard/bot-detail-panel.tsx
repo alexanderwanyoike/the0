@@ -35,7 +35,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBotLogs } from "@/hooks/use-bot-logs";
-import { useBotLogsStream } from "@/hooks/use-bot-logs-stream";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
 import { shouldUseLogStreaming } from "@/lib/bot-utils";
@@ -108,28 +107,25 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
     }
   }, [useStreaming, bot]);
 
+  // While bot is null the hook stays inert; once the bot loads, botId and
+  // streaming resolve in the same render, so the hook mounts its transport
+  // exactly once (no polling-then-streaming flip).
   const hookBotId = bot !== null ? botId : "";
 
-  const streamHook = useBotLogsStream({
-    botId: useStreaming ? hookBotId : "",
+  const logsHook = useBotLogs({
+    botId: hookBotId,
+    streaming: useStreaming,
+    autoRefresh: !useStreaming && refreshInterval > 0,
     refreshInterval,
   });
-
-  const pollingHook = useBotLogs({
-    botId: useStreaming ? "" : hookBotId,
-    autoRefresh: !useStreaming && bot !== null && refreshInterval > 0,
-    refreshInterval,
-  });
-
-  const activeHook = useStreaming ? streamHook : pollingHook;
 
   const handleIntervalChange = (val: IntervalValue) => {
     setInterval_(val);
     if (val.type === "live") {
       // Clear date filter so SSE streams all logs
-      activeHook.setDateFilter(null);
+      logsHook.setDateFilter(null);
     } else {
-      activeHook.setDateRangeFilter(val.start, val.end);
+      logsHook.setDateRangeFilter(val.start, val.end);
     }
   };
 
@@ -140,22 +136,17 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
     setDateFilter,
     setDateRangeFilter,
     exportLogs,
-  } = activeHook;
+  } = logsHook;
 
-  const connected = useStreaming ? streamHook.connected : undefined;
-  const lastUpdate = useStreaming ? streamHook.lastUpdate : undefined;
-  const hasEarlierLogs = useStreaming ? streamHook.hasEarlierLogs : undefined;
-  const loadingEarlier = useStreaming ? streamHook.loadingEarlier : undefined;
-  const loadEarlierLogs = useStreaming ? streamHook.loadEarlierLogs : undefined;
+  const connected = useStreaming ? logsHook.connected : undefined;
+  const lastUpdate = useStreaming ? logsHook.lastUpdate : undefined;
+  const hasEarlierLogs = useStreaming ? logsHook.hasEarlierLogs : undefined;
+  const loadingEarlier = useStreaming ? logsHook.loadingEarlier : undefined;
+  const loadEarlierLogs = useStreaming ? logsHook.loadEarlierLogs : undefined;
 
-  // Pagination: available for REST polling and for stream hook's REST mode
-  // (when a realtime bot is viewing a date range)
-  const hasMoreLogs = useStreaming
-    ? streamHook.hasMore || undefined
-    : pollingHook.hasMore || undefined;
-  const loadMoreLogs = useStreaming
-    ? streamHook.loadMore
-    : pollingHook.loadMore;
+  // Pagination applies to REST results (scheduled bots or date-filtered views)
+  const hasMoreLogs = logsHook.hasMore || undefined;
+  const loadMoreLogs = logsHook.hasMore ? logsHook.loadMore : undefined;
 
   useEffect(() => {
     const fetchBot = async () => {
@@ -472,7 +463,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           refreshInterval={refreshInterval}
           onRefreshIntervalChange={setRefreshInterval}
           sort={sortOrder}
-          onSortChange={(s) => { setSortOrder(s); activeHook.updateQuery({ sort: s }); }}
+          onSortChange={(s) => { setSortOrder(s); logsHook.updateQuery({ sort: s }); }}
         />
         {cliUpdateModal}
       </>
@@ -582,6 +573,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 customBotId={customBotId}
                 version={bot.config.version}
                 dateRange={interval.type === "range" ? { start: interval.start, end: interval.end } : undefined}
+                streaming={useStreaming}
                 refreshInterval={refreshInterval}
                 className=""
               />
@@ -623,7 +615,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 loadMore={loadMoreLogs}
                 loadingMore={hasMoreLogs ? logsLoading : undefined}
                 sort={sortOrder}
-                onSortChange={(s) => { setSortOrder(s); activeHook.updateQuery({ sort: s }); }}
+                onSortChange={(s) => { setSortOrder(s); logsHook.updateQuery({ sort: s }); }}
                 className="h-full"
                 compact
               />

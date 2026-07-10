@@ -3,6 +3,7 @@ import { useBotLogs } from "../use-bot-logs";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-fetch";
+import { validateSSEAuth } from "@/lib/sse/sse-auth";
 
 // Mock dependencies
 jest.mock("@/contexts/auth-context", () => ({
@@ -17,9 +18,92 @@ jest.mock("@/lib/auth-fetch", () => ({
   authFetch: jest.fn(),
 }));
 
+jest.mock("@/lib/sse/sse-auth", () => ({
+  validateSSEAuth: jest.fn(),
+}));
+
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockUseToast = useToast as jest.MockedFunction<typeof useToast>;
 const mockAuthFetch = authFetch as jest.MockedFunction<typeof authFetch>;
+const mockValidateSSEAuth = validateSSEAuth as jest.MockedFunction<
+  typeof validateSSEAuth
+>;
+
+// ---- ReadableStream-based SSE mock ----
+
+interface MockSSEStreamController {
+  push: (eventType: string, data: any) => void;
+  close: () => void;
+}
+
+function createMockSSEStream(signal?: AbortSignal): {
+  stream: ReadableStream<Uint8Array>;
+  controller: MockSSEStreamController;
+} {
+  const encoder = new TextEncoder();
+  let streamController: ReadableStreamDefaultController<Uint8Array>;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      streamController = controller;
+      // Mimic real browser behavior: aborting a fetch whose body is being
+      // read rejects the pending read with a TypeError, NOT an AbortError.
+      signal?.addEventListener("abort", () => {
+        try {
+          controller.error(new TypeError("Failed to fetch"));
+        } catch {
+          // Already closed/errored
+        }
+      });
+    },
+  });
+
+  return {
+    stream,
+    controller: {
+      push(eventType: string, data: any) {
+        const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+        streamController.enqueue(encoder.encode(payload));
+      },
+      close() {
+        try {
+          streamController.close();
+        } catch {
+          // Already closed
+        }
+      },
+    },
+  };
+}
+
+function restResponse({
+  data = [],
+  total = data.length,
+  hasMore = false,
+}: {
+  data?: { date: string; content: string; timestamp?: string }[];
+  total?: number;
+  hasMore?: boolean;
+} = {}) {
+  return {
+    ok: true,
+    json: async () => ({ data, total, hasMore }),
+  } as any;
+}
+
+/** Count REST (non-stream) authFetch calls made so far */
+function restCallCount() {
+  return mockAuthFetch.mock.calls.filter(
+    (call) => typeof call[0] === "string" && !call[0].includes("/stream"),
+  ).length;
+}
+
+/** Count SSE stream connections made so far */
+function streamCallCount() {
+  return mockAuthFetch.mock.calls.filter(
+    (call) => typeof call[0] === "string" && call[0].includes("/stream"),
+  ).length;
+}
 
 describe("useBotLogs", () => {
   const mockToast = jest.fn();
@@ -38,6 +122,10 @@ describe("useBotLogs", () => {
       toasts: [],
       dismiss: jest.fn(),
     });
+    mockValidateSSEAuth.mockReturnValue({
+      success: true,
+      token: "test-token",
+    } as any);
   });
 
   it("should return loading state initially", async () => {
@@ -839,5 +927,629 @@ describe("useBotLogs", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  // ---- Abort correctness (REST mode) ----
+
+  describe("abort correctness", () => {
+    it("treats an AbortError rejection as silent", async () => {
+      mockAuthFetch.mockImplementation(
+        (_url: any, opts?: any) =>
+          new Promise((_, reject) => {
+            opts?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }) as any,
+      );
+
+      const { result, unmount } = renderHook(() =>
+        useBotLogs({ botId: "bot-1" }),
+      );
+
+      await waitFor(() => expect(mockAuthFetch).toHaveBeenCalled());
+      unmount();
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(result.current.error).toBeNull();
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it("treats a TypeError rejection from an aborted request as silent (browser abort quirk)", async () => {
+      // Some browsers reject an aborted fetch with TypeError("Failed to fetch")
+      // instead of AbortError. The hook must check signal.aborted, not the
+      // error name, or intentional teardowns surface as user-facing errors.
+      mockAuthFetch.mockImplementation(
+        (_url: any, opts?: any) =>
+          new Promise((_, reject) => {
+            opts?.signal?.addEventListener("abort", () =>
+              reject(new TypeError("Failed to fetch")),
+            );
+          }) as any,
+      );
+
+      const { result, unmount } = renderHook(() =>
+        useBotLogs({ botId: "bot-1" }),
+      );
+
+      await waitFor(() => expect(mockAuthFetch).toHaveBeenCalled());
+      unmount();
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      expect(result.current.error).toBeNull();
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it("stops polling after unmount (no leaked interval)", async () => {
+      jest.useFakeTimers();
+      try {
+        mockAuthFetch.mockResolvedValue(restResponse());
+
+        const { unmount } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", autoRefresh: true, refreshInterval: 5000 }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        unmount();
+        const callsAtUnmount = restCallCount();
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(60000);
+        });
+        expect(restCallCount()).toBe(callsAtUnmount);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  // ---- Streaming mode ----
+
+  describe("streaming mode", () => {
+    let currentMockStream: {
+      stream: ReadableStream<Uint8Array>;
+      controller: MockSSEStreamController;
+    } | null = null;
+
+    function setupStreamingMocks(rest: {
+      data?: { date: string; content: string; timestamp?: string }[];
+      total?: number;
+      hasMore?: boolean;
+    } = {}) {
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          currentMockStream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: currentMockStream.stream } as any;
+        }
+        return restResponse(rest);
+      });
+    }
+
+    beforeEach(() => {
+      currentMockStream = null;
+      setupStreamingMocks();
+    });
+
+    afterEach(() => {
+      currentMockStream?.controller.close();
+    });
+
+    it("fetches history via REST and connects SSE", async () => {
+      setupStreamingMocks({
+        data: [
+          { date: "2024-01-01T10:01:00Z", content: "newest" },
+          { date: "2024-01-01T10:00:00Z", content: "oldest" },
+        ],
+        total: 2,
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(2);
+      });
+
+      // History arrives desc from the API but is displayed chronologically
+      // (oldest first) so live appends land at the bottom.
+      expect(result.current.logs[0].content).toBe("oldest");
+      expect(result.current.logs[1].content).toBe("newest");
+      expect(streamCallCount()).toBe(1);
+      expect(restCallCount()).toBe(1);
+    });
+
+    it("appends SSE update events after history loads", async () => {
+      setupStreamingMocks({
+        data: [{ date: "2024-01-01T10:00:00Z", content: "Initial" }],
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(1);
+      });
+
+      act(() => {
+        currentMockStream!.controller.push("update", {
+          content: "New log entry",
+          timestamp: "2024-01-01T10:02:00Z",
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs).toHaveLength(2);
+        expect(result.current.logs[1].content).toBe("New log entry");
+        expect(result.current.logs[1].timestamp).toBe("2024-01-01T10:02:00Z");
+        expect(result.current.lastUpdate).not.toBeNull();
+      });
+    });
+
+    it("ignores SSE history events (history comes from REST)", async () => {
+      setupStreamingMocks({
+        data: [{ date: "2024-01-01T10:00:00Z", content: "REST history" }],
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(1);
+      });
+
+      act(() => {
+        currentMockStream!.controller.push("history", [
+          { date: "2024-01-01T09:00:00Z", content: "SSE history dupe" },
+        ]);
+      });
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.logs[0].content).toBe("REST history");
+    });
+
+    it("buffers updates arriving before history resolves, then merges without duplicates", async () => {
+      let resolveRest: (value: any) => void;
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          currentMockStream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: currentMockStream.stream } as any;
+        }
+        return new Promise((resolve) => {
+          resolveRest = resolve;
+        });
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      // Updates arrive while REST history is still in flight
+      act(() => {
+        currentMockStream!.controller.push("update", {
+          content: "overlap line",
+          timestamp: "2024-01-01T10:01:00Z",
+        });
+        currentMockStream!.controller.push("update", {
+          content: "fresh line",
+          timestamp: "2024-01-01T10:02:00Z",
+        });
+      });
+
+      // History resolves already containing the overlapping line
+      await act(async () => {
+        resolveRest!(
+          restResponse({
+            data: [
+              {
+                date: "2024-01-01T10:01:00Z",
+                content: "overlap line",
+                timestamp: "2024-01-01T10:01:00Z",
+              },
+              {
+                date: "2024-01-01T10:00:00Z",
+                content: "old line",
+                timestamp: "2024-01-01T10:00:00Z",
+              },
+            ],
+            total: 2,
+          }),
+        );
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs).toHaveLength(3);
+      });
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "old line",
+        "overlap line",
+        "fresh line",
+      ]);
+    });
+
+    it("falls back to polling when SSE fails with a network error", async () => {
+      jest.useFakeTimers();
+      try {
+        mockAuthFetch.mockImplementation(async (url: any) => {
+          if (typeof url === "string" && url.includes("/stream")) {
+            throw new Error("Connection refused");
+          }
+          return restResponse({
+            data: [{ date: "2024-01-01T10:00:00Z", content: "REST log" }],
+          });
+        });
+
+        const { result } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        expect(result.current.connected).toBe(false);
+        const initial = restCallCount();
+        expect(initial).toBeGreaterThan(0);
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(11000);
+        });
+        expect(restCallCount()).toBeGreaterThanOrEqual(initial + 2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("does not start fallback polling when refreshInterval is 0", async () => {
+      jest.useFakeTimers();
+      try {
+        mockAuthFetch.mockImplementation(async (url: any) => {
+          if (typeof url === "string" && url.includes("/stream")) {
+            throw new Error("Connection refused");
+          }
+          return restResponse();
+        });
+
+        renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 0 }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        const initial = restCallCount();
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(60000);
+        });
+        expect(restCallCount()).toBe(initial);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("does NOT start fallback polling when the SSE abort is intentional (unmount)", async () => {
+      // The stream mock errors pending reads with TypeError("Failed to fetch")
+      // on abort, mimicking real browsers. An intentional teardown must not
+      // be mistaken for a connection failure that triggers fallback polling.
+      jest.useFakeTimers();
+      try {
+        const { result, unmount } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(100);
+        });
+        expect(result.current.connected).toBe(true);
+
+        unmount();
+        const callsAtUnmount = restCallCount();
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(60000);
+        });
+
+        expect(restCallCount()).toBe(callsAtUnmount);
+        expect(mockToast).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("disconnects SSE and fetches via REST when a date filter is set", async () => {
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      setupStreamingMocks({
+        data: [{ date: "20240101", content: "Historical log" }],
+      });
+
+      act(() => {
+        result.current.setDateFilter("20240101");
+      });
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(false);
+        expect(
+          result.current.logs.some((l) => l.content === "Historical log"),
+        ).toBe(true);
+      });
+      expect(mockAuthFetch).toHaveBeenCalledWith(
+        expect.stringContaining("date=20240101"),
+        expect.any(Object),
+      );
+      // The intentional SSE teardown must not surface an error or toast
+      expect(mockToast).not.toHaveBeenCalled();
+      expect(result.current.error).toBeNull();
+    });
+
+    it("reconnects SSE when the date filter is cleared", async () => {
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      act(() => {
+        result.current.setDateFilter("20240101");
+      });
+      await waitFor(() => expect(result.current.connected).toBe(false));
+
+      act(() => {
+        result.current.setDateFilter(null);
+      });
+      await waitFor(() => expect(result.current.connected).toBe(true));
+    });
+
+    it("uses -- separator for ISO datetime ranges", async () => {
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      act(() => {
+        result.current.setDateRangeFilter(
+          "2024-01-01T00:00:00Z",
+          "2024-01-02T00:00:00Z",
+        );
+      });
+
+      await waitFor(() => {
+        const restUrls = mockAuthFetch.mock.calls
+          .map((c) => c[0] as string)
+          .filter((u) => !u.includes("/stream"));
+        expect(
+          restUrls.some((u) =>
+            u.includes(
+              `dateRange=${encodeURIComponent("2024-01-01T00:00:00Z--2024-01-02T00:00:00Z")}`,
+            ),
+          ),
+        ).toBe(true);
+      });
+    });
+
+    it("resets state when botId changes", async () => {
+      setupStreamingMocks({
+        data: [{ date: "2024-01-01T10:00:00Z", content: "Bot A log" }],
+      });
+
+      const { result, rerender } = renderHook(
+        ({ id }) => useBotLogs({ botId: id, streaming: true }),
+        { initialProps: { id: "bot-a" } },
+      );
+
+      await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+      setupStreamingMocks({ data: [] });
+      rerender({ id: "bot-b" });
+
+      await waitFor(() => {
+        expect(result.current.logs).toEqual([]);
+        expect(result.current.total).toBe(0);
+      });
+    });
+
+    it("handles rapid botId changes without errors or toasts", async () => {
+      const { result, rerender } = renderHook(
+        ({ id }) => useBotLogs({ botId: id, streaming: true }),
+        { initialProps: { id: "bot-a" } },
+      );
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+
+      for (let i = 0; i < 5; i++) {
+        rerender({ id: i % 2 === 0 ? "bot-b" : "bot-a" });
+      }
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it("does not reconnect SSE when refreshInterval changes", async () => {
+      const { result, rerender } = renderHook(
+        ({ interval }) =>
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: interval,
+          }),
+        { initialProps: { interval: 30000 } },
+      );
+
+      await waitFor(() => expect(result.current.connected).toBe(true));
+      const before = streamCallCount();
+
+      rerender({ interval: 10000 });
+
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 100));
+      });
+
+      expect(streamCallCount()).toBe(before);
+      expect(result.current.connected).toBe(true);
+    });
+
+    it("caps entries at 10000 when updates exceed the cap", async () => {
+      const entries = Array.from({ length: 10000 }, (_, i) => ({
+        date: "2024-01-01T10:00:00Z",
+        content: `Entry ${i}`,
+      }));
+      setupStreamingMocks({ data: entries, total: 10000 });
+
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          streaming: true,
+          initialQuery: { limit: 10000, offset: 0, sort: "desc" },
+        }),
+      );
+
+      await waitFor(() => expect(result.current.logs).toHaveLength(10000));
+
+      act(() => {
+        currentMockStream!.controller.push("update", {
+          content: "New entry",
+          timestamp: "2024-01-01T11:00:00Z",
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs.length).toBeLessThanOrEqual(10000);
+        expect(
+          result.current.logs[result.current.logs.length - 1].content,
+        ).toBe("New entry");
+      });
+    });
+
+    it("exposes hasEarlierLogs when the initial live fetch has more", async () => {
+      setupStreamingMocks({
+        data: [{ date: "2024-01-01T10:00:00Z", content: "Log" }],
+        total: 500,
+        hasMore: true,
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.hasEarlierLogs).toBe(true);
+      });
+    });
+
+    it("prepends earlier logs without duplicating existing entries", async () => {
+      setupStreamingMocks({
+        data: [{ date: "2024-01-01T10:00:00Z", content: "Current log" }],
+        total: 2,
+        hasMore: true,
+      });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+      setupStreamingMocks({
+        data: [
+          { date: "2024-01-01T10:00:00Z", content: "Current log" },
+          { date: "2024-01-01T09:00:00Z", content: "Earlier log" },
+        ],
+        total: 2,
+        hasMore: false,
+      });
+
+      await act(async () => {
+        result.current.loadEarlierLogs();
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs).toHaveLength(2);
+        expect(result.current.logs[0].content).toBe("Earlier log");
+        expect(result.current.logs[1].content).toBe("Current log");
+      });
+    });
+
+    it("filters SSE updates to metric lines when query type is metrics", async () => {
+      // The REST history is server-filtered by type=metrics; live updates
+      // must honor the same filter client-side or dashboards would see
+      // plain log lines leaking into their metric event stream.
+      setupStreamingMocks({ data: [] });
+
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          streaming: true,
+          initialQuery: { limit: 100, offset: 0, sort: "desc", type: "metrics" },
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        currentMockStream!.controller.push("update", {
+          content: JSON.stringify({ _metric: "trade", price: 100 }),
+          timestamp: "2024-01-01T10:01:00Z",
+        });
+        currentMockStream!.controller.push("update", {
+          content: "plain non-metric log line",
+          timestamp: "2024-01-01T10:02:00Z",
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs).toHaveLength(1);
+      });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      expect(result.current.logs).toHaveLength(1);
+      expect(result.current.logs[0].content).toContain("_metric");
+    });
+
+    it("supports metrics type in initialQuery for the history fetch", async () => {
+      renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          streaming: true,
+          initialQuery: { limit: 100, offset: 0, sort: "desc", type: "metrics" },
+        }),
+      );
+
+      await waitFor(() => {
+        const restUrls = mockAuthFetch.mock.calls
+          .map((c) => c[0] as string)
+          .filter((u) => !u.includes("/stream"));
+        expect(restUrls.some((u) => u.includes("type=metrics"))).toBe(true);
+      });
+    });
   });
 });

@@ -127,6 +127,23 @@ describe("BotEventsContext", () => {
       );
     });
 
+    it("passes streaming prop to useBotEvents", () => {
+      const { useBotEvents } = require("@/hooks/use-bot-events");
+
+      render(
+        <BotEventsProvider botId="bot-123" streaming={true}>
+          <div>Child</div>
+        </BotEventsProvider>,
+      );
+
+      expect(useBotEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          botId: "bot-123",
+          streaming: true,
+        }),
+      );
+    });
+
     it("passes dateRange prop to useBotEvents", () => {
       const { useBotEvents } = require("@/hooks/use-bot-events");
       const dateRange = { start: "20240101", end: "20240131" };

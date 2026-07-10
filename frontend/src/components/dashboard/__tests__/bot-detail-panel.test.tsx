@@ -42,18 +42,14 @@ jest.mock("@/hooks/use-bot-logs", () => ({
   useBotLogs: () => ({
     logs: [],
     loading: false,
+    error: null,
+    hasMore: false,
+    total: 0,
+    query: {},
     refresh: jest.fn(),
-    setDateFilter: jest.fn(),
-    setDateRangeFilter: jest.fn(),
-    exportLogs: jest.fn(),
-  }),
-}));
-
-jest.mock("@/hooks/use-bot-logs-stream", () => ({
-  useBotLogsStream: () => ({
-    logs: [],
-    loading: false,
-    refresh: jest.fn(),
+    loadMore: jest.fn(),
+    loadEarlierLogs: jest.fn(),
+    updateQuery: jest.fn(),
     setDateFilter: jest.fn(),
     setDateRangeFilter: jest.fn(),
     exportLogs: jest.fn(),
@@ -61,7 +57,6 @@ jest.mock("@/hooks/use-bot-logs-stream", () => ({
     lastUpdate: null,
     hasEarlierLogs: false,
     loadingEarlier: false,
-    loadEarlierLogs: jest.fn(),
   }),
 }));
 

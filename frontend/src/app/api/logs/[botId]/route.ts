@@ -22,6 +22,10 @@ export async function GET(
             "Content-Type": "application/json",
             Authorization: token,
           } as HeadersInit,
+          // Large date-range queries can stream thousands of entries from
+          // object storage; bound the upstream wait so a stuck backend
+          // surfaces as a 500 instead of hanging the browser's request.
+          signal: AbortSignal.timeout(30_000),
         },
       );
 

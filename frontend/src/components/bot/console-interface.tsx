@@ -377,7 +377,7 @@ SmartLogEntry.displayName = "SmartLogEntry";
 /**
  * Connection status indicator for the console toolbar.
  *
- * Three states derived from the useBotLogsStream hook:
+ * Three states derived from the useBotLogs hook (streaming mode):
  * - connected=true              -> Green dot + "Live"        (SSE active)
  * - connected=false, lastUpdate -> Gray dot  + "Polling"     (fell back to REST)
  * - connected=false, no update  -> Yellow dot + "Connecting" (SSE hasn't connected yet)
