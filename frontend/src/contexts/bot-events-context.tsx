@@ -44,6 +44,8 @@ const BotEventsContext = getSharedContext();
 interface BotEventsProviderProps {
   children: ReactNode;
   botId: string;
+  /** Stream events live via SSE (realtime bots) instead of polling */
+  streaming?: boolean;
   autoRefresh?: boolean;
   refreshInterval?: number;
   dateRange?: { start: string; end: string };
@@ -56,12 +58,14 @@ interface BotEventsProviderProps {
 export function BotEventsProvider({
   children,
   botId,
+  streaming = false,
   autoRefresh = true,
   refreshInterval = 30000,
   dateRange,
 }: BotEventsProviderProps) {
   const { events, loading, error, utils, refresh } = useBotEvents({
     botId,
+    streaming,
     autoRefresh,
     refreshInterval,
     dateRange,

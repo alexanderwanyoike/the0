@@ -100,6 +100,8 @@ interface BotDashboardLoaderProps {
   customBotId: string;
   version?: string;
   dateRange?: { start: string; end: string };
+  /** Stream metric events live via SSE (realtime bots) instead of polling */
+  streaming?: boolean;
   refreshInterval?: number;
   className?: string;
 }
@@ -116,6 +118,7 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
   customBotId,
   version,
   dateRange,
+  streaming = false,
   refreshInterval = 30000,
   className,
 }: BotDashboardLoaderProps) {
@@ -250,6 +253,7 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
     return (
       <BotEventsProvider
         botId={botId}
+        streaming={streaming}
         autoRefresh={refreshInterval > 0}
         refreshInterval={refreshInterval || undefined}
         dateRange={dateRange}

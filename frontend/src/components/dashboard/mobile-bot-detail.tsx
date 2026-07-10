@@ -164,7 +164,12 @@ export function MobileBotDetail({
               botId={botId}
               customBotId={customBotId}
               version={bot.config.version}
-              dateRange={{ start: interval.start, end: interval.end }}
+              dateRange={
+                interval.type === "range"
+                  ? { start: interval.start, end: interval.end }
+                  : undefined
+              }
+              streaming={showLive}
               refreshInterval={refreshInterval}
               className=""
             />
