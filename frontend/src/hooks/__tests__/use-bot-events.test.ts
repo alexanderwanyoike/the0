@@ -142,10 +142,22 @@ describe("useBotEvents", () => {
 
       expect(mockUseBotLogs).toHaveBeenCalledWith({
         botId: "bot-123",
+        streaming: false,
         autoRefresh: false,
         refreshInterval: 30000,
         initialQuery: { limit: 100, offset: 0, type: "metrics" },
       });
+    });
+
+    it("passes streaming option through to useBotLogs", () => {
+      renderHook(() => useBotEvents({ botId: "bot-123", streaming: true }));
+
+      expect(mockUseBotLogs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streaming: true,
+          initialQuery: expect.objectContaining({ type: "metrics" }),
+        }),
+      );
     });
 
     it("passes autoRefresh option to useBotLogs", () => {
