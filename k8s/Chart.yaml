@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.3
-appVersion: "1.14.2"
+version: 0.9.4
+appVersion: "1.14.3"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,17 +31,13 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: added
-      description: Stream custom dashboard metrics live over SSE instead of 30s polling
-    - kind: changed
-      description: Unify frontend bot log hooks into one REST-history plus SSE-updates implementation
+      description: Add lookbackDays latest-mode queries to the bot logs API endpoint
+    - kind: added
+      description: Default scheduled-bot dashboards to a Latest interval mode so they no longer render blank
+    - kind: added
+      description: Make the dashboard bot list sidebar resizable
     - kind: fixed
-      description: Stop intentional request aborts surfacing as Failed to fetch errors and leaking polling intervals
-    - kind: fixed
-      description: Fall back to polling when the SSE log stream closes so live views recover from API restarts
-    - kind: fixed
-      description: Pin npm to v10 in the runtime image to unbreak source builds on Node 20
-    - kind: changed
-      description: Remove outdated Kaniko references from the Kubernetes docs
+      description: Address code review findings on latest-mode log queries
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
