@@ -46,6 +46,8 @@ interface BotEventsProviderProps {
   botId: string;
   /** Stream events live via SSE (realtime bots) instead of polling */
   streaming?: boolean;
+  /** Latest mode: newest metrics across a lookback window (scheduled bots) */
+  latest?: boolean;
   autoRefresh?: boolean;
   refreshInterval?: number;
   dateRange?: { start: string; end: string };
@@ -59,6 +61,7 @@ export function BotEventsProvider({
   children,
   botId,
   streaming = false,
+  latest = false,
   autoRefresh = true,
   refreshInterval = 30000,
   dateRange,
@@ -66,6 +69,7 @@ export function BotEventsProvider({
   const { events, loading, error, utils, refresh } = useBotEvents({
     botId,
     streaming,
+    latest,
     autoRefresh,
     refreshInterval,
     dateRange,

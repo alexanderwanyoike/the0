@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useCallback, useEffect, useRef } from "react";
-import { useBotLogs } from "./use-bot-logs";
+import { useBotLogs, DEFAULT_LOOKBACK_DAYS } from "./use-bot-logs";
 import {
   BotEvent,
   parseEvents,
@@ -17,6 +17,10 @@ interface UseBotEventsOptions {
   autoRefresh?: boolean;
   refreshInterval?: number;
   dateRange?: { start: string; end: string };
+  /** Latest mode: fetch the newest metrics across a lookback window instead
+   *  of a fixed date window (scheduled bots that don't run every day).
+   *  Takes precedence over dateRange. */
+  latest?: boolean;
 }
 
 interface BotEventUtils {
@@ -84,18 +88,29 @@ export function useBotEvents({
   autoRefresh = false,
   refreshInterval = 30000,
   dateRange,
+  latest = false,
 }: UseBotEventsOptions): UseBotEventsReturn {
-  // Build initial query from dateRange; always request metrics type
-  const initialQuery = dateRange
+  // Build initial query; always request metrics type. Latest mode asks for
+  // the newest metrics across a lookback window so scheduled bots show their
+  // last known state even when they haven't run inside any fixed window.
+  const initialQuery = latest
     ? {
-        dateRange: dateRange.start.includes("T")
-          ? `${dateRange.start}--${dateRange.end}`
-          : `${dateRange.start}-${dateRange.end}`,
         limit: 100,
         offset: 0,
         type: "metrics" as const,
+        sort: "desc" as const,
+        lookbackDays: DEFAULT_LOOKBACK_DAYS,
       }
-    : { limit: 100, offset: 0, type: "metrics" as const };
+    : dateRange
+      ? {
+          dateRange: dateRange.start.includes("T")
+            ? `${dateRange.start}--${dateRange.end}`
+            : `${dateRange.start}-${dateRange.end}`,
+          limit: 100,
+          offset: 0,
+          type: "metrics" as const,
+        }
+      : { limit: 100, offset: 0, type: "metrics" as const };
 
   // With streaming, metric history still loads via REST (type=metrics) and
   // new lines append live over SSE; non-metric lines are filtered out by
@@ -107,6 +122,7 @@ export function useBotEvents({
     refresh,
     setDateFilter,
     setDateRangeFilter,
+    setLatestFilter,
     exportLogs,
   } = useBotLogs({
     botId,
@@ -116,15 +132,24 @@ export function useBotEvents({
     initialQuery,
   });
 
-  // Refetch when dateRange changes
-  const prevDateRange = useRef(dateRange);
+  // Refetch when the query mode changes after mount: latest <-> range, or a
+  // different range. A signature comparison covers every transition,
+  // including range selected on a bot that had no range before.
+  const querySignature = latest
+    ? "latest"
+    : dateRange
+      ? `range:${dateRange.start}--${dateRange.end}`
+      : "none";
+  const prevSignature = useRef(querySignature);
   useEffect(() => {
-    const prev = prevDateRange.current;
-    prevDateRange.current = dateRange;
-    if (!dateRange || !prev) return;
-    if (prev.start === dateRange.start && prev.end === dateRange.end) return;
-    setDateRangeFilter(dateRange.start, dateRange.end);
-  }, [dateRange, setDateRangeFilter]);
+    if (prevSignature.current === querySignature) return;
+    prevSignature.current = querySignature;
+    if (latest) {
+      setLatestFilter();
+    } else if (dateRange) {
+      setDateRangeFilter(dateRange.start, dateRange.end);
+    }
+  }, [querySignature, latest, dateRange, setLatestFilter, setDateRangeFilter]);
 
   // Parse raw logs into events
   // Ensure timestamps are always Date objects for SDK compatibility
@@ -138,10 +163,18 @@ export function useBotEvents({
 
     // Ensure all events have a valid timestamp (SDK expects Date, not null)
     // Use current time as fallback for events without timestamps
-    return parsedEvents.map((event) => ({
+    const stamped = parsedEvents.map((event) => ({
       ...event,
       timestamp: event.timestamp ?? new Date(),
     }));
+
+    // The API returns newest-first for desc queries but every event util
+    // (latest, extractTimeSeries, groupByRun) assumes chronological order.
+    // Stable-sort here so utils are correct regardless of fetch order;
+    // fallback-stamped events share "now" and keep their relative order.
+    return stamped.sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+    );
   }, [rawLogs]);
 
   // Create bound utilities

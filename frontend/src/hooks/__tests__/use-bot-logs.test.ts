@@ -806,6 +806,114 @@ describe("useBotLogs", () => {
     expect(calledUrl).toContain("offset=10");
   });
 
+  describe("latest mode (lookbackDays)", () => {
+    beforeEach(() => {
+      mockAuthFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [], total: 0, hasMore: false }),
+      } as Response);
+    });
+
+    it("sends lookbackDays instead of defaulting date to today", async () => {
+      renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          initialQuery: { limit: 100, offset: 0, sort: "desc", lookbackDays: 30 },
+        }),
+      );
+
+      await waitFor(() => {
+        expect(mockAuthFetch).toHaveBeenCalled();
+      });
+
+      const url = mockAuthFetch.mock.calls[0][0] as string;
+      expect(url).toContain("lookbackDays=30");
+      expect(url).not.toContain("date=");
+    });
+
+    it("setLatestFilter clears date filters and queries by lookback", async () => {
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        result.current.setDateRangeFilter("20260401", "20260403");
+      });
+      await waitFor(() => {
+        expect(result.current.query.dateRange).toBe("20260401-20260403");
+      });
+
+      mockAuthFetch.mockClear();
+      act(() => {
+        result.current.setLatestFilter();
+      });
+
+      await waitFor(() => {
+        expect(mockAuthFetch).toHaveBeenCalled();
+      });
+
+      const url = mockAuthFetch.mock.calls[0][0] as string;
+      expect(url).toContain("lookbackDays=");
+      expect(url).not.toContain("dateRange=");
+      expect(url).not.toContain("date=");
+    });
+
+    it("setDateRangeFilter clears lookbackDays from the query", async () => {
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          initialQuery: { limit: 100, offset: 0, lookbackDays: 30 },
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      mockAuthFetch.mockClear();
+      act(() => {
+        result.current.setDateRangeFilter("20260401", "20260403");
+      });
+
+      await waitFor(() => {
+        expect(mockAuthFetch).toHaveBeenCalled();
+      });
+
+      const url = mockAuthFetch.mock.calls[0][0] as string;
+      expect(url).toContain("dateRange=20260401-20260403");
+      expect(url).not.toContain("lookbackDays=");
+      expect(result.current.query.lookbackDays).toBeUndefined();
+    });
+
+    it("setDateFilter clears lookbackDays from the query", async () => {
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          initialQuery: { limit: 100, offset: 0, lookbackDays: 30 },
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      mockAuthFetch.mockClear();
+      act(() => {
+        result.current.setDateFilter("20260401");
+      });
+
+      await waitFor(() => {
+        expect(mockAuthFetch).toHaveBeenCalled();
+      });
+
+      const url = mockAuthFetch.mock.calls[0][0] as string;
+      expect(url).toContain("date=20260401");
+      expect(url).not.toContain("lookbackDays=");
+    });
+  });
+
   it("should include sort=desc in URL by default", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,

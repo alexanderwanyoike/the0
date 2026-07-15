@@ -68,6 +68,7 @@ interface MobileBotDetailProps {
   interval: IntervalValue;
   onIntervalChange: (value: IntervalValue) => void;
   showLive?: boolean;
+  showLatest?: boolean;
   refreshInterval: number;
   onRefreshIntervalChange: (ms: number) => void;
   sort?: "asc" | "desc";
@@ -102,6 +103,7 @@ export function MobileBotDetail({
   interval,
   onIntervalChange,
   showLive,
+  showLatest,
   refreshInterval,
   onRefreshIntervalChange,
   sort,
@@ -139,7 +141,7 @@ export function MobileBotDetail({
 
       {/* Interval Picker + Refresh Selector */}
       <div className="px-3 py-2 border-b space-y-1.5">
-        <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} />
+        <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} showLatest={showLatest} />
         <RefreshSelector value={refreshInterval} onChange={onRefreshIntervalChange} hidden={shouldHideRefreshSelector(!!showLive, interval.label)} />
       </div>
 
@@ -169,6 +171,7 @@ export function MobileBotDetail({
                   ? { start: interval.start, end: interval.end }
                   : undefined
               }
+              latest={interval.type === "latest"}
               streaming={showLive}
               refreshInterval={refreshInterval}
               className=""
