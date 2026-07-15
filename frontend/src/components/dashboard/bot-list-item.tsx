@@ -34,7 +34,9 @@ export function BotListItem({ bot, isActive, onClick }: BotListItemProps) {
           )}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate">{name}</p>
+          <p className="text-sm font-medium truncate" title={name}>
+            {name}
+          </p>
           {symbol && (
             <p className="text-xs text-muted-foreground font-mono truncate">
               {symbol}
