@@ -22,7 +22,7 @@ import {
   IntervalPicker,
   IntervalValue,
   LIVE_INTERVAL,
-  DEFAULT_INTERVAL,
+  LATEST_INTERVAL,
 } from "@/components/bot/interval-picker";
 import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
 import {
@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useBotLogs } from "@/hooks/use-bot-logs";
+import { useBotLogs, DEFAULT_LOOKBACK_DAYS } from "@/hooks/use-bot-logs";
 import { BotService, Bot as ApiBotType } from "@/lib/api/api-client";
 import { getErrorMessage } from "@/lib/axios";
 import { shouldUseLogStreaming } from "@/lib/bot-utils";
@@ -87,11 +87,12 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const useStreaming = shouldUseLogStreaming(bot);
 
   // Interval picker state (shared by dashboard + console)
-  // Realtime bots default to live mode; scheduled bots default to 1d range.
+  // Realtime bots default to live mode; scheduled bots default to latest
+  // mode (their last run is rarely inside any fixed window).
   // Note: bot is null at mount, so useStreaming is initially false. The
   // useEffect below corrects the interval once the bot loads.
   const [interval, setInterval_] = useState<IntervalValue>(
-    useStreaming ? LIVE_INTERVAL : DEFAULT_INTERVAL,
+    useStreaming ? LIVE_INTERVAL : LATEST_INTERVAL,
   );
   const streamingInitialized = useRef(false);
 
@@ -103,7 +104,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   useEffect(() => {
     if (!streamingInitialized.current && bot) {
       streamingInitialized.current = true;
-      setInterval_(useStreaming ? LIVE_INTERVAL : DEFAULT_INTERVAL);
+      setInterval_(useStreaming ? LIVE_INTERVAL : LATEST_INTERVAL);
     }
   }, [useStreaming, bot]);
 
@@ -117,6 +118,17 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
     streaming: useStreaming,
     autoRefresh: !useStreaming && refreshInterval > 0,
     refreshInterval,
+    // Scheduled bots start in latest mode: newest lines across the lookback
+    // window instead of today's (possibly empty) file. Streaming bots keep
+    // the hook's default query (SSE provides freshness).
+    initialQuery: useStreaming
+      ? undefined
+      : {
+          limit: 1000,
+          offset: 0,
+          sort: "desc",
+          lookbackDays: DEFAULT_LOOKBACK_DAYS,
+        },
   });
 
   const handleIntervalChange = (val: IntervalValue) => {
@@ -124,6 +136,8 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
     if (val.type === "live") {
       // Clear date filter so SSE streams all logs
       logsHook.setDateFilter(null);
+    } else if (val.type === "latest") {
+      logsHook.setLatestFilter();
     } else {
       logsHook.setDateRangeFilter(val.start, val.end);
     }
@@ -460,6 +474,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           interval={interval}
           onIntervalChange={handleIntervalChange}
           showLive={useStreaming}
+          showLatest={!useStreaming}
           refreshInterval={refreshInterval}
           onRefreshIntervalChange={setRefreshInterval}
           sort={sortOrder}
@@ -555,7 +570,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
 
         {/* Interval Picker + Refresh Selector */}
         <div className="px-4 lg:px-6 flex flex-wrap items-center gap-4">
-          <IntervalPicker value={interval} onChange={handleIntervalChange} showLive={useStreaming} />
+          <IntervalPicker value={interval} onChange={handleIntervalChange} showLive={useStreaming} showLatest={!useStreaming} />
           <RefreshSelector value={refreshInterval} onChange={setRefreshInterval} hidden={shouldHideRefreshSelector(useStreaming, interval.label)} />
         </div>
 
@@ -573,6 +588,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 customBotId={customBotId}
                 version={bot.config.version}
                 dateRange={interval.type === "range" ? { start: interval.start, end: interval.end } : undefined}
+                latest={interval.type === "latest"}
                 streaming={useStreaming}
                 refreshInterval={refreshInterval}
                 className=""

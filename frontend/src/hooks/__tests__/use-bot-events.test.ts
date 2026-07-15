@@ -2,9 +2,10 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { useBotEvents } from "../use-bot-events";
 import { useBotLogs } from "../use-bot-logs";
 
-// Mock the useBotLogs hook
+// Mock the useBotLogs hook (keep the real constant's value in the mock)
 jest.mock("../use-bot-logs", () => ({
   useBotLogs: jest.fn(),
+  DEFAULT_LOOKBACK_DAYS: 30,
 }));
 
 // Mock event parser
@@ -118,6 +119,7 @@ describe("useBotEvents", () => {
   const mockRefresh = jest.fn();
   const mockSetDateFilter = jest.fn();
   const mockSetDateRangeFilter = jest.fn();
+  const mockSetLatestFilter = jest.fn();
   const mockExportLogs = jest.fn();
 
   beforeEach(() => {
@@ -132,6 +134,7 @@ describe("useBotEvents", () => {
       loadMore: jest.fn(),
       setDateFilter: mockSetDateFilter,
       setDateRangeFilter: mockSetDateRangeFilter,
+      setLatestFilter: mockSetLatestFilter,
       exportLogs: mockExportLogs,
     });
   });
@@ -218,6 +221,152 @@ describe("useBotEvents", () => {
         "20240102",
         "20240102",
       );
+    });
+  });
+
+  describe("latest mode", () => {
+    it("builds a lookback query instead of a date window", () => {
+      renderHook(() => useBotEvents({ botId: "bot-123", latest: true }));
+
+      expect(mockUseBotLogs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialQuery: {
+            limit: 100,
+            offset: 0,
+            type: "metrics",
+            sort: "desc",
+            lookbackDays: 30,
+          },
+        }),
+      );
+    });
+
+    it("ignores dateRange while latest mode is active", () => {
+      renderHook(() =>
+        useBotEvents({
+          botId: "bot-123",
+          latest: true,
+          dateRange: { start: "20240101", end: "20240131" },
+        }),
+      );
+
+      expect(mockUseBotLogs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialQuery: expect.objectContaining({ lookbackDays: 30 }),
+        }),
+      );
+      const initialQuery = (mockUseBotLogs.mock.calls[0][0] as any)
+        .initialQuery;
+      expect(initialQuery.dateRange).toBeUndefined();
+    });
+
+    it("switches to a range query when latest mode is turned off", () => {
+      const { rerender } = renderHook(
+        ({ latest, dateRange }: any) =>
+          useBotEvents({ botId: "bot-123", latest, dateRange }),
+        { initialProps: { latest: true, dateRange: undefined } as any },
+      );
+
+      rerender({
+        latest: false,
+        dateRange: { start: "20240102", end: "20240102" },
+      });
+
+      expect(mockSetDateRangeFilter).toHaveBeenCalledWith(
+        "20240102",
+        "20240102",
+      );
+      expect(mockSetLatestFilter).not.toHaveBeenCalled();
+    });
+
+    it("switches back to a lookback query when latest mode is turned on", () => {
+      const { rerender } = renderHook(
+        ({ latest, dateRange }: any) =>
+          useBotEvents({ botId: "bot-123", latest, dateRange }),
+        {
+          initialProps: {
+            latest: false,
+            dateRange: { start: "20240102", end: "20240102" },
+          } as any,
+        },
+      );
+
+      rerender({ latest: true, dateRange: undefined });
+
+      expect(mockSetLatestFilter).toHaveBeenCalled();
+    });
+
+    it("clears the filter when switching to neither latest nor range (live)", () => {
+      const { rerender } = renderHook(
+        ({ latest, dateRange }: any) =>
+          useBotEvents({ botId: "bot-123", latest, dateRange }),
+        {
+          initialProps: {
+            latest: false,
+            dateRange: { start: "20240102", end: "20240102" },
+          } as any,
+        },
+      );
+
+      rerender({ latest: false, dateRange: undefined });
+
+      expect(mockSetDateFilter).toHaveBeenCalledWith(null);
+    });
+
+    it("refetches when a range is selected on a bot with no prior range (live dashboards)", () => {
+      const { rerender } = renderHook(
+        ({ dateRange }: any) => useBotEvents({ botId: "bot-123", dateRange }),
+        { initialProps: { dateRange: undefined } as any },
+      );
+
+      rerender({ dateRange: { start: "20240102", end: "20240103" } });
+
+      expect(mockSetDateRangeFilter).toHaveBeenCalledWith(
+        "20240102",
+        "20240103",
+      );
+    });
+  });
+
+  describe("event ordering", () => {
+    it("sorts parsed events chronologically regardless of fetch order", () => {
+      const { parseEvents } = jest.requireMock("@/lib/events/event-parser");
+      // Simulate a newest-first (sort=desc) API response: parseEvents
+      // preserves input order, so events arrive newest-first here.
+      (parseEvents as jest.Mock).mockReturnValueOnce([
+        {
+          timestamp: new Date("2026-07-14T23:40:00Z"),
+          type: "metric",
+          data: { _metric: "signal", run: "newest" },
+          metricType: "signal",
+          raw: "newest",
+        },
+        {
+          timestamp: new Date("2026-07-11T23:40:00Z"),
+          type: "metric",
+          data: { _metric: "signal", run: "middle" },
+          metricType: "signal",
+          raw: "middle",
+        },
+        {
+          timestamp: new Date("2026-07-09T23:40:00Z"),
+          type: "metric",
+          data: { _metric: "signal", run: "oldest" },
+          metricType: "signal",
+          raw: "oldest",
+        },
+      ]);
+
+      const { result } = renderHook(() => useBotEvents({ botId: "bot-123" }));
+
+      expect(result.current.events.map((e) => e.raw)).toEqual([
+        "oldest",
+        "middle",
+        "newest",
+      ]);
+      // latest() takes the last element, so chronological order makes it
+      // return the genuinely newest event
+      expect(result.current.utils.latest("signal")?.raw).toBe("newest");
     });
   });
 

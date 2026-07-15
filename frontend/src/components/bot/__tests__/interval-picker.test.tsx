@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import {
   IntervalPicker,
   LIVE_INTERVAL,
+  LATEST_INTERVAL,
   DEFAULT_DAY_INTERVAL,
   DEFAULT_INTERVAL,
   computeInterval,
@@ -180,6 +181,62 @@ describe("IntervalPicker", () => {
     );
 
     expect(screen.getByRole("button", { name: /custom/i })).toBeInTheDocument();
+  });
+
+  it("should render Latest button when showLatest is true", () => {
+    render(
+      <IntervalPicker
+        value={LATEST_INTERVAL}
+        onChange={mockOnChange}
+        showLatest
+      />,
+    );
+
+    expect(screen.getByText("Latest")).toBeInTheDocument();
+  });
+
+  it("should not render Latest button when showLatest is omitted", () => {
+    render(
+      <IntervalPicker value={DEFAULT_DAY_INTERVAL} onChange={mockOnChange} />,
+    );
+
+    expect(screen.queryByText("Latest")).not.toBeInTheDocument();
+  });
+
+  it("should call onChange with latest interval when Latest clicked", () => {
+    render(
+      <IntervalPicker
+        value={DEFAULT_DAY_INTERVAL}
+        onChange={mockOnChange}
+        showLatest
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Latest"));
+
+    expect(mockOnChange).toHaveBeenCalledWith(LATEST_INTERVAL);
+  });
+
+  it("should highlight Latest when active", () => {
+    render(
+      <IntervalPicker
+        value={LATEST_INTERVAL}
+        onChange={mockOnChange}
+        showLatest
+      />,
+    );
+
+    const latestButton = screen.getByText("Latest").closest("button");
+    expect(latestButton?.className).toContain("bg-secondary");
+  });
+
+  describe("LATEST_INTERVAL constant", () => {
+    it("should have type 'latest' and empty start/end", () => {
+      expect(LATEST_INTERVAL.type).toBe("latest");
+      expect(LATEST_INTERVAL.label).toBe("latest");
+      expect(LATEST_INTERVAL.start).toBe("");
+      expect(LATEST_INTERVAL.end).toBe("");
+    });
   });
 
   describe("LIVE_INTERVAL constant", () => {

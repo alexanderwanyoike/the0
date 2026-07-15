@@ -11,6 +11,9 @@ import * as Minio from "minio";
 export interface LogsQuery {
   date?: string;
   dateRange?: string;
+  // Latest mode: no fixed window - walk day files backwards from today
+  // (up to lookbackDays) until `limit` entries are found, newest-first.
+  lookbackDays?: number;
   limit: number;
   offset: number;
   type?: "all" | "metrics";
@@ -57,6 +60,17 @@ export class LogsService {
     const botResult = await this.botService.findOneByUserId(uid, botId);
     if (!botResult.success) {
       return Failure("Bot not found or access denied");
+    }
+
+    // Latest mode: no explicit window - serve the newest entries regardless
+    // of when the bot last ran (scheduled bots may not have run today).
+    if (!query.date && !query.dateRange && query.lookbackDays) {
+      try {
+        return Ok(await this.getLatestLogs(botId, query));
+      } catch (error: unknown) {
+        this.logger.error({ err: error }, "Error fetching latest logs");
+        return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
+      }
     }
 
     // Generate date list from query
@@ -110,6 +124,93 @@ export class LogsService {
       this.logger.error({ err: error }, "Error fetching logs");
       return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
+  }
+
+  /**
+   * Latest mode: walk day files newest-first (today back through
+   * lookbackDays) and collect entries until offset+limit+1 are found. The
+   * +1 sentinel lets hasMore reflect real data instead of guessing whether
+   * unscanned days would have contributed anything.
+   */
+  private async getLatestLogs(
+    botId: string,
+    query: LogsQuery,
+  ): Promise<{ entries: LogEntry[]; hasMore: boolean }> {
+    const dates = this.generateLookbackDates(query.lookbackDays!);
+    const maxNeeded = query.offset + query.limit + 1;
+
+    // Chronological accumulator: each older day is prepended as a block, so
+    // reversing at the end yields newest-first without per-entry timestamps
+    // (day files are already time-ordered internally).
+    let collected: LogEntry[] = [];
+    for (const date of dates) {
+      const logPath = `logs/${botId}/${date}.log`;
+      const dayEntries: LogEntry[] = [];
+      if (query.type === "metrics") {
+        // Metric lines are sparse; stream the whole day file. Offset is
+        // deliberately zeroed - pagination applies to the flattened result.
+        await this.streamFilteredLogs(
+          logPath,
+          date,
+          { ...query, offset: 0 },
+          dayEntries,
+          { count: 0 },
+        );
+      } else {
+        // Raw logs can be huge; tail keeps only the newest lines per day.
+        const truncated = await this.tailFilteredLogs(
+          logPath,
+          date,
+          { ...query, offset: 0, limit: maxNeeded },
+          dayEntries,
+        );
+        if (truncated && dayEntries.length < maxNeeded) {
+          // The tail window held fewer lines than needed (very long lines
+          // or a deep offset). Skipping the rest of the day would silently
+          // splice in older days' entries, so re-read the whole day capped
+          // the same way the dateRange desc path caps its reads.
+          dayEntries.length = 0;
+          await this.streamFilteredLogs(
+            logPath,
+            date,
+            { ...query, offset: 0, limit: Math.max(maxNeeded, 10000) },
+            dayEntries,
+            { count: 0 },
+          );
+        }
+      }
+      // Keep only the newest maxNeeded lines per day so a huge day (many
+      // metrics, or the full-read fallback above) can't grow the working
+      // set beyond ~2x maxNeeded.
+      if (dayEntries.length > maxNeeded) {
+        dayEntries.splice(0, dayEntries.length - maxNeeded);
+      }
+      collected = dayEntries.concat(collected);
+      if (collected.length >= maxNeeded) break;
+    }
+
+    const newestFirst = collected.reverse();
+    const afterOffset = newestFirst.slice(query.offset);
+    const hasMore = afterOffset.length > query.limit;
+    const entries = afterOffset.slice(0, query.limit);
+    if (query.sort === "asc") entries.reverse();
+    return { entries, hasMore };
+  }
+
+  /** Newest-first YYYYMMDD list: today back through `days` days (local time,
+   *  matching the runtime's day bucketing of log files). */
+  private generateLookbackDates(days: number): string[] {
+    const dates: string[] = [];
+    const current = new Date();
+    for (let i = 0; i < days; i++) {
+      dates.push(
+        current.getFullYear().toString() +
+          (current.getMonth() + 1).toString().padStart(2, "0") +
+          current.getDate().toString().padStart(2, "0"),
+      );
+      current.setDate(current.getDate() - 1);
+    }
+    return dates;
   }
 
   private async streamFilteredLogs(
@@ -216,17 +317,19 @@ export class LogsService {
     }
   }
 
+  /** @returns true when the file was larger than the tail window, i.e. the
+   *  read may have skipped earlier lines from this day. */
   private async tailFilteredLogs(
     logPath: string,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     let stat: { size: number };
     try {
       stat = await this.minioClient.statObject(this.logBucket, logPath);
     } catch (error: unknown) {
-      if (LogsService.isNotFoundError(error)) return;
+      if (LogsService.isNotFoundError(error)) return false;
       throw error;
     }
 
@@ -245,7 +348,7 @@ export class LogsService {
           : await this.minioClient.getObject(this.logBucket, logPath);
     } catch (error: unknown) {
       // File may have been deleted between stat and read
-      if (LogsService.isNotFoundError(error)) return;
+      if (LogsService.isNotFoundError(error)) return false;
       throw error;
     }
 
@@ -284,6 +387,8 @@ export class LogsService {
     if (query.type !== "metrics" && entries.length > query.limit) {
       entries.splice(0, entries.length - query.limit);
     }
+
+    return start > 0;
   }
 
   private normalizeLine(line: string, logDate: string): LogEntry {

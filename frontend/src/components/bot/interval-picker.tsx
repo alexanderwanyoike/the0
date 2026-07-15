@@ -9,20 +9,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Clock, Radio } from "lucide-react";
+import { CalendarIcon, Clock, History, Radio } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
 export interface IntervalValue {
-  type: "live" | "range";
+  type: "live" | "range" | "latest";
   label: string;
-  start: string; // YYYYMMDD or ISO datetime (empty for "live")
-  end: string; // YYYYMMDD or ISO datetime (empty for "live")
+  start: string; // YYYYMMDD or ISO datetime (empty for "live"/"latest")
+  end: string; // YYYYMMDD or ISO datetime (empty for "live"/"latest")
 }
 
 interface IntervalPickerProps {
   value: IntervalValue;
   onChange: (value: IntervalValue) => void;
   showLive?: boolean;
+  showLatest?: boolean;
 }
 
 function formatDate(date: Date): string {
@@ -72,12 +73,22 @@ export const LIVE_INTERVAL: IntervalValue = {
   end: "",
 };
 
+/** Latest mode: the bot's most recent output regardless of when it ran.
+ *  Default for scheduled bots, whose last run is rarely inside any fixed
+ *  window (nightly/weekly crons). */
+export const LATEST_INTERVAL: IntervalValue = {
+  type: "latest",
+  label: "latest",
+  start: "",
+  end: "",
+};
+
 /** Default interval: last 1 day */
 export const DEFAULT_DAY_INTERVAL: IntervalValue = computeInterval("1d", {
   days: 1,
 });
 
-/** Default interval for scheduled bots: last 1 hour */
+/** 1h preset (initial state before the bot type resolves) */
 export const DEFAULT_INTERVAL: IntervalValue = computeInterval("1h", {
   hours: 1,
 });
@@ -86,6 +97,7 @@ export function IntervalPicker({
   value,
   onChange,
   showLive = false,
+  showLatest = false,
 }: IntervalPickerProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>(undefined);
@@ -121,6 +133,22 @@ export function IntervalPicker({
         >
           <Radio className="h-3 w-3 mr-1" />
           Live
+        </Button>
+      )}
+
+      {showLatest && (
+        <Button
+          variant={value.label === "latest" ? "secondary" : "ghost"}
+          size="sm"
+          className={cn(
+            "h-7 px-2.5 text-xs font-mono",
+            value.label === "latest" &&
+              "bg-secondary text-secondary-foreground",
+          )}
+          onClick={() => onChange(LATEST_INTERVAL)}
+        >
+          <History className="h-3 w-3 mr-1" />
+          Latest
         </Button>
       )}
 
