@@ -32,6 +32,9 @@ import { validateSSEAuth } from "@/lib/sse/sse-auth";
 export interface LogsQuery {
   date?: string;
   dateRange?: string;
+  /** Latest mode: newest entries across the last N days, regardless of when
+   *  the bot last ran. Ignored when date/dateRange is set. */
+  lookbackDays?: number;
   limit?: number;
   offset?: number;
   type?: string;
@@ -72,11 +75,15 @@ export interface UseBotLogsReturn {
   updateQuery: (params: Partial<LogsQuery>) => void;
   setDateFilter: (date: string | null) => void;
   setDateRangeFilter: (start: string, end: string) => void;
+  setLatestFilter: () => void;
   exportLogs: () => void;
 }
 
 const MAX_LOG_ENTRIES = 10000;
 const DEFAULT_QUERY: LogsQuery = { limit: 1000, offset: 0, sort: "desc" };
+/** How far back latest mode is willing to scan for a bot's most recent
+ *  output. Scheduled bots that run weekly stay well inside this window. */
+export const DEFAULT_LOOKBACK_DAYS = 30;
 
 const entryKey = (l: LogEntry) => `${l.date}|${l.content}`;
 
@@ -215,6 +222,8 @@ export const useBotLogs = ({
           searchParams.set("dateRange", queryParams.dateRange);
         } else if (queryParams.date) {
           searchParams.set("date", queryParams.date);
+        } else if (queryParams.lookbackDays) {
+          searchParams.set("lookbackDays", queryParams.lookbackDays.toString());
         } else {
           searchParams.set(
             "date",
@@ -501,6 +510,7 @@ export const useBotLogs = ({
       updateQuery({
         date: date || undefined,
         dateRange: undefined,
+        lookbackDays: undefined,
       });
     },
     [updateQuery],
@@ -513,10 +523,19 @@ export const useBotLogs = ({
       updateQuery({
         dateRange: `${startDate}${separator}${endDate}`,
         date: undefined,
+        lookbackDays: undefined,
       });
     },
     [updateQuery],
   );
+
+  const setLatestFilter = useCallback(() => {
+    updateQuery({
+      date: undefined,
+      dateRange: undefined,
+      lookbackDays: DEFAULT_LOOKBACK_DAYS,
+    });
+  }, [updateQuery]);
 
   const refresh = useCallback(() => {
     const refreshQuery = { ...query, offset: 0 };
@@ -605,6 +624,7 @@ export const useBotLogs = ({
     updateQuery,
     setDateFilter,
     setDateRangeFilter,
+    setLatestFilter,
     exportLogs,
   };
 };

@@ -76,6 +76,7 @@ export class LogsController {
     const result = await this.logsService.getLogs(botId, {
       date: query.date,
       dateRange: query.dateRange,
+      lookbackDays: query.lookbackDays,
       limit: query.limit || 100,
       offset: query.offset || 0,
       type: query.type,

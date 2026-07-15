@@ -10,6 +10,7 @@ import {
   useDashboardBots,
 } from "@/contexts/dashboard-bots-context";
 import { BotListPanel } from "@/components/dashboard/bot-list-panel";
+import { ResizableSidebarLayout } from "@/components/dashboard/resizable-sidebar-layout";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 function DashboardInner({ children }: { children: ReactNode }) {
@@ -35,19 +36,22 @@ function DashboardInner({ children }: { children: ReactNode }) {
     );
   }
 
-  // Desktop: side panel + content
+  // Desktop: resizable side panel + content
   if (isDesktop) {
     return (
-      <div className="flex h-[calc(100vh-3rem)]">
-        <aside className="w-[220px] border-r flex-shrink-0">
-          <BotListPanel
-            bots={bots}
-            activeBotId={activeBotId}
-            onSelectBot={handleSelectBot}
-            className="h-full"
-          />
-        </aside>
-        <main className="flex-1 overflow-auto">{children}</main>
+      <div className="h-[calc(100vh-3rem)]">
+        <ResizableSidebarLayout
+          sidebar={
+            <BotListPanel
+              bots={bots}
+              activeBotId={activeBotId}
+              onSelectBot={handleSelectBot}
+              className="h-full"
+            />
+          }
+        >
+          <main className="h-full overflow-auto">{children}</main>
+        </ResizableSidebarLayout>
       </div>
     );
   }

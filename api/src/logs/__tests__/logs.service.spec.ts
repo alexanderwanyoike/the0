@@ -1099,6 +1099,251 @@ describe("LogsService", () => {
     });
   });
 
+  describe("getLogs - lookbackDays (latest mode)", () => {
+    /** Local-time YYYYMMDD for N days ago, matching the service's day bucketing. */
+    function localDateStr(daysAgo: number): string {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      return (
+        d.getFullYear().toString() +
+        String(d.getMonth() + 1).padStart(2, "0") +
+        String(d.getDate()).padStart(2, "0")
+      );
+    }
+
+    /** Mock MinIO so each logs/bot-1/<date>.log resolves to the given content. */
+    function mockFiles(files: Record<string, string>) {
+      const notFound = () => {
+        const err: any = new Error("NoSuchKey");
+        err.code = "NoSuchKey";
+        return Promise.reject(err);
+      };
+      mockMinioClient.getObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          files[path] !== undefined
+            ? Promise.resolve(stringStream(files[path]))
+            : notFound(),
+      );
+      mockMinioClient.statObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          files[path] !== undefined
+            ? Promise.resolve({
+                size: Buffer.byteLength(files[path], "utf-8"),
+              })
+            : notFound(),
+      );
+    }
+
+    it("should return newest-first entries across day files without a date param", async () => {
+      const today = localDateStr(0);
+      const older = localDateStr(2);
+      mockFiles({
+        [`logs/bot-1/${older}.log`]: '{"message":"old-1"}\n{"message":"old-2"}',
+        [`logs/bot-1/${today}.log`]: '{"message":"new-1"}\n{"message":"new-2"}',
+      });
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        "new-2",
+        "new-1",
+        "old-2",
+        "old-1",
+      ]);
+      // Days with no log file are skipped, not errors
+      expect(result.data!.hasMore).toBe(false);
+    });
+
+    it("should return the newest `limit` metric entries across days", async () => {
+      const metric = (day: string, n: number) =>
+        `{"_metric":"signal","run":"${day}-${n}","timestamp":"2026-01-01T0${n}:00:00Z"}`;
+      const today = localDateStr(0);
+      const yesterday = localDateStr(1);
+      const older = localDateStr(2);
+      mockFiles({
+        [`logs/bot-1/${today}.log`]: [metric("t", 1), metric("t", 2)].join("\n"),
+        [`logs/bot-1/${yesterday}.log`]: [metric("y", 1), metric("y", 2)].join("\n"),
+        [`logs/bot-1/${older}.log`]: [metric("o", 1), metric("o", 2)].join("\n"),
+      });
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 3,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      // Unlike date-range metric queries, latest mode respects limit
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        metric("t", 2),
+        metric("t", 1),
+        metric("y", 2),
+      ]);
+      expect(result.data!.hasMore).toBe(true);
+    });
+
+    it("should stop scanning older days once enough entries are collected", async () => {
+      const today = localDateStr(0);
+      const yesterday = localDateStr(1);
+      mockFiles({
+        [`logs/bot-1/${today}.log`]:
+          '{"message":"a"}\n{"message":"b"}\n{"message":"c"}',
+        [`logs/bot-1/${yesterday}.log`]: '{"message":"y"}',
+      });
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 2,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual(["c", "b"]);
+      expect(result.data!.hasMore).toBe(true);
+      // Only today's file was opened; older days were never touched
+      const touchedPaths = [
+        ...mockMinioClient.statObject.mock.calls,
+        ...mockMinioClient.getObject.mock.calls,
+      ].map((call: any[]) => call[1]);
+      expect(touchedPaths).not.toContain(`logs/bot-1/${yesterday}.log`);
+    });
+
+    it("should apply offset across the lookback window for pagination", async () => {
+      const today = localDateStr(0);
+      const yesterday = localDateStr(1);
+      mockFiles({
+        [`logs/bot-1/${today}.log`]: '{"message":"t1"}\n{"message":"t2"}',
+        [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
+      });
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 2,
+        offset: 2,
+      });
+
+      expect(result.success).toBe(true);
+      // Newest-first flat order is [t2, t1, y2, y1]; offset 2 -> [y2, y1]
+      expect(result.data!.entries.map((e) => e.content)).toEqual(["y2", "y1"]);
+      expect(result.data!.hasMore).toBe(false);
+    });
+
+    it("should return chronological order when sort=asc", async () => {
+      const today = localDateStr(0);
+      const yesterday = localDateStr(1);
+      mockFiles({
+        [`logs/bot-1/${today}.log`]: '{"message":"t1"}\n{"message":"t2"}',
+        [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
+      });
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 10,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        "y1",
+        "y2",
+        "t1",
+        "t2",
+      ]);
+    });
+
+    it("should fall back to a full read when the tail window holds too few lines", async () => {
+      const today = localDateStr(0);
+      const todayPath = `logs/bot-1/${today}.log`;
+      // File larger than the 512KB tail window whose tail only contains 2
+      // lines (very long lines); the full file has 5
+      const fullLines = Array.from(
+        { length: 5 },
+        (_, i) => `{"message":"line-${i + 1}"}`,
+      );
+      const notFound = () => {
+        const err: any = new Error("NoSuchKey");
+        err.code = "NoSuchKey";
+        return Promise.reject(err);
+      };
+      mockMinioClient.statObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          path === todayPath
+            ? Promise.resolve({ size: 512 * 1024 + 1000 })
+            : notFound(),
+      );
+      mockMinioClient.getPartialObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          path === todayPath
+            ? Promise.resolve(
+                stringStream("partial-junk\n" + fullLines.slice(-2).join("\n")),
+              )
+            : notFound(),
+      );
+      mockMinioClient.getObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          path === todayPath
+            ? Promise.resolve(stringStream(fullLines.join("\n")))
+            : notFound(),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 3,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      // Tail yielded only 2 of the needed 4 entries, so the day is re-read
+      // in full and the newest 3 lines are returned
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        "line-5",
+        "line-4",
+        "line-3",
+      ]);
+      expect(result.data!.hasMore).toBe(true);
+    });
+
+    it("should prefer an explicit date over lookbackDays", async () => {
+      mockFiles({
+        "logs/bot-1/20260401.log": '{"message":"explicit-date"}',
+      });
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        lookbackDays: 7,
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toHaveLength(1);
+      expect(result.data!.entries[0].content).toBe("explicit-date");
+      expect(result.data!.entries[0].date).toBe("20260401");
+    });
+
+    it("should return empty entries when no day in the window has logs", async () => {
+      mockFiles({});
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 10,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toEqual([]);
+      expect(result.data!.hasMore).toBe(false);
+    });
+  });
+
   describe("getLogs - auth and validation", () => {
     it("should return failure when user is not authenticated", async () => {
       const unauthService = new LogsService(
