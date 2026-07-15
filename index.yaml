@@ -5,6 +5,58 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: added
+          description: Add lookbackDays latest-mode queries to the bot logs API endpoint
+        - kind: added
+          description: Default scheduled-bot dashboards to a Latest interval mode so they no longer render blank
+        - kind: added
+          description: Make the dashboard bot list sidebar resizable
+        - kind: fixed
+          description: Address code review findings on latest-mode log queries
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.14.3
+    created: "2026-07-15T10:48:19.266276058Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 8c384f0c6171dff829c0f3c5d4f10dce7b697ae7e97b88ad48d07ad4de9db678
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.9.4/the0-0.9.4.tgz
+    version: 0.9.4
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: added
           description: Stream custom dashboard metrics live over SSE instead of 30s polling
         - kind: changed
           description: Unify frontend bot log hooks into one REST-history plus SSE-updates implementation
@@ -1697,4 +1749,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-07-10T09:12:09.246376467Z"
+generated: "2026-07-15T10:48:19.26647929Z"
