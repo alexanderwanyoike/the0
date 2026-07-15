@@ -158,12 +158,32 @@ export class LogsService {
         );
       } else {
         // Raw logs can be huge; tail keeps only the newest lines per day.
-        await this.tailFilteredLogs(
+        const truncated = await this.tailFilteredLogs(
           logPath,
           date,
           { ...query, offset: 0, limit: maxNeeded },
           dayEntries,
         );
+        if (truncated && dayEntries.length < maxNeeded) {
+          // The tail window held fewer lines than needed (very long lines
+          // or a deep offset). Skipping the rest of the day would silently
+          // splice in older days' entries, so re-read the whole day capped
+          // the same way the dateRange desc path caps its reads.
+          dayEntries.length = 0;
+          await this.streamFilteredLogs(
+            logPath,
+            date,
+            { ...query, offset: 0, limit: Math.max(maxNeeded, 10000) },
+            dayEntries,
+            { count: 0 },
+          );
+        }
+      }
+      // Keep only the newest maxNeeded lines per day so a huge day (many
+      // metrics, or the full-read fallback above) can't grow the working
+      // set beyond ~2x maxNeeded.
+      if (dayEntries.length > maxNeeded) {
+        dayEntries.splice(0, dayEntries.length - maxNeeded);
       }
       collected = dayEntries.concat(collected);
       if (collected.length >= maxNeeded) break;
@@ -297,17 +317,19 @@ export class LogsService {
     }
   }
 
+  /** @returns true when the file was larger than the tail window, i.e. the
+   *  read may have skipped earlier lines from this day. */
   private async tailFilteredLogs(
     logPath: string,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     let stat: { size: number };
     try {
       stat = await this.minioClient.statObject(this.logBucket, logPath);
     } catch (error: unknown) {
-      if (LogsService.isNotFoundError(error)) return;
+      if (LogsService.isNotFoundError(error)) return false;
       throw error;
     }
 
@@ -326,7 +348,7 @@ export class LogsService {
           : await this.minioClient.getObject(this.logBucket, logPath);
     } catch (error: unknown) {
       // File may have been deleted between stat and read
-      if (LogsService.isNotFoundError(error)) return;
+      if (LogsService.isNotFoundError(error)) return false;
       throw error;
     }
 
@@ -365,6 +387,8 @@ export class LogsService {
     if (query.type !== "metrics" && entries.length > query.limit) {
       entries.splice(0, entries.length - query.limit);
     }
+
+    return start > 0;
   }
 
   private normalizeLine(line: string, logDate: string): LogEntry {

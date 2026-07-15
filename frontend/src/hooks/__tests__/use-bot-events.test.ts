@@ -296,6 +296,23 @@ describe("useBotEvents", () => {
       expect(mockSetLatestFilter).toHaveBeenCalled();
     });
 
+    it("clears the filter when switching to neither latest nor range (live)", () => {
+      const { rerender } = renderHook(
+        ({ latest, dateRange }: any) =>
+          useBotEvents({ botId: "bot-123", latest, dateRange }),
+        {
+          initialProps: {
+            latest: false,
+            dateRange: { start: "20240102", end: "20240102" },
+          } as any,
+        },
+      );
+
+      rerender({ latest: false, dateRange: undefined });
+
+      expect(mockSetDateFilter).toHaveBeenCalledWith(null);
+    });
+
     it("refetches when a range is selected on a bot with no prior range (live dashboards)", () => {
       const { rerender } = renderHook(
         ({ dateRange }: any) => useBotEvents({ botId: "bot-123", dateRange }),

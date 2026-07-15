@@ -148,8 +148,19 @@ export function useBotEvents({
       setLatestFilter();
     } else if (dateRange) {
       setDateRangeFilter(dateRange.start, dateRange.end);
+    } else {
+      // Neither mode active (e.g. back to live): clear any stale filter so
+      // streaming/default fetching resumes
+      setDateFilter(null);
     }
-  }, [querySignature, latest, dateRange, setLatestFilter, setDateRangeFilter]);
+  }, [
+    querySignature,
+    latest,
+    dateRange,
+    setLatestFilter,
+    setDateRangeFilter,
+    setDateFilter,
+  ]);
 
   // Parse raw logs into events
   // Ensure timestamps are always Date objects for SDK compatibility

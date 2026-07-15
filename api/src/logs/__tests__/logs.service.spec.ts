@@ -1258,6 +1258,58 @@ describe("LogsService", () => {
       ]);
     });
 
+    it("should fall back to a full read when the tail window holds too few lines", async () => {
+      const today = localDateStr(0);
+      const todayPath = `logs/bot-1/${today}.log`;
+      // File larger than the 512KB tail window whose tail only contains 2
+      // lines (very long lines); the full file has 5
+      const fullLines = Array.from(
+        { length: 5 },
+        (_, i) => `{"message":"line-${i + 1}"}`,
+      );
+      const notFound = () => {
+        const err: any = new Error("NoSuchKey");
+        err.code = "NoSuchKey";
+        return Promise.reject(err);
+      };
+      mockMinioClient.statObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          path === todayPath
+            ? Promise.resolve({ size: 512 * 1024 + 1000 })
+            : notFound(),
+      );
+      mockMinioClient.getPartialObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          path === todayPath
+            ? Promise.resolve(
+                stringStream("partial-junk\n" + fullLines.slice(-2).join("\n")),
+              )
+            : notFound(),
+      );
+      mockMinioClient.getObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          path === todayPath
+            ? Promise.resolve(stringStream(fullLines.join("\n")))
+            : notFound(),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 7,
+        limit: 3,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      // Tail yielded only 2 of the needed 4 entries, so the day is re-read
+      // in full and the newest 3 lines are returned
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        "line-5",
+        "line-4",
+        "line-3",
+      ]);
+      expect(result.data!.hasMore).toBe(true);
+    });
+
     it("should prefer an explicit date over lookbackDays", async () => {
       mockFiles({
         "logs/bot-1/20260401.log": '{"message":"explicit-date"}',
