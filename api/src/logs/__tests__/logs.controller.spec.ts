@@ -131,6 +131,24 @@ describe("LogsController", () => {
       );
     });
 
+    it("should pass lookbackDays parameter to service", async () => {
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: [], hasMore: false }),
+      );
+
+      await controller.getLogs(
+        "bot-123",
+        { limit: 100, offset: 0, lookbackDays: 30, type: "metrics" } as any,
+        mockUser,
+      );
+
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+        "bot-123",
+        expect.objectContaining({ lookbackDays: 30, type: "metrics" }),
+        "user123",
+      );
+    });
+
     it("should return hasMore=true when entries equal limit", async () => {
       const mockLogs = Array.from({ length: 100 }, (_, i) => ({
         date: "20260210",

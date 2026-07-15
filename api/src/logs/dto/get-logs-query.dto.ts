@@ -14,6 +14,13 @@ export class GetLogsQueryDto {
   @Transform(({ value }) => parseInt(value))
   @IsInt()
   @Min(1)
+  @Max(90)
+  lookbackDays?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsInt()
+  @Min(1)
   @Max(2000)
   limit?: number;
 
