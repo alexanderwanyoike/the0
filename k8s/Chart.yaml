@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.4
-appVersion: "1.14.3"
+version: 0.9.5
+appVersion: "1.14.4"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,13 +31,9 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: added
-      description: Add lookbackDays latest-mode queries to the bot logs API endpoint
-    - kind: added
-      description: Default scheduled-bot dashboards to a Latest interval mode so they no longer render blank
-    - kind: added
-      description: Make the dashboard bot list sidebar resizable
+      description: Expose bot state and bot query tools via the MCP server so AI agents can inspect persisted state and query running bots
     - kind: fixed
-      description: Address code review findings on latest-mode log queries
+      description: Add GitHub Packages auth to the typescript example bot .npmrc so yarn install works out of the box
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
