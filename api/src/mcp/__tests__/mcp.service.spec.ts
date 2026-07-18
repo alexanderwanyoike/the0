@@ -410,6 +410,14 @@ describe("McpService", () => {
         expect(result.content[0].text).toContain("Authentication required");
       });
 
+      it("should require a bot_id", async () => {
+        const result = await service.handleToolCall("bot_state_list", {}, userId);
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain("bot_id");
+        expect(botStateService.listKeys).not.toHaveBeenCalled();
+      });
+
       it("should list state keys for a bot", async () => {
         botStateService.listKeys.mockResolvedValue(
           Ok([{ key: "positions", size: 128 }]),
@@ -471,6 +479,25 @@ describe("McpService", () => {
 
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain("Authentication required");
+      });
+
+      it("should require a bot_id and key", async () => {
+        const missingKey = await service.handleToolCall(
+          "bot_state_get",
+          { bot_id: "bot-123" },
+          userId,
+        );
+        const missingBotId = await service.handleToolCall(
+          "bot_state_get",
+          { key: "positions" },
+          userId,
+        );
+
+        expect(missingKey.isError).toBe(true);
+        expect(missingKey.content[0].text).toContain("key");
+        expect(missingBotId.isError).toBe(true);
+        expect(missingBotId.content[0].text).toContain("bot_id");
+        expect(botStateService.getKey).not.toHaveBeenCalled();
       });
 
       it("should return the state value for a key", async () => {
@@ -561,6 +588,18 @@ describe("McpService", () => {
 
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain("query_path");
+      });
+
+      it("should require a bot_id", async () => {
+        const result = await service.handleToolCall(
+          "bot_query",
+          { query_path: "/positions" },
+          userId,
+        );
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain("bot_id");
+        expect(botQueryService.executeQuery).not.toHaveBeenCalled();
       });
 
       it("should surface query failures", async () => {

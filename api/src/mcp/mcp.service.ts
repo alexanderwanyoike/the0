@@ -667,6 +667,9 @@ export class McpService {
     if (!userId) {
       throw new Error("Authentication required");
     }
+    if (!input.bot_id) {
+      throw new Error("bot_id is required");
+    }
     const botStateService = await this.resolveForUser(BotStateService, userId);
     const result = await botStateService.listKeys(input.bot_id);
     if (!result.success) {
@@ -678,6 +681,12 @@ export class McpService {
   private async handleBotStateGet(input: BotStateGetInput, userId?: string) {
     if (!userId) {
       throw new Error("Authentication required");
+    }
+    if (!input.bot_id) {
+      throw new Error("bot_id is required");
+    }
+    if (!input.key) {
+      throw new Error("key is required");
     }
     const botStateService = await this.resolveForUser(BotStateService, userId);
     const result = await botStateService.getKey(input.bot_id, input.key);
@@ -691,6 +700,9 @@ export class McpService {
   private async handleBotQuery(input: BotQueryInput, userId?: string) {
     if (!userId) {
       throw new Error("Authentication required");
+    }
+    if (!input.bot_id) {
+      throw new Error("bot_id is required");
     }
     if (!input.query_path) {
       throw new Error("query_path is required");

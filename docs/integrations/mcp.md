@@ -109,7 +109,7 @@ claude
 
 ## Available Tools
 
-the0's MCP server exposes 14 tools organized into five categories:
+the0's MCP server exposes 14 tools organized into six categories:
 
 ### Authentication
 
