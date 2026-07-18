@@ -33,6 +33,22 @@ export interface LogsGetInput {
   limit?: number;
 }
 
+export interface BotStateListInput {
+  bot_id: string;
+}
+
+export interface BotStateGetInput {
+  bot_id: string;
+  key: string;
+}
+
+export interface BotQueryInput {
+  bot_id: string;
+  query_path: string;
+  params?: Record<string, unknown>;
+  timeout_sec?: number;
+}
+
 export interface CustomBotListInput {
   // No parameters needed
 }
@@ -109,6 +125,13 @@ export const MCP_TOOL_NAMES = {
   // Logs
   LOGS_GET: "logs_get",
   LOGS_SUMMARY: "logs_summary",
+
+  // Bot State
+  BOT_STATE_LIST: "bot_state_list",
+  BOT_STATE_GET: "bot_state_get",
+
+  // Bot Query
+  BOT_QUERY: "bot_query",
 
   // Custom Bot
   CUSTOM_BOT_LIST: "custom_bot_list",
