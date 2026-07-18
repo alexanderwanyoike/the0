@@ -109,7 +109,7 @@ claude
 
 ## Available Tools
 
-the0's MCP server exposes 11 tools organized into three categories:
+the0's MCP server exposes 14 tools organized into five categories:
 
 ### Authentication
 
@@ -133,6 +133,19 @@ the0's MCP server exposes 11 tools organized into three categories:
 |------|-------------|------------|
 | `logs_get` | Get execution logs for a bot | `bot_id`, optional: `date`, `date_range`, `limit` |
 | `logs_summary` | Get log statistics | `bot_id` |
+
+### Bot State
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `bot_state_list` | List the persisted state keys for a bot (with sizes) | `bot_id` |
+| `bot_state_get` | Get the value of a specific state key | `bot_id`, `key` |
+
+### Bot Queries
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `bot_query` | Execute a query against a running realtime bot | `bot_id`, `query_path`, optional: `params`, `timeout_sec` |
 
 ### Custom Bots
 

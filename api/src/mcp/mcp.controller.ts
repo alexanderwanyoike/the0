@@ -323,6 +323,71 @@ export class McpController {
         },
       },
 
+      // Bot State Tools
+      {
+        name: "bot_state_list",
+        description:
+          "List the persisted state keys for a bot instance (with sizes)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            bot_id: {
+              type: "string",
+              description: "The bot instance ID",
+            },
+          },
+          required: ["bot_id"],
+        },
+      },
+      {
+        name: "bot_state_get",
+        description:
+          "Get the value of a specific persisted state key for a bot instance",
+        inputSchema: {
+          type: "object",
+          properties: {
+            bot_id: {
+              type: "string",
+              description: "The bot instance ID",
+            },
+            key: {
+              type: "string",
+              description: "The state key name",
+            },
+          },
+          required: ["bot_id", "key"],
+        },
+      },
+
+      // Bot Query Tools
+      {
+        name: "bot_query",
+        description:
+          "Execute a query against a running realtime bot's query endpoint",
+        inputSchema: {
+          type: "object",
+          properties: {
+            bot_id: {
+              type: "string",
+              description: "The bot instance ID",
+            },
+            query_path: {
+              type: "string",
+              description: "Query path exposed by the bot (e.g. /positions)",
+            },
+            params: {
+              type: "object",
+              description: "Query parameters (optional)",
+            },
+            timeout_sec: {
+              type: "number",
+              description: "Query timeout in seconds (default: 30)",
+            },
+          },
+          required: ["bot_id", "query_path"],
+        },
+      },
+
       // Custom Bot Tools
       {
         name: "custom_bot_list",
