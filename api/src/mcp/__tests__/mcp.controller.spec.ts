@@ -108,6 +108,9 @@ describe("McpController", () => {
         expect(toolNames).toContain("bot_delete");
         expect(toolNames).toContain("logs_get");
         expect(toolNames).toContain("logs_summary");
+        expect(toolNames).toContain("bot_state_list");
+        expect(toolNames).toContain("bot_state_get");
+        expect(toolNames).toContain("bot_query");
         expect(toolNames).toContain("custom_bot_list");
         expect(toolNames).toContain("custom_bot_get");
         expect(toolNames).toContain("custom_bot_schema");

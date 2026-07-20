@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Type } from "@nestjs/common";
+import { ContextIdFactory, ModuleRef } from "@nestjs/core";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -11,6 +12,9 @@ import {
   BotUpdateInput,
   BotDeleteInput,
   BotGetInput,
+  BotStateListInput,
+  BotStateGetInput,
+  BotQueryInput,
   LogsGetInput,
   CustomBotGetInput,
   CustomBotSchemaInput,
@@ -19,6 +23,8 @@ import { BotRepository } from "@/bot/bot.repository";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
+import { BotStateService } from "@/bot-state/bot-state.service";
+import { BotQueryService } from "@/bot-query/bot-query.service";
 
 @Injectable()
 export class McpService {
@@ -30,8 +36,27 @@ export class McpService {
     private readonly logsService: LogsService,
     private readonly apiKeyService: ApiKeyService,
     private readonly logger: PinoLogger,
+    private readonly moduleRef: ModuleRef,
   ) {
     this.initializeServer();
+  }
+
+  /**
+   * Resolve a request-scoped service under a synthetic request context that
+   * carries the MCP caller's identity. The bot-state and bot-query services
+   * enforce ownership by reading request.user, so this makes their existing
+   * authorization apply to MCP calls exactly as it does to HTTP requests.
+   */
+  private async resolveForUser<T>(
+    provider: Type<T>,
+    userId: string,
+  ): Promise<T> {
+    const contextId = ContextIdFactory.create();
+    this.moduleRef.registerRequestByContextId(
+      { user: { uid: userId } },
+      contextId,
+    );
+    return this.moduleRef.resolve(provider, contextId, { strict: false });
   }
 
   private initializeServer() {
@@ -200,6 +225,71 @@ export class McpService {
         },
       },
 
+      // Bot State Tools
+      {
+        name: MCP_TOOL_NAMES.BOT_STATE_LIST,
+        description:
+          "List the persisted state keys for a bot instance (with sizes)",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            bot_id: {
+              type: "string",
+              description: "The bot instance ID",
+            },
+          },
+          required: ["bot_id"],
+        },
+      },
+      {
+        name: MCP_TOOL_NAMES.BOT_STATE_GET,
+        description:
+          "Get the value of a specific persisted state key for a bot instance",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            bot_id: {
+              type: "string",
+              description: "The bot instance ID",
+            },
+            key: {
+              type: "string",
+              description: "The state key name",
+            },
+          },
+          required: ["bot_id", "key"],
+        },
+      },
+
+      // Bot Query Tools
+      {
+        name: MCP_TOOL_NAMES.BOT_QUERY,
+        description:
+          "Execute a query against a running realtime bot's query endpoint",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            bot_id: {
+              type: "string",
+              description: "The bot instance ID",
+            },
+            query_path: {
+              type: "string",
+              description: "Query path exposed by the bot (e.g. /positions)",
+            },
+            params: {
+              type: "object",
+              description: "Query parameters (optional)",
+            },
+            timeout_sec: {
+              type: "number",
+              description: "Query timeout in seconds (default: 30)",
+            },
+          },
+          required: ["bot_id", "query_path"],
+        },
+      },
+
       // Custom Bot Tools
       {
         name: MCP_TOOL_NAMES.CUSTOM_BOT_LIST,
@@ -312,6 +402,27 @@ export class McpService {
           );
           break;
 
+        case MCP_TOOL_NAMES.BOT_STATE_LIST:
+          result = await this.handleBotStateList(
+            args as unknown as BotStateListInput,
+            userId,
+          );
+          break;
+
+        case MCP_TOOL_NAMES.BOT_STATE_GET:
+          result = await this.handleBotStateGet(
+            args as unknown as BotStateGetInput,
+            userId,
+          );
+          break;
+
+        case MCP_TOOL_NAMES.BOT_QUERY:
+          result = await this.handleBotQuery(
+            args as unknown as BotQueryInput,
+            userId,
+          );
+          break;
+
         case MCP_TOOL_NAMES.CUSTOM_BOT_LIST:
           result = await this.handleCustomBotList();
           break;
@@ -393,8 +504,11 @@ export class McpService {
       throw new Error("Authentication required");
     }
 
-    const { name: configName, type: configType, version: configVersion } =
-      input.config;
+    const {
+      name: configName,
+      type: configType,
+      version: configVersion,
+    } = input.config;
 
     if (!configName || !configType || !configVersion) {
       throw new Error(
@@ -546,6 +660,63 @@ export class McpService {
       },
       last_entry: logs.length > 0 ? logs[0] : null,
     };
+  }
+
+  // Bot State Handlers
+  private async handleBotStateList(input: BotStateListInput, userId?: string) {
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+    if (!input.bot_id) {
+      throw new Error("bot_id is required");
+    }
+    const botStateService = await this.resolveForUser(BotStateService, userId);
+    const result = await botStateService.listKeys(input.bot_id);
+    if (!result.success) {
+      throw new Error(result.error?.message || "Failed to list state keys");
+    }
+    return { bot_id: input.bot_id, keys: result.data };
+  }
+
+  private async handleBotStateGet(input: BotStateGetInput, userId?: string) {
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+    if (!input.bot_id) {
+      throw new Error("bot_id is required");
+    }
+    if (!input.key) {
+      throw new Error("key is required");
+    }
+    const botStateService = await this.resolveForUser(BotStateService, userId);
+    const result = await botStateService.getKey(input.bot_id, input.key);
+    if (!result.success) {
+      throw new Error(result.error?.message || "Failed to get state value");
+    }
+    return { bot_id: input.bot_id, key: input.key, value: result.data };
+  }
+
+  // Bot Query Handlers
+  private async handleBotQuery(input: BotQueryInput, userId?: string) {
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+    if (!input.bot_id) {
+      throw new Error("bot_id is required");
+    }
+    if (!input.query_path) {
+      throw new Error("query_path is required");
+    }
+    const botQueryService = await this.resolveForUser(BotQueryService, userId);
+    const result = await botQueryService.executeQuery(input.bot_id, {
+      queryPath: input.query_path,
+      params: input.params,
+      timeoutSec: input.timeout_sec,
+    });
+    if (!result.success) {
+      throw new Error(result.error?.message || "Failed to execute query");
+    }
+    return result.data;
   }
 
   // Custom Bot Handlers

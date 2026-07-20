@@ -136,17 +136,27 @@ The CLI automatically:
 
 ## SDK Installation
 
-The examples use `@the0/react` from GitHub Packages:
+The TypeScript examples use `@alexanderwanyoike/the0-node` from GitHub Packages:
 
 ```json
 {
   "dependencies": {
-    "@the0/react": "^0.1.0"
+    "@alexanderwanyoike/the0-node": "^0.3.1"
   }
 }
 ```
 
 Configure `.npmrc` for GitHub Packages:
 ```
-@the0:registry=https://npm.pkg.github.com
+@alexanderwanyoike:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+GitHub Packages requires authentication even for public packages, so set
+`GITHUB_TOKEN` to a personal access token with the `read:packages` scope
+before installing:
+
+```bash
+export GITHUB_TOKEN=ghp_...
+yarn install
 ```
