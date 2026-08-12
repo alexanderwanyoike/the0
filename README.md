@@ -466,3 +466,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 [Website](https://the0.app) • [Documentation](https://docs.the0.app) • [Discord](https://discord.gg/g5mp57nK)
 
 </div>
+
+---
+This one's for you Dad
