@@ -10,7 +10,9 @@ import { useThe0Events, BotEvent } from "@alexanderwanyoike/the0-react";
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
 
-  if (loading) {
+  // Full-screen states only when there is nothing to render yet: background
+  // refreshes keep the last data visible instead of unmounting the dashboard
+  if (loading && events.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-primary font-mono">Connecting to bot...</div>
@@ -18,7 +20,7 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
+  if (error && events.length === 0) {
     return (
       <div className="p-4 bg-destructive/10 border border-destructive/30 rounded">
         <p className="text-destructive">Error loading events: {error}</p>

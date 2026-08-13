@@ -27,8 +27,10 @@ import { useThe0Events } from '@alexanderwanyoike/the0-react';
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  // Guard on events.length so background refreshes keep your last data
+  // visible instead of unmounting the dashboard into a loading screen
+  if (loading && events.length === 0) return <div>Loading...</div>;
+  if (error && events.length === 0) return <div>Error: {error}</div>;
 
   // Filter events by metric type
   const trades = utils.filterByType('trade');
