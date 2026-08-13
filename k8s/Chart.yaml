@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.5
-appVersion: "1.14.4"
+version: 0.9.6
+appVersion: "1.14.5"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,10 +30,22 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
-    - kind: added
-      description: Expose bot state and bot query tools via the MCP server so AI agents can inspect persisted state and query running bots
     - kind: fixed
-      description: Add GitHub Packages auth to the typescript example bot .npmrc so yarn install works out of the box
+      description: Propagate NATS_URL into bot pods so live log streaming works in Kubernetes (sync sidecar and inline sync); changing it now reconciles existing pods and CronJobs
+    - kind: fixed
+      description: Publish log chunks to NATS before the MinIO append so live streaming latency is not gated on object storage writes
+    - kind: fixed
+      description: File watcher debounce gained a trailing-edge trigger so the final write of a burst syncs immediately instead of waiting for the backup ticker
+    - kind: fixed
+      description: Set PYTHONUNBUFFERED=1 on bot containers so Python metric output streams instead of sitting in the stdout buffer
+    - kind: fixed
+      description: Dashboards no longer unmount into loading screens on background refreshes; loading and error only surface when there is nothing to render
+    - kind: changed
+      description: All bot types stream over SSE by default, including scheduled bots; the refresh interval selector is replaced by a live connection status indicator
+    - kind: changed
+      description: Metrics log queries respect limit/offset and report hasMore honestly; dashboard metric history fetch raised to 1000 entries
+    - kind: added
+      description: React SDK context exposes optional isFetching, connected and lastUpdate fields so custom dashboards can render live indicators
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
