@@ -16,7 +16,10 @@ interface BotEventsContextValue {
   connected?: boolean;
   /** When data last arrived (REST or SSE) */
   lastUpdate?: Date | null;
-  /** Error message if any */
+  /** Set only when there is nothing to render (initial load failed).
+   *  Background refresh failures keep this null so a naive `if (error)`
+   *  early-return can't blank a dashboard that has data on screen; they
+   *  surface through toasts and the connection indicator instead. */
   error: string | null;
   /** Event utilities bound to current events */
   utils: BotEventUtils;
@@ -84,6 +87,10 @@ export function BotEventsProvider({
       dateRange,
     });
 
+  // Errors only reach bot frontends when there is nothing to render: this is
+  // what makes the naive `if (error) return <Error/>` pattern safe to write
+  const displayError = events.length === 0 ? error : null;
+
   // Memoized so a provider re-render with unchanged hook output doesn't hand
   // every consumer (each chart in a bot dashboard) a new value object
   const value = useMemo(
@@ -93,12 +100,12 @@ export function BotEventsProvider({
       isFetching,
       connected,
       lastUpdate,
-      error,
+      error: displayError,
       utils,
       refresh,
       botId,
     }),
-    [events, loading, isFetching, connected, lastUpdate, error, utils, refresh, botId],
+    [events, loading, isFetching, connected, lastUpdate, displayError, utils, refresh, botId],
   );
 
   return (

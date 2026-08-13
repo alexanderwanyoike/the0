@@ -60,6 +60,9 @@ export interface The0EventsContextValue {
   /** When data last arrived (REST or SSE). Optional: older platform
    *  versions may not provide it. */
   lastUpdate?: Date | null;
+  /** Set only when there is nothing to render (initial load failed), so a
+   *  plain `if (error)` early return is safe: background refresh failures
+   *  never blank a dashboard that has data on screen. */
   error: string | null;
   utils: BotEventUtils;
   refresh: () => void;
