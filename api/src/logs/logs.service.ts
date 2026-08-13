@@ -86,6 +86,11 @@ export class LogsService {
 
       const sortOrder = query.sort || "desc";
 
+      // For metrics we know the exact filtered count before truncation, so
+      // hasMore can be computed precisely instead of the >=limit heuristic
+      // used for raw logs (whose streams stop early at the limit).
+      let metricsHasMore = false;
+
       if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
         // Single date, non-metrics: tail for latest entries (returns newest-first)
         const logPath = `logs/${botId}/${dates[0]}.log`;
@@ -94,7 +99,7 @@ export class LogsService {
       } else {
         // Multi-date or metrics: stream from start (returns oldest-first)
         const skipped = { count: 0 };
-        if (sortOrder === "desc" && query.type !== "metrics") {
+        if (sortOrder === "desc") {
           // For desc on the stream path, read entries in chronological order,
           // reverse to newest-first, then apply offset and limit.
           // Cap total reads to prevent memory exhaustion on huge ranges.
@@ -106,19 +111,28 @@ export class LogsService {
             if (entries.length >= maxRead) break;
           }
           entries.reverse();
+          metricsHasMore = entries.length > query.offset + query.limit;
           entries.splice(0, query.offset);
           if (entries.length > query.limit) entries.length = query.limit;
         } else {
           for (const date of dates) {
             const logPath = `logs/${botId}/${date}.log`;
             await this.streamFilteredLogs(logPath, date, query, entries, skipped);
+            // Metric streams don't stop at the limit mid-file (the whole day
+            // is read), so one extra entry past the limit is the hasMore
+            // sentinel; raw-log streams stop exactly at the limit.
+            if (entries.length > query.limit) break;
             if (query.type !== "metrics" && entries.length >= query.limit) break;
           }
-          if (sortOrder === "desc") entries.reverse();
+          metricsHasMore = entries.length > query.limit;
+          if (entries.length > query.limit) entries.length = query.limit;
         }
       }
 
-      const hasMore = query.type !== "metrics" && entries.length >= query.limit;
+      const hasMore =
+        query.type === "metrics"
+          ? metricsHasMore
+          : entries.length >= query.limit;
       return Ok({ entries, hasMore });
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error fetching logs");

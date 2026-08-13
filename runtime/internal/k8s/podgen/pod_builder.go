@@ -63,6 +63,10 @@ func NewPodBuilder(name, namespace string) *PodBuilder {
 			{Name: "tmp", MountPath: "/tmp"},
 			{Name: "query", MountPath: "/query"},
 		},
+		// Python block-buffers stdout (8KB) when it's a pipe, so metric()
+		// print() output would sit unflushed instead of reaching the log
+		// pipeline. Set for all runtimes; harmless outside Python.
+		botEnv: []corev1.EnvVar{{Name: "PYTHONUNBUFFERED", Value: "1"}},
 		botResources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceMemory: resource.MustParse(DefaultMemoryLimit),
@@ -237,6 +241,16 @@ func (b *PodBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string, useS
 	return b
 }
 
+// WithNATSConfig adds the NATS URL for live log publishing. The sync process
+// (sidecar for realtime, inline for scheduled) reads NATS_URL to stream log
+// lines; without it, logs only reach MinIO and dashboards fall back to polling.
+func (b *PodBuilder) WithNATSConfig(natsURL string) *PodBuilder {
+	if natsURL != "" {
+		b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "NATS_URL", Value: natsURL})
+	}
+	return b
+}
+
 // WithResources sets resource limits and requests for the bot container.
 func (b *PodBuilder) WithResources(memoryLimit, cpuLimit, memoryRequest, cpuRequest string) *PodBuilder {
 	b.botResources = corev1.ResourceRequirements{
@@ -280,7 +294,7 @@ func (b *PodBuilder) WithSyncSidecar(image string, botID string, watchDone bool)
 		ImagePullPolicy: b.botImagePullPolicy,
 		Command:         []string{"/app/runtime", "daemon", "sync"},
 		Args:            args,
-		Env:             b.minioEnvVars(),
+		Env:             b.syncEnvVars(),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "bot-state", MountPath: "/state"},
 			{Name: "the0", MountPath: "/var/the0"},
@@ -362,16 +376,17 @@ func (b *PodBuilder) ForQuery(queryPath string, queryParams map[string]interface
 	return b
 }
 
-// minioEnvVars extracts MinIO env vars from botEnv for sidecars.
-func (b *PodBuilder) minioEnvVars() []corev1.EnvVar {
-	var minioEnv []corev1.EnvVar
+// syncEnvVars extracts the env vars the sync sidecar needs from botEnv:
+// MinIO credentials for log/state upload and NATS_URL for live log publishing.
+func (b *PodBuilder) syncEnvVars() []corev1.EnvVar {
+	var syncEnv []corev1.EnvVar
 	for _, env := range b.botEnv {
 		switch env.Name {
-		case "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_USE_SSL":
-			minioEnv = append(minioEnv, env)
+		case "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_USE_SSL", "NATS_URL":
+			syncEnv = append(syncEnv, env)
 		}
 	}
-	return minioEnv
+	return syncEnv
 }
 
 // Build creates the final Pod spec.

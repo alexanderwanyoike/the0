@@ -13,16 +13,21 @@ import (
 // FileWatcher watches files and directories for changes using fsnotify.
 // When changes are detected, it triggers a callback.
 type FileWatcher struct {
-	watcher    *fsnotify.Watcher
-	logger     util.Logger
-	onChange   func()
-	debounce   time.Duration
-	mu         sync.Mutex
-	lastEvent  time.Time
-	stopCh     chan struct{}
-	stoppedCh  chan struct{}
-	started    bool
-	startedMu  sync.Mutex
+	watcher   *fsnotify.Watcher
+	logger    util.Logger
+	onChange  func()
+	debounce  time.Duration
+	mu        sync.Mutex
+	lastEvent time.Time
+	// trailing is the pending trailing-edge debounce timer (nil when none).
+	// stopped gates both new timers and in-flight timer callbacks after Stop.
+	// Both are guarded by mu.
+	trailing  *time.Timer
+	stopped   bool
+	stopCh    chan struct{}
+	stoppedCh chan struct{}
+	started   bool
+	startedMu sync.Mutex
 }
 
 // FileWatcherConfig configures the file watcher.
@@ -110,6 +115,10 @@ func (fw *FileWatcher) Start() {
 }
 
 // handleEvent processes a file system event with debouncing.
+// The first event of a burst fires immediately (leading edge). Events inside
+// the debounce window schedule a single trailing trigger instead of being
+// dropped — otherwise the final write of a burst would sit unsynced until the
+// slow periodic backup ticker picked it up.
 func (fw *FileWatcher) handleEvent(event fsnotify.Event) {
 	// Only trigger on write/create events (not chmod, rename, etc.)
 	if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
@@ -117,10 +126,20 @@ func (fw *FileWatcher) handleEvent(event fsnotify.Event) {
 	}
 
 	fw.mu.Lock()
+	if fw.stopped {
+		fw.mu.Unlock()
+		return
+	}
 	now := time.Now()
-	shouldTrigger := now.Sub(fw.lastEvent) >= fw.debounce
+	elapsed := now.Sub(fw.lastEvent)
+	shouldTrigger := elapsed >= fw.debounce
 	if shouldTrigger {
 		fw.lastEvent = now
+	} else if fw.trailing == nil {
+		// Inside the window with no trailing trigger pending: schedule one for
+		// the end of the window so the burst's tail is synced. Later in-window
+		// events coalesce into this same timer.
+		fw.trailing = time.AfterFunc(fw.debounce-elapsed, fw.fireTrailing)
 	}
 	fw.mu.Unlock()
 
@@ -130,11 +149,41 @@ func (fw *FileWatcher) handleEvent(event fsnotify.Event) {
 	}
 }
 
+// fireTrailing runs on the trailing debounce timer's goroutine and triggers
+// the sync callback for the tail of an event burst.
+func (fw *FileWatcher) fireTrailing() {
+	fw.mu.Lock()
+	fw.trailing = nil
+	if fw.stopped {
+		fw.mu.Unlock()
+		return
+	}
+	// Counts as an event for debouncing so a write arriving right after the
+	// trailing fire doesn't immediately fire again.
+	fw.lastEvent = time.Now()
+	fw.mu.Unlock()
+
+	if fw.onChange != nil {
+		fw.logger.Info("Trailing debounce trigger")
+		fw.onChange()
+	}
+}
+
 // Stop stops the file watcher.
 func (fw *FileWatcher) Stop() error {
 	fw.startedMu.Lock()
 	wasStarted := fw.started
 	fw.startedMu.Unlock()
+
+	// Cancel any pending trailing trigger; the stopped flag also covers a
+	// timer callback that already fired and is waiting on the mutex.
+	fw.mu.Lock()
+	fw.stopped = true
+	if fw.trailing != nil {
+		fw.trailing.Stop()
+		fw.trailing = nil
+	}
+	fw.mu.Unlock()
 
 	close(fw.stopCh)
 

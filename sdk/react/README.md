@@ -27,6 +27,8 @@ import { useThe0Events } from '@alexanderwanyoike/the0-react';
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
 
+  // Safe as-is: the platform only sets loading/error while there is nothing
+  // to render, so background refreshes never unmount your dashboard
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
 

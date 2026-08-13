@@ -187,22 +187,24 @@ func adjustChunkToNewlineBoundary(file *os.File, buf []byte, n int, offset int64
 	return chunkSize, nil
 }
 
-// uploadChunk uploads a log chunk to MinIO and publishes it to NATS.
+// uploadChunk publishes a log chunk to NATS and uploads it to MinIO.
+// NATS goes first: live SSE viewers care about latency, while the MinIO
+// append is O(day-file-size) and can fail transiently — neither should
+// delay or suppress the live stream. An upload failure keeps lastOffset in
+// place so the chunk is re-uploaded on the next Sync (durability never drops
+// data); that retry also re-publishes to NATS, which is accepted
+// at-least-once behavior for the live stream.
 func (l *LogsSyncer) uploadChunk(ctx context.Context, content string) error {
-	syncCtx, cancel := context.WithTimeout(ctx, l.uploadTimeout)
-	defer cancel()
-
-	if err := l.logUploader.AppendBotLogs(syncCtx, l.botID, content); err != nil {
-		return err
-	}
-
 	if l.natsPublisher != nil {
 		if err := l.natsPublisher.Publish(l.botID, content); err != nil {
 			l.logger.Info("Failed to publish logs to NATS", "error", err.Error())
 		}
 	}
 
-	return nil
+	syncCtx, cancel := context.WithTimeout(ctx, l.uploadTimeout)
+	defer cancel()
+
+	return l.logUploader.AppendBotLogs(syncCtx, l.botID, content)
 }
 
 // Close cleans up all owned resources (uploader and publisher).

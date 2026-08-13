@@ -125,6 +125,7 @@ describe("useBotEvents", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseBotLogs.mockReturnValue({
+      isFetching: false,
       logs: mockLogs,
       loading: false,
       error: null,
@@ -148,7 +149,7 @@ describe("useBotEvents", () => {
         streaming: false,
         autoRefresh: false,
         refreshInterval: 30000,
-        initialQuery: { limit: 100, offset: 0, type: "metrics" },
+        initialQuery: { limit: 1000, offset: 0, type: "metrics" },
       });
     });
 
@@ -231,7 +232,7 @@ describe("useBotEvents", () => {
       expect(mockUseBotLogs).toHaveBeenCalledWith(
         expect.objectContaining({
           initialQuery: {
-            limit: 100,
+            limit: 1000,
             offset: 0,
             type: "metrics",
             sort: "desc",
@@ -330,6 +331,22 @@ describe("useBotEvents", () => {
 
   describe("event ordering", () => {
     it("sorts parsed events chronologically regardless of fetch order", () => {
+      // Single raw entry so the (per-entry) parser is invoked exactly once
+      mockUseBotLogs.mockReturnValue({
+        isFetching: false,
+        logs: [{ date: "2026-07-14T23:40:00Z", content: "desc batch" }],
+        loading: false,
+        error: null,
+        hasMore: false,
+        total: 1,
+        refresh: mockRefresh,
+        loadMore: jest.fn(),
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        setLatestFilter: mockSetLatestFilter,
+        exportLogs: mockExportLogs,
+      } as any);
+
       const { parseEvents } = jest.requireMock("@/lib/events/event-parser");
       // Simulate a newest-first (sort=desc) API response: parseEvents
       // preserves input order, so events arrive newest-first here.
@@ -395,9 +412,103 @@ describe("useBotEvents", () => {
     });
   });
 
+  describe("event parsing efficiency", () => {
+    it("reuses parsed events for unchanged log entries when new entries append", () => {
+      const entryA = { date: "2024-01-01T10:00:00Z", content: "Log line A" };
+      const entryB = { date: "2024-01-01T10:01:00Z", content: "Log line B" };
+      const baseReturn = {
+        isFetching: false,
+        loading: false,
+        error: null,
+        hasMore: false,
+        total: 1,
+        refresh: mockRefresh,
+        loadMore: jest.fn(),
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        setLatestFilter: mockSetLatestFilter,
+        exportLogs: mockExportLogs,
+      };
+
+      mockUseBotLogs.mockReturnValue({ ...baseReturn, logs: [entryA] } as any);
+      const { result, rerender } = renderHook(() =>
+        useBotEvents({ botId: "bot-123" }),
+      );
+      const firstEvent = result.current.events[0];
+      expect(firstEvent).toBeDefined();
+
+      // SSE append: same entryA object, plus a new entry. The already-parsed
+      // event for entryA must keep its identity so charts and memoized
+      // consumers don't see every event as new on every appended line.
+      mockUseBotLogs.mockReturnValue({
+        ...baseReturn,
+        logs: [entryA, entryB],
+      } as any);
+      rerender();
+
+      expect(result.current.events.length).toBe(2);
+      expect(result.current.events[0]).toBe(firstEvent);
+    });
+  });
+
   describe("loading state", () => {
+    it("passes isFetching through from useBotLogs for background refreshes", () => {
+      mockUseBotLogs.mockReturnValue({
+        isFetching: true,
+        logs: [],
+        loading: false,
+        error: null,
+        hasMore: false,
+        total: 0,
+        refresh: mockRefresh,
+        loadMore: jest.fn(),
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        exportLogs: mockExportLogs,
+      });
+
+      const { result } = renderHook(() => useBotEvents({ botId: "bot-123" }));
+
+      expect(result.current.isFetching).toBe(true);
+      expect(result.current.loading).toBe(false);
+    });
+
+    it("passes connected and lastUpdate through for live indicators", () => {
+      const when = new Date("2026-08-13T10:00:00Z");
+      mockUseBotLogs.mockReturnValue({
+        isFetching: false,
+        connected: true,
+        lastUpdate: when,
+        logs: [],
+        loading: false,
+        error: null,
+        hasMore: false,
+        total: 0,
+        refresh: mockRefresh,
+        loadMore: jest.fn(),
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        setLatestFilter: mockSetLatestFilter,
+        exportLogs: mockExportLogs,
+      } as any);
+
+      const { result } = renderHook(() =>
+        useBotEvents({ botId: "bot-123", streaming: true }),
+      );
+
+      expect(result.current.connected).toBe(true);
+      expect(result.current.lastUpdate).toBe(when);
+
+      // Outside streaming mode the indicator stays hidden
+      const { result: nonStreaming } = renderHook(() =>
+        useBotEvents({ botId: "bot-123" }),
+      );
+      expect(nonStreaming.current.connected).toBeUndefined();
+    });
+
     it("returns loading state from useBotLogs", () => {
       mockUseBotLogs.mockReturnValue({
+      isFetching: false,
         logs: [],
         loading: true,
         error: null,
@@ -425,6 +536,7 @@ describe("useBotEvents", () => {
   describe("error state", () => {
     it("returns error from useBotLogs", () => {
       mockUseBotLogs.mockReturnValue({
+      isFetching: false,
         logs: [],
         loading: false,
         error: "Failed to fetch logs",
@@ -628,6 +740,7 @@ describe("useBotEvents", () => {
 
       // Simulate events change
       mockUseBotLogs.mockReturnValue({
+      isFetching: false,
         logs: [
           { date: "20240101", content: "[2024-01-01 12:00:00] INFO: New log" },
         ],
@@ -653,6 +766,7 @@ describe("useBotEvents", () => {
   describe("empty state", () => {
     it("handles empty logs array", () => {
       mockUseBotLogs.mockReturnValue({
+      isFetching: false,
         logs: [],
         loading: false,
         error: null,

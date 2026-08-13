@@ -691,3 +691,60 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete orphan pod")
 }
 
+
+func TestBotController_Reconcile_PropagatesNATSURLToSyncSidecar(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{
+			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
+		},
+	}
+	mockK8s := &MockK8sClient{Pods: []corev1.Pod{}}
+
+	config := testControllerConfig()
+	config.NATSURL = "nats://nats:4222"
+
+	controller := NewBotController(config, mockRepo, mockK8s)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, mockK8s.CreatedPods, 1)
+	require.Len(t, mockK8s.CreatedPods[0].Spec.InitContainers, 1)
+
+	sidecarEnv := make(map[string]string)
+	for _, env := range mockK8s.CreatedPods[0].Spec.InitContainers[0].Env {
+		sidecarEnv[env.Name] = env.Value
+	}
+	assert.Equal(t, "nats://nats:4222", sidecarEnv["NATS_URL"],
+		"sync sidecar needs NATS_URL for live log publishing")
+}
+
+func TestBotController_Reconcile_ReplacesPodWhenNATSURLAdded(t *testing.T) {
+	bot := createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")
+
+	// Existing pod was generated before NATS_URL was configured
+	oldGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
+		Namespace:      "the0",
+		ControllerName: "the0-bot-controller",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
+	})
+	oldPod, err := oldGenerator.GeneratePod(bot)
+	require.NoError(t, err)
+	oldPod.Status.Phase = corev1.PodRunning
+
+	mockRepo := &MockBotRepository{Bots: []model.Bot{bot}}
+	mockK8s := &MockK8sClient{Pods: []corev1.Pod{*oldPod}}
+
+	config := testControllerConfig()
+	config.NATSURL = "nats://nats:4222"
+	controller := NewBotController(config, mockRepo, mockK8s)
+
+	err = controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockK8s.DeleteCalled,
+		"pod without NATS_URL must be replaced once NATS_URL is configured")
+}

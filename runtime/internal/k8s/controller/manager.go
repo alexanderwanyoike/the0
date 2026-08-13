@@ -33,6 +33,9 @@ type ManagerConfig struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
+	// NATSURL for live log publishing from bot pods (empty disables)
+	NATSURL string
+
 	// RuntimeImage for init containers and sidecars in bot pods
 	RuntimeImage string
 
@@ -103,6 +106,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			MinIOSecretKey:         config.MinIOSecretKey,
 			MinIOBucket:            config.MinIOBucket,
 			MinIOUseSSL:            config.MinIOUseSSL,
+			NATSURL:                config.NATSURL,
 			RuntimeImage:           config.RuntimeImage,
 			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
@@ -135,6 +139,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			MinIOSecretKey:         config.MinIOSecretKey,
 			MinIOBucket:            config.MinIOBucket,
 			MinIOUseSSL:            config.MinIOUseSSL,
+			NATSURL:                config.NATSURL,
 			RuntimeImage:           config.RuntimeImage,
 			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},

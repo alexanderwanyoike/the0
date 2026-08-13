@@ -355,6 +355,91 @@ func TestLogsSyncer_Sync_WithNATSPublisher(t *testing.T) {
 	assert.Equal(t, content, mockPublisher.PublishCalls[0].Content)
 }
 
+// orderRecordingUploader and orderRecordingPublisher share a slice to record
+// the relative order of publish vs upload calls within a chunk.
+type orderRecordingUploader struct {
+	order *[]string
+	err   error
+}
+
+func (o *orderRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string) error {
+	*o.order = append(*o.order, "upload")
+	return o.err
+}
+func (o *orderRecordingUploader) StoreFinalLogs(ctx context.Context, botID, content string) error {
+	return nil
+}
+func (o *orderRecordingUploader) Close() error { return nil }
+
+type orderRecordingPublisher struct {
+	order *[]string
+}
+
+func (o *orderRecordingPublisher) Publish(botID string, content string) error {
+	*o.order = append(*o.order, "publish")
+	return nil
+}
+func (o *orderRecordingPublisher) Close() error { return nil }
+
+func TestLogsSyncer_Sync_PublishesToNATSBeforeUpload(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+	require.NoError(t, os.WriteFile(logFile, []byte("line 1\n"), 0644))
+
+	var order []string
+	uploader := &orderRecordingUploader{order: &order}
+	publisher := &orderRecordingPublisher{order: &order}
+	syncer := NewLogsSyncer("bot-1", tmpDir, uploader, publisher, &util.DefaultLogger{})
+
+	synced := syncer.Sync(context.Background())
+
+	assert.True(t, synced)
+	assert.Equal(t, []string{"publish", "upload"}, order,
+		"NATS publish (liveness) must happen before MinIO upload (durability)")
+}
+
+func TestLogsSyncer_Sync_PublishesToNATSWhenUploadFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	content := "important live line\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{AppendError: assert.AnError}
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, mockPublisher, &util.DefaultLogger{})
+
+	synced := syncer.Sync(context.Background())
+
+	assert.False(t, synced, "sync reports failure so durability is retried")
+	require.Len(t, mockPublisher.PublishCalls, 1,
+		"chunk must still reach live viewers when MinIO upload fails")
+	assert.Equal(t, content, mockPublisher.PublishCalls[0].Content)
+}
+
+func TestLogsSyncer_Sync_RetriesUploadOfSameChunkAfterFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+
+	content := "line to retry\n"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	mockUploader := &MockMinIOLogger{AppendError: assert.AnError}
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, mockPublisher, &util.DefaultLogger{})
+
+	// First sync: upload fails, offset must not advance
+	assert.False(t, syncer.Sync(context.Background()))
+	require.Len(t, mockUploader.AppendCalls, 1)
+
+	// Upload recovers: the same chunk is uploaded again so durability never
+	// drops data (the re-publish to NATS is accepted at-least-once behavior)
+	mockUploader.AppendError = nil
+	assert.True(t, syncer.Sync(context.Background()))
+	require.Len(t, mockUploader.AppendCalls, 2)
+	assert.Equal(t, content, mockUploader.AppendCalls[1].Content)
+}
+
 func TestLogsSyncer_Sync_NATSPublishError(t *testing.T) {
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "bot.log")

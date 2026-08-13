@@ -161,6 +161,19 @@ export default function Dashboard() {
 
 The dashboard renders loading and error states first, then displays the actual metrics. The `utils` object provides methods for filtering events by type, getting the latest metric of a given type, and extracting data for visualization.
 
+### Design for a Live Dashboard
+
+The platform keeps your data fresh in the background - live streaming for realtime bots, refreshes for scheduled ones - and your dashboard stays mounted the whole time. The early returns above are safe because of two guarantees the platform makes:
+
+- **`loading` is only true while there is nothing to render.** Once your dashboard has data, refreshes happen behind it without ever flipping `loading` back on, so an `if (loading)` early return can only ever show before first data arrives.
+- **`error` is only set when there is nothing to render.** A transient background refresh failure never reaches your dashboard while data is on screen; the platform keeps your last data visible and surfaces the problem through its own connection indicator.
+
+In other words: write the obvious code, it does the right thing. A few habits on top of that make the result feel like a trading terminal rather than a page that reloads:
+
+- **Append, don't rebuild.** Drive charts from `utils.extractTimeSeries(...)` and let new points extend the series. Parsed events keep their identity across updates, so memoized components (`React.memo`, `useMemo` keyed on events) only re-render when data actually changes.
+- **Show freshness, not spinners.** A "last updated" timestamp from your newest event (`utils.latest(...)?.timestamp`) tells users the dashboard is alive without any flashing.
+- **Scheduled bots are status pages.** A bot that runs once a day can only produce one data point a day - frame the dashboard around its last run rather than simulating a live feed.
+
 ## The Events API
 
 The `useThe0Events` hook provides everything you need to work with your bot's event stream:

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import moment from "moment";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import {
   IntervalPicker,
   IntervalValue,
 } from "@/components/bot/interval-picker";
-import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
+import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 import {
   AlertDialog,
@@ -69,8 +69,9 @@ interface MobileBotDetailProps {
   onIntervalChange: (value: IntervalValue) => void;
   showLive?: boolean;
   showLatest?: boolean;
-  refreshInterval: number;
-  onRefreshIntervalChange: (ms: number) => void;
+  /** SSE transport flag for the dashboard (independent of the showLive UI
+   *  option: scheduled bots stream too but default to the Latest view) */
+  streaming?: boolean;
   sort?: "asc" | "desc";
   onSortChange?: (sort: "asc" | "desc") => void;
 }
@@ -104,12 +105,21 @@ export function MobileBotDetail({
   onIntervalChange,
   showLive,
   showLatest,
-  refreshInterval,
-  onRefreshIntervalChange,
+  streaming,
   sort,
   onSortChange,
 }: MobileBotDetailProps) {
   const router = useRouter();
+
+  // Stable identity: an inline literal here defeats React.memo on
+  // BotDashboardLoader and remounts the dashboard on every render
+  const dashboardDateRange = useMemo(
+    () =>
+      interval.type === "range"
+        ? { start: interval.start, end: interval.end }
+        : undefined,
+    [interval],
+  );
 
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)]">
@@ -142,7 +152,7 @@ export function MobileBotDetail({
       {/* Interval Picker + Refresh Selector */}
       <div className="px-3 py-2 border-b space-y-1.5">
         <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} showLatest={showLatest} />
-        <RefreshSelector value={refreshInterval} onChange={onRefreshIntervalChange} hidden={shouldHideRefreshSelector(!!showLive, interval.label)} />
+        <ConnectionStatusIndicator connected={connected} lastUpdate={lastUpdate} />
       </div>
 
       {/* Tabbed content */}
@@ -159,21 +169,23 @@ export function MobileBotDetail({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dashboard" className="flex-1 m-0 overflow-auto">
+        {/* forceMount keeps the dashboard alive across tab switches:
+            without it, every Console/Details round-trip re-imports the
+            bundle, reconnects SSE, and refetches history */}
+        <TabsContent
+          value="dashboard"
+          forceMount
+          className="flex-1 m-0 overflow-auto data-[state=inactive]:hidden"
+        >
           {bot.config.hasFrontend && customBotId ? (
             <BotDashboardLoader
               key={botId}
               botId={botId}
               customBotId={customBotId}
               version={bot.config.version}
-              dateRange={
-                interval.type === "range"
-                  ? { start: interval.start, end: interval.end }
-                  : undefined
-              }
+              dateRange={dashboardDateRange}
               latest={interval.type === "latest"}
-              streaming={showLive}
-              refreshInterval={refreshInterval}
+              streaming={streaming}
               className=""
             />
           ) : (
