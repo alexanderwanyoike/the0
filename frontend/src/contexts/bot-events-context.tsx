@@ -11,6 +11,11 @@ interface BotEventsContextValue {
   loading: boolean;
   /** True while a background refresh is in flight (subtle indicators) */
   isFetching: boolean;
+  /** SSE connection state: true = live, false = degraded to polling,
+   *  undefined = not streaming */
+  connected?: boolean;
+  /** When data last arrived (REST or SSE) */
+  lastUpdate?: Date | null;
   /** Set only when there is nothing to render (initial load failed).
    *  Background refresh failures keep this null so a naive `if (error)`
    *  early-return can't blank a dashboard that has data on screen; they
@@ -72,14 +77,15 @@ export function BotEventsProvider({
   refreshInterval = 30000,
   dateRange,
 }: BotEventsProviderProps) {
-  const { events, loading, isFetching, error, utils, refresh } = useBotEvents({
-    botId,
-    streaming,
-    latest,
-    autoRefresh,
-    refreshInterval,
-    dateRange,
-  });
+  const { events, loading, isFetching, connected, lastUpdate, error, utils, refresh } =
+    useBotEvents({
+      botId,
+      streaming,
+      latest,
+      autoRefresh,
+      refreshInterval,
+      dateRange,
+    });
 
   // Errors only reach bot frontends when there is nothing to render: this is
   // what makes the naive `if (error) return <Error/>` pattern safe to write
@@ -92,12 +98,14 @@ export function BotEventsProvider({
       events,
       loading,
       isFetching,
+      connected,
+      lastUpdate,
       error: displayError,
       utils,
       refresh,
       botId,
     }),
-    [events, loading, isFetching, displayError, utils, refresh, botId],
+    [events, loading, isFetching, connected, lastUpdate, displayError, utils, refresh, botId],
   );
 
   return (

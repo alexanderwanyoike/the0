@@ -64,6 +64,11 @@ interface UseBotEventsReturn {
   loading: boolean;
   /** True while a background refresh is in flight */
   isFetching: boolean;
+  /** SSE connection state: true = live stream active, false = degraded to
+   *  polling or not yet connected, undefined = not streaming */
+  connected?: boolean;
+  /** When data last arrived (REST or SSE) */
+  lastUpdate: Date | null;
   /** Error message if any */
   error: string | null;
   /** Event utilities bound to current events */
@@ -97,7 +102,7 @@ export function useBotEvents({
   // last known state even when they haven't run inside any fixed window.
   const initialQuery = latest
     ? {
-        limit: 100,
+        limit: 1000,
         offset: 0,
         type: "metrics" as const,
         sort: "desc" as const,
@@ -108,11 +113,11 @@ export function useBotEvents({
           dateRange: dateRange.start.includes("T")
             ? `${dateRange.start}--${dateRange.end}`
             : `${dateRange.start}-${dateRange.end}`,
-          limit: 100,
+          limit: 1000,
           offset: 0,
           type: "metrics" as const,
         }
-      : { limit: 100, offset: 0, type: "metrics" as const };
+      : { limit: 1000, offset: 0, type: "metrics" as const };
 
   // With streaming, metric history still loads via REST (type=metrics) and
   // new lines append live over SSE; non-metric lines are filtered out by
@@ -121,6 +126,8 @@ export function useBotEvents({
     logs: rawLogs,
     loading,
     isFetching,
+    connected,
+    lastUpdate,
     error,
     refresh,
     setDateFilter,
@@ -235,6 +242,9 @@ export function useBotEvents({
     events,
     loading,
     isFetching,
+    // Only meaningful in streaming mode; undefined keeps indicators hidden
+    connected: streaming ? connected : undefined,
+    lastUpdate,
     error,
     utils,
     refresh,
