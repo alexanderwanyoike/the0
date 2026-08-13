@@ -59,6 +59,10 @@ type PodGeneratorConfig struct {
 	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
 	MinIOUseSSL      bool
 
+	// NATSURL enables live log streaming: the sync process publishes bot log
+	// lines to NATS for the API's SSE fan-out. Empty disables publishing.
+	NATSURL string
+
 	// RuntimeImage is the image for init and sidecar containers (e.g., "the0/runtime:latest")
 	RuntimeImage string
 
@@ -117,11 +121,12 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			LabelManagedBy:        g.config.ControllerName,
 		}).
 		WithAnnotations(map[string]string{
-			AnnotationConfigHash: computeConfigHash(bot),
+			AnnotationConfigHash: g.computeConfigHash(bot),
 		}).
 		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
 		WithBotType("realtime").
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithNATSConfig(g.config.NATSURL).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
 		WithSyncSidecar(g.config.RuntimeImage, bot.ID, false)
 
@@ -165,11 +170,12 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 			LabelManagedBy:        g.config.ControllerName,
 		}).
 		WithAnnotations(map[string]string{
-			AnnotationConfigHash: computeConfigHash(bot),
+			AnnotationConfigHash: g.computeConfigHash(bot),
 		}).
 		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
 		WithBotType("scheduled").
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithNATSConfig(g.config.NATSURL).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 	// Note: No query sidecar - queries are ephemeral
 
@@ -300,10 +306,12 @@ func ExtractConfigHash(pod *corev1.Pod) string {
 	return pod.Annotations[AnnotationConfigHash]
 }
 
-// ConfigChanged returns true if the bot config has changed since the pod was created.
-func ConfigChanged(pod *corev1.Pod, bot model.Bot) bool {
+// ConfigChanged returns true if the desired pod spec has changed since the pod
+// was created, either from the bot's own config or from generator-level inputs
+// (e.g. NATS URL) that shape the pod environment.
+func (g *PodGenerator) ConfigChanged(pod *corev1.Pod, bot model.Bot) bool {
 	existingHash := ExtractConfigHash(pod)
-	currentHash := computeConfigHash(bot)
+	currentHash := g.computeConfigHash(bot)
 	return existingHash != currentHash
 }
 
@@ -355,15 +363,19 @@ func parseResourceOrDefault(value, defaultValue string) resource.Quantity {
 }
 
 // computeConfigHash creates a hash of the bot config for change detection.
-func computeConfigHash(bot model.Bot) string {
+// Generator-level inputs that shape the pod environment (NATS URL) are part of
+// the hash so changing them reconciles existing pods.
+func (g *PodGenerator) computeConfigHash(bot model.Bot) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
 		Enabled          *bool
+		NATSURL          string
 	}{
 		Config:           bot.Config,
 		CustomBotVersion: bot.CustomBotVersion.Version,
 		Enabled:          bot.Enabled,
+		NATSURL:          g.config.NATSURL,
 	}
 
 	jsonBytes, err := json.Marshal(data)

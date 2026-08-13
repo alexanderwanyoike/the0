@@ -457,14 +457,25 @@ func TestConfigChanged(t *testing.T) {
 	require.NoError(t, err)
 
 	// Same config should not be changed
-	assert.False(t, ConfigChanged(pod, bot))
+	assert.False(t, generator.ConfigChanged(pod, bot))
 
 	// Modified config should be detected
 	botModified := bot
 	botModified.Config = map[string]interface{}{
 		"key": "value2",
 	}
-	assert.True(t, ConfigChanged(pod, botModified))
+	assert.True(t, generator.ConfigChanged(pod, botModified))
+
+	// A generator with a different NATS URL must also detect a change, so
+	// existing pods are reconciled when live streaming is (re)configured
+	natsGenerator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		NATSURL:        "nats://nats:4222",
+	})
+	assert.True(t, natsGenerator.ConfigChanged(pod, bot))
 }
 
 func TestSanitizeLabelValue(t *testing.T) {
@@ -578,4 +589,86 @@ func TestValidateMinIOPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func envToMap(envVars []corev1.EnvVar) map[string]string {
+	m := make(map[string]string, len(envVars))
+	for _, env := range envVars {
+		m[env.Name] = env.Value
+	}
+	return m
+}
+
+func natsTestBot(id, botRuntime string) model.Bot {
+	return model.Bot{
+		ID:     id,
+		Config: map[string]interface{}{},
+		CustomBotVersion: model.CustomBotVersion{
+			Version: "1.0.0",
+			Config: model.APIBotConfig{
+				Name:        "nats-bot",
+				Runtime:     botRuntime,
+				Entrypoints: map[string]string{"bot": "main.py"},
+			},
+			FilePath: "nats-bot/1.0.0",
+		},
+	}
+}
+
+func TestPodGenerator_NATSURLPropagation(t *testing.T) {
+	withNATS := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+		NATSURL:        "nats://nats:4222",
+	})
+
+	t.Run("realtime sync sidecar receives NATS_URL", func(t *testing.T) {
+		pod, err := withNATS.GeneratePod(natsTestBot("rt-bot", "python3.11"))
+		require.NoError(t, err)
+
+		require.Len(t, pod.Spec.InitContainers, 1)
+		sidecarEnv := envToMap(pod.Spec.InitContainers[0].Env)
+		assert.Equal(t, "nats://nats:4222", sidecarEnv["NATS_URL"],
+			"sync sidecar needs NATS_URL to publish live log lines")
+		// MinIO vars must survive alongside NATS_URL
+		assert.Equal(t, "minio:9000", sidecarEnv["MINIO_ENDPOINT"])
+	})
+
+	t.Run("scheduled bot container receives NATS_URL for inline sync", func(t *testing.T) {
+		podSpec, err := withNATS.GenerateScheduledPodSpec(natsTestBot("sched-bot", "python3.11"))
+		require.NoError(t, err)
+
+		require.Len(t, podSpec.Containers, 1)
+		botEnv := envToMap(podSpec.Containers[0].Env)
+		assert.Equal(t, "nats://nats:4222", botEnv["NATS_URL"],
+			"scheduled bots run sync inline in the bot container")
+	})
+
+	t.Run("empty NATS_URL sets no env var", func(t *testing.T) {
+		withoutNATS := NewPodGenerator(PodGeneratorConfig{
+			Namespace:      "the0",
+			MinIOEndpoint:  "minio:9000",
+			MinIOAccessKey: "key",
+			MinIOSecretKey: "secret",
+			MinIOBucket:    "bots",
+			RuntimeImage:   "the0/runtime:latest",
+		})
+
+		pod, err := withoutNATS.GeneratePod(natsTestBot("rt-bot", "python3.11"))
+		require.NoError(t, err)
+		require.Len(t, pod.Spec.InitContainers, 1)
+		sidecarEnv := envToMap(pod.Spec.InitContainers[0].Env)
+		_, present := sidecarEnv["NATS_URL"]
+		assert.False(t, present, "no NATS_URL config should mean no NATS_URL env var")
+
+		podSpec, err := withoutNATS.GenerateScheduledPodSpec(natsTestBot("sched-bot", "python3.11"))
+		require.NoError(t, err)
+		botEnv := envToMap(podSpec.Containers[0].Env)
+		_, present = botEnv["NATS_URL"]
+		assert.False(t, present)
+	})
 }

@@ -390,6 +390,7 @@ func runController() {
 		MinIOSecretKey:         minioSecretKey,
 		MinIOBucket:            minioBucket,
 		MinIOUseSSL:            minioUseSSL,
+		NATSURL:                natsUrl,
 		RuntimeImage:           runtimeImage,
 		RuntimeImagePullPolicy: runtimeImagePullPolicy,
 		Logger:                 &util.DefaultLogger{},
