@@ -191,7 +191,7 @@ describe("LogsService", () => {
       expect(result.data!.entries[2].content).toContain("line-7");
     });
 
-    it("should return all metrics ignoring limit when type=metrics", async () => {
+    it("should return the newest `limit` metrics and report hasMore when type=metrics", async () => {
       const lines = [
         '{"level":"info","msg":"noise"}',
         '{"_metric":true,"name":"m1","value":1}',
@@ -202,7 +202,7 @@ describe("LogsService", () => {
         '{"_metric":true,"name":"m4","value":4}',
       ].join("\n");
 
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+      mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
       const result = await service.getLogs("bot-1", {
         date: "20260401",
@@ -212,8 +212,13 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      // All 4 metrics returned despite limit=2
-      expect(result.data!.entries).toHaveLength(4);
+      // Default sort is desc: newest 2 of the 4 metrics, with hasMore
+      // signalling the older ones are reachable via offset
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        '{"_metric":true,"name":"m4","value":4}',
+        '{"_metric":true,"name":"m3","value":3}',
+      ]);
+      expect(result.data!.hasMore).toBe(true);
     });
 
     it("should combine offset and type=metrics filtering", async () => {
@@ -753,7 +758,7 @@ describe("LogsService", () => {
       expect(mockMinioClient.getObject).toHaveBeenCalled();
     });
 
-    it("should return all metrics without limit when type=metrics", async () => {
+    it("should respect limit for metrics scattered through a large file", async () => {
       // 200 lines: 150 noise + 50 metrics scattered throughout
       const lines = Array.from({ length: 200 }, (_, i) =>
         i % 4 === 0
@@ -761,7 +766,7 @@ describe("LogsService", () => {
           : `{"level":"info","message":"noise-${i}"}`,
       ).join("\n") + "\n";
 
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+      mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
       const result = await service.getLogs("bot-1", {
         date: "20260401",
@@ -771,8 +776,10 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      // Should return all 50 metrics, not just 10
-      expect(result.data!.entries.length).toBe(50);
+      // Newest 10 of the 50 metrics; the rest are reachable via offset
+      expect(result.data!.entries.length).toBe(10);
+      expect(result.data!.entries[0].content).toContain("metric-196");
+      expect(result.data!.hasMore).toBe(true);
     });
 
     it("should still respect limit for non-metrics queries", async () => {
@@ -1341,6 +1348,120 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toEqual([]);
       expect(result.data!.hasMore).toBe(false);
+    });
+  });
+
+  describe("getLogs - metrics pagination", () => {
+    const metricLine = (n: number) =>
+      `{"_metric":true,"name":"m${n}","value":${n}}`;
+
+    it("should page backwards through metric history with offset (desc)", async () => {
+      const lines = Array.from({ length: 5 }, (_, i) => metricLine(i + 1)).join(
+        "\n",
+      );
+      mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
+
+      const page1 = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 2,
+        offset: 0,
+        type: "metrics",
+      });
+      expect(page1.success).toBe(true);
+      expect(page1.data!.entries.map((e) => e.content)).toEqual([
+        metricLine(5),
+        metricLine(4),
+      ]);
+      expect(page1.data!.hasMore).toBe(true);
+
+      const page2 = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 2,
+        offset: 2,
+        type: "metrics",
+      });
+      expect(page2.data!.entries.map((e) => e.content)).toEqual([
+        metricLine(3),
+        metricLine(2),
+      ]);
+      expect(page2.data!.hasMore).toBe(true);
+
+      const page3 = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 2,
+        offset: 4,
+        type: "metrics",
+      });
+      expect(page3.data!.entries.map((e) => e.content)).toEqual([
+        metricLine(1),
+      ]);
+      expect(page3.data!.hasMore).toBe(false);
+    });
+
+    it("should report hasMore false when all metrics fit in one page", async () => {
+      const lines = [metricLine(1), metricLine(2), metricLine(3)].join("\n");
+      mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toHaveLength(3);
+      expect(result.data!.hasMore).toBe(false);
+    });
+
+    it("should respect limit and report hasMore for asc metric queries", async () => {
+      const lines = Array.from({ length: 4 }, (_, i) => metricLine(i + 1)).join(
+        "\n",
+      );
+      mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 2,
+        offset: 0,
+        type: "metrics",
+        sort: "asc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        metricLine(1),
+        metricLine(2),
+      ]);
+      expect(result.data!.hasMore).toBe(true);
+    });
+
+    it("should paginate metrics across a date range", async () => {
+      const day1 = ['{"level":"info","message":"noise"}', metricLine(1)].join(
+        "\n",
+      );
+      const day2 = [metricLine(2), metricLine(3)].join("\n");
+      mockMinioClient.getObject.mockImplementation(
+        (_bucket: string, path: string) =>
+          Promise.resolve(
+            stringStream(path.includes("20260401") ? day1 : day2),
+          ),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 2,
+        offset: 0,
+        type: "metrics",
+      });
+
+      expect(result.success).toBe(true);
+      // Newest-first across days: day2's metrics come first
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        metricLine(3),
+        metricLine(2),
+      ]);
+      expect(result.data!.hasMore).toBe(true);
     });
   });
 
