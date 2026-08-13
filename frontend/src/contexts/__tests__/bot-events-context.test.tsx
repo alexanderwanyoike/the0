@@ -145,6 +145,66 @@ describe("BotEventsContext", () => {
       expect(screen.getByTestId("fetching")).toHaveTextContent("false");
     });
 
+    it("suppresses error while data is on screen (background refresh failure)", () => {
+      const { useBotEvents } = require("@/hooks/use-bot-events");
+      useBotEvents.mockReturnValueOnce({
+        events: mockEvents,
+        loading: false,
+        isFetching: false,
+        error: "network blip",
+        utils: mockUtils,
+        refresh: mockRefresh,
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        exportLogs: mockExportLogs,
+        rawLogs: [],
+      });
+
+      const TestComponent = () => {
+        const context = useBotEventsContext();
+        return <span data-testid="error">{String(context.error)}</span>;
+      };
+
+      render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      // A transient refresh failure must not blank a dashboard that has
+      // data: naive `if (error)` early-returns in bot frontends stay safe
+      expect(screen.getByTestId("error")).toHaveTextContent("null");
+    });
+
+    it("exposes error when there is nothing to render (initial load failure)", () => {
+      const { useBotEvents } = require("@/hooks/use-bot-events");
+      useBotEvents.mockReturnValueOnce({
+        events: [],
+        loading: false,
+        isFetching: false,
+        error: "boom",
+        utils: mockUtils,
+        refresh: mockRefresh,
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        exportLogs: mockExportLogs,
+        rawLogs: [],
+      });
+
+      const TestComponent = () => {
+        const context = useBotEventsContext();
+        return <span data-testid="error">{String(context.error)}</span>;
+      };
+
+      render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      expect(screen.getByTestId("error")).toHaveTextContent("boom");
+    });
+
     it("passes autoRefresh prop to useBotEvents", () => {
       const { useBotEvents } = require("@/hooks/use-bot-events");
 
