@@ -46,7 +46,20 @@ export interface BotEventUtils {
 
 export interface The0EventsContextValue {
   events: BotEvent[];
+  /** True only while there is nothing to render yet (initial load). The
+   *  platform refreshes data in the background without flipping this, so
+   *  guard full-screen loading states with `events.length === 0`. */
   loading: boolean;
+  /** True while a background refresh is in flight. Optional: older platform
+   *  versions may not provide it. */
+  isFetching?: boolean;
+  /** Live stream state: true = SSE connected, false = degraded to polling,
+   *  undefined = not streaming. Optional: older platform versions may not
+   *  provide it. Use for a live/updating indicator. */
+  connected?: boolean;
+  /** When data last arrived (REST or SSE). Optional: older platform
+   *  versions may not provide it. */
+  lastUpdate?: Date | null;
   error: string | null;
   utils: BotEventUtils;
   refresh: () => void;

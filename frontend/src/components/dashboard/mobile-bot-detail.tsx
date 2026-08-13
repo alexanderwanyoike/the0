@@ -20,7 +20,7 @@ import {
   IntervalPicker,
   IntervalValue,
 } from "@/components/bot/interval-picker";
-import { RefreshSelector, shouldHideRefreshSelector } from "@/components/bot/refresh-selector";
+import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 import {
   AlertDialog,
@@ -69,8 +69,9 @@ interface MobileBotDetailProps {
   onIntervalChange: (value: IntervalValue) => void;
   showLive?: boolean;
   showLatest?: boolean;
-  refreshInterval: number;
-  onRefreshIntervalChange: (ms: number) => void;
+  /** SSE transport flag for the dashboard (independent of the showLive UI
+   *  option: scheduled bots stream too but default to the Latest view) */
+  streaming?: boolean;
   sort?: "asc" | "desc";
   onSortChange?: (sort: "asc" | "desc") => void;
 }
@@ -104,8 +105,7 @@ export function MobileBotDetail({
   onIntervalChange,
   showLive,
   showLatest,
-  refreshInterval,
-  onRefreshIntervalChange,
+  streaming,
   sort,
   onSortChange,
 }: MobileBotDetailProps) {
@@ -152,7 +152,7 @@ export function MobileBotDetail({
       {/* Interval Picker + Refresh Selector */}
       <div className="px-3 py-2 border-b space-y-1.5">
         <IntervalPicker value={interval} onChange={onIntervalChange} showLive={showLive} showLatest={showLatest} />
-        <RefreshSelector value={refreshInterval} onChange={onRefreshIntervalChange} hidden={shouldHideRefreshSelector(!!showLive, interval.label)} />
+        <ConnectionStatusIndicator connected={connected} lastUpdate={lastUpdate} />
       </div>
 
       {/* Tabbed content */}
@@ -185,8 +185,7 @@ export function MobileBotDetail({
               version={bot.config.version}
               dateRange={dashboardDateRange}
               latest={interval.type === "latest"}
-              streaming={showLive}
-              refreshInterval={refreshInterval}
+              streaming={streaming}
               className=""
             />
           ) : (

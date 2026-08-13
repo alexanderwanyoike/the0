@@ -46,12 +46,17 @@ const mockRefresh = jest.fn();
 const mockSetDateFilter = jest.fn();
 const mockSetDateRangeFilter = jest.fn();
 const mockExportLogs = jest.fn();
+// Stable identity across mock calls - a fresh Date per render would defeat
+// the provider's useMemo and fail the referential-stability test below
+const mockLastUpdate = new Date("2026-08-13T10:00:00Z");
 
 jest.mock("@/hooks/use-bot-events", () => ({
   useBotEvents: jest.fn(() => ({
     events: mockEvents,
     loading: false,
     isFetching: false,
+    connected: true,
+    lastUpdate: mockLastUpdate,
     error: null,
     utils: mockUtils,
     refresh: mockRefresh,
@@ -143,6 +148,29 @@ describe("BotEventsContext", () => {
       );
 
       expect(screen.getByTestId("fetching")).toHaveTextContent("false");
+    });
+
+    it("exposes connected and lastUpdate so dashboards can show liveness", () => {
+      const TestComponent = () => {
+        const context = useBotEventsContext();
+        return (
+          <>
+            <span data-testid="connected">{String(context.connected)}</span>
+            <span data-testid="last-update">
+              {context.lastUpdate ? "has-update" : "none"}
+            </span>
+          </>
+        );
+      };
+
+      render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      expect(screen.getByTestId("connected")).toHaveTextContent("true");
+      expect(screen.getByTestId("last-update")).toHaveTextContent("has-update");
     });
 
     it("passes autoRefresh prop to useBotEvents", () => {

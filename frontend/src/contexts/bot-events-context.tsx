@@ -11,6 +11,11 @@ interface BotEventsContextValue {
   loading: boolean;
   /** True while a background refresh is in flight (subtle indicators) */
   isFetching: boolean;
+  /** SSE connection state: true = live, false = degraded to polling,
+   *  undefined = not streaming */
+  connected?: boolean;
+  /** When data last arrived (REST or SSE) */
+  lastUpdate?: Date | null;
   /** Error message if any */
   error: string | null;
   /** Event utilities bound to current events */
@@ -69,14 +74,15 @@ export function BotEventsProvider({
   refreshInterval = 30000,
   dateRange,
 }: BotEventsProviderProps) {
-  const { events, loading, isFetching, error, utils, refresh } = useBotEvents({
-    botId,
-    streaming,
-    latest,
-    autoRefresh,
-    refreshInterval,
-    dateRange,
-  });
+  const { events, loading, isFetching, connected, lastUpdate, error, utils, refresh } =
+    useBotEvents({
+      botId,
+      streaming,
+      latest,
+      autoRefresh,
+      refreshInterval,
+      dateRange,
+    });
 
   // Memoized so a provider re-render with unchanged hook output doesn't hand
   // every consumer (each chart in a bot dashboard) a new value object
@@ -85,12 +91,14 @@ export function BotEventsProvider({
       events,
       loading,
       isFetching,
+      connected,
+      lastUpdate,
       error,
       utils,
       refresh,
       botId,
     }),
-    [events, loading, isFetching, error, utils, refresh, botId],
+    [events, loading, isFetching, connected, lastUpdate, error, utils, refresh, botId],
   );
 
   return (

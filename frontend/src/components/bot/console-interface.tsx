@@ -384,7 +384,7 @@ SmartLogEntry.displayName = "SmartLogEntry";
  *
  * When `connected` is undefined the indicator is hidden (backwards compatible).
  */
-const ConnectionStatusIndicator: React.FC<{
+export const ConnectionStatusIndicator: React.FC<{
   connected?: boolean;
   lastUpdate?: Date | null;
 }> = ({ connected, lastUpdate }) => {

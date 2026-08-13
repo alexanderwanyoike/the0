@@ -61,7 +61,9 @@ jest.mock("@/hooks/use-bot-logs", () => ({
 }));
 
 jest.mock("@/lib/bot-utils", () => ({
-  shouldUseLogStreaming: () => false,
+  // All loaded bots stream; these tests exercise a scheduled bot's defaults
+  shouldUseLogStreaming: (bot: unknown) => bot !== null,
+  isScheduledBot: () => true,
 }));
 
 jest.mock("@/hooks/use-media-query", () => ({
@@ -74,6 +76,9 @@ jest.mock("@/components/bot/bot-dashboard-loader", () => ({
 
 jest.mock("@/components/bot/console-interface", () => ({
   ConsoleInterface: () => <div data-testid="console-interface" />,
+  ConnectionStatusIndicator: () => (
+    <div data-testid="connection-status-indicator" />
+  ),
 }));
 
 jest.mock("../mobile-bot-detail", () => ({

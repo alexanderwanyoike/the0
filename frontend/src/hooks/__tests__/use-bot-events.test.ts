@@ -149,7 +149,7 @@ describe("useBotEvents", () => {
         streaming: false,
         autoRefresh: false,
         refreshInterval: 30000,
-        initialQuery: { limit: 100, offset: 0, type: "metrics" },
+        initialQuery: { limit: 1000, offset: 0, type: "metrics" },
       });
     });
 
@@ -232,7 +232,7 @@ describe("useBotEvents", () => {
       expect(mockUseBotLogs).toHaveBeenCalledWith(
         expect.objectContaining({
           initialQuery: {
-            limit: 100,
+            limit: 1000,
             offset: 0,
             type: "metrics",
             sort: "desc",
@@ -471,6 +471,39 @@ describe("useBotEvents", () => {
 
       expect(result.current.isFetching).toBe(true);
       expect(result.current.loading).toBe(false);
+    });
+
+    it("passes connected and lastUpdate through for live indicators", () => {
+      const when = new Date("2026-08-13T10:00:00Z");
+      mockUseBotLogs.mockReturnValue({
+        isFetching: false,
+        connected: true,
+        lastUpdate: when,
+        logs: [],
+        loading: false,
+        error: null,
+        hasMore: false,
+        total: 0,
+        refresh: mockRefresh,
+        loadMore: jest.fn(),
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        setLatestFilter: mockSetLatestFilter,
+        exportLogs: mockExportLogs,
+      } as any);
+
+      const { result } = renderHook(() =>
+        useBotEvents({ botId: "bot-123", streaming: true }),
+      );
+
+      expect(result.current.connected).toBe(true);
+      expect(result.current.lastUpdate).toBe(when);
+
+      // Outside streaming mode the indicator stays hidden
+      const { result: nonStreaming } = renderHook(() =>
+        useBotEvents({ botId: "bot-123" }),
+      );
+      expect(nonStreaming.current.connected).toBeUndefined();
     });
 
     it("returns loading state from useBotLogs", () => {
