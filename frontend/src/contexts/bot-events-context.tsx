@@ -1,14 +1,20 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, useMemo, ReactNode } from "react";
 import { useBotEvents, BotEvent, BotEventUtils } from "@/hooks/use-bot-events";
 
 interface BotEventsContextValue {
   /** Parsed bot events */
   events: BotEvent[];
-  /** Loading state */
+  /** True only while there is nothing to render yet. Background refreshes
+   *  keep this false so dashboards don't unmount into a loading screen. */
   loading: boolean;
-  /** Error message if any */
+  /** True while a background refresh is in flight (subtle indicators) */
+  isFetching: boolean;
+  /** Set only when there is nothing to render (initial load failed).
+   *  Background refresh failures keep this null so a naive `if (error)`
+   *  early-return can't blank a dashboard that has data on screen; they
+   *  surface through toasts and the connection indicator instead. */
   error: string | null;
   /** Event utilities bound to current events */
   utils: BotEventUtils;
@@ -66,7 +72,7 @@ export function BotEventsProvider({
   refreshInterval = 30000,
   dateRange,
 }: BotEventsProviderProps) {
-  const { events, loading, error, utils, refresh } = useBotEvents({
+  const { events, loading, isFetching, error, utils, refresh } = useBotEvents({
     botId,
     streaming,
     latest,
@@ -75,17 +81,27 @@ export function BotEventsProvider({
     dateRange,
   });
 
+  // Errors only reach bot frontends when there is nothing to render: this is
+  // what makes the naive `if (error) return <Error/>` pattern safe to write
+  const displayError = events.length === 0 ? error : null;
+
+  // Memoized so a provider re-render with unchanged hook output doesn't hand
+  // every consumer (each chart in a bot dashboard) a new value object
+  const value = useMemo(
+    () => ({
+      events,
+      loading,
+      isFetching,
+      error: displayError,
+      utils,
+      refresh,
+      botId,
+    }),
+    [events, loading, isFetching, displayError, utils, refresh, botId],
+  );
+
   return (
-    <BotEventsContext.Provider
-      value={{
-        events,
-        loading,
-        error,
-        utils,
-        refresh,
-        botId,
-      }}
-    >
+    <BotEventsContext.Provider value={value}>
       {children}
     </BotEventsContext.Provider>
   );

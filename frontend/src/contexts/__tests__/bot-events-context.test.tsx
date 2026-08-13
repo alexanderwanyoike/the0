@@ -51,6 +51,7 @@ jest.mock("@/hooks/use-bot-events", () => ({
   useBotEvents: jest.fn(() => ({
     events: mockEvents,
     loading: false,
+    isFetching: false,
     error: null,
     utils: mockUtils,
     refresh: mockRefresh,
@@ -103,6 +104,105 @@ describe("BotEventsContext", () => {
       expect(screen.getByTestId("bot-id")).toHaveTextContent("test-bot-id");
       expect(screen.getByTestId("event-count")).toHaveTextContent("2");
       expect(screen.getByTestId("loading")).toHaveTextContent("false");
+    });
+
+    it("keeps the context value referentially stable when hook results are unchanged", () => {
+      const captured: unknown[] = [];
+      const TestComponent = () => {
+        captured.push(useBotEventsContext());
+        return null;
+      };
+
+      const { rerender } = render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+      rerender(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      expect(captured.length).toBeGreaterThanOrEqual(2);
+      // A provider re-render with identical hook output must not hand
+      // consumers a new value object (it would re-render every chart)
+      expect(captured[captured.length - 1]).toBe(captured[0]);
+    });
+
+    it("exposes isFetching for background refresh indicators", () => {
+      const TestComponent = () => {
+        const context = useBotEventsContext();
+        return <span data-testid="fetching">{String(context.isFetching)}</span>;
+      };
+
+      render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      expect(screen.getByTestId("fetching")).toHaveTextContent("false");
+    });
+
+    it("suppresses error while data is on screen (background refresh failure)", () => {
+      const { useBotEvents } = require("@/hooks/use-bot-events");
+      useBotEvents.mockReturnValueOnce({
+        events: mockEvents,
+        loading: false,
+        isFetching: false,
+        error: "network blip",
+        utils: mockUtils,
+        refresh: mockRefresh,
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        exportLogs: mockExportLogs,
+        rawLogs: [],
+      });
+
+      const TestComponent = () => {
+        const context = useBotEventsContext();
+        return <span data-testid="error">{String(context.error)}</span>;
+      };
+
+      render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      // A transient refresh failure must not blank a dashboard that has
+      // data: naive `if (error)` early-returns in bot frontends stay safe
+      expect(screen.getByTestId("error")).toHaveTextContent("null");
+    });
+
+    it("exposes error when there is nothing to render (initial load failure)", () => {
+      const { useBotEvents } = require("@/hooks/use-bot-events");
+      useBotEvents.mockReturnValueOnce({
+        events: [],
+        loading: false,
+        isFetching: false,
+        error: "boom",
+        utils: mockUtils,
+        refresh: mockRefresh,
+        setDateFilter: mockSetDateFilter,
+        setDateRangeFilter: mockSetDateRangeFilter,
+        exportLogs: mockExportLogs,
+        rawLogs: [],
+      });
+
+      const TestComponent = () => {
+        const context = useBotEventsContext();
+        return <span data-testid="error">{String(context.error)}</span>;
+      };
+
+      render(
+        <BotEventsProvider botId="bot-123">
+          <TestComponent />
+        </BotEventsProvider>,
+      );
+
+      expect(screen.getByTestId("error")).toHaveTextContent("boom");
     });
 
     it("passes autoRefresh prop to useBotEvents", () => {

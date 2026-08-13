@@ -60,8 +60,10 @@ interface BotEventUtils {
 interface UseBotEventsReturn {
   /** Parsed bot events */
   events: BotEvent[];
-  /** Loading state */
+  /** True only while there is nothing to render yet (initial load) */
   loading: boolean;
+  /** True while a background refresh is in flight */
+  isFetching: boolean;
   /** Error message if any */
   error: string | null;
   /** Event utilities bound to current events */
@@ -118,6 +120,7 @@ export function useBotEvents({
   const {
     logs: rawLogs,
     loading,
+    isFetching,
     error,
     refresh,
     setDateFilter,
@@ -162,30 +165,45 @@ export function useBotEvents({
     setDateFilter,
   ]);
 
+  // Per-entry parse cache keyed by log entry identity. Appends (SSE lines,
+  // pagination) preserve existing entry objects, so only new entries are
+  // parsed and already-parsed events keep their identity - without this,
+  // every arriving line re-parsed the whole buffer (up to 10k entries) and
+  // handed consumers all-new event objects. Replace fetches create fresh
+  // entry objects, which correctly miss the cache; WeakMap lets the old
+  // generation be GC'd.
+  const parseCacheRef = useRef(
+    new WeakMap<object, (BotEvent & { timestamp: Date })[]>(),
+  );
+
   // Parse raw logs into events
   // Ensure timestamps are always Date objects for SDK compatibility
   const events = useMemo(() => {
-    // Convert raw logs to the format expected by parseEvents
-    const logEntries = rawLogs.map((log) => ({
-      date: log.date,
-      content: log.content,
-    }));
-    const parsedEvents = parseEvents(logEntries);
+    const cache = parseCacheRef.current;
+    const all: (BotEvent & { timestamp: Date })[] = [];
 
-    // Ensure all events have a valid timestamp (SDK expects Date, not null)
-    // Use current time as fallback for events without timestamps
-    const stamped = parsedEvents.map((event) => ({
-      ...event,
-      timestamp: event.timestamp ?? new Date(),
-    }));
+    for (const log of rawLogs) {
+      let parsed = cache.get(log);
+      if (!parsed) {
+        // Fallback-stamp events without timestamps at parse time (SDK expects
+        // Date, not null); caching also keeps that fallback stable instead of
+        // drifting to "now" on every re-render
+        parsed = parseEvents([
+          { date: log.date, content: log.content, timestamp: log.timestamp },
+        ]).map((event) => ({
+          ...event,
+          timestamp: event.timestamp ?? new Date(),
+        }));
+        cache.set(log, parsed);
+      }
+      all.push(...parsed);
+    }
 
     // The API returns newest-first for desc queries but every event util
     // (latest, extractTimeSeries, groupByRun) assumes chronological order.
     // Stable-sort here so utils are correct regardless of fetch order;
-    // fallback-stamped events share "now" and keep their relative order.
-    return stamped.sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-    );
+    // fallback-stamped events share their parse time and keep relative order.
+    return all.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }, [rawLogs]);
 
   // Create bound utilities
@@ -216,6 +234,7 @@ export function useBotEvents({
   return {
     events,
     loading,
+    isFetching,
     error,
     utils,
     refresh,

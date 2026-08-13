@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import moment from "moment";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,16 @@ export function MobileBotDetail({
 }: MobileBotDetailProps) {
   const router = useRouter();
 
+  // Stable identity: an inline literal here defeats React.memo on
+  // BotDashboardLoader and remounts the dashboard on every render
+  const dashboardDateRange = useMemo(
+    () =>
+      interval.type === "range"
+        ? { start: interval.start, end: interval.end }
+        : undefined,
+    [interval],
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)]">
       {/* Header with back arrow */}
@@ -159,18 +169,21 @@ export function MobileBotDetail({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dashboard" className="flex-1 m-0 overflow-auto">
+        {/* forceMount keeps the dashboard alive across tab switches:
+            without it, every Console/Details round-trip re-imports the
+            bundle, reconnects SSE, and refetches history */}
+        <TabsContent
+          value="dashboard"
+          forceMount
+          className="flex-1 m-0 overflow-auto data-[state=inactive]:hidden"
+        >
           {bot.config.hasFrontend && customBotId ? (
             <BotDashboardLoader
               key={botId}
               botId={botId}
               customBotId={customBotId}
               version={bot.config.version}
-              dateRange={
-                interval.type === "range"
-                  ? { start: interval.start, end: interval.end }
-                  : undefined
-              }
+              dateRange={dashboardDateRange}
               latest={interval.type === "latest"}
               streaming={showLive}
               refreshInterval={refreshInterval}
