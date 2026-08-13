@@ -68,6 +68,8 @@ type BotScheduleControllerConfig struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+	// NATSURL for live log publishing from bot pods (empty disables)
+	NATSURL string
 	// RuntimeImage for init containers and sidecars
 	RuntimeImage string
 	// RuntimeImagePullPolicy for init/sidecar containers
@@ -111,6 +113,7 @@ func NewBotScheduleController(
 		MinIOSecretKey:         config.MinIOSecretKey,
 		MinIOBucket:            config.MinIOBucket,
 		MinIOUseSSL:            config.MinIOUseSSL,
+		NATSURL:                config.NATSURL,
 		RuntimeImage:           config.RuntimeImage,
 		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	})

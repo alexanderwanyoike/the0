@@ -59,6 +59,10 @@ type PodGeneratorConfig struct {
 	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
 	MinIOUseSSL      bool
 
+	// NATSURL enables live log streaming: the sync process publishes bot log
+	// lines to NATS for the API's SSE fan-out. Empty disables publishing.
+	NATSURL string
+
 	// RuntimeImage is the image for init and sidecar containers (e.g., "the0/runtime:latest")
 	RuntimeImage string
 
@@ -122,6 +126,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
 		WithBotType("realtime").
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithNATSConfig(g.config.NATSURL).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
 		WithSyncSidecar(g.config.RuntimeImage, bot.ID, false)
 
@@ -170,6 +175,7 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
 		WithBotType("scheduled").
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
+		WithNATSConfig(g.config.NATSURL).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 	// Note: No query sidecar - queries are ephemeral
 

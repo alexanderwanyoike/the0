@@ -763,3 +763,38 @@ func TestMockK8sCronJobClient_Errors(t *testing.T) {
 		assert.Equal(t, "delete error", err.Error())
 	})
 }
+
+func TestBotScheduleController_Reconcile_PropagatesNATSURLToBotContainer(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{schedule},
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{
+			Namespace:      "the0",
+			ControllerName: "test-controller",
+			NATSURL:        "nats://nats:4222",
+		},
+		mockRepo,
+		mockCronClient,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+	require.NotNil(t, cronJob)
+
+	containers := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers
+	require.Len(t, containers, 1)
+
+	botEnv := make(map[string]string)
+	for _, env := range containers[0].Env {
+		botEnv[env.Name] = env.Value
+	}
+	assert.Equal(t, "nats://nats:4222", botEnv["NATS_URL"],
+		"scheduled bots run sync inline and need NATS_URL for live log publishing")
+}

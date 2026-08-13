@@ -691,3 +691,30 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete orphan pod")
 }
 
+
+func TestBotController_Reconcile_PropagatesNATSURLToSyncSidecar(t *testing.T) {
+	mockRepo := &MockBotRepository{
+		Bots: []model.Bot{
+			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
+		},
+	}
+	mockK8s := &MockK8sClient{Pods: []corev1.Pod{}}
+
+	config := testControllerConfig()
+	config.NATSURL = "nats://nats:4222"
+
+	controller := NewBotController(config, mockRepo, mockK8s)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, mockK8s.CreatedPods, 1)
+	require.Len(t, mockK8s.CreatedPods[0].Spec.InitContainers, 1)
+
+	sidecarEnv := make(map[string]string)
+	for _, env := range mockK8s.CreatedPods[0].Spec.InitContainers[0].Env {
+		sidecarEnv[env.Name] = env.Value
+	}
+	assert.Equal(t, "nats://nats:4222", sidecarEnv["NATS_URL"],
+		"sync sidecar needs NATS_URL for live log publishing")
+}
