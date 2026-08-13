@@ -4,6 +4,66 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: fixed
+          description: Propagate NATS_URL into bot pods so live log streaming works in Kubernetes (sync sidecar and inline sync); changing it now reconciles existing pods and CronJobs
+        - kind: fixed
+          description: Publish log chunks to NATS before the MinIO append so live streaming latency is not gated on object storage writes
+        - kind: fixed
+          description: File watcher debounce gained a trailing-edge trigger so the final write of a burst syncs immediately instead of waiting for the backup ticker
+        - kind: fixed
+          description: Set PYTHONUNBUFFERED=1 on bot containers so Python metric output streams instead of sitting in the stdout buffer
+        - kind: fixed
+          description: Dashboards no longer unmount into loading screens on background refreshes; loading and error only surface when there is nothing to render
+        - kind: changed
+          description: All bot types stream over SSE by default, including scheduled bots; the refresh interval selector is replaced by a live connection status indicator
+        - kind: changed
+          description: Metrics log queries respect limit/offset and report hasMore honestly; dashboard metric history fetch raised to 1000 entries
+        - kind: added
+          description: React SDK context exposes optional isFetching, connected and lastUpdate fields so custom dashboards can render live indicators
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.14.5
+    created: "2026-08-13T20:51:55.384876212Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 537f3cf01aae27e7454d6c5fb215d389b32541e919a92b3f1fe7de65dd10524f
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.9.6/the0-0.9.6.tgz
+    version: 0.9.6
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: added
           description: Expose bot state and bot query tools via the MCP server so AI agents can inspect persisted state and query running bots
         - kind: fixed
@@ -1797,4 +1857,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-07-20T11:18:30.227431283Z"
+generated: "2026-08-13T20:51:55.385151909Z"
