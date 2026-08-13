@@ -23,6 +23,8 @@ func TestNewContainerBuilder(t *testing.T) {
 	assert.Equal(t, "/tmp", cfg.WorkingDir)
 	assert.NotNil(t, cfg.Labels)
 	assert.Contains(t, cfg.Env, "PYTHONDONTWRITEBYTECODE=1")
+	assert.Contains(t, cfg.Env, "PYTHONUNBUFFERED=1",
+		"python stdout must be unbuffered so metric() lines reach the log pipe immediately")
 	assert.Equal(t, container.NetworkMode("bridge"), hostCfg.NetworkMode)
 	assert.True(t, hostCfg.ReadonlyRootfs)
 	assert.Contains(t, hostCfg.CapDrop, "ALL")
@@ -92,8 +94,8 @@ func TestContainerBuilder_WithEnv(t *testing.T) {
 
 	cfg, _ := builder.Build()
 
-	// Should have default PYTHONDONTWRITEBYTECODE=1 + 3 new vars
-	assert.Len(t, cfg.Env, 4)
+	// Should have default PYTHONDONTWRITEBYTECODE=1 + PYTHONUNBUFFERED=1 + 3 new vars
+	assert.Len(t, cfg.Env, 5)
 	assert.Contains(t, cfg.Env, "KEY1=value1")
 	assert.Contains(t, cfg.Env, "KEY2=value2")
 	assert.Contains(t, cfg.Env, "KEY3=value3")
