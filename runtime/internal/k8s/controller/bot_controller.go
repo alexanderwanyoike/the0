@@ -213,7 +213,7 @@ func (c *BotController) Reconcile(ctx context.Context) error {
 				util.LogMaster("[BotController] Failed to create pod for bot %s: %v", bot.ID, err)
 				// Continue with other bots
 			}
-		} else if podgen.ConfigChanged(pod, bot) {
+		} else if c.podGenerator.ConfigChanged(pod, bot) {
 			// Config changed -> delete pod (will be recreated next cycle)
 			util.LogMaster("[BotController] Config changed for bot %s, deleting pod for recreation", bot.ID)
 			if err := c.k8sClient.DeletePod(ctx, c.config.Namespace, pod.Name); err != nil {

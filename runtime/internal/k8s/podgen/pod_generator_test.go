@@ -457,14 +457,25 @@ func TestConfigChanged(t *testing.T) {
 	require.NoError(t, err)
 
 	// Same config should not be changed
-	assert.False(t, ConfigChanged(pod, bot))
+	assert.False(t, generator.ConfigChanged(pod, bot))
 
 	// Modified config should be detected
 	botModified := bot
 	botModified.Config = map[string]interface{}{
 		"key": "value2",
 	}
-	assert.True(t, ConfigChanged(pod, botModified))
+	assert.True(t, generator.ConfigChanged(pod, botModified))
+
+	// A generator with a different NATS URL must also detect a change, so
+	// existing pods are reconciled when live streaming is (re)configured
+	natsGenerator := NewPodGenerator(PodGeneratorConfig{
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		NATSURL:        "nats://nats:4222",
+	})
+	assert.True(t, natsGenerator.ConfigChanged(pod, bot))
 }
 
 func TestSanitizeLabelValue(t *testing.T) {

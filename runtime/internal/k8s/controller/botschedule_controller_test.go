@@ -198,7 +198,7 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 
 func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	configHash := computeScheduleHash(schedule)
+	configHash := computeScheduleHash(schedule, "")
 
 	mockRepo := &MockBotScheduleRepository{
 		Schedules: []model.BotSchedule{schedule},
@@ -278,9 +278,9 @@ func TestComputeScheduleHash(t *testing.T) {
 	schedule2 := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 10 * * *")
 	schedule3 := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 9 * * *")
 
-	hash1 := computeScheduleHash(schedule1)
-	hash2 := computeScheduleHash(schedule2)
-	hash3 := computeScheduleHash(schedule3)
+	hash1 := computeScheduleHash(schedule1, "")
+	hash2 := computeScheduleHash(schedule2, "")
+	hash3 := computeScheduleHash(schedule3, "")
 
 	// Hashes should be 16 characters
 	assert.Len(t, hash1, 16)
@@ -291,7 +291,7 @@ func TestComputeScheduleHash(t *testing.T) {
 
 	// Same config should produce same hash
 	schedule1Copy := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy))
+	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy, ""))
 }
 
 func TestScheduleToBot(t *testing.T) {
@@ -797,4 +797,41 @@ func TestBotScheduleController_Reconcile_PropagatesNATSURLToBotContainer(t *test
 	}
 	assert.Equal(t, "nats://nats:4222", botEnv["NATS_URL"],
 		"scheduled bots run sync inline and need NATS_URL for live log publishing")
+}
+
+func TestBotScheduleController_Reconcile_UpdatesCronJobWhenNATSURLAdded(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+	mockCronClient := NewMockK8sCronJobClient()
+
+	// Seed a CronJob created before NATS_URL was configured
+	oldController := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller"},
+		&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+		mockCronClient,
+	)
+	require.NoError(t, oldController.Reconcile(context.Background()))
+	require.Equal(t, 1, mockCronClient.CreateCalled)
+
+	// Reconcile with NATS_URL configured: the existing CronJob must be updated
+	newController := NewBotScheduleController(
+		BotScheduleControllerConfig{
+			Namespace:      "the0",
+			ControllerName: "test-controller",
+			NATSURL:        "nats://nats:4222",
+		},
+		&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+		mockCronClient,
+	)
+	require.NoError(t, newController.Reconcile(context.Background()))
+
+	assert.Equal(t, 1, mockCronClient.UpdateCalled,
+		"CronJob without NATS_URL must be updated once NATS_URL is configured")
+
+	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+	require.NotNil(t, cronJob)
+	botEnv := make(map[string]string)
+	for _, env := range cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env {
+		botEnv[env.Name] = env.Value
+	}
+	assert.Equal(t, "nats://nats:4222", botEnv["NATS_URL"])
 }
