@@ -98,11 +98,7 @@ import { useThe0Events, BotEvent } from "@alexanderwanyoike/the0-react";
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
 
-  // Full-screen states only when there is nothing to render yet. The platform
-  // refreshes data in the background (polling or live streaming); guarding on
-  // events.length keeps your last data visible during refreshes instead of
-  // unmounting the whole dashboard into a loading screen.
-  if (loading && events.length === 0) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-green-400 font-mono">Loading metrics...</div>
@@ -110,7 +106,7 @@ export default function Dashboard() {
     );
   }
 
-  if (error && events.length === 0) {
+  if (error) {
     return (
       <div className="p-4 bg-red-950/30 border border-red-800 rounded">
         <p className="text-red-400">Error: {error}</p>
@@ -167,10 +163,13 @@ The dashboard renders loading and error states first, then displays the actual m
 
 ### Design for a Live Dashboard
 
-The platform keeps your data fresh in the background - live streaming for realtime bots, refreshes for scheduled ones - and your dashboard stays mounted the whole time. A few habits make the result feel like a trading terminal rather than a page that reloads:
+The platform keeps your data fresh in the background - live streaming for realtime bots, refreshes for scheduled ones - and your dashboard stays mounted the whole time. The early returns above are safe because of two guarantees the platform makes:
 
-- **Never gate the whole dashboard on `loading` alone.** Guard full-screen states with `events.length === 0` as shown above. `loading` is only true while there is nothing to render yet; once data exists, refreshes happen behind your rendered dashboard.
-- **Treat errors the same way.** A transient refresh failure should not blank a dashboard that has data on screen. Show stale data, optionally with a small warning.
+- **`loading` is only true while there is nothing to render.** Once your dashboard has data, refreshes happen behind it without ever flipping `loading` back on, so an `if (loading)` early return can only ever show before first data arrives.
+- **`error` is only set when there is nothing to render.** A transient background refresh failure never reaches your dashboard while data is on screen; the platform keeps your last data visible and surfaces the problem through its own connection indicator.
+
+In other words: write the obvious code, it does the right thing. A few habits on top of that make the result feel like a trading terminal rather than a page that reloads:
+
 - **Append, don't rebuild.** Drive charts from `utils.extractTimeSeries(...)` and let new points extend the series. Parsed events keep their identity across updates, so memoized components (`React.memo`, `useMemo` keyed on events) only re-render when data actually changes.
 - **Show freshness, not spinners.** A "last updated" timestamp from your newest event (`utils.latest(...)?.timestamp`) tells users the dashboard is alive without any flashing.
 - **Scheduled bots are status pages.** A bot that runs once a day can only produce one data point a day - frame the dashboard around its last run rather than simulating a live feed.
