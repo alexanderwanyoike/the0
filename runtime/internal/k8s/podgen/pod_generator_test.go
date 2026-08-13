@@ -90,6 +90,8 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	assert.Equal(t, "realtime", envMap["BOT_TYPE"])
 	assert.Empty(t, envMap["IS_SCHEDULED"], "realtime bots should not have IS_SCHEDULED set")
 	assert.Contains(t, envMap["BOT_CONFIG"], "BTC/USD")
+	assert.Equal(t, "1", envMap["PYTHONUNBUFFERED"],
+		"python stdout must be unbuffered so metric() lines reach the log pipe immediately")
 
 	// Check resources
 	assert.Equal(t, DefaultMemoryLimit, botContainer.Resources.Limits.Memory().String())

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -185,6 +186,77 @@ func TestFileWatcher_Debounce(t *testing.T) {
 	// Should have at most 2 calls (first write triggers, then one more after debounce)
 	count := atomic.LoadInt32(&callCount)
 	assert.LessOrEqual(t, count, int32(2), "rapid writes should be debounced")
+}
+
+func TestFileWatcher_TrailingEdgeDebounce(t *testing.T) {
+	writeEvent := fsnotify.Event{Name: "bot.log", Op: fsnotify.Write}
+
+	t.Run("burst tail triggers a trailing sync after the window", func(t *testing.T) {
+		var callCount int32
+		fw, err := NewFileWatcher(FileWatcherConfig{
+			Logger:   &util.DefaultLogger{},
+			OnChange: func() { atomic.AddInt32(&callCount, 1) },
+			Debounce: 100 * time.Millisecond,
+		})
+		require.NoError(t, err)
+		defer fw.Stop()
+
+		// Leading edge fires immediately
+		fw.handleEvent(writeEvent)
+		require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+		// Burst inside the debounce window: throttled, but the tail must not
+		// be dropped - a trailing trigger has to fire once the burst settles
+		fw.handleEvent(writeEvent)
+		fw.handleEvent(writeEvent)
+		require.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+			"in-window events must be throttled, not fired immediately")
+
+		assert.Eventually(t, func() bool {
+			return atomic.LoadInt32(&callCount) >= 2
+		}, time.Second, 10*time.Millisecond,
+			"the final write of a burst must trigger a trailing sync within ~debounce")
+	})
+
+	t.Run("no trailing trigger fires after Stop", func(t *testing.T) {
+		var callCount int32
+		fw, err := NewFileWatcher(FileWatcherConfig{
+			Logger:   &util.DefaultLogger{},
+			OnChange: func() { atomic.AddInt32(&callCount, 1) },
+			Debounce: 100 * time.Millisecond,
+		})
+		require.NoError(t, err)
+
+		fw.handleEvent(writeEvent) // leading edge
+		fw.handleEvent(writeEvent) // schedules trailing trigger
+		require.NoError(t, fw.Stop())
+
+		time.Sleep(300 * time.Millisecond)
+		assert.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+			"trailing trigger must not fire after the watcher is stopped")
+	})
+
+	t.Run("events after a trailing fire are debounced against it", func(t *testing.T) {
+		var callCount int32
+		fw, err := NewFileWatcher(FileWatcherConfig{
+			Logger:   &util.DefaultLogger{},
+			OnChange: func() { atomic.AddInt32(&callCount, 1) },
+			Debounce: 100 * time.Millisecond,
+		})
+		require.NoError(t, err)
+		defer fw.Stop()
+
+		fw.handleEvent(writeEvent) // leading edge -> 1
+		fw.handleEvent(writeEvent) // schedules trailing -> eventually 2
+		require.Eventually(t, func() bool {
+			return atomic.LoadInt32(&callCount) == 2
+		}, time.Second, 10*time.Millisecond)
+
+		// A lone event well past the window is a fresh leading edge
+		time.Sleep(150 * time.Millisecond)
+		fw.handleEvent(writeEvent)
+		assert.Equal(t, int32(3), atomic.LoadInt32(&callCount))
+	})
 }
 
 func TestFileWatcher_Stop(t *testing.T) {

@@ -30,7 +30,13 @@ func NewContainerBuilder(imageName string) *ContainerBuilder {
 			StopSignal: "SIGTERM",
 			WorkingDir: "/tmp",
 			Labels:     make(map[string]string),
-			Env:        []string{"PYTHONDONTWRITEBYTECODE=1"}, // Prevent Python from creating __pycache__ directories
+			Env: []string{
+				"PYTHONDONTWRITEBYTECODE=1", // Prevent Python from creating __pycache__ directories
+				// Python block-buffers stdout (8KB) when it's a pipe, so metric()
+				// print() output would sit unflushed instead of reaching the log
+				// pipeline. Harmless for non-Python runtimes.
+				"PYTHONUNBUFFERED=1",
+			},
 		},
 		hostConfig: &container.HostConfig{
 			// Default to bridge mode; use WithNetwork to join a specific network

@@ -63,6 +63,10 @@ func NewPodBuilder(name, namespace string) *PodBuilder {
 			{Name: "tmp", MountPath: "/tmp"},
 			{Name: "query", MountPath: "/query"},
 		},
+		// Python block-buffers stdout (8KB) when it's a pipe, so metric()
+		// print() output would sit unflushed instead of reaching the log
+		// pipeline. Set for all runtimes; harmless outside Python.
+		botEnv: []corev1.EnvVar{{Name: "PYTHONUNBUFFERED", Value: "1"}},
 		botResources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceMemory: resource.MustParse(DefaultMemoryLimit),
