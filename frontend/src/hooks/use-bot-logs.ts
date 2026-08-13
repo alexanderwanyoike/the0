@@ -59,7 +59,13 @@ interface UseBotLogsProps {
 
 export interface UseBotLogsReturn {
   logs: LogEntry[];
+  /** True only while there is nothing to render yet (initial load / bot
+   *  switch). Background refetches keep this false so consumers can keep
+   *  showing stale data instead of unmounting into a loading screen. */
   loading: boolean;
+  /** True while any replace fetch is in flight, including background
+   *  refreshes. Use for subtle "updating" indicators. */
+  isFetching: boolean;
   error: string | null;
   hasMore: boolean;
   total: number;
@@ -108,6 +114,7 @@ export const useBotLogs = ({
 }: UseBotLogsProps): UseBotLogsReturn => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
   const [hasMore, setHasMore] = useState(false);
@@ -125,6 +132,10 @@ export const useBotLogs = ({
 
   const restAbortRef = useRef<AbortController | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  // True once a replace fetch has delivered data for the current bot. While
+  // set, replace fetches are background refreshes: they must not flip
+  // `loading` (which would unmount dashboards into their loading screen).
+  const hasDataRef = useRef(false);
   // Latest fetchLogs so the polling interval never calls a stale closure
   const fetchLogsRef = useRef<(q?: LogsQuery, m?: false | "append" | "prepend") => Promise<boolean>>(null!);
   // Skip polling overwrites while the user has explicitly paginated
@@ -211,7 +222,12 @@ export const useBotLogs = ({
       if (!merge) historyLoadedRef.current = false;
 
       try {
-        if (!merge) setLoading(true);
+        if (!merge) {
+          setIsFetching(true);
+          // Full loading state only when there is nothing to render yet;
+          // once data exists, refetches are stale-while-revalidate
+          if (!hasDataRef.current) setLoading(true);
+        }
         setError(null);
         if (!user) {
           throw new Error("User not authenticated");
@@ -274,6 +290,7 @@ export const useBotLogs = ({
           setHasEarlierLogs(result.hasMore);
         } else {
           historyLoadedRef.current = true;
+          hasDataRef.current = true;
           earlierOffsetRef.current = queryParams.limit || 100;
           setLogs(expanded.slice(-MAX_LOG_ENTRIES));
           // Merge in any live updates that arrived while the fetch was in
@@ -323,6 +340,7 @@ export const useBotLogs = ({
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
+          setIsFetching(false);
           setLoadingEarlier(false);
         }
       }
@@ -387,6 +405,7 @@ export const useBotLogs = ({
     setLoading(true);
     paginatedRef.current = false;
     historyLoadedRef.current = false;
+    hasDataRef.current = false;
     pendingUpdatesRef.current = [];
 
     fetchLogsRef.current(startQuery);
@@ -609,6 +628,7 @@ export const useBotLogs = ({
   return {
     logs,
     loading,
+    isFetching,
     error,
     hasMore,
     total,

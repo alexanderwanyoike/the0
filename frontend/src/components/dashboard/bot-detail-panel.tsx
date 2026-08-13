@@ -113,6 +113,16 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   // exactly once (no polling-then-streaming flip).
   const hookBotId = bot !== null ? botId : "";
 
+  // Stable identity: an inline literal here defeats React.memo on
+  // BotDashboardLoader and remounts the dashboard on every panel render
+  const dashboardDateRange = useMemo(
+    () =>
+      interval.type === "range"
+        ? { start: interval.start, end: interval.end }
+        : undefined,
+    [interval],
+  );
+
   const logsHook = useBotLogs({
     botId: hookBotId,
     streaming: useStreaming,
@@ -587,7 +597,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
                 botId={botId}
                 customBotId={customBotId}
                 version={bot.config.version}
-                dateRange={interval.type === "range" ? { start: interval.start, end: interval.end } : undefined}
+                dateRange={dashboardDateRange}
                 latest={interval.type === "latest"}
                 streaming={useStreaming}
                 refreshInterval={refreshInterval}

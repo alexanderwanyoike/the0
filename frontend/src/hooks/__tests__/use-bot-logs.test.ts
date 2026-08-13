@@ -1887,4 +1887,144 @@ describe("useBotLogs", () => {
       });
     });
   });
+
+  describe("background refresh loading semantics", () => {
+    const logsResponse = {
+      ok: true,
+      json: async () => ({
+        data: [{ date: "20260406", content: "Log" }],
+        total: 1,
+        hasMore: false,
+      }),
+    } as Response;
+
+    it("keeps loading false when a polling tick refetches after data has loaded", async () => {
+      jest.useFakeTimers();
+      try {
+        // First fetch resolves immediately; the polling fetch hangs so we can
+        // observe state while it is in flight
+        let resolvePoll: (r: Response) => void;
+        mockAuthFetch
+          .mockResolvedValueOnce(logsResponse)
+          .mockImplementationOnce(
+            () => new Promise<Response>((r) => (resolvePoll = r)),
+          );
+
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: 30000,
+          }),
+        );
+
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(0);
+        });
+        expect(result.current.loading).toBe(false);
+        expect(result.current.logs.length).toBe(1);
+
+        // Fire the polling tick; its fetch is now in flight
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(30000);
+        });
+
+        expect(result.current.loading).toBe(false);
+        expect(result.current.isFetching).toBe(true);
+        // Stale data must remain visible during the background refetch
+        expect(result.current.logs.length).toBe(1);
+
+        await act(async () => {
+          resolvePoll!(logsResponse);
+          await jest.advanceTimersByTimeAsync(0);
+        });
+        expect(result.current.isFetching).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("keeps loading false during manual refresh once data has loaded", async () => {
+      mockAuthFetch.mockResolvedValue(logsResponse);
+
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        result.current.refresh();
+      });
+
+      expect(result.current.loading).toBe(false);
+
+      await waitFor(() => {
+        expect(result.current.isFetching).toBe(false);
+      });
+    });
+
+    it("keeps loading false on filter change once data has loaded (stale-while-revalidate)", async () => {
+      mockAuthFetch.mockResolvedValue(logsResponse);
+
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        result.current.setDateRangeFilter("20260401", "20260403");
+      });
+
+      expect(result.current.loading).toBe(false);
+
+      await waitFor(() => {
+        expect(result.current.isFetching).toBe(false);
+      });
+    });
+
+    it("sets loading again when the bot changes (no stale data across bots)", async () => {
+      mockAuthFetch.mockResolvedValue(logsResponse);
+
+      const { result, rerender } = renderHook(
+        ({ botId }) => useBotLogs({ botId }),
+        { initialProps: { botId: "bot-1" } },
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      rerender({ botId: "bot-2" });
+
+      expect(result.current.loading).toBe(true);
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+    });
+
+    it("recovers full loading state when the initial fetch fails (no data to show)", async () => {
+      mockAuthFetch.mockRejectedValueOnce(new Error("network down"));
+
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("network down");
+      });
+
+      // With no data yet, a retry is an initial load again, not a background one
+      mockAuthFetch.mockResolvedValue(logsResponse);
+      act(() => {
+        result.current.refresh();
+      });
+      expect(result.current.loading).toBe(true);
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      expect(result.current.logs.length).toBe(1);
+    });
+  });
 });
