@@ -7,7 +7,7 @@
  *
  * @example
  * ```typescript
- * import { state } from '@the0/sdk';
+ * import { state } from 'the0-node';
  *
  * // Store state
  * state.set('portfolio', { AAPL: 100, GOOGL: 50 });

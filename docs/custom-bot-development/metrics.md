@@ -40,7 +40,7 @@ def main():
 **TypeScript:**
 
 ```typescript
-import { parse, metric, success } from "@alexanderwanyoike/the0-node";
+import { parse, metric, success } from "the0-node";
 
 async function main(): Promise<void> {
     const { id, config } = parse();

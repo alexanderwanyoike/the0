@@ -1,28 +1,23 @@
-# @alexanderwanyoike/the0-react
+# the0-react
 
 React SDK for building custom bot dashboards on the0 platform.
 
 ## Installation
 
-This package is published to GitHub Packages. First, configure npm to use GitHub Packages for the `@alexanderwanyoike` scope:
-
 ```bash
-# Create or edit ~/.npmrc
-echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
-```
-
-Then install:
-
-```bash
-npm install @alexanderwanyoike/the0-react
+npm install the0-react
 # or
-yarn add @alexanderwanyoike/the0-react
+yarn add the0-react
 ```
+
+> Migrating from GitHub Packages? This package was previously published there
+> as `@alexanderwanyoike/the0-react`. Update your dependency to `the0-react` and remove the
+> `@alexanderwanyoike:registry` line from your `.npmrc` (project or `~/.npmrc`).
 
 ## Usage
 
 ```tsx
-import { useThe0Events } from '@alexanderwanyoike/the0-react';
+import { useThe0Events } from 'the0-react';
 
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
@@ -120,19 +115,15 @@ esbuild frontend/index.tsx \
 
 ## Publishing (Maintainers)
 
-This package is published to GitHub Packages.
+This package is published to the public npm registry.
 
 ### Prerequisites
 
-1. Create a GitHub Personal Access Token with `write:packages` scope:
-   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
+Authenticate with npm as a maintainer of the package:
 
-2. Authenticate with GitHub Packages:
-   ```bash
-   npm login --registry=https://npm.pkg.github.com
-   # Username: your-github-username
-   # Password: your-personal-access-token
-   ```
+```bash
+npm login
+```
 
 ### Publish
 
@@ -140,7 +131,7 @@ This package is published to GitHub Packages.
 # Build the package
 yarn build
 
-# Publish to GitHub Packages
+# Publish to npm
 npm publish
 ```
 

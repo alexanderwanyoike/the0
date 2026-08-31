@@ -23,7 +23,7 @@ export interface BuildOptions {
  *
  * @example
  * ```js
- * import { build } from "@alexanderwanyoike/the0-react/build";
+ * import { build } from "the0-react/build";
  *
  * // Simple usage with defaults
  * await build();

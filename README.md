@@ -333,7 +333,7 @@ Build trading bots in any of these languages with official SDK support:
 | Language | SDK | Documentation | Package Registry |
 |----------|-----|---------------|------------------|
 | **Python** | [sdk/python](sdk/python) | [Quick Start](docs/custom-bot-development/python-quick-start.md) | [PyPI](https://pypi.org/project/the0-sdk/) |
-| **TypeScript/Node.js** | [sdk/nodejs](sdk/nodejs) | [Quick Start](docs/custom-bot-development/nodejs-quick-start.md) | [npm](https://www.npmjs.com/package/@alexanderwanyoike/the0-node) |
+| **TypeScript/Node.js** | [sdk/nodejs](sdk/nodejs) | [Quick Start](docs/custom-bot-development/nodejs-quick-start.md) | [npm](https://www.npmjs.com/package/the0-node) |
 | **Rust** | [sdk/rust](sdk/rust) | [Quick Start](docs/custom-bot-development/rust-quick-start.md) | [crates.io](https://crates.io/crates/the0-sdk) |
 | **C++** | [sdk/cpp](sdk/cpp) | [Quick Start](docs/custom-bot-development/cpp-quick-start.md) | Header-only (FetchContent) |
 | **C#** | [sdk/dotnet](sdk/dotnet) | [Quick Start](docs/custom-bot-development/csharp-quick-start.md) | [NuGet](https://www.nuget.org/packages/The0.Sdk) |
@@ -346,7 +346,7 @@ Build React dashboards tailored to your trading strategies using the React SDK:
 
 | SDK | Documentation | Package |
 |-----|---------------|---------|
-| [sdk/react](sdk/react) | [Custom Frontends](docs/custom-bot-development/custom-frontends.md) | [@alexanderwanyoike/the0-react](https://www.npmjs.com/package/@alexanderwanyoike/the0-react) |
+| [sdk/react](sdk/react) | [Custom Frontends](docs/custom-bot-development/custom-frontends.md) | [the0-react](https://www.npmjs.com/package/the0-react) |
 
 ### Framework Agnostic
 

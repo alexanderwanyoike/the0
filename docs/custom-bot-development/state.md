@@ -51,7 +51,7 @@ state.clear()
 ```
 
 ```typescript [TypeScript]
-import { state } from "@alexanderwanyoike/the0-node";
+import { state } from "the0-node";
 
 // Store a value
 state.set("portfolio", { AAPL: 100, GOOGL: 50 });
@@ -258,7 +258,7 @@ state.set("prev_long_sma", long_sma)
 ```
 
 ```typescript [TypeScript]
-import { state, metric } from "@alexanderwanyoike/the0-node";
+import { state, metric } from "the0-node";
 
 interface SmaState {
     prevShortSma: number | null;
@@ -357,7 +357,7 @@ if len(price_history) >= 20:
 ```
 
 ```typescript [TypeScript]
-import { state } from "@alexanderwanyoike/the0-node";
+import { state } from "the0-node";
 
 interface PriceEntry {
     price: number;
@@ -462,7 +462,7 @@ state.set("total_trades", total_trades)
 ```
 
 ```typescript [TypeScript]
-import { state, metric } from "@alexanderwanyoike/the0-node";
+import { state, metric } from "the0-node";
 
 // Load counters
 let totalSignals = state.get<number>("total_signals", 0);

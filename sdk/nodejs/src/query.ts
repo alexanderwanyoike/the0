@@ -5,10 +5,10 @@
  * custom read-only query handlers that can be executed on demand.
  *
  * Separate namespace from state and main SDK exports.
- * Users import: import { query } from '@the0/sdk';
+ * Users import: import { query } from 'the0-node';
  *
  * @example
- * import { query, state } from '@the0/sdk';
+ * import { query, state } from 'the0-node';
  *
  * query.handler('/portfolio', async (req) => {
  *   const positions = await state.get('positions', []);
@@ -142,7 +142,7 @@ export function getConfig(): Record<string, unknown> {
  *
  * @example
  * // In query.ts
- * import { query, state } from '@the0/sdk';
+ * import { query, state } from 'the0-node';
  *
  * query.handler('/portfolio', async (req) => {
  *   return { positions: await state.get('positions', []) };

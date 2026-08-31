@@ -2,7 +2,7 @@
 
 A scheduled bot example that demonstrates:
 - Structured metric emission with structlog
-- Custom React frontend with `@the0/react` SDK
+- Custom React frontend with `the0-react` SDK
 - Portfolio value tracking and trade simulation
 
 ## What It Does

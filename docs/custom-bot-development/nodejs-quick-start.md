@@ -130,7 +130,7 @@ Create `package.json`:
     "start": "node main.js"
   },
   "dependencies": {
-    "@alexanderwanyoike/the0-node": "^0.1.0",
+    "the0-node": "^0.1.0",
     "pino": "^9.0.0"
   },
   "devDependencies": {
@@ -158,13 +158,9 @@ Create `tsconfig.json`:
 }
 ```
 
-Install the SDK from GitHub Packages:
+Install the dependencies:
 
 ```bash
-# Configure npm for the @alexanderwanyoike scope
-echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
-
-# Install dependencies
 npm install
 ```
 
@@ -173,7 +169,7 @@ npm install
 Create `main.ts` with your bot implementation. The key pattern for TypeScript bots is exporting the `main` function—the runtime invokes it directly rather than your code calling it:
 
 ```typescript
-import { parse, metric, sleep, success } from "@alexanderwanyoike/the0-node";
+import { parse, metric, sleep, success } from "the0-node";
 import pino from "pino";
 
 const logger = pino({ level: "info" });
@@ -313,7 +309,7 @@ The Node.js SDK provides these core functions:
 Reads `BOT_ID` and `BOT_CONFIG` from environment variables. The generic type parameter provides TypeScript type safety for your configuration:
 
 ```typescript
-import { parse } from "@alexanderwanyoike/the0-node";
+import { parse } from "the0-node";
 
 interface MyConfig {
   symbol: string;
@@ -329,7 +325,7 @@ const { id, config } = parse<MyConfig>();
 Emits a metric to the platform dashboard:
 
 ```typescript
-import { metric } from "@alexanderwanyoike/the0-node";
+import { metric } from "the0-node";
 
 metric("price", { symbol: "BTC/USD", value: 45000, change_pct: 2.5 });
 metric("alert", { type: "price_spike", severity: "high", message: "BTC up 5%" });
@@ -341,7 +337,7 @@ metric("signal", { direction: "long", confidence: 0.85 });
 Async utility for waiting between iterations:
 
 ```typescript
-import { sleep } from "@alexanderwanyoike/the0-node";
+import { sleep } from "the0-node";
 
 await sleep(5000); // Wait 5 seconds
 ```
@@ -351,7 +347,7 @@ await sleep(5000); // Wait 5 seconds
 Reports successful execution for scheduled bots:
 
 ```typescript
-import { success } from "@alexanderwanyoike/the0-node";
+import { success } from "the0-node";
 
 success("Analysis complete", { processed: 100 });
 ```
@@ -361,7 +357,7 @@ success("Analysis complete", { processed: 100 });
 Reports failure and terminates with exit code 1:
 
 ```typescript
-import { error } from "@alexanderwanyoike/the0-node";
+import { error } from "the0-node";
 
 if (!config.api_key) {
   error("API key is required");
@@ -474,7 +470,7 @@ The platform automatically detects and parses JSON log entries with `_metric` fi
 If you prefer plain JavaScript over TypeScript, create `main.js` directly:
 
 ```javascript
-import { parse, metric, sleep } from "@alexanderwanyoike/the0-node";
+import { parse, metric, sleep } from "the0-node";
 
 async function main() {
   const { id, config } = parse();

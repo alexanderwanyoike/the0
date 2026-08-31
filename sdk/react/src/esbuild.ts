@@ -14,7 +14,7 @@ import type { Plugin } from "esbuild";
  * @example
  * ```js
  * import * as esbuild from "esbuild";
- * import { reactGlobalPlugin } from "@alexanderwanyoike/the0-react/esbuild";
+ * import { reactGlobalPlugin } from "the0-react/esbuild";
  *
  * await esbuild.build({
  *   entryPoints: ["index.tsx"],
