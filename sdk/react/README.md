@@ -1,23 +1,23 @@
-# @alexanderwanyoike/the0-react
+# the0-react
 
 React SDK for building custom bot dashboards on the0 platform.
 
 ## Installation
 
 ```bash
-npm install @alexanderwanyoike/the0-react
+npm install the0-react
 # or
-yarn add @alexanderwanyoike/the0-react
+yarn add the0-react
 ```
 
-> Migrating from GitHub Packages? This package now lives on the public npm
-> registry. Remove the `@alexanderwanyoike:registry` line from your `.npmrc`
-> (project or `~/.npmrc`) to pick up new versions.
+> Migrating from GitHub Packages? This package was previously published there
+> as `@alexanderwanyoike/the0-react`. Update your dependency to `the0-react` and remove the
+> `@alexanderwanyoike:registry` line from your `.npmrc` (project or `~/.npmrc`).
 
 ## Usage
 
 ```tsx
-import { useThe0Events } from '@alexanderwanyoike/the0-react';
+import { useThe0Events } from 'the0-react';
 
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
@@ -119,8 +119,7 @@ This package is published to the public npm registry.
 
 ### Prerequisites
 
-Authenticate with npm as a user with publish rights to the
-`@alexanderwanyoike` scope:
+Authenticate with npm as a maintainer of the package:
 
 ```bash
 npm login

@@ -47,7 +47,7 @@ Create `frontend/package.json` with the React SDK as a dev dependency:
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@alexanderwanyoike/the0-react": "^0.2.0",
+    "the0-react": "^0.2.0",
     "@types/react": "^19.0.0",
     "typescript": "^5.0.0"
   }
@@ -93,7 +93,7 @@ Here's a complete dashboard example:
 
 ```tsx
 import React from "react";
-import { useThe0Events, BotEvent } from "@alexanderwanyoike/the0-react";
+import { useThe0Events, BotEvent } from "the0-react";
 
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();
@@ -356,7 +356,7 @@ For advanced users who need custom esbuild configuration, you can import the plu
 ```javascript
 // esbuild.config.mjs
 import * as esbuild from "esbuild";
-import { reactGlobalPlugin } from "@alexanderwanyoike/the0-react/esbuild";
+import { reactGlobalPlugin } from "the0-react/esbuild";
 
 await esbuild.build({
   entryPoints: ["index.tsx"],
@@ -371,7 +371,7 @@ await esbuild.build({
 Or use the programmatic build function with options:
 
 ```javascript
-import { build } from "@alexanderwanyoike/the0-react/build";
+import { build } from "the0-react/build";
 
 await build({
   entryPoint: "src/Dashboard.tsx",
@@ -384,7 +384,7 @@ await build({
 
 **Dashboard not appearing**: Ensure `frontend/package.json` exists with a `build` script that runs `the0-build`.
 
-**React not found error**: Use `@alexanderwanyoike/the0-react` version 0.2.0 or higher, which includes React as a peer dependency.
+**React not found error**: Use `the0-react` version 0.2.0 or higher, which includes React as a peer dependency.
 
 **Metrics not showing**: Verify your bot emits metrics using either the SDK `metric()` function or structured logging with the `_metric` field.
 

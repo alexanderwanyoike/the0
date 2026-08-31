@@ -64,7 +64,7 @@ if __name__ == "__main__":
 **TypeScript:**
 
 ```typescript
-import { parse, metric, success } from "@alexanderwanyoike/the0-node";
+import { parse, metric, success } from "the0-node";
 
 interface BotConfig {
     symbol: string;

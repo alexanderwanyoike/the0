@@ -74,7 +74,7 @@ if __name__ == "__main__":
 ```
 
 ```typescript [TypeScript]
-import { query, state, logger } from "@alexanderwanyoike/the0-node";
+import { query, state, logger } from "the0-node";
 
 interface BotState {
     priceHistory: { price: number; timestamp: number }[];

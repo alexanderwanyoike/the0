@@ -2,7 +2,7 @@
 
 A realtime bot example that demonstrates:
 - Structured metric emission with pino logging
-- Custom React frontend with `@the0/react` SDK
+- Custom React frontend with `the0-react` SDK
 - Continuous price monitoring with alerts
 
 ## What It Does

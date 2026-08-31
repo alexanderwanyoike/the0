@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { useThe0Events, BotEvent } from "@alexanderwanyoike/the0-react";
+import { useThe0Events, BotEvent } from "the0-react";
 
 export default function Dashboard() {
   const { events, utils, loading, error } = useThe0Events();

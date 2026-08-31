@@ -1,6 +1,6 @@
 # Example Bots with Custom Frontends
 
-This directory contains example bots demonstrating how to build custom trading bots with React dashboards using the `@the0/react` SDK.
+This directory contains example bots demonstrating how to build custom trading bots with React dashboards using the `the0-react` SDK.
 
 ## Examples
 
@@ -77,10 +77,10 @@ my-bot/
         └── bundle.js     # Built ESM bundle
 ```
 
-The frontend uses the `@the0/react` SDK to access bot events:
+The frontend uses the `the0-react` SDK to access bot events:
 
 ```tsx
-import { useThe0Events } from '@the0/react';
+import { useThe0Events } from 'the0-react';
 
 export default function Dashboard() {
   const { events, utils, loading } = useThe0Events();
@@ -136,12 +136,12 @@ The CLI automatically:
 
 ## SDK Installation
 
-The TypeScript examples use `@alexanderwanyoike/the0-node` from npm:
+The TypeScript examples use `the0-node` from npm:
 
 ```json
 {
   "dependencies": {
-    "@alexanderwanyoike/the0-node": "^0.3.1"
+    "the0-node": "^0.3.1"
   }
 }
 ```

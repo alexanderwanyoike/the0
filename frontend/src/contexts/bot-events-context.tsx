@@ -29,7 +29,7 @@ interface BotEventsContextValue {
   botId: string;
 }
 
-// Shared context - also accessible via @the0/react SDK
+// Shared context - also accessible via the0-react SDK
 declare global {
   interface Window {
     __THE0_EVENTS_CONTEXT__?: React.Context<BotEventsContextValue | null>;

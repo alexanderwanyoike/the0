@@ -5,7 +5,7 @@ A scheduled bot that simulates portfolio tracking with mock data.
 
 This example demonstrates:
 - Structured metric emission using structlog with _metric field
-- How the @the0/react SDK consumes these metrics in custom frontends
+- How the the0-react SDK consumes these metrics in custom frontends
 - Scheduled bot pattern (runs once per trigger, then exits)
 
 Metrics emitted:

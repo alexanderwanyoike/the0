@@ -1,4 +1,4 @@
-// Jest setup for @the0/react SDK
+// Jest setup for the0-react SDK
 import "@testing-library/react";
 
 // Suppress console errors during tests unless debugging

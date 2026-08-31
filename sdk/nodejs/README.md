@@ -1,23 +1,23 @@
-# @alexanderwanyoike/the0-node
+# the0-node
 
 Official SDK for building trading bots on the0 platform with Node.js and TypeScript.
 
 ## Installation
 
 ```bash
-npm install @alexanderwanyoike/the0-node
+npm install the0-node
 # or
-yarn add @alexanderwanyoike/the0-node
+yarn add the0-node
 ```
 
-> Migrating from GitHub Packages? This package now lives on the public npm
-> registry. Remove the `@alexanderwanyoike:registry` line from your `.npmrc`
-> (project or `~/.npmrc`) to pick up new versions.
+> Migrating from GitHub Packages? This package was previously published there
+> as `@alexanderwanyoike/the0-node`. Update your dependency to `the0-node` and remove the
+> `@alexanderwanyoike:registry` line from your `.npmrc` (project or `~/.npmrc`).
 
 ## Quick Start
 
 ```typescript
-import { parse, success, error, metric } from '@alexanderwanyoike/the0-node';
+import { parse, success, error, metric } from 'the0-node';
 
 // Parse bot configuration from environment
 const { id, config } = parse<{
@@ -123,7 +123,7 @@ await sleep(5000); // Wait 5 seconds
 Run on a cron schedule, execute once, and exit:
 
 ```typescript
-import { parse, success, error } from '@alexanderwanyoike/the0-node';
+import { parse, success, error } from 'the0-node';
 
 const { id, config } = parse();
 
@@ -141,7 +141,7 @@ try {
 Run continuously until stopped:
 
 ```typescript
-import { parse, metric, sleep } from '@alexanderwanyoike/the0-node';
+import { parse, metric, sleep } from 'the0-node';
 
 const { id, config } = parse();
 
@@ -164,8 +164,7 @@ This package is published to the public npm registry.
 
 ### Prerequisites
 
-Authenticate with npm as a user with publish rights to the
-`@alexanderwanyoike` scope:
+Authenticate with npm as a maintainer of the package:
 
 ```bash
 npm login

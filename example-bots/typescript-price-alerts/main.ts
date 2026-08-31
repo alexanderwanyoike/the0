@@ -17,7 +17,7 @@
  * - Tracks alert_count for monitoring bot activity
  */
 
-import { parse, metric, sleep, success, state } from "@alexanderwanyoike/the0-node";
+import { parse, metric, sleep, success, state } from "the0-node";
 import pino from "pino";
 
 // Configure pino logger for structured JSON output

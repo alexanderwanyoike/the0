@@ -1,5 +1,5 @@
 /**
- * @the0/react - React SDK for bot custom frontends
+ * the0-react - React SDK for bot custom frontends
  *
  * This SDK provides hooks and utilities for building custom dashboards
  * that visualize bot metrics and events.
@@ -104,7 +104,7 @@ export const The0EventsContext = getSharedContext();
  *
  * @example
  * ```tsx
- * import { useThe0Events } from '@the0/react';
+ * import { useThe0Events } from 'the0-react';
  *
  * export default function Dashboard() {
  *   const { events, utils, loading } = useThe0Events();

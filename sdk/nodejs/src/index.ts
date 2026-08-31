@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { parse, success, error, result, metric } from '@the0/sdk';
+ * import { parse, success, error, result, metric } from 'the0-node';
  *
  * // Parse bot configuration
  * const { id, config } = parse();

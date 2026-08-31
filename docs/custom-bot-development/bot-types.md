@@ -118,7 +118,7 @@ Realtime bots don't use cron schedules—they run continuously until stopped.
 A realtime bot contains a main loop that runs indefinitely. The typescript-price-alerts example shows the pattern:
 
 ```typescript
-import { parse, metric, sleep } from "@alexanderwanyoike/the0-node";
+import { parse, metric, sleep } from "the0-node";
 import pino from "pino";
 
 const logger = pino({ level: "info" });
