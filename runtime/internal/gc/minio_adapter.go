@@ -16,6 +16,37 @@ func NewMinIOAdapter(client *minio.Client) MinIOClient {
 	return &minioAdapter{client: client}
 }
 
+// bucketAPI is the subset of minio.Client that ensureBucket needs, split out
+// so the concurrent-creation race can be tested without a live server.
+type bucketAPI interface {
+	BucketExists(ctx context.Context, bucket string) (bool, error)
+	MakeBucket(ctx context.Context, bucket string, opts minio.MakeBucketOptions) error
+}
+
+func ensureBucket(ctx context.Context, api bucketAPI, bucket string) error {
+	exists, err := api.BucketExists(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	if err := api.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+		// Several services create these buckets lazily, so on a fresh stack
+		// another one can win the create between our exists check and here.
+		// The bucket existing is all we need; only fail if it still doesn't.
+		if exists, checkErr := api.BucketExists(ctx, bucket); checkErr == nil && exists {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (m *minioAdapter) EnsureBucket(ctx context.Context, bucket string) error {
+	return ensureBucket(ctx, m.client, bucket)
+}
+
 func (m *minioAdapter) ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error) {
 	var names []string
 	for obj := range m.client.ListObjects(ctx, bucket, minio.ListObjectsOptions{
