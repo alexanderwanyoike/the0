@@ -136,7 +136,7 @@ The CLI automatically:
 
 ## SDK Installation
 
-The TypeScript examples use `@alexanderwanyoike/the0-node` from GitHub Packages:
+The TypeScript examples use `@alexanderwanyoike/the0-node` from npm:
 
 ```json
 {
@@ -146,17 +146,9 @@ The TypeScript examples use `@alexanderwanyoike/the0-node` from GitHub Packages:
 }
 ```
 
-Configure `.npmrc` for GitHub Packages:
-```
-@alexanderwanyoike:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-GitHub Packages requires authentication even for public packages, so set
-`GITHUB_TOKEN` to a personal access token with the `read:packages` scope
-before installing:
+The SDK packages are published to the public npm registry, so a plain
+install works with no registry configuration or authentication:
 
 ```bash
-export GITHUB_TOKEN=ghp_...
 yarn install
 ```

@@ -158,13 +158,9 @@ Create `tsconfig.json`:
 }
 ```
 
-Install the SDK from GitHub Packages:
+Install the dependencies:
 
 ```bash
-# Configure npm for the @alexanderwanyoike scope
-echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
-
-# Install dependencies
 npm install
 ```
 

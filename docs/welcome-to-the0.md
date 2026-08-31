@@ -37,7 +37,7 @@ the0 provides official SDKs for seven languages, each offering consistent APIs f
 | Language | Runtime | SDK Source |
 |----------|---------|------------|
 | Python | python3.11 | `the0-sdk` (PyPI) |
-| TypeScript/Node.js | nodejs20 | `@alexanderwanyoike/the0-node` (GitHub Packages) |
+| TypeScript/Node.js | nodejs20 | `@alexanderwanyoike/the0-node` (npm) |
 | Rust | rust-stable | `the0-sdk` (crates.io) |
 | C# | dotnet8 | `The0.Sdk` (NuGet) |
 | Scala | scala3 | `the0-sdk` (GitHub Repository) |
