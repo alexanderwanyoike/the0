@@ -5,6 +5,58 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: CLI bot bundles use forward slashes in zip entries so bundles built on Windows extract correctly; previously every Windows-deployed bot with dependencies failed at import time
+        - kind: fixed
+          description: The gc service creates its MinIO buckets on startup instead of crash-looping on a fresh stack, and tolerates another service winning the bucket-creation race
+        - kind: changed
+          description: The Node.js and React SDKs moved from GitHub Packages to the public npm registry as the0-node and the0-react; installs need no registry configuration or authentication
+        - kind: added
+          description: SDK npm releases publish via GitHub Actions with npm trusted publishing (OIDC) and provenance attestations
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.14.6
+    created: "2026-08-31T20:40:29.061206034Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 07c04297cce61f031a0cec4960f117ba942c1e8b0aa747829095952ba69ad4b2
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.9.7/the0-0.9.7.tgz
+    version: 0.9.7
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: Propagate NATS_URL into bot pods so live log streaming works in Kubernetes (sync sidecar and inline sync); changing it now reconciles existing pods and CronJobs
         - kind: fixed
           description: Publish log chunks to NATS before the MinIO append so live streaming latency is not gated on object storage writes
@@ -1857,4 +1909,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-08-13T20:51:55.385151909Z"
+generated: "2026-08-31T20:40:29.061389928Z"
