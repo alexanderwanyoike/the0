@@ -126,7 +126,12 @@ def simulate_portfolio(initial_value: float, volatility: float, symbols: list) -
         price_change = random.uniform(-volatility, volatility)
         current_price = base_price * (1 + price_change)
 
-        quantity = value_per_symbol / current_price
+        # Size the position at the base price and mark it at the current one.
+        # Deriving quantity from current_price instead would cancel the price
+        # movement straight back out - quantity * current_price collapses to
+        # value_per_symbol - so the portfolio would report exactly
+        # initial_value on every run no matter what volatility was configured.
+        quantity = value_per_symbol / base_price
         position_value = quantity * current_price
 
         positions.append({
