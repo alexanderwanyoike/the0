@@ -16,6 +16,17 @@ func NewMinIOAdapter(client *minio.Client) MinIOClient {
 	return &minioAdapter{client: client}
 }
 
+func (m *minioAdapter) EnsureBucket(ctx context.Context, bucket string) error {
+	exists, err := m.client.BucketExists(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	return m.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+}
+
 func (m *minioAdapter) ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error) {
 	var names []string
 	for obj := range m.client.ListObjects(ctx, bucket, minio.ListObjectsOptions{
