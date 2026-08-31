@@ -30,6 +30,20 @@ type mockMinIOClient struct {
 	// If set, AbortIncompleteUpload returns this error for keys matching abortErrKey.
 	abortErr    error
 	abortErrKey string
+
+	// Tracks buckets passed to EnsureBucket.
+	ensured []string
+	// If set, EnsureBucket returns this error for the matching bucket.
+	ensureErr       error
+	ensureErrBucket string
+}
+
+func (m *mockMinIOClient) EnsureBucket(ctx context.Context, bucket string) error {
+	if m.ensureErr != nil && (m.ensureErrBucket == "" || m.ensureErrBucket == bucket) {
+		return m.ensureErr
+	}
+	m.ensured = append(m.ensured, bucket)
+	return nil
 }
 
 func (m *mockMinIOClient) ListObjectNames(ctx context.Context, bucket, prefix string) ([]string, error) {
@@ -159,6 +173,31 @@ func TestGC_DeletesOrphanedArtifacts(t *testing.T) {
 	for _, d := range minio.deleted {
 		assert.NotContains(t, d, "bot-active")
 	}
+}
+
+func TestGC_CreatesMissingBucketsBeforeSweep(t *testing.T) {
+	minio := &mockMinIOClient{}
+	store := &mockBotStore{existingIDs: map[string]bool{}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	_, err := gc.Run(context.Background())
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"bot-logs", "bot-state"}, minio.ensured)
+}
+
+func TestGC_EnsureBucketErrorFailsSweep(t *testing.T) {
+	minio := &mockMinIOClient{
+		ensureErr:       errors.New("access denied"),
+		ensureErrBucket: "bot-state",
+	}
+	store := &mockBotStore{existingIDs: map[string]bool{}}
+
+	gc := NewGarbageCollector(GarbageCollectorOptions{MinIO: minio, Store: store, LogsBucket: "bot-logs", StateBucket: "bot-state"})
+	_, err := gc.Run(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bot-state")
 }
 
 func TestGC_NoOrphans(t *testing.T) {

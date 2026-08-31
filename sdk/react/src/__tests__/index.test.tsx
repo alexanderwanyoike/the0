@@ -10,7 +10,7 @@ import {
   The0EventsContextValue,
 } from "../index";
 
-describe("@the0/react SDK", () => {
+describe("the0-react SDK", () => {
   // Create mock utils
   const createMockUtils = (events: BotEvent[]): BotEventUtils => ({
     since: jest.fn(() => events),

@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@alexanderwanyoike/the0-react": "^0.2.0",
+    "the0-react": "^0.2.0",
     "@types/react": "^19.0.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.0.0"

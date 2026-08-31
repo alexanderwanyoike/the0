@@ -1,28 +1,23 @@
-# @alexanderwanyoike/the0-node
+# the0-node
 
 Official SDK for building trading bots on the0 platform with Node.js and TypeScript.
 
 ## Installation
 
-This package is published to GitHub Packages. First, configure npm to use GitHub Packages for the `@alexanderwanyoike` scope:
-
 ```bash
-# Create or edit ~/.npmrc
-echo "@alexanderwanyoike:registry=https://npm.pkg.github.com" >> ~/.npmrc
-```
-
-Then install:
-
-```bash
-npm install @alexanderwanyoike/the0-node
+npm install the0-node
 # or
-yarn add @alexanderwanyoike/the0-node
+yarn add the0-node
 ```
+
+> Migrating from GitHub Packages? This package was previously published there
+> as `@alexanderwanyoike/the0-node`. Update your dependency to `the0-node` and remove the
+> `@alexanderwanyoike:registry` line from your `.npmrc` (project or `~/.npmrc`).
 
 ## Quick Start
 
 ```typescript
-import { parse, success, error, metric } from '@alexanderwanyoike/the0-node';
+import { parse, success, error, metric } from 'the0-node';
 
 // Parse bot configuration from environment
 const { id, config } = parse<{
@@ -128,7 +123,7 @@ await sleep(5000); // Wait 5 seconds
 Run on a cron schedule, execute once, and exit:
 
 ```typescript
-import { parse, success, error } from '@alexanderwanyoike/the0-node';
+import { parse, success, error } from 'the0-node';
 
 const { id, config } = parse();
 
@@ -146,7 +141,7 @@ try {
 Run continuously until stopped:
 
 ```typescript
-import { parse, metric, sleep } from '@alexanderwanyoike/the0-node';
+import { parse, metric, sleep } from 'the0-node';
 
 const { id, config } = parse();
 
@@ -165,19 +160,15 @@ while (true) {
 
 ## Publishing (Maintainers)
 
-This package is published to GitHub Packages.
+This package is published to the public npm registry.
 
 ### Prerequisites
 
-1. Create a GitHub Personal Access Token with `write:packages` scope:
-   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
+Authenticate with npm as a maintainer of the package:
 
-2. Authenticate with GitHub Packages:
-   ```bash
-   npm login --registry=https://npm.pkg.github.com
-   # Username: your-github-username
-   # Password: your-personal-access-token
-   ```
+```bash
+npm login
+```
 
 ### Publish
 
@@ -185,7 +176,7 @@ This package is published to GitHub Packages.
 # Build the package
 yarn build
 
-# Publish to GitHub Packages
+# Publish to npm
 npm publish
 ```
 

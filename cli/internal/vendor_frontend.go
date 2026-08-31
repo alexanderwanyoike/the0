@@ -158,7 +158,10 @@ func (v *FrontendVendor) runContainer(vm *VendorManager) (string, error) {
 		gid = "1000"
 	}
 
-	// Configure npm auth for GitHub Packages if GITHUB_TOKEN is set
+	// Configure npm auth for GitHub Packages if GITHUB_TOKEN is set. The SDKs
+	// now live on the public npm registry, but bots created before the move
+	// may still have a project .npmrc pinning the scope to GitHub Packages,
+	// and their builds only work with this auth in place.
 	npmAuthSetup := `if [ -n "$GITHUB_TOKEN" ]; then echo "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN" >> ~/.npmrc; fi`
 
 	// Build command: setup auth, install deps, run build script

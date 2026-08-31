@@ -85,7 +85,12 @@ func CreateBotZipFromDir(sourceDir string) (string, error) {
 		if err != nil {
 			return err
 		}
-		header.Name = relPath
+		// The ZIP spec (APPNOTE 4.4.17.1) requires forward slashes as the path
+		// separator. filepath.Rel returns OS-native separators, so on Windows
+		// this produced entries like `vendor\the0\__init__.py`, which Linux
+		// extractors treat as one flat filename -- the bot's vendor/ directory
+		// never materialises and every dependency import fails at runtime.
+		header.Name = filepath.ToSlash(relPath)
 		header.Method = zip.Deflate
 
 		writer, err := zipWriter.CreateHeader(header)

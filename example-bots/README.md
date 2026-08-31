@@ -1,6 +1,6 @@
 # Example Bots with Custom Frontends
 
-This directory contains example bots demonstrating how to build custom trading bots with React dashboards using the `@the0/react` SDK.
+This directory contains example bots demonstrating how to build custom trading bots with React dashboards using the `the0-react` SDK.
 
 ## Examples
 
@@ -77,10 +77,10 @@ my-bot/
         └── bundle.js     # Built ESM bundle
 ```
 
-The frontend uses the `@the0/react` SDK to access bot events:
+The frontend uses the `the0-react` SDK to access bot events:
 
 ```tsx
-import { useThe0Events } from '@the0/react';
+import { useThe0Events } from 'the0-react';
 
 export default function Dashboard() {
   const { events, utils, loading } = useThe0Events();
@@ -136,27 +136,19 @@ The CLI automatically:
 
 ## SDK Installation
 
-The TypeScript examples use `@alexanderwanyoike/the0-node` from GitHub Packages:
+The TypeScript examples use `the0-node` from npm:
 
 ```json
 {
   "dependencies": {
-    "@alexanderwanyoike/the0-node": "^0.3.1"
+    "the0-node": "^0.3.1"
   }
 }
 ```
 
-Configure `.npmrc` for GitHub Packages:
-```
-@alexanderwanyoike:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-GitHub Packages requires authentication even for public packages, so set
-`GITHUB_TOKEN` to a personal access token with the `read:packages` scope
-before installing:
+The SDK packages are published to the public npm registry, so a plain
+install works with no registry configuration or authentication:
 
 ```bash
-export GITHUB_TOKEN=ghp_...
 yarn install
 ```

@@ -14,7 +14,7 @@
  *   /statistics    - Get overall bot statistics
  */
 
-import { query, state } from "@alexanderwanyoike/the0-node";
+import { query, state } from "the0-node";
 
 // Persistent state structure (matches main.ts)
 interface PersistedState {
