@@ -1,0 +1,81 @@
+name: Publish SDKs to npm
+
+# Publishes the0-node and the0-react via npm trusted publishing (OIDC).
+# Both packages' npm settings trust this exact workflow filename; renaming
+# this file breaks publishing until the npm config is updated to match.
+#
+# Idempotent: a package whose version already exists on npm is skipped, so
+# running the workflow publishes only what has been bumped.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: the0-node
+            dir: sdk/nodejs
+          - package: the0-react
+            dir: sdk/react
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'yarn'
+          cache-dependency-path: ${{ matrix.dir }}/yarn.lock
+
+      # Trusted publishing (OIDC) requires npm 11.5.1+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Check whether this version is already published
+        id: version
+        working-directory: ${{ matrix.dir }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "$NAME" != "${{ matrix.package }}" ]; then
+            echo "package.json name '$NAME' does not match expected '${{ matrix.package }}'" >&2
+            exit 1
+          fi
+          if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            echo "$NAME@$VERSION already on npm, skipping publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$NAME@$VERSION not yet published"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.version.outputs.publish == 'true'
+        working-directory: ${{ matrix.dir }}
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        if: steps.version.outputs.publish == 'true'
+        working-directory: ${{ matrix.dir }}
+        run: yarn build
+
+      - name: Test
+        if: steps.version.outputs.publish == 'true'
+        working-directory: ${{ matrix.dir }}
+        run: yarn test
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true'
+        working-directory: ${{ matrix.dir }}
+        run: npm publish
