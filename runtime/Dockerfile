@@ -50,12 +50,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3.11 /usr/bin/python
 
 # Node.js 20 LTS
-# npm is pinned to the v10 line: npm@latest (v12+) requires Node >= 22 and
-# breaks the install on Node 20.
+# npm is pinned to the v11 line: it supports Node >= 20.17 while npm@latest
+# (v12+) requires Node >= 22 and breaks the install on Node 20. v10's bundled
+# deps (pacote, sigstore) carry HIGH advisories that v11 fixes.
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g npm@10
+    && npm install -g npm@11
 
 # .NET 8 Runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \

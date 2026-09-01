@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.7
-appVersion: "1.14.6"
+version: 0.9.8
+appVersion: "1.14.7"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,14 +30,10 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: security
+      description: Runtime image clears its HIGH/CRITICAL scan findings - golang.org/x/crypto, x/net and x/text bumped past their advisories, and the bundled npm moved to the v11 line with a patched toolchain
     - kind: fixed
-      description: CLI bot bundles use forward slashes in zip entries so bundles built on Windows extract correctly; previously every Windows-deployed bot with dependencies failed at import time
-    - kind: fixed
-      description: The gc service creates its MinIO buckets on startup instead of crash-looping on a fresh stack, and tolerates another service winning the bucket-creation race
-    - kind: changed
-      description: The Node.js and React SDKs moved from GitHub Packages to the public npm registry as the0-node and the0-react; installs need no registry configuration or authentication
-    - kind: added
-      description: SDK npm releases publish via GitHub Actions with npm trusted publishing (OIDC) and provenance attestations
+      description: API image builds again against current Alpine repositories - libexpat is unpinned from the hardened base image's stale checksum so python3 can resolve
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
