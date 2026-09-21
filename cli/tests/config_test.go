@@ -392,3 +392,14 @@ metadata:
 		os.Remove("bot-config.yaml")
 	})
 }
+
+func TestRuntimeDeprecationWarning(t *testing.T) {
+	if got := internal.RuntimeDeprecationWarning("nodejs20"); !strings.Contains(got, "nodejs22") {
+		t.Errorf("nodejs20 warning should point at nodejs22, got %q", got)
+	}
+	for _, runtime := range []string{"nodejs22", "python3.11", ""} {
+		if got := internal.RuntimeDeprecationWarning(runtime); got != "" {
+			t.Errorf("runtime %q should not warn, got %q", runtime, got)
+		}
+	}
+}

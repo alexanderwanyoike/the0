@@ -15,10 +15,19 @@ import (
 )
 
 const (
-	nodeImage            = "node:20-slim"
 	nodeModulesDir       = "node_modules"
 	nodeModulesBackupDir = "_node_modules_backup"
 )
+
+// nodeImageFor returns the image whose Node major matches the bot's runtime.
+// Native addons are compiled during vendoring, so building on a different
+// major than the bot runs on fails at load time with an ABI mismatch.
+func nodeImageFor(runtime string) string {
+	if runtime == "nodejs20" {
+		return "node:20-slim"
+	}
+	return "node:22-slim"
+}
 
 // NodeVendor handles Node.js dependency installation via npm
 type NodeVendor struct{}
@@ -35,7 +44,7 @@ func (v *NodeVendor) Name() string {
 
 // DockerImage returns the Docker image used for vendoring
 func (v *NodeVendor) DockerImage() string {
-	return nodeImage
+	return nodeImageFor("")
 }
 
 // Detect checks if package.json exists (but not in frontend directory)
@@ -140,6 +149,7 @@ func (v *NodeVendor) hasTypeScriptFiles(projectPath string) bool {
 // pullImage pulls the Node.js image if it doesn't exist locally
 func (v *NodeVendor) pullImage(vm *VendorManager) error {
 	ctx := context.Background()
+	nodeImage := nodeImageFor(vm.runtime)
 
 	// Check if image exists locally
 	images, err := vm.dockerClient.ImageList(ctx, image.ListOptions{})
@@ -196,7 +206,7 @@ func (v *NodeVendor) runContainer(vm *VendorManager, hasTypeScript bool) (string
 	installCmd := v.getInstallCommand(hasTypeScript)
 
 	config := &container.Config{
-		Image: nodeImage,
+		Image: nodeImageFor(vm.runtime),
 		Cmd: []string{
 			"sh", "-c",
 			installCmd,

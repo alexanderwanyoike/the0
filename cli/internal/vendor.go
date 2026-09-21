@@ -23,6 +23,7 @@ const (
 type VendorManager struct {
 	dockerClient *client.Client
 	projectPath  string
+	runtime      string
 }
 
 // NewVendorManager creates a new vendor manager instance
@@ -251,8 +252,8 @@ func CleanupVendoring(projectPath string) {
 
 // PerformVendoringIfNeeded performs vendoring only if needed and Docker is available.
 // This is a convenience function that uses VendorDependenciesIfNeeded from vendor_interface.go.
-func PerformVendoringIfNeeded(projectPath string) error {
-	return VendorDependenciesIfNeeded(projectPath)
+func PerformVendoringIfNeeded(projectPath, runtime string) error {
+	return VendorDependenciesIfNeeded(projectPath, runtime)
 }
 
 // Legacy compatibility functions - these delegate to the new vendor implementations

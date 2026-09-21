@@ -17,8 +17,22 @@ func TestNodeVendor_Name(t *testing.T) {
 
 func TestNodeVendor_DockerImage(t *testing.T) {
 	v := &NodeVendor{}
-	if v.DockerImage() != "node:20-slim" {
-		t.Errorf("Expected 'node:20-slim', got '%s'", v.DockerImage())
+	if v.DockerImage() != "node:22-slim" {
+		t.Errorf("Expected 'node:22-slim', got '%s'", v.DockerImage())
+	}
+}
+
+func TestNodeImageFor_MatchesBotRuntime(t *testing.T) {
+	tests := map[string]string{
+		"nodejs20":   "node:20-slim",
+		"nodejs22":   "node:22-slim",
+		"":           "node:22-slim",
+		"python3.11": "node:22-slim",
+	}
+	for runtime, want := range tests {
+		if got := nodeImageFor(runtime); got != want {
+			t.Errorf("nodeImageFor(%q) = %q, want %q", runtime, got, want)
+		}
 	}
 }
 
