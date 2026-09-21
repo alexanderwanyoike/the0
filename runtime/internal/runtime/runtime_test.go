@@ -11,6 +11,7 @@ func TestGetDockerImage(t *testing.T) {
 	validRuntimes := []string{
 		"python3.11",
 		"nodejs20",
+		"nodejs22",
 		"rust-stable",
 		"dotnet8",
 		"gcc13",
@@ -46,6 +47,7 @@ func TestIsValidRuntime(t *testing.T) {
 	validRuntimes := []string{
 		"python3.11",
 		"nodejs20",
+		"nodejs22",
 		"rust-stable",
 		"dotnet8",
 		"gcc13",
@@ -84,6 +86,7 @@ func TestSupportedRuntimes(t *testing.T) {
 		"gcc13",
 		"ghc96",
 		"nodejs20",
+		"nodejs22",
 		"python3.11",
 		"rust-stable",
 		"scala3",

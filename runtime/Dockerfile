@@ -7,7 +7,8 @@
 #
 # Supported runtimes:
 #   - python3.11: Python 3.11 (from deadsnakes PPA)
-#   - nodejs20: Node.js 20 LTS
+#   - nodejs22: Node.js 22 LTS
+#   - nodejs20: Node.js 20 (end of life, kept for already-deployed bots)
 #   - dotnet8: .NET 8 runtime
 #   - scala3: Scala 3 (via Java 17 JRE)
 #   - rust-stable: Pre-compiled Rust binaries
@@ -49,14 +50,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.11 /usr/bin/python
 
-# Node.js 20 LTS
-# npm is pinned to the v11 line: it supports Node >= 20.17 while npm@latest
-# (v12+) requires Node >= 22 and breaks the install on Node 20. v10's bundled
-# deps (pacote, sigstore) carry HIGH advisories that v11 fixes.
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+# Node.js 22 LTS is the default `node` on PATH (runtime: nodejs22).
+# npm and corepack are removed from both Node installs: the runtime only ever
+# executes `node` (dependencies are vendored by the CLI before upload), and
+# npm's bundled deps are a recurring source of HIGH advisories in image scans.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g npm@11
+    && rm -rf /var/lib/apt/lists/* /usr/lib/node_modules \
+       /usr/bin/npm /usr/bin/npx /usr/bin/corepack
+
+# Node.js 20 (runtime: nodejs20) is end of life and only stays so that bots
+# already deployed on it keep running until their authors move to nodejs22
+# (issue #331). Pinned to the final 20.x release.
+ARG NODE20_VERSION=20.20.2
+RUN case "$(dpkg --print-architecture)" in \
+      amd64) NODE_ARCH=x64;   NODE_SHA=19e56f0825510207dd904f087fe52faa0a4eb6b2aab5f0ea7a33830d04888b8b ;; \
+      arm64) NODE_ARCH=arm64; NODE_SHA=47ef73d543ecf6eb19435f6c03a0ac4809b3bf0dd6b26c7c571efc2a6572a74d ;; \
+      *) echo "unsupported architecture for Node 20" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSLo /tmp/node20.tar.gz "https://nodejs.org/dist/v${NODE20_VERSION}/node-v${NODE20_VERSION}-linux-${NODE_ARCH}.tar.gz" \
+    && echo "${NODE_SHA}  /tmp/node20.tar.gz" | sha256sum -c - \
+    && mkdir -p /opt/node20 \
+    && tar -xzf /tmp/node20.tar.gz -C /opt/node20 --strip-components=1 \
+    && rm -rf /tmp/node20.tar.gz /opt/node20/lib/node_modules \
+       /opt/node20/bin/npm /opt/node20/bin/npx /opt/node20/bin/corepack
 
 # .NET 8 Runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \

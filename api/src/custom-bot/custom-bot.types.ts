@@ -7,6 +7,7 @@ export type CustomBotStatus = "active";
 export const SUPPORTED_RUNTIMES = [
   "python3.11",
   "nodejs20",
+  "nodejs22",
   "rust-stable",
   "dotnet8",
   "gcc13",

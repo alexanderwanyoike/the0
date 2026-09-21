@@ -5,6 +5,7 @@ import {
   CustomBot,
   CustomBotConfig,
   CustomBotWithVersions,
+  SUPPORTED_RUNTIMES,
 } from "../custom-bot.types";
 import { Ok, Failure } from "@/common/result";
 import { validateCustomBotConfigPayload } from "../custom-bot.schema";
@@ -311,7 +312,7 @@ describe("CustomBotService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        "Bots must specify a valid runtime (python3.11, nodejs20, rust-stable, dotnet8, gcc13, scala3, ghc96)",
+        `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
       );
       expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
     });
@@ -437,7 +438,7 @@ describe("CustomBotService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(
-        "Bots must specify a valid runtime (python3.11, nodejs20, rust-stable, dotnet8, gcc13, scala3, ghc96)",
+        `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
       );
       expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
     });

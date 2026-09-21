@@ -18,6 +18,7 @@ const UniversalRuntimeImage = "ghcr.io/alexanderwanyoike/the0/runtime:latest"
 var supportedRuntimes = map[string]bool{
 	"python3.11":  true,
 	"nodejs20":    true,
+	"nodejs22":    true,
 	"rust-stable": true,
 	"dotnet8":     true,
 	"gcc13":       true,
