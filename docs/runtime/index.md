@@ -72,7 +72,7 @@ flowchart LR
 The platform supports multiple programming languages:
 
 - Python 3.11
-- Node.js 20
+- Node.js 22 (Node.js 20 is deprecated)
 - Rust
 - C++
 - C# (.NET 8)

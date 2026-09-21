@@ -25,7 +25,7 @@ make install
 the0 auth login
 ```
 
-You'll also need Node.js 20 or higher installed locally for testing.
+You'll also need Node.js 22 or higher installed locally for testing.
 
 ## Project Structure
 
@@ -57,7 +57,7 @@ description: "Monitors prices and emits alerts when thresholds are crossed"
 version: 1.0.0
 author: "your-name"
 type: realtime
-runtime: nodejs20
+runtime: nodejs22
 
 entrypoints:
   bot: main.js

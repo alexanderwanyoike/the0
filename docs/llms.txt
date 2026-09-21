@@ -31,7 +31,7 @@
 
 ### Supported Languages
 - Python 3.11+
-- JavaScript/Node.js 20+
+- JavaScript/Node.js 22 (`nodejs22`; `nodejs20` is deprecated)
 
 ### Bot Structure
 ```
