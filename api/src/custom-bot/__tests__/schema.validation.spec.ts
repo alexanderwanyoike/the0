@@ -3,7 +3,11 @@ import {
   validateCustomBotConfigPayload,
   validateCustomBotPayload,
 } from "../custom-bot.schema";
-import { CustomBotConfig } from "../custom-bot.types";
+import {
+  BOT_TYPES,
+  CustomBotConfig,
+  SUPPORTED_RUNTIMES,
+} from "../custom-bot.types";
 
 describe("Custom Bot Schema Validation", () => {
   const validConfig: CustomBotConfig = {
@@ -234,6 +238,31 @@ describe("Custom Bot Schema Validation", () => {
   });
 
   describe("runtime validation rules", () => {
+    it("should accept every supported runtime for every bot type", () => {
+      for (const type of BOT_TYPES) {
+        for (const runtime of SUPPORTED_RUNTIMES) {
+          const result = validateCustomBotConfigPayload({
+            ...validConfig,
+            type,
+            runtime,
+          });
+          expect({ type, runtime, valid: result.valid }).toEqual({
+            type,
+            runtime,
+            valid: true,
+          });
+        }
+      }
+    });
+
+    it("should reject a runtime outside the supported list", () => {
+      const result = validateCustomBotConfigPayload({
+        ...validConfig,
+        runtime: "nodejs18",
+      } as unknown as Record<string, unknown>);
+      expect(result.valid).toBe(false);
+    });
+
     it("should validate scheduled bot with python3.11 runtime", () => {
       const scheduledConfig = {
         ...validConfig,
