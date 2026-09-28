@@ -21,6 +21,14 @@ func TestBuildBotCommand_Python311(t *testing.T) {
 func TestBuildBotCommand_NodeJS20(t *testing.T) {
 	cmd := BuildBotCommand("nodejs20", "index.js", constants.TestBotDir)
 
+	assert.Equal(t, "/opt/node20/bin/node", cmd.Args[0])
+	assert.Contains(t, cmd.Args, constants.TestNodeWrapperPath)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
+}
+
+func TestBuildBotCommand_NodeJS22(t *testing.T) {
+	cmd := BuildBotCommand("nodejs22", "index.js", constants.TestBotDir)
+
 	assert.Equal(t, "node", cmd.Args[0])
 	assert.Contains(t, cmd.Args, constants.TestNodeWrapperPath)
 	assert.Equal(t, constants.TestBotDir, cmd.Dir)
@@ -46,6 +54,14 @@ func TestBuildBotCommand_AllRuntimes(t *testing.T) {
 		{
 			name:         "nodejs20",
 			runtime:      "nodejs20",
+			entrypoint:   "index.js",
+			workDir:      constants.TestBotDir,
+			expectedArgs: []string{"/opt/node20/bin/node", constants.TestNodeWrapperPath},
+			expectedDir:  constants.TestBotDir,
+		},
+		{
+			name:         "nodejs22",
+			runtime:      "nodejs22",
 			entrypoint:   "index.js",
 			workDir:      constants.TestBotDir,
 			expectedArgs: []string{"node", constants.TestNodeWrapperPath},
@@ -137,9 +153,11 @@ func TestBuildQueryCommand_Python(t *testing.T) {
 
 func TestBuildQueryCommand_Node(t *testing.T) {
 	cmd := BuildQueryCommand("nodejs20", "query.js", constants.TestBotDir)
+	assert.Equal(t, []string{"/opt/node20/bin/node", "query.js"}, cmd.Args)
+	assert.Equal(t, constants.TestBotDir, cmd.Dir)
 
-	assert.Equal(t, "node", cmd.Args[0])
-	assert.Contains(t, cmd.Args, "query.js")
+	cmd = BuildQueryCommand("nodejs22", "query.js", constants.TestBotDir)
+	assert.Equal(t, []string{"node", "query.js"}, cmd.Args)
 	assert.Equal(t, constants.TestBotDir, cmd.Dir)
 }
 
@@ -174,6 +192,18 @@ func TestBuildBotEnv_BasicFields(t *testing.T) {
 	assert.Contains(t, env, "CODE_MOUNT_DIR=bot")
 	assert.Contains(t, env, "SCRIPT_PATH=main.py")
 	assert.Contains(t, env, "ENTRYPOINT_TYPE=bot")
+}
+
+func TestBuildBotEnv_NodeJS20PutsNode20FirstOnPath(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin")
+
+	env := BuildBotEnv(&Config{Runtime: "nodejs20"})
+	assert.Equal(t, "PATH=/opt/node20/bin:/usr/bin", env[len(env)-1])
+
+	for _, runtime := range []string{"nodejs22", "python3.11"} {
+		env = BuildBotEnv(&Config{Runtime: runtime})
+		assert.NotContains(t, env, "PATH=/opt/node20/bin:/usr/bin", runtime)
+	}
 }
 
 func TestBuildBotEnv_StateDirFromEnv(t *testing.T) {

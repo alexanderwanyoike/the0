@@ -25,7 +25,7 @@ const (
 	// LabelCustomBotVersion is the label key for the custom bot version.
 	LabelCustomBotVersion = "the0.app/custom-bot-version"
 
-	// LabelRuntime is the label key for the bot runtime (python3.11, nodejs20, etc).
+	// LabelRuntime is the label key for the bot runtime (python3.11, nodejs22, etc).
 	LabelRuntime = "the0.app/runtime"
 
 	// LabelManagedBy indicates the controller managing this pod.

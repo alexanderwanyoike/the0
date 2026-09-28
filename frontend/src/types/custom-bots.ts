@@ -3,7 +3,15 @@ import { BotSchema } from "@/lib/api/api-client";
 export type CustomBotStatus = "active";
 
 export type BotType = "scheduled" | "realtime" | "event";
-export type Runtime = "python3.11" | "nodejs20";
+export type Runtime =
+  | "python3.11"
+  | "nodejs20"
+  | "nodejs22"
+  | "rust-stable"
+  | "dotnet8"
+  | "gcc13"
+  | "scala3"
+  | "ghc96";
 
 // Custom Bot Configuration
 export interface CustomBotConfig {

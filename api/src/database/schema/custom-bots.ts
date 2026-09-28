@@ -2,6 +2,7 @@ import { pgTable, varchar, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 import { usersTable, usersTableSqlite } from "./users";
+import type { Runtime } from "../../custom-bot/custom-bot.types";
 
 // Types matching original theo-api exactly
 export interface CustomBotConfig {
@@ -9,7 +10,7 @@ export interface CustomBotConfig {
   description: string;
   version: string;
   type: "scheduled" | "realtime" | "event";
-  runtime: "python3.11" | "nodejs20";
+  runtime: Runtime;
   author: string;
   entrypoints: {
     bot: string;
