@@ -58,10 +58,14 @@ func deployBot(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if warning := internal.RuntimeDeprecationWarning(config.Runtime); warning != "" {
+		logger.Warning("%s", warning)
+	}
+
 	logger.UpdateSpinner("Installing dependencies")
 
 	// Step 2.5: Check for dependencies and perform compilation if needed
-	if err := internal.PerformVendoringIfNeeded("."); err != nil {
+	if err := internal.PerformVendoringIfNeeded(".", config.Runtime); err != nil {
 		logger.StopSpinnerWithError("Dependency installation failed")
 		logger.Error("%v", err)
 		internal.CleanupVendoring(".")

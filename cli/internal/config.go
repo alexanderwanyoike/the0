@@ -15,7 +15,7 @@ type BotConfig struct {
 	Description string `yaml:"description" json:"description"`
 	Version     string `yaml:"version" json:"version"`
 	Author      string `yaml:"author" json:"author"`
-	Runtime     string `yaml:"runtime,omitempty" json:"runtime,omitempty"` // e.g., "python3.11", "nodejs20", defaults to "none"
+	Runtime     string `yaml:"runtime,omitempty" json:"runtime,omitempty"` // e.g., "python3.11", "nodejs22", defaults to "none"
 	Type        string `yaml:"type" json:"type"`                           // e.g., "scheduled", "event", "realtime"
 	Entrypoints struct {
 		Bot   string `yaml:"bot" json:"bot"`
@@ -74,7 +74,7 @@ func ValidateBotConfig(config *BotConfig) error {
 
 	// Validate runtime requirement for realtime bots
 	if config.Type == "realtime" && config.Runtime == "" {
-		return fmt.Errorf("runtime is required for realtime bots (e.g., 'python3.11', 'nodejs20')")
+		return fmt.Errorf("runtime is required for realtime bots (e.g., 'python3.11', 'nodejs22')")
 	}
 
 	if config.Entrypoints.Bot == "" {
@@ -112,4 +112,13 @@ func ValidateBotFiles(config *BotConfig) error {
 		return fmt.Errorf("entrypoint file not found: %s (build may have failed)", config.Entrypoints.Bot)
 	}
 	return nil
+}
+
+// RuntimeDeprecationWarning returns the warning to show when deploying a bot on
+// a deprecated runtime, or "" when the runtime is current.
+func RuntimeDeprecationWarning(runtime string) string {
+	if runtime == "nodejs20" {
+		return "Node.js 20 is end of life and no longer receives security fixes. Switch to 'runtime: nodejs22' in bot-config.yaml."
+	}
+	return ""
 }

@@ -16,8 +16,8 @@ func TestFrontendVendor_Name(t *testing.T) {
 func TestFrontendVendor_DockerImage(t *testing.T) {
 	v := &FrontendVendor{}
 	// Frontend uses the same Node image
-	if v.DockerImage() != "node:20-slim" {
-		t.Errorf("Expected 'node:20-slim', got '%s'", v.DockerImage())
+	if v.DockerImage() != "node:22-slim" {
+		t.Errorf("Expected 'node:22-slim', got '%s'", v.DockerImage())
 	}
 }
 

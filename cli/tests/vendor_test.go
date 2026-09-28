@@ -199,7 +199,7 @@ func TestPerformVendoringIfNeeded_NoRequirements(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Should not error and should not attempt vendoring
-	err = internal.PerformVendoringIfNeeded(tmpDir)
+	err = internal.PerformVendoringIfNeeded(tmpDir, "")
 	if err != nil {
 		t.Errorf("Unexpected error when no requirements.txt exists: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestPerformVendoringIfNeeded_DockerNotAvailable(t *testing.T) {
 	}
 
 	// Should error when Docker is not available but dependencies are detected
-	err = internal.PerformVendoringIfNeeded(tmpDir)
+	err = internal.PerformVendoringIfNeeded(tmpDir, "")
 	if err == nil {
 		t.Error("Expected error when Docker unavailable but dependencies detected")
 	}
