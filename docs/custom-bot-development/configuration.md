@@ -45,12 +45,15 @@ The platform supports multiple language runtimes. Each runtime has specific requ
 | Runtime | Identifier | Entry Point |
 |---------|------------|-------------|
 | Python 3.11 | `python3.11` | `main.py` |
-| Node.js 20 | `nodejs20` | `main.js` |
+| Node.js 22 | `nodejs22` | `main.js` |
+| Node.js 20 (deprecated) | `nodejs20` | `main.js` |
 | Rust | `rust-stable` | `target/release/my-bot` |
 | C++ | `gcc13` | `build/my-bot` |
 | C# .NET 8 | `dotnet8` | `bin/Release/net8.0/publish/MyBot.dll` |
 | Scala 3 | `scala3` | `target/scala-3.3.1/my-bot-assembly-1.0.0.jar` |
 | Haskell | `ghc96` | `dist-newstyle/build/.../my-bot` |
+
+`nodejs20` is deprecated because Node.js 20 is end of life and no longer receives security fixes. Bots already deployed on it keep running, and the CLI warns when you deploy one. To migrate, change `runtime` to `nodejs22` and redeploy; the CLI rebuilds your dependencies against Node.js 22.
 
 For interpreted languages like Python and JavaScript, the entry point is simply the filename. For compiled languages, it must be the exact path to the compiled binary or artifact as produced by your build system.
 
