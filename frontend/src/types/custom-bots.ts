@@ -6,6 +6,7 @@ export type BotType = "scheduled" | "realtime" | "event";
 export type Runtime =
   | "python3.11"
   | "nodejs20"
+  | "nodejs22"
   | "rust-stable"
   | "dotnet8"
   | "gcc13"

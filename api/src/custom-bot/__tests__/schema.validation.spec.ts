@@ -255,6 +255,11 @@ describe("Custom Bot Schema Validation", () => {
       }
     });
 
+    it("should accept nodejs22 alongside nodejs20", () => {
+      expect(SUPPORTED_RUNTIMES).toContain("nodejs20");
+      expect(SUPPORTED_RUNTIMES).toContain("nodejs22");
+    });
+
     it("should reject a runtime outside the supported list", () => {
       const result = validateCustomBotConfigPayload({
         ...validConfig,
