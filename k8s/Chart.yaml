@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.8
-appVersion: "1.14.7"
+version: 0.9.9
+appVersion: "1.14.8"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,10 +30,16 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: nodejs22 bot runtime - the runtime image carries Node.js 22 as the default node next to Node.js 20.20.2, which is only used by bots that still declare nodejs20
+    - kind: changed
+      description: CLI vendors Node bots in the Node version their runtime runs on, so native addons match the ABI, and the frontend bundle builds on Node.js 22
+    - kind: deprecated
+      description: nodejs20 bot runtime - Node.js 20 is end of life upstream, deploying a nodejs20 bot prints a warning pointing at nodejs22
+    - kind: removed
+      description: npm and corepack are no longer in the runtime image - bots that shell out to npm or npx at run time must vendor what they need at deploy time
     - kind: security
-      description: Runtime image clears its HIGH/CRITICAL scan findings - golang.org/x/crypto, x/net and x/text bumped past their advisories, and the bundled npm moved to the v11 line with a patched toolchain
-    - kind: fixed
-      description: API image builds again against current Alpine repositories - libexpat is unpinned from the hardened base image's stale checksum so python3 can resolve
+      description: browserslist pinned past its HIGH advisories in the frontend and the React SDK
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
