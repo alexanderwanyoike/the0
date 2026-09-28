@@ -38,7 +38,7 @@ func setupMinIOTestContainer(t *testing.T) *testMinIOServer {
 	secretKey := "testsecret"
 
 	req := testcontainers.ContainerRequest{
-		Image:        "minio/minio:latest",
+		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
 		ExposedPorts: []string{"9000/tcp"},
 		Env: map[string]string{
 			"MINIO_ACCESS_KEY": accessKey,

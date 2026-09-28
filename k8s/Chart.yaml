@@ -38,8 +38,10 @@ annotations:
       description: nodejs20 bot runtime - Node.js 20 is end of life upstream, deploying a nodejs20 bot prints a warning pointing at nodejs22
     - kind: removed
       description: npm and corepack are no longer in the runtime image - bots that shell out to npm or npx at run time must vendor what they need at deploy time
+    - kind: fixed
+      description: Bundled MinIO pulls again - the default image moves to pgsty/minio, pinned to a release tag, because minio/minio was deleted from Docker Hub
     - kind: security
-      description: browserslist pinned past its HIGH advisories in the frontend and the React SDK
+      description: Frontend and API dependencies bumped past their HIGH/CRITICAL advisories (next, multer, adm-zip, sharp, fast-uri, js-yaml, browserslist), and the unused plotly dependency removed
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
