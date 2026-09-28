@@ -62,7 +62,7 @@ readme: README.md
 Custom bots can be written in seven languages:
 
 - Python (runtime: `python3.11`)
-- TypeScript/Node.js (runtime: `nodejs20`)
+- TypeScript/Node.js (runtime: `nodejs22`)
 - Rust (runtime: `rust-stable`)
 - C# (runtime: `dotnet8`)
 - Scala (runtime: `scala3`)

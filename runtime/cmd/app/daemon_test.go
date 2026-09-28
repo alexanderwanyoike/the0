@@ -144,7 +144,7 @@ func startMinIOTestContainer(t *testing.T) (*minio.Client, func(), string) {
 	ctx := context.Background()
 
 	req := testcontainers.ContainerRequest{
-		Image:        "minio/minio:latest",
+		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
 		ExposedPorts: []string{"9000/tcp"},
 		Env: map[string]string{
 			"MINIO_ROOT_USER":     "minioadmin",

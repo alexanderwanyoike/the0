@@ -14,6 +14,10 @@ import (
 	"github.com/fatih/color"
 )
 
+// The dashboard bundle runs in a browser, so its build Node is independent of
+// the bot's runtime.
+const frontendNodeImage = "node:22-slim"
+
 // FrontendVendor handles frontend bundle building via npm
 type FrontendVendor struct{}
 
@@ -29,7 +33,7 @@ func (v *FrontendVendor) Name() string {
 
 // DockerImage returns the Docker image used for building
 func (v *FrontendVendor) DockerImage() string {
-	return nodeImage
+	return frontendNodeImage
 }
 
 // Detect checks if frontend/package.json exists
@@ -105,7 +109,7 @@ func (v *FrontendVendor) pullImage(vm *VendorManager) error {
 	imageExists := false
 	for _, img := range images {
 		for _, tag := range img.RepoTags {
-			if tag == nodeImage {
+			if tag == frontendNodeImage {
 				imageExists = true
 				break
 			}
@@ -120,9 +124,9 @@ func (v *FrontendVendor) pullImage(vm *VendorManager) error {
 	}
 
 	blue := color.New(color.FgBlue)
-	blue.Printf("Pulling Docker image: %s...\n", nodeImage)
+	blue.Printf("Pulling Docker image: %s...\n", frontendNodeImage)
 
-	reader, err := vm.dockerClient.ImagePull(ctx, nodeImage, image.PullOptions{})
+	reader, err := vm.dockerClient.ImagePull(ctx, frontendNodeImage, image.PullOptions{})
 	if err != nil {
 		return err
 	}
@@ -172,7 +176,7 @@ func (v *FrontendVendor) runContainer(vm *VendorManager) (string, error) {
 	)
 
 	config := &container.Config{
-		Image: nodeImage,
+		Image: frontendNodeImage,
 		Cmd: []string{
 			"sh", "-c",
 			buildCmd,

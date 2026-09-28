@@ -4,14 +4,18 @@ export const BOT_TYPES: BotType[] = ["scheduled", "realtime", "event"];
 
 export type CustomBotStatus = "active";
 
-export type Runtime =
-  | "python3.11"
-  | "nodejs20"
-  | "rust-stable"
-  | "dotnet8"
-  | "gcc13"
-  | "scala3"
-  | "ghc96";
+export const SUPPORTED_RUNTIMES = [
+  "python3.11",
+  "nodejs20",
+  "nodejs22",
+  "rust-stable",
+  "dotnet8",
+  "gcc13",
+  "scala3",
+  "ghc96",
+] as const;
+
+export type Runtime = (typeof SUPPORTED_RUNTIMES)[number];
 
 export interface CustomBotConfig {
   name: string;

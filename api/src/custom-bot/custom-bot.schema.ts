@@ -1,6 +1,6 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
-import { CustomBotConfig } from "./custom-bot.types";
+import { CustomBotConfig, SUPPORTED_RUNTIMES } from "./custom-bot.types";
 
 const ajv = new Ajv();
 const schemaAjv = new Ajv({ strict: true, strictSchema: false });
@@ -34,15 +34,7 @@ export const customBotConfigSchema = {
     },
     runtime: {
       type: "string",
-      enum: [
-        "python3.11",
-        "nodejs20",
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ],
+      enum: [...SUPPORTED_RUNTIMES],
     },
     author: {
       type: "string",
@@ -120,15 +112,7 @@ export const customBotConfigSchema = {
       then: {
         properties: {
           runtime: {
-            enum: [
-              "python3.11",
-              "nodejs20",
-              "rust-stable",
-              "dotnet8",
-              "gcc13",
-              "scala3",
-              "ghc96",
-            ],
+            enum: [...SUPPORTED_RUNTIMES],
           },
         },
       },

@@ -9,7 +9,7 @@ This directory contains example bots demonstrating how to build custom trading b
 | Example | Type | Runtime | Description |
 |---------|------|---------|-------------|
 | [python-portfolio-tracker](./python-portfolio-tracker/) | Scheduled | Python 3.11 | Simulates portfolio tracking with value history and trades |
-| [typescript-price-alerts](./typescript-price-alerts/) | Realtime | Node.js 20 | Monitors prices and emits alerts/signals |
+| [typescript-price-alerts](./typescript-price-alerts/) | Realtime | Node.js 22 | Monitors prices and emits alerts/signals |
 
 ### SMA Crossover Strategy (Yahoo Finance Data)
 

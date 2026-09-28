@@ -44,7 +44,7 @@ func GetVendors() []DependencyVendor {
 
 // VendorDependenciesIfNeeded iterates through all registered vendors
 // and installs dependencies for any detected projects.
-func VendorDependenciesIfNeeded(projectPath string) error {
+func VendorDependenciesIfNeeded(projectPath, runtime string) error {
 	blue := color.New(color.FgBlue)
 	red := color.New(color.FgRed)
 
@@ -79,6 +79,7 @@ func VendorDependenciesIfNeeded(projectPath string) error {
 		return fmt.Errorf("vendor manager initialization failed: %v", err)
 	}
 	defer vm.Close()
+	vm.runtime = runtime
 
 	if err := vm.CheckDockerRunning(); err != nil {
 		red.Printf("Docker daemon not running: %v\n", err)

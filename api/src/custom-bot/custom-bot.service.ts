@@ -9,6 +9,7 @@ import {
   CustomBot,
   CustomBotWithVersions,
   VersionWithInstances,
+  SUPPORTED_RUNTIMES,
 } from "./custom-bot.types";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
 
@@ -40,19 +41,9 @@ export class CustomBotService {
         return Failure(existsResult.error);
       }
 
-      const validRuntimes = [
-        "python3.11",
-        "nodejs20",
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ];
-
-      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
+      if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
         return Failure(
-          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
+          `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
         );
       }
 
@@ -148,19 +139,9 @@ export class CustomBotService {
         return Failure("Bot name in config must match the URL parameter");
       }
 
-      const validRuntimes = [
-        "python3.11",
-        "nodejs20",
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ];
-
-      if (!config.runtime || !validRuntimes.includes(config.runtime)) {
+      if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
         return Failure(
-          `Bots must specify a valid runtime (${validRuntimes.join(", ")})`,
+          `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
         );
       }
 

@@ -28,7 +28,7 @@ Handles code download, state management, sync, query server, and bot execution.
 Environment Variables (required):
   BOT_ID          - Unique bot identifier
   CODE_FILE       - MinIO path to code.zip
-  RUNTIME         - Runtime name (python3.11, nodejs20, dotnet8, etc.)
+  RUNTIME         - Runtime name (python3.11, nodejs22, dotnet8, etc.)
   ENTRYPOINT      - Bot entrypoint file (e.g., main.py)
   BOT_CONFIG      - JSON configuration for the bot
 

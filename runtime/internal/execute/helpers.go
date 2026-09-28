@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+// node20BinDir holds Node 20 in the runtime image. The default `node` on PATH
+// is Node 22, so nodejs20 bots must be pointed at this directory explicitly.
+const node20BinDir = "/opt/node20/bin"
+
 // BuildBotCommand creates an exec.Cmd for the given runtime and entrypoint.
 // For Python and Node.js, uses wrapper scripts that handle signal management,
 // config parsing, and result writing.
@@ -31,6 +35,8 @@ func BuildBotCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 		// - Config parsing
 		// - Result file writing
 		// The wrapper reads SCRIPT_PATH env var for the actual entrypoint
+		cmd = exec.Command(filepath.Join(node20BinDir, "node"), "/app/wrappers/node_bot.js")
+	case "nodejs22":
 		cmd = exec.Command("node", "/app/wrappers/node_bot.js")
 	case "dotnet8":
 		// For .NET, entrypoint is either a .dll or project path
@@ -78,6 +84,8 @@ func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 		cmd = exec.Command("python3", entrypoint)
 	case "nodejs20":
 		// Run query script directly
+		cmd = exec.Command(filepath.Join(node20BinDir, "node"), entrypoint)
+	case "nodejs22":
 		cmd = exec.Command("node", entrypoint)
 	case "dotnet8":
 		// For .NET, entrypoint is either a .dll or project path
@@ -137,6 +145,11 @@ func BuildBotEnv(cfg *Config) []string {
 			pythonPath = pythonPath + string(os.PathListSeparator) + existing
 		}
 		env = append(env, "PYTHONPATH="+pythonPath)
+	}
+
+	// A nodejs20 bot that spawns `node` itself must not pick up the image's default Node 22.
+	if cfg.Runtime == "nodejs20" {
+		env = append(env, "PATH="+node20BinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 
 	// Add query-specific env vars if applicable
