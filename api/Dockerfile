@@ -1,5 +1,5 @@
 # Use Docker Hardened Images for build and runtime stages.
-FROM dhi.io/node:20-alpine3.22-dev AS base
+FROM dhi.io/node:22-alpine3.22-dev AS base
 
 # Set working directory
 WORKDIR /app
@@ -30,7 +30,7 @@ RUN yarn build
 RUN mkdir -p uploads/custom-bots
 
 # Production stage
-FROM dhi.io/node:20-alpine3.22 AS runner
+FROM dhi.io/node:22-alpine3.22 AS runner
 WORKDIR /app
 
 # Copy built application
