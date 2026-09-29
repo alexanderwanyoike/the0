@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.9
-appVersion: "1.14.8"
+version: 0.9.10
+appVersion: "1.14.9"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,18 +30,16 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
-    - kind: added
-      description: nodejs22 bot runtime - the runtime image carries Node.js 22 as the default node next to Node.js 20.20.2, which is only used by bots that still declare nodejs20
     - kind: changed
-      description: CLI vendors Node bots in the Node version their runtime runs on, so native addons match the ABI, and the frontend bundle builds on Node.js 22
-    - kind: deprecated
-      description: nodejs20 bot runtime - Node.js 20 is end of life upstream, deploying a nodejs20 bot prints a warning pointing at nodejs22
-    - kind: removed
-      description: npm and corepack are no longer in the runtime image - bots that shell out to npm or npx at run time must vendor what they need at deploy time
+      description: Bundled object store moves to Silo (pgsty/silo, pinned to RELEASE.2026-09-16T00-00-00Z), the maintained continuation of the pgsty/minio fork - existing data volumes are read in place, see the migration guide
+    - kind: changed
+      description: Bundled object store Deployment passes args to the image entrypoint instead of overriding the command, and uses the Recreate strategy so an upgrade never runs two servers on one volume
+    - kind: changed
+      description: API and frontend images run on Node.js 22 because Node.js 20 is end of life upstream, with better-sqlite3 bumped to 12.x
     - kind: fixed
-      description: Bundled MinIO pulls again - the default image moves to pgsty/minio, pinned to a release tag, because minio/minio was deleted from Docker Hub
+      description: Scheduled bot runs no longer lose their output when the container exits quickly - containers are removed after their logs are read, and the scheduler cleans up orphaned scheduled containers after five minutes
     - kind: security
-      description: Frontend and API dependencies bumped past their HIGH/CRITICAL advisories (next, multer, adm-zip, sharp, fast-uri, js-yaml, browserslist), and the unused plotly dependency removed
+      description: Bundled object store picks up Silo security fixes (SN-2026-005 onwards) that the frozen pgsty/minio image does not have
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
