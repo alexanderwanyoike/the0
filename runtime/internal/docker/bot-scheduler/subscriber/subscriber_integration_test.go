@@ -195,10 +195,16 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
 
+	collection := db.Collection(collectionName)
+	err = waitFor(20*time.Second, func() bool {
+		count, _ := collection.CountDocuments(ctx, bson.M{"id": "duplicate-schedule"})
+		return count >= 1
+	})
+	require.NoError(t, err, "first create should be processed")
+	// The duplicate is not observable once handled, so give it a window.
 	time.Sleep(300 * time.Millisecond)
 
 	// Verify only one schedule exists
-	collection := db.Collection(collectionName)
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "duplicate-schedule"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), count, "Should only have one schedule, not duplicates")
@@ -276,12 +282,15 @@ func TestSubscriber_BotScheduleUpdated_UpdatesMongo(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotScheduleUpdated, payload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
-
 	// Verify schedule was updated
 	var result model.BotSchedule
-	err = collection.FindOne(ctx, bson.M{"id": "update-test-schedule"}).Decode(&result)
-	require.NoError(t, err)
+	err = waitFor(20*time.Second, func() bool {
+		if err := collection.FindOne(ctx, bson.M{"id": "update-test-schedule"}).Decode(&result); err != nil {
+			return false
+		}
+		return result.Config["schedule"] == "0 12 * * *"
+	})
+	require.NoError(t, err, "update should be processed")
 
 	assert.Equal(t, "0 12 * * *", result.Config["schedule"])
 	assert.Equal(t, "ETH/USD", result.Config["symbol"])
@@ -409,7 +418,17 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotScheduleDeleted, payload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	err = waitFor(20*time.Second, func() bool {
+		count, _ := collection.CountDocuments(ctx, bson.M{"id": "delete-me"})
+		var partition struct {
+			BotCount int32 `bson:"bot_count"`
+		}
+		if err := partitions.FindOne(ctx, bson.M{"_id": int32(1)}).Decode(&partition); err != nil {
+			return false
+		}
+		return count == 0 && partition.BotCount == 4
+	})
+	require.NoError(t, err, "delete should be processed")
 
 	// Verify schedule was deleted
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "delete-me"})
@@ -528,13 +547,13 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	validPayload, _ := json.Marshal(validEvent)
 	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, validPayload)
 
-	time.Sleep(200 * time.Millisecond)
-
 	// Verify valid message was processed
 	collection := db.Collection(collectionName)
-	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-invalid"})
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), count, "Subscriber should recover from invalid JSON")
+	err = waitFor(20*time.Second, func() bool {
+		count, _ := collection.CountDocuments(ctx, bson.M{"id": "after-invalid"})
+		return count == 1
+	})
+	require.NoError(t, err, "Subscriber should recover from invalid JSON")
 }
 
 // TestSubscriber_GracefulShutdown verifies clean shutdown behavior
