@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"runtime/internal/s3test"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,8 +14,7 @@ func TestQueryResultManager_Integration(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	ctx := context.Background()
 	logger := &integrationTestLogger{t: t}
@@ -23,7 +23,7 @@ func TestQueryResultManager_Integration(t *testing.T) {
 	cfg := &Config{
 		QueryResultBucket: "test-query-results",
 	}
-	manager := NewQueryResultManager(server.client, cfg, logger)
+	manager := NewQueryResultManager(server.Client, cfg, logger)
 
 	t.Run("upload and download", func(t *testing.T) {
 		key := "test-bot/query1.json"
@@ -48,7 +48,7 @@ func TestQueryResultManager_Integration(t *testing.T) {
 		cfg := &Config{
 			QueryResultBucket: "auto-created-bucket",
 		}
-		manager := NewQueryResultManager(server.client, cfg, logger)
+		manager := NewQueryResultManager(server.Client, cfg, logger)
 
 		key := "test/result.json"
 		data := []byte(`{"status": "ok"}`)
@@ -58,7 +58,7 @@ func TestQueryResultManager_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify bucket exists
-		exists, err := server.client.BucketExists(ctx, "auto-created-bucket")
+		exists, err := server.Client.BucketExists(ctx, "auto-created-bucket")
 		require.NoError(t, err)
 		assert.True(t, exists)
 
@@ -226,12 +226,11 @@ func TestQueryResultManager_KeyFormats(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	ctx := context.Background()
 	logger := &integrationTestLogger{t: t}
-	manager := NewQueryResultManager(server.client, nil, logger)
+	manager := NewQueryResultManager(server.Client, nil, logger)
 
 	tests := []struct {
 		name string
@@ -267,12 +266,11 @@ func BenchmarkQueryResultManager_Upload(b *testing.B) {
 		b.Skip("Skipping integration benchmark")
 	}
 
-	server := setupMinIOTestContainer(&testing.T{})
-	defer server.cleanup(&testing.T{})
+	server := s3test.StartT(b)
 
 	ctx := context.Background()
 	logger := &testLogger{}
-	manager := NewQueryResultManager(server.client, nil, logger)
+	manager := NewQueryResultManager(server.Client, nil, logger)
 
 	data := []byte(`{"benchmark": true, "size": 1024}`)
 
@@ -288,12 +286,11 @@ func BenchmarkQueryResultManager_Download(b *testing.B) {
 		b.Skip("Skipping integration benchmark")
 	}
 
-	server := setupMinIOTestContainer(&testing.T{})
-	defer server.cleanup(&testing.T{})
+	server := s3test.StartT(b)
 
 	ctx := context.Background()
 	logger := &testLogger{}
-	manager := NewQueryResultManager(server.client, nil, logger)
+	manager := NewQueryResultManager(server.Client, nil, logger)
 
 	// Upload once
 	key := "benchmark/result.json"

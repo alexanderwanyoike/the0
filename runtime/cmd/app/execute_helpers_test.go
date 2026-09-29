@@ -16,6 +16,7 @@ import (
 
 	"runtime/internal/constants"
 	"runtime/internal/execute"
+	"runtime/internal/s3test"
 	"runtime/internal/util"
 )
 
@@ -484,8 +485,7 @@ func TestDownloadCode_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	minioClient, cleanup, endpoint := startMinIOTestContainer(t)
-	defer cleanup()
+	minioClient, endpoint := startMinIOTestContainer(t)
 
 	ctx := context.Background()
 
@@ -506,8 +506,8 @@ func TestDownloadCode_Success(t *testing.T) {
 	codeDir := t.TempDir()
 
 	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", "minioadmin")
-	os.Setenv("MINIO_SECRET_KEY", "minioadmin")
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")
@@ -570,15 +570,14 @@ func TestDownloadState_NoExistingState(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	_, cleanup, endpoint := startMinIOTestContainer(t)
-	defer cleanup()
+	_, endpoint := startMinIOTestContainer(t)
 
 	ctx := context.Background()
 	stateDir := t.TempDir()
 
 	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", "minioadmin")
-	os.Setenv("MINIO_SECRET_KEY", "minioadmin")
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")

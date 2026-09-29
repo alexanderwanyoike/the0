@@ -4,84 +4,19 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/runtime/storage"
+	"runtime/internal/s3test"
 )
-
-// testMinIOServer holds MinIO test container info
-type testMinIOServer struct {
-	container testcontainers.Container
-	endpoint  string
-	accessKey string
-	secretKey string
-	client    *minio.Client
-}
-
-// setupMinIOTestContainer starts a MinIO container for testing
-func setupMinIOTestContainer(t *testing.T) *testMinIOServer {
-	ctx := context.Background()
-
-	accessKey := "testkey"
-	secretKey := "testsecret"
-
-	req := testcontainers.ContainerRequest{
-		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
-		ExposedPorts: []string{"9000/tcp"},
-		Env: map[string]string{
-			"MINIO_ACCESS_KEY": accessKey,
-			"MINIO_SECRET_KEY": secretKey,
-		},
-		Cmd:        []string{"server", "/data"},
-		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp"),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-
-	host, err := container.Host(ctx)
-	require.NoError(t, err)
-
-	port, err := container.MappedPort(ctx, "9000")
-	require.NoError(t, err)
-
-	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
-
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-
-	return &testMinIOServer{
-		container: container,
-		endpoint:  endpoint,
-		accessKey: accessKey,
-		secretKey: secretKey,
-		client:    client,
-	}
-}
-
-func (s *testMinIOServer) cleanup(t *testing.T) {
-	if s.container != nil {
-		require.NoError(t, s.container.Terminate(context.Background()))
-	}
-}
 
 // testLogger implements a simple logger for testing
 type testDaemonLogger struct {
@@ -118,19 +53,18 @@ func TestInit_Integration(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	ctx := context.Background()
 
 	// Create buckets
-	require.NoError(t, server.client.MakeBucket(ctx, "test-code", minio.MakeBucketOptions{}))
-	require.NoError(t, server.client.MakeBucket(ctx, "test-state", minio.MakeBucketOptions{}))
+	require.NoError(t, server.Client.MakeBucket(ctx, "test-code", minio.MakeBucketOptions{}))
+	require.NoError(t, server.Client.MakeBucket(ctx, "test-state", minio.MakeBucketOptions{}))
 
 	// Set environment variables for LoadConfigFromEnv
-	os.Setenv("MINIO_ENDPOINT", server.endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", server.accessKey)
-	os.Setenv("MINIO_SECRET_KEY", server.secretKey)
+	os.Setenv("MINIO_ENDPOINT", server.Endpoint)
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	os.Setenv("MINIO_USE_SSL", "false")
 	os.Setenv("MINIO_CODE_BUCKET", "test-code")
 	os.Setenv("MINIO_STATE_BUCKET", "test-state")
@@ -161,13 +95,13 @@ func TestInit_Integration(t *testing.T) {
 
 		// Upload code zip to MinIO
 		codePath := "test-bot/v1.0.0/code.zip"
-		_, err := server.client.PutObject(ctx, "test-code", codePath, &buf, int64(buf.Len()), minio.PutObjectOptions{
+		_, err := server.Client.PutObject(ctx, "test-code", codePath, &buf, int64(buf.Len()), minio.PutObjectOptions{
 			ContentType: "application/zip",
 		})
 		require.NoError(t, err)
 
 		// Create and upload state
-		stateManager := storage.NewStateManager(server.client, &storage.Config{
+		stateManager := storage.NewStateManager(server.Client, &storage.Config{
 			StateBucket: "test-state",
 		}, &testDaemonLogger{t: t})
 
@@ -241,7 +175,7 @@ func TestInit_Integration(t *testing.T) {
 		w.Close()
 
 		codePath := "no-state-bot/v1.0.0/code.zip"
-		_, err = server.client.PutObject(ctx, "test-code", codePath, &buf, int64(buf.Len()), minio.PutObjectOptions{})
+		_, err = server.Client.PutObject(ctx, "test-code", codePath, &buf, int64(buf.Len()), minio.PutObjectOptions{})
 		require.NoError(t, err)
 
 		// Init for bot without state should succeed (first run scenario)
@@ -287,20 +221,19 @@ func TestLogsSyncer_Integration(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	ctx := context.Background()
 	logger := &testDaemonLogger{t: t}
 
 	// Create logs bucket
-	require.NoError(t, server.client.MakeBucket(ctx, "test-logs", minio.MakeBucketOptions{}))
+	require.NoError(t, server.Client.MakeBucket(ctx, "test-logs", minio.MakeBucketOptions{}))
 
 	minioLogger, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
 		LogsBucket: "test-logs",
-		Endpoint:   server.endpoint,
-		AccessKey:  server.accessKey,
-		SecretKey:  server.secretKey,
+		Endpoint:   server.Endpoint,
+		AccessKey:  s3test.AccessKey,
+		SecretKey:  s3test.SecretKey,
 		UseSSL:     false,
 	})
 	require.NoError(t, err)
@@ -412,16 +345,15 @@ func TestStateSyncer_Integration(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	ctx := context.Background()
 	logger := &testDaemonLogger{t: t}
 
 	// Create state bucket
-	require.NoError(t, server.client.MakeBucket(ctx, "test-state", minio.MakeBucketOptions{}))
+	require.NoError(t, server.Client.MakeBucket(ctx, "test-state", minio.MakeBucketOptions{}))
 
-	stateManager := storage.NewStateManager(server.client, &storage.Config{
+	stateManager := storage.NewStateManager(server.Client, &storage.Config{
 		StateBucket: "test-state",
 	}, logger)
 
@@ -559,15 +491,14 @@ func TestStateSyncer_ContextCancellation(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	logger := &testDaemonLogger{t: t}
 
 	// Create state bucket
-	require.NoError(t, server.client.MakeBucket(context.Background(), "test-state", minio.MakeBucketOptions{}))
+	require.NoError(t, server.Client.MakeBucket(context.Background(), "test-state", minio.MakeBucketOptions{}))
 
-	stateManager := storage.NewStateManager(server.client, &storage.Config{
+	stateManager := storage.NewStateManager(server.Client, &storage.Config{
 		StateBucket: "test-state",
 	}, logger)
 
