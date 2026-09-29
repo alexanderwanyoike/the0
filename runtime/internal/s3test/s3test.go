@@ -110,15 +110,17 @@ func newServer(ctx context.Context, container testcontainers.Container) (*Server
 // health paths differ between stores, and MinIO reports live before bucket
 // operations succeed.
 func waitForS3(ctx context.Context, client *minio.Client, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	for {
 		_, err := client.ListBuckets(ctx)
 		if err == nil {
 			return nil
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("store not serving S3 after %s: %w", timeout, err)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("store not serving S3 within %s: %w (last error: %v)", timeout, ctx.Err(), err)
+		case <-time.After(200 * time.Millisecond):
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
 }
