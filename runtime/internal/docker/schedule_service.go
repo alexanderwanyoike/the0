@@ -227,6 +227,8 @@ func (s *ScheduleService) runScheduleLoop() {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
 
+	s.removeOrphanedContainers(s.ctx)
+
 	// Run immediately on start (gated by dep checker)
 	if s.depChecker.IsHealthy() {
 		s.checkAndExecuteSchedules()
@@ -237,6 +239,7 @@ func (s *ScheduleService) runScheduleLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			s.removeOrphanedContainers(s.ctx)
 			if !s.depChecker.IsHealthy() {
 				s.logger.Error("Dependencies unhealthy, skipping schedule check")
 				continue
@@ -329,6 +332,30 @@ func (s *ScheduleService) getDueSchedules(ctx context.Context, now time.Time) ([
 	}
 
 	return schedules, nil
+}
+
+// removeOrphanedContainers removes exited scheduled containers that no
+// in-flight execution owns. Scheduled containers do not auto-remove (#304), so
+// one survives when the scheduler dies mid-run or RunAndWait's own removal
+// fails, and the bot-runner's reconcile only cleans up realtime containers.
+func (s *ScheduleService) removeOrphanedContainers(ctx context.Context) {
+	containers, err := s.runner.ListAllManagedContainers(ctx)
+	if err != nil {
+		s.logger.Error("Failed to list containers for orphan cleanup: %v", err)
+		return
+	}
+	for _, container := range containers {
+		if container.Labels["runtime.type"] != "scheduled" || container.Status != "exited" {
+			continue
+		}
+		if s.isExecuting(container.ID) {
+			continue
+		}
+		s.logger.Info("Removing orphaned scheduled container %s for schedule %s", container.ContainerID, container.ID)
+		if _, err := s.runner.HandleCrashedContainer(ctx, container); err != nil {
+			s.logger.Error("Failed to remove orphaned container %s: %v", container.ContainerID, err)
+		}
+	}
 }
 
 // isExecuting checks if a schedule is currently being executed

@@ -24,6 +24,7 @@ type MockDockerRunner struct {
 	shouldFailStop    bool
 	startDelay        bool // Simulate async behavior
 	crashedContainers []*ContainerInfo
+	handled           []string // container IDs passed to HandleCrashedContainer
 }
 
 func NewMockDockerRunner() *MockDockerRunner {
@@ -129,6 +130,8 @@ func (m *MockDockerRunner) HandleCrashedContainer(ctx context.Context, container
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.handled = append(m.handled, containerInfo.ContainerID)
+
 	// Remove from crashed list
 	for i, info := range m.crashedContainers {
 		if info.ContainerID == containerInfo.ContainerID {
@@ -137,6 +140,13 @@ func (m *MockDockerRunner) HandleCrashedContainer(ctx context.Context, container
 		}
 	}
 	return "mock crash logs", nil
+}
+
+// HandledContainers returns the container IDs passed to HandleCrashedContainer.
+func (m *MockDockerRunner) HandledContainers() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.handled...)
 }
 
 func (m *MockDockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
@@ -215,6 +225,22 @@ func (m *MockDockerRunner) AddScheduledContainer(botID, containerID string) {
 			"runtime.type":    "scheduled", // Created by bot-scheduler, not bot-runner
 		},
 	}
+}
+
+// AddExitedScheduledContainer adds a bot-scheduler container that has exited
+// but was not removed.
+func (m *MockDockerRunner) AddExitedScheduledContainer(scheduleID, containerID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.crashedContainers = append(m.crashedContainers, &ContainerInfo{
+		ContainerID: containerID,
+		ID:          scheduleID,
+		Status:      "exited",
+		Labels: map[string]string{
+			"runtime.managed": "true",
+			"runtime.type":    "scheduled",
+		},
+	})
 }
 
 func TestNewBotService_RequiresMongoURI(t *testing.T) {

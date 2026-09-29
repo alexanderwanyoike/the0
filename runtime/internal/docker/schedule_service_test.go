@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -421,6 +422,56 @@ func TestScheduleService_ExecutingStateCleanup(t *testing.T) {
 }
 
 // Test toExecutable with different runtimes
+func TestScheduleService_RemovesOrphanedContainers(t *testing.T) {
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI: "mongodb://localhost:27017",
+		NATSUrl:  "nats://localhost:4222",
+	})
+	require.NoError(t, err)
+
+	mockRunner := NewMockDockerRunner()
+	mockRunner.AddExitedScheduledContainer("orphaned-schedule", "orphan-container")
+	mockRunner.AddExitedScheduledContainer("executing-schedule", "capturing-container")
+	mockRunner.AddScheduledContainer("running-schedule", "running-container")
+	mockRunner.AddCrashedContainer("realtime-bot", "realtime-container", 1)
+	service.runner = mockRunner
+	require.True(t, service.tryStartExecution("executing-schedule"))
+
+	service.removeOrphanedContainers(context.Background())
+
+	// Only the exited scheduled container no execution owns is removed: an
+	// executing schedule's RunAndWait is still reading its container, and
+	// realtime containers belong to the bot-runner.
+	assert.Equal(t, []string{"orphan-container"}, mockRunner.HandledContainers())
+}
+
+func TestScheduleLoop_RemovesOrphanedContainers(t *testing.T) {
+	service, err := NewScheduleService(ScheduleServiceConfig{
+		MongoURI:      "mongodb://localhost:27017",
+		NATSUrl:       "nats://localhost:4222",
+		CheckInterval: 20 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	mockRunner := NewMockDockerRunner()
+	mockRunner.AddExitedScheduledContainer("orphaned-schedule", "orphan-container")
+	service.runner = mockRunner
+
+	// Unhealthy deps keep the loop away from MongoDB (nil here); container
+	// cleanup only needs Docker, so it must still run.
+	dc := NewDependencyChecker(nil, nil, "test-bucket", &util.NopLogger{})
+	dc.SetLastResult(false, false)
+	service.depChecker = dc
+
+	service.wg.Add(1)
+	go service.runScheduleLoop()
+	time.Sleep(50 * time.Millisecond)
+	service.Stop()
+	service.wg.Wait()
+
+	assert.Contains(t, mockRunner.HandledContainers(), "orphan-container")
+}
+
 func TestScheduleService_ToExecutable_DifferentRuntimes(t *testing.T) {
 	service, err := NewScheduleService(ScheduleServiceConfig{
 		MongoURI: "mongodb://localhost:27017",
