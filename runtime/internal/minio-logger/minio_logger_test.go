@@ -624,6 +624,43 @@ func primeDailyLog(t *testing.T, client *minio.Client, bucket, botID string, siz
 	require.NoError(t, err)
 }
 
+// TestComposeAppendSmallTail covers the common case of a busy bot: the daily
+// log is already past the compose threshold and the next sync carries only a
+// few lines, so the multipart copy's last part comes from a tiny temp object.
+// Some S3 stores reject UploadPartCopy from small sources (Garage, #342).
+func TestComposeAppendSmallTail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	server := s3test.StartT(t)
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      server.Endpoint,
+		AccessKey:     s3test.AccessKey,
+		SecretKey:     s3test.SecretKey,
+		LogsBucket:    "test-small-tail-logs",
+		ResultsBucket: "test-small-tail-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	botID := "small-tail-bot"
+	bulk := strings.Repeat("x", int(composeMinPartSize)+1)
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line"))
+
+	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().Format("20060102"))
+	obj, err := server.Client.GetObject(context.Background(), "test-small-tail-logs", objectPath, minio.GetObjectOptions{})
+	require.NoError(t, err)
+	defer obj.Close()
+	content, err := io.ReadAll(obj)
+	require.NoError(t, err)
+
+	assert.Greater(t, int64(len(content)), int64(composeMinPartSize))
+	assert.True(t, strings.Contains(string(content), bulk), "existing log must be kept intact")
+	assert.Contains(t, string(content[len(content)-512:]), "small tail line")
+}
+
 func TestAppendBotLogs_AbortsOnCompleteMultipartError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test")

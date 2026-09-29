@@ -96,7 +96,7 @@ nats:
 
 minio:
   enabled: true
-  image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+  image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
   port: 9000
   consolePort: 9001
   accessKey: the0admin

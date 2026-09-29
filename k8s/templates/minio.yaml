@@ -32,6 +32,11 @@ metadata:
     app.kubernetes.io/component: minio
 spec:
   replicas: 1
+  # A rolling update starts the new pod while the old one still holds the
+  # ReadWriteOnce data volume: two servers on one data directory, or a rollout
+  # stuck on a volume that cannot attach to a second node.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "the0.selectorLabels" . | nindent 6 }}
@@ -46,8 +51,9 @@ spec:
         - name: minio
           image: {{ .Values.minio.image }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          command:
-            - minio
+          # args, not command: the image entrypoint resolves the server binary,
+          # which is `minio` in MinIO images and `silo` in the default image.
+          args:
             - server
             - /data
             - --console-address

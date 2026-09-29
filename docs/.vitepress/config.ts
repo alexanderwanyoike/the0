@@ -132,6 +132,7 @@ export default withMermaid(defineConfig({
         items: [
           { text: 'Overview', link: '/migration-guides/' },
           { text: 'v1.14.0 Root Admin', link: '/migration-guides/v1-14-root-admin' },
+          { text: 'Bundled Object Store: Silo', link: '/migration-guides/bundled-object-store-silo' },
         ]
       }
     ],
