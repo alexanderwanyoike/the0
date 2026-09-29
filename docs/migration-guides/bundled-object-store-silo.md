@@ -7,7 +7,7 @@ order: 2
 
 # Bundled Object Store: MinIO to Silo
 
-the0 bundles an S3-compatible object store for bot code, logs and state. Upstream MinIO community edition is no longer maintained, and its images were removed from Docker Hub and quay.io in September 2026. The previous release moved the bundled store to `pgsty/minio`. That image is no longer published either: the project continues as [Silo](https://github.com/pgsty/silo) under `pgsty/silo`, and new releases, including security fixes, only ship there.
+the0 bundles an S3-compatible object store for bot code, logs and state. Upstream MinIO community edition is no longer maintained, and its images were removed from Docker Hub and quay.io in September 2026. The previous release moved the bundled store to `pgsty/minio`. No new images have been published under that name since `RELEASE.2026-08-04T00-00-00Z`: the project continues as [Silo](https://github.com/pgsty/silo) under `pgsty/silo`, and new releases, including security fixes, only ship there. The existing `pgsty/minio` tags can still be pulled.
 
 The bundled store is now `pgsty/silo`, pinned to a release tag. Silo is the MinIO codebase under a new name, so it keeps the same S3 API, environment variables, ports, console and health endpoints, and reads existing data volumes in place.
 
@@ -78,4 +78,13 @@ kubectl -n the0 logs deploy/the0-api | grep -i minio
 
 ## Rolling Back
 
-The on-disk format is shared, so setting `minio.image` (or the Compose image) back to `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` reads the same volume. Taking a copy of your buckets before any storage upgrade is still good practice, for example with `mc mirror`.
+The on-disk format is shared, so setting `minio.image` (or the Compose image) back to `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` reads the same volume.
+
+That tag can still be pulled from Docker Hub as of this release, but the repository no longer changes, and upstream MinIO images were deleted without notice. If you want a rollback path that does not depend on it, keep a local copy before upgrading:
+
+```bash
+docker pull pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+docker save pgsty/minio:RELEASE.2026-08-04T00-00-00Z -o pgsty-minio-2026-08-04.tar
+```
+
+For Kubernetes, push that image to a registry your cluster can pull from. Taking a copy of your buckets before any storage upgrade is still good practice, for example with `mc mirror`.

@@ -645,11 +645,15 @@ func TestComposeAppendSmallTail(t *testing.T) {
 	defer logger.Close()
 
 	botID := "small-tail-bot"
+	day := time.Now().Format("20060102")
 	bulk := strings.Repeat("x", int(composeMinPartSize)+1)
 	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk))
 	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line"))
+	if time.Now().Format("20060102") != day {
+		t.Skip("appends straddled midnight, so the tail started a new daily log instead of composing")
+	}
 
-	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().Format("20060102"))
+	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, day)
 	obj, err := server.Client.GetObject(context.Background(), "test-small-tail-logs", objectPath, minio.GetObjectOptions{})
 	require.NoError(t, err)
 	defer obj.Close()
