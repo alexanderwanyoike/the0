@@ -6,6 +6,7 @@ package s3test
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func newServer(ctx context.Context, container testcontainers.Container) (*Server
 		return nil, fmt.Errorf("store container port: %w", err)
 	}
 
-	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
+	endpoint := net.JoinHostPort(host, port.Port())
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds: credentials.NewStaticV4(AccessKey, SecretKey, ""),
 	})
