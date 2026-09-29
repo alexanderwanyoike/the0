@@ -24,6 +24,7 @@ type MockDockerRunner struct {
 	shouldFailStop    bool
 	startDelay        bool // Simulate async behavior
 	crashedContainers []*ContainerInfo
+	handled           []string // container IDs passed to HandleCrashedContainer
 }
 
 func NewMockDockerRunner() *MockDockerRunner {
@@ -129,6 +130,8 @@ func (m *MockDockerRunner) HandleCrashedContainer(ctx context.Context, container
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.handled = append(m.handled, containerInfo.ContainerID)
+
 	// Remove from crashed list
 	for i, info := range m.crashedContainers {
 		if info.ContainerID == containerInfo.ContainerID {
@@ -137,6 +140,13 @@ func (m *MockDockerRunner) HandleCrashedContainer(ctx context.Context, container
 		}
 	}
 	return "mock crash logs", nil
+}
+
+// HandledContainers returns the container IDs passed to HandleCrashedContainer.
+func (m *MockDockerRunner) HandledContainers() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.handled...)
 }
 
 func (m *MockDockerRunner) GetContainerLogs(ctx context.Context, containerID string, tail int) (string, error) {
@@ -215,6 +225,23 @@ func (m *MockDockerRunner) AddScheduledContainer(botID, containerID string) {
 			"runtime.type":    "scheduled", // Created by bot-scheduler, not bot-runner
 		},
 	}
+}
+
+// AddExitedScheduledContainer adds a scheduled-type container that has exited
+// but was not removed. finishedAt is Docker's RFC3339 exit time, empty if unknown.
+func (m *MockDockerRunner) AddExitedScheduledContainer(scheduleID, containerID, finishedAt string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.crashedContainers = append(m.crashedContainers, &ContainerInfo{
+		ContainerID: containerID,
+		ID:          scheduleID,
+		Status:      "exited",
+		FinishedAt:  finishedAt,
+		Labels: map[string]string{
+			"runtime.managed": "true",
+			"runtime.type":    "scheduled",
+		},
+	})
 }
 
 func TestNewBotService_RequiresMongoURI(t *testing.T) {
@@ -1331,10 +1358,10 @@ func TestStartBot_BackoffAfterRepeatedFailures(t *testing.T) {
 		service.startBot(service.ctx, "bot1", bot)
 	}
 
-	// Wait for all async starts to complete
-	require.Eventually(t, func() bool {
-		return mockRunner.GetStartCallCount() == 5
-	}, 200*time.Millisecond, 10*time.Millisecond)
+	// Wait on the start goroutines themselves, not the start count: each one
+	// records its failure only after StartContainer has returned.
+	service.wg.Wait()
+	require.Equal(t, 5, mockRunner.GetStartCallCount())
 
 	// Bot should now be in backoff
 	assert.True(t, service.state.ShouldSkipBot("bot1"), "bot should be in backoff after 5 failures")

@@ -266,14 +266,10 @@ func (r *dockerRunner) buildContainerConfig(
 		builder = builder.WithDevRuntime(r.config.DevRuntimePath)
 	}
 
-	// Long-running containers should NOT auto-remove on exit so we can capture crash logs.
-	// Terminating containers that need result files also shouldn't auto-remove (race condition).
-	// Only enable auto-remove for terminating containers that don't need result extraction.
-	if executable.IsLongRunning || executable.ResultFilePath != "" {
-		builder = builder.WithAutoRemove(false) // Keep container for log/result capture
-	} else {
-		builder = builder.WithAutoRemove(true) // Run-to-completion cleans up automatically
-	}
+	// Auto-remove lets the daemon delete an exited container before its logs or
+	// result file are read (#304). Terminating containers are removed by
+	// RunAndWait after capture; crashed long-running ones by HandleCrashedContainer.
+	builder = builder.WithAutoRemove(false)
 
 	// Enable host.docker.internal on Linux for containers to reach the Docker host.
 	// This is needed for containers to access services running on the host (e.g., MinIO in tests).

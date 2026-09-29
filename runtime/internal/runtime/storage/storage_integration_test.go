@@ -4,100 +4,15 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/internal/s3test"
 	"testing"
-	"time"
 
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
-
-// testMinIOServer holds MinIO test container info
-type testMinIOServer struct {
-	container testcontainers.Container
-	endpoint  string
-	accessKey string
-	secretKey string
-	client    *minio.Client
-}
-
-// setupMinIOTestContainer starts a MinIO container for testing
-func setupMinIOTestContainer(t *testing.T) *testMinIOServer {
-	ctx := context.Background()
-
-	accessKey := "testkey"
-	secretKey := "testsecret"
-
-	req := testcontainers.ContainerRequest{
-		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
-		ExposedPorts: []string{"9000/tcp"},
-		Env: map[string]string{
-			"MINIO_ACCESS_KEY": accessKey,
-			"MINIO_SECRET_KEY": secretKey,
-		},
-		Cmd:        []string{"server", "/data"},
-		WaitingFor: wait.ForHTTP("/minio/health/ready").WithPort("9000/tcp"),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-
-	host, err := container.Host(ctx)
-	require.NoError(t, err)
-
-	port, err := container.MappedPort(ctx, "9000")
-	require.NoError(t, err)
-
-	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
-
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-	require.NoError(t, waitForMinIOReady(ctx, client, 30*time.Second))
-
-	return &testMinIOServer{
-		container: container,
-		endpoint:  endpoint,
-		accessKey: accessKey,
-		secretKey: secretKey,
-		client:    client,
-	}
-}
-
-func waitForMinIOReady(ctx context.Context, client *minio.Client, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	var lastErr error
-
-	for time.Now().Before(deadline) {
-		_, lastErr = client.ListBuckets(ctx)
-		if lastErr == nil {
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	if lastErr != nil {
-		return fmt.Errorf("minio did not become ready: %w", lastErr)
-	}
-	return fmt.Errorf("minio did not become ready within %s", timeout)
-}
-
-func (s *testMinIOServer) cleanup(t *testing.T) {
-	if s.container != nil {
-		require.NoError(t, s.container.Terminate(context.Background()))
-	}
-}
 
 // testLogger implements a simple logger for testing
 type integrationTestLogger struct {
@@ -116,13 +31,12 @@ func TestStateManager_Integration(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	cfg := &Config{
-		Endpoint:              server.endpoint,
-		AccessKey:             server.accessKey,
-		SecretKey:             server.secretKey,
+		Endpoint:              server.Endpoint,
+		AccessKey:             s3test.AccessKey,
+		SecretKey:             s3test.SecretKey,
 		UseSSL:                false,
 		StateBucket:           "test-state",
 		MaxStateSizeBytes:     8 * 1024 * 1024 * 1024,
@@ -130,7 +44,7 @@ func TestStateManager_Integration(t *testing.T) {
 	}
 
 	logger := &integrationTestLogger{t: t}
-	stateManager := NewStateManager(server.client, cfg, logger)
+	stateManager := NewStateManager(server.Client, cfg, logger)
 
 	t.Run("UploadAndDownloadState", func(t *testing.T) {
 		ctx := context.Background()
@@ -292,23 +206,22 @@ func TestCodeManager_Integration(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	server := setupMinIOTestContainer(t)
-	defer server.cleanup(t)
+	server := s3test.StartT(t)
 
 	cfg := &Config{
-		Endpoint:   server.endpoint,
-		AccessKey:  server.accessKey,
-		SecretKey:  server.secretKey,
+		Endpoint:   server.Endpoint,
+		AccessKey:  s3test.AccessKey,
+		SecretKey:  s3test.SecretKey,
 		UseSSL:     false,
 		CodeBucket: "test-code",
 	}
 
 	logger := &integrationTestLogger{t: t}
-	codeManager := NewCodeManager(server.client, cfg, logger)
+	codeManager := NewCodeManager(server.Client, cfg, logger)
 
 	// Create the bucket
 	ctx := context.Background()
-	err := server.client.MakeBucket(ctx, "test-code", minio.MakeBucketOptions{})
+	err := server.Client.MakeBucket(ctx, "test-code", minio.MakeBucketOptions{})
 	require.NoError(t, err)
 
 	t.Run("DownloadAndExtractZip", func(t *testing.T) {
@@ -330,7 +243,7 @@ func TestCodeManager_Integration(t *testing.T) {
 
 		// Upload zip to MinIO
 		objectPath := "my-bot/v1.0.0/code.zip"
-		_, err := server.client.PutObject(ctx, "test-code", objectPath, &buf, int64(buf.Len()), minio.PutObjectOptions{
+		_, err := server.Client.PutObject(ctx, "test-code", objectPath, &buf, int64(buf.Len()), minio.PutObjectOptions{
 			ContentType: "application/zip",
 		})
 		require.NoError(t, err)
