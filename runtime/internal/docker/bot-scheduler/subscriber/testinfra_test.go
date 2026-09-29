@@ -51,7 +51,7 @@ func (ti *TestInfrastructure) Close() {
 
 // GetDatabase returns a MongoDB database handle with a unique name for test isolation
 func (ti *TestInfrastructure) GetDatabase(testName string) *mongo.Database {
-	dbName := fmt.Sprintf("test_%s_%d", testName, time.Now().Unix())
+	dbName := fmt.Sprintf("test_%s_%d", testName, time.Now().UnixNano())
 	return ti.mongoClient.Database(dbName)
 }
 

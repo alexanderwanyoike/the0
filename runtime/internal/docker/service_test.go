@@ -1331,10 +1331,10 @@ func TestStartBot_BackoffAfterRepeatedFailures(t *testing.T) {
 		service.startBot(service.ctx, "bot1", bot)
 	}
 
-	// Wait for all async starts to complete
-	require.Eventually(t, func() bool {
-		return mockRunner.GetStartCallCount() == 5
-	}, 200*time.Millisecond, 10*time.Millisecond)
+	// Wait on the start goroutines themselves, not the start count: each one
+	// records its failure only after StartContainer has returned.
+	service.wg.Wait()
+	require.Equal(t, 5, mockRunner.GetStartCallCount())
 
 	// Bot should now be in backoff
 	assert.True(t, service.state.ShouldSkipBot("bot1"), "bot should be in backoff after 5 failures")
