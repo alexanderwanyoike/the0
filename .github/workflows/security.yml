@@ -15,7 +15,7 @@ permissions:
 env:
   TRIVY_VERSION: 0.70.0
   GO_VERSION: '1.25.10'
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   GOVULNCHECK_VERSION: v1.3.0
   OSV_GO_VERSION: '1.25.10'
   OSV_SCANNER_VERSION: v2.2.3
@@ -254,7 +254,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: frontend/package.json
           cache: yarn
           cache-dependency-path: frontend/yarn.lock
 

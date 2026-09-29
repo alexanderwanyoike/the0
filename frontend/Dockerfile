@@ -1,5 +1,5 @@
 # Multi-stage build for production optimization
-FROM dhi.io/node:20-alpine3.22-dev AS base
+FROM dhi.io/node:22-alpine3.22-dev AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -46,7 +46,7 @@ RUN \
   fi
 
 # Production image, copy all the files and run next
-FROM dhi.io/node:20-alpine3.22 AS runner
+FROM dhi.io/node:22-alpine3.22 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
