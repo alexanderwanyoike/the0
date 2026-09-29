@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime/internal/model"
+	"runtime/internal/s3test"
 	"runtime/internal/util"
 	"strings"
 	"testing"
@@ -19,11 +20,8 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // Shared MinIO server for all integration tests
@@ -300,24 +298,21 @@ func loadRealTestBotFile(t *testing.T, filename string) []byte {
 	return data
 }
 
-// MinIO test server management using testcontainers
+// MinIOTestServer adds the endpoint bot containers use to reach the store.
 type MinIOTestServer struct {
-	container         testcontainers.Container
-	endpoint          string // For host-side access (test code)
-	containerEndpoint string // For container access (via host.docker.internal)
-	accessKey         string
-	secretKey         string
+	*s3test.Server
+	containerEndpoint string
 }
 
-// GetTestConfig returns a DockerRunnerConfig for testing with this MinIO server.
-// Uses endpoint for the runner's MinIO client (host-accessible), and
-// containerEndpoint for containers (via host.docker.internal).
+// GetTestConfig returns a DockerRunnerConfig for testing with this store.
+// The runner's own client uses the host endpoint; bot containers reach the
+// store through host.docker.internal.
 func (m *MinIOTestServer) GetTestConfig() *DockerRunnerConfig {
 	return &DockerRunnerConfig{
-		MinIOEndpoint:          m.endpoint,          // Host-accessible endpoint for runner's MinIO client
-		MinIOContainerEndpoint: m.containerEndpoint, // Container-accessible endpoint for bot containers
-		MinIOAccessKeyID:       m.accessKey,
-		MinIOSecretAccessKey:   m.secretKey,
+		MinIOEndpoint:          m.Endpoint,
+		MinIOContainerEndpoint: m.containerEndpoint,
+		MinIOAccessKeyID:       s3test.AccessKey,
+		MinIOSecretAccessKey:   s3test.SecretKey,
 		MinIOUseSSL:            false,
 		MinIOCodeBucket:        "custom-bots",
 		MinioLogsBucket:        "bot-logs",
@@ -332,79 +327,29 @@ func (m *MinIOTestServer) GetTestConfig() *DockerRunnerConfig {
 }
 
 func (m *MinIOTestServer) Close() {
-	if m.container != nil {
-		m.container.Terminate(context.Background())
-	}
+	m.Terminate(context.Background())
 }
 
-// startMinIOTestServerForPackage starts a shared MinIO server for all tests in TestMain
+// startMinIOTestServerForPackage starts a shared store for all tests in TestMain
 func startMinIOTestServerForPackage() *MinIOTestServer {
-	ctx := context.Background()
-
-	// MinIO credentials
-	accessKey := "testaccess"
-	secretKey := "testsecret"
-
-	// Create MinIO container
-	req := testcontainers.ContainerRequest{
-		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
-		ExposedPorts: []string{"9000/tcp"},
-		Env: map[string]string{
-			"MINIO_ROOT_USER":     accessKey,
-			"MINIO_ROOT_PASSWORD": secretKey,
-		},
-		Cmd:        []string{"server", "/data"},
-		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000"),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
+	server, err := s3test.Start(context.Background())
 	if err != nil {
-		panic(fmt.Sprintf("Failed to start MinIO testcontainer: %v", err))
+		panic(fmt.Sprintf("Failed to start store testcontainer: %v", err))
 	}
 
-	// Get the container endpoint
-	host, err := container.Host(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get container host: %v", err))
-	}
-	port, err := container.MappedPort(ctx, "9000")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get container port: %v", err))
-	}
+	containerEndpoint := fmt.Sprintf("host.docker.internal:%s", server.Port)
 
-	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
-
-	// For containers to reach the host, we use host.docker.internal (enabled via --add-host).
-	// The runner sets MINIO_ENDPOINT which gets passed to containers as an environment variable.
-	containerEndpoint := fmt.Sprintf("host.docker.internal:%s", port.Port())
-
-	// Set environment variables for the docker runner
-	// Containers will use host.docker.internal to reach MinIO on the host
+	// Containers will use host.docker.internal to reach the store on the host
 	os.Setenv("MINIO_ENDPOINT", containerEndpoint)
-	os.Setenv("MINIO_ACCESS_KEY", accessKey)
-	os.Setenv("MINIO_SECRET_KEY", secretKey)
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	os.Setenv("MINIO_SSL", "false")
 
-	return &MinIOTestServer{
-		container:         container,
-		endpoint:          endpoint,          // For host-side access (test code)
-		containerEndpoint: containerEndpoint, // For container access (env vars)
-		accessKey:         accessKey,
-		secretKey:         secretKey,
-	}
+	return &MinIOTestServer{Server: server, containerEndpoint: containerEndpoint}
 }
 
 func uploadToMinIO(t *testing.T, server *MinIOTestServer, objectName string, data []byte) {
-	// Create MinIO client
-	client, err := minio.New(server.endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(server.accessKey, server.secretKey, ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-
+	client := server.Client
 	ctx := context.Background()
 	bucketName := "custom-bots"
 

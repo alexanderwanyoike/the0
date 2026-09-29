@@ -13,13 +13,11 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"runtime/internal/constants"
+	"runtime/internal/s3test"
 )
 
 // TestRunDaemonInit_MissingEnvironment tests init fails with missing MinIO config
@@ -139,52 +137,16 @@ func TestDaemonSync_CustomInterval(t *testing.T) {
 
 // Integration tests with MinIO testcontainer
 
-// startMinIOTestContainer starts a MinIO container for testing
-func startMinIOTestContainer(t *testing.T) (*minio.Client, func(), string) {
+// startMinIOTestContainer starts a store with the buckets the daemon expects.
+func startMinIOTestContainer(t *testing.T) (*minio.Client, string) {
+	server := s3test.StartT(t)
 	ctx := context.Background()
 
-	req := testcontainers.ContainerRequest{
-		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
-		ExposedPorts: []string{"9000/tcp"},
-		Env: map[string]string{
-			"MINIO_ROOT_USER":     "minioadmin",
-			"MINIO_ROOT_PASSWORD": "minioadmin",
-		},
-		Cmd:        []string{"server", "/data"},
-		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp"),
-	}
+	// Bucket names are the storage config defaults.
+	require.NoError(t, server.Client.MakeBucket(ctx, "custom-bots", minio.MakeBucketOptions{}))
+	require.NoError(t, server.Client.MakeBucket(ctx, "state", minio.MakeBucketOptions{}))
 
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-
-	host, err := container.Host(ctx)
-	require.NoError(t, err)
-	port, err := container.MappedPort(ctx, "9000")
-	require.NoError(t, err)
-
-	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
-
-	// Create MinIO client
-	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4("minioadmin", "minioadmin", ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-
-	// Create buckets (using default names from storage config)
-	err = minioClient.MakeBucket(ctx, "custom-bots", minio.MakeBucketOptions{})
-	require.NoError(t, err)
-	err = minioClient.MakeBucket(ctx, "state", minio.MakeBucketOptions{})
-	require.NoError(t, err)
-
-	cleanup := func() {
-		container.Terminate(ctx)
-	}
-
-	return minioClient, cleanup, endpoint
+	return server.Client, server.Endpoint
 }
 
 // createTestBotZip creates a zip file with test bot files
@@ -237,8 +199,7 @@ func TestRunDaemonInit_Integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	minioClient, cleanup, endpoint := startMinIOTestContainer(t)
-	defer cleanup()
+	minioClient, endpoint := startMinIOTestContainer(t)
 
 	ctx := context.Background()
 
@@ -261,8 +222,8 @@ func TestRunDaemonInit_Integration(t *testing.T) {
 	stateDir := t.TempDir()
 
 	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", "minioadmin")
-	os.Setenv("MINIO_SECRET_KEY", "minioadmin")
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")
@@ -296,8 +257,7 @@ func TestRunDaemonInit_MultipleFiles(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	minioClient, cleanup, endpoint := startMinIOTestContainer(t)
-	defer cleanup()
+	minioClient, endpoint := startMinIOTestContainer(t)
 
 	ctx := context.Background()
 
@@ -321,8 +281,8 @@ func TestRunDaemonInit_MultipleFiles(t *testing.T) {
 	stateDir := t.TempDir()
 
 	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", "minioadmin")
-	os.Setenv("MINIO_SECRET_KEY", "minioadmin")
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")
@@ -360,16 +320,15 @@ func TestRunDaemonInit_NoCodeFile(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	minioClient, cleanup, endpoint := startMinIOTestContainer(t)
-	defer cleanup()
+	minioClient, endpoint := startMinIOTestContainer(t)
 
 	// Set up environment
 	codeDir := t.TempDir()
 	stateDir := t.TempDir()
 
 	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", "minioadmin")
-	os.Setenv("MINIO_SECRET_KEY", "minioadmin")
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")
@@ -400,8 +359,7 @@ func TestRunDaemonSync_ShortRun(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	_, cleanup, endpoint := startMinIOTestContainer(t)
-	defer cleanup()
+	_, endpoint := startMinIOTestContainer(t)
 
 	// Set up environment
 	stateDir := t.TempDir()
@@ -413,8 +371,8 @@ func TestRunDaemonSync_ShortRun(t *testing.T) {
 	require.NoError(t, err)
 
 	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", "minioadmin")
-	os.Setenv("MINIO_SECRET_KEY", "minioadmin")
+	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
 	defer func() {
 		os.Unsetenv("MINIO_ENDPOINT")
 		os.Unsetenv("MINIO_ACCESS_KEY")

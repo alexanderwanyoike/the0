@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/internal/s3test"
 	"strings"
 	"sync"
 	"testing"
@@ -15,68 +16,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
-
-// setupMinIOTestContainer starts a MinIO container for testing
-func setupMinIOTestContainer(t *testing.T) (testcontainers.Container, string, string, string) {
-	ctx := context.Background()
-
-	accessKey := "testkey"
-	secretKey := "testsecret"
-
-	req := testcontainers.ContainerRequest{
-		Image:        "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
-		ExposedPorts: []string{"9000/tcp"},
-		Env: map[string]string{
-			"MINIO_ACCESS_KEY": accessKey,
-			"MINIO_SECRET_KEY": secretKey,
-		},
-		Cmd:        []string{"server", "/data"},
-		WaitingFor: wait.ForHTTP("/minio/health/live").WithPort("9000/tcp"),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-
-	host, err := container.Host(ctx)
-	require.NoError(t, err)
-
-	port, err := container.MappedPort(ctx, "9000")
-	require.NoError(t, err)
-
-	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
-
-	// Wait for MinIO to be fully initialized for bucket operations
-	// The health endpoint may return OK before bucket operations are ready
-	waitForMinIOReady(t, endpoint, accessKey, secretKey)
-
-	return container, endpoint, accessKey, secretKey
-}
-
-// waitForMinIOReady waits until MinIO is ready for bucket operations
-func waitForMinIOReady(t *testing.T, endpoint, accessKey, secretKey string) {
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	maxRetries := 10
-	for i := 0; i < maxRetries; i++ {
-		_, err := client.ListBuckets(ctx)
-		if err == nil {
-			return // MinIO is ready
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	t.Fatalf("MinIO did not become ready after %d retries", maxRetries)
-}
 
 func TestNewMinIOLogger(t *testing.T) {
 	// Test missing environment variables
@@ -126,8 +66,7 @@ func TestNewMinIOLogger(t *testing.T) {
 	})
 
 	t.Run("SuccessfulConnection", func(t *testing.T) {
-		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-		defer container.Terminate(context.Background())
+		endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
@@ -197,8 +136,7 @@ func TestAppendBotLogs(t *testing.T) {
 	})
 
 	t.Run("IntegrationTest", func(t *testing.T) {
-		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-		defer container.Terminate(context.Background())
+		endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
@@ -250,8 +188,7 @@ func TestAppendBotLogs(t *testing.T) {
 	})
 
 	t.Run("ConcurrentAppends", func(t *testing.T) {
-		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-		defer container.Terminate(context.Background())
+		endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 		os.Setenv("MINIO_ENDPOINT", endpoint)
 		os.Setenv("MINIO_ACCESS_KEY", accessKey)
@@ -325,8 +262,7 @@ func TestStoreFinalLogs(t *testing.T) {
 	})
 
 	t.Run("IntegrationTest", func(t *testing.T) {
-		container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-		defer container.Terminate(context.Background())
+		endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 		logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
 			Endpoint:      endpoint,
@@ -466,8 +402,7 @@ func TestComposeAppend(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-	defer container.Terminate(context.Background())
+	endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
 		Endpoint:      endpoint,
@@ -560,8 +495,7 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-	defer container.Terminate(context.Background())
+	endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
 		Endpoint:      endpoint,
@@ -690,13 +624,53 @@ func primeDailyLog(t *testing.T, client *minio.Client, bucket, botID string, siz
 	require.NoError(t, err)
 }
 
+// TestComposeAppendSmallTail covers the common case of a busy bot: the daily
+// log is already past the compose threshold and the next sync carries only a
+// few lines, so the multipart copy's last part comes from a tiny temp object.
+// Some S3 stores reject UploadPartCopy from small sources (Garage, #342).
+func TestComposeAppendSmallTail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	server := s3test.StartT(t)
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      server.Endpoint,
+		AccessKey:     s3test.AccessKey,
+		SecretKey:     s3test.SecretKey,
+		LogsBucket:    "test-small-tail-logs",
+		ResultsBucket: "test-small-tail-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	botID := "small-tail-bot"
+	day := time.Now().Format("20060102")
+	bulk := strings.Repeat("x", int(composeMinPartSize)+1)
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line"))
+	if time.Now().Format("20060102") != day {
+		t.Skip("appends straddled midnight, so the tail started a new daily log instead of composing")
+	}
+
+	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, day)
+	obj, err := server.Client.GetObject(context.Background(), "test-small-tail-logs", objectPath, minio.GetObjectOptions{})
+	require.NoError(t, err)
+	defer obj.Close()
+	content, err := io.ReadAll(obj)
+	require.NoError(t, err)
+
+	assert.Greater(t, int64(len(content)), int64(composeMinPartSize))
+	assert.True(t, strings.Contains(string(content), bulk), "existing log must be kept intact")
+	assert.Contains(t, string(content[len(content)-512:]), "small tail line")
+}
+
 func TestAppendBotLogs_AbortsOnCompleteMultipartError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test")
 	}
 
-	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-	defer container.Terminate(context.Background())
+	endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
 		Endpoint:      endpoint,
@@ -732,8 +706,7 @@ func TestAppendBotLogs_AbortsOnCopyPartError(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-	defer container.Terminate(context.Background())
+	endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
 		Endpoint:      endpoint,
@@ -765,8 +738,7 @@ func TestAppendBotLogs_NoLeakedUploadsOnHappyCompose(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	container, endpoint, accessKey, secretKey := setupMinIOTestContainer(t)
-	defer container.Terminate(context.Background())
+	endpoint, accessKey, secretKey := s3test.StartT(t).Endpoint, s3test.AccessKey, s3test.SecretKey
 
 	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
 		Endpoint:      endpoint,

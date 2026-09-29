@@ -76,7 +76,7 @@ The Docker Compose configuration starts these services:
 
 **NATS** (port 4222) provides event streaming between services. JetStream is enabled for durable message delivery.
 
-**MinIO** (ports 9000, 9001) provides S3-compatible object storage for bot code packages, execution logs, and artifacts.
+**MinIO** (ports 9000, 9001) provides S3-compatible object storage for bot code packages, execution logs, and artifacts. The bundled image is [Silo](https://github.com/pgsty/silo) (`pgsty/silo`), a maintained fork of MinIO community edition, because upstream MinIO no longer publishes images. See [Bundled Object Store: MinIO to Silo](../migration-guides/bundled-object-store-silo).
 
 ### Application Services
 
