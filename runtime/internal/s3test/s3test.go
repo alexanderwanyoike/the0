@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	image = "pgsty/minio:RELEASE.2026-08-04T00-00-00Z"
+	image = "pgsty/silo:RELEASE.2026-09-16T00-00-00Z"
 
 	AccessKey = "the0testaccess"
 	SecretKey = "the0testsecretkey"
