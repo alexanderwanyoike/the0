@@ -429,19 +429,21 @@ func TestScheduleService_RemovesOrphanedContainers(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	longAgo := time.Now().Add(-10 * time.Minute).Format(time.RFC3339Nano)
+	justNow := time.Now().Format(time.RFC3339Nano)
+
 	mockRunner := NewMockDockerRunner()
-	mockRunner.AddExitedScheduledContainer("orphaned-schedule", "orphan-container")
-	mockRunner.AddExitedScheduledContainer("executing-schedule", "capturing-container")
+	mockRunner.AddExitedScheduledContainer("orphaned-schedule", "orphan-container", longAgo)
+	// An owner still reading its output, like a scheduled run or a query
+	// container started by the query server.
+	mockRunner.AddExitedScheduledContainer("capturing-schedule", "capturing-container", justNow)
+	mockRunner.AddExitedScheduledContainer("unknown-schedule", "unknown-exit-container", "")
 	mockRunner.AddScheduledContainer("running-schedule", "running-container")
 	mockRunner.AddCrashedContainer("realtime-bot", "realtime-container", 1)
 	service.runner = mockRunner
-	require.True(t, service.tryStartExecution("executing-schedule"))
 
 	service.removeOrphanedContainers(context.Background())
 
-	// Only the exited scheduled container no execution owns is removed: an
-	// executing schedule's RunAndWait is still reading its container, and
-	// realtime containers belong to the bot-runner.
 	assert.Equal(t, []string{"orphan-container"}, mockRunner.HandledContainers())
 }
 
@@ -454,7 +456,8 @@ func TestScheduleLoop_RemovesOrphanedContainers(t *testing.T) {
 	require.NoError(t, err)
 
 	mockRunner := NewMockDockerRunner()
-	mockRunner.AddExitedScheduledContainer("orphaned-schedule", "orphan-container")
+	mockRunner.AddExitedScheduledContainer("orphaned-schedule", "orphan-container",
+		time.Now().Add(-10*time.Minute).Format(time.RFC3339Nano))
 	service.runner = mockRunner
 
 	// Unhealthy deps keep the loop away from MongoDB (nil here); container

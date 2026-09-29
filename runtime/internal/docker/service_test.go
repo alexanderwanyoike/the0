@@ -227,15 +227,16 @@ func (m *MockDockerRunner) AddScheduledContainer(botID, containerID string) {
 	}
 }
 
-// AddExitedScheduledContainer adds a bot-scheduler container that has exited
-// but was not removed.
-func (m *MockDockerRunner) AddExitedScheduledContainer(scheduleID, containerID string) {
+// AddExitedScheduledContainer adds a scheduled-type container that has exited
+// but was not removed. finishedAt is Docker's RFC3339 exit time, empty if unknown.
+func (m *MockDockerRunner) AddExitedScheduledContainer(scheduleID, containerID, finishedAt string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.crashedContainers = append(m.crashedContainers, &ContainerInfo{
 		ContainerID: containerID,
 		ID:          scheduleID,
 		Status:      "exited",
+		FinishedAt:  finishedAt,
 		Labels: map[string]string{
 			"runtime.managed": "true",
 			"runtime.type":    "scheduled",

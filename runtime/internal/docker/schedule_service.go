@@ -334,10 +334,17 @@ func (s *ScheduleService) getDueSchedules(ctx context.Context, now time.Time) ([
 	return schedules, nil
 }
 
-// removeOrphanedContainers removes exited scheduled containers that no
-// in-flight execution owns. Scheduled containers do not auto-remove (#304), so
-// one survives when the scheduler dies mid-run or RunAndWait's own removal
-// fails, and the bot-runner's reconcile only cleans up realtime containers.
+// orphanGrace is how long a scheduled container must have been exited before
+// the sweep treats it as orphaned. Its owner, which is RunAndWait in this
+// process or in the query server, reads and removes it within moments of exit,
+// and query containers carry the same runtime.type label without being
+// tracked here.
+const orphanGrace = 5 * time.Minute
+
+// removeOrphanedContainers removes scheduled containers that exited more than
+// orphanGrace ago. Scheduled containers do not auto-remove (#304), so one
+// survives when its owner dies mid-run or RunAndWait's own removal fails, and
+// the bot-runner's reconcile only cleans up realtime containers.
 func (s *ScheduleService) removeOrphanedContainers(ctx context.Context) {
 	containers, err := s.runner.ListAllManagedContainers(ctx)
 	if err != nil {
@@ -348,7 +355,8 @@ func (s *ScheduleService) removeOrphanedContainers(ctx context.Context) {
 		if container.Labels["runtime.type"] != "scheduled" || container.Status != "exited" {
 			continue
 		}
-		if s.isExecuting(container.ID) {
+		finishedAt, err := time.Parse(time.RFC3339Nano, container.FinishedAt)
+		if err != nil || time.Since(finishedAt) < orphanGrace {
 			continue
 		}
 		s.logger.Info("Removing orphaned scheduled container %s for schedule %s", container.ContainerID, container.ID)
