@@ -4,6 +4,60 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: changed
+          description: Bundled object store moves to Silo (pgsty/silo, pinned to RELEASE.2026-09-16T00-00-00Z), the maintained continuation of the pgsty/minio fork - existing data volumes are read in place, see the migration guide
+        - kind: changed
+          description: Bundled object store Deployment passes args to the image entrypoint instead of overriding the command, and uses the Recreate strategy so an upgrade never runs two servers on one volume
+        - kind: changed
+          description: API and frontend images run on Node.js 22 because Node.js 20 is end of life upstream, with better-sqlite3 bumped to 12.x
+        - kind: fixed
+          description: Scheduled bot runs no longer lose their output when the container exits quickly - containers are removed after their logs are read, and the scheduler cleans up orphaned scheduled containers after five minutes
+        - kind: security
+          description: Bundled object store picks up Silo security fixes (SN-2026-005 onwards) that the frozen pgsty/minio image does not have
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.14.9
+    created: "2026-09-29T21:20:40.625760217Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: fde53d8e6d8cbd25d2b6cb1ec1ab688451954d6373ce0fd2bad0f27564ec6b92
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.9.10/the0-0.9.10.tgz
+    version: 0.9.10
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: added
           description: nodejs22 bot runtime - the runtime image carries Node.js 22 as the default node next to Node.js 20.20.2, which is only used by bots that still declare nodejs20
         - kind: changed
@@ -2013,4 +2067,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-09-28T22:10:26.279862544Z"
+generated: "2026-09-29T21:20:40.626027685Z"
