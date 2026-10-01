@@ -363,19 +363,22 @@ func parseResourceOrDefault(value, defaultValue string) resource.Quantity {
 }
 
 // computeConfigHash creates a hash of the bot config for change detection.
-// Generator-level inputs that shape the pod environment (NATS URL) are part of
-// the hash so changing them reconciles existing pods.
+// Generator-level inputs that shape the pod (NATS URL, runtime image) are part
+// of the hash so changing them, as a platform upgrade does, reconciles existing
+// pods.
 func (g *PodGenerator) computeConfigHash(bot model.Bot) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
 		Enabled          *bool
 		NATSURL          string
+		RuntimeImage     string
 	}{
 		Config:           bot.Config,
 		CustomBotVersion: bot.CustomBotVersion.Version,
 		Enabled:          bot.Enabled,
 		NATSURL:          g.config.NATSURL,
+		RuntimeImage:     g.config.RuntimeImage,
 	}
 
 	jsonBytes, err := json.Marshal(data)
