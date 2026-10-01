@@ -45,6 +45,11 @@ jobs:
       working-directory: ./api
       run: yarn build
 
+    - name: Fallow codebase report (non-blocking)
+      working-directory: ./api
+      continue-on-error: true
+      run: yarn -s fallow --format markdown --score >> "$GITHUB_STEP_SUMMARY"
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
