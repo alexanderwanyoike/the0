@@ -45,6 +45,11 @@ jobs:
       working-directory: ./frontend
       run: yarn build
 
+    - name: Fallow codebase report (non-blocking)
+      working-directory: ./frontend
+      continue-on-error: true
+      run: yarn --silent fallow --format github-summary >> "$GITHUB_STEP_SUMMARY"
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
