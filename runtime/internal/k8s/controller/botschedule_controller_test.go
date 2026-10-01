@@ -198,7 +198,7 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 
 func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	configHash := computeScheduleHash(schedule, "")
+	configHash := computeScheduleHash(schedule, "", "")
 
 	mockRepo := &MockBotScheduleRepository{
 		Schedules: []model.BotSchedule{schedule},
@@ -278,9 +278,9 @@ func TestComputeScheduleHash(t *testing.T) {
 	schedule2 := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 10 * * *")
 	schedule3 := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 9 * * *")
 
-	hash1 := computeScheduleHash(schedule1, "")
-	hash2 := computeScheduleHash(schedule2, "")
-	hash3 := computeScheduleHash(schedule3, "")
+	hash1 := computeScheduleHash(schedule1, "", "")
+	hash2 := computeScheduleHash(schedule2, "", "")
+	hash3 := computeScheduleHash(schedule3, "", "")
 
 	// Hashes should be 16 characters
 	assert.Len(t, hash1, 16)
@@ -291,7 +291,7 @@ func TestComputeScheduleHash(t *testing.T) {
 
 	// Same config should produce same hash
 	schedule1Copy := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy, ""))
+	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy, "", ""))
 }
 
 func TestScheduleToBot(t *testing.T) {
@@ -834,4 +834,29 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenNATSURLAdded(t *testi
 		botEnv[env.Name] = env.Value
 	}
 	assert.Equal(t, "nats://nats:4222", botEnv["NATS_URL"])
+}
+
+func TestBotScheduleController_Reconcile_UpdatesCronJobWhenRuntimeImageChanges(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+	mockCronClient := NewMockK8sCronJobClient()
+	controllerFor := func(image string) *BotScheduleController {
+		return NewBotScheduleController(
+			BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller", RuntimeImage: image},
+			&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+			mockCronClient,
+		)
+	}
+
+	// CronJob created by the previous platform release
+	require.NoError(t, controllerFor("ghcr.io/the0/runtime:1.14.8").Reconcile(context.Background()))
+	require.Equal(t, 1, mockCronClient.CreateCalled)
+
+	// The upgraded controller runs a newer runtime image
+	require.NoError(t, controllerFor("ghcr.io/the0/runtime:1.14.9").Reconcile(context.Background()))
+
+	assert.Equal(t, 1, mockCronClient.UpdateCalled,
+		"CronJob must follow the controller's runtime image after a platform upgrade")
+	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+	require.NotNil(t, cronJob)
+	assert.Equal(t, "ghcr.io/the0/runtime:1.14.9", cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
 }

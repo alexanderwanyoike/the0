@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.10
-appVersion: "1.14.9"
+version: 0.9.11
+appVersion: "1.14.10"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,16 +30,8 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
-    - kind: changed
-      description: Bundled object store moves to Silo (pgsty/silo, pinned to RELEASE.2026-09-16T00-00-00Z), the maintained continuation of the pgsty/minio fork - existing data volumes are read in place, see the migration guide
-    - kind: changed
-      description: Bundled object store Deployment passes args to the image entrypoint instead of overriding the command, and uses the Recreate strategy so an upgrade never runs two servers on one volume
-    - kind: changed
-      description: API and frontend images run on Node.js 22 because Node.js 20 is end of life upstream, with better-sqlite3 bumped to 12.x
     - kind: fixed
-      description: Scheduled bot runs no longer lose their output when the container exits quickly - containers are removed after their logs are read, and the scheduler cleans up orphaned scheduled containers after five minutes
-    - kind: security
-      description: Bundled object store picks up Silo security fixes (SN-2026-005 onwards) that the frozen pgsty/minio image does not have
+      description: Platform upgrades now reach existing bots - the bot controller treats a new runtime image as a change, so scheduled bot CronJobs move to the new image on their next run and running realtime bot pods are replaced once onto it
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
