@@ -301,7 +301,7 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 		return nil, fmt.Errorf("failed to generate pod spec: %w", err)
 	}
 
-	configHash := computeScheduleHash(schedule, c.config.NATSURL)
+	configHash := computeScheduleHash(schedule, c.config.NATSURL, c.config.RuntimeImage)
 
 	successfulJobsHistory := int32(3)
 	failedJobsHistory := int32(1)
@@ -352,7 +352,7 @@ func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedu
 	if cronJob.Annotations != nil {
 		existingHash = cronJob.Annotations[AnnotationScheduleHash]
 	}
-	currentHash := computeScheduleHash(schedule, c.config.NATSURL)
+	currentHash := computeScheduleHash(schedule, c.config.NATSURL, c.config.RuntimeImage)
 	return existingHash != currentHash
 }
 
@@ -409,19 +409,21 @@ func convertToK8sCronFormat(cronExpr string) string {
 }
 
 // computeScheduleHash creates a hash of the schedule config. Controller-level
-// inputs that shape the generated pod environment (NATS URL) are part of the
-// hash so changing them updates existing CronJobs.
-func computeScheduleHash(schedule model.BotSchedule, natsURL string) string {
+// inputs that shape the generated pod (NATS URL, runtime image) are part of the
+// hash so changing them, as a platform upgrade does, updates existing CronJobs.
+func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage string) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
 		Enabled          *bool
 		NATSURL          string
+		RuntimeImage     string
 	}{
 		Config:           schedule.Config,
 		CustomBotVersion: schedule.CustomBotVersion.Version,
 		Enabled:          schedule.Enabled,
 		NATSURL:          natsURL,
+		RuntimeImage:     runtimeImage,
 	}
 
 	jsonBytes, err := json.Marshal(data)
