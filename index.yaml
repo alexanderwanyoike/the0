@@ -4,6 +4,64 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: added
+          description: Swagger UI at /docs and the OpenAPI spec at /docs-json for the api - off by default in this chart, set the0Api.env.SWAGGER_ENABLED to "true" to serve them
+        - kind: security
+          description: Login no longer reveals whether an account exists or is inactive - the password is checked first, and unknown emails cost the same bcrypt comparison
+        - kind: security
+          description: API key checks no longer return database error details to clients - a rejected key gets a generic "Invalid API key" and the reason is logged server side
+        - kind: fixed
+          description: A database outage during JWT or API key checks now answers 503 instead of 401, so a brief outage no longer logs users out
+        - kind: fixed
+          description: The MCP tools/list schema for bot_deploy matches what the handler reads (the name lives in config.name)
+        - kind: security
+          description: axios and brace-expansion bumped past new HIGH advisories in the api, frontend and React SDK
+        - kind: removed
+          description: The unused hello-world GET / endpoint, and the never-connected MCP SDK server with its @modelcontextprotocol/sdk and zod dependencies
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/g5mp57nK
+      artifacthub.io/prerelease: "true"
+    apiVersion: v2
+    appVersion: 1.15.0
+    created: "2026-10-02T15:53:46.61798931Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: c59a84dd03aa771ec34162e8e91be177ecc0f9d34a161c0137d394edb951f717
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.10.0/the0-0.10.0.tgz
+    version: 0.10.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: fixed
           description: Platform upgrades now reach existing bots - the bot controller treats a new runtime image as a change, so scheduled bot CronJobs move to the new image on their next run and running realtime bot pods are replaced once onto it
       artifacthub.io/images: |
@@ -2113,4 +2171,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-01T11:47:02.435878629Z"
+generated: "2026-10-02T15:53:46.618376667Z"
