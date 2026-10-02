@@ -1,5 +1,3 @@
-import { ConfigService } from "@nestjs/config";
-
 export interface DatabaseConfig {
   type: "postgresql" | "sqlite";
   url: string;
@@ -84,15 +82,5 @@ export function loadConfig(): DatabaseConfig {
     logging: process.env.NODE_ENV === "development",
     autoSelectFamily: process.env.DB_AUTO_SELECT_FAMILY !== "false",
     pool: getPoolConfig(),
-  };
-}
-
-export function createDatabaseConfigFactory() {
-  return {
-    provide: "DATABASE_CONFIG",
-    useFactory: (configService: ConfigService): DatabaseConfig => {
-      return loadConfig();
-    },
-    inject: [ConfigService],
   };
 }

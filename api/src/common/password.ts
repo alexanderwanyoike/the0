@@ -3,7 +3,7 @@ import * as bcrypt from "bcrypt";
 const DEFAULT_BCRYPT_SALT_ROUNDS = 12;
 const MIN_BCRYPT_SALT_ROUNDS = 12;
 
-export function getBcryptSaltRounds(): number {
+function getBcryptSaltRounds(): number {
   const rawRounds = process.env.BCRYPT_SALT_ROUNDS;
   if (!rawRounds) {
     return DEFAULT_BCRYPT_SALT_ROUNDS;

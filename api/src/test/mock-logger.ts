@@ -18,8 +18,3 @@ export const createMockLogger = () => ({
   errorKey: "err",
   call: jest.fn(),
 });
-
-/**
- * Pre-created mock logger instance for simple test cases
- */
-export const mockPinoLogger = createMockLogger();

@@ -4,10 +4,6 @@
 import { BotConfig } from "@/database/schema/bots";
 
 // Tool input schemas
-export interface BotListInput {
-  // No parameters needed
-}
-
 export interface BotGetInput {
   bot_id: string;
 }
@@ -49,10 +45,6 @@ export interface BotQueryInput {
   timeout_sec?: number;
 }
 
-export interface CustomBotListInput {
-  // No parameters needed
-}
-
 export interface CustomBotGetInput {
   name: string;
   version?: string;
@@ -61,42 +53,6 @@ export interface CustomBotGetInput {
 export interface CustomBotSchemaInput {
   name: string;
   version?: string;
-}
-
-// Tool response types
-export interface BotSummary {
-  id: string;
-  name: string;
-  type: string;
-  version: string;
-  status?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LogEntry {
-  date: string;
-  content: string;
-}
-
-export interface LogsSummary {
-  bot_id: string;
-  total_entries: number;
-  date_range: {
-    start: string;
-    end: string;
-  };
-  error_count: number;
-  last_entry?: LogEntry;
-}
-
-export interface CustomBotSummary {
-  name: string;
-  description: string;
-  latestVersion: string;
-  type: string;
-  author: string;
-  createdAt: string;
 }
 
 // MCP Tool definition helper type

@@ -1,6 +1,5 @@
 import { CustomBotRepository } from "../custom-bot.repository";
 import { CustomBot, CustomBotConfig } from "../custom-bot.types";
-import { Result } from "@/common";
 
 // Mock Drizzle database and dependencies
 jest.mock("@/database/connection", () => ({
