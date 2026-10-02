@@ -84,7 +84,8 @@ jobs:
       continue-on-error: true
       run: |
         { echo '### runtime: deadcode (unreachable from main)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-        make -s deadcode >> "$GITHUB_STEP_SUMMARY" || status=$?
+        # stderr only on failure: on success it is just "go: downloading" noise.
+        make -s deadcode >> "$GITHUB_STEP_SUMMARY" 2> "$RUNNER_TEMP/deadcode.err" || { status=$?; cat "$RUNNER_TEMP/deadcode.err" >> "$GITHUB_STEP_SUMMARY"; }
         echo '```' >> "$GITHUB_STEP_SUMMARY"
         exit "${status:-0}"
 
