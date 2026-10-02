@@ -20,15 +20,10 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
-export interface ApiResponse<T> {
+export interface AuthApiResponse<T> {
   success: boolean;
   data?: T;
   message?: string;
-}
-
-export interface ApiError {
-  message: string;
-  statusCode?: number;
 }
 
 export interface Result<T, E = string> {
