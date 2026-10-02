@@ -162,6 +162,10 @@ describe("AuthService", () => {
   describe("login", () => {
     const credentials = { email: "test@example.com", password: "secret" };
 
+    beforeEach(() => {
+      jest.mocked(bcrypt.compare).mockClear();
+    });
+
     it("returns a signed token and the user for valid credentials", async () => {
       const result = await service.login(credentials);
 
@@ -196,6 +200,46 @@ describe("AuthService", () => {
         data: null,
       });
       expect(userRepository.updateLastLogin).not.toHaveBeenCalled();
+    });
+
+    it("gives an inactive account with a wrong password the generic credentials error", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce({
+        ...testUser,
+        isActive: false,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "Invalid credentials",
+        data: null,
+      });
+    });
+
+    it("tells an inactive account with the right password that it is inactive", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce({
+        ...testUser,
+        isActive: false,
+      });
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "User account is inactive",
+        data: null,
+      });
+      expect(userRepository.updateLastLogin).not.toHaveBeenCalled();
+    });
+
+    it("compares a password for an unknown email so timing does not reveal it", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce(null);
+
+      await service.login(credentials);
+
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
     });
 
     it("throws ServiceUnavailableException when the database is unreachable", async () => {

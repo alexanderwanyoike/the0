@@ -1,6 +1,8 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
+import { hashPassword } from "@/common/password";
 import { isConnectionError } from "@/common/database-errors";
 import { Failure, Result } from "../common/result";
 import { UserRole } from "@/user/user.constants";
@@ -26,6 +28,8 @@ interface JwtPayload {
 
 @Injectable()
 export class AuthService {
+  private dummyPasswordHash?: Promise<string>;
+
   constructor(
     private jwtService: JwtService,
     private readonly users: UserRepository,
@@ -42,6 +46,11 @@ export class AuthService {
     });
 
     return { token, user: authUser };
+  }
+
+  private getDummyPasswordHash(): Promise<string> {
+    this.dummyPasswordHash ??= hashPassword(randomBytes(32).toString("hex"));
+    return this.dummyPasswordHash;
   }
 
   async validateToken(token: string): Promise<Result<AuthUser, string>> {
@@ -98,7 +107,14 @@ export class AuthService {
     try {
       const user = await this.users.findByEmail(credentials.email);
 
-      if (!user) {
+      // The password is checked before anything else about the account, and
+      // against a dummy hash when the email is unknown, so neither the error
+      // nor the response time reveals which emails exist or are inactive.
+      const isPasswordValid = await bcrypt.compare(
+        credentials.password,
+        user?.passwordHash ?? (await this.getDummyPasswordHash()),
+      );
+      if (!user || !isPasswordValid) {
         return {
           success: false,
           error: "Invalid credentials",
@@ -110,18 +126,6 @@ export class AuthService {
         return {
           success: false,
           error: "User account is inactive",
-          data: null,
-        };
-      }
-
-      const isPasswordValid = await bcrypt.compare(
-        credentials.password,
-        user.passwordHash,
-      );
-      if (!isPasswordValid) {
-        return {
-          success: false,
-          error: "Invalid credentials",
           data: null,
         };
       }
