@@ -20,6 +20,8 @@ import {
   SCHEDULED_BOT_TOPICS,
 } from "@/bot/bot.constants";
 
+type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
+
 @Injectable({ scope: Scope.REQUEST })
 export class BotService {
   constructor(
@@ -233,30 +235,11 @@ export class BotService {
       return Failure("Bot not found");
     }
 
-    // Get custom bot data to determine correct topic
-    let topics = null;
-    const configType = botResult.data.config?.type;
-    const configVersion = botResult.data.config?.version;
-    if (configType && configVersion) {
-      const [_, name] = configType.split("/");
-      if (!name?.trim()) {
-        this.logger.warn(
-          { type: configType },
-          "Invalid bot type: missing name after '/'",
-        );
-        return Failure("Invalid bot type: missing name after '/'");
-      }
-      const customBotResult =
-        await this.customBotService.getUserSpecificVersion(
-          uid,
-          name,
-          configVersion,
-        );
-
-      if (customBotResult.success) {
-        topics = this.getTopicsForBotType(customBotResult.data);
-      }
+    const topicsResult = await this.topicsForExistingBot(uid, botResult.data);
+    if (!topicsResult.success) {
+      return Failure(topicsResult.error);
     }
+    const topics = topicsResult.data;
 
     const result = await this.botRepository.remove(uid, id);
 
@@ -268,51 +251,76 @@ export class BotService {
     // not here. The GC periodically sweeps orphaned artifacts after the
     // bot container has fully exited and done its final sync.
 
-    // Check if custom bot version is now orphaned
-    const deleteResult: BotDeleteResult = {};
-    if (botResult.data.customBotId) {
-      const orphanResult = await this.customBotService.checkOrphaned(
-        botResult.data.customBotId,
-      );
-      if (!orphanResult.success) {
-        this.logger.warn(
-          {
-            botId: botResult.data.id,
-            customBotId: botResult.data.customBotId,
-            error: orphanResult.error,
-          },
-          "Failed to check if custom bot version is orphaned",
-        );
-      } else if (orphanResult.data.orphaned) {
-        deleteResult.orphanedVersion = {
-          name: orphanResult.data.name,
-          version: orphanResult.data.version,
-          customBotId: botResult.data.customBotId,
-        };
-      }
-    }
+    const deleteResult = await this.describeOrphanedVersion(botResult.data);
 
     if (topics) {
-      // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-      const eventPayload = {
-        id: botResult.data.id,
-        config: botResult.data.config,
-      };
-
-      // Publish bot deletion event to appropriate runtime service
-      const publishResult = await this.natsService.publish(
+      await this.publishBotEvent(
         topics.DELETED,
-        eventPayload,
+        { id: botResult.data.id, config: botResult.data.config },
+        botResult.data.id,
+        "Failed to publish bot deletion event",
       );
-      if (!publishResult.success) {
-        this.logger.error(
-          { error: publishResult.error, botId: botResult.data.id },
-          "Failed to publish bot deletion event",
-        );
-      }
     }
 
     return Ok(deleteResult);
+  }
+
+  /**
+   * Only a malformed type blocks deletion. A bot with no type/version, or
+   * whose custom bot version is gone, is still deleted, just without an
+   * event (null topics).
+   */
+  private async topicsForExistingBot(
+    uid: string,
+    bot: Bot,
+  ): Promise<Result<BotTopics | null, string>> {
+    const configType = bot.config?.type;
+    const configVersion = bot.config?.version;
+    if (!configType || !configVersion) return Ok(null);
+
+    const [_, name] = configType.split("/");
+    if (!name?.trim()) {
+      this.logger.warn(
+        { type: configType },
+        "Invalid bot type: missing name after '/'",
+      );
+      return Failure("Invalid bot type: missing name after '/'");
+    }
+
+    const customBotResult = await this.customBotService.getUserSpecificVersion(
+      uid,
+      name,
+      configVersion,
+    );
+    if (!customBotResult.success) return Ok(null);
+    return Ok(this.getTopicsForBotType(customBotResult.data));
+  }
+
+  /** A failed orphan check is logged and reported as "not orphaned". */
+  private async describeOrphanedVersion(bot: Bot): Promise<BotDeleteResult> {
+    const deleteResult: BotDeleteResult = {};
+    if (!bot.customBotId) return deleteResult;
+
+    const orphanResult = await this.customBotService.checkOrphaned(
+      bot.customBotId,
+    );
+    if (!orphanResult.success) {
+      this.logger.warn(
+        {
+          botId: bot.id,
+          customBotId: bot.customBotId,
+          error: orphanResult.error,
+        },
+        "Failed to check if custom bot version is orphaned",
+      );
+    } else if (orphanResult.data.orphaned) {
+      deleteResult.orphanedVersion = {
+        name: orphanResult.data.name,
+        version: orphanResult.data.version,
+        customBotId: bot.customBotId,
+      };
+    }
+    return deleteResult;
   }
 
   private async validateBotTypeAndConfig(
@@ -377,7 +385,7 @@ export class BotService {
 
   private getTopicsForBotType(
     customBot: CustomBot,
-  ): { CREATED: string; UPDATED: string; DELETED: string } | null {
+  ): BotTopics | null {
     const botType = customBot.config.type;
 
     if (botType === "realtime") {
