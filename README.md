@@ -36,16 +36,16 @@ Backtesting stays local, next to your research. the0 is where a strategy goes on
 
 ```python
 import ccxt
-from the0 import parse, metric, state, success
+from the0 import metric, state, success
 
-bot_id, config = parse()
-price = ccxt.binance().fetch_ticker(config["symbol"])["last"]
+def main(bot_id, config):
+    price = ccxt.binance().fetch_ticker(config["symbol"])["last"]
 
-runs = state.get("runs", 0) + 1
-state.set("runs", runs)
+    runs = state.get("runs", 0) + 1
+    state.set("runs", runs)
 
-metric("price", {"symbol": config["symbol"], "value": price})
-success(f"Run {runs}: {config['symbol']} at {price}")
+    metric("price", {"symbol": config["symbol"], "value": price})
+    success(f"Run {runs}: {config['symbol']} at {price}")
 ```
 
 Use any exchange client or library you like. Upload the bot once, then start an instance of it on a schedule:
