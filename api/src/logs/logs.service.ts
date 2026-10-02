@@ -234,57 +234,16 @@ export class LogsService {
     entries: LogEntry[],
     skipped: { count: number },
   ): Promise<void> {
-    let stream: NodeJS.ReadableStream;
-    try {
-      stream = await this.minioClient.getObject(this.logBucket, logPath);
-    } catch (error: unknown) {
-      if (LogsService.isNotFoundError(error)) return;
-      throw error;
-    }
+    const stream = await this.openLogStream(logPath);
+    if (!stream) return;
 
     let leftover = "";
     for await (const chunk of stream) {
-      const text = leftover + chunk.toString("utf-8");
-      const lines = text.split("\n");
+      const lines = (leftover + chunk.toString("utf-8")).split("\n");
       leftover = lines.pop() || "";
 
       for (const line of lines) {
-        if (!line.trim()) continue;
-
-        // Filter by type using JSON parsing
-        if (query.type === "metrics") {
-          try {
-            const parsed = JSON.parse(line);
-            if (!parsed._metric) continue;
-          } catch {
-            continue;
-          }
-        }
-
-        // Handle offset
-        if (skipped.count < query.offset) {
-          skipped.count++;
-          continue;
-        }
-
-        const normalized = this.normalizeLine(line, logDate);
-
-        // Filter by datetime window if set
-        if (query.startTime && query.endTime) {
-          const entryTime = normalized.timestamp
-            ? new Date(normalized.timestamp)
-            : null;
-          if (
-            entryTime &&
-            (entryTime < query.startTime || entryTime > query.endTime)
-          ) {
-            continue; // Outside time window
-          }
-          // Lines without timestamps are included (can't filter, don't exclude)
-        }
-
-        entries.push(normalized);
-
+        if (!this.collectLine(line, logDate, query, entries, skipped)) continue;
         if (query.type !== "metrics" && entries.length >= query.limit) {
           (stream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.();
           return;
@@ -292,43 +251,92 @@ export class LogsService {
       }
     }
 
-    // Handle leftover line (content after last newline)
-    if (leftover.trim()) {
-      let includeLeftover = true;
-      if (query.type === "metrics") {
-        try {
-          const parsed = JSON.parse(leftover);
-          if (!parsed._metric) includeLeftover = false;
-        } catch {
-          includeLeftover = false;
-        }
-      }
+    this.collectTrailingLine(leftover, logDate, query, entries, skipped);
+  }
 
-      if (includeLeftover) {
-        if (skipped.count < query.offset) {
-          skipped.count++;
-        } else if (query.type === "metrics" || entries.length < query.limit) {
-          const normalized = this.normalizeLine(leftover, logDate);
-
-          // Filter by datetime window if set
-          if (query.startTime && query.endTime) {
-            const entryTime = normalized.timestamp
-              ? new Date(normalized.timestamp)
-              : null;
-            if (
-              entryTime &&
-              (entryTime < query.startTime || entryTime > query.endTime)
-            ) {
-              // Outside time window - skip
-            } else {
-              entries.push(normalized);
-            }
-          } else {
-            entries.push(normalized);
-          }
-        }
-      }
+  private async openLogStream(
+    logPath: string,
+  ): Promise<NodeJS.ReadableStream | null> {
+    try {
+      return await this.minioClient.getObject(this.logBucket, logPath);
+    } catch (error: unknown) {
+      if (LogsService.isNotFoundError(error)) return null;
+      throw error;
     }
+  }
+
+  /** @returns true when the line was appended to `entries`. */
+  private collectLine(
+    line: string,
+    logDate: string,
+    query: LogsQuery,
+    entries: LogEntry[],
+    skipped: { count: number },
+  ): boolean {
+    if (!this.passesLineFilters(line, query, skipped)) return false;
+    const normalized = this.normalizeLine(line, logDate);
+    if (LogsService.isOutsideTimeWindow(normalized, query)) return false;
+    entries.push(normalized);
+    return true;
+  }
+
+  /**
+   * Complete lines stop the stream once a raw-log read reaches its limit;
+   * the content after the last newline has no stream left to stop, so the
+   * limit is checked before taking it instead.
+   */
+  private collectTrailingLine(
+    leftover: string,
+    logDate: string,
+    query: LogsQuery,
+    entries: LogEntry[],
+    skipped: { count: number },
+  ): void {
+    if (!this.passesLineFilters(leftover, query, skipped)) return;
+    if (query.type !== "metrics" && entries.length >= query.limit) return;
+    const normalized = this.normalizeLine(leftover, logDate);
+    if (LogsService.isOutsideTimeWindow(normalized, query)) return;
+    entries.push(normalized);
+  }
+
+  /** Not a pure check: a line skipped for the offset is consumed here. */
+  private passesLineFilters(
+    line: string,
+    query: LogsQuery,
+    skipped: { count: number },
+  ): boolean {
+    if (!line.trim()) return false;
+    if (query.type === "metrics" && !LogsService.isMetricLine(line)) {
+      return false;
+    }
+    if (skipped.count < query.offset) {
+      skipped.count++;
+      return false;
+    }
+    return true;
+  }
+
+  /** Metric detection parses JSON instead of string-matching "_metric",
+   *  which also appears in ordinary log messages. */
+  private static isMetricLine(line: string): boolean {
+    try {
+      return Boolean(JSON.parse(line)._metric);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Lines without a timestamp are kept: they cannot be placed in the window. */
+  private static isOutsideTimeWindow(
+    entry: LogEntry,
+    query: LogsQuery,
+  ): boolean {
+    if (!query.startTime || !query.endTime) return false;
+    const entryTime = entry.timestamp ? new Date(entry.timestamp) : null;
+    return (
+      entryTime !== null &&
+      (entryTime < query.startTime || entryTime > query.endTime)
+    );
   }
 
   /** @returns true when the file was larger than the tail window, i.e. the
@@ -379,21 +387,7 @@ export class LogsService {
     for (const line of lines) {
       if (!line.trim()) continue;
       const normalized = this.normalizeLine(line, logDate);
-
-      // Filter by datetime window if set
-      if (query.startTime && query.endTime) {
-        const entryTime = normalized.timestamp
-          ? new Date(normalized.timestamp)
-          : null;
-        if (
-          entryTime &&
-          (entryTime < query.startTime || entryTime > query.endTime)
-        ) {
-          continue; // Outside time window
-        }
-        // Lines without timestamps are included (can't filter, don't exclude)
-      }
-
+      if (LogsService.isOutsideTimeWindow(normalized, query)) continue;
       entries.push(normalized);
     }
 

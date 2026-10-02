@@ -403,6 +403,74 @@ describe("LogsService", () => {
       expect(result.data!.entries[0].content).toContain("d1-l2");
       expect(result.data!.entries[1].content).toContain("d2-l1");
     });
+    it("should skip blank lines on the stream path", async () => {
+      const content = '{"msg":"a"}\n\n   \n{"msg":"b"}\n';
+
+      mockMinioClient.getObject
+        .mockResolvedValueOnce(stringStream(content))
+        .mockResolvedValueOnce(stringStream(""));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 100,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        '{"msg":"a"}',
+        '{"msg":"b"}',
+      ]);
+    });
+
+    it("should count a trailing line without a newline toward the offset", async () => {
+      const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
+      const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
+
+      mockMinioClient.getObject
+        .mockResolvedValueOnce(stringStream(day1))
+        .mockResolvedValueOnce(stringStream(day2));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 10,
+        offset: 2,
+        sort: "asc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        '{"msg":"d2-l1"}',
+        '{"msg":"d2-l2"}',
+      ]);
+    });
+
+    it("should stop reading older days once the desc read cap is reached", async () => {
+      const day1 = Array.from(
+        { length: 10000 },
+        (_, i) => `{"msg":"d1-${i}"}`,
+      ).join("\n");
+
+      mockMinioClient.getObject
+        .mockResolvedValueOnce(stringStream(day1 + "\n"))
+        .mockResolvedValueOnce(stringStream('{"msg":"d2-0"}\n'));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 2,
+        offset: 0,
+        sort: "desc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockMinioClient.getObject).toHaveBeenCalledTimes(1);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        '{"msg":"d1-9999"}',
+        '{"msg":"d1-9998"}',
+      ]);
+      expect(result.data!.hasMore).toBe(true);
+    });
   });
 
   describe("getLogs - JSON-based metrics filtering", () => {
@@ -965,6 +1033,28 @@ describe("LogsService", () => {
       );
     });
 
+    it("should include a trailing line without a timestamp when filtering by datetime", async () => {
+      const lines = [
+        '{"timestamp":"2026-04-03T10:15:00Z","message":"in range"}',
+        "plain trailing line",
+      ].join("\n");
+
+      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
+        limit: 100,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries.map((e) => e.content)).toEqual([
+        "in range",
+        "plain trailing line",
+      ]);
+    });
+
     it("should use tail path for single-date datetime range and filter by time", async () => {
       // When the datetime range spans a single day, it should use the tail path
       // but still apply time filtering
@@ -1500,6 +1590,22 @@ describe("LogsService", () => {
       expect(result.error).toContain("not found");
     });
 
+    it("should check ownership against an explicit userId", async () => {
+      mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
+
+      const result = await service.getLogs(
+        "bot-1",
+        { date: "20260401", limit: 100, offset: 0 },
+        "other-user",
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockBotService.findOneByUserId).toHaveBeenCalledWith(
+        "other-user",
+        "bot-1",
+      );
+    });
+
     it("should return failure for invalid date format", async () => {
       const result = await service.getLogs("bot-1", {
         date: "not-a-date",
@@ -1509,6 +1615,62 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Invalid date");
+    });
+  });
+
+  describe("getLogs - storage failures", () => {
+    const failure = () =>
+      Object.assign(new Error("access denied"), { code: "AccessDenied" });
+
+    it("should report a failure when tailing a log file fails", async () => {
+      const error = failure();
+      mockMinioClient.statObject.mockRejectedValue(error);
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result).toEqual(Failure("Failed to fetch logs: access denied"));
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: error },
+        "Error fetching logs",
+      );
+    });
+
+    it("should report a failure when streaming a log file fails", async () => {
+      const error = failure();
+      mockMinioClient.getObject.mockRejectedValue(error);
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result).toEqual(Failure("Failed to fetch logs: access denied"));
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: error },
+        "Error fetching logs",
+      );
+    });
+
+    it("should report a failure when a latest-mode read fails", async () => {
+      const error = failure();
+      mockMinioClient.statObject.mockRejectedValue(error);
+
+      const result = await service.getLogs("bot-1", {
+        lookbackDays: 3,
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result).toEqual(Failure("Failed to fetch logs: access denied"));
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: error },
+        "Error fetching latest logs",
+      );
     });
   });
 });
