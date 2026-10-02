@@ -9,7 +9,9 @@ import {
   CustomBotsProvider,
   useCustomBotsContext,
 } from "@/contexts/custom-bots-context";
-import { CustomBotListPanel } from "@/components/custom-bots/custom-bot-list-panel";
+import { BotListPanel } from "@/components/bot-list/bot-list";
+import { CustomBotListItem } from "@/components/custom-bots/custom-bot-list-item";
+import { useCustomBotFilters } from "@/hooks/use-custom-bot-filters";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 function CustomBotsInner({ children }: { children: ReactNode }) {
@@ -41,11 +43,21 @@ function CustomBotsInner({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-[calc(100vh-3rem)]">
         <aside className="w-[220px] border-r flex-shrink-0">
-          <CustomBotListPanel
+          <BotListPanel
+            title="Custom Bots"
+            emptyCopy="No custom bots yet"
+            filterLabel="Filter custom bots"
             bots={bots}
-            activeBotName={activeBotName}
-            onSelectBot={handleSelectBot}
+            useFilters={useCustomBotFilters}
             className="h-full"
+            renderItem={(bot) => (
+              <CustomBotListItem
+                key={bot.id}
+                bot={bot}
+                isActive={bot.name === activeBotName}
+                onClick={() => handleSelectBot(bot.name)}
+              />
+            )}
           />
         </aside>
         <main className="flex-1 overflow-auto">{children}</main>

@@ -9,7 +9,9 @@ import {
   DashboardBotsProvider,
   useDashboardBots,
 } from "@/contexts/dashboard-bots-context";
-import { BotListPanel } from "@/components/dashboard/bot-list-panel";
+import { BotListPanel } from "@/components/bot-list/bot-list";
+import { BotListItem } from "@/components/dashboard/bot-list-item";
+import { useBotFilters } from "@/hooks/use-bot-filters";
 import { ResizableSidebarLayout } from "@/components/dashboard/resizable-sidebar-layout";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
@@ -43,10 +45,20 @@ function DashboardInner({ children }: { children: ReactNode }) {
         <ResizableSidebarLayout
           sidebar={
             <BotListPanel
+              title="Bots"
+              emptyCopy="No bots yet"
+              filterLabel="Filter bots"
               bots={bots}
-              activeBotId={activeBotId}
-              onSelectBot={handleSelectBot}
+              useFilters={useBotFilters}
               className="h-full"
+              renderItem={(bot) => (
+                <BotListItem
+                  key={bot.id}
+                  bot={bot}
+                  isActive={bot.id === activeBotId}
+                  onClick={() => handleSelectBot(bot.id)}
+                />
+              )}
             />
           }
         >

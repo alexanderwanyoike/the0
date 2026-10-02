@@ -6,10 +6,9 @@ import { useDashboardBots } from "@/contexts/dashboard-bots-context";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useBotFilters } from "@/hooks/use-bot-filters";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { BotFilterDropdown } from "@/components/dashboard/bot-filter-dropdown";
+import { MobileBotCard, MobileBotList } from "@/components/bot-list/bot-list";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
-import { AlertTriangle, Bot, Clock, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Bot, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import cronstrue from "cronstrue";
@@ -65,117 +64,78 @@ export default function DashboardPage() {
     return <EmptyState />;
   }
 
-  return <MobileBotList bots={bots} />;
+  return <DashboardBotList bots={bots} />;
 }
 
-function MobileBotList({ bots }: { bots: ApiBotType[] }) {
-  const {
-    search,
-    setSearch,
-    type,
-    setType,
-    status,
-    setStatus,
-    hasActiveFilters,
-    activeCount,
-    filterBots,
-  } = useBotFilters();
+const botHref = (bot: ApiBotType) => `/dashboard/${bot.id}`;
+
+function DashboardBotList({ bots }: { bots: ApiBotType[] }) {
   const router = useRouter();
 
-  const filtered = filterBots(bots);
+  return (
+    <MobileBotList
+      title="Trading Bots"
+      bots={bots}
+      useFilters={useBotFilters}
+      filterLabel="Filter bots"
+      renderItem={(bot) => (
+        <DashboardBotCard
+          key={bot.id}
+          bot={bot}
+          onClick={() => router.push(botHref(bot))}
+        />
+      )}
+    />
+  );
+}
+
+function readableSchedule(schedule: string | undefined) {
+  if (!schedule) return "Real-time";
+  try {
+    return cronstrue.toString(schedule);
+  } catch {
+    return schedule;
+  }
+}
+
+function DashboardBotCard({
+  bot,
+  onClick,
+}: {
+  bot: ApiBotType;
+  onClick: () => void;
+}) {
+  const config = bot.config as Record<string, any>;
+  const name = config?.name || bot.id;
+  const symbol = config?.symbol || "";
+  const botType = config?.type || "Bot";
+  const enabled = config?.enabled ?? true;
 
   return (
-    <div className="px-3 py-4">
-      <div className="mb-4">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          Trading Bots
-        </h2>
-        <p className="text-xl font-semibold">
-          {hasActiveFilters
-            ? `${filtered.length} / ${bots.length} bots`
-            : `${bots.length} ${bots.length === 1 ? "bot" : "bots"}`}
-        </p>
-      </div>
-      <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            aria-label="Filter bots"
-            placeholder="Filter bots..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
+    <MobileBotCard
+      statusColor={enabled ? "bg-green-500" : "bg-gray-400"}
+      onClick={onClick}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{name}</p>
+        <div className="flex items-center gap-2 mt-1">
+          {symbol && (
+            <Badge variant="secondary" className="text-xs font-mono">
+              {symbol}
+            </Badge>
+          )}
+          <Badge variant="outline" className="text-xs">
+            {botType}
+          </Badge>
         </div>
-        <BotFilterDropdown
-          type={type}
-          setType={setType}
-          status={status}
-          setStatus={setStatus}
-          activeCount={activeCount}
-        />
       </div>
-      <div className="space-y-2">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Bot className="h-8 w-8 mb-2" />
-            <p className="text-sm">No matching bots</p>
-          </div>
-        ) : (
-          filtered.map((bot) => {
-            const config = bot.config as Record<string, any>;
-            const name = config?.name || bot.id;
-            const symbol = config?.symbol || "";
-            const botType = config?.type || "Bot";
-            const schedule = config?.schedule;
-            const enabled = config?.enabled ?? true;
-
-            let readableSchedule = "Real-time";
-            if (schedule) {
-              try {
-                readableSchedule = cronstrue.toString(schedule);
-              } catch {
-                readableSchedule = schedule;
-              }
-            }
-
-            return (
-              <button
-                key={bot.id}
-                onClick={() => router.push(`/dashboard/${bot.id}`)}
-                className="w-full text-left p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${enabled ? "bg-green-500" : "bg-gray-400"}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {symbol && (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-mono"
-                        >
-                          {symbol}
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="text-xs">
-                        {botType}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                    <Clock className="h-3 w-3" />
-                    <span className="hidden sm:inline">{readableSchedule}</span>
-                  </div>
-                </div>
-              </button>
-            );
-          })
-        )}
+      <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+        <Clock className="h-3 w-3" />
+        <span className="hidden sm:inline">
+          {readableSchedule(config?.schedule)}
+        </span>
       </div>
-    </div>
+    </MobileBotCard>
   );
 }
 
