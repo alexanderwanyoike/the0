@@ -8,14 +8,17 @@ import { IntervalPicker } from "@/components/bot/interval-picker";
 import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { MobileBotDetail } from "./mobile-bot-detail";
-import { CliUpdateDialog } from "./bot-detail/cli-update-dialog";
 import {
   BotConfigCard,
   BotDetailHeader,
   BotDetailsCard,
+  CliUpdateDialog,
 } from "./bot-detail/bot-detail-sections";
-import { useBotDetailLogs } from "./bot-detail/use-bot-detail-logs";
-import { DetailBot, useOwnedBot } from "./bot-detail/use-owned-bot";
+import {
+  DetailBot,
+  useBotDetailLogs,
+  useOwnedBot,
+} from "./bot-detail/use-bot-detail";
 
 interface BotDetailPanelProps {
   botId: string;

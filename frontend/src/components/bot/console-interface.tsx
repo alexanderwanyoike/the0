@@ -10,7 +10,7 @@ import { SmartLogEntry } from "./console/log-entries";
 import { ConsoleFilterPanel, ConsoleToolbar } from "./console/console-toolbar";
 import { useConsoleFilters } from "./console/use-console-filters";
 
-export { ConnectionStatusIndicator } from "./console/connection-status-indicator";
+export { ConnectionStatusIndicator } from "./console/console-toolbar";
 
 interface ConsoleInterfaceProps {
   botId: string;

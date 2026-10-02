@@ -33,12 +33,13 @@ import {
   toDisplayOrder,
 } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
-import { fetchLogsPage, LogsPage } from "./bot-logs/fetch-logs-page";
 import {
+  fetchLogsPage,
+  LogsPage,
   useAutoRefreshPolling,
+  useLiveLogStream,
   useLogPolling,
-} from "./bot-logs/use-log-polling";
-import { useLiveLogStream } from "./bot-logs/use-live-log-stream";
+} from "./bot-logs/log-transport";
 
 interface UseBotLogsProps {
   botId: string;
