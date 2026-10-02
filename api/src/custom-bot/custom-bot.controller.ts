@@ -37,6 +37,44 @@ export class CustomBotController {
     private readonly storageService: StorageService,
   ) {}
 
+  private async parseDeployRequest(
+    name: string,
+    body: CustomBotDeployDto,
+    userId: string,
+  ): Promise<{ filePath: string; config: CustomBotConfig }> {
+    const filePath = this.validateFilePath(body.filePath, userId);
+
+    const fileExistsResult = await this.storageService.fileExists(filePath);
+    if (!fileExistsResult.success) {
+      throw new BadRequestException(
+        `File validation failed: ${fileExistsResult.error}`,
+      );
+    }
+
+    if (!fileExistsResult.data) {
+      throw new BadRequestException("File not found at specified file path");
+    }
+
+    if (!body.config) {
+      throw new BadRequestException("Config field is required");
+    }
+
+    let config: CustomBotConfig;
+    try {
+      config = JSON.parse(body.config);
+    } catch (error) {
+      throw new BadRequestException("Config must be valid JSON");
+    }
+
+    if (config.name !== name) {
+      throw new BadRequestException(
+        "Bot name in config must match URL parameter",
+      );
+    }
+
+    return { filePath, config };
+  }
+
   private validateFilePath(filePath: unknown, userId: string): string {
     if (typeof filePath !== "string") {
       throw new BadRequestException("filePath must be a string");
@@ -111,35 +149,11 @@ export class CustomBotController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user.uid;
-    const filePath = this.validateFilePath(body.filePath, userId);
-
-    const fileExistsResult = await this.storageService.fileExists(filePath);
-    if (!fileExistsResult.success) {
-      throw new BadRequestException(
-        `File validation failed: ${fileExistsResult.error}`,
-      );
-    }
-
-    if (!fileExistsResult.data) {
-      throw new BadRequestException("File not found at specified file path");
-    }
-
-    if (!body.config) {
-      throw new BadRequestException("Config field is required");
-    }
-
-    let config: CustomBotConfig;
-    try {
-      config = JSON.parse(body.config);
-    } catch (error) {
-      throw new BadRequestException("Config must be valid JSON");
-    }
-
-    if (config.name !== name) {
-      throw new BadRequestException(
-        "Bot name in config must match URL parameter",
-      );
-    }
+    const { filePath, config } = await this.parseDeployRequest(
+      name,
+      body,
+      userId,
+    );
 
     const result = await this.customBotService.createCustomBot(
       userId,
@@ -166,35 +180,11 @@ export class CustomBotController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user.uid;
-    const filePath = this.validateFilePath(body.filePath, userId);
-
-    const fileExistsResult = await this.storageService.fileExists(filePath);
-    if (!fileExistsResult.success) {
-      throw new BadRequestException(
-        `File validation failed: ${fileExistsResult.error}`,
-      );
-    }
-
-    if (!fileExistsResult.data) {
-      throw new BadRequestException("File not found at specified file path");
-    }
-
-    if (!body.config) {
-      throw new BadRequestException("Config field is required");
-    }
-
-    let config: CustomBotConfig;
-    try {
-      config = JSON.parse(body.config);
-    } catch (error) {
-      throw new BadRequestException("Config must be valid JSON");
-    }
-
-    if (config.name !== name) {
-      throw new BadRequestException(
-        "Bot name in config must match URL parameter",
-      );
-    }
+    const { filePath, config } = await this.parseDeployRequest(
+      name,
+      body,
+      userId,
+    );
 
     const result = await this.customBotService.updateCustomBot(
       userId,

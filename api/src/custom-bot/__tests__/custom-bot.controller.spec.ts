@@ -350,6 +350,71 @@ describe("CustomBotController", () => {
     });
   });
 
+  describe.each(["createCustomBot", "updateCustomBot"] as const)(
+    "%s deploy request validation",
+    (method) => {
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const fileFound = Ok<boolean, string>(true);
+
+      it.each([
+        [
+          "the file lookup fails",
+          Failure<boolean, string>("GCS error"),
+          JSON.stringify(validConfig),
+          "File validation failed: GCS error",
+        ],
+        [
+          "the file is missing",
+          Ok<boolean, string>(false),
+          JSON.stringify(validConfig),
+          "File not found at specified file path",
+        ],
+        ["config is empty", fileFound, "", "Config field is required"],
+        [
+          "config is not JSON",
+          fileFound,
+          "invalid json",
+          "Config must be valid JSON",
+        ],
+        [
+          "config names another bot",
+          fileFound,
+          JSON.stringify({ ...validConfig, name: "other-bot" }),
+          "Bot name in config must match URL parameter",
+        ],
+      ])(
+        "should reject the request when %s",
+        async (_case, exists, config, message) => {
+          mockStorageService.fileExists.mockResolvedValue(exists);
+
+          await expect(
+            controller[method]("test-bot", { filePath, config }, mockUser),
+          ).rejects.toThrow(new BadRequestException(message));
+          expect(mockService[method]).not.toHaveBeenCalled();
+        },
+      );
+
+      it("should pass the parsed config and checked file path to the service", async () => {
+        mockStorageService.fileExists.mockResolvedValue(fileFound);
+        mockService[method].mockResolvedValue(Ok({}));
+
+        await controller[method](
+          "test-bot",
+          { filePath, config: JSON.stringify(validConfig) },
+          mockUser,
+        );
+
+        expect(mockStorageService.fileExists).toHaveBeenCalledWith(filePath);
+        expect(mockService[method]).toHaveBeenCalledWith(
+          "user123",
+          ...(method === "updateCustomBot" ? ["test-bot"] : []),
+          validConfig,
+          filePath,
+        );
+      });
+    },
+  );
+
   describe("getUserCustomBots", () => {
     it("should get user custom bots successfully", async () => {
       const mockUserBots: CustomBotWithVersions[] = [
