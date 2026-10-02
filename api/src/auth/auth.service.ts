@@ -1,6 +1,12 @@
-import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import {
+  Injectable,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
+import { hashPassword } from "@/common/password";
 import { isConnectionError } from "@/common/database-errors";
 import { Failure, Result } from "../common/result";
 import { UserRole } from "@/user/user.constants";
@@ -25,11 +31,23 @@ interface JwtPayload {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
+  // Login compares unknown emails against this hash of random bytes, so an
+  // attempt takes as long whether or not the account exists and the response
+  // time does not reveal which emails are registered. It is built at startup,
+  // with the configured cost, so even the first attempt costs one comparison.
+  private dummyPasswordHash: string;
+
   constructor(
     private jwtService: JwtService,
     private readonly users: UserRepository,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    this.dummyPasswordHash = await hashPassword(
+      randomBytes(32).toString("hex"),
+    );
+  }
 
   private signUser(user: UserRecord): { token: string; user: AuthUser } {
     const authUser = toAuthUser(user);
@@ -98,7 +116,13 @@ export class AuthService {
     try {
       const user = await this.users.findByEmail(credentials.email);
 
-      if (!user) {
+      // The password is checked before anything else about the account, so
+      // only a caller who knows it learns whether the account is inactive.
+      const isPasswordValid = await bcrypt.compare(
+        credentials.password,
+        user?.passwordHash ?? this.dummyPasswordHash,
+      );
+      if (!user || !isPasswordValid) {
         return {
           success: false,
           error: "Invalid credentials",
@@ -110,18 +134,6 @@ export class AuthService {
         return {
           success: false,
           error: "User account is inactive",
-          data: null,
-        };
-      }
-
-      const isPasswordValid = await bcrypt.compare(
-        credentials.password,
-        user.passwordHash,
-      );
-      if (!isPasswordValid) {
-        return {
-          success: false,
-          error: "Invalid credentials",
           data: null,
         };
       }
