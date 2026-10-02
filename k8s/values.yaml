@@ -151,6 +151,9 @@ the0Api:
     # a Secret reference; the API fails startup when either value is missing.
     # THE0_ADMIN_EMAIL: "admin@example.com"
     RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
+    # Swagger UI at /docs and the OpenAPI spec at /docs-json. On by default
+    # unless NODE_ENV is "production"; there, set "true" to opt in.
+    # SWAGGER_ENABLED: "true"
     # Database pool lifecycle (prevents stale connections)
     DB_POOL_MAX: "10"
     DB_POOL_IDLE_TIMEOUT: "20"

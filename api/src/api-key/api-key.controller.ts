@@ -16,17 +16,26 @@ import { AuthGuard } from "@nestjs/passport";
 import { ApiKeyCreatedResponseDto } from "@/api-key/dto/api-key-created-response.dto";
 import { ApiKeyResponseDto } from "@/api-key/dto/api-key-response.dto"; // Assuming you have JWT auth
 import { AuthenticatedRequest } from "@/auth/auth.types";
+import {
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from "@nestjs/swagger";
+import { ApiJwtAuth } from "@/swagger/api-auth.decorators";
 
+@ApiTags("api-keys")
+@ApiJwtAuth()
 @Controller("api-keys")
 @UseGuards(AuthGuard())
 export class ApiKeyController {
   constructor(private readonly apiKeyService: ApiKeyService) {}
 
-  /**
-   * Create a new API key
-   * POST /api-keys
-   */
   @Post()
+  @ApiOperation({
+    summary: "Create an API key",
+    description: "The full key is only returned in this response.",
+  })
   async createApiKey(
     @Request() req: AuthenticatedRequest,
     @Body() createApiKeyDto: CreateApiKeyDto,
@@ -52,11 +61,8 @@ export class ApiKeyController {
     return result.data;
   }
 
-  /**
-   * Get all API keys for the authenticated user
-   * GET /api-keys
-   */
   @Get()
+  @ApiOperation({ summary: "List your API keys" })
   async getApiKeys(
     @Request() req: AuthenticatedRequest,
   ): Promise<ApiKeyResponseDto[]> {
@@ -82,11 +88,10 @@ export class ApiKeyController {
     return result.data;
   }
 
-  /**
-   * Get a specific API key by ID
-   * GET /api-keys/:id
-   */
   @Get(":id")
+  @ApiOperation({ summary: "Get an API key" })
+  @ApiParam({ name: "id", description: "API key ID" })
+  @ApiNotFoundResponse({ description: "API key not found" })
   async getApiKeyById(
     @Request() req: AuthenticatedRequest,
     @Param("id") keyId: string,
@@ -116,11 +121,10 @@ export class ApiKeyController {
     return result.data;
   }
 
-  /**
-   * Delete (deactivate) an API key
-   * DELETE /api-keys/:id
-   */
   @Delete(":id")
+  @ApiOperation({ summary: "Delete (deactivate) an API key" })
+  @ApiParam({ name: "id", description: "API key ID" })
+  @ApiNotFoundResponse({ description: "API key not found" })
   async deleteApiKey(
     @Request() req: AuthenticatedRequest,
     @Param("id") keyId: string,
@@ -150,11 +154,8 @@ export class ApiKeyController {
     return { message: "API key deleted successfully" };
   }
 
-  /**
-   * Get API key statistics
-   * GET /api-keys/stats
-   */
   @Get("stats/summary")
+  @ApiOperation({ summary: "Count your total and active API keys" })
   async getApiKeyStats(
     @Request() req: AuthenticatedRequest,
   ): Promise<{ total: number; active: number }> {
