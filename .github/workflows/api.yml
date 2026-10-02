@@ -53,11 +53,9 @@ jobs:
     - name: ESLint report (non-blocking)
       working-directory: ./api
       continue-on-error: true
-      run: |
-        { echo '### api: ESLint'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-        yarn -s eslint "{src,apps,libs,test}/**/*.ts" --no-color >> "$GITHUB_STEP_SUMMARY" 2>&1 || status=$?
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        exit "${status:-0}"
+      run: >-
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "api: ESLint"
+        yarn -s eslint "{src,apps,libs,test}/**/*.ts" --no-color
 
   build-and-push:
     needs: test
