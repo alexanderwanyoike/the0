@@ -12,10 +12,13 @@
   // Referenced by name, not imported: pino-pretty is a pino transport target,
   // @nestjs/schematics is the nest-cli.json collection, and
   // eslint-config-prettier is a peer of eslint-plugin-prettier's recommended
-  // config.
+  // config. multer is what @nestjs/platform-express's FileInterceptor runs
+  // on; it stays a direct dependency beside its security resolution so the
+  // patched version is explicit rather than implied.
   "ignoreDependencies": [
     "pino-pretty",
     "@nestjs/schematics",
-    "eslint-config-prettier"
+    "eslint-config-prettier",
+    "multer"
   ]
 }
