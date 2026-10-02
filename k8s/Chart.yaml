@@ -31,7 +31,7 @@ annotations:
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
     - kind: added
-      description: Swagger UI at /docs and the OpenAPI spec at /docs-json for the api - on by default outside production, opt in with SWAGGER_ENABLED=true when NODE_ENV=production
+      description: Swagger UI at /docs and the OpenAPI spec at /docs-json for the api - off by default in this chart, set the0Api.env.SWAGGER_ENABLED to "true" to serve them
     - kind: security
       description: Login no longer reveals whether an account exists or is inactive - the password is checked first, and unknown emails cost the same bcrypt comparison
     - kind: security
