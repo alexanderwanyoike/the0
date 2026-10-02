@@ -400,3 +400,48 @@ func TestQueryHandler_EntrypointFilesCopied(t *testing.T) {
 	assert.Equal(t, "main.py", capturedExec.EntrypointFiles["bot"])
 	assert.NotEmpty(t, capturedExec.QueryResultKey)
 }
+
+func TestQueryHandler_FailedScheduledQuery(t *testing.T) {
+	executable := model.Executable{
+		ID:              "test-bot",
+		Runtime:         "python3.11",
+		Entrypoint:      "bot",
+		EntrypointFiles: map[string]string{"bot": "main.py", "query": "query.py"},
+	}
+	failingRunner := &mockDockerRunner{
+		startContainerFunc: func(ctx context.Context, exec model.Executable) (*ExecutionResult, error) {
+			return &ExecutionResult{Status: "error", Output: "runtime log noise", ExitCode: 1}, nil
+		},
+	}
+
+	t.Run("returns the bot's own error and its available paths", func(t *testing.T) {
+		resultManager := &mockQueryResultManager{
+			downloadFunc: func(ctx context.Context, key string) ([]byte, error) {
+				return []byte(`{"status":"error","error":"No handler for path: /status","available":["/today","/history"]}`), nil
+			},
+		}
+		handler := NewQueryHandler(QueryHandlerConfig{Runner: failingRunner, ResultManager: resultManager, Logger: &util.DefaultLogger{}})
+
+		response, err := handler.ExecuteQuery(context.Background(), query.Request{BotID: "test-bot", QueryPath: "/status"}, executable, "")
+		require.NoError(t, err)
+
+		assert.Equal(t, "error", response.Status)
+		assert.Equal(t, "No handler for path: /status (available: /today, /history)", response.Error)
+		assert.Equal(t, resultManager.downloadKey, resultManager.deleteKey)
+	})
+
+	t.Run("reports the exit code and output when the bot wrote no result", func(t *testing.T) {
+		resultManager := &mockQueryResultManager{
+			downloadFunc: func(ctx context.Context, key string) ([]byte, error) {
+				return nil, assert.AnError
+			},
+		}
+		handler := NewQueryHandler(QueryHandlerConfig{Runner: failingRunner, ResultManager: resultManager, Logger: &util.DefaultLogger{}})
+
+		response, err := handler.ExecuteQuery(context.Background(), query.Request{BotID: "test-bot", QueryPath: "/status"}, executable, "")
+		require.NoError(t, err)
+
+		assert.Equal(t, "error", response.Status)
+		assert.Equal(t, "query container exited with code 1: runtime log noise", response.Error)
+	})
+}
