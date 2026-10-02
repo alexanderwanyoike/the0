@@ -1,7 +1,8 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ConsoleInterface, LogEntry } from "../console-interface";
+import { ConsoleInterface } from "../console-interface";
+import type { LogEntry } from "@/types/logs";
 
 jest.mock("react-virtuoso", () => ({
   Virtuoso: React.forwardRef(
