@@ -83,58 +83,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Ok([]);
       }
 
-      // Group bots by name
-      const botsByName = new Map<string, CustomBot[]>();
-      for (const bot of result.data) {
-        if (!botsByName.has(bot.name)) {
-          botsByName.set(bot.name, []);
-        }
-        botsByName.get(bot.name)!.push(bot);
-      }
-
-      // Transform each group to CustomBotWithVersions
-      const customBotsWithVersions: CustomBotWithVersions[] = [];
-
-      for (const [botName, bots] of botsByName) {
-        // Sort by creation date descending (latest first)
-        bots.sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        );
-
-        const latestBot = bots[0];
-
-        const versions: CustomBotVersion[] = bots.map((bot) => ({
-          id: bot.id,
-          version: bot.version,
-          config: bot.config,
-          userId: bot.userId,
-          filePath: bot.filePath,
-          status: bot.status,
-          createdAt: bot.createdAt,
-          updatedAt: bot.updatedAt,
-        }));
-
-        const customBotWithVersions: CustomBotWithVersions = {
-          id: latestBot.id,
-          name: latestBot.name,
-          userId: latestBot.userId,
-          latestVersion: latestBot.version,
-          versions,
-          createdAt: bots[bots.length - 1].createdAt, // First created
-          updatedAt: latestBot.updatedAt, // Latest updated
-        };
-
-        customBotsWithVersions.push(customBotWithVersions);
-      }
-
-      // Sort by latest update time descending
-      customBotsWithVersions.sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
-
-      return Ok(customBotsWithVersions);
+      return Ok(groupByName(result.data));
     } catch (error: unknown) {
       return Failure(errorMessage(error));
     }
@@ -154,31 +103,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Failure("Bot not found");
       }
 
-      const bots = result.data;
-      const latestBot = bots[0]; // Already ordered by createdAt desc
-
-      const versions: CustomBotVersion[] = bots.map((bot) => ({
-        id: bot.id,
-        version: bot.version,
-        config: bot.config,
-        userId: bot.userId,
-        filePath: bot.filePath,
-        status: bot.status,
-        createdAt: bot.createdAt,
-        updatedAt: bot.updatedAt,
-      }));
-
-      const customBotWithVersions: CustomBotWithVersions = {
-        id: latestBot.id,
-        name: latestBot.name,
-        userId: latestBot.userId,
-        latestVersion: latestBot.version,
-        versions,
-        createdAt: bots[bots.length - 1].createdAt, // First created
-        updatedAt: latestBot.updatedAt, // Latest updated
-      };
-
-      return Ok(customBotWithVersions);
+      // findByKey already orders by createdAt desc.
+      return Ok(toBotWithVersions(result.data));
     } catch (error: unknown) {
       return Failure(errorMessage(error));
     }
@@ -197,31 +123,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Failure("Bot not found");
       }
 
-      const bots = result.data;
-      const latestBot = bots[0]; // Already ordered by createdAt desc
-
-      const versions: CustomBotVersion[] = bots.map((bot) => ({
-        id: bot.id,
-        version: bot.version,
-        config: bot.config,
-        userId: bot.userId,
-        filePath: bot.filePath,
-        status: bot.status,
-        createdAt: bot.createdAt,
-        updatedAt: bot.updatedAt,
-      }));
-
-      const customBotWithVersions: CustomBotWithVersions = {
-        id: latestBot.id,
-        name: latestBot.name,
-        userId: latestBot.userId,
-        latestVersion: latestBot.version,
-        versions,
-        createdAt: bots[bots.length - 1].createdAt, // First created
-        updatedAt: latestBot.updatedAt, // Latest updated
-      };
-
-      return Ok(customBotWithVersions);
+      // findGlobalByKey already orders by createdAt desc.
+      return Ok(toBotWithVersions(result.data));
     } catch (error: unknown) {
       return Failure(errorMessage(error));
     }
@@ -326,7 +229,10 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       await this.db
         .delete(this.table)
         .where(
-          and(eq(this.table.userId, userId), eq(this.table[this.keyField], name)),
+          and(
+            eq(this.table.userId, userId),
+            eq(this.table[this.keyField], name),
+          ),
         );
 
       return Ok(null);
@@ -349,61 +255,64 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Ok([]);
       }
 
-      // Group bots by name
-      const botsByName = new Map<string, CustomBot[]>();
-      for (const record of records) {
-        const bot = this.transformRecordToData(record);
-        if (!botsByName.has(bot.name)) {
-          botsByName.set(bot.name, []);
-        }
-        botsByName.get(bot.name)!.push(bot);
-      }
-
-      // Transform each group to CustomBotWithVersions
-      const customBotsWithVersions: CustomBotWithVersions[] = [];
-
-      for (const [, bots] of botsByName) {
-        // Sort by creation date descending (latest first)
-        bots.sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        );
-
-        const latestBot = bots[0];
-
-        const versions: CustomBotVersion[] = bots.map((bot) => ({
-          id: bot.id,
-          version: bot.version,
-          config: bot.config,
-          userId: bot.userId,
-          filePath: bot.filePath,
-          status: bot.status,
-          createdAt: bot.createdAt,
-          updatedAt: bot.updatedAt,
-        }));
-
-        const customBotWithVersions: CustomBotWithVersions = {
-          id: latestBot.id,
-          name: latestBot.name,
-          userId: latestBot.userId,
-          latestVersion: latestBot.version,
-          versions,
-          createdAt: bots[bots.length - 1].createdAt, // First created
-          updatedAt: latestBot.updatedAt, // Latest updated
-        };
-
-        customBotsWithVersions.push(customBotWithVersions);
-      }
-
-      // Sort by latest update time descending
-      customBotsWithVersions.sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      return Ok(
+        groupByName(
+          records.map((record: Record<string, unknown>) =>
+            this.transformRecordToData(record),
+          ),
+        ),
       );
-
-      return Ok(customBotsWithVersions);
     } catch (error: unknown) {
       return Failure(errorMessage(error));
     }
   }
+}
+
+// `bots` are versions of one custom bot, newest first.
+function toBotWithVersions(bots: CustomBot[]): CustomBotWithVersions {
+  const latestBot = bots[0];
+  const versions: CustomBotVersion[] = bots.map((bot) => ({
+    id: bot.id,
+    version: bot.version,
+    config: bot.config,
+    userId: bot.userId,
+    filePath: bot.filePath,
+    status: bot.status,
+    createdAt: bot.createdAt,
+    updatedAt: bot.updatedAt,
+  }));
+
+  return {
+    id: latestBot.id,
+    name: latestBot.name,
+    userId: latestBot.userId,
+    latestVersion: latestBot.version,
+    versions,
+    createdAt: bots[bots.length - 1].createdAt,
+    updatedAt: latestBot.updatedAt,
+  };
+}
+
+function groupByName(bots: CustomBot[]): CustomBotWithVersions[] {
+  const botsByName = new Map<string, CustomBot[]>();
+  for (const bot of bots) {
+    if (!botsByName.has(bot.name)) {
+      botsByName.set(bot.name, []);
+    }
+    botsByName.get(bot.name)!.push(bot);
+  }
+
+  return [...botsByName.values()]
+    .map((versions) =>
+      toBotWithVersions(
+        versions.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
+      ),
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
 }

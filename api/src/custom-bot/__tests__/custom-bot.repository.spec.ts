@@ -595,6 +595,78 @@ describe("CustomBotRepository", () => {
     });
   });
 
+  describe("getAllGlobalCustomBots", () => {
+    const row = (
+      name: string,
+      version: string,
+      userId: string,
+      created: string,
+      updated: string,
+    ) => ({
+      id: `${name}-${version}`,
+      name,
+      version,
+      config: { name, version },
+      filePath: `/bots/${name}/${version}.zip`,
+      status: "active",
+      userId,
+      createdAt: new Date(created),
+      updatedAt: new Date(updated),
+    });
+
+    it("should group every user's versions by name, newest version first and most recently updated bot first", async () => {
+      const alphaOld = row("alpha", "1.0.0", "u1", "2023-01-01", "2023-01-01");
+      const alphaNew = row("alpha", "1.1.0", "u1", "2023-03-01", "2023-03-02");
+      const betaOnly = row("beta", "0.1.0", "u2", "2023-02-01", "2023-04-01");
+      mockDb.orderBy.mockResolvedValueOnce([alphaOld, betaOnly, alphaNew]);
+
+      const result = await repository.getAllGlobalCustomBots();
+
+      const version = (r: ReturnType<typeof row>) => ({
+        id: r.id,
+        version: r.version,
+        config: r.config,
+        userId: r.userId,
+        filePath: r.filePath,
+        status: r.status,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      });
+      expect(result).toEqual({
+        success: true,
+        error: null,
+        data: [
+          {
+            id: betaOnly.id,
+            name: "beta",
+            userId: "u2",
+            latestVersion: "0.1.0",
+            versions: [version(betaOnly)],
+            createdAt: betaOnly.createdAt,
+            updatedAt: betaOnly.updatedAt,
+          },
+          {
+            id: alphaNew.id,
+            name: "alpha",
+            userId: "u1",
+            latestVersion: "1.1.0",
+            versions: [version(alphaNew), version(alphaOld)],
+            createdAt: alphaOld.createdAt,
+            updatedAt: alphaNew.updatedAt,
+          },
+        ],
+      });
+    });
+
+    it("should return an empty list when no custom bots exist", async () => {
+      mockDb.orderBy.mockResolvedValueOnce([]);
+
+      const result = await repository.getAllGlobalCustomBots();
+
+      expect(result.data).toEqual([]);
+    });
+  });
+
   describe("getSpecificUserVersion", () => {
     it("should return specific user version", async () => {
       const mockBotData = {
