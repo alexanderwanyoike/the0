@@ -335,40 +335,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
-  // Legacy aliases for backward compatibility
-  async getVersionsForBot(
-    userId: string,
-    name: string,
-  ): Promise<Result<CustomBotVersion[], string>> {
-    const result = await this.getAllUserVersions(userId, name);
-    if (!result.success) {
-      return Failure(result.error);
-    }
-    return Ok(result.data.versions);
-  }
-
-  async getBotsWithVersions(
-    userId: string,
-  ): Promise<Result<CustomBotWithVersions[], string>> {
-    return this.getUserCustomBots(userId);
-  }
-
-  async createBot(
-    userId: string,
-    customBot: Partial<CustomBot>,
-  ): Promise<Result<CustomBot, string>> {
-    const data = {
-      userId,
-      name: customBot.name!,
-      version: customBot.version!,
-      config: customBot.config!,
-      filePath: customBot.filePath!,
-      status: customBot.status || "active",
-    };
-
-    return this.create(data);
-  }
-
   async getAllGlobalCustomBots(): Promise<
     Result<CustomBotWithVersions[], string>
   > {

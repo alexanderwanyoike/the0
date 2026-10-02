@@ -39,7 +39,6 @@ describe("AuthService", () => {
       findByEmail: jest.fn().mockResolvedValue(testUser),
       updateLastLogin: jest.fn().mockResolvedValue(undefined),
       count: jest.fn(),
-      hasActiveAdmin: jest.fn(),
       createFirstAdmin: jest.fn(),
     };
 
