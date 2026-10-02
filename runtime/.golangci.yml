@@ -1,0 +1,65 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - staticcheck
+    - unused
+    - gocyclo
+    - gocognit
+    - dupl
+    - depguard
+  settings:
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    dupl:
+      threshold: 150
+    depguard:
+      # Every rule below holds today; they guard the boundaries rather than describe aspirations.
+      rules:
+        k8s-independent-of-docker:
+          files:
+            - "**/internal/k8s/**"
+          deny:
+            - pkg: runtime/internal/docker
+              desc: the k8s controller must not depend on the Docker runtime
+        docker-independent-of-k8s-orchestration:
+          files:
+            - "**/internal/docker/**"
+          deny:
+            - pkg: runtime/internal/k8s/controller
+              desc: the Docker runtime must not depend on the k8s controller
+            - pkg: runtime/internal/k8s/podgen
+              desc: the Docker runtime must not depend on k8s pod generation
+            - pkg: runtime/internal/k8s/detect
+              desc: runtime mode detection belongs in cmd/app
+        leaf-packages:
+          files:
+            - "**/internal/model/**"
+            - "**/internal/util/**"
+            - "**/internal/constants/**"
+            - "**/internal/runtime/**"
+            - "**/internal/query/**"
+          deny:
+            - pkg: runtime/internal/docker
+              desc: shared packages must not depend on a runtime mode
+            - pkg: runtime/internal/k8s
+              desc: shared packages must not depend on a runtime mode
+            - pkg: runtime/internal/daemon
+              desc: shared packages must not depend on the daemon
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - dupl
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

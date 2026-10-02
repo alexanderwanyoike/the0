@@ -39,3 +39,41 @@ jobs:
     - name: Build CLI binary
       working-directory: ./cli
       run: go build -o the0 .
+
+  analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.10'
+        cache-dependency-path: cli/go.sum
+
+    - name: Install golangci-lint
+      continue-on-error: true
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: v2.14.0
+        install-only: true
+
+    - name: golangci-lint report (non-blocking)
+      working-directory: ./cli
+      continue-on-error: true
+      run: |
+        { echo '### cli: golangci-lint'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        golangci-lint run --config .golangci.yml --output.tab.path=stdout ./... >> "$GITHUB_STEP_SUMMARY" 2>&1 || status=$?
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        exit "${status:-0}"
+
+    - name: deadcode report (non-blocking)
+      working-directory: ./cli
+      continue-on-error: true
+      run: |
+        { echo '### cli: deadcode (unreachable from main)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        make -s deadcode >> "$GITHUB_STEP_SUMMARY" || status=$?
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        exit "${status:-0}"

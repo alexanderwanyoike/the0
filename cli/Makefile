@@ -1,6 +1,6 @@
 # Makefile for the0 CLI
 
-.PHONY: build test clean install lint security-audit security-scan
+.PHONY: build test clean install lint deadcode security-audit security-scan
 
 VERSION ?= dev
 LDFLAGS = -ldflags="-w -s -X main.VERSION=$(VERSION)"
@@ -29,9 +29,14 @@ deps:
 	go mod tidy
 	go mod download
 
+DEADCODE_VERSION ?= v0.49.0
+
 # Lint the code
 lint:
-	golangci-lint run
+	golangci-lint run --config .golangci.yml ./...
+
+deadcode:
+	go run golang.org/x/tools/cmd/deadcode@$(DEADCODE_VERSION) ./...
 
 # Install the CLI locally
 install: build
