@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.9.11
-appVersion: "1.14.10"
+version: 0.10.0
+appVersion: "1.15.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,8 +30,20 @@ annotations:
     - name: Discord
       url: https://discord.gg/g5mp57nK
   artifacthub.io/changes: |
+    - kind: added
+      description: Swagger UI at /docs and the OpenAPI spec at /docs-json for the api - on by default outside production, opt in with SWAGGER_ENABLED=true when NODE_ENV=production
+    - kind: security
+      description: Login no longer reveals whether an account exists or is inactive - the password is checked first, and unknown emails cost the same bcrypt comparison
+    - kind: security
+      description: API key checks no longer return database error details to clients - a rejected key gets a generic "Invalid API key" and the reason is logged server side
     - kind: fixed
-      description: Platform upgrades now reach existing bots - the bot controller treats a new runtime image as a change, so scheduled bot CronJobs move to the new image on their next run and running realtime bot pods are replaced once onto it
+      description: A database outage during JWT or API key checks now answers 503 instead of 401, so a brief outage no longer logs users out
+    - kind: fixed
+      description: The MCP tools/list schema for bot_deploy matches what the handler reads (the name lives in config.name)
+    - kind: security
+      description: axios and brace-expansion bumped past new HIGH advisories in the api, frontend and React SDK
+    - kind: removed
+      description: The unused hello-world GET / endpoint, and the never-connected MCP SDK server with its @modelcontextprotocol/sdk and zod dependencies
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
