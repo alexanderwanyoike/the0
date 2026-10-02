@@ -284,16 +284,33 @@ describe("JwtStrategy", () => {
   });
 
   describe("hides storage failures from the caller", () => {
-    it("answers with a generic 401 and logs the cause", async () => {
+    it("answers an unreachable database with 503 so users are not logged out", async () => {
       const token = await loginToken();
-      const cause = new Error("connect ECONNREFUSED 10.0.0.5:5432");
+      users.findById.mockRejectedValue(
+        Object.assign(new Error("connect ECONNREFUSED 10.0.0.5:5432"), {
+          code: "ECONNREFUSED",
+        }),
+      );
+
+      const res = await getProtected(`Bearer ${token}`);
+
+      expect(res.status).toBe(503);
+      expect(res.body.message).toBe("Database temporarily unavailable");
+      expect(JSON.stringify(res.body)).not.toContain("10.0.0.5");
+    });
+
+    it("answers other storage errors with a generic 401 and logs the cause", async () => {
+      const token = await loginToken();
+      const cause = new Error(
+        'relation "users" does not exist at 10.0.0.5:5432',
+      );
       users.findById.mockRejectedValue(cause);
 
       const res = await getProtected(`Bearer ${token}`);
 
       expect(res.status).toBe(401);
       expect(res.body.message).toBe("Token validation failed");
-      expect(JSON.stringify(res.body)).not.toContain("ECONNREFUSED");
+      expect(JSON.stringify(res.body)).not.toContain("10.0.0.5");
       expect(logger.error).toHaveBeenCalledWith(
         { err: cause },
         "JWT validation error",
