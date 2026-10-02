@@ -1,8 +1,19 @@
 import { useState, useCallback, useMemo } from "react";
 import { Bot } from "@/lib/api/api-client";
+import {
+  BOT_TYPE_OPTIONS,
+  FilterFacet,
+  FilterOption,
+} from "@/hooks/bot-list-filters";
 
-export type BotTypeFilter = "all" | "scheduled" | "realtime";
-export type BotStatusFilter = "all" | "enabled" | "disabled";
+type BotTypeFilter = "all" | "scheduled" | "realtime";
+type BotStatusFilter = "all" | "enabled" | "disabled";
+
+const BOT_STATUS_OPTIONS: readonly FilterOption[] = [
+  { value: "all", label: "All" },
+  { value: "enabled", label: "Enabled" },
+  { value: "disabled", label: "Disabled" },
+];
 
 export function useBotFilters() {
   const [search, setSearch] = useState("");
@@ -55,6 +66,21 @@ export function useBotFilters() {
     [search, type, status],
   );
 
+  const facets: FilterFacet[] = [
+    {
+      label: "Type",
+      value: type,
+      options: BOT_TYPE_OPTIONS,
+      onChange: (value) => setType(value as BotTypeFilter),
+    },
+    {
+      label: "Status",
+      value: status,
+      options: BOT_STATUS_OPTIONS,
+      onChange: (value) => setStatus(value as BotStatusFilter),
+    },
+  ];
+
   return {
     search,
     setSearch,
@@ -64,6 +90,7 @@ export function useBotFilters() {
     setStatus,
     hasActiveFilters,
     activeCount,
+    facets,
     filterBots,
   };
 }

@@ -9,6 +9,13 @@ import {
   Put,
   UseGuards,
 } from "@nestjs/common";
+import {
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from "@nestjs/swagger";
 import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import { CurrentUser } from "@/auth/current-user.decorator";
@@ -20,6 +27,9 @@ import { DeleteAccountDto } from "./dto/delete-account.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { UpdateAdminUserDto } from "./dto/update-admin-user.dto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
+import { ApiAdminJwtAuth, ApiJwtAuth } from "@/swagger/api-auth.decorators";
+
+const USER_ID_PARAM = { name: "id", description: "User ID" };
 
 @Controller()
 export class UserController {
@@ -27,6 +37,9 @@ export class UserController {
 
   @Get("admin/users")
   @UseGuards(AdminJwtGuard)
+  @ApiTags("admin")
+  @ApiAdminJwtAuth()
+  @ApiOperation({ summary: "List all users" })
   async listUsers() {
     return {
       success: true,
@@ -37,6 +50,10 @@ export class UserController {
 
   @Post("admin/users")
   @UseGuards(AdminJwtGuard)
+  @ApiTags("admin")
+  @ApiAdminJwtAuth()
+  @ApiOperation({ summary: "Create a user" })
+  @ApiBadRequestResponse({ description: "Invalid user details" })
   async createUser(@Body() body: CreateAdminUserDto) {
     return {
       success: true,
@@ -47,6 +64,11 @@ export class UserController {
 
   @Patch("admin/users/:id")
   @UseGuards(AdminJwtGuard)
+  @ApiTags("admin")
+  @ApiAdminJwtAuth()
+  @ApiOperation({ summary: "Update a user's details, role or active state" })
+  @ApiParam(USER_ID_PARAM)
+  @ApiNotFoundResponse({ description: "User not found" })
   async updateUser(
     @Param("id") id: string,
     @Body() body: UpdateAdminUserDto,
@@ -61,6 +83,11 @@ export class UserController {
 
   @Post("admin/users/:id/reset-password")
   @UseGuards(AdminJwtGuard)
+  @ApiTags("admin")
+  @ApiAdminJwtAuth()
+  @ApiOperation({ summary: "Set a new password for a user" })
+  @ApiParam(USER_ID_PARAM)
+  @ApiNotFoundResponse({ description: "User not found" })
   async resetPassword(
     @Param("id") id: string,
     @Body() body: ResetPasswordDto,
@@ -75,6 +102,9 @@ export class UserController {
 
   @Put("users/profile")
   @UseGuards(JwtAuthGuard)
+  @ApiTags("users")
+  @ApiJwtAuth()
+  @ApiOperation({ summary: "Update your profile" })
   async updateProfile(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: UpdateProfileDto,
@@ -88,6 +118,9 @@ export class UserController {
 
   @Put("users/change-password")
   @UseGuards(JwtAuthGuard)
+  @ApiTags("users")
+  @ApiJwtAuth()
+  @ApiOperation({ summary: "Change your password" })
   async changePassword(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: ChangePasswordDto,
@@ -105,6 +138,12 @@ export class UserController {
 
   @Delete("users/delete-account")
   @UseGuards(JwtAuthGuard)
+  @ApiTags("users")
+  @ApiJwtAuth()
+  @ApiOperation({
+    summary: "Deactivate your account",
+    description: "Requires your current password in the body.",
+  })
   async deleteAccount(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: DeleteAccountDto,

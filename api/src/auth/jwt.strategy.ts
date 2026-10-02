@@ -1,11 +1,16 @@
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PassportStrategy } from "@nestjs/passport";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRepository } from "@/user/user.repository";
 import { UserRecord } from "@/user/user.types";
+import { isConnectionError } from "@/common/database-errors";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -63,6 +68,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
+      }
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
       }
       this.logger.error({ err: error }, "JWT validation error");
       throw new UnauthorizedException("Token validation failed");

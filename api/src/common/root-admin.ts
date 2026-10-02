@@ -7,12 +7,12 @@ export interface ConfiguredRootAdmin {
   password: string;
 }
 
-export function getOptionalConfiguredRootAdminEmail(): string | undefined {
+function getOptionalConfiguredRootAdminEmail(): string | undefined {
   const email = process.env.THE0_ADMIN_EMAIL?.trim();
   return email ? normalizeEmailForComparison(email) : undefined;
 }
 
-export function getRequiredConfiguredRootAdminEmail(): string {
+function getRequiredConfiguredRootAdminEmail(): string {
   const email = process.env.THE0_ADMIN_EMAIL?.trim();
   if (!email) {
     throw new Error("THE0_ADMIN_EMAIL must be configured");
@@ -23,7 +23,7 @@ export function getRequiredConfiguredRootAdminEmail(): string {
   return normalizeEmailForComparison(email);
 }
 
-export function getRequiredConfiguredRootAdminPassword(): string {
+function getRequiredConfiguredRootAdminPassword(): string {
   const password = process.env.THE0_ADMIN_PASSWORD;
   if (password === undefined || password === "") {
     throw new Error("THE0_ADMIN_PASSWORD must be configured");

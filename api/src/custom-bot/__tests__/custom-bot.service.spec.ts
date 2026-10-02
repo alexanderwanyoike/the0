@@ -111,6 +111,59 @@ describe("CustomBotService", () => {
   });
 
   describe("createCustomBot", () => {
+    describe("bundle checks", () => {
+      const filePath = "bots/test-bot/1.0.0.zip";
+      const arrangeCreate = () => {
+        mockValidateConfig.mockReturnValue({ valid: true });
+        mockRepository.globalBotExists.mockResolvedValue(Ok(false));
+        mockStorageService.validateZipStructure.mockResolvedValue(Ok(true));
+        mockRepository.createNewGlobalVersion.mockResolvedValue(
+          Ok({} as CustomBot),
+        );
+        mockRepository.getSpecificGlobalVersion.mockResolvedValue(
+          Ok({} as CustomBot),
+        );
+      };
+
+      it.each(["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"] as const)(
+        "should not require the %s entrypoint in the ZIP since it is built server-side",
+        async (runtime) => {
+          arrangeCreate();
+
+          await service.createCustomBot(
+            "user123",
+            { ...validConfig, runtime },
+            filePath,
+          );
+
+          expect(mockStorageService.validateZipStructure).toHaveBeenCalledWith(
+            filePath,
+            [],
+          );
+        },
+      );
+
+      it.each([
+        [Ok("frontend/test-bot/1.0.0"), true],
+        [Ok(null), false],
+        [Failure("extract failed"), false],
+      ])(
+        "should store hasFrontend from the frontend extraction result (%j)",
+        async (extracted, hasFrontend) => {
+          arrangeCreate();
+          mockStorageService.extractAndStoreFrontend.mockResolvedValue(
+            extracted as any,
+          );
+
+          await service.createCustomBot("user123", validConfig, filePath);
+
+          expect(
+            mockRepository.createNewGlobalVersion.mock.calls[0][1].config,
+          ).toEqual({ ...validConfig, hasFrontend });
+        },
+      );
+    });
+
     it("should create a custom bot successfully", async () => {
       const userId = "user123";
       const filePath =
@@ -359,6 +412,88 @@ describe("CustomBotService", () => {
   });
 
   describe("updateCustomBot", () => {
+    describe("bundle checks", () => {
+      const filePath = "bots/test-bot/1.1.0.zip";
+      const updateConfig = { ...validConfig, version: "1.1.0" };
+      const arrangeUpdate = () => {
+        mockValidateConfig.mockReturnValue({ valid: true });
+        mockRepository.globalBotExists.mockResolvedValue(Ok(true));
+        mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Ok({ version: "1.0.0" } as CustomBot),
+        );
+        mockRepository.isVersionNewer.mockReturnValue(true);
+        mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
+        mockStorageService.validateZipStructure.mockResolvedValue(Ok(true));
+        mockRepository.createNewGlobalVersion.mockResolvedValue(
+          Ok({} as CustomBot),
+        );
+        mockRepository.getSpecificGlobalVersion.mockResolvedValue(
+          Ok({} as CustomBot),
+        );
+      };
+
+      it.each(["rust-stable", "dotnet8", "gcc13", "scala3", "ghc96"] as const)(
+        "should not require the %s entrypoint in the ZIP since it is built server-side",
+        async (runtime) => {
+          arrangeUpdate();
+
+          await service.updateCustomBot(
+            "user123",
+            "test-bot",
+            { ...updateConfig, runtime },
+            filePath,
+          );
+
+          expect(mockStorageService.validateZipStructure).toHaveBeenCalledWith(
+            filePath,
+            [],
+          );
+        },
+      );
+
+      it("should require the entrypoints in the ZIP for interpreted runtimes", async () => {
+        arrangeUpdate();
+
+        await service.updateCustomBot(
+          "user123",
+          "test-bot",
+          updateConfig,
+          filePath,
+        );
+
+        expect(mockStorageService.validateZipStructure).toHaveBeenCalledWith(
+          filePath,
+          ["main.py"],
+        );
+      });
+
+      it.each([
+        [Ok("frontend/test-bot/1.1.0"), true],
+        [Ok(null), false],
+        [Failure("extract failed"), false],
+      ])(
+        "should store hasFrontend from the frontend extraction result (%j)",
+        async (extracted, hasFrontend) => {
+          arrangeUpdate();
+          mockStorageService.extractAndStoreFrontend.mockResolvedValue(
+            extracted as any,
+          );
+
+          await service.updateCustomBot(
+            "user123",
+            "test-bot",
+            updateConfig,
+            filePath,
+          );
+
+          expect(
+            mockRepository.createNewGlobalVersion.mock.calls[0][1].config,
+          ).toEqual({ ...updateConfig, hasFrontend });
+        },
+      );
+    });
+
     it("should update custom bot with new version successfully", async () => {
       const userId = "user123";
       const botName = "test-bot";
@@ -700,6 +835,122 @@ describe("CustomBotService", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("Failed to update custom bot");
       expect(result.error).toContain("Database connection failed");
+    });
+
+    describe("pre-upload checks", () => {
+      const userId = "user123";
+      const filePath = "bots/test-bot/1.0.0.zip";
+
+      const arrangePassingChecks = () => {
+        mockValidateConfig.mockReturnValue({ valid: true });
+        mockRepository.globalBotExists.mockResolvedValue(Ok(true));
+        mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Ok({ version: "0.9.0" } as CustomBot),
+        );
+        mockRepository.isVersionNewer.mockReturnValue(true);
+        mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
+      };
+
+      const update = () =>
+        service.updateCustomBot(userId, "test-bot", validConfig, filePath);
+
+      it("should reject an invalid config before touching the repository", async () => {
+        arrangePassingChecks();
+        mockValidateConfig.mockReturnValue({
+          valid: false,
+          errors: ["name is required", "version is invalid"],
+        });
+
+        const result = await update();
+
+        expect(result).toEqual(
+          Failure("Validation failed: name is required, version is invalid"),
+        );
+        expect(mockRepository.globalBotExists).not.toHaveBeenCalled();
+      });
+
+      it("should pass through a repository error when checking the bot exists", async () => {
+        arrangePassingChecks();
+        mockRepository.globalBotExists.mockResolvedValue(Failure("db down"));
+
+        const result = await update();
+
+        expect(result).toEqual(Failure("db down"));
+        expect(mockRepository.checkUserOwnership).not.toHaveBeenCalled();
+      });
+
+      it("should pass through a repository error when loading the latest version", async () => {
+        arrangePassingChecks();
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Failure("latest lookup failed"),
+        );
+
+        const result = await update();
+
+        expect(result).toEqual(Failure("latest lookup failed"));
+        expect(mockRepository.isVersionNewer).not.toHaveBeenCalled();
+      });
+
+      it("should name both versions when the new version is not newer", async () => {
+        arrangePassingChecks();
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Ok({ version: "2.0.0" } as CustomBot),
+        );
+        mockRepository.isVersionNewer.mockReturnValue(false);
+
+        const result = await update();
+
+        expect(result).toEqual(
+          Failure("Version 1.0.0 must be greater than current version 2.0.0"),
+        );
+        expect(mockRepository.isVersionNewer).toHaveBeenCalledWith(
+          "2.0.0",
+          "1.0.0",
+        );
+        expect(mockRepository.globalVersionExists).not.toHaveBeenCalled();
+      });
+
+      it("should pass through a repository error when checking the version exists", async () => {
+        arrangePassingChecks();
+        mockRepository.globalVersionExists.mockResolvedValue(
+          Failure("version lookup failed"),
+        );
+
+        const result = await update();
+
+        expect(result).toEqual(Failure("version lookup failed"));
+        expect(mockRepository.globalVersionExists).toHaveBeenCalledWith(
+          "test-bot",
+          "1.0.0",
+        );
+        expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
+      });
+
+      it("should run the checks in order before storing the version", async () => {
+        arrangePassingChecks();
+        mockStorageService.validateZipStructure.mockResolvedValue(
+          Failure("stop here"),
+        );
+
+        await update();
+
+        const order = (mock: jest.Mock) => mock.mock.invocationCallOrder[0];
+        const calls = [
+          mockValidateConfig,
+          mockRepository.globalBotExists,
+          mockRepository.checkUserOwnership,
+          mockRepository.getGlobalLatestVersion,
+          mockRepository.isVersionNewer,
+          mockRepository.globalVersionExists,
+          mockStorageService.validateZipStructure,
+        ].map((mock) => order(mock as unknown as jest.Mock));
+        expect(calls).toEqual([...calls].sort((a, b) => a - b));
+        expect(mockRepository.checkUserOwnership).toHaveBeenCalledWith(
+          userId,
+          "test-bot",
+        );
+      });
     });
   });
 
@@ -1190,16 +1441,26 @@ describe("CustomBotService", () => {
       mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
       mockRepository.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
       mockRepository.countInstancesByCustomBotIds.mockResolvedValue(
-        Ok(new Map([["cb-1", 0], ["cb-2", 0]])),
+        Ok(
+          new Map([
+            ["cb-1", 0],
+            ["cb-2", 0],
+          ]),
+        ),
       );
-      mockStorageService.listObjects.mockResolvedValue(Ok(["user123/test-bot/2.0.0", "user123/test-bot/1.0.0"]));
+      mockStorageService.listObjects.mockResolvedValue(
+        Ok(["user123/test-bot/2.0.0", "user123/test-bot/1.0.0"]),
+      );
       mockStorageService.deleteFile.mockResolvedValue(Ok(undefined));
       mockRepository.removeAllByName.mockResolvedValue(Ok(null));
 
       const result = await service.deleteAllVersions(userId, botName);
 
       expect(result.success).toBe(true);
-      expect(mockRepository.removeAllByName).toHaveBeenCalledWith(userId, botName);
+      expect(mockRepository.removeAllByName).toHaveBeenCalledWith(
+        userId,
+        botName,
+      );
     });
 
     it("should refuse if any version has active instances", async () => {
@@ -1237,7 +1498,12 @@ describe("CustomBotService", () => {
       mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
       mockRepository.getAllGlobalVersions.mockResolvedValue(Ok(mockVersions));
       mockRepository.countInstancesByCustomBotIds.mockResolvedValue(
-        Ok(new Map([["cb-1", 2], ["cb-2", 0]])),
+        Ok(
+          new Map([
+            ["cb-1", 2],
+            ["cb-2", 0],
+          ]),
+        ),
       );
 
       const result = await service.deleteAllVersions(userId, botName);
@@ -1285,10 +1551,18 @@ describe("CustomBotService", () => {
 
       mockRepository.getAllUserVersions.mockResolvedValue(Ok(mockVersions));
       mockRepository.countInstancesByCustomBotIds.mockResolvedValue(
-        Ok(new Map([["cb-1", 3], ["cb-2", 0]])),
+        Ok(
+          new Map([
+            ["cb-1", 3],
+            ["cb-2", 0],
+          ]),
+        ),
       );
 
-      const result = await service.getVersionsWithInstanceCounts(userId, botName);
+      const result = await service.getVersionsWithInstanceCounts(
+        userId,
+        botName,
+      );
 
       expect(result.success).toBe(true);
       expect(result.data).toHaveLength(2);

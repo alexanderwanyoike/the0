@@ -20,6 +20,8 @@ describe("BotService - Enhanced Tests", () => {
   let repository: BotRepository;
   let validator: BotValidator;
   let mockCustomBotService: CustomBotService;
+  let natsService: { publish: jest.Mock };
+  let logger: ReturnType<typeof createMockLogger>;
   // FeatureGateService removed for OSS version
   const uid = "test-user-id";
 
@@ -112,6 +114,8 @@ describe("BotService - Enhanced Tests", () => {
     service = await module.resolve<BotService>(BotService);
     repository = module.get<BotRepository>(BotRepository);
     validator = module.get<BotValidator>(BotValidator);
+    natsService = module.get(NatsService);
+    logger = module.get(PinoLogger);
 
     // Reset all mocks
     jest.clearAllMocks();
@@ -239,6 +243,75 @@ describe("BotService - Enhanced Tests", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Missing required field");
+    });
+
+    it("should fail when the repository cannot store the bot", async () => {
+      jest.spyOn(repository, "create").mockResolvedValue(Failure("db down"));
+      jest.spyOn(repository, "findOne");
+
+      const result = await service.create(validBotData);
+
+      expect(result).toEqual(Failure("db down"));
+      expect(natsService.publish).not.toHaveBeenCalled();
+      expect(repository.findOne).not.toHaveBeenCalled();
+    });
+
+    describe("creation event", () => {
+      const createdBot = mockBot({ id: "test-id", userId: uid });
+
+      beforeEach(() => {
+        jest.spyOn(repository, "findOne").mockResolvedValue(Ok(createdBot));
+      });
+
+      it("should publish the creation with the validated custom bot", async () => {
+        const result = await service.create(validBotData);
+
+        expect(result).toEqual(Ok(createdBot));
+        expect(natsService.publish).toHaveBeenCalledWith(
+          "the0.bot-schedule.created",
+          {
+            id: "test-id",
+            config: { ...validBotData.config, customBotId: mockCustomBot.id },
+            custom: {
+              config: mockCustomBot.config,
+              createdAt: mockCustomBot.createdAt,
+              updatedAt: mockCustomBot.updatedAt,
+              filePath: mockCustomBot.filePath,
+              version: "1.0.0",
+            },
+          },
+        );
+        const publishOrder = natsService.publish.mock.invocationCallOrder[0];
+        const reloadOrder = (repository.findOne as jest.Mock).mock
+          .invocationCallOrder[0];
+        expect(publishOrder).toBeLessThan(reloadOrder);
+      });
+
+      it("should log and still return the bot when publishing fails", async () => {
+        natsService.publish.mockResolvedValue(Failure("nats down"));
+
+        const result = await service.create(validBotData);
+
+        expect(result).toEqual(Ok(createdBot));
+        expect(logger.error).toHaveBeenCalledWith(
+          { error: "nats down", botId: "test-id" },
+          "Failed to publish bot creation event",
+        );
+      });
+
+      it("should skip the event for an unknown bot type", async () => {
+        mockCustomBotService.getGlobalSpecificVersion = jest.fn().mockResolvedValue(
+          Ok({
+            ...mockCustomBot,
+            config: { ...mockCustomBot.config, type: "other" },
+          }),
+        );
+
+        const result = await service.create(validBotData);
+
+        expect(result).toEqual(Ok(createdBot));
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
     });
 
     describe("deployment authorization", () => {
@@ -666,6 +739,146 @@ describe("BotService - Enhanced Tests", () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe("Update failed");
     });
+
+    it("should fail when the bot to update does not exist", async () => {
+      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest.spyOn(repository, "update");
+
+      const result = await service.update("test-id", updateData);
+
+      expect(result).toEqual(Failure("Bot not found"));
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it("should rotate customBotId when the current version is unknown", async () => {
+      mockCustomBotService.getGlobalSpecificVersion = jest
+        .fn()
+        .mockResolvedValue(Ok({ ...mockCustomBot, id: "cb-new" }));
+      jest.spyOn(repository, "findOne").mockResolvedValue(
+        Ok({
+          ...existingBot,
+          customBotId: "cb-old",
+          config: { ...existingBot.config, version: undefined },
+        }),
+      );
+      jest.spyOn(repository, "update").mockResolvedValue(Ok(existingBot));
+
+      await service.update("test-id", updateData);
+
+      expect(repository.update).toHaveBeenCalledWith(
+        uid,
+        "test-id",
+        expect.objectContaining({ customBotId: "cb-new" }),
+      );
+    });
+
+    describe("update event", () => {
+      beforeEach(() => {
+        jest.spyOn(repository, "update").mockResolvedValue(Ok(existingBot));
+      });
+
+      it("should publish the update with the user's custom bot version", async () => {
+        const result = await service.update("test-id", updateData);
+
+        expect(result).toEqual(Ok(existingBot));
+        expect(mockCustomBotService.getUserSpecificVersion).toHaveBeenCalledWith(
+          uid,
+          "test-custom-bot",
+          "1.0.0",
+        );
+        expect(natsService.publish).toHaveBeenCalledWith(
+          "the0.bot-schedule.updated",
+          {
+            id: "test-id",
+            config: { ...updateData.config, customBotId: "test-custom-bot" },
+            custom: {
+              config: mockCustomBot.config,
+              createdAt: mockCustomBot.createdAt,
+              updatedAt: mockCustomBot.updatedAt,
+              filePath: mockCustomBot.filePath,
+              version: "1.0.0",
+            },
+          },
+        );
+      });
+
+      it("should send an empty filePath when the custom bot has none", async () => {
+        mockCustomBotService.getUserSpecificVersion = jest
+          .fn()
+          .mockResolvedValue(Ok({ ...mockCustomBot, filePath: undefined }));
+
+        await service.update("test-id", updateData);
+
+        expect(natsService.publish).toHaveBeenCalledWith(
+          "the0.bot-schedule.updated",
+          expect.objectContaining({
+            custom: expect.objectContaining({ filePath: "" }),
+          }),
+        );
+      });
+
+      it("should log and still succeed when publishing fails", async () => {
+        natsService.publish.mockResolvedValue(Failure("nats down"));
+
+        const result = await service.update("test-id", updateData);
+
+        expect(result.success).toBe(true);
+        expect(logger.error).toHaveBeenCalledWith(
+          { error: "nats down", botId: "test-id" },
+          "Failed to publish bot update event",
+        );
+      });
+
+      it("should skip the event when the updated bot cannot be reloaded", async () => {
+        jest
+          .spyOn(repository, "findOne")
+          .mockResolvedValueOnce(Ok(existingBot))
+          .mockResolvedValueOnce(Failure("gone"));
+
+        const result = await service.update("test-id", updateData);
+
+        expect(result.success).toBe(true);
+        expect(mockCustomBotService.getUserSpecificVersion).not.toHaveBeenCalled();
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+
+      it("should skip the event when the user's custom bot version is unavailable", async () => {
+        mockCustomBotService.getUserSpecificVersion = jest
+          .fn()
+          .mockResolvedValue(Failure("not found"));
+
+        const result = await service.update("test-id", updateData);
+
+        expect(result.success).toBe(true);
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+
+      it("should skip the event for an unknown bot type", async () => {
+        mockCustomBotService.getUserSpecificVersion = jest.fn().mockResolvedValue(
+          Ok({
+            ...mockCustomBot,
+            config: { ...mockCustomBot.config, type: "other" },
+          }),
+        );
+
+        const result = await service.update("test-id", updateData);
+
+        expect(result.success).toBe(true);
+        expect(natsService.publish).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+          { botType: "other" },
+          "Unknown bot type",
+        );
+      });
+
+      it("should not publish when the repository update fails", async () => {
+        jest.spyOn(repository, "update").mockResolvedValue(Failure("nope"));
+
+        await service.update("test-id", updateData);
+
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe("remove", () => {
@@ -750,6 +963,152 @@ describe("BotService - Enhanced Tests", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Bot not found");
+    });
+
+    describe("lifecycle", () => {
+      const botToRemove = mockBot({
+        id: "test-id",
+        config: mockBotConfig({ type: "scheduled/test-bot", version: "1.0.0" }),
+        userId: uid,
+        customBotId: "cb-123",
+      });
+
+      beforeEach(() => {
+        jest.spyOn(repository, "findOne").mockResolvedValue(Ok(botToRemove));
+        jest.spyOn(repository, "remove").mockResolvedValue(Ok(undefined));
+        (mockCustomBotService.checkOrphaned as jest.Mock) = jest
+          .fn()
+          .mockResolvedValue(
+            Ok({ orphaned: false, name: "test-bot", version: "1.0.0" }),
+          );
+      });
+
+      it("should fail when the bot does not exist", async () => {
+        jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Failure("Bot not found"));
+        expect(repository.remove).not.toHaveBeenCalled();
+      });
+
+      it("should reject a bot type without a name before deleting", async () => {
+        jest.spyOn(repository, "findOne").mockResolvedValue(
+          Ok({
+            ...botToRemove,
+            config: { ...botToRemove.config, type: "scheduled/ " },
+          }),
+        );
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(
+          Failure("Invalid bot type: missing name after '/'"),
+        );
+        expect(logger.warn).toHaveBeenCalledWith(
+          { type: "scheduled/ " },
+          "Invalid bot type: missing name after '/'",
+        );
+        expect(repository.remove).not.toHaveBeenCalled();
+      });
+
+      it("should publish the deletion after the orphan check", async () => {
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Ok({}));
+        expect(mockCustomBotService.getUserSpecificVersion).toHaveBeenCalledWith(
+          uid,
+          "test-bot",
+          "1.0.0",
+        );
+        expect(natsService.publish).toHaveBeenCalledWith(
+          "the0.bot-schedule.deleted",
+          { id: "test-id", config: botToRemove.config },
+        );
+        const checkOrder = (mockCustomBotService.checkOrphaned as jest.Mock)
+          .mock.invocationCallOrder[0];
+        const publishOrder = natsService.publish.mock.invocationCallOrder[0];
+        expect(checkOrder).toBeLessThan(publishOrder);
+      });
+
+      it("should delete without an event when the custom bot version is unavailable", async () => {
+        mockCustomBotService.getUserSpecificVersion = jest
+          .fn()
+          .mockResolvedValue(Failure("not found"));
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Ok({}));
+        expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+
+      it("should skip the custom bot lookup when the version is missing", async () => {
+        jest.spyOn(repository, "findOne").mockResolvedValue(
+          Ok({
+            ...botToRemove,
+            config: { ...botToRemove.config, version: undefined },
+          }),
+        );
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Ok({}));
+        expect(mockCustomBotService.getUserSpecificVersion).not.toHaveBeenCalled();
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+
+      it("should neither check orphans nor publish when removal fails", async () => {
+        jest.spyOn(repository, "remove").mockResolvedValue(Failure("db down"));
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Failure("db down"));
+        expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+
+      it("should warn and continue when the orphan check fails", async () => {
+        (mockCustomBotService.checkOrphaned as jest.Mock).mockResolvedValue(
+          Failure("lookup failed"),
+        );
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Ok({}));
+        expect(logger.warn).toHaveBeenCalledWith(
+          {
+            botId: "test-id",
+            customBotId: "cb-123",
+            error: "lookup failed",
+          },
+          "Failed to check if custom bot version is orphaned",
+        );
+        expect(natsService.publish).toHaveBeenCalled();
+      });
+
+      it("should skip the orphan check when the bot has no customBotId", async () => {
+        jest
+          .spyOn(repository, "findOne")
+          .mockResolvedValue(Ok({ ...botToRemove, customBotId: null }));
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Ok({}));
+        expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
+      });
+
+      it("should log and still succeed when publishing the deletion fails", async () => {
+        natsService.publish.mockResolvedValue(Failure("nats down"));
+
+        const result = await service.remove("test-id");
+
+        expect(result).toEqual(Ok({}));
+        expect(logger.error).toHaveBeenCalledWith(
+          { error: "nats down", botId: "test-id" },
+          "Failed to publish bot deletion event",
+        );
+      });
     });
   });
 });

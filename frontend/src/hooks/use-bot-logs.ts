@@ -23,29 +23,23 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { LogEntry } from "@/components/bot/console-interface";
-import { expandLogEntries } from "@/lib/log-utils";
+import type { LogEntry, LogsQuery, PageMerge } from "@/types/logs";
+import {
+  MAX_LOG_ENTRIES,
+  formatLogsForExport,
+  isHistoricalQuery,
+  mergeUniqueEntries,
+  parseLiveUpdate,
+  toDisplayOrder,
+} from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
-import { authFetch } from "@/lib/auth-fetch";
-import { validateSSEAuth } from "@/lib/sse/sse-auth";
-
-export interface LogsQuery {
-  date?: string;
-  dateRange?: string;
-  /** Latest mode: newest entries across the last N days, regardless of when
-   *  the bot last ran. Ignored when date/dateRange is set. */
-  lookbackDays?: number;
-  limit?: number;
-  offset?: number;
-  type?: string;
-  sort?: "asc" | "desc";
-}
-
-interface LogsResponse {
-  data: LogEntry[];
-  total: number;
-  hasMore: boolean;
-}
+import {
+  fetchLogsPage,
+  LogsPage,
+  useAutoRefreshPolling,
+  useLiveLogStream,
+  useLogPolling,
+} from "./bot-logs/log-transport";
 
 interface UseBotLogsProps {
   botId: string;
@@ -85,25 +79,10 @@ export interface UseBotLogsReturn {
   exportLogs: () => void;
 }
 
-const MAX_LOG_ENTRIES = 10000;
 const DEFAULT_QUERY: LogsQuery = { limit: 1000, offset: 0, sort: "desc" };
 /** How far back latest mode is willing to scan for a bot's most recent
  *  output. Scheduled bots that run weekly stay well inside this window. */
 export const DEFAULT_LOOKBACK_DAYS = 30;
-
-const entryKey = (l: LogEntry) => `${l.date}|${l.content}`;
-
-/** Parse a raw SSE message block into event type and data. */
-function parseSSEMessage(msg: string): { eventType: string; data: string } {
-  let eventType = "message";
-  let data = "";
-  for (const line of msg.split("\n")) {
-    if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-    else if (line.startsWith("data: ")) data += line.slice(6);
-    else if (line.startsWith("data:")) data += line.slice(5);
-  }
-  return { eventType, data };
-}
 
 export const useBotLogs = ({
   botId,
@@ -119,7 +98,6 @@ export const useBotLogs = ({
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
-  const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -131,13 +109,14 @@ export const useBotLogs = ({
   const { toast } = useToast();
 
   const restAbortRef = useRef<AbortController | null>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
   // True once a replace fetch has delivered data for the current bot. While
   // set, replace fetches are background refreshes: they must not flip
   // `loading` (which would unmount dashboards into their loading screen).
   const hasDataRef = useRef(false);
   // Latest fetchLogs so the polling interval never calls a stale closure
-  const fetchLogsRef = useRef<(q?: LogsQuery, m?: false | "append" | "prepend") => Promise<boolean>>(null!);
+  const fetchLogsRef = useRef<
+    (q?: LogsQuery, m?: PageMerge) => Promise<boolean>
+  >(null!);
   // Skip polling overwrites while the user has explicitly paginated
   const paginatedRef = useRef(false);
   const loadingMoreRef = useRef(false);
@@ -149,8 +128,6 @@ export const useBotLogs = ({
   // Offset for backfilling earlier logs in live mode
   const earlierOffsetRef = useRef(0);
   // Prop refs so effects/callbacks read latest values without re-running
-  const refreshIntervalRef = useRef(refreshInterval);
-  refreshIntervalRef.current = refreshInterval;
   const streamingRef = useRef(streaming);
   streamingRef.current = streaming;
   const initialQueryRef = useRef(initialQuery);
@@ -158,36 +135,23 @@ export const useBotLogs = ({
   const queryRef = useRef(query);
   queryRef.current = query;
 
-  // A date/dateRange filter suspends live streaming (historical views are REST)
-  const filterActive = !!(query.date || query.dateRange);
-  const liveMode = streaming && !filterActive;
+  const liveMode = streaming && !isHistoricalQuery(query);
 
-  // -- Polling (single owner for interval lifecycle) --
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    stopPolling();
-    if (refreshIntervalRef.current > 0) {
-      pollingRef.current = setInterval(() => {
-        // Skip the tick while the user has paginated or a pagination fetch
-        // is in flight - fetchLogs aborts the previous request, so firing
-        // here would silently cancel their load-more/load-earlier click.
-        if (
-          !paginatedRef.current &&
-          !loadingMoreRef.current &&
-          !loadingEarlierRef.current
-        ) {
-          fetchLogsRef.current();
-        }
-      }, refreshIntervalRef.current);
-    }
-  }, [stopPolling]);
+  const { startPolling, stopPolling, isPolling } = useLogPolling(
+    refreshInterval,
+    () => {
+      // Skip the tick while the user has paginated or a pagination fetch
+      // is in flight - fetchLogs aborts the previous request, so firing
+      // here would silently cancel their load-more/load-earlier click.
+      if (
+        !paginatedRef.current &&
+        !loadingMoreRef.current &&
+        !loadingEarlierRef.current
+      ) {
+        fetchLogsRef.current();
+      }
+    },
+  );
 
   // -- Pending live updates (SSE lines buffered while history is in flight) --
 
@@ -195,19 +159,67 @@ export const useBotLogs = ({
     if (pendingUpdatesRef.current.length === 0) return;
     const pending = pendingUpdatesRef.current;
     pendingUpdatesRef.current = [];
-    setLogs((prev) => {
-      const existing = new Set(prev.map(entryKey));
-      const fresh = pending.filter((l) => !existing.has(entryKey(l)));
-      return [...prev, ...fresh].slice(-MAX_LOG_ENTRIES);
-    });
+    setLogs((prev) => mergeUniqueEntries(prev, pending, "append"));
   }, []);
 
   // -- REST fetch (history, filters, pagination, polling) --
 
+  const applyPage = useCallback(
+    (
+      page: LogsPage,
+      queryParams: LogsQuery,
+      merge: PageMerge,
+      live: boolean,
+    ) => {
+      if (merge) {
+        setLogs((prev) => mergeUniqueEntries(prev, page.entries, merge));
+        if (merge === "append") setHasMore(page.hasMore);
+        else setHasEarlierLogs(page.hasMore);
+      } else {
+        historyLoadedRef.current = true;
+        hasDataRef.current = true;
+        earlierOffsetRef.current = queryParams.limit || 100;
+        setLogs(page.entries.slice(-MAX_LOG_ENTRIES));
+        // Merge in any live updates that arrived while the fetch was in
+        // flight (React applies the updater after the set above).
+        flushPendingUpdates();
+        // Live history extends backwards (earlier logs); REST pages forwards
+        setHasEarlierLogs(live ? page.hasMore : false);
+        setHasMore(live ? false : page.hasMore);
+      }
+      setTotal(page.total);
+      setLastUpdate(new Date());
+    },
+    [flushPendingUpdates],
+  );
+
+  const handleFetchFailure = useCallback(
+    (err: any, merge: PageMerge, wasHistoryLoaded: boolean) => {
+      if (!merge) {
+        // A genuine failure means no newer fetch superseded us (it would
+        // have aborted this one), so restore buffering state and release
+        // any updates captured while the fetch was in flight.
+        historyLoadedRef.current = wasHistoryLoaded;
+        if (wasHistoryLoaded) flushPendingUpdates();
+      }
+
+      const errorMessage = err?.message || "Failed to fetch logs";
+      setError(errorMessage);
+      if (!merge) {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    },
+    [toast, flushPendingUpdates],
+  );
+
   const fetchLogs = useCallback(
     async (
       queryParams: LogsQuery = query,
-      merge: false | "append" | "prepend" = false,
+      merge: PageMerge = false,
     ): Promise<boolean> => {
       if (!botId) return false;
 
@@ -233,80 +245,14 @@ export const useBotLogs = ({
           throw new Error("User not authenticated");
         }
 
-        const searchParams = new URLSearchParams();
-        if (queryParams.dateRange) {
-          searchParams.set("dateRange", queryParams.dateRange);
-        } else if (queryParams.date) {
-          searchParams.set("date", queryParams.date);
-        } else if (queryParams.lookbackDays) {
-          searchParams.set("lookbackDays", queryParams.lookbackDays.toString());
-        } else {
-          searchParams.set(
-            "date",
-            new Date().toISOString().slice(0, 10).replace(/-/g, ""),
-          );
-        }
-        if (queryParams.limit)
-          searchParams.set("limit", queryParams.limit.toString());
-        if (queryParams.offset)
-          searchParams.set("offset", queryParams.offset.toString());
-        if (queryParams.type) searchParams.set("type", queryParams.type);
-        if (queryParams.sort) searchParams.set("sort", queryParams.sort);
-
-        const response = await authFetch(
-          `/api/logs/${encodeURIComponent(botId)}?${searchParams.toString()}`,
-          { signal: controller.signal },
+        const page = await fetchLogsPage(botId, queryParams, controller.signal);
+        const live = streamingRef.current && !isHistoricalQuery(queryParams);
+        applyPage(
+          { ...page, entries: toDisplayOrder(page.entries, live, merge) },
+          queryParams,
+          merge,
+          live,
         );
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch logs: ${response.statusText}`);
-        }
-
-        const result: LogsResponse = await response.json();
-        let expanded = expandLogEntries(result.data);
-
-        // Live mode fetches sort=desc (latest N) but displays chronologically
-        // so SSE appends land at the bottom.
-        const live =
-          streamingRef.current && !queryParams.date && !queryParams.dateRange;
-        if (live && merge !== "append") {
-          expanded = [...expanded].reverse();
-        }
-
-        if (merge === "append") {
-          setLogs((prev) => {
-            const existing = new Set(prev.map(entryKey));
-            const unique = expanded.filter((l) => !existing.has(entryKey(l)));
-            return [...prev, ...unique].slice(-MAX_LOG_ENTRIES);
-          });
-          setHasMore(result.hasMore);
-        } else if (merge === "prepend") {
-          setLogs((prev) => {
-            const existing = new Set(prev.map(entryKey));
-            const unique = expanded.filter((l) => !existing.has(entryKey(l)));
-            // Keep the front (earlier logs) when trimming a full buffer
-            return [...unique, ...prev].slice(0, MAX_LOG_ENTRIES);
-          });
-          setHasEarlierLogs(result.hasMore);
-        } else {
-          historyLoadedRef.current = true;
-          hasDataRef.current = true;
-          earlierOffsetRef.current = queryParams.limit || 100;
-          setLogs(expanded.slice(-MAX_LOG_ENTRIES));
-          // Merge in any live updates that arrived while the fetch was in
-          // flight (React applies the updater after the set above).
-          flushPendingUpdates();
-          if (live) {
-            setHasEarlierLogs(result.hasMore);
-            setHasMore(false);
-          } else {
-            setHasMore(result.hasMore);
-            setHasEarlierLogs(false);
-          }
-        }
-
-        setTotal(result.total);
-        setLastUpdate(new Date());
         return true;
       } catch (err: any) {
         // Intentional aborts (unmount, bot switch, filter change) are silent.
@@ -318,24 +264,7 @@ export const useBotLogs = ({
         if (controller.signal.aborted || err?.name === "AbortError") {
           return false;
         }
-
-        if (!merge) {
-          // A genuine failure means no newer fetch superseded us (it would
-          // have aborted this one), so restore buffering state and release
-          // any updates captured while the fetch was in flight.
-          historyLoadedRef.current = wasHistoryLoaded;
-          if (wasHistoryLoaded) flushPendingUpdates();
-        }
-
-        const errorMessage = err?.message || "Failed to fetch logs";
-        setError(errorMessage);
-        if (!merge) {
-          toast({
-            title: "Error",
-            description: errorMessage,
-            variant: "destructive",
-          });
-        }
+        handleFetchFailure(err, merge, wasHistoryLoaded);
         return false;
       } finally {
         if (!controller.signal.aborted) {
@@ -345,7 +274,7 @@ export const useBotLogs = ({
         }
       }
     },
-    [botId, query, user, toast, flushPendingUpdates],
+    [botId, query, user, applyPage, handleFetchFailure],
   );
   fetchLogsRef.current = fetchLogs;
 
@@ -353,25 +282,7 @@ export const useBotLogs = ({
 
   const handleUpdateEvent = useCallback((data: string) => {
     try {
-      const parsed: { content: string; timestamp: string } = JSON.parse(data);
-      let entries = expandLogEntries([
-        {
-          date: parsed.timestamp,
-          content: parsed.content,
-          timestamp: parsed.timestamp,
-        },
-      ]);
-      // Mirror the server-side type=metrics filter (logs.service) for live
-      // lines: history is filtered by the API, appends must match.
-      if (queryRef.current.type === "metrics") {
-        entries = entries.filter((entry) => {
-          try {
-            return !!JSON.parse(entry.content)?._metric;
-          } catch {
-            return false;
-          }
-        });
-      }
+      const entries = parseLiveUpdate(data, queryRef.current.type);
       if (entries.length === 0) return;
       if (!historyLoadedRef.current) {
         pendingUpdatesRef.current.push(...entries);
@@ -415,102 +326,26 @@ export const useBotLogs = ({
     };
   }, [botId, user, streaming]);
 
-  // -- Polling owner: non-streaming autoRefresh + cadence reconfiguration --
+  useAutoRefreshPolling({
+    botId,
+    user,
+    streaming,
+    autoRefresh,
+    refreshInterval,
+    startPolling,
+    stopPolling,
+    isPolling,
+  });
 
-  useEffect(() => {
-    if (!botId || !user) return;
-
-    if (!streaming) {
-      if (autoRefresh && refreshInterval > 0) {
-        startPolling();
-        return () => stopPolling();
-      }
-      stopPolling();
-      return;
-    }
-
-    // Streaming mode: polling only exists as an SSE-failure fallback (owned
-    // by the SSE effect). If it's running, restart it at the new cadence.
-    if (pollingRef.current) {
-      startPolling();
-    }
-  }, [botId, user, streaming, autoRefresh, refreshInterval, startPolling, stopPolling]);
-
-  // -- SSE connection lifecycle (live mode only) --
-
-  useEffect(() => {
-    if (!liveMode || !botId || !user) return;
-
-    const authResult = validateSSEAuth();
-    if (!authResult.success) {
-      // Can't stream without auth; keep data fresh via polling instead
-      startPolling();
-      return () => stopPolling();
-    }
-
-    const controller = new AbortController();
-
-    authFetch(`/api/logs/${encodeURIComponent(botId)}/stream`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok || !response.body) {
-          throw new Error(`Stream response: ${response.status}`);
-        }
-
-        setConnected(true);
-        stopPolling();
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const messages = buffer.split("\n\n");
-          buffer = messages.pop() || "";
-
-          for (const msg of messages) {
-            if (!msg.trim()) continue;
-            const { eventType, data } = parseSSEMessage(msg);
-            if (!data) continue;
-            // "history" events are intentionally ignored - REST is the
-            // single source of history (see module doc).
-            if (eventType === "update") {
-              handleUpdateEvent(data);
-            }
-          }
-        }
-
-        // Stream ended cleanly (server restart, proxy recycle, access
-        // denied). Live updates are gone either way, so unless this was our
-        // own teardown, fall back to polling to keep data flowing.
-        setConnected(false);
-        if (!controller.signal.aborted) {
-          startPolling();
-        }
-      })
-      .catch((err) => {
-        // Intentional teardown (unmount, filter change, refresh) must not
-        // trigger fallback polling - that's how intervals used to leak.
-        // signal.aborted is checked first because browsers may reject an
-        // aborted body read with TypeError, not AbortError.
-        if (controller.signal.aborted || err?.name === "AbortError") return;
-
-        setConnected(false);
-        startPolling();
-      });
-
-    return () => {
-      controller.abort();
-      setConnected(false);
-      // Fallback polling belongs to this SSE session
-      stopPolling();
-    };
-  }, [botId, user, liveMode, sseNonce, handleUpdateEvent, startPolling, stopPolling]);
+  const connected = useLiveLogStream({
+    botId,
+    user,
+    liveMode,
+    reconnectKey: sseNonce,
+    onUpdate: handleUpdateEvent,
+    startPolling,
+    stopPolling,
+  });
 
   // -- Query operations --
 
@@ -615,8 +450,7 @@ export const useBotLogs = ({
       return;
     }
 
-    const logText = logs.map((log) => `[${log.date}] ${log.content}`).join("\n");
-    const blob = new Blob([logText], { type: "text/plain" });
+    const blob = new Blob([formatLogsForExport(logs)], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

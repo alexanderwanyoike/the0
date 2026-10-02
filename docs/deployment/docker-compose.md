@@ -151,6 +151,9 @@ environment:
   JWT_EXPIRES_IN: 24h
   THE0_ADMIN_EMAIL: admin@example.com
   THE0_ADMIN_PASSWORD: root-admin-password
+  # Serve Swagger UI at /docs and the OpenAPI spec at /docs-json. Off by
+  # default when NODE_ENV is production, as it is in this stack.
+  SWAGGER_ENABLED: "true"
 ```
 
 ### Storage Configuration

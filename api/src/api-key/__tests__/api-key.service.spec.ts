@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { ApiKeyRepository } from "@/api-key/api-key.repository";
@@ -20,6 +21,23 @@ describe("ApiKeyService", () => {
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
+  };
+
+  // A stored row carries columns the response must not leak.
+  const storedApiKey = {
+    ...mockApiKey,
+    lastUsedAt: new Date(),
+    keyValue: "raw-column",
+  };
+  const expectedResponse = {
+    id: storedApiKey.id,
+    userId: storedApiKey.userId,
+    name: storedApiKey.name,
+    key: storedApiKey.key,
+    isActive: storedApiKey.isActive,
+    createdAt: storedApiKey.createdAt,
+    updatedAt: storedApiKey.updatedAt,
+    lastUsedAt: storedApiKey.lastUsedAt,
   };
 
   const mockUser: UserRecord = {
@@ -72,6 +90,17 @@ describe("ApiKeyService", () => {
   });
 
   describe("createApiKey", () => {
+    it("should return only the API key response fields", async () => {
+      repository.findAll.mockResolvedValue(Ok([]));
+      repository.createApiKey.mockResolvedValue(Ok(storedApiKey));
+
+      const result = await service.createApiKey("user-123", {
+        name: "Test API Key",
+      });
+
+      expect(result.data).toStrictEqual(expectedResponse);
+    });
+
     it("should create an API key successfully", async () => {
       const createDto: CreateApiKeyDto = { name: "Test API Key" };
       repository.findAll.mockResolvedValue(Ok([]));
@@ -112,6 +141,14 @@ describe("ApiKeyService", () => {
   });
 
   describe("getUserApiKeys", () => {
+    it("should return only the API key response fields", async () => {
+      repository.findAll.mockResolvedValue(Ok([storedApiKey]));
+
+      const result = await service.getUserApiKeys("user-123");
+
+      expect(result.data).toStrictEqual([expectedResponse]);
+    });
+
     it("should return user API keys with full key", async () => {
       repository.findAll.mockResolvedValue(Ok([mockApiKey]));
 
@@ -135,6 +172,14 @@ describe("ApiKeyService", () => {
   });
 
   describe("getApiKeyById", () => {
+    it("should return only the API key response fields", async () => {
+      repository.findOne.mockResolvedValue(Ok(storedApiKey));
+
+      const result = await service.getApiKeyById("user-123", "test-id");
+
+      expect(result.data).toStrictEqual(expectedResponse);
+    });
+
     it("should return specific API key with full key", async () => {
       repository.findOne.mockResolvedValue(Ok(mockApiKey));
 
@@ -213,6 +258,31 @@ describe("ApiKeyService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("API key not found or inactive");
+    });
+
+    it("reports an unreachable database as unavailable when looking up the key", async () => {
+      repository.findByKey.mockRejectedValue(
+        Object.assign(new Error("connect ECONNREFUSED 10.0.0.5:5432"), {
+          code: "ECONNREFUSED",
+        }),
+      );
+
+      await expect(service.validateApiKey("the0_key")).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it("reports an unreachable database as unavailable when looking up the owner", async () => {
+      repository.findByKey.mockResolvedValue(Ok(mockApiKey));
+      users.findById.mockRejectedValue(
+        Object.assign(new Error("connect ETIMEDOUT 10.0.0.5:5432"), {
+          code: "ETIMEDOUT",
+        }),
+      );
+
+      await expect(service.validateApiKey("the0_key")).rejects.toThrow(
+        ServiceUnavailableException,
+      );
     });
   });
 

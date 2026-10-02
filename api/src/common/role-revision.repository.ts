@@ -1,7 +1,6 @@
 import { Result, Ok, Failure, errorMessage } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
-import { eq, and, desc, asc } from "drizzle-orm";
-import { createId } from "@paralleldrive/cuid2";
+import { eq, and, desc } from "drizzle-orm";
 import pino from "pino";
 
 const logger = pino({ name: "RoleRevisionRepository" });
@@ -71,24 +70,6 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     }
   }
 
-  async findOne(userId: string, id: string): Promise<Result<T, string>> {
-    try {
-      const records = await this.db
-        .select()
-        .from(this.table)
-        .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
-
-      if (records.length === 0) {
-        return Failure("Not found");
-      }
-
-      return Ok(this.transformRecordToData(records[0]));
-    } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching document");
-      return Failure(errorMessage(error));
-    }
-  }
-
   async findOneById(id: string): Promise<Result<T, string>> {
     try {
       const records = await this.db
@@ -103,29 +84,6 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document by ID");
-      return Failure(errorMessage(error));
-    }
-  }
-
-  async update(
-    userId: string,
-    id: string,
-    args: Partial<T>,
-  ): Promise<Result<T, string>> {
-    try {
-      const updateData = {
-        ...args,
-        updatedAt: new Date(),
-      };
-
-      await this.db
-        .update(this.table)
-        .set(updateData)
-        .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
-
-      return this.findOne(userId, id);
-    } catch (error: unknown) {
-      logger.error({ err: error }, "Error updating document");
       return Failure(errorMessage(error));
     }
   }
@@ -202,34 +160,6 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     }
   }
 
-  async getLatestVersion(
-    userId: string,
-    keyValue: string,
-  ): Promise<Result<T, string>> {
-    try {
-      const records = await this.db
-        .select()
-        .from(this.table)
-        .where(
-          and(
-            eq(this.table.userId, userId),
-            eq(this.table[this.keyField], keyValue),
-          ),
-        )
-        .orderBy(desc(this.table.createdAt))
-        .limit(1);
-
-      if (records.length === 0) {
-        return Failure("Not found");
-      }
-
-      return Ok(this.transformRecordToData(records[0]));
-    } catch (error: unknown) {
-      logger.error({ err: error }, "Error fetching latest version");
-      return Failure(errorMessage(error));
-    }
-  }
-
   // Global methods (not user-scoped) for checking uniqueness
   async getGlobalLatestVersion(key: string): Promise<Result<T, string>> {
     try {
@@ -273,18 +203,6 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     }
   }
 
-  async globalKeyExists(key: string): Promise<Result<boolean, string>> {
-    try {
-      const result = await this.findGlobalByKey(key);
-      if (!result.success) {
-        return Failure(result.error);
-      }
-      return Ok(result.data.length > 0);
-    } catch (error: unknown) {
-      return Failure(errorMessage(error));
-    }
-  }
-
   async findGlobalByKeyAndVersion(
     key: string,
     version: string,
@@ -319,10 +237,5 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       id: record.id,
       ...record,
     } as T;
-  }
-
-  // Legacy method name for backward compatibility
-  protected transformSnapshotToData<U>(record: Record<string, unknown>): U {
-    return this.transformRecordToData(record) as unknown as U;
   }
 }

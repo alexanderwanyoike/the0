@@ -17,6 +17,15 @@ export const SUPPORTED_RUNTIMES = [
 
 export type Runtime = (typeof SUPPORTED_RUNTIMES)[number];
 
+// Built server-side, so their entrypoints are not in the uploaded ZIP.
+export const COMPILED_RUNTIMES: readonly Runtime[] = [
+  "rust-stable",
+  "dotnet8",
+  "gcc13",
+  "scala3",
+  "ghc96",
+];
+
 export interface CustomBotConfig {
   name: string;
   description: string;

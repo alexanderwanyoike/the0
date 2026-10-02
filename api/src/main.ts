@@ -1,9 +1,15 @@
 import "dotenv/config";
 import { ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
 import { runMigrations } from "./database/migrate";
+import {
+  setupSwagger,
+  SWAGGER_JSON_PATH,
+  SWAGGER_UI_PATH,
+} from "./swagger/swagger.setup";
 
 async function bootstrap() {
   // Fail fast if JWT_SECRET is not configured
@@ -43,10 +49,17 @@ async function bootstrap() {
     }),
   );
 
+  const docsEnabled = setupSwagger(app, app.get(ConfigService));
+
   const port = process.env.PORT || 3000;
   await app.listen(port, "0.0.0.0");
 
   logger.log(`the0 API started on port ${port}`);
+  if (docsEnabled) {
+    logger.log(
+      `API docs at /${SWAGGER_UI_PATH}, OpenAPI spec at /${SWAGGER_JSON_PATH}`,
+    );
+  }
 }
 
 bootstrap().catch((error) => {

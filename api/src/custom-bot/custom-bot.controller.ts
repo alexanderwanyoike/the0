@@ -16,12 +16,24 @@ import {
   UploadedFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiConsumes,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiProduces,
+  ApiTags,
+} from "@nestjs/swagger";
 import { Response } from "express";
 import { CustomBotService } from "./custom-bot.service";
 import { CustomBotConfig } from "./custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
+import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { StorageService } from "./storage.service";
 
 interface CustomBotDeployDto {
@@ -29,6 +41,31 @@ interface CustomBotDeployDto {
   filePath: string; // Storage path where file was uploaded
 }
 
+// Described by hand because the body is an interface, not a DTO class: as an
+// undecorated class, the global ValidationPipe (forbidNonWhitelisted) would
+// reject every field.
+const DEPLOY_BODY_SCHEMA = {
+  type: "object",
+  required: ["config", "filePath"],
+  properties: {
+    config: {
+      type: "string",
+      description:
+        "Custom bot config (name, version, runtime, entrypoints, schema, ...) " +
+        "as a JSON string; `name` must match the path",
+    },
+    filePath: {
+      type: "string",
+      description: "Storage path returned by the upload endpoint",
+    },
+  },
+};
+
+const NAME_PARAM = { name: "name", description: "Custom bot name" };
+const VERSION_PARAM = { name: "version", description: "Semver version" };
+
+@ApiTags("custom-bots")
+@ApiJwtOrApiKeyAuth()
 @Controller("custom-bots")
 @UseGuards(AuthCombinedGuard)
 export class CustomBotController {
@@ -36,6 +73,44 @@ export class CustomBotController {
     private readonly customBotService: CustomBotService,
     private readonly storageService: StorageService,
   ) {}
+
+  private async parseDeployRequest(
+    name: string,
+    body: CustomBotDeployDto,
+    userId: string,
+  ): Promise<{ filePath: string; config: CustomBotConfig }> {
+    const filePath = this.validateFilePath(body.filePath, userId);
+
+    const fileExistsResult = await this.storageService.fileExists(filePath);
+    if (!fileExistsResult.success) {
+      throw new BadRequestException(
+        `File validation failed: ${fileExistsResult.error}`,
+      );
+    }
+
+    if (!fileExistsResult.data) {
+      throw new BadRequestException("File not found at specified file path");
+    }
+
+    if (!body.config) {
+      throw new BadRequestException("Config field is required");
+    }
+
+    let config: CustomBotConfig;
+    try {
+      config = JSON.parse(body.config);
+    } catch (error) {
+      throw new BadRequestException("Config must be valid JSON");
+    }
+
+    if (config.name !== name) {
+      throw new BadRequestException(
+        "Bot name in config must match URL parameter",
+      );
+    }
+
+    return { filePath, config };
+  }
 
   private validateFilePath(filePath: unknown, userId: string): string {
     if (typeof filePath !== "string") {
@@ -59,6 +134,25 @@ export class CustomBotController {
   @Post(":name/upload")
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))
+  @ApiOperation({
+    summary: "Upload a custom bot's zip archive",
+    description: "Returns the storage path to pass to the deploy endpoints.",
+  })
+  @ApiParam(NAME_PARAM)
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["file", "version"],
+      properties: {
+        file: { type: "string", format: "binary", description: "ZIP archive" },
+        version: { type: "string", description: "Semver version" },
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: "Missing file or version, or not a zip",
+  })
   async uploadFile(
     @Param("name") name: string,
     @UploadedFile() file: Express.Multer.File,
@@ -105,41 +199,21 @@ export class CustomBotController {
 
   @Post(":name")
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Deploy the first version of a custom bot" })
+  @ApiParam(NAME_PARAM)
+  @ApiBody({ schema: DEPLOY_BODY_SCHEMA })
+  @ApiBadRequestResponse({ description: "Invalid config or file path" })
   async createCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user.uid;
-    const filePath = this.validateFilePath(body.filePath, userId);
-
-    const fileExistsResult = await this.storageService.fileExists(filePath);
-    if (!fileExistsResult.success) {
-      throw new BadRequestException(
-        `File validation failed: ${fileExistsResult.error}`,
-      );
-    }
-
-    if (!fileExistsResult.data) {
-      throw new BadRequestException("File not found at specified file path");
-    }
-
-    if (!body.config) {
-      throw new BadRequestException("Config field is required");
-    }
-
-    let config: CustomBotConfig;
-    try {
-      config = JSON.parse(body.config);
-    } catch (error) {
-      throw new BadRequestException("Config must be valid JSON");
-    }
-
-    if (config.name !== name) {
-      throw new BadRequestException(
-        "Bot name in config must match URL parameter",
-      );
-    }
+    const { filePath, config } = await this.parseDeployRequest(
+      name,
+      body,
+      userId,
+    );
 
     const result = await this.customBotService.createCustomBot(
       userId,
@@ -160,41 +234,21 @@ export class CustomBotController {
 
   @Put(":name")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Deploy a new version of a custom bot" })
+  @ApiParam(NAME_PARAM)
+  @ApiBody({ schema: DEPLOY_BODY_SCHEMA })
+  @ApiBadRequestResponse({ description: "Invalid config or file path" })
   async updateCustomBot(
     @Param("name") name: string,
     @Body() body: CustomBotDeployDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const userId = user.uid;
-    const filePath = this.validateFilePath(body.filePath, userId);
-
-    const fileExistsResult = await this.storageService.fileExists(filePath);
-    if (!fileExistsResult.success) {
-      throw new BadRequestException(
-        `File validation failed: ${fileExistsResult.error}`,
-      );
-    }
-
-    if (!fileExistsResult.data) {
-      throw new BadRequestException("File not found at specified file path");
-    }
-
-    if (!body.config) {
-      throw new BadRequestException("Config field is required");
-    }
-
-    let config: CustomBotConfig;
-    try {
-      config = JSON.parse(body.config);
-    } catch (error) {
-      throw new BadRequestException("Config must be valid JSON");
-    }
-
-    if (config.name !== name) {
-      throw new BadRequestException(
-        "Bot name in config must match URL parameter",
-      );
-    }
+    const { filePath, config } = await this.parseDeployRequest(
+      name,
+      body,
+      userId,
+    );
 
     const result = await this.customBotService.updateCustomBot(
       userId,
@@ -216,6 +270,7 @@ export class CustomBotController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "List your custom bots" })
   async getUserCustomBots(@CurrentUser() user: AuthenticatedUser) {
     const userId = user.uid;
 
@@ -234,6 +289,11 @@ export class CustomBotController {
 
   @Get(":name/versions")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "List your versions of a custom bot with their instance counts",
+  })
+  @ApiParam(NAME_PARAM)
+  @ApiNotFoundResponse({ description: "Custom bot not found" })
   async getVersionsWithInstances(
     @Param("name") name: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -256,6 +316,9 @@ export class CustomBotController {
 
   @Get(":name")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "List every version of a custom bot" })
+  @ApiParam(NAME_PARAM)
+  @ApiNotFoundResponse({ description: "Custom bot not found" })
   async getAllVersions(@Param("name") name: string) {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
@@ -271,6 +334,11 @@ export class CustomBotController {
   }
 
   @Get("by-id/:id/frontend")
+  @ApiOperation({ summary: "Download a custom bot version's frontend bundle" })
+  @ApiParam({ name: "id", description: "Custom bot version ID" })
+  @ApiProduces("application/javascript")
+  @ApiOkResponse({ description: "JavaScript bundle" })
+  @ApiNotFoundResponse({ description: "Bot or frontend bundle not found" })
   async getFrontendBundleById(@Param("id") id: string, @Res() res: Response) {
     // Get custom bot by ID (includes specific version info)
     const result = await this.customBotService.getById(id);
@@ -308,6 +376,10 @@ export class CustomBotController {
 
   @Delete(":name/:version")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Delete one version of a custom bot" })
+  @ApiParam(NAME_PARAM)
+  @ApiParam(VERSION_PARAM)
+  @ApiBadRequestResponse({ description: "Version could not be deleted" })
   async deleteVersion(
     @Param("name") name: string,
     @Param("version") version: string,
@@ -331,6 +403,9 @@ export class CustomBotController {
 
   @Delete(":name")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Delete every version of a custom bot" })
+  @ApiParam(NAME_PARAM)
+  @ApiBadRequestResponse({ description: "Custom bot could not be deleted" })
   async deleteAllVersions(
     @Param("name") name: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -352,6 +427,10 @@ export class CustomBotController {
 
   @Get(":name/:version")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Get one version of a custom bot" })
+  @ApiParam(NAME_PARAM)
+  @ApiParam(VERSION_PARAM)
+  @ApiNotFoundResponse({ description: "Custom bot version not found" })
   async getSpecificVersion(
     @Param("name") name: string,
     @Param("version") version: string,

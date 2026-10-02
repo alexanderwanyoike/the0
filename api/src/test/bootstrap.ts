@@ -20,17 +20,6 @@ jest.mock("nats", () => ({
   StringCodec: jest.fn(),
 }));
 
-// Mock Redis
-jest.mock("redis", () => ({
-  createClient: jest.fn().mockReturnValue({
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-  }),
-}));
-
 // Mock bcrypt
 jest.mock("bcrypt", () => ({
   hash: jest.fn().mockResolvedValue("hashed_password"),

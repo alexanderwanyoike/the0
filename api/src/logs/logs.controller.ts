@@ -9,6 +9,15 @@ import {
   BadRequestException,
   NotFoundException,
 } from "@nestjs/common";
+import {
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiProduces,
+  ApiTags,
+} from "@nestjs/swagger";
 import { Request, Response } from "express";
 import { PinoLogger } from "nestjs-pino";
 import { LogsService } from "./logs.service";
@@ -18,6 +27,7 @@ import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
+import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
 // Must stay in sync with runtime's sanitizeBotID (runtime/internal/daemon/nats_publisher.go)
 const VALID_BOT_ID = /^[A-Za-z0-9_-]+$/;
@@ -34,6 +44,10 @@ interface SubscriptionResult {
   warningsSent: boolean;
 }
 
+const BOT_ID_PARAM = { name: "botId", description: "Bot instance ID" };
+
+@ApiTags("logs")
+@ApiJwtOrApiKeyAuth()
 @Controller("logs")
 @UseGuards(AuthCombinedGuard)
 export class LogsController {
@@ -64,6 +78,15 @@ export class LogsController {
   ) {}
 
   @Get(":botId")
+  @ApiOperation({
+    summary: "Read a bot's logs",
+    description:
+      "Pass `date`, `dateRange` or `lookbackDays`. Without a date or range, " +
+      "`lookbackDays` returns the newest entries from up to that many days.",
+  })
+  @ApiParam(BOT_ID_PARAM)
+  @ApiBadRequestResponse({ description: "Invalid bot ID or query" })
+  @ApiNotFoundResponse({ description: "Bot not found or access denied" })
   async getLogs(
     @Param("botId") botId: string,
     @Query() query: GetLogsQueryDto,
@@ -102,6 +125,15 @@ export class LogsController {
   }
 
   @Get(":botId/stream")
+  @ApiOperation({
+    summary: "Stream a bot's logs as server-sent events",
+    description:
+      "Sends today's logs as a `history` event, then live `update` events. " +
+      "`warning` and `error` events report degraded or failed streams.",
+  })
+  @ApiParam(BOT_ID_PARAM)
+  @ApiProduces("text/event-stream")
+  @ApiOkResponse({ description: "Event stream" })
   async streamLogs(
     @Param("botId") botId: string,
     @CurrentUser() user: AuthenticatedUser,

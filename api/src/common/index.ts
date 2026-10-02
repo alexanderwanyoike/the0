@@ -1,1 +1,1 @@
-export { Result, Ok, Failure } from "./result";
+export { Ok, Failure } from "./result";

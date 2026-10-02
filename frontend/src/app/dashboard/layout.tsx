@@ -1,92 +1,50 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
-import DashboardLayout from "@/components/layouts/dashboard-layout";
+import { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   DashboardBotsProvider,
   useDashboardBots,
 } from "@/contexts/dashboard-bots-context";
-import { BotListPanel } from "@/components/dashboard/bot-list-panel";
+import { BotListPanel } from "@/components/bot-list/bot-list-panel";
+import { BotListLayout } from "@/components/bot-list/bot-list-layout";
 import { ResizableSidebarLayout } from "@/components/dashboard/resizable-sidebar-layout";
-import { useMediaQuery } from "@/hooks/use-media-query";
+import { BotListItem } from "@/components/dashboard/bot-list-item";
+import { useBotFilters } from "@/hooks/use-bot-filters";
 
-function DashboardInner({ children }: { children: ReactNode }) {
+function DashboardBotsSidebar() {
   const { bots } = useDashboardBots();
   const router = useRouter();
-  const pathname = usePathname();
-  const isDesktop = useMediaQuery("(min-width: 1280px)");
+  const activeBotId = usePathname().split("/")[2] ?? null;
 
-  // Extract active bot ID from URL
-  const pathParts = pathname.split("/");
-  const activeBotId = pathParts.length >= 3 ? pathParts[2] : null;
-
-  const handleSelectBot = (botId: string) => {
-    router.push(`/dashboard/${botId}`);
-  };
-
-  // Wait for media query to resolve
-  if (isDesktop === null) {
-    return (
-      <div className="h-[calc(100vh-3rem)]">
-        <main className="h-full overflow-auto">{children}</main>
-      </div>
-    );
-  }
-
-  // Desktop: resizable side panel + content
-  if (isDesktop) {
-    return (
-      <div className="h-[calc(100vh-3rem)]">
-        <ResizableSidebarLayout
-          sidebar={
-            <BotListPanel
-              bots={bots}
-              activeBotId={activeBotId}
-              onSelectBot={handleSelectBot}
-              className="h-full"
-            />
-          }
-        >
-          <main className="h-full overflow-auto">{children}</main>
-        </ResizableSidebarLayout>
-      </div>
-    );
-  }
-
-  // Non-desktop: children only (list page or detail page handles its own layout)
   return (
-    <div className="h-[calc(100vh-3rem)]">
-      <main className="h-full overflow-auto">{children}</main>
-    </div>
+    <BotListPanel
+      title="Bots"
+      emptyCopy="No bots yet"
+      filterLabel="Filter bots"
+      bots={bots}
+      useFilters={useBotFilters}
+      className="h-full"
+      renderItem={(bot) => (
+        <BotListItem
+          key={bot.id}
+          bot={bot}
+          isActive={bot.id === activeBotId}
+          onClick={() => router.push(`/dashboard/${bot.id}`)}
+        />
+      )}
+    />
   );
-}
-
-function AuthGate({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
-    }
-  }, [user, loading, router]);
-
-  if (loading || !user) return null;
-
-  return <>{children}</>;
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <DashboardLayout>
-      <AuthGate>
-        <DashboardBotsProvider>
-          <DashboardInner>{children}</DashboardInner>
-        </DashboardBotsProvider>
-      </AuthGate>
-    </DashboardLayout>
+    <BotListLayout
+      provider={DashboardBotsProvider}
+      sidebar={<DashboardBotsSidebar />}
+      sidebarLayout={ResizableSidebarLayout}
+    >
+      {children}
+    </BotListLayout>
   );
 }

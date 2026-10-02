@@ -85,7 +85,6 @@ describe("UserService", () => {
       updateProfile: jest.fn(),
       updateLastLogin: jest.fn(),
       count: jest.fn(),
-      hasActiveAdmin: jest.fn(),
       createFirstAdmin: jest.fn(),
       promoteToAdmin: jest.fn(),
     } as unknown as jest.Mocked<UserRepository>;

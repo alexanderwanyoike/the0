@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  // Loaded by things fallow does not read: the Dockerfile HEALTHCHECK and
+  // the package.json jest setupFiles (<rootDir> is not expanded).
+  "entry": [
+    "scripts/docker-healthcheck.js",
+    "src/test/bootstrap.ts"
+  ],
+  // Referenced by name, not imported: pino-pretty is a pino transport target,
+  // @nestjs/schematics is the nest-cli.json collection, and
+  // eslint-config-prettier is a peer of eslint-plugin-prettier's recommended
+  // config. multer is what @nestjs/platform-express's FileInterceptor runs
+  // on; it stays a direct dependency beside its security resolution so the
+  // patched version is explicit rather than implied.
+  "ignoreDependencies": [
+    "pino-pretty",
+    "@nestjs/schematics",
+    "eslint-config-prettier",
+    "multer"
+  ]
+}

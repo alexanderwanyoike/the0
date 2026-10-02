@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyRepository } from "../api-key.repository";
 import { Ok, Failure } from "../../common/result";
+import { getDatabase } from "../../database/connection";
 
 jest.mock("../../database/connection", () => ({
   getDatabase: jest.fn().mockReturnValue({
@@ -98,6 +99,30 @@ describe("ApiKeyRepository", () => {
 
       expect(result.success).toBe(true);
       expect(result.data.id).toBe("test-id");
+    });
+
+    it("rethrows a database connection error instead of reporting the key as invalid", async () => {
+      const where = (getDatabase as jest.Mock)().select().from().where;
+      where.mockRejectedValueOnce(
+        Object.assign(new Error("connect ECONNREFUSED 10.0.0.5:5432"), {
+          code: "ECONNREFUSED",
+        }),
+      );
+
+      await expect(repository.findByKey("the0_key")).rejects.toMatchObject({
+        code: "ECONNREFUSED",
+      });
+    });
+
+    it("reports other lookup errors without the database message", async () => {
+      const where = (getDatabase as jest.Mock)().select().from().where;
+      where.mockRejectedValueOnce(
+        new Error('relation "api_keys" does not exist at 10.0.0.5:5432'),
+      );
+
+      const result = await repository.findByKey("the0_key");
+
+      expect(result).toEqual(Failure("API key lookup failed"));
     });
   });
 

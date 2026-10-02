@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import * as crypto from "crypto";
 import pino from "pino";
+import { isConnectionError } from "@/common/database-errors";
 
 const logger = pino({ name: "ApiKeyRepository" });
 
@@ -70,7 +71,11 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
         lastUsedAt: apiKey.lastUsedAt,
       } as ApiKey);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      if (isConnectionError(error)) {
+        throw error;
+      }
+      logger.error({ err: error }, "Error looking up API key");
+      return Failure("API key lookup failed");
     }
   }
 

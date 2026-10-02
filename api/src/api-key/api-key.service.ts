@@ -1,5 +1,6 @@
 // src/api-keys/services/api-key.service.ts
-import { Injectable } from "@nestjs/common";
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { isConnectionError } from "@/common/database-errors";
 import { ApiKeyRepository } from "./api-key.repository";
 import { Result, Ok, Failure } from "../common/result";
 import { ApiKey } from "./models/api-key.model";
@@ -7,6 +8,19 @@ import { CreateApiKeyDto } from "./dto/create-api-key.dto";
 import { ApiKeyCreatedResponseDto } from "./dto/api-key-created-response.dto";
 import { ApiKeyResponseDto } from "./dto/api-key-response.dto";
 import { UserRepository } from "@/user/user.repository";
+
+function toResponseDto(apiKey: ApiKey): ApiKeyCreatedResponseDto {
+  return {
+    id: apiKey.id,
+    userId: apiKey.userId,
+    name: apiKey.name,
+    key: apiKey.key,
+    isActive: apiKey.isActive,
+    createdAt: apiKey.createdAt,
+    updatedAt: apiKey.updatedAt,
+    lastUsedAt: apiKey.lastUsedAt,
+  };
+}
 
 @Injectable()
 export class ApiKeyService {
@@ -44,19 +58,7 @@ export class ApiKeyService {
       return Failure(result.error);
     }
 
-    // Return the created API key with full key
-    const responseDto: ApiKeyCreatedResponseDto = {
-      id: result.data.id,
-      userId: result.data.userId,
-      name: result.data.name,
-      key: result.data.key,
-      isActive: result.data.isActive,
-      createdAt: result.data.createdAt,
-      updatedAt: result.data.updatedAt,
-      lastUsedAt: result.data.lastUsedAt,
-    };
-
-    return Ok(responseDto);
+    return Ok(toResponseDto(result.data));
   }
 
   /**
@@ -70,19 +72,7 @@ export class ApiKeyService {
       return Failure(result.error);
     }
 
-    // Transform to response DTOs (including full key)
-    const responseDtos: ApiKeyResponseDto[] = result.data.map((apiKey) => ({
-      id: apiKey.id,
-      userId: apiKey.userId,
-      name: apiKey.name,
-      key: apiKey.key,
-      isActive: apiKey.isActive,
-      createdAt: apiKey.createdAt,
-      updatedAt: apiKey.updatedAt,
-      lastUsedAt: apiKey.lastUsedAt,
-    }));
-
-    return Ok(responseDtos);
+    return Ok(result.data.map(toResponseDto));
   }
 
   /**
@@ -97,19 +87,7 @@ export class ApiKeyService {
       return Failure(result.error);
     }
 
-    // Transform to response DTO (including full key)
-    const responseDto: ApiKeyResponseDto = {
-      id: result.data.id,
-      userId: result.data.userId,
-      name: result.data.name,
-      key: result.data.key,
-      isActive: result.data.isActive,
-      createdAt: result.data.createdAt,
-      updatedAt: result.data.updatedAt,
-      lastUsedAt: result.data.lastUsedAt,
-    };
-
-    return Ok(responseDto);
+    return Ok(toResponseDto(result.data));
   }
 
   /**
@@ -128,23 +106,34 @@ export class ApiKeyService {
   }
 
   /**
-   * Validate an API key (for authentication middleware)
+   * Validate an API key (for authentication middleware). Failure reasons are
+   * for server-side logs only: callers answer clients with a generic message,
+   * because a reason can carry database details.
    */
   async validateApiKey(key: string): Promise<Result<ApiKey, string>> {
-    const result = await this.apiKeyRepository.findByKey(key);
-    if (!result.success) {
-      return Failure(result.error);
+    try {
+      const result = await this.apiKeyRepository.findByKey(key);
+      if (!result.success) {
+        return Failure(result.error);
+      }
+
+      const user = await this.users.findById(result.data.userId);
+      if (!user?.isActive) {
+        return Failure("API key owner is inactive");
+      }
+
+      // Update last used timestamp
+      await this.apiKeyRepository.updateLastUsed(result.data.id);
+
+      return Ok(result.data);
+    } catch (error) {
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
+      }
+      throw error;
     }
-
-    const user = await this.users.findById(result.data.userId);
-    if (!user?.isActive) {
-      return Failure("API key owner is inactive");
-    }
-
-    // Update last used timestamp
-    await this.apiKeyRepository.updateLastUsed(result.data.id);
-
-    return Ok(result.data);
   }
 
   /**

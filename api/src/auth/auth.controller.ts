@@ -9,8 +9,22 @@ import {
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { ValidateTokenDto } from "./dto/validate-token.dto";
-import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
+import {
+  ApiHeader,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
 import { ApiKeyService } from "@/api-key/api-key.service";
+import { ApiJwtAuth, ApiKeySecurity } from "@/swagger/api-auth.decorators";
+
+// The header is read by hand here, so Swagger would list it as a required
+// parameter; the security scheme already sends it.
+const AUTHORIZATION_HEADER = {
+  name: "authorization",
+  required: false,
+  description: "Filled in by Authorize",
+};
 
 @ApiTags("auth")
 @Controller("auth")
@@ -21,6 +35,8 @@ export class AuthController {
   ) {}
 
   @Post("login")
+  @ApiOperation({ summary: "Log in with email and password to get a JWT" })
+  @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   async login(@Body() loginDto: LoginDto) {
     const result = await this.authService.login(loginDto);
 
@@ -36,7 +52,8 @@ export class AuthController {
   }
 
   @Post("validate")
-  @ApiBearerAuth()
+  @ApiOperation({ summary: "Check whether a JWT passed in the body is valid" })
+  @ApiUnauthorizedResponse({ description: "Token is invalid or expired" })
   async validate(@Body() validateTokenDto: ValidateTokenDto) {
     const result = await this.authService.validateToken(validateTokenDto.token);
 
@@ -52,7 +69,9 @@ export class AuthController {
   }
 
   @Get("me")
-  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the user the JWT belongs to" })
+  @ApiJwtAuth()
+  @ApiHeader(AUTHORIZATION_HEADER)
   async getCurrentUser(@Headers("authorization") authHeader?: string) {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       throw new UnauthorizedException("Bearer token is required");
@@ -73,6 +92,12 @@ export class AuthController {
   }
 
   @Get("validate-api-key")
+  @ApiOperation({
+    summary: "Check whether an API key is valid",
+    description: "Also accepts the key as `Authorization: Bearer <key>`.",
+  })
+  @ApiKeySecurity()
+  @ApiHeader(AUTHORIZATION_HEADER)
   async validateApiKey(@Headers("authorization") authHeader?: string) {
     if (!authHeader) {
       throw new UnauthorizedException("Authorization header is required");
@@ -91,7 +116,7 @@ export class AuthController {
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
     if (!result.success) {
-      throw new UnauthorizedException(result.error);
+      throw new UnauthorizedException("Invalid API key");
     }
 
     return {

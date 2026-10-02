@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiHeader, ApiBody } from "@nestjs/swagger";
 import { McpService } from "./mcp.service";
+import { MCP_TOOL_DEFINITIONS } from "./mcp.types";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { PinoLogger } from "nestjs-pino";
 
@@ -36,7 +37,7 @@ interface JsonRpcResponse {
   };
 }
 
-@ApiTags("MCP")
+@ApiTags("mcp")
 @Controller("mcp")
 export class McpController {
   constructor(
@@ -54,8 +55,8 @@ export class McpController {
   })
   @ApiHeader({
     name: "x-api-key",
-    description: "API key for authentication",
-    required: true,
+    description: "API key; required for tools/call",
+    required: false,
   })
   @ApiBody({
     description: "JSON-RPC 2.0 request",
@@ -101,7 +102,7 @@ export class McpController {
 
         case "tools/list":
           return this.createResponse(request.id, {
-            tools: this.getToolDefinitions(),
+            tools: MCP_TOOL_DEFINITIONS,
           });
 
         case "tools/call":
@@ -182,259 +183,5 @@ export class McpController {
         data,
       },
     };
-  }
-
-  private getToolDefinitions() {
-    return [
-      // Auth Tools
-      {
-        name: "auth_status",
-        description: "Check if the API key is valid and get connection status",
-        inputSchema: {
-          type: "object",
-          properties: {},
-          required: [] as string[],
-        },
-      },
-
-      // Bot Instance Tools
-      {
-        name: "bot_list",
-        description:
-          "List all deployed bot instances for the authenticated user",
-        inputSchema: {
-          type: "object",
-          properties: {},
-          required: [] as string[],
-        },
-      },
-      {
-        name: "bot_get",
-        description: "Get details of a specific bot instance",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-      {
-        name: "bot_deploy",
-        description: "Deploy a new bot instance with the given configuration",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "Name for the bot instance",
-            },
-            config: {
-              type: "object",
-              description:
-                "Bot configuration including type (e.g., scheduled/bot-name), version, and bot-specific settings",
-            },
-          },
-          required: ["name", "config"],
-        },
-      },
-      {
-        name: "bot_update",
-        description: "Update an existing bot instance configuration",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID to update",
-            },
-            name: {
-              type: "string",
-              description: "New name for the bot instance (optional)",
-            },
-            config: {
-              type: "object",
-              description: "Updated bot configuration",
-            },
-          },
-          required: ["bot_id", "config"],
-        },
-      },
-      {
-        name: "bot_delete",
-        description: "Delete a bot instance",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID to delete",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-
-      // Logs Tools
-      {
-        name: "logs_get",
-        description: "Get execution logs for a bot instance",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID",
-            },
-            date: {
-              type: "string",
-              description: "Date in YYYYMMDD format (optional)",
-            },
-            date_range: {
-              type: "string",
-              description:
-                "Date range in YYYYMMDD-YYYYMMDD format (optional, overrides date)",
-            },
-            limit: {
-              type: "number",
-              description:
-                "Maximum number of log entries (default: 100, max: 500)",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-      {
-        name: "logs_summary",
-        description:
-          "Get a summary of log statistics for a bot (error counts, date range, etc.)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-
-      // Bot State Tools
-      {
-        name: "bot_state_list",
-        description:
-          "List the persisted state keys for a bot instance (with sizes)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID",
-            },
-          },
-          required: ["bot_id"],
-        },
-      },
-      {
-        name: "bot_state_get",
-        description:
-          "Get the value of a specific persisted state key for a bot instance",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID",
-            },
-            key: {
-              type: "string",
-              description: "The state key name",
-            },
-          },
-          required: ["bot_id", "key"],
-        },
-      },
-
-      // Bot Query Tools
-      {
-        name: "bot_query",
-        description:
-          "Execute a query against a running realtime bot's query endpoint",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: {
-              type: "string",
-              description: "The bot instance ID",
-            },
-            query_path: {
-              type: "string",
-              description: "Query path exposed by the bot (e.g. /positions)",
-            },
-            params: {
-              type: "object",
-              description: "Query parameters (optional)",
-            },
-            timeout_sec: {
-              type: "number",
-              description: "Query timeout in seconds (default: 30)",
-            },
-          },
-          required: ["bot_id", "query_path"],
-        },
-      },
-
-      // Custom Bot Tools
-      {
-        name: "custom_bot_list",
-        description: "List all available custom bots in the marketplace",
-        inputSchema: {
-          type: "object",
-          properties: {},
-          required: [] as string[],
-        },
-      },
-      {
-        name: "custom_bot_get",
-        description: "Get details of a specific custom bot",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "The custom bot name",
-            },
-            version: {
-              type: "string",
-              description: "Version to retrieve (optional, defaults to latest)",
-            },
-          },
-          required: ["name"],
-        },
-      },
-      {
-        name: "custom_bot_schema",
-        description:
-          "Get the JSON schema for configuring a custom bot (use this to understand required configuration)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "The custom bot name",
-            },
-            version: {
-              type: "string",
-              description: "Version to retrieve schema for (optional)",
-            },
-          },
-          required: ["name"],
-        },
-      },
-    ];
   }
 }

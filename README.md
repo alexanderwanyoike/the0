@@ -1,471 +1,139 @@
-# the0
-
 <div align="center">
 
-**Open-Source Algorithmic Trading Platform**
+<img src="assets/the0-icon.png" width="88" alt="the0 logo">
 
-*Production-grade bot execution engine for quantitative trading*
+# the0
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python)](https://www.python.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Rust](https://img.shields.io/badge/Rust-stable-DEA584?logo=rust)](https://www.rust-lang.org/)
-[![C++](https://img.shields.io/badge/C++-17-00599C?logo=cplusplus)](https://isocpp.org/)
-[![C#](https://img.shields.io/badge/C%23-.NET%208-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Scala](https://img.shields.io/badge/Scala-3-DC322F?logo=scala)](https://www.scala-lang.org/)
-[![Haskell](https://img.shields.io/badge/Haskell-GHC%209.6-5D4F85?logo=haskell)](https://www.haskell.org/)
+**Run your trading bots like production software.**
+
+A self-hosted runtime for algorithmic trading. Write a bot in the language you already use;<br>
+the0 runs it, schedules it, keeps its state, streams its logs and gives it a live dashboard.
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/alexanderwanyoike/the0?filter=v*)](https://github.com/alexanderwanyoike/the0/releases)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/g5mp57nK)
+
+[Docs](https://docs.the0.app) · [Quick start](#quick-start) · [Build a bot](https://docs.the0.app/custom-bot-development/) · [Discord](https://discord.gg/g5mp57nK)
 
 </div>
 
 ---
 
-## What is the0?
+You've tested a strategy on your laptop. Now it has to run every day, survive restarts, remember its positions between runs and tell you what it's doing. That last mile is ops work, and it's the same for every bot. the0 is that last mile, built once:
 
-**the0** is an open-source algorithmic trading execution engine that provides production-grade infrastructure for deploying and managing trading bots across multiple markets. Build strategies in your preferred language—Python, TypeScript, Rust, C++, C#, Scala, or Haskell—then deploy them to a self-hosted execution engine with real-time monitoring and custom React dashboards.
+| | |
+|---|---|
+| **Runtime** | Every bot runs in its own isolated container, in Python, TypeScript, Rust, C++, C#, Scala or Haskell. |
+| **Scheduling** | Run bots continuously, or on a cron schedule per instance. |
+| **State** | Key-value state that survives between runs and restarts. |
+| **Logs & metrics** | Structured logs and metrics from every run, live in the browser and queryable from the CLI and API. |
+| **Dashboards** | Ship a React dashboard with your bot and watch its metrics update in real time. |
 
-> **Status**: Beta - Active development. Not production-ready. Contributions and feedback welcome.
+Backtesting stays local, next to your research. the0 is where a strategy goes once it's ready to trade.
 
-### Key Features
+## A complete bot
 
-- **Multi-Language Support** - Build bots in Python, TypeScript, Rust, C++, C#, Scala, or Haskell
-- **Custom Frontends** - Create React dashboards tailored to your trading strategies
-- **Real-time Execution** - Deploy scheduled or continuous trading bots with isolated execution
-- **Self-Hosted** - Full control over your infrastructure and data
-- **Docker Ready** - Streamlined deployment with Docker Compose
-- **CLI-First Workflow** - Efficient bot management via command-line interface
-- **Exchange Agnostic** - Design your bots to work with any trading platform
+```python
+import ccxt
+from the0 import parse, metric, state, success
 
----
+bot_id, config = parse()
+price = ccxt.binance().fetch_ticker(config["symbol"])["last"]
 
-## Quick Start
+runs = state.get("runs", 0) + 1
+state.set("runs", runs)
 
-Deploy the0 locally:
-
-### Prerequisites
-
-- **Docker** 20.10+ with **Compose** plugin (the CLI uses Docker Compose under the hood)
-- At least 4GB RAM available for containers
-
-### Option 1: CLI Local Deployment (Recommended)
-
-```bash
-# Install the CLI
-curl -sSL https://install.the0.app | sh
-
-# Initialize local compose and configure the root admin
-the0 local init --email you@example.com --password testuse123
-
-# Start all services
-the0 local start
-
-# Access the platform
-open http://localhost:3001/login  # Frontend
-open http://localhost:3000  # API
-open http://localhost:9001  # MinIO Console (admin/the0password)
+metric("price", {"symbol": config["symbol"], "value": price})
+success(f"Run {runs}: {config['symbol']} at {price}")
 ```
 
-### Option 2: Kubernetes (Helm)
+Use any exchange client or library you like. Upload the bot once, then start an instance of it on a schedule:
 
-Kubernetes is not a one-command install. A production deployment needs
-operator-managed backing services and secrets for PostgreSQL, MongoDB,
-S3-compatible object storage, JWT signing, and the deployment-managed root
-admin. The chart can run NATS in the cluster, or you can point it at an
-external NATS service.
+```json
+{ "name": "btc-watch", "type": "scheduled/price-watch", "version": "1.0.0",
+  "schedule": "*/5 * * * *", "symbol": "BTC/USDT" }
+```
 
-The Helm chart is published for production use, but prepare a values file and
-Secret workflow first:
+```bash
+the0 custom-bot deploy           # package and upload the bot
+the0 bot deploy instance.json    # run it every five minutes
+the0 bot logs <bot_id> -w        # follow its logs
+```
+
+The [Python quick start](https://docs.the0.app/custom-bot-development/python-quick-start) walks through the full project, including the bot's config schema and dashboard.
+
+## Quick start
+
+You need Docker with the Compose plugin and about 4 GB of free memory.
+
+```bash
+curl -sSL https://install.the0.app | sh   # installs the CLI to ~/.the0/bin
+the0 local init                            # prompts for the admin email and password
+the0 local start
+```
+
+Open http://localhost:3001 and sign in. The API listens on http://localhost:3000.
+
+For a server, follow [Docker Compose](https://docs.the0.app/deployment/docker-compose) or install the [Helm chart](https://docs.the0.app/deployment/kubernetes) on Kubernetes:
 
 ```bash
 helm repo add the0 https://alexanderwanyoike.github.io/the0
-helm repo update
 ```
 
-**Local development with Minikube:**
+## Languages
 
-```bash
-cd k8s
-make minikube-up
-make setup-hosts
-```
+| Language | SDK | Guide |
+|---|---|---|
+| Python | [`the0-sdk`](https://pypi.org/project/the0-sdk/) on PyPI | [Quick start](https://docs.the0.app/custom-bot-development/python-quick-start) |
+| TypeScript / Node.js | [`the0-node`](https://www.npmjs.com/package/the0-node) on npm | [Quick start](https://docs.the0.app/custom-bot-development/nodejs-quick-start) |
+| Rust | [`the0-sdk`](https://crates.io/crates/the0-sdk) on crates.io | [Quick start](https://docs.the0.app/custom-bot-development/rust-quick-start) |
+| C++ | Header-only, via [FetchContent](sdk/cpp) | [Quick start](https://docs.the0.app/custom-bot-development/cpp-quick-start) |
+| C# | [`The0.Sdk`](https://www.nuget.org/packages/The0.Sdk) on NuGet | [Quick start](https://docs.the0.app/custom-bot-development/csharp-quick-start) |
+| Scala | [GitHub Packages](https://github.com/alexanderwanyoike/the0/packages) | [Quick start](https://docs.the0.app/custom-bot-development/scala-quick-start) |
+| Haskell | [From source](sdk/haskell) with cabal | [Quick start](https://docs.the0.app/custom-bot-development/haskell-quick-start) |
+| React dashboards | [`the0-react`](https://www.npmjs.com/package/the0-react) on npm | [Custom frontends](https://docs.the0.app/custom-bot-development/custom-frontends) |
 
-See [Kubernetes Deployment](docs/deployment/kubernetes.md) for the full guide,
-including the external services and root admin configuration the chart expects.
+Working examples for each language live in [`example-bots/`](example-bots).
 
----
+## Built for AI agents too
 
-## CLI Installation
-
-The the0 CLI tool provides a local development interface for managing your bots.
-
-### Quick Install (Recommended)
-
-```bash
-curl -sSL https://install.the0.app | sh
-```
-
-This detects your OS and architecture, downloads the latest release binary, verifies its checksum, and installs it to `~/.the0/bin/the0`. Make sure `~/.the0/bin` is in your PATH.
-
-### Install from Source
-
-```bash
-# Clone the repository if you haven't already
-git clone https://github.com/alexanderwanyoike/the0.git
-cd the0/cli
-
-# Build and install the CLI
-make install
-
-# Verify installation
-the0 --help
-```
-
-The source build installs to `~/bin/the0`. Make sure `~/bin` is in your PATH.
-
-### Prerequisites for CLI
-
-- **Go 1.21+** - Required for building the CLI
-- **Git** - For cloning the repository
-
-### CLI Configuration & Usage
-
-**Configure API endpoint for local deployments:**
-
-```bash
-# For Docker Compose deployment
-export THE0_API_URL=http://localhost:3000
-
-# For Kubernetes deployment  
-export THE0_API_URL=http://api.the0.local:3000
-```
-
-**For CLI bot usage instructions, visit the official documentation:**
-
-📖 [the0 CLI Documentation](https://docs.the0.app/the0-cli/)
-
----
-
-## MCP Server (Claude Code Integration)
-
-the0 includes a built-in MCP (Model Context Protocol) server that enables AI assistants like Claude Code to interact directly with the platform. This allows you to manage bots, view logs, and deploy configurations using natural language.
-
-### Configure Claude Code
-
-MCP tools require authentication via API key. Generate one from the web dashboard (Settings → API Keys) or via the CLI (`the0 auth login`).
-
-**Option 1: CLI Command**
+The API ships an [MCP server](https://docs.the0.app/integrations/mcp), so Claude Code or any MCP client can list, deploy and debug your bots. Create an API key in the dashboard, then:
 
 ```bash
 claude mcp add the0 --transport http http://localhost:3000/mcp \
-  --header "x-api-key: YOUR_API_KEY"
+  --header "x-api-key: $THE0_API_KEY"
 ```
 
-**Option 2: Configuration File**
-
-Add to your `.mcp.json` in the project root:
-
-```json
-{
-  "mcpServers": {
-    "the0": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp",
-      "headers": {
-        "x-api-key": "YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-For team environments, use environment variable expansion to avoid committing secrets:
-
-```json
-{
-  "mcpServers": {
-    "the0": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp",
-      "headers": {
-        "x-api-key": "${THE0_API_KEY}"
-      }
-    }
-  }
-}
-```
-
-Restart Claude Code after configuring, then verify with `/mcp` — you should see the0 server as connected.
-
-### Available MCP Tools
-
-| Category | Tool | Description |
-|----------|------|-------------|
-| **Auth** | `auth_status` | Check API key validity |
-| **Bot Instance** | `bot_list` | List deployed bots |
-| | `bot_get` | Get bot details |
-| | `bot_deploy` | Deploy a new bot |
-| | `bot_update` | Update bot configuration |
-| | `bot_delete` | Delete a bot |
-| **Logs** | `logs_get` | Get execution logs |
-| | `logs_summary` | Get log statistics |
-| **Custom Bot** | `custom_bot_list` | List available custom bots |
-| | `custom_bot_get` | Get custom bot details |
-| | `custom_bot_schema` | Get configuration schema |
-
-### Example Usage
-
-Once configured, ask Claude Code:
-
-- *"List my deployed bots"*
-- *"Show me the logs for my trading bot"*
-- *"What custom bots are available?"*
-- *"Deploy a new scheduled bot with this configuration"*
-
-For detailed MCP documentation including all tool parameters and troubleshooting, see [MCP Integration Guide](docs/integrations/mcp.md).
-
----
-
-## Architecture
-
-the0 is built as a microservices execution engine that enables algorithmic trading bot deployment and management:
+## How it fits together
 
 ```mermaid
-graph TB
-    subgraph "Users"
-        DEV[👨‍💻 Bot Developer<br/>Creates & tests bots]
-        TRADER[📊 Trader<br/>Deploys & monitors]
-    end
-    
-    subgraph "the0 Platform"
-        subgraph "Client Layer"
-            WEB[🌐 Web Dashboard<br/>Next.js 15, React 19<br/>Bot management & monitoring]
-            CLI[🛠️ CLI Tool<br/>Go, Cobra<br/>Local development]
-        end
-        
-        subgraph "API Layer"
-            API[🚀 API Server<br/>NestJS, TypeScript<br/>REST API & orchestration]
-        end
-        
-        subgraph "Runtime Services"
-            BR[⚡ Bot Runner<br/>Go, gRPC<br/>Real-time execution]
-            BS[⏰ Bot Scheduler<br/>Go, gRPC<br/>Cron execution]
-        end
-
-        subgraph "Data Layer"
-            PG[(🐘 PostgreSQL<br/>Users, bots, auth)]
-            MONGO[(🍃 MongoDB<br/>Runtime state, logs)]
-            NATS[📨 NATS JetStream<br/>Event streaming]
-            MINIO[📦 MinIO<br/>Code & log storage]
-        end
-    end
-    
-    %% User interactions
-    DEV -.->|HTTPS| WEB
-    DEV -.->|CLI| CLI
-    TRADER -.->|HTTPS| WEB
-    
-    %% Client to API
-    WEB -->|REST + JWT| API
-    CLI -->|REST + API Key| API
-    API -->|SSE| WEB
-    
-    %% API to databases
-    API -->|SQL| PG
-    API -->|Events| NATS
-    API -->|S3 API| MINIO
-    
-    %% Runtime services
-    NATS -->|Events| BR
-    NATS -->|Events| BS
-
-    BR -->|State| MONGO
-    BS -->|Schedules| MONGO
-
-    BR -->|Logs| MINIO
-    
-    %% Styling
-    classDef userClass fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    classDef clientClass fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    classDef apiClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef runtimeClass fill:#fff8e1,stroke:#f57c00,stroke-width:2px
-    classDef dataClass fill:#e0f2f1,stroke:#00695c,stroke-width:2px
-
-    class DEV,TRADER userClass
-    class WEB,CLI clientClass
-    class API apiClass
-    class BR,BS runtimeClass
-    class PG,MONGO,NATS,MINIO dataClass
+flowchart LR
+    Clients["CLI, dashboard, MCP"] --> API
+    API -- NATS --> Runner[Bot runner]
+    API -- NATS --> Scheduler[Bot scheduler]
+    Runner --> Bots[[Your bots]]
+    Scheduler --> Bots
 ```
 
-### How It Works
+The API is NestJS, the runtime and CLI are Go, and the dashboard is Next.js. PostgreSQL holds users and bot definitions, MongoDB holds runtime state, NATS carries events, and an S3-compatible store holds bot code and logs. Bots run as Docker containers under Compose, or as pods and CronJobs on Kubernetes.
 
-**🌐 Web Dashboard** - Next.js frontend for bot management, real-time monitoring, and documentation system
-
-**🛠️ CLI Tool** - Go-based command-line interface for local bot development, testing, and deployment automation
-
-**🚀 API Server** - NestJS backend providing REST APIs, JWT authentication, and event orchestration across all services
-
-**⚙️ Runtime Services** - Specialized Go microservices using master-worker patterns for different execution models:
-- **Bot Runner**: Real-time trading bot execution
-- **Bot Scheduler**: Cron-based scheduled execution
-
-**💾 Data Architecture** - Multi-database approach:
-- **PostgreSQL**: User accounts, bot definitions, authentication
-- **MongoDB**: Runtime state, job queues, execution logs
-- **MinIO**: Bot code storage and logs
-- **NATS JetStream**: Event streaming and service coordination
-
-### Key Benefits
-
-- **Isolated**: Each bot runs in isolation with resource management
-- **Fast**: Real-time execution with live market data
-- **Scalable**: Handles multiple bots and users across distributed infrastructure
-
----
-
-## Bot Development
-
-### Supported Languages
-
-Build trading bots in any of these languages with official SDK support:
-
-| Language | SDK | Documentation | Package Registry |
-|----------|-----|---------------|------------------|
-| **Python** | [sdk/python](sdk/python) | [Quick Start](docs/custom-bot-development/python-quick-start.md) | [PyPI](https://pypi.org/project/the0-sdk/) |
-| **TypeScript/Node.js** | [sdk/nodejs](sdk/nodejs) | [Quick Start](docs/custom-bot-development/nodejs-quick-start.md) | [npm](https://www.npmjs.com/package/the0-node) |
-| **Rust** | [sdk/rust](sdk/rust) | [Quick Start](docs/custom-bot-development/rust-quick-start.md) | [crates.io](https://crates.io/crates/the0-sdk) |
-| **C++** | [sdk/cpp](sdk/cpp) | [Quick Start](docs/custom-bot-development/cpp-quick-start.md) | Header-only (FetchContent) |
-| **C#** | [sdk/dotnet](sdk/dotnet) | [Quick Start](docs/custom-bot-development/csharp-quick-start.md) | [NuGet](https://www.nuget.org/packages/The0.Sdk) |
-| **Scala** | [sdk/scala](sdk/scala) | [Quick Start](docs/custom-bot-development/scala-quick-start.md) | [GitHub Packages](https://github.com/alexanderwanyoike/the0/packages) |
-| **Haskell** | [sdk/haskell](sdk/haskell) | [Quick Start](docs/custom-bot-development/haskell-quick-start.md) | Source (cabal) |
-
-### Custom Frontends
-
-Build React dashboards tailored to your trading strategies using the React SDK:
-
-| SDK | Documentation | Package |
-|-----|---------------|---------|
-| [sdk/react](sdk/react) | [Custom Frontends](docs/custom-bot-development/custom-frontends.md) | [the0-react](https://www.npmjs.com/package/the0-react) |
-
-### Framework Agnostic
-
-the0 doesn't lock you into specific libraries or frameworks. Use any packages from your language's ecosystem—pandas for Python, sttp for Scala, reqwest for Rust, or any other libraries you prefer.
-
-### Example: Simple DCA Bot
-
-```python
-from typing import Dict, Any
-from alpaca.trading.client import TradingClient
-
-def main(id: str, config: Dict[str, Any]) -> Dict[str, Any]:
-    """Dollar Cost Averaging bot - buys a fixed amount regularly"""
-    
-    # Initialize trading client
-    client = TradingClient(
-        api_key=config["api_key"],
-        secret_key=config["secret_key"],
-        paper=config.get("paper", True)
-    )
-    
-    # Calculate and execute purchase
-    symbol = config["symbol"]
-    amount = config["amount"]
-    
-    # Place market buy order
-    order = client.submit_order(
-        symbol=symbol,
-        notional=amount,
-        side=OrderSide.BUY,
-        type=OrderType.MARKET,
-        time_in_force=TimeInForce.DAY
-    )
-    
-    return {
-        "status": "success",
-        "message": f"Purchased ${amount} of {symbol}",
-        "order_id": order.id
-    }
-```
-
-### Bot Types
-
-- **Scheduled Bots** - Run on cron schedules (daily, weekly, monthly)
-- **Real-time Bots** - Continuous execution with live data feeds
-
----
-
-## Documentation
-
-### Getting Started
-- [Welcome to the0](/docs/welcome-to-the0.md) - Platform overview
-- [Custom Bot Development](/docs/custom-bot-development/) - Build your first bot
-- [Quick Start Guide](/docs/custom-bot-development/quick-start-guide.md) - 15-minute DCA bot tutorial
-
-### Deployment Guides
-- [Kubernetes Deployment](k8s/README.md) - Production deployment
-
-### Development Resources
-- [Bot Configuration](docs/custom-bot-development/configuration.md) - Configuration reference
-- [Testing & Debugging](docs/custom-bot-development/testing.md) - Development best practices
-
----
+> **Beta.** the0 moves fast. Breaking changes ship with a [migration guide](https://docs.the0.app/migration-guides/).
 
 ## Contributing
 
-We welcome contributions from developers, traders, and AI enthusiasts! the0 is built by a community that values creativity and innovation.
-
-### AI-Assisted Development
-
-We encourage the use of AI tools and agents in development:
-
-- **AI Assistants Welcome** - Use Claude, ChatGPT, GitHub Copilot, or any AI tools you prefer
-- **AI-Generated Code** - AI-written code is acceptable when properly tested
-- **Creative Solutions** - We value innovative approaches and problem-solving
-- **Quality First** - Ensure your code is properly tested, regardless of origin
-- **Context Engineering Over Vibe Coding** - Use context engineering when contributing with AI
-
-### Ways to Contribute
-
-- **Bug Reports** - Found an issue? Let us know
-- **Feature Requests** - Have ideas for improvements?
-- **Code Contributions** - Submit pull requests (AI-assisted or manual)
-- **Documentation** - Help improve our docs and examples
-- **Bot Templates** - Share innovative trading strategies and patterns
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
-
-### Getting Started
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Build your solution (with or without AI assistance)
-4. Add tests
-5. Submit a pull request with a clear description
-
----
+Bug reports, ideas and pull requests are all welcome, AI-assisted ones included as long as they come with tests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or say hello on [Discord](https://discord.gg/g5mp57nK).
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Support & Community
-
-- **Discord**: [Join our community for support](https://discord.gg/g5mp57nK)
-- **Documentation**: [docs.the0.app](https://docs.the0.app)
-- **GitHub Issues**: [Report bugs or request features](https://github.com/alexanderwanyoike/the0/issues)
+[Apache 2.0](LICENSE)
 
 ---
 
 <div align="center">
 
-**Built by AlphaNeuron**
-
-[Website](https://the0.app) • [Documentation](https://docs.the0.app) • [Discord](https://discord.gg/g5mp57nK)
+Built by AlphaNeuron · [the0.app](https://the0.app)
 
 </div>
 
----
 This one's for you Dad

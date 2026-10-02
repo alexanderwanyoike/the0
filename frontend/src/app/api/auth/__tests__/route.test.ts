@@ -17,6 +17,101 @@ function getCalledUrl(call: unknown[]): string {
     : ((call[0] as { url?: string })?.url ?? String(call[0]));
 }
 
+function upstreamRequest(): Request {
+  const [input, init] = mockFetch.mock.calls[0];
+  return input instanceof Request ? input : new Request(input, init);
+}
+
+describe.each([
+  { path: "/auth/login", handler: () => loginPOST, label: "auth login" },
+  {
+    path: "/auth/validate",
+    handler: () => validatePOST,
+    label: "auth validate",
+  },
+])("POST /api$path request forwarding", ({ path, handler, label }) => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.BOT_API_URL = "http://localhost:3000";
+  });
+
+  const makeRequest = (body: string) =>
+    new NextRequest(`http://localhost:3001/api${path}`, {
+      method: "POST",
+      body,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer caller-token",
+      },
+    });
+
+  it("forwards the JSON body but not the caller's Authorization header", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), { status: 200 }),
+    );
+
+    await handler()(makeRequest(JSON.stringify({ token: "t" })));
+
+    const upstream = upstreamRequest();
+    expect(upstream.method).toBe("POST");
+    expect([...upstream.headers.keys()]).toEqual(["content-type"]);
+    expect(await upstream.text()).toBe(JSON.stringify({ token: "t" }));
+  });
+
+  it("answers 500 'Authentication service unavailable' and logs when the bot API is unreachable", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const failure = new Error("Network error");
+    mockFetch.mockRejectedValueOnce(failure);
+
+    const response = await handler()(makeRequest("{}"));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      success: false,
+      message: "Authentication service unavailable",
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      `Error proxying ${label}:`,
+      failure,
+    );
+    consoleError.mockRestore();
+  });
+
+  it("answers 500 without calling the bot API when the body is not JSON", async () => {
+    const response = await handler()(makeRequest("{not json"));
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      success: false,
+      message: "Authentication service unavailable",
+    });
+  });
+
+  it("answers 500 when the upstream body is not JSON", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response("Bad Gateway", { status: 502 }),
+    );
+
+    const response = await handler()(makeRequest("{}"));
+
+    expect(response.status).toBe(500);
+  });
+
+  it("names the authentication service when BOT_API_URL is missing", async () => {
+    delete process.env.BOT_API_URL;
+
+    const response = await handler()(makeRequest("{}"));
+
+    expect(await response.json()).toEqual({
+      success: false,
+      message: "Authentication service misconfigured",
+    });
+  });
+});
+
 describe("POST /api/auth/login", () => {
   beforeEach(() => {
     jest.clearAllMocks();

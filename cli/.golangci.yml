@@ -1,0 +1,31 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - staticcheck
+    - unused
+    - gocyclo
+    - gocognit
+    - dupl
+  settings:
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    dupl:
+      threshold: 150
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - dupl
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

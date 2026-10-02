@@ -10,6 +10,7 @@ import {
   CustomBotWithVersions,
   VersionWithInstances,
   SUPPORTED_RUNTIMES,
+  COMPILED_RUNTIMES,
 } from "./custom-bot.types";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
 
@@ -51,74 +52,70 @@ export class CustomBotService {
         return Failure("Custom bot with this name already exists");
       }
 
-      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = [
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ];
-      const requiredFiles = compiledRuntimes.includes(config.runtime)
-        ? [] // Skip entrypoint validation for compiled languages
-        : Object.values(config.entrypoints).filter(Boolean);
-
-      // Validate ZIP file structure from uploaded file
-      const zipValidation = await this.storageService.validateZipStructure(
-        filePath,
-        requiredFiles,
-      );
-      if (!zipValidation.success) {
-        return Failure(`ZIP validation failed: ${zipValidation.error}`);
-      }
-
-      // Extract frontend bundle if present (do this before creating bot record)
-      const frontendResult = await this.storageService.extractAndStoreFrontend(
-        filePath,
+      return await this.storeVersion(
         userId,
-        config.name,
-        config.version,
-      );
-
-      // Update config with hasFrontend flag
-      const finalConfig = {
-        ...config,
-        hasFrontend: frontendResult.success && frontendResult.data !== null,
-      };
-
-      if (frontendResult.success && frontendResult.data) {
-        this.logger.info(
-          { botName: config.name, frontendPath: frontendResult.data },
-          "Frontend bundle extracted for bot",
-        );
-      }
-
-      // Create the bot
-      const botData: Partial<CustomBot> = {
-        name: finalConfig.name,
-        version: finalConfig.version,
-        config: finalConfig,
-        filePath: filePath,
-        status: "active",
-      };
-
-      const result = await this.customBotRepository.createNewGlobalVersion(
-        userId,
-        botData,
-      );
-
-      if (!result.success) {
-        return Failure(result.error);
-      }
-
-      return await this.customBotRepository.getSpecificGlobalVersion(
-        config.name,
-        config.version,
+        config,
+        filePath,
+        "Frontend bundle extracted for bot",
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error creating custom bot");
       return Failure(`Failed to create custom bot: ${errorMessage(error)}`);
     }
+  }
+
+  private async storeVersion(
+    userId: string,
+    config: CustomBotConfig,
+    filePath: string,
+    frontendLogMessage: string,
+  ): Promise<Result<CustomBot, string>> {
+    const requiredFiles = COMPILED_RUNTIMES.includes(config.runtime)
+      ? []
+      : Object.values(config.entrypoints).filter(Boolean);
+    const zipValidation = await this.storageService.validateZipStructure(
+      filePath,
+      requiredFiles,
+    );
+    if (!zipValidation.success) {
+      return Failure(`ZIP validation failed: ${zipValidation.error}`);
+    }
+
+    const frontendResult = await this.storageService.extractAndStoreFrontend(
+      filePath,
+      userId,
+      config.name,
+      config.version,
+    );
+    const finalConfig = {
+      ...config,
+      hasFrontend: frontendResult.success && frontendResult.data !== null,
+    };
+    if (frontendResult.success && frontendResult.data) {
+      this.logger.info(
+        { botName: config.name, frontendPath: frontendResult.data },
+        frontendLogMessage,
+      );
+    }
+
+    const result = await this.customBotRepository.createNewGlobalVersion(
+      userId,
+      {
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
+        filePath,
+        status: "active",
+      },
+    );
+    if (!result.success) {
+      return Failure(result.error);
+    }
+
+    return this.customBotRepository.getSpecificGlobalVersion(
+      config.name,
+      config.version,
+    );
   }
 
   async updateCustomBot(
@@ -128,144 +125,99 @@ export class CustomBotService {
     filePath: string,
   ): Promise<Result<CustomBot, string>> {
     try {
-      // Validate config structure
-      const validation = validateCustomBotConfigPayload(config);
-      if (!validation.valid) {
-        return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
-      }
+      const configCheck = this.checkUpdateConfig(name, config);
+      if (!configCheck.success) return Failure(configCheck.error);
 
-      // Ensure the name in config matches the parameter
-      if (config.name !== name) {
-        return Failure("Bot name in config must match the URL parameter");
-      }
+      const ownerCheck = await this.checkUserOwnsExistingBot(userId, name);
+      if (!ownerCheck.success) return Failure(ownerCheck.error);
 
-      if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
-        return Failure(
-          `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
-        );
-      }
+      const versionCheck = await this.checkVersionIsNew(name, config.version);
+      if (!versionCheck.success) return Failure(versionCheck.error);
 
-      // Check if bot exists
-      const existsResult = await this.customBotRepository.globalBotExists(name);
-      if (!existsResult.success) {
-        return Failure(existsResult.error);
-      }
-
-      if (!existsResult.data) {
-        return Failure(
-          "Custom bot does not exist. Create it first using POST.",
-        );
-      }
-
-      // Check if the user is the owner of the bot
-      const ownershipCheckResult =
-        await this.customBotRepository.checkUserOwnership(userId, name);
-      if (!ownershipCheckResult.success) {
-        return Failure(ownershipCheckResult.error);
-      }
-
-      // Get latest version to compare
-      const latestResult =
-        await this.customBotRepository.getGlobalLatestVersion(name);
-      if (!latestResult.success) {
-        return Failure(latestResult.error);
-      }
-
-      const latestBot = latestResult.data;
-
-      // Check if new version is actually newer
-      const isNewer = this.customBotRepository.isVersionNewer(
-        latestBot.version,
-        config.version,
-      );
-      if (!isNewer) {
-        return Failure(
-          `Version ${config.version} must be greater than current version ${latestBot.version}`,
-        );
-      }
-
-      // Check if this exact version already exists
-      const versionExistsResult =
-        await this.customBotRepository.globalVersionExists(
-          name,
-          config.version,
-        );
-      if (!versionExistsResult.success) {
-        return Failure(versionExistsResult.error);
-      }
-
-      if (versionExistsResult.data) {
-        return Failure(`Version ${config.version} already exists for this bot`);
-      }
-
-      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = [
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ];
-      const requiredFiles = compiledRuntimes.includes(config.runtime)
-        ? [] // Skip entrypoint validation for compiled languages
-        : Object.values(config.entrypoints).filter(Boolean);
-
-      // Validate ZIP file structure from uploaded file
-      const zipValidation = await this.storageService.validateZipStructure(
-        filePath,
-        requiredFiles,
-      );
-      if (!zipValidation.success) {
-        return Failure(`ZIP validation failed: ${zipValidation.error}`);
-      }
-
-      // Extract frontend bundle if present
-      const frontendResult = await this.storageService.extractAndStoreFrontend(
-        filePath,
+      return await this.storeVersion(
         userId,
-        config.name,
-        config.version,
-      );
-
-      // Update config with hasFrontend flag
-      const finalConfig = {
-        ...config,
-        hasFrontend: frontendResult.success && frontendResult.data !== null,
-      };
-
-      if (frontendResult.success && frontendResult.data) {
-        this.logger.info(
-          { botName: config.name, frontendPath: frontendResult.data },
-          "Frontend bundle extracted for bot update",
-        );
-      }
-
-      // Create new version
-      const botData: Partial<CustomBot> = {
-        name: finalConfig.name,
-        version: finalConfig.version,
-        config: finalConfig,
-        filePath: filePath,
-        status: "active",
-      };
-
-      const customBot = await this.customBotRepository.createNewGlobalVersion(
-        userId,
-        botData,
-      );
-
-      if (!customBot.success) {
-        return Failure(customBot.error);
-      }
-
-      return await this.customBotRepository.getSpecificGlobalVersion(
-        config.name,
-        config.version,
+        config,
+        filePath,
+        "Frontend bundle extracted for bot update",
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error updating custom bot");
       return Failure(`Failed to update custom bot: ${errorMessage(error)}`);
     }
+  }
+
+  private checkUpdateConfig(
+    name: string,
+    config: CustomBotConfig,
+  ): Result<null, string> {
+    const validation = validateCustomBotConfigPayload(config);
+    if (!validation.valid) {
+      return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
+    }
+
+    if (config.name !== name) {
+      return Failure("Bot name in config must match the URL parameter");
+    }
+
+    if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
+      return Failure(
+        `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
+      );
+    }
+
+    return Ok(null);
+  }
+
+  private async checkUserOwnsExistingBot(
+    userId: string,
+    name: string,
+  ): Promise<Result<null, string>> {
+    const existsResult = await this.customBotRepository.globalBotExists(name);
+    if (!existsResult.success) {
+      return Failure(existsResult.error);
+    }
+
+    if (!existsResult.data) {
+      return Failure("Custom bot does not exist. Create it first using POST.");
+    }
+
+    const ownershipCheckResult =
+      await this.customBotRepository.checkUserOwnership(userId, name);
+    if (!ownershipCheckResult.success) {
+      return Failure(ownershipCheckResult.error);
+    }
+
+    return Ok(null);
+  }
+
+  private async checkVersionIsNew(
+    name: string,
+    version: string,
+  ): Promise<Result<null, string>> {
+    const latestResult =
+      await this.customBotRepository.getGlobalLatestVersion(name);
+    if (!latestResult.success) {
+      return Failure(latestResult.error);
+    }
+
+    const latestVersion = latestResult.data.version;
+    if (!this.customBotRepository.isVersionNewer(latestVersion, version)) {
+      return Failure(
+        `Version ${version} must be greater than current version ${latestVersion}`,
+      );
+    }
+
+    const versionExistsResult =
+      await this.customBotRepository.globalVersionExists(name, version);
+    if (!versionExistsResult.success) {
+      return Failure(versionExistsResult.error);
+    }
+
+    if (versionExistsResult.data) {
+      return Failure(`Version ${version} already exists for this bot`);
+    }
+
+    return Ok(null);
   }
 
   async getUserCustomBots(

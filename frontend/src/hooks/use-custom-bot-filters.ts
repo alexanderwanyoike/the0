@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { CustomBotWithVersions } from "@/types/custom-bots";
+import { BOT_TYPE_OPTIONS, FilterFacet } from "@/hooks/bot-list-filters";
 
-export type CustomBotTypeFilter = "all" | "scheduled" | "realtime";
+type CustomBotTypeFilter = "all" | "scheduled" | "realtime";
 
 export function useCustomBotFilters() {
   const [search, setSearch] = useState("");
@@ -46,6 +47,15 @@ export function useCustomBotFilters() {
     [search, type],
   );
 
+  const facets: FilterFacet[] = [
+    {
+      label: "Type",
+      value: type,
+      options: BOT_TYPE_OPTIONS,
+      onChange: (value) => setType(value as CustomBotTypeFilter),
+    },
+  ];
+
   return {
     search,
     setSearch,
@@ -53,6 +63,7 @@ export function useCustomBotFilters() {
     setType,
     hasActiveFilters,
     activeCount,
+    facets,
     filterBots,
   };
 }

@@ -2,12 +2,7 @@
 
 import { useMemo, useCallback, useEffect, useRef } from "react";
 import { useBotLogs, DEFAULT_LOOKBACK_DAYS } from "./use-bot-logs";
-import {
-  BotEvent,
-  parseEvents,
-  isMetricEvent,
-  isLogEvent,
-} from "@/lib/events/event-parser";
+import { BotEvent, parseEvents } from "@/lib/events/event-parser";
 import * as eventUtils from "@/lib/events/event-utils";
 
 interface UseBotEventsOptions {
@@ -255,6 +250,5 @@ export function useBotEvents({
   };
 }
 
-// Re-export types and utilities for convenience
+// Re-export types for convenience
 export type { BotEvent, BotEventUtils };
-export { isMetricEvent, isLogEvent };

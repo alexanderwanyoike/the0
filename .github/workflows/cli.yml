@@ -39,3 +39,38 @@ jobs:
     - name: Build CLI binary
       working-directory: ./cli
       run: go build -o the0 .
+
+  analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.10'
+        cache-dependency-path: cli/go.sum
+
+    - name: Install golangci-lint
+      continue-on-error: true
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: v2.14.0
+        install-only: true
+
+    - name: golangci-lint report (non-blocking)
+      working-directory: ./cli
+      continue-on-error: true
+      run: >-
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "cli: golangci-lint"
+        golangci-lint run --config .golangci.yml --output.tab.path=stdout ./...
+
+    - name: deadcode report (non-blocking)
+      working-directory: ./cli
+      continue-on-error: true
+      run: |
+        # stderr only on failure: on success it is just "go: downloading" noise.
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "cli: deadcode (unreachable from main)" \
+          sh -c 'make -s deadcode 2> "$RUNNER_TEMP/deadcode.err" || { s=$?; cat "$RUNNER_TEMP/deadcode.err"; exit "$s"; }'

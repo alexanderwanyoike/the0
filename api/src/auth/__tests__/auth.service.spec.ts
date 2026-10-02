@@ -5,6 +5,7 @@ import { JwtService } from "@nestjs/jwt";
 import { UserRepository } from "@/user/user.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRecord } from "@/user/user.types";
+import * as bcrypt from "bcrypt";
 
 jest.mock("bcrypt", () => ({
   hash: jest.fn().mockResolvedValue("hashed-password"),
@@ -39,7 +40,6 @@ describe("AuthService", () => {
       findByEmail: jest.fn().mockResolvedValue(testUser),
       updateLastLogin: jest.fn().mockResolvedValue(undefined),
       count: jest.fn(),
-      hasActiveAdmin: jest.fn(),
       createFirstAdmin: jest.fn(),
     };
 
@@ -61,6 +61,8 @@ describe("AuthService", () => {
         },
       ],
     }).compile();
+
+    await module.init();
 
     service = module.get<AuthService>(AuthService);
     jwtService = module.get<JwtService>(JwtService);
@@ -156,6 +158,126 @@ describe("AuthService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Invalid token");
+    });
+  });
+
+  describe("login", () => {
+    const credentials = { email: "test@example.com", password: "secret" };
+
+    beforeEach(() => {
+      jest.mocked(bcrypt.compare).mockClear();
+    });
+
+    it("returns a signed token and the user for valid credentials", async () => {
+      const result = await service.login(credentials);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.token).toBe("test-token");
+      expect(result.data?.user.id).toBe("test-id");
+      expect(bcrypt.compare).toHaveBeenCalledWith("secret", "hashed-password");
+      expect(userRepository.updateLastLogin).toHaveBeenCalledWith("test-id");
+    });
+
+    it("rejects an unknown email with the generic credentials error", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce(null);
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "Invalid credentials",
+        data: null,
+      });
+      expect(userRepository.updateLastLogin).not.toHaveBeenCalled();
+    });
+
+    it("rejects a wrong password with the generic credentials error", async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "Invalid credentials",
+        data: null,
+      });
+      expect(userRepository.updateLastLogin).not.toHaveBeenCalled();
+    });
+
+    it("gives an inactive account with a wrong password the generic credentials error", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce({
+        ...testUser,
+        isActive: false,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "Invalid credentials",
+        data: null,
+      });
+    });
+
+    it("tells an inactive account with the right password that it is inactive", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce({
+        ...testUser,
+        isActive: false,
+      });
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "User account is inactive",
+        data: null,
+      });
+      expect(userRepository.updateLastLogin).not.toHaveBeenCalled();
+    });
+
+    it("prepares the stand-in hash at startup, so an unknown email costs one comparison", async () => {
+      jest.mocked(bcrypt.hash).mockClear();
+      userRepository.findByEmail.mockResolvedValueOnce(null);
+
+      await service.login(credentials);
+
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+    });
+
+    it("compares a password for an unknown email so timing does not reveal it", async () => {
+      userRepository.findByEmail.mockResolvedValueOnce(null);
+
+      await service.login(credentials);
+
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws ServiceUnavailableException when the database is unreachable", async () => {
+      userRepository.findByEmail.mockRejectedValueOnce(
+        Object.assign(new Error("connect ETIMEDOUT 10.0.0.5:5432"), {
+          code: "ETIMEDOUT",
+        }),
+      );
+
+      await expect(service.login(credentials)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it("hides other errors behind a generic failure", async () => {
+      userRepository.findByEmail.mockRejectedValueOnce(
+        new Error('relation "users" does not exist'),
+      );
+
+      const result = await service.login(credentials);
+
+      expect(result).toEqual({
+        success: false,
+        error: "Login failed",
+        data: null,
+      });
     });
   });
 });

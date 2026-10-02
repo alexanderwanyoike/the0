@@ -7,6 +7,7 @@ import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import * as tar from "tar";
 import * as fs from "fs/promises";
+import type { Stats } from "fs";
 import * as path from "path";
 import * as os from "os";
 
@@ -47,7 +48,6 @@ interface StateDownloadResult {
   tempDir: string;
   etag: string;
 }
-
 
 @Injectable({ scope: Scope.REQUEST })
 export class BotStateService {
@@ -159,24 +159,11 @@ export class BotStateService {
     botId: string,
     key: string,
   ): Promise<Result<unknown, BotStateError>> {
-    // Validate bot ID to prevent path traversal
-    if (!this.isValidBotId(botId)) {
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Invalid bot ID format",
-      });
+    const accessError = await this.checkBotAccess(botId);
+    if (accessError) {
+      return Failure(accessError);
     }
 
-    // Verify bot ownership
-    const botResult = await this.botService.findOne(botId);
-    if (!botResult.success) {
-      return Failure({
-        code: BotStateErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      });
-    }
-
-    // Validate key using allowlist regex
     if (!this.isValidKey(key)) {
       return Failure({
         code: BotStateErrorCode.INVALID_KEY,
@@ -194,51 +181,8 @@ export class BotStateService {
       }
 
       try {
-        const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
-
-        // Check if file exists
-        let stats;
-        try {
-          stats = await fs.stat(filepath);
-        } catch {
-          return Failure({
-            code: BotStateErrorCode.KEY_NOT_FOUND,
-            message: "State key not found",
-          });
-        }
-
-        // Check file size before reading
-        if (stats.size > this.maxStateFileSize) {
-          this.logger.warn(
-            { botId, key, size: stats.size, maxSize: this.maxStateFileSize },
-            "State file exceeds maximum size",
-          );
-          return Failure({
-            code: BotStateErrorCode.FILE_TOO_LARGE,
-            message: `State file exceeds maximum size limit (${Math.round(this.maxStateFileSize / 1024 / 1024)}MB)`,
-          });
-        }
-
-        const content = await fs.readFile(filepath, "utf-8");
-
-        // Parse JSON with specific error handling
-        let value: unknown;
-        try {
-          value = JSON.parse(content);
-        } catch (parseError: unknown) {
-          this.logger.error(
-            { err: parseError, botId, key },
-            "Invalid JSON in state file",
-          );
-          return Failure({
-            code: BotStateErrorCode.INVALID_JSON,
-            message: "State file contains invalid JSON",
-          });
-        }
-
-        return Ok(value);
+        return await this.readStateValue(tempDir, botId, key);
       } finally {
-        // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: unknown) {
@@ -246,6 +190,81 @@ export class BotStateService {
       return Failure({
         code: BotStateErrorCode.STORAGE_ERROR,
         message: "Failed to get state key",
+      });
+    }
+  }
+
+  /**
+   * The ID format is checked first so a path-traversal ID never reaches the
+   * ownership lookup.
+   */
+  private async checkBotAccess(botId: string): Promise<BotStateError | null> {
+    if (!this.isValidBotId(botId)) {
+      return {
+        code: BotStateErrorCode.STORAGE_ERROR,
+        message: "Invalid bot ID format",
+      };
+    }
+
+    const botResult = await this.botService.findOne(botId);
+    if (!botResult.success) {
+      return {
+        code: BotStateErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found or access denied",
+      };
+    }
+
+    return null;
+  }
+
+  private async readStateValue(
+    tempDir: string,
+    botId: string,
+    key: string,
+  ): Promise<Result<unknown, BotStateError>> {
+    const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
+
+    let stats: Stats;
+    try {
+      stats = await fs.stat(filepath);
+    } catch {
+      return Failure({
+        code: BotStateErrorCode.KEY_NOT_FOUND,
+        message: "State key not found",
+      });
+    }
+
+    // Checked before reading so an oversized value is never loaded into memory.
+    if (stats.size > this.maxStateFileSize) {
+      this.logger.warn(
+        { botId, key, size: stats.size, maxSize: this.maxStateFileSize },
+        "State file exceeds maximum size",
+      );
+      return Failure({
+        code: BotStateErrorCode.FILE_TOO_LARGE,
+        message: `State file exceeds maximum size limit (${Math.round(this.maxStateFileSize / 1024 / 1024)}MB)`,
+      });
+    }
+
+    const content = await fs.readFile(filepath, "utf-8");
+    return this.parseStateValue(content, botId, key);
+  }
+
+  private parseStateValue(
+    content: string,
+    botId: string,
+    key: string,
+  ): Result<unknown, BotStateError> {
+    try {
+      return Ok(JSON.parse(content));
+    } catch (parseError: unknown) {
+      this.logger.error(
+        { err: parseError, botId, key },
+        "Invalid JSON in state file",
+      );
+      return Failure({
+        code: BotStateErrorCode.INVALID_JSON,
+        message: "State file contains invalid JSON",
       });
     }
   }
@@ -284,44 +303,15 @@ export class BotStateService {
     }
 
     try {
-      // Download state with ETag for optimistic locking
       const downloadResult = await this.downloadAndExtractStateWithEtag(botId);
       if (!downloadResult) {
         return Ok(false); // No state exists
       }
 
       const { tempDir, etag } = downloadResult;
-
       try {
-        const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
-        try {
-          await fs.access(filepath);
-        } catch {
-          return Ok(false);
-        }
-
-        // Delete the file
-        await fs.unlink(filepath);
-
-        // Re-upload the modified state with optimistic locking
-        const uploadSucceeded = await this.uploadStateWithLocking(
-          botId,
-          tempDir,
-          etag,
-        );
-
-        if (!uploadSucceeded) {
-          // Concurrent modification detected - return conflict error
-          return Failure({
-            code: BotStateErrorCode.CONCURRENT_MODIFICATION,
-            message:
-              "State was modified by another operation. Please retry the request.",
-          });
-        }
-
-        return Ok(true);
+        return await this.removeKeyAndReupload(botId, key, tempDir, etag);
       } finally {
-        // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: unknown) {
@@ -331,6 +321,38 @@ export class BotStateService {
         message: "Failed to delete state key",
       });
     }
+  }
+
+  /** @returns Ok(false) when the key is not in the downloaded state. */
+  private async removeKeyAndReupload(
+    botId: string,
+    key: string,
+    tempDir: string,
+    etag: string,
+  ): Promise<Result<boolean, BotStateError>> {
+    const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
+    try {
+      await fs.access(filepath);
+    } catch {
+      return Ok(false);
+    }
+
+    await fs.unlink(filepath);
+
+    const uploadSucceeded = await this.uploadStateWithLocking(
+      botId,
+      tempDir,
+      etag,
+    );
+    if (!uploadSucceeded) {
+      return Failure({
+        code: BotStateErrorCode.CONCURRENT_MODIFICATION,
+        message:
+          "State was modified by another operation. Please retry the request.",
+      });
+    }
+
+    return Ok(true);
   }
 
   /**
@@ -457,115 +479,107 @@ export class BotStateService {
     expectedEtag?: string,
   ): Promise<boolean> {
     const statePath = `${botId}/state.tar.gz`;
-    const tarPath = path.join(tempDir, "state.tar.gz");
-    const stateDir = path.join(tempDir, ".the0-state");
 
-    // Check if there's any state left
+    if (!(await this.hasStateFiles(tempDir))) {
+      return this.removeStateUnlessModified(botId, statePath, expectedEtag);
+    }
+
+    if (
+      expectedEtag &&
+      !(await this.isUnmodifiedForUpload(botId, statePath, expectedEtag))
+    ) {
+      return false;
+    }
+
+    await this.archiveAndUploadState(tempDir, statePath);
+    return true;
+  }
+
+  private async hasStateFiles(tempDir: string): Promise<boolean> {
+    const stateDir = path.join(tempDir, ".the0-state");
     try {
       await fs.access(stateDir);
     } catch {
-      // No state directory, remove the object (with conflict check if needed)
-      if (expectedEtag) {
-        // Verify state hasn't changed before deleting
-        try {
-          const currentStat = await this.minioClient.statObject(
-            this.stateBucket,
-            statePath,
-          );
-          if (currentStat.etag !== expectedEtag) {
-            this.logger.warn(
-              { botId, expectedEtag, currentEtag: currentStat.etag },
-              "Concurrent modification detected during state deletion",
-            );
-            return false; // Conflict - state was modified
-          }
-        } catch (error: unknown) {
-          if (!hasErrorCode(error) || error.code !== "NotFound") {
-            throw error;
-          }
-          // Object already deleted, that's fine
-        }
-      }
-      try {
-        await this.minioClient.removeObject(this.stateBucket, statePath);
-      } catch {
-        // Ignore errors when removing
-      }
-      return true;
+      return false;
     }
+    const files = await fs.readdir(stateDir);
+    return files.some((f) => f.endsWith(".json"));
+  }
 
-    const files = (await fs.readdir(stateDir)).filter((f) =>
-      f.endsWith(".json"),
-    );
-    if (files.length === 0) {
-      // No state files left, remove the object (with conflict check)
-      if (expectedEtag) {
-        try {
-          const currentStat = await this.minioClient.statObject(
-            this.stateBucket,
-            statePath,
-          );
-          if (currentStat.etag !== expectedEtag) {
-            this.logger.warn(
-              { botId, expectedEtag, currentEtag: currentStat.etag },
-              "Concurrent modification detected during state deletion",
-            );
-            return false;
-          }
-        } catch (error: unknown) {
-          if (!hasErrorCode(error) || error.code !== "NotFound") {
-            throw error;
-          }
-        }
+  private async statStateArchive(
+    statePath: string,
+  ): Promise<Minio.BucketItemStat | null> {
+    try {
+      return await this.minioClient.statObject(this.stateBucket, statePath);
+    } catch (error: unknown) {
+      if (hasErrorCode(error) && error.code === "NotFound") {
+        return null;
       }
-      try {
-        await this.minioClient.removeObject(this.stateBucket, statePath);
-      } catch {
-        // Ignore errors when removing
-      }
-      return true;
+      throw error;
     }
+  }
 
-    // Verify state hasn't been modified since download (optimistic locking)
+  /**
+   * An archive that is already gone does not count as a conflict here: the
+   * caller wanted it removed anyway.
+   */
+  private async removeStateUnlessModified(
+    botId: string,
+    statePath: string,
+    expectedEtag?: string,
+  ): Promise<boolean> {
     if (expectedEtag) {
-      try {
-        const currentStat = await this.minioClient.statObject(
-          this.stateBucket,
-          statePath,
+      const currentStat = await this.statStateArchive(statePath);
+      if (currentStat !== null && currentStat.etag !== expectedEtag) {
+        this.logger.warn(
+          { botId, expectedEtag, currentEtag: currentStat.etag },
+          "Concurrent modification detected during state deletion",
         );
-        if (currentStat.etag !== expectedEtag) {
-          this.logger.warn(
-            { botId, expectedEtag, currentEtag: currentStat.etag },
-            "Concurrent modification detected - aborting upload to prevent data loss",
-          );
-          return false; // Conflict - state was modified by another request
-        }
-      } catch (error: unknown) {
-        if (hasErrorCode(error) && error.code === "NotFound") {
-          // Object was deleted - this is also a conflict since we expected it to exist
-          this.logger.warn(
-            { botId, expectedEtag },
-            "State object was deleted during modification",
-          );
-          return false;
-        }
-        throw error;
+        return false;
       }
     }
-
-    // Create tar.gz from .the0-state directory
-    await tar.c(
-      {
-        gzip: true,
-        file: tarPath,
-        cwd: tempDir,
-      },
-      [".the0-state"],
-    );
-
-    // Upload to MinIO
-    await this.minioClient.fPutObject(this.stateBucket, statePath, tarPath);
+    try {
+      await this.minioClient.removeObject(this.stateBucket, statePath);
+    } catch {
+      // Ignore errors when removing
+    }
     return true;
+  }
+
+  /**
+   * Unlike removal, an archive deleted since download is a conflict: the
+   * upload would resurrect state another request just cleared.
+   */
+  private async isUnmodifiedForUpload(
+    botId: string,
+    statePath: string,
+    expectedEtag: string,
+  ): Promise<boolean> {
+    const currentStat = await this.statStateArchive(statePath);
+    if (currentStat === null) {
+      this.logger.warn(
+        { botId, expectedEtag },
+        "State object was deleted during modification",
+      );
+      return false;
+    }
+    if (currentStat.etag !== expectedEtag) {
+      this.logger.warn(
+        { botId, expectedEtag, currentEtag: currentStat.etag },
+        "Concurrent modification detected - aborting upload to prevent data loss",
+      );
+      return false;
+    }
+    return true;
+  }
+
+  private async archiveAndUploadState(
+    tempDir: string,
+    statePath: string,
+  ): Promise<void> {
+    const tarPath = path.join(tempDir, "state.tar.gz");
+    await tar.c({ gzip: true, file: tarPath, cwd: tempDir }, [".the0-state"]);
+    await this.minioClient.fPutObject(this.stateBucket, statePath, tarPath);
   }
 
   /**

@@ -45,6 +45,18 @@ jobs:
       working-directory: ./frontend
       run: yarn build
 
+    - name: Fallow codebase report (non-blocking)
+      working-directory: ./frontend
+      continue-on-error: true
+      run: yarn --silent fallow --format github-summary >> "$GITHUB_STEP_SUMMARY"
+
+    - name: ESLint report (non-blocking)
+      working-directory: ./frontend
+      continue-on-error: true
+      run: >-
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "frontend: ESLint"
+        yarn --silent lint --no-color
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest

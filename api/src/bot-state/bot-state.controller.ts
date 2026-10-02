@@ -13,17 +13,15 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { BotStateService, BotStateErrorCode } from "./bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
-@ApiTags("Bot State")
+@ApiTags("bot-state")
+@ApiJwtOrApiKeyAuth()
 @Controller("bots/:botId/state")
 @UseGuards(AuthCombinedGuard)
 export class BotStateController {
   constructor(private readonly botStateService: BotStateService) {}
 
-  /**
-   * List all state keys for a bot.
-   * GET /bots/:botId/state
-   */
   @Get()
   @ApiOperation({ summary: "List all state keys for a bot" })
   @ApiParam({ name: "botId", description: "Bot identifier" })
@@ -51,10 +49,6 @@ export class BotStateController {
     };
   }
 
-  /**
-   * Get a specific state value.
-   * GET /bots/:botId/state/:key
-   */
   @Get(":key")
   @ApiOperation({ summary: "Get a specific state value" })
   @ApiParam({ name: "botId", description: "Bot identifier" })
@@ -93,10 +87,6 @@ export class BotStateController {
     };
   }
 
-  /**
-   * Delete a specific state key.
-   * DELETE /bots/:botId/state/:key
-   */
   @Delete(":key")
   @ApiOperation({ summary: "Delete a specific state key" })
   @ApiParam({ name: "botId", description: "Bot identifier" })
@@ -136,10 +126,6 @@ export class BotStateController {
     };
   }
 
-  /**
-   * Clear all state for a bot.
-   * DELETE /bots/:botId/state
-   */
   @Delete()
   @ApiOperation({ summary: "Clear all state for a bot" })
   @ApiParam({ name: "botId", description: "Bot identifier" })
