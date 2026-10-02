@@ -14,11 +14,14 @@ import { MINIO_CLIENT } from "@/minio";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import * as tar from "tar";
 
 describe("BotStateService", () => {
   let service: BotStateService;
   let mockBotService: jest.Mocked<Partial<BotService>>;
   let mockConfigService: jest.Mocked<ConfigService>;
+  let mockMinioClient: Record<string, jest.Mock>;
+  let mockLogger: ReturnType<typeof createMockLogger>;
   let tempDir: string;
 
   const testUid = "test-user-id";
@@ -59,7 +62,7 @@ describe("BotStateService", () => {
     } as any;
 
     // Create mock MinIO client
-    const mockMinioClient = {
+    mockMinioClient = {
       statObject: jest.fn(),
       getObject: jest.fn(),
       fGetObject: jest.fn(),
@@ -86,7 +89,7 @@ describe("BotStateService", () => {
         },
         {
           provide: PinoLogger,
-          useValue: createMockLogger(),
+          useValue: (mockLogger = createMockLogger()),
         },
         {
           provide: REQUEST,
@@ -195,6 +198,361 @@ describe("BotStateService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+    });
+  });
+
+  describe("deleting a key from stored state", () => {
+    const statePath = `${testBotId}/state.tar.gz`;
+    const notFound = () =>
+      Object.assign(new Error("Not Found"), { code: "NotFound" });
+
+    const writeStateArchive = async (
+      dest: string,
+      files: Record<string, string>,
+    ) => {
+      const srcDir = fs.mkdtempSync(path.join(tempDir, "src-"));
+      const stateDir = path.join(srcDir, ".the0-state");
+      fs.mkdirSync(stateDir);
+      for (const [name, content] of Object.entries(files)) {
+        fs.writeFileSync(path.join(stateDir, name), content);
+      }
+      await tar.c({ gzip: true, file: dest, cwd: srcDir }, [".the0-state"]);
+    };
+
+    const downloadedDirs: string[] = [];
+    const storeState = (files: Record<string, string>) => {
+      mockMinioClient.statObject.mockResolvedValueOnce({
+        size: 100,
+        etag: "etag-1",
+      });
+      mockMinioClient.fGetObject.mockImplementation(
+        async (_bucket: string, _path: string, dest: string) => {
+          downloadedDirs.push(path.dirname(dest));
+          await writeStateArchive(dest, files);
+        },
+      );
+    };
+
+    // The service deletes its temp dir after uploading, so the archive must
+    // be inspected while fPutObject is still running.
+    const captureUploads = () => {
+      const uploads: string[][] = [];
+      mockMinioClient.fPutObject.mockImplementation(
+        async (_bucket: string, _path: string, file: string) => {
+          const outDir = fs.mkdtempSync(path.join(tempDir, "upload-"));
+          await tar.x({ file, cwd: outDir });
+          uploads.push(fs.readdirSync(path.join(outDir, ".the0-state")).sort());
+        },
+      );
+      return uploads;
+    };
+
+    beforeEach(() => {
+      downloadedDirs.length = 0;
+    });
+
+    it("returns false without downloading when no state archive exists", async () => {
+      mockMinioClient.statObject.mockRejectedValueOnce(notFound());
+
+      const result = await service.deleteKey(testBotId, "portfolio");
+
+      expect(result).toEqual(Ok(false));
+      expect(mockMinioClient.fGetObject).not.toHaveBeenCalled();
+    });
+
+    it("returns false without writing when the key is absent", async () => {
+      storeState({ "other.json": "2" });
+
+      const result = await service.deleteKey(testBotId, "portfolio");
+
+      expect(result).toEqual(Ok(false));
+      expect(mockMinioClient.statObject).toHaveBeenCalledTimes(1);
+      expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+      expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+    });
+
+    describe("when other keys remain", () => {
+      beforeEach(() => {
+        storeState({ "portfolio.json": '{"a":1}', "other.json": "2" });
+      });
+
+      it("re-uploads the archive without the key when the ETag is unchanged", async () => {
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+        const uploads = captureUploads();
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(Ok(true));
+        expect(mockMinioClient.statObject).toHaveBeenNthCalledWith(
+          2,
+          "bot-state",
+          statePath,
+        );
+        expect(mockMinioClient.fPutObject).toHaveBeenCalledWith(
+          "bot-state",
+          statePath,
+          expect.stringMatching(/state\.tar\.gz$/),
+        );
+        expect(uploads).toEqual([["other.json"]]);
+        expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it("cleans up the downloaded temp dir", async () => {
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+        captureUploads();
+
+        await service.deleteKey(testBotId, "portfolio");
+
+        expect(downloadedDirs).toHaveLength(1);
+        expect(fs.existsSync(downloadedDirs[0])).toBe(false);
+      });
+
+      it("reports a concurrent modification without uploading when the ETag changed", async () => {
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-2" });
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(
+          Failure({
+            code: BotStateErrorCode.CONCURRENT_MODIFICATION,
+            message:
+              "State was modified by another operation. Please retry the request.",
+          }),
+        );
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          { botId: testBotId, expectedEtag: "etag-1", currentEtag: "etag-2" },
+          "Concurrent modification detected - aborting upload to prevent data loss",
+        );
+        expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+        expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+      });
+
+      it("reports a concurrent modification when the archive was deleted meanwhile", async () => {
+        mockMinioClient.statObject.mockRejectedValueOnce(notFound());
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result.error?.code).toBe(
+          BotStateErrorCode.CONCURRENT_MODIFICATION,
+        );
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          { botId: testBotId, expectedEtag: "etag-1" },
+          "State object was deleted during modification",
+        );
+        expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+      });
+
+      it("returns a storage error when the ETag check fails", async () => {
+        const failure = new Error("stat failed");
+        mockMinioClient.statObject.mockRejectedValueOnce(failure);
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(
+          Failure({
+            code: BotStateErrorCode.STORAGE_ERROR,
+            message: "Failed to delete state key",
+          }),
+        );
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          { err: failure, botId: testBotId, key: "portfolio" },
+          "Error deleting state key",
+        );
+        expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+      });
+
+      it("returns a storage error when the upload fails", async () => {
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+        mockMinioClient.fPutObject.mockRejectedValueOnce(
+          new Error("put failed"),
+        );
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
+      });
+    });
+
+    describe("when the last key is removed", () => {
+      it("removes the archive when the ETag is unchanged", async () => {
+        storeState({ "portfolio.json": "1" });
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(Ok(true));
+        expect(mockMinioClient.statObject).toHaveBeenCalledTimes(2);
+        expect(mockMinioClient.removeObject).toHaveBeenCalledWith(
+          "bot-state",
+          statePath,
+        );
+        expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+      });
+
+      it("treats leftover non-JSON files as empty state", async () => {
+        storeState({ "portfolio.json": "1", "notes.txt": "x" });
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(Ok(true));
+        expect(mockMinioClient.removeObject).toHaveBeenCalledTimes(1);
+        expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+      });
+
+      it("reports a concurrent modification without removing when the ETag changed", async () => {
+        storeState({ "portfolio.json": "1" });
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-2" });
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result.error?.code).toBe(
+          BotStateErrorCode.CONCURRENT_MODIFICATION,
+        );
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          { botId: testBotId, expectedEtag: "etag-1", currentEtag: "etag-2" },
+          "Concurrent modification detected during state deletion",
+        );
+        expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+      });
+
+      it("still removes the archive when it is already gone", async () => {
+        storeState({ "portfolio.json": "1" });
+        mockMinioClient.statObject.mockRejectedValueOnce(notFound());
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(Ok(true));
+        expect(mockMinioClient.removeObject).toHaveBeenCalledWith(
+          "bot-state",
+          statePath,
+        );
+        expect(mockLogger.warn).not.toHaveBeenCalled();
+      });
+
+      it("returns a storage error when the ETag check fails", async () => {
+        storeState({ "portfolio.json": "1" });
+        mockMinioClient.statObject.mockRejectedValueOnce(
+          new Error("stat failed"),
+        );
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
+        expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+      });
+
+      it("ignores failures removing the archive", async () => {
+        storeState({ "portfolio.json": "1" });
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+        mockMinioClient.removeObject.mockRejectedValueOnce(
+          new Error("remove failed"),
+        );
+
+        const result = await service.deleteKey(testBotId, "portfolio");
+
+        expect(result).toEqual(Ok(true));
+      });
+    });
+  });
+
+  // No public method reaches these branches today: deleteKey always leaves
+  // the state directory in place and always passes an ETag.
+  describe("uploading state outside deleteKey", () => {
+    const statePath = `${testBotId}/state.tar.gz`;
+    const upload = (dir: string, expectedEtag?: string): Promise<boolean> =>
+      (service as any).uploadStateWithLocking(testBotId, dir, expectedEtag);
+
+    describe("without a state directory", () => {
+      it("removes the archive without an ETag check when none is expected", async () => {
+        await expect(upload(tempDir)).resolves.toBe(true);
+
+        expect(mockMinioClient.statObject).not.toHaveBeenCalled();
+        expect(mockMinioClient.removeObject).toHaveBeenCalledWith(
+          "bot-state",
+          statePath,
+        );
+      });
+
+      it("removes the archive when the ETag is unchanged", async () => {
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
+
+        await expect(upload(tempDir, "etag-1")).resolves.toBe(true);
+
+        expect(mockMinioClient.statObject).toHaveBeenCalledWith(
+          "bot-state",
+          statePath,
+        );
+        expect(mockMinioClient.removeObject).toHaveBeenCalledTimes(1);
+      });
+
+      it("refuses to remove the archive when the ETag changed", async () => {
+        mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-2" });
+
+        await expect(upload(tempDir, "etag-1")).resolves.toBe(false);
+
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          { botId: testBotId, expectedEtag: "etag-1", currentEtag: "etag-2" },
+          "Concurrent modification detected during state deletion",
+        );
+        expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+      });
+
+      it("still removes the archive when it is already gone", async () => {
+        mockMinioClient.statObject.mockRejectedValueOnce(
+          Object.assign(new Error("Not Found"), { code: "NotFound" }),
+        );
+
+        await expect(upload(tempDir, "etag-1")).resolves.toBe(true);
+
+        expect(mockMinioClient.removeObject).toHaveBeenCalledTimes(1);
+      });
+
+      it("propagates other ETag check failures", async () => {
+        mockMinioClient.statObject.mockRejectedValueOnce(
+          Object.assign(new Error("denied"), { code: "AccessDenied" }),
+        );
+
+        await expect(upload(tempDir, "etag-1")).rejects.toThrow("denied");
+
+        expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
+      });
+
+      it("ignores failures removing the archive", async () => {
+        mockMinioClient.removeObject.mockRejectedValueOnce(
+          new Error("remove failed"),
+        );
+
+        await expect(upload(tempDir)).resolves.toBe(true);
+      });
+    });
+
+    describe("without an expected ETag", () => {
+      it("uploads remaining keys without an ETag check", async () => {
+        fs.mkdirSync(path.join(tempDir, ".the0-state"));
+        fs.writeFileSync(path.join(tempDir, ".the0-state", "a.json"), "1");
+
+        await expect(upload(tempDir)).resolves.toBe(true);
+
+        expect(mockMinioClient.statObject).not.toHaveBeenCalled();
+        expect(mockMinioClient.fPutObject).toHaveBeenCalledWith(
+          "bot-state",
+          statePath,
+          path.join(tempDir, "state.tar.gz"),
+        );
+        expect(fs.existsSync(path.join(tempDir, "state.tar.gz"))).toBe(true);
+      });
+
+      it("removes the archive without an ETag check when no keys remain", async () => {
+        fs.mkdirSync(path.join(tempDir, ".the0-state"));
+
+        await expect(upload(tempDir)).resolves.toBe(true);
+
+        expect(mockMinioClient.statObject).not.toHaveBeenCalled();
+        expect(mockMinioClient.removeObject).toHaveBeenCalledTimes(1);
+        expect(mockMinioClient.fPutObject).not.toHaveBeenCalled();
+      });
     });
   });
 

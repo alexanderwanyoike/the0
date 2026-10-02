@@ -48,7 +48,6 @@ interface StateDownloadResult {
   etag: string;
 }
 
-
 @Injectable({ scope: Scope.REQUEST })
 export class BotStateService {
   private stateBucket: string;
@@ -457,115 +456,107 @@ export class BotStateService {
     expectedEtag?: string,
   ): Promise<boolean> {
     const statePath = `${botId}/state.tar.gz`;
-    const tarPath = path.join(tempDir, "state.tar.gz");
-    const stateDir = path.join(tempDir, ".the0-state");
 
-    // Check if there's any state left
+    if (!(await this.hasStateFiles(tempDir))) {
+      return this.removeStateUnlessModified(botId, statePath, expectedEtag);
+    }
+
+    if (
+      expectedEtag &&
+      !(await this.isUnmodifiedForUpload(botId, statePath, expectedEtag))
+    ) {
+      return false;
+    }
+
+    await this.archiveAndUploadState(tempDir, statePath);
+    return true;
+  }
+
+  private async hasStateFiles(tempDir: string): Promise<boolean> {
+    const stateDir = path.join(tempDir, ".the0-state");
     try {
       await fs.access(stateDir);
     } catch {
-      // No state directory, remove the object (with conflict check if needed)
-      if (expectedEtag) {
-        // Verify state hasn't changed before deleting
-        try {
-          const currentStat = await this.minioClient.statObject(
-            this.stateBucket,
-            statePath,
-          );
-          if (currentStat.etag !== expectedEtag) {
-            this.logger.warn(
-              { botId, expectedEtag, currentEtag: currentStat.etag },
-              "Concurrent modification detected during state deletion",
-            );
-            return false; // Conflict - state was modified
-          }
-        } catch (error: unknown) {
-          if (!hasErrorCode(error) || error.code !== "NotFound") {
-            throw error;
-          }
-          // Object already deleted, that's fine
-        }
-      }
-      try {
-        await this.minioClient.removeObject(this.stateBucket, statePath);
-      } catch {
-        // Ignore errors when removing
-      }
-      return true;
+      return false;
     }
+    const files = await fs.readdir(stateDir);
+    return files.some((f) => f.endsWith(".json"));
+  }
 
-    const files = (await fs.readdir(stateDir)).filter((f) =>
-      f.endsWith(".json"),
-    );
-    if (files.length === 0) {
-      // No state files left, remove the object (with conflict check)
-      if (expectedEtag) {
-        try {
-          const currentStat = await this.minioClient.statObject(
-            this.stateBucket,
-            statePath,
-          );
-          if (currentStat.etag !== expectedEtag) {
-            this.logger.warn(
-              { botId, expectedEtag, currentEtag: currentStat.etag },
-              "Concurrent modification detected during state deletion",
-            );
-            return false;
-          }
-        } catch (error: unknown) {
-          if (!hasErrorCode(error) || error.code !== "NotFound") {
-            throw error;
-          }
-        }
+  private async statStateArchive(
+    statePath: string,
+  ): Promise<Minio.BucketItemStat | null> {
+    try {
+      return await this.minioClient.statObject(this.stateBucket, statePath);
+    } catch (error: unknown) {
+      if (hasErrorCode(error) && error.code === "NotFound") {
+        return null;
       }
-      try {
-        await this.minioClient.removeObject(this.stateBucket, statePath);
-      } catch {
-        // Ignore errors when removing
-      }
-      return true;
+      throw error;
     }
+  }
 
-    // Verify state hasn't been modified since download (optimistic locking)
+  /**
+   * An archive that is already gone does not count as a conflict here: the
+   * caller wanted it removed anyway.
+   */
+  private async removeStateUnlessModified(
+    botId: string,
+    statePath: string,
+    expectedEtag?: string,
+  ): Promise<boolean> {
     if (expectedEtag) {
-      try {
-        const currentStat = await this.minioClient.statObject(
-          this.stateBucket,
-          statePath,
+      const currentStat = await this.statStateArchive(statePath);
+      if (currentStat !== null && currentStat.etag !== expectedEtag) {
+        this.logger.warn(
+          { botId, expectedEtag, currentEtag: currentStat.etag },
+          "Concurrent modification detected during state deletion",
         );
-        if (currentStat.etag !== expectedEtag) {
-          this.logger.warn(
-            { botId, expectedEtag, currentEtag: currentStat.etag },
-            "Concurrent modification detected - aborting upload to prevent data loss",
-          );
-          return false; // Conflict - state was modified by another request
-        }
-      } catch (error: unknown) {
-        if (hasErrorCode(error) && error.code === "NotFound") {
-          // Object was deleted - this is also a conflict since we expected it to exist
-          this.logger.warn(
-            { botId, expectedEtag },
-            "State object was deleted during modification",
-          );
-          return false;
-        }
-        throw error;
+        return false;
       }
     }
-
-    // Create tar.gz from .the0-state directory
-    await tar.c(
-      {
-        gzip: true,
-        file: tarPath,
-        cwd: tempDir,
-      },
-      [".the0-state"],
-    );
-
-    // Upload to MinIO
-    await this.minioClient.fPutObject(this.stateBucket, statePath, tarPath);
+    try {
+      await this.minioClient.removeObject(this.stateBucket, statePath);
+    } catch {
+      // Ignore errors when removing
+    }
     return true;
+  }
+
+  /**
+   * Unlike removal, an archive deleted since download is a conflict: the
+   * upload would resurrect state another request just cleared.
+   */
+  private async isUnmodifiedForUpload(
+    botId: string,
+    statePath: string,
+    expectedEtag: string,
+  ): Promise<boolean> {
+    const currentStat = await this.statStateArchive(statePath);
+    if (currentStat === null) {
+      this.logger.warn(
+        { botId, expectedEtag },
+        "State object was deleted during modification",
+      );
+      return false;
+    }
+    if (currentStat.etag !== expectedEtag) {
+      this.logger.warn(
+        { botId, expectedEtag, currentEtag: currentStat.etag },
+        "Concurrent modification detected - aborting upload to prevent data loss",
+      );
+      return false;
+    }
+    return true;
+  }
+
+  private async archiveAndUploadState(
+    tempDir: string,
+    statePath: string,
+  ): Promise<void> {
+    const tarPath = path.join(tempDir, "state.tar.gz");
+    await tar.c({ gzip: true, file: tarPath, cwd: tempDir }, [".the0-state"]);
+    await this.minioClient.fPutObject(this.stateBucket, statePath, tarPath);
   }
 
   /**
