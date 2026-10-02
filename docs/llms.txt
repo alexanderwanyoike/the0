@@ -45,5 +45,5 @@ custom-bot/
 
 ## Links
 - GitHub: https://github.com/alexanderwanyoike/the0
-- Discord: https://discord.gg/g5mp57nK
+- Discord: https://discord.gg/8xpMh3RR3
 - License: Apache 2.0

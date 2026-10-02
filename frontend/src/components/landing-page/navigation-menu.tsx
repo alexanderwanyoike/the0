@@ -55,12 +55,7 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
               0
             </span>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-xl font-bold tracking-tight">the0</span>
-            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 rounded-md border border-orange-200 dark:border-orange-800">
-              BETA
-            </span>
-          </div>
+          <span className="text-xl font-bold tracking-tight">the0</span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -133,9 +128,6 @@ export function NavigationMenu({ showSearch = true }: NavigationMenuProps) {
                     </span>
                   </div>
                   <span className="font-bold">the0</span>
-                  <span className="px-1 py-0.5 text-[8px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 rounded border border-orange-200 dark:border-orange-800">
-                    BETA
-                  </span>
                 </div>
 
                 <div className="flex-1 overflow-auto">

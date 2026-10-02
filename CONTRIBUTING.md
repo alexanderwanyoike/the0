@@ -286,7 +286,7 @@ go test ./...
 
 ## Communication
 
-- **Discord**: [Join our community](https://discord.gg/g5mp57nK) - `#contributors` channel
+- **Discord**: [Join our community](https://discord.gg/8xpMh3RR3) - `#contributors` channel
 - **GitHub Issues**: For bugs and feature requests
 - **GitHub Discussions**: For questions and general discussion
 - **Pull Requests**: For code review and technical discussion

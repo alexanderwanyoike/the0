@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement via Discord at
-https://discord.gg/g5mp57nK or by contacting the project maintainers.
+https://discord.gg/8xpMh3RR3 or by contacting the project maintainers.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

@@ -746,7 +746,7 @@ MIT License - see LICENSE file for details.
 ## Support
 
 - 📚 Documentation: [docs.the0.app](https://docs.the0.app)
-- 💬 Discord: [Join for support](https://discord.gg/g5mp57nK)
+- 💬 Discord: [Join for support](https://discord.gg/8xpMh3RR3)
 - 🐛 Issues: [GitHub Issues](https://github.com/the0platform/cli/issues)
 
 ---

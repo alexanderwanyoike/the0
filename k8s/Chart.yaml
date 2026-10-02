@@ -20,7 +20,7 @@ maintainers:
     url: https://github.com/alexanderwanyoike
 annotations:
   artifacthub.io/license: Apache-2.0
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   artifacthub.io/category: integration-delivery
   artifacthub.io/links: |
     - name: Documentation
@@ -28,7 +28,7 @@ annotations:
     - name: Source
       url: https://github.com/alexanderwanyoike/the0
     - name: Discord
-      url: https://discord.gg/g5mp57nK
+      url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: added
       description: Swagger UI at /docs and the OpenAPI spec at /docs-json for the api - off by default in this chart, set the0Api.env.SWAGGER_ENABLED to "true" to serve them
