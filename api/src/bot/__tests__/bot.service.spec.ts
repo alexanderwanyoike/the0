@@ -245,6 +245,75 @@ describe("BotService - Enhanced Tests", () => {
       expect(result.error).toContain("Missing required field");
     });
 
+    it("should fail when the repository cannot store the bot", async () => {
+      jest.spyOn(repository, "create").mockResolvedValue(Failure("db down"));
+      jest.spyOn(repository, "findOne");
+
+      const result = await service.create(validBotData);
+
+      expect(result).toEqual(Failure("db down"));
+      expect(natsService.publish).not.toHaveBeenCalled();
+      expect(repository.findOne).not.toHaveBeenCalled();
+    });
+
+    describe("creation event", () => {
+      const createdBot = mockBot({ id: "test-id", userId: uid });
+
+      beforeEach(() => {
+        jest.spyOn(repository, "findOne").mockResolvedValue(Ok(createdBot));
+      });
+
+      it("should publish the creation with the validated custom bot", async () => {
+        const result = await service.create(validBotData);
+
+        expect(result).toEqual(Ok(createdBot));
+        expect(natsService.publish).toHaveBeenCalledWith(
+          "the0.bot-schedule.created",
+          {
+            id: "test-id",
+            config: { ...validBotData.config, customBotId: mockCustomBot.id },
+            custom: {
+              config: mockCustomBot.config,
+              createdAt: mockCustomBot.createdAt,
+              updatedAt: mockCustomBot.updatedAt,
+              filePath: mockCustomBot.filePath,
+              version: "1.0.0",
+            },
+          },
+        );
+        const publishOrder = natsService.publish.mock.invocationCallOrder[0];
+        const reloadOrder = (repository.findOne as jest.Mock).mock
+          .invocationCallOrder[0];
+        expect(publishOrder).toBeLessThan(reloadOrder);
+      });
+
+      it("should log and still return the bot when publishing fails", async () => {
+        natsService.publish.mockResolvedValue(Failure("nats down"));
+
+        const result = await service.create(validBotData);
+
+        expect(result).toEqual(Ok(createdBot));
+        expect(logger.error).toHaveBeenCalledWith(
+          { error: "nats down", botId: "test-id" },
+          "Failed to publish bot creation event",
+        );
+      });
+
+      it("should skip the event for an unknown bot type", async () => {
+        mockCustomBotService.getGlobalSpecificVersion = jest.fn().mockResolvedValue(
+          Ok({
+            ...mockCustomBot,
+            config: { ...mockCustomBot.config, type: "other" },
+          }),
+        );
+
+        const result = await service.create(validBotData);
+
+        expect(result).toEqual(Ok(createdBot));
+        expect(natsService.publish).not.toHaveBeenCalled();
+      });
+    });
+
     describe("deployment authorization", () => {
       it("should allow deployment for bot owner", async () => {
         jest.spyOn(repository, "findOne").mockResolvedValue({

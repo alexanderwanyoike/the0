@@ -42,9 +42,7 @@ export class BotService {
     );
 
     if (!validationResult.success) {
-      return Failure(
-        validationResult.error,
-      );
+      return Failure(validationResult.error);
     }
 
     // Get bot type from config
@@ -78,41 +76,29 @@ export class BotService {
       return Failure(result.error);
     }
 
-    // validationResult.data is the CustomBot from validateBotTypeAndConfig
-    const customBot = validationResult.data;
-    const topics = this.getTopicsForBotType(customBot);
-
-    if (topics) {
-      // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-      const eventPayload = {
-        id: result.data.id,
-        config: {
-          ...createBotDto.config,
-          customBotId: validationResult.data.id,
-        },
-        custom: {
-          config: customBot.config,
-          createdAt: customBot.createdAt,
-          updatedAt: customBot.updatedAt,
-          filePath: customBot.filePath || "",
-          version: customBot.version,
-        },
-      };
-
-      // Publish bot creation event to appropriate runtime service
-      const publishResult = await this.natsService.publish(
-        topics.CREATED,
-        eventPayload,
-      );
-      if (!publishResult.success) {
-        this.logger.error(
-          { error: publishResult.error, botId: result.data.id },
-          "Failed to publish bot creation event",
-        );
-      }
-    }
+    await this.publishBotCreated(
+      result.data.id,
+      createBotDto.config,
+      validationResult.data,
+    );
 
     return this.botRepository.findOne(uid, result.data.id);
+  }
+
+  private async publishBotCreated(
+    botId: string,
+    config: BotConfig,
+    customBot: CustomBot,
+  ): Promise<void> {
+    const topics = this.getTopicsForBotType(customBot);
+    if (!topics) return;
+
+    await this.publishBotEvent(
+      topics.CREATED,
+      customBotEventPayload(botId, config, customBot.id, customBot),
+      botId,
+      "Failed to publish bot creation event",
+    );
   }
 
   findAll(): Promise<Result<Bot[], string>> {
