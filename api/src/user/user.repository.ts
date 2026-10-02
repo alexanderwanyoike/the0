@@ -45,19 +45,6 @@ export class UserRepository {
     return Number(rows[0]?.value ?? 0);
   }
 
-  async hasActiveAdmin(): Promise<boolean> {
-    const db = getDatabase();
-    const userTable = this.getUserTable();
-    const rows = (await db
-      .select({ id: userTable.id })
-      .from(userTable)
-      .where(
-        and(eq(userTable.isActive, true), eq(userTable.role, USER_ROLES.ADMIN)),
-      )
-      .limit(1)) as { id: string }[];
-    return rows.length > 0;
-  }
-
   async list(): Promise<UserRecord[]> {
     const db = getDatabase();
     const userTable = this.getUserTable();

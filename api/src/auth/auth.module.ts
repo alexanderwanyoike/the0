@@ -1,8 +1,7 @@
 import { Global, Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { JwtModule } from "@nestjs/jwt";
+import { JwtModule, type JwtSignOptions } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
-import type { SignOptions } from "jsonwebtoken";
 import { AuthController } from "./auth.controller";
 import { AdminBootstrapService } from "./admin-bootstrap.service";
 import { AdminJwtGuard } from "./admin-jwt.guard";
@@ -22,7 +21,7 @@ import { UserModule } from "@/user/user.module";
         secret: configService.getOrThrow<string>("JWT_SECRET"),
         signOptions: {
           expiresIn: (configService.get<string>("JWT_EXPIRES_IN") ||
-            "24h") as SignOptions["expiresIn"],
+            "24h") as JwtSignOptions["expiresIn"],
           issuer: "the0-oss-api",
           audience: "the0-oss-clients",
         },

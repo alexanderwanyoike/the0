@@ -2,7 +2,6 @@ import { Result, Ok, Failure, errorMessage } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
 import Repository from "./repository";
-import { createId } from "@paralleldrive/cuid2";
 import pino from "pino";
 
 const logger = pino({ name: "RoleRepository" });

@@ -10,14 +10,14 @@ import * as botsSchema from "./schema/bots";
 // Logs are stored in external storage (MinIO/S3), not in database
 
 // Combined schema for PostgreSQL
-export const pgSchema = {
+const pgSchema = {
   ...usersSchema,
   ...customBotsSchema,
   ...botsSchema,
 };
 
 // Combined schema for SQLite
-export const sqliteSchema = {
+const sqliteSchema = {
   usersTable: usersSchema.usersTableSqlite,
   adminMutationLocksTable: usersSchema.adminMutationLocksTableSqlite,
   apiKeysTable: usersSchema.apiKeysTableSqlite,
@@ -119,5 +119,3 @@ export function getTables(): TableRegistry {
   }
   return tablesCache!;
 }
-
-export { pgSchema as schema };

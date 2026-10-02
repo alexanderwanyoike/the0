@@ -10,6 +10,7 @@ import {
   CustomBotWithVersions,
   VersionWithInstances,
   SUPPORTED_RUNTIMES,
+  COMPILED_RUNTIMES,
 } from "./custom-bot.types";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
 
@@ -51,74 +52,70 @@ export class CustomBotService {
         return Failure("Custom bot with this name already exists");
       }
 
-      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = [
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ];
-      const requiredFiles = compiledRuntimes.includes(config.runtime)
-        ? [] // Skip entrypoint validation for compiled languages
-        : Object.values(config.entrypoints).filter(Boolean);
-
-      // Validate ZIP file structure from uploaded file
-      const zipValidation = await this.storageService.validateZipStructure(
-        filePath,
-        requiredFiles,
-      );
-      if (!zipValidation.success) {
-        return Failure(`ZIP validation failed: ${zipValidation.error}`);
-      }
-
-      // Extract frontend bundle if present (do this before creating bot record)
-      const frontendResult = await this.storageService.extractAndStoreFrontend(
-        filePath,
+      return await this.storeVersion(
         userId,
-        config.name,
-        config.version,
-      );
-
-      // Update config with hasFrontend flag
-      const finalConfig = {
-        ...config,
-        hasFrontend: frontendResult.success && frontendResult.data !== null,
-      };
-
-      if (frontendResult.success && frontendResult.data) {
-        this.logger.info(
-          { botName: config.name, frontendPath: frontendResult.data },
-          "Frontend bundle extracted for bot",
-        );
-      }
-
-      // Create the bot
-      const botData: Partial<CustomBot> = {
-        name: finalConfig.name,
-        version: finalConfig.version,
-        config: finalConfig,
-        filePath: filePath,
-        status: "active",
-      };
-
-      const result = await this.customBotRepository.createNewGlobalVersion(
-        userId,
-        botData,
-      );
-
-      if (!result.success) {
-        return Failure(result.error);
-      }
-
-      return await this.customBotRepository.getSpecificGlobalVersion(
-        config.name,
-        config.version,
+        config,
+        filePath,
+        "Frontend bundle extracted for bot",
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error creating custom bot");
       return Failure(`Failed to create custom bot: ${errorMessage(error)}`);
     }
+  }
+
+  private async storeVersion(
+    userId: string,
+    config: CustomBotConfig,
+    filePath: string,
+    frontendLogMessage: string,
+  ): Promise<Result<CustomBot, string>> {
+    const requiredFiles = COMPILED_RUNTIMES.includes(config.runtime)
+      ? []
+      : Object.values(config.entrypoints).filter(Boolean);
+    const zipValidation = await this.storageService.validateZipStructure(
+      filePath,
+      requiredFiles,
+    );
+    if (!zipValidation.success) {
+      return Failure(`ZIP validation failed: ${zipValidation.error}`);
+    }
+
+    const frontendResult = await this.storageService.extractAndStoreFrontend(
+      filePath,
+      userId,
+      config.name,
+      config.version,
+    );
+    const finalConfig = {
+      ...config,
+      hasFrontend: frontendResult.success && frontendResult.data !== null,
+    };
+    if (frontendResult.success && frontendResult.data) {
+      this.logger.info(
+        { botName: config.name, frontendPath: frontendResult.data },
+        frontendLogMessage,
+      );
+    }
+
+    const result = await this.customBotRepository.createNewGlobalVersion(
+      userId,
+      {
+        name: finalConfig.name,
+        version: finalConfig.version,
+        config: finalConfig,
+        filePath,
+        status: "active",
+      },
+    );
+    if (!result.success) {
+      return Failure(result.error);
+    }
+
+    return this.customBotRepository.getSpecificGlobalVersion(
+      config.name,
+      config.version,
+    );
   }
 
   async updateCustomBot(
@@ -198,69 +195,11 @@ export class CustomBotService {
         return Failure(`Version ${config.version} already exists for this bot`);
       }
 
-      // Compiled runtimes - entrypoint is built server-side, don't validate in ZIP
-      const compiledRuntimes = [
-        "rust-stable",
-        "dotnet8",
-        "gcc13",
-        "scala3",
-        "ghc96",
-      ];
-      const requiredFiles = compiledRuntimes.includes(config.runtime)
-        ? [] // Skip entrypoint validation for compiled languages
-        : Object.values(config.entrypoints).filter(Boolean);
-
-      // Validate ZIP file structure from uploaded file
-      const zipValidation = await this.storageService.validateZipStructure(
-        filePath,
-        requiredFiles,
-      );
-      if (!zipValidation.success) {
-        return Failure(`ZIP validation failed: ${zipValidation.error}`);
-      }
-
-      // Extract frontend bundle if present
-      const frontendResult = await this.storageService.extractAndStoreFrontend(
-        filePath,
+      return await this.storeVersion(
         userId,
-        config.name,
-        config.version,
-      );
-
-      // Update config with hasFrontend flag
-      const finalConfig = {
-        ...config,
-        hasFrontend: frontendResult.success && frontendResult.data !== null,
-      };
-
-      if (frontendResult.success && frontendResult.data) {
-        this.logger.info(
-          { botName: config.name, frontendPath: frontendResult.data },
-          "Frontend bundle extracted for bot update",
-        );
-      }
-
-      // Create new version
-      const botData: Partial<CustomBot> = {
-        name: finalConfig.name,
-        version: finalConfig.version,
-        config: finalConfig,
-        filePath: filePath,
-        status: "active",
-      };
-
-      const customBot = await this.customBotRepository.createNewGlobalVersion(
-        userId,
-        botData,
-      );
-
-      if (!customBot.success) {
-        return Failure(customBot.error);
-      }
-
-      return await this.customBotRepository.getSpecificGlobalVersion(
-        config.name,
-        config.version,
+        config,
+        filePath,
+        "Frontend bundle extracted for bot update",
       );
     } catch (error: unknown) {
       this.logger.error({ err: error }, "Error updating custom bot");
