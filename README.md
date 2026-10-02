@@ -12,9 +12,9 @@ the0 runs it, schedules it, keeps its state, streams its logs and gives it a liv
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/alexanderwanyoike/the0?filter=v*)](https://github.com/alexanderwanyoike/the0/releases)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/g5mp57nK)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/8xpMh3RR3)
 
-[Docs](https://docs.the0.app) · [Quick start](#quick-start) · [Build a bot](https://docs.the0.app/custom-bot-development/) · [Discord](https://discord.gg/g5mp57nK)
+[Docs](https://docs.the0.app) · [Quick start](#quick-start) · [Build a bot](https://docs.the0.app/custom-bot-development/) · [Discord](https://discord.gg/8xpMh3RR3)
 
 </div>
 
@@ -32,37 +32,6 @@ You've tested a strategy on your laptop. Now it has to run every day, survive re
 
 Backtesting stays local, next to your research. the0 is where a strategy goes once it's ready to trade.
 
-## A complete bot
-
-```python
-import ccxt
-from the0 import parse, metric, state, success
-
-bot_id, config = parse()
-price = ccxt.binance().fetch_ticker(config["symbol"])["last"]
-
-runs = state.get("runs", 0) + 1
-state.set("runs", runs)
-
-metric("price", {"symbol": config["symbol"], "value": price})
-success(f"Run {runs}: {config['symbol']} at {price}")
-```
-
-Use any exchange client or library you like. Upload the bot once, then start an instance of it on a schedule:
-
-```json
-{ "name": "btc-watch", "type": "scheduled/price-watch", "version": "1.0.0",
-  "schedule": "*/5 * * * *", "symbol": "BTC/USDT" }
-```
-
-```bash
-the0 custom-bot deploy           # package and upload the bot
-the0 bot deploy instance.json    # run it every five minutes
-the0 bot logs <bot_id> -w        # follow its logs
-```
-
-The [Python quick start](https://docs.the0.app/custom-bot-development/python-quick-start) walks through the full project, including the bot's config schema and dashboard.
-
 ## Quick start
 
 You need Docker with the Compose plugin and about 4 GB of free memory.
@@ -74,6 +43,8 @@ the0 local start
 ```
 
 Open http://localhost:3001 and sign in. The API listens on http://localhost:3000.
+
+Then [build and deploy your first bot](https://docs.the0.app/custom-bot-development/) in the language of your choice.
 
 For a server, follow [Docker Compose](https://docs.the0.app/deployment/docker-compose) or install the [Helm chart](https://docs.the0.app/deployment/kubernetes) on Kubernetes:
 
@@ -118,11 +89,11 @@ flowchart LR
 
 The API is NestJS, the runtime and CLI are Go, and the dashboard is Next.js. PostgreSQL holds users and bot definitions, MongoDB holds runtime state, NATS carries events, and an S3-compatible store holds bot code and logs. Bots run as Docker containers under Compose, or as pods and CronJobs on Kubernetes.
 
-> **Beta.** the0 moves fast. Breaking changes ship with a [migration guide](https://docs.the0.app/migration-guides/).
+Upgrading? Every breaking change ships with a [migration guide](https://docs.the0.app/migration-guides/).
 
 ## Contributing
 
-Bug reports, ideas and pull requests are all welcome, AI-assisted ones included as long as they come with tests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or say hello on [Discord](https://discord.gg/g5mp57nK).
+Bug reports, ideas and pull requests are all welcome, AI-assisted ones included as long as they come with tests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or say hello on [Discord](https://discord.gg/8xpMh3RR3).
 
 ## License
 

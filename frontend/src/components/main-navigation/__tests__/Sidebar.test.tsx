@@ -39,6 +39,22 @@ describe("Sidebar Component", () => {
     expect(screen.getByText("Analytics")).toBeInTheDocument();
   });
 
+  it("shows the app name without a beta label", () => {
+    render(
+      <Sidebar
+        navigation={mockNavigation}
+        user={mockUser}
+        onLogout={jest.fn()}
+        currentPath="/dashboard"
+        isCollapsed={false}
+        onCollapsedChange={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("the0")).toBeInTheDocument();
+    expect(screen.queryByText(/beta/i)).not.toBeInTheDocument();
+  });
+
   it("calls onLogout when logout button is clicked", async () => {
     const mockOnLogout = jest.fn();
     render(

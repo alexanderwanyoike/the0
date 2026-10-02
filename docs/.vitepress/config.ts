@@ -139,7 +139,7 @@ export default withMermaid(defineConfig({
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/alexanderwanyoike/the0' },
-      { icon: 'discord', link: 'https://discord.gg/g5mp57nK' },
+      { icon: 'discord', link: 'https://discord.gg/8xpMh3RR3' },
     ],
 
     footer: {

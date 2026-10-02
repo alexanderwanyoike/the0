@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.10.0
-appVersion: "1.15.0"
+version: 0.11.0
+appVersion: "1.16.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -20,7 +20,7 @@ maintainers:
     url: https://github.com/alexanderwanyoike
 annotations:
   artifacthub.io/license: Apache-2.0
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   artifacthub.io/category: integration-delivery
   artifacthub.io/links: |
     - name: Documentation
@@ -28,22 +28,14 @@ annotations:
     - name: Source
       url: https://github.com/alexanderwanyoike/the0
     - name: Discord
-      url: https://discord.gg/g5mp57nK
+      url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
-    - kind: added
-      description: Swagger UI at /docs and the OpenAPI spec at /docs-json for the api - off by default in this chart, set the0Api.env.SWAGGER_ENABLED to "true" to serve them
-    - kind: security
-      description: Login no longer reveals whether an account exists or is inactive - the password is checked first, and unknown emails cost the same bcrypt comparison
-    - kind: security
-      description: API key checks no longer return database error details to clients - a rejected key gets a generic "Invalid API key" and the reason is logged server side
-    - kind: fixed
-      description: A database outage during JWT or API key checks now answers 503 instead of 401, so a brief outage no longer logs users out
-    - kind: fixed
-      description: The MCP tools/list schema for bot_deploy matches what the handler reads (the name lives in config.name)
-    - kind: security
-      description: axios and brace-expansion bumped past new HIGH advisories in the api, frontend and React SDK
+    - kind: changed
+      description: the0 is out of beta - the BETA labels are gone from the dashboard and landing page, and the chart is no longer marked as a prerelease
+    - kind: changed
+      description: Discord links in the docs, READMEs and chart point at the new community invite
     - kind: removed
-      description: The unused hello-world GET / endpoint, and the never-connected MCP SDK server with its @modelcontextprotocol/sdk and zod dependencies
+      description: The stale ROADMAP.md
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
