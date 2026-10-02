@@ -1,5 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { UnauthorizedException } from "@nestjs/common";
+import {
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { AuthController } from "../auth.controller";
 import { AuthService } from "../auth.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
@@ -201,6 +204,28 @@ describe("AuthController", () => {
       await expect(
         controller.validateApiKey("ApiKey the0_unknown"),
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it("answers a rejected key with a generic message that hides the reason", async () => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Failure('relation "api_keys" does not exist at 10.0.0.5:5432'),
+      );
+
+      const error = await controller
+        .validateApiKey("ApiKey the0_unknown")
+        .catch((e: unknown) => e);
+
+      expect(error).toEqual(new UnauthorizedException("Invalid API key"));
+    });
+
+    it("passes a database outage through as service unavailable", async () => {
+      mockApiKeyService.validateApiKey.mockRejectedValue(
+        new ServiceUnavailableException("Database temporarily unavailable"),
+      );
+
+      await expect(
+        controller.validateApiKey("ApiKey the0_secret"),
+      ).rejects.toThrow(ServiceUnavailableException);
     });
   });
 });
