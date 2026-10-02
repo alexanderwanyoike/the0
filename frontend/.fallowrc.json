@@ -2,7 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": ["scripts/docker-healthcheck.js"],
   "ignoreExports": [{ "file": "src/components/ui/**", "exports": ["*"] }],
-  "ignoreDependencies": ["tailwindcss-animate"],
+  // Loaded by name, not imported: tailwindcss-animate is a plugin listed in
+  // tailwind.config.ts, and eslint-config-next is what eslint.config.mjs
+  // extends as "next/core-web-vitals" and "next/typescript".
+  "ignoreDependencies": ["tailwindcss-animate", "eslint-config-next"],
   "health": {
     "ignore": ["**/*.test.*", "**/__tests__/**"]
   }
