@@ -67,7 +67,7 @@ export async function readJsonRequest(req: NextRequest): Promise<unknown> {
   }
 }
 
-export function malformedJsonResponse() {
+function malformedJsonResponse() {
   return NextResponse.json(
     { success: false, message: "Malformed JSON payload" },
     { status: 400 },

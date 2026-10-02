@@ -1,7 +1,7 @@
 // Configuration for external services
 // Uses NEXT_PUBLIC_ for build-time embedding and runtime flexibility
 
-export const getDocsUrl = (): string => {
+const getDocsUrl = (): string => {
   // Primary: Use NEXT_PUBLIC_DOCS_URL (embedded at build time)
   // Fallback: Use /docs for backward compatibility
   return process.env.NEXT_PUBLIC_DOCS_URL || "/docs";

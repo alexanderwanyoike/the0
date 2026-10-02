@@ -21,29 +21,7 @@ export type BotServiceError = {
   statusCode: number;
 };
 
-export type BotMeta = {
-  name: string;
-  exchange: string;
-  description: string;
-  longDescription: string;
-  version: string;
-};
-
 export class BotService {
-  public static async createBot(
-    config: Record<string, any>,
-  ): Promise<Result<Bot, BotServiceError>> {
-    try {
-      const response = await axios.post("/api/bot", {
-        name: config.name,
-        config,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
-  }
-
   public static async getBot(
     id: string,
   ): Promise<Result<Bot, BotServiceError>> {

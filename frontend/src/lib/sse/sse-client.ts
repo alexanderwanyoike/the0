@@ -194,16 +194,4 @@ export class SSEClient {
     const connection = this.connections.get(url);
     return connection?.readyState === EventSource.OPEN;
   }
-
-  /**
-   * Get all active connection URLs
-   */
-  getActiveConnections(): string[] {
-    return Array.from(this.connections.keys()).filter((url) =>
-      this.isConnected(url),
-    );
-  }
 }
-
-// Export singleton instance for convenience
-export const sseClient = new SSEClient();
