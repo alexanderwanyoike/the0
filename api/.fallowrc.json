@@ -1,13 +1,10 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
-  // Loaded by things fallow does not read: the Dockerfile HEALTHCHECK, the
-  // package.json jest setupFiles (<rootDir> is not expanded) and the
-  // test:e2e script's test/jest-e2e.json.
+  // Loaded by things fallow does not read: the Dockerfile HEALTHCHECK and
+  // the package.json jest setupFiles (<rootDir> is not expanded).
   "entry": [
     "scripts/docker-healthcheck.js",
-    "src/test/bootstrap.ts",
-    "test/setup.ts",
-    "test/**/*.e2e-spec.ts"
+    "src/test/bootstrap.ts"
   ],
   // Referenced by name, not imported: pino-pretty is a pino transport target,
   // @nestjs/schematics is the nest-cli.json collection, and

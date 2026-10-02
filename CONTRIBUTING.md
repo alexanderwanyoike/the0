@@ -223,8 +223,7 @@ yarn test:watch        # Watch mode
 
 ```bash
 cd api
-yarn test              # Unit tests
-yarn test:e2e         # End-to-end tests
+yarn test              # Unit, integration and HTTP-level tests
 ```
 
 - Unit tests for services and controllers

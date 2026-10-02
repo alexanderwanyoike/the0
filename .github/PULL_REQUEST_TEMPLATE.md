@@ -60,7 +60,7 @@ Fixes #
 # List the test commands you ran
 # Example:
 # cd frontend && yarn test
-# cd api && yarn test:e2e
+# cd api && yarn test
 # cd runtime && go test ./...
 ```
 
