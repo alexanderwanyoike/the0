@@ -6,8 +6,8 @@ import {
   FilterOption,
 } from "@/hooks/bot-list-filters";
 
-export type BotTypeFilter = "all" | "scheduled" | "realtime";
-export type BotStatusFilter = "all" | "enabled" | "disabled";
+type BotTypeFilter = "all" | "scheduled" | "realtime";
+type BotStatusFilter = "all" | "enabled" | "disabled";
 
 const BOT_STATUS_OPTIONS: readonly FilterOption[] = [
   { value: "all", label: "All" },

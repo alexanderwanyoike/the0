@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { CustomBotWithVersions } from "@/types/custom-bots";
 import { BOT_TYPE_OPTIONS, FilterFacet } from "@/hooks/bot-list-filters";
 
-export type CustomBotTypeFilter = "all" | "scheduled" | "realtime";
+type CustomBotTypeFilter = "all" | "scheduled" | "realtime";
 
 export function useCustomBotFilters() {
   const [search, setSearch] = useState("");
