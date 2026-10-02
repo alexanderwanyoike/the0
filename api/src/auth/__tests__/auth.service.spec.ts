@@ -62,6 +62,8 @@ describe("AuthService", () => {
       ],
     }).compile();
 
+    await module.init();
+
     service = module.get<AuthService>(AuthService);
     jwtService = module.get<JwtService>(JwtService);
     userRepository = module.get(UserRepository);
@@ -232,6 +234,16 @@ describe("AuthService", () => {
         data: null,
       });
       expect(userRepository.updateLastLogin).not.toHaveBeenCalled();
+    });
+
+    it("prepares the stand-in hash at startup, so an unknown email costs one comparison", async () => {
+      jest.mocked(bcrypt.hash).mockClear();
+      userRepository.findByEmail.mockResolvedValueOnce(null);
+
+      await service.login(credentials);
+
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
     });
 
     it("compares a password for an unknown email so timing does not reveal it", async () => {
