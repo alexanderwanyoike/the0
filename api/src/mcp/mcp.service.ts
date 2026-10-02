@@ -1,13 +1,7 @@
 import { Injectable, Type } from "@nestjs/common";
 import { ContextIdFactory, ModuleRef } from "@nestjs/core";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
 import { PinoLogger } from "nestjs-pino";
 import {
-  MCP_TOOL_DEFINITIONS,
   MCP_TOOL_NAMES,
   BotDeployInput,
   BotUpdateInput,
@@ -29,8 +23,6 @@ import { BotQueryService } from "@/bot-query/bot-query.service";
 
 @Injectable()
 export class McpService {
-  private server: Server;
-
   constructor(
     private readonly botRepository: BotRepository,
     private readonly customBotService: CustomBotService,
@@ -38,9 +30,7 @@ export class McpService {
     private readonly apiKeyService: ApiKeyService,
     private readonly logger: PinoLogger,
     private readonly moduleRef: ModuleRef,
-  ) {
-    this.initializeServer();
-  }
+  ) {}
 
   /**
    * Resolve a request-scoped service under a synthetic request context that
@@ -58,37 +48,6 @@ export class McpService {
       contextId,
     );
     return this.moduleRef.resolve(provider, contextId, { strict: false });
-  }
-
-  private initializeServer() {
-    this.server = new Server(
-      {
-        name: "the0-mcp",
-        version: "1.0.0",
-      },
-      {
-        capabilities: {
-          tools: {},
-        },
-      },
-    );
-
-    this.registerToolHandlers();
-  }
-
-  private registerToolHandlers() {
-    // Register tool list handler
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: MCP_TOOL_DEFINITIONS,
-      };
-    });
-
-    // Register tool call handler
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-      return this.handleToolCall(name, args || {});
-    });
   }
 
   async handleToolCall(
@@ -536,10 +495,5 @@ export class McpService {
       version: result.data.version,
       schema: result.data.config?.schema?.bot || {},
     };
-  }
-
-  // Expose server for transport
-  getServer(): Server {
-    return this.server;
   }
 }
