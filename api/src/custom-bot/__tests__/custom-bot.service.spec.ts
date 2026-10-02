@@ -836,6 +836,122 @@ describe("CustomBotService", () => {
       expect(result.error).toContain("Failed to update custom bot");
       expect(result.error).toContain("Database connection failed");
     });
+
+    describe("pre-upload checks", () => {
+      const userId = "user123";
+      const filePath = "bots/test-bot/1.0.0.zip";
+
+      const arrangePassingChecks = () => {
+        mockValidateConfig.mockReturnValue({ valid: true });
+        mockRepository.globalBotExists.mockResolvedValue(Ok(true));
+        mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Ok({ version: "0.9.0" } as CustomBot),
+        );
+        mockRepository.isVersionNewer.mockReturnValue(true);
+        mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
+      };
+
+      const update = () =>
+        service.updateCustomBot(userId, "test-bot", validConfig, filePath);
+
+      it("should reject an invalid config before touching the repository", async () => {
+        arrangePassingChecks();
+        mockValidateConfig.mockReturnValue({
+          valid: false,
+          errors: ["name is required", "version is invalid"],
+        });
+
+        const result = await update();
+
+        expect(result).toEqual(
+          Failure("Validation failed: name is required, version is invalid"),
+        );
+        expect(mockRepository.globalBotExists).not.toHaveBeenCalled();
+      });
+
+      it("should pass through a repository error when checking the bot exists", async () => {
+        arrangePassingChecks();
+        mockRepository.globalBotExists.mockResolvedValue(Failure("db down"));
+
+        const result = await update();
+
+        expect(result).toEqual(Failure("db down"));
+        expect(mockRepository.checkUserOwnership).not.toHaveBeenCalled();
+      });
+
+      it("should pass through a repository error when loading the latest version", async () => {
+        arrangePassingChecks();
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Failure("latest lookup failed"),
+        );
+
+        const result = await update();
+
+        expect(result).toEqual(Failure("latest lookup failed"));
+        expect(mockRepository.isVersionNewer).not.toHaveBeenCalled();
+      });
+
+      it("should name both versions when the new version is not newer", async () => {
+        arrangePassingChecks();
+        mockRepository.getGlobalLatestVersion.mockResolvedValue(
+          Ok({ version: "2.0.0" } as CustomBot),
+        );
+        mockRepository.isVersionNewer.mockReturnValue(false);
+
+        const result = await update();
+
+        expect(result).toEqual(
+          Failure("Version 1.0.0 must be greater than current version 2.0.0"),
+        );
+        expect(mockRepository.isVersionNewer).toHaveBeenCalledWith(
+          "2.0.0",
+          "1.0.0",
+        );
+        expect(mockRepository.globalVersionExists).not.toHaveBeenCalled();
+      });
+
+      it("should pass through a repository error when checking the version exists", async () => {
+        arrangePassingChecks();
+        mockRepository.globalVersionExists.mockResolvedValue(
+          Failure("version lookup failed"),
+        );
+
+        const result = await update();
+
+        expect(result).toEqual(Failure("version lookup failed"));
+        expect(mockRepository.globalVersionExists).toHaveBeenCalledWith(
+          "test-bot",
+          "1.0.0",
+        );
+        expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
+      });
+
+      it("should run the checks in order before storing the version", async () => {
+        arrangePassingChecks();
+        mockStorageService.validateZipStructure.mockResolvedValue(
+          Failure("stop here"),
+        );
+
+        await update();
+
+        const order = (mock: jest.Mock) => mock.mock.invocationCallOrder[0];
+        const calls = [
+          mockValidateConfig,
+          mockRepository.globalBotExists,
+          mockRepository.checkUserOwnership,
+          mockRepository.getGlobalLatestVersion,
+          mockRepository.isVersionNewer,
+          mockRepository.globalVersionExists,
+          mockStorageService.validateZipStructure,
+        ].map((mock) => order(mock as unknown as jest.Mock));
+        expect(calls).toEqual([...calls].sort((a, b) => a - b));
+        expect(mockRepository.checkUserOwnership).toHaveBeenCalledWith(
+          userId,
+          "test-bot",
+        );
+      });
+    });
   });
 
   describe("getUserCustomBots", () => {
