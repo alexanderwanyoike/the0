@@ -6,7 +6,7 @@ on:
     paths:
       - "k8s/**"
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "k8s/**"
   workflow_dispatch:
@@ -25,6 +25,9 @@ jobs:
 
       - name: Lint chart
         run: helm lint k8s/
+
+      - name: Test chart rendering
+        run: bash k8s/tests/render-test.sh
 
       - name: Package chart (validate)
         run: helm package k8s/
