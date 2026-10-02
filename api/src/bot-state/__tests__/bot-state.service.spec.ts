@@ -371,6 +371,19 @@ describe("BotStateService", () => {
   });
 
   describe("deleting a key from stored state", () => {
+    it("looks up ownership before validating the bot ID format", async () => {
+      const result = await service.deleteKey("../other-bot", "portfolio");
+
+      expect(mockBotService.findOne).toHaveBeenCalledWith("../other-bot");
+      expect(result).toEqual(
+        Failure({
+          code: BotStateErrorCode.STORAGE_ERROR,
+          message: "Invalid bot ID format",
+        }),
+      );
+      expect(mockMinioClient.statObject).not.toHaveBeenCalled();
+    });
+
     // The service deletes its temp dir after uploading, so the archive must
     // be inspected while fPutObject is still running.
     const captureUploads = () => {

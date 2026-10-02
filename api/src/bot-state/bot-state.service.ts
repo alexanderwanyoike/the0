@@ -303,44 +303,15 @@ export class BotStateService {
     }
 
     try {
-      // Download state with ETag for optimistic locking
       const downloadResult = await this.downloadAndExtractStateWithEtag(botId);
       if (!downloadResult) {
         return Ok(false); // No state exists
       }
 
       const { tempDir, etag } = downloadResult;
-
       try {
-        const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
-        try {
-          await fs.access(filepath);
-        } catch {
-          return Ok(false);
-        }
-
-        // Delete the file
-        await fs.unlink(filepath);
-
-        // Re-upload the modified state with optimistic locking
-        const uploadSucceeded = await this.uploadStateWithLocking(
-          botId,
-          tempDir,
-          etag,
-        );
-
-        if (!uploadSucceeded) {
-          // Concurrent modification detected - return conflict error
-          return Failure({
-            code: BotStateErrorCode.CONCURRENT_MODIFICATION,
-            message:
-              "State was modified by another operation. Please retry the request.",
-          });
-        }
-
-        return Ok(true);
+        return await this.removeKeyAndReupload(botId, key, tempDir, etag);
       } finally {
-        // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: unknown) {
@@ -350,6 +321,38 @@ export class BotStateService {
         message: "Failed to delete state key",
       });
     }
+  }
+
+  /** @returns Ok(false) when the key is not in the downloaded state. */
+  private async removeKeyAndReupload(
+    botId: string,
+    key: string,
+    tempDir: string,
+    etag: string,
+  ): Promise<Result<boolean, BotStateError>> {
+    const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
+    try {
+      await fs.access(filepath);
+    } catch {
+      return Ok(false);
+    }
+
+    await fs.unlink(filepath);
+
+    const uploadSucceeded = await this.uploadStateWithLocking(
+      botId,
+      tempDir,
+      etag,
+    );
+    if (!uploadSucceeded) {
+      return Failure({
+        code: BotStateErrorCode.CONCURRENT_MODIFICATION,
+        message:
+          "State was modified by another operation. Please retry the request.",
+      });
+    }
+
+    return Ok(true);
   }
 
   /**
