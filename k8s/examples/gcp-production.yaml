@@ -52,7 +52,6 @@ the0Api:
     FRONTEND_URL: "https://app.the0.app"
     JWT_SECRET: "CHANGEME"
     JWT_EXPIRES_IN: "7d"
-    RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
 
 the0Frontend:
   replicas: 2

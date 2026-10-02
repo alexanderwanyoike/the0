@@ -64,6 +64,8 @@ spec:
                   key: database-url
             - name: NATS_URLS
               value: {{ include "the0.natsUrl" . | quote }}
+            - name: RUNTIME_QUERY_URL
+              value: {{ .Values.the0Api.env.RUNTIME_QUERY_URL | default (include "the0.runtimeQueryUrl" .) | quote }}
             - name: MINIO_ENDPOINT
               value: {{ include "the0.minioEndpoint" . | quote }}
             - name: MINIO_PORT
@@ -86,7 +88,7 @@ spec:
                   name: {{ include "the0.secretName" . }}
                   key: jwt-secret
             {{- range $key, $value := .Values.the0Api.env }}
-            {{- if and (ne $key "JWT_SECRET") (ne $key "DATABASE_URL") (ne $key "MINIO_ACCESS_KEY") (ne $key "MINIO_SECRET_KEY") }}
+            {{- if and (ne $key "JWT_SECRET") (ne $key "DATABASE_URL") (ne $key "MINIO_ACCESS_KEY") (ne $key "MINIO_SECRET_KEY") (ne $key "RUNTIME_QUERY_URL") }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}

@@ -137,6 +137,13 @@ nats://{{ .Values.nats.external.host }}:{{ .Values.nats.external.port }}
 {{- end }}
 
 {{/*
+Bot-controller query server URL, used by the API service
+*/}}
+{{- define "the0.runtimeQueryUrl" -}}
+http://{{ include "the0.fullname" . }}-bot-controller:9477
+{{- end }}
+
+{{/*
 MinIO endpoint (host only, no port) — used by the API service
 */}}
 {{- define "the0.minioEndpoint" -}}
