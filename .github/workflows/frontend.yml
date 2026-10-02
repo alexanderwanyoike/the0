@@ -53,11 +53,9 @@ jobs:
     - name: ESLint report (non-blocking)
       working-directory: ./frontend
       continue-on-error: true
-      run: |
-        { echo '### frontend: ESLint'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-        yarn --silent lint --no-color >> "$GITHUB_STEP_SUMMARY" 2>&1 || status=$?
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        exit "${status:-0}"
+      run: >-
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "frontend: ESLint"
+        yarn --silent lint --no-color
 
   build-and-push:
     needs: test
