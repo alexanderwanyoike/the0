@@ -2,7 +2,7 @@
 BINARY_NAME=runtime
 BUILD_DIR=./build
 
-.PHONY: build clean docker-build test fmt security-audit security-image security-scan
+.PHONY: build clean docker-build test fmt lint deadcode security-audit security-image security-scan
 
 # Build the Go binary
 build:
@@ -37,6 +37,15 @@ fmt:
 	@echo "Formatting code..."
 	go fmt ./...
 	@echo "Done!"
+
+DEADCODE_VERSION ?= v0.49.0
+
+lint:
+	golangci-lint run --config .golangci.yml ./...
+
+# The module is named "runtime", so deadcode's default filter would also match the standard library's runtime package.
+deadcode:
+	go run golang.org/x/tools/cmd/deadcode@$(DEADCODE_VERSION) -filter '^runtime/(cmd|internal)/' ./...
 
 security-audit:
 	@command -v govulncheck >/dev/null 2>&1 || { echo "govulncheck is required for Go vulnerability scanning. Install: go install golang.org/x/vuln/cmd/govulncheck@latest"; exit 1; }
