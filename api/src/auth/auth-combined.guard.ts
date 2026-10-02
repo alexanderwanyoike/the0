@@ -56,7 +56,7 @@ export class AuthCombinedGuard implements CanActivate {
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
     if (!result.success) {
-      throw new UnauthorizedException(result.error);
+      throw new UnauthorizedException("Invalid API key");
     }
 
     request.user = {

@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { ApiKeyRepository } from "@/api-key/api-key.repository";
@@ -257,6 +258,31 @@ describe("ApiKeyService", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("API key not found or inactive");
+    });
+
+    it("reports an unreachable database as unavailable when looking up the key", async () => {
+      repository.findByKey.mockRejectedValue(
+        Object.assign(new Error("connect ECONNREFUSED 10.0.0.5:5432"), {
+          code: "ECONNREFUSED",
+        }),
+      );
+
+      await expect(service.validateApiKey("the0_key")).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it("reports an unreachable database as unavailable when looking up the owner", async () => {
+      repository.findByKey.mockResolvedValue(Ok(mockApiKey));
+      users.findById.mockRejectedValue(
+        Object.assign(new Error("connect ETIMEDOUT 10.0.0.5:5432"), {
+          code: "ETIMEDOUT",
+        }),
+      );
+
+      await expect(service.validateApiKey("the0_key")).rejects.toThrow(
+        ServiceUnavailableException,
+      );
     });
   });
 

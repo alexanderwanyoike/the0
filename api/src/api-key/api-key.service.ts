@@ -1,5 +1,6 @@
 // src/api-keys/services/api-key.service.ts
-import { Injectable } from "@nestjs/common";
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { isConnectionError } from "@/common/database-errors";
 import { ApiKeyRepository } from "./api-key.repository";
 import { Result, Ok, Failure } from "../common/result";
 import { ApiKey } from "./models/api-key.model";
@@ -105,23 +106,34 @@ export class ApiKeyService {
   }
 
   /**
-   * Validate an API key (for authentication middleware)
+   * Validate an API key (for authentication middleware). Failure reasons are
+   * for server-side logs only: callers answer clients with a generic message,
+   * because a reason can carry database details.
    */
   async validateApiKey(key: string): Promise<Result<ApiKey, string>> {
-    const result = await this.apiKeyRepository.findByKey(key);
-    if (!result.success) {
-      return Failure(result.error);
+    try {
+      const result = await this.apiKeyRepository.findByKey(key);
+      if (!result.success) {
+        return Failure(result.error);
+      }
+
+      const user = await this.users.findById(result.data.userId);
+      if (!user?.isActive) {
+        return Failure("API key owner is inactive");
+      }
+
+      // Update last used timestamp
+      await this.apiKeyRepository.updateLastUsed(result.data.id);
+
+      return Ok(result.data);
+    } catch (error) {
+      if (isConnectionError(error)) {
+        throw new ServiceUnavailableException(
+          "Database temporarily unavailable",
+        );
+      }
+      throw error;
     }
-
-    const user = await this.users.findById(result.data.userId);
-    if (!user?.isActive) {
-      return Failure("API key owner is inactive");
-    }
-
-    // Update last used timestamp
-    await this.apiKeyRepository.updateLastUsed(result.data.id);
-
-    return Ok(result.data);
   }
 
   /**

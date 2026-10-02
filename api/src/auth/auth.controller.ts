@@ -91,7 +91,7 @@ export class AuthController {
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
     if (!result.success) {
-      throw new UnauthorizedException(result.error);
+      throw new UnauthorizedException("Invalid API key");
     }
 
     return {
