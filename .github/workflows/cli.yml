@@ -63,18 +63,14 @@ jobs:
     - name: golangci-lint report (non-blocking)
       working-directory: ./cli
       continue-on-error: true
-      run: |
-        { echo '### cli: golangci-lint'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-        golangci-lint run --config .golangci.yml --output.tab.path=stdout ./... >> "$GITHUB_STEP_SUMMARY" 2>&1 || status=$?
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        exit "${status:-0}"
+      run: >-
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "cli: golangci-lint"
+        golangci-lint run --config .golangci.yml --output.tab.path=stdout ./...
 
     - name: deadcode report (non-blocking)
       working-directory: ./cli
       continue-on-error: true
       run: |
-        { echo '### cli: deadcode (unreachable from main)'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
         # stderr only on failure: on success it is just "go: downloading" noise.
-        make -s deadcode >> "$GITHUB_STEP_SUMMARY" 2> "$RUNNER_TEMP/deadcode.err" || { status=$?; cat "$RUNNER_TEMP/deadcode.err" >> "$GITHUB_STEP_SUMMARY"; }
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        exit "${status:-0}"
+        bash "$GITHUB_WORKSPACE/.github/scripts/summary-code-block.sh" "cli: deadcode (unreachable from main)" \
+          sh -c 'make -s deadcode 2> "$RUNNER_TEMP/deadcode.err" || { s=$?; cat "$RUNNER_TEMP/deadcode.err"; exit "$s"; }'
