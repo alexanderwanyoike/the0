@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BotDetailPanel } from "../bot-detail-panel";
 import { BotService } from "@/lib/api/api-client";
@@ -66,8 +66,9 @@ jest.mock("@/lib/bot-utils", () => ({
   isScheduledBot: () => true,
 }));
 
+let mockIsDesktop: boolean | null = true;
 jest.mock("@/hooks/use-media-query", () => ({
-  useMediaQuery: () => true, // default to desktop
+  useMediaQuery: () => mockIsDesktop,
 }));
 
 jest.mock("@/components/bot/bot-dashboard-loader", () => ({
@@ -134,6 +135,7 @@ const mockBot: any = {
 describe("BotDetailPanel", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsDesktop = true;
     mockUseAuth.mockReturnValue({
       user: { id: "user-1" },
     } as any);
@@ -277,6 +279,231 @@ describe("BotDetailPanel", () => {
           expect.objectContaining({ enabled: false }),
         );
       });
+    });
+
+    it("shows Disabled once the update succeeds", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      mockUpdateBot.mockResolvedValue({ success: true, data: {} } as any);
+
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Enabled");
+
+      await userEvent.click(screen.getByRole("switch"));
+
+      expect(await screen.findByText("Disabled")).toBeInTheDocument();
+      expect(screen.getByRole("switch")).not.toBeChecked();
+    });
+
+    it("keeps the previous state and toasts when the update fails", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      mockUpdateBot.mockResolvedValue({
+        success: false,
+        error: { message: "nope" },
+      } as any);
+      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Enabled");
+
+      await userEvent.click(screen.getByRole("switch"));
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Update Failed",
+            variant: "destructive",
+          }),
+        );
+      });
+      expect(screen.getByText("Enabled")).toBeInTheDocument();
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe("delete navigation", () => {
+    async function confirmDelete() {
+      await screen.findByText("Test Bot");
+      await userEvent.click(screen.getByRole("button", { name: /delete/i }));
+      await userEvent.click(screen.getByRole("button", { name: /delete bot/i }));
+    }
+
+    it("moves to the next remaining bot", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      mockDeleteBot.mockResolvedValue({ success: true, data: {} } as any);
+      mockUseDashboardBots.mockReturnValue({
+        bots: [mockBot, { ...mockBot, id: "bot-456" }],
+        loading: false,
+        error: null,
+        refetchBots: jest.fn(),
+        removeBotFromList: mockRemoveBotFromList,
+      });
+
+      render(<BotDetailPanel botId="bot-123" />);
+      await confirmDelete();
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith("/dashboard/bot-456");
+      });
+    });
+
+    it("returns to the dashboard when no bots remain", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      mockDeleteBot.mockResolvedValue({ success: true, data: {} } as any);
+
+      render(<BotDetailPanel botId="bot-123" />);
+      await confirmDelete();
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith("/dashboard");
+      });
+    });
+
+    it("toasts and stays put when the delete fails", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      mockDeleteBot.mockResolvedValue({
+        success: false,
+        error: { message: "delete broke" },
+      } as any);
+      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+      render(<BotDetailPanel botId="bot-123" />);
+      await confirmDelete();
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Delete Failed",
+          description: "delete broke",
+          variant: "destructive",
+        });
+      });
+      expect(mockRemoveBotFromList).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe("desktop detail layout", () => {
+    it("renders the details, console and dashboard placeholder", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await screen.findByText("Test Bot");
+      expect(screen.getByText("ot-123")).toBeInTheDocument();
+      expect(screen.getByText("BTCUSD")).toBeInTheDocument();
+      expect(screen.getByText("0 * * * *")).toBeInTheDocument();
+      expect(screen.getByText("Bot Details")).toBeInTheDocument();
+      expect(screen.getByText("Configuration")).toBeInTheDocument();
+      expect(
+        screen.getByText("No dashboard configured for this bot"),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("console-interface")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("connection-status-indicator"),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("bot-dashboard")).not.toBeInTheDocument();
+    });
+
+    it("renders the custom dashboard and Real-time schedule when configured", async () => {
+      mockGetBot.mockResolvedValue({
+        success: true,
+        data: {
+          ...mockBot,
+          customBotId: "custom-1",
+          config: { ...mockBot.config, hasFrontend: true, schedule: undefined },
+        },
+      } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await screen.findByText("Test Bot");
+      expect(screen.getByTestId("bot-dashboard")).toBeInTheDocument();
+      expect(screen.getByText("Real-time")).toBeInTheDocument();
+    });
+
+    it("copies the masked configuration", async () => {
+      const writeText = jest.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      });
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Test Bot");
+
+      fireEvent.click(screen.getByText("Copy").closest("button")!);
+
+      const copied = JSON.parse(writeText.mock.calls[0][0]);
+      expect(copied.symbol).toBe("BTCUSD");
+      expect(copied.api_key).toBeUndefined();
+      expect(copied.password).toBeUndefined();
+      expect(mockToast).toHaveBeenCalledWith({
+        description: "Bot configuration copied to clipboard",
+        duration: 2000,
+      });
+    });
+  });
+
+  describe("CLI update dialog", () => {
+    it("opens with the bot id and update command and copies them", async () => {
+      const writeText = jest.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+      });
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Test Bot");
+
+      fireEvent.click(screen.getByRole("button", { name: /update via cli/i }));
+
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Update Bot via CLI")).toBeInTheDocument();
+      expect(within(dialog).getByDisplayValue("bot-123")).toBeInTheDocument();
+      expect(
+        within(dialog).getByDisplayValue("the0 bot update bot-123 config.json"),
+      ).toBeInTheDocument();
+      expect(within(dialog).getByText("the0 bot logs bot-123")).toBeInTheDocument();
+
+      const [copyId, copyCommand] = within(dialog).getAllByRole("button", {
+        name: /copy/i,
+      });
+      fireEvent.click(copyId);
+      expect(writeText).toHaveBeenLastCalledWith("bot-123");
+      expect(mockToast).toHaveBeenLastCalledWith({
+        title: "Bot ID Copied",
+        description: "Bot ID copied to clipboard.",
+      });
+
+      fireEvent.click(copyCommand);
+      expect(writeText).toHaveBeenLastCalledWith(
+        "the0 bot update bot-123 config.json",
+      );
+      expect(mockToast).toHaveBeenLastCalledWith({
+        title: "Command Copied",
+        description: "CLI update command copied to clipboard.",
+      });
+    });
+  });
+
+  describe("responsive layout", () => {
+    it("renders the mobile layout below the desktop breakpoint", async () => {
+      mockIsDesktop = false;
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      expect(await screen.findByTestId("mobile-bot-detail")).toBeInTheDocument();
+      expect(screen.queryByText("Bot Details")).not.toBeInTheDocument();
+    });
+
+    it("shows a spinner until the media query resolves", async () => {
+      mockIsDesktop = null;
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await waitFor(() => expect(mockGetBot).toHaveBeenCalled());
+      await act(async () => {});
+      expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+      expect(screen.queryByText("Test Bot")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("mobile-bot-detail")).not.toBeInTheDocument();
     });
   });
 });

@@ -355,6 +355,100 @@ describe("ConsoleInterface", () => {
     });
   });
 
+  describe("date range filtering", () => {
+    async function openFilters() {
+      const user = userEvent.setup();
+      await user.click(screen.getAllByRole("button")[0]);
+      return user;
+    }
+
+    function dateInputs() {
+      return Array.from(
+        document.querySelectorAll<HTMLInputElement>('input[type="date"]'),
+      );
+    }
+
+    it("sends a compact single date and null when it is cleared", async () => {
+      const onDateChange = jest.fn();
+      render(
+        <ConsoleInterface {...defaultProps} onDateChange={onDateChange} />,
+      );
+      await openFilters();
+
+      const [single] = dateInputs();
+      fireEvent.change(single, { target: { value: "2024-03-05" } });
+      expect(onDateChange).toHaveBeenLastCalledWith("20240305");
+      expect(single).toHaveValue("2024-03-05");
+
+      fireEvent.change(single, { target: { value: "" } });
+      expect(onDateChange).toHaveBeenLastCalledWith(null);
+    });
+
+    it("sends a compact range only once both ends are set and clears the single date", async () => {
+      const onDateChange = jest.fn();
+      const onDateRangeChange = jest.fn();
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          onDateChange={onDateChange}
+          onDateRangeChange={onDateRangeChange}
+        />,
+      );
+      await openFilters();
+
+      const [single, start, end] = dateInputs();
+      fireEvent.change(single, { target: { value: "2024-03-05" } });
+      fireEvent.change(start, { target: { value: "2024-03-01" } });
+      expect(onDateRangeChange).not.toHaveBeenCalled();
+
+      fireEvent.change(end, { target: { value: "2024-03-04" } });
+      expect(onDateRangeChange).toHaveBeenCalledWith("20240301", "20240304");
+      expect(single).toHaveValue("");
+
+      fireEvent.change(start, { target: { value: "2024-03-02" } });
+      expect(onDateRangeChange).toHaveBeenLastCalledWith(
+        "20240302",
+        "20240304",
+      );
+    });
+
+    it("clears a range start when a single date is picked", async () => {
+      render(<ConsoleInterface {...defaultProps} />);
+      await openFilters();
+
+      const [single, start] = dateInputs();
+      fireEvent.change(start, { target: { value: "2024-03-01" } });
+      fireEvent.change(single, { target: { value: "2024-03-05" } });
+
+      expect(start).toHaveValue("");
+    });
+
+    it("resets search, date and range and sends null from Clear", async () => {
+      const onDateChange = jest.fn();
+      render(
+        <ConsoleInterface {...defaultProps} onDateChange={onDateChange} />,
+      );
+      const user = await openFilters();
+
+      expect(
+        screen.queryByRole("button", { name: /clear/i }),
+      ).not.toBeInTheDocument();
+
+      const [, start] = dateInputs();
+      fireEvent.change(start, { target: { value: "2024-03-01" } });
+      await user.type(screen.getByPlaceholderText("Search logs..."), "abc");
+
+      await user.click(screen.getByRole("button", { name: /clear/i }));
+
+      expect(screen.getByPlaceholderText("Search logs...")).toHaveValue("");
+      expect(dateInputs()[1]).toHaveValue("");
+      expect(onDateChange).toHaveBeenLastCalledWith(null);
+      expect(
+        screen.queryByRole("button", { name: /clear/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe("filter panel", () => {
     it("toggles filter panel visibility", async () => {
       const user = userEvent.setup();
@@ -747,6 +841,110 @@ describe("ConsoleInterface", () => {
       );
 
       expect(screen.queryByText("Load more")).not.toBeInTheDocument();
+    });
+
+    it("calls loadMore when the footer button is clicked", () => {
+      const loadMore = jest.fn();
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "2024-01-01", content: "INFO: footer click" }]}
+          hasMore={true}
+          loadMore={loadMore}
+        />,
+      );
+
+      fireEvent.click(screen.getByText("Load more"));
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows a disabled loading footer while loadingMore", () => {
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "2024-01-01", content: "INFO: footer loading" }]}
+          hasMore={true}
+          loadMore={jest.fn()}
+          loadingMore={true}
+        />,
+      );
+
+      expect(screen.queryByText("Load more")).not.toBeInTheDocument();
+      expect(screen.getByText("Loading...").closest("button")).toBeDisabled();
+    });
+
+    it("hides the footer when hasMore is true but loadMore is missing", () => {
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "2024-01-01", content: "INFO: footer missing" }]}
+          hasMore={true}
+        />,
+      );
+
+      expect(screen.queryByText("Load more")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("metric timestamps", () => {
+    function renderMetricWithoutParsedTimestamp(content: string) {
+      mockParseLogLine.mockImplementationOnce((c: string) => {
+        const parsed = JSON.parse(c);
+        return {
+          timestamp: null,
+          type: "metric",
+          data: parsed,
+          metricType: parsed._metric,
+          raw: c,
+        } as any;
+      });
+      render(
+        <ConsoleInterface
+          {...defaultProps}
+          logs={[{ date: "2024-01-01", content }]}
+        />,
+      );
+    }
+
+    function localStamp(ms: number) {
+      const d = new Date(ms);
+      const p = (n: number) => String(n).padStart(2, "0");
+      return {
+        date: `${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+        time: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
+      };
+    }
+
+    it("falls back to a numeric epoch-seconds timestamp in the metric data", () => {
+      renderMetricWithoutParsedTimestamp(
+        '{"_metric":"price","value":1,"timestamp":1704103200}',
+      );
+      const { date, time } = localStamp(1704103200 * 1000);
+      expect(screen.getByText(date)).toBeInTheDocument();
+      expect(screen.getByText(time)).toBeInTheDocument();
+      expect(screen.getByText("value: 1")).toBeInTheDocument();
+    });
+
+    it("falls back to a numeric-string epoch-milliseconds timestamp", () => {
+      renderMetricWithoutParsedTimestamp(
+        '{"_metric":"price","value":2,"timestamp":"1704103260000Z"}',
+      );
+      const { time } = localStamp(1704103260000);
+      expect(screen.getByText(time)).toBeInTheDocument();
+    });
+
+    it("falls back to an ISO string timestamp", () => {
+      renderMetricWithoutParsedTimestamp(
+        '{"_metric":"price","value":3,"timestamp":"2024-01-01T10:01:30Z"}',
+      );
+      const { time } = localStamp(Date.parse("2024-01-01T10:01:30Z"));
+      expect(screen.getByText(time)).toBeInTheDocument();
+    });
+
+    it("shows no timestamp when neither the parser nor the data has one", () => {
+      renderMetricWithoutParsedTimestamp('{"_metric":"price","value":4}');
+      expect(screen.getByText("value: 4")).toBeInTheDocument();
+      expect(document.querySelector(".tabular-nums")).toBeNull();
     });
   });
 
