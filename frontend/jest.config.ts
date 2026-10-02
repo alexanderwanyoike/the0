@@ -64,7 +64,6 @@ const customJestConfig: Config = {
       "<rootDir>/__mocks__/react-syntax-highlighter.js",
     "^react-syntax-highlighter/dist/esm/(.*)$":
       "<rootDir>/__mocks__/react-syntax-highlighter.js",
-    "^uuid$": "<rootDir>/__mocks__/uuid.js",
   },
   testPathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/node_modules/"],
 
