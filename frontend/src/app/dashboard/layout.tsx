@@ -6,8 +6,9 @@ import {
   DashboardBotsProvider,
   useDashboardBots,
 } from "@/contexts/dashboard-bots-context";
-import { BotListPanel } from "@/components/bot-list/bot-list";
-import { BotListLayout } from "@/components/bot-list/bot-list-shell";
+import { BotListPanel } from "@/components/bot-list/bot-list-panel";
+import { BotListLayout } from "@/components/bot-list/bot-list-layout";
+import { ResizableSidebarLayout } from "@/components/dashboard/resizable-sidebar-layout";
 import { BotListItem } from "@/components/dashboard/bot-list-item";
 import { useBotFilters } from "@/hooks/use-bot-filters";
 
@@ -41,7 +42,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <BotListLayout
       provider={DashboardBotsProvider}
       sidebar={<DashboardBotsSidebar />}
-      resizableSidebar
+      sidebarLayout={ResizableSidebarLayout}
     >
       {children}
     </BotListLayout>

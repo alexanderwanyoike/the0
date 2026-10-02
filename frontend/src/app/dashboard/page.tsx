@@ -7,7 +7,7 @@ import { useDashboardBots } from "@/contexts/dashboard-bots-context";
 import { useBotFilters } from "@/hooks/use-bot-filters";
 import { Button } from "@/components/ui/button";
 import { MobileBotList } from "@/components/bot-list/bot-list";
-import { BotListPage } from "@/components/bot-list/bot-list-shell";
+import { BotListPage } from "@/components/bot-list/bot-list-page";
 import { MobileBotListItem } from "@/components/dashboard/bot-list-item";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
 

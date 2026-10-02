@@ -1,80 +1,10 @@
 "use client";
 
-import { ComponentType, ReactNode, useEffect } from "react";
+import { ReactNode, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
-import DashboardLayout from "@/components/layouts/dashboard-layout";
-import { AuthGate } from "@/components/auth/auth-gate";
-import { ResizableSidebarLayout } from "@/components/dashboard/resizable-sidebar-layout";
 import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "@/hooks/use-media-query";
-
-const DESKTOP_QUERY = "(min-width: 1280px)";
-
-interface BotListLayoutProps {
-  provider: ComponentType<{ children: ReactNode }>;
-  /** Rendered inside `provider`, and only on desktop. */
-  sidebar: ReactNode;
-  resizableSidebar?: boolean;
-  children: ReactNode;
-}
-
-/** Route layout for a section that lists bots beside the selected one. */
-export function BotListLayout({
-  provider: Provider,
-  sidebar,
-  resizableSidebar = false,
-  children,
-}: BotListLayoutProps) {
-  return (
-    <DashboardLayout>
-      <AuthGate>
-        <Provider>
-          <BotListFrame sidebar={sidebar} resizableSidebar={resizableSidebar}>
-            {children}
-          </BotListFrame>
-        </Provider>
-      </AuthGate>
-    </DashboardLayout>
-  );
-}
-
-function BotListFrame({
-  sidebar,
-  resizableSidebar,
-  children,
-}: {
-  sidebar: ReactNode;
-  resizableSidebar: boolean;
-  children: ReactNode;
-}) {
-  const isDesktop = useMediaQuery(DESKTOP_QUERY);
-
-  if (!isDesktop) {
-    return (
-      <div className="h-[calc(100vh-3rem)]">
-        <main className="h-full overflow-auto">{children}</main>
-      </div>
-    );
-  }
-
-  if (resizableSidebar) {
-    return (
-      <div className="h-[calc(100vh-3rem)]">
-        <ResizableSidebarLayout sidebar={sidebar}>
-          <main className="h-full overflow-auto">{children}</main>
-        </ResizableSidebarLayout>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-[calc(100vh-3rem)]">
-      <aside className="w-[220px] border-r flex-shrink-0">{sidebar}</aside>
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
-  );
-}
 
 interface BotListPageProps<T> {
   bots: T[];
@@ -103,7 +33,7 @@ export function BotListPage<T>({
   botHref,
   children,
 }: BotListPageProps<T>) {
-  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const isDesktop = useMediaQuery("(min-width: 1280px)");
   const router = useRouter();
 
   useEffect(() => {

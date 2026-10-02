@@ -5,7 +5,6 @@ import { Bot, Filter, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +17,9 @@ import {
 import { cn } from "@/lib/utils";
 import type { BotListFilters, FilterFacet } from "@/hooks/bot-list-filters";
 
-const NO_MATCHES = "No matching bots";
+export const NO_MATCHES = "No matching bots";
 
-interface BotListProps<T> {
+export interface BotListProps<T> {
   title: string;
   bots: T[];
   /**
@@ -33,53 +32,6 @@ interface BotListProps<T> {
   renderItem: (bot: T) => ReactNode;
 }
 
-interface BotListPanelProps<T> extends BotListProps<T> {
-  /** Shown instead of the list when there are no bots at all. */
-  emptyCopy: string;
-  className?: string;
-}
-
-/** Desktop sidebar list of bots with search and filters. */
-export function BotListPanel<T>({
-  title,
-  bots,
-  useFilters,
-  filterLabel,
-  renderItem,
-  emptyCopy,
-  className,
-}: BotListPanelProps<T>) {
-  const filters = useFilters();
-  const filtered = filters.filterBots(bots);
-
-  return (
-    <div className={cn("flex flex-col", className)}>
-      <div className="px-3 py-3 border-b flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">{title}</span>
-          <Badge variant="secondary" className="text-xs">
-            {filters.hasActiveFilters
-              ? `${filtered.length} / ${bots.length}`
-              : bots.length}
-          </Badge>
-        </div>
-        <FilterBar filters={filters} label={filterLabel} compact />
-      </div>
-
-      <ScrollArea className="flex-1">
-        <div className="p-1.5 space-y-0.5">
-          <BotItems
-            bots={filtered}
-            renderItem={renderItem}
-            emptyCopy={bots.length === 0 ? emptyCopy : NO_MATCHES}
-          />
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
-/** Full-width list of bots shown in place of the sidebar below desktop. */
 export function MobileBotList<T>({
   title,
   bots,
@@ -136,7 +88,7 @@ export function MobileBotCard({
   );
 }
 
-function BotItems<T>({
+export function BotItems<T>({
   bots,
   renderItem,
   emptyCopy,
@@ -155,7 +107,7 @@ function BotItems<T>({
   );
 }
 
-function FilterBar<T>({
+export function FilterBar<T>({
   filters,
   label,
   compact = false,

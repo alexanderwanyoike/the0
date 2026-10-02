@@ -3,7 +3,6 @@ export interface FilterOption {
   label: string;
 }
 
-/** One radio group in a bot list's filter menu. */
 export interface FilterFacet {
   label: string;
   value: string;
@@ -11,7 +10,6 @@ export interface FilterFacet {
   onChange: (value: string) => void;
 }
 
-/** The filter state a bot list renders, whatever kind of bot it lists. */
 export interface BotListFilters<T> {
   search: string;
   setSearch: (value: string) => void;

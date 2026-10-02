@@ -6,8 +6,8 @@ import {
   CustomBotsProvider,
   useCustomBotsContext,
 } from "@/contexts/custom-bots-context";
-import { BotListPanel } from "@/components/bot-list/bot-list";
-import { BotListLayout } from "@/components/bot-list/bot-list-shell";
+import { BotListPanel } from "@/components/bot-list/bot-list-panel";
+import { BotListLayout } from "@/components/bot-list/bot-list-layout";
 import { CustomBotListItem } from "@/components/custom-bots/custom-bot-list-item";
 import { useCustomBotFilters } from "@/hooks/use-custom-bot-filters";
 
