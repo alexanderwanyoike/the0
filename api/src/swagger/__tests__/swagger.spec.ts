@@ -1,10 +1,16 @@
-import { INestApplication } from "@nestjs/common";
+import { INestApplication, Type } from "@nestjs/common";
+import { GUARDS_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 import { ConfigService } from "@nestjs/config";
+import { ModulesContainer } from "@nestjs/core";
+import { AuthGuard } from "@nestjs/passport";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { version } from "../../../package.json";
 import { AppModule } from "@/app.module";
 import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
+import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import configuration from "@/config/configuration";
 import { NatsService } from "@/nats/nats.service";
 import {
@@ -13,11 +19,29 @@ import {
   SWAGGER_UI_PATH,
 } from "../swagger.setup";
 
+type Operation = {
+  operationId: string;
+  summary?: string;
+  tags?: string[];
+  security?: Record<string, string[]>[];
+  requestBody?: { content: Record<string, unknown> };
+};
 type OpenApiDocument = {
   openapi: string;
   info: { title: string; version: string };
+  paths: Record<string, Record<string, Operation>>;
   components: { securitySchemes: Record<string, Record<string, string>> };
 };
+
+const JWT = { bearer: [] as string[] };
+const API_KEY = { apiKey: [] as string[] };
+
+const SECURITY_BY_GUARD = new Map<unknown, Record<string, string[]>[]>([
+  [AuthCombinedGuard, [JWT, API_KEY]],
+  [JwtAuthGuard, [JWT]],
+  [AdminJwtGuard, [JWT]],
+  [AuthGuard(), [JWT]],
+]);
 
 async function createApp(swaggerEnabled: boolean): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -30,6 +54,25 @@ async function createApp(swaggerEnabled: boolean): Promise<INestApplication> {
   setupSwagger(app, new ConfigService({ SWAGGER_ENABLED: swaggerEnabled }));
   await app.init();
   return app;
+}
+
+function operationsById(document: OpenApiDocument): Map<string, Operation> {
+  const operations = new Map<string, Operation>();
+  for (const pathItem of Object.values(document.paths)) {
+    for (const operation of Object.values(pathItem)) {
+      operations.set(operation.operationId, operation);
+    }
+  }
+  return operations;
+}
+
+function routeHandlers(controller: Type): string[] {
+  const prototype = controller.prototype;
+  return Object.getOwnPropertyNames(prototype).filter(
+    (name) =>
+      name !== "constructor" &&
+      Reflect.hasMetadata(PATH_METADATA, prototype[name]),
+  );
 }
 
 describe("Swagger documentation", () => {
@@ -152,6 +195,80 @@ describe("Swagger documentation", () => {
         in: "header",
         name: "Authorization",
       });
+    });
+
+    it.each([
+      ["get", "/bot/{id}", "bots", [JWT, API_KEY]],
+      ["post", "/custom-bots/{name}", "custom-bots", [JWT, API_KEY]],
+      ["get", "/logs/{botId}", "logs", [JWT, API_KEY]],
+      ["get", "/bots/{botId}/state", "bot-state", [JWT, API_KEY]],
+      ["post", "/query/{botId}", "bot-query", [JWT, API_KEY]],
+      ["get", "/api-keys", "api-keys", [JWT]],
+      ["get", "/admin/users", "admin", [JWT]],
+      ["put", "/users/profile", "users", [JWT]],
+      ["get", "/auth/me", "auth", [JWT]],
+      ["get", "/auth/validate-api-key", "auth", [API_KEY]],
+      ["post", "/auth/login", "auth", undefined],
+      ["post", "/mcp", "mcp", undefined],
+      ["get", "/health", "health", undefined],
+      ["get", "/health/ready", "health", undefined],
+    ])(
+      "documents %s %s under %s with its security",
+      (method, path, tag, security) => {
+        const operation = document.paths[path]?.[method];
+
+        expect(operation).toBeDefined();
+        expect(operation.tags).toEqual([tag]);
+        expect(operation.summary).toEqual(expect.any(String));
+        expect(operation.security).toEqual(security);
+      },
+    );
+
+    it("documents every guarded route with the credentials its guard accepts", () => {
+      const operations = operationsById(document);
+      const documented: { operationId: string; security: unknown }[] = [];
+      const expected: { operationId: string; security: unknown }[] = [];
+
+      for (const module of app.get(ModulesContainer).values()) {
+        for (const { metatype } of module.controllers.values()) {
+          const controller = metatype as Type;
+          const classGuards =
+            Reflect.getMetadata(GUARDS_METADATA, controller) ?? [];
+
+          for (const handler of routeHandlers(controller)) {
+            const [guard] = [
+              ...classGuards,
+              ...(Reflect.getMetadata(
+                GUARDS_METADATA,
+                controller.prototype[handler],
+              ) ?? []),
+            ];
+            if (!guard) continue;
+
+            const operationId = `${controller.name}_${handler}`;
+            documented.push({
+              operationId,
+              security: operations.get(operationId)?.security,
+            });
+            expected.push({
+              operationId,
+              security:
+                SECURITY_BY_GUARD.get(guard) ?? `unmapped guard ${guard.name}`,
+            });
+          }
+        }
+      }
+
+      expect(documented.length).toBeGreaterThan(30);
+      expect(documented).toEqual(expected);
+    });
+
+    it("documents the bot upload as a multipart form", () => {
+      const upload = document.paths["/custom-bots/{name}/upload"].post;
+
+      expect(Object.keys(upload.requestBody.content)).toEqual([
+        "multipart/form-data",
+      ]);
     });
   });
 });

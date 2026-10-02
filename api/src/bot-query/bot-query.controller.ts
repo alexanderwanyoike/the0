@@ -19,6 +19,7 @@ import {
 import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
 import { BotQueryService, BotQueryErrorCode } from "./bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
 class ExecuteQueryDto {
   @IsString()
@@ -33,16 +34,13 @@ class ExecuteQueryDto {
   timeout_sec?: number;
 }
 
-@ApiTags("Bot Query")
+@ApiTags("bot-query")
+@ApiJwtOrApiKeyAuth()
 @Controller("query/:botId")
 @UseGuards(AuthCombinedGuard)
 export class BotQueryController {
   constructor(private readonly botQueryService: BotQueryService) {}
 
-  /**
-   * Execute a query against a bot.
-   * POST /bots/:botId/query
-   */
   @Post()
   @ApiOperation({ summary: "Execute a query against a bot" })
   @ApiParam({ name: "botId", description: "Bot identifier" })

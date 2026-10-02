@@ -37,7 +37,7 @@ interface JsonRpcResponse {
   };
 }
 
-@ApiTags("MCP")
+@ApiTags("mcp")
 @Controller("mcp")
 export class McpController {
   constructor(
@@ -55,8 +55,8 @@ export class McpController {
   })
   @ApiHeader({
     name: "x-api-key",
-    description: "API key for authentication",
-    required: true,
+    description: "API key; required for tools/call",
+    required: false,
   })
   @ApiBody({
     description: "JSON-RPC 2.0 request",
