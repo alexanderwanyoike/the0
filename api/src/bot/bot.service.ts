@@ -20,6 +20,8 @@ import {
   SCHEDULED_BOT_TOPICS,
 } from "@/bot/bot.constants";
 
+type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
+
 @Injectable({ scope: Scope.REQUEST })
 export class BotService {
   constructor(
@@ -40,9 +42,7 @@ export class BotService {
     );
 
     if (!validationResult.success) {
-      return Failure(
-        validationResult.error,
-      );
+      return Failure(validationResult.error);
     }
 
     // Get bot type from config
@@ -76,41 +76,29 @@ export class BotService {
       return Failure(result.error);
     }
 
-    // validationResult.data is the CustomBot from validateBotTypeAndConfig
-    const customBot = validationResult.data;
-    const topics = this.getTopicsForBotType(customBot);
-
-    if (topics) {
-      // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-      const eventPayload = {
-        id: result.data.id,
-        config: {
-          ...createBotDto.config,
-          customBotId: validationResult.data.id,
-        },
-        custom: {
-          config: customBot.config,
-          createdAt: customBot.createdAt,
-          updatedAt: customBot.updatedAt,
-          filePath: customBot.filePath || "",
-          version: customBot.version,
-        },
-      };
-
-      // Publish bot creation event to appropriate runtime service
-      const publishResult = await this.natsService.publish(
-        topics.CREATED,
-        eventPayload,
-      );
-      if (!publishResult.success) {
-        this.logger.error(
-          { error: publishResult.error, botId: result.data.id },
-          "Failed to publish bot creation event",
-        );
-      }
-    }
+    await this.publishBotCreated(
+      result.data.id,
+      createBotDto.config,
+      validationResult.data,
+    );
 
     return this.botRepository.findOne(uid, result.data.id);
+  }
+
+  private async publishBotCreated(
+    botId: string,
+    config: BotConfig,
+    customBot: CustomBot,
+  ): Promise<void> {
+    const topics = this.getTopicsForBotType(customBot);
+    if (!topics) return;
+
+    await this.publishBotEvent(
+      topics.CREATED,
+      customBotEventPayload(botId, config, customBot.id, customBot),
+      botId,
+      "Failed to publish bot creation event",
+    );
   }
 
   findAll(): Promise<Result<Bot[], string>> {
@@ -142,22 +130,15 @@ export class BotService {
 
     const { uid } = this.request.user;
 
-    // Block breaking (major) version changes — require delete/redeploy for those
     const currentBot = await this.botRepository.findOne(uid, id);
     if (!currentBot.success) {
       return Failure("Bot not found");
     }
     const currentVersion = currentBot.data.config?.version;
     const newVersion = updateBotDto.config?.version;
-    if (
-      currentVersion &&
-      newVersion &&
-      semver.major(currentVersion) !== semver.major(newVersion)
-    ) {
-      return Failure(
-        `Major version upgrade (${currentVersion} -> ${newVersion}) requires delete and redeploy. ` +
-          `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`,
-      );
+    const majorChangeError = majorVersionChangeError(currentVersion, newVersion);
+    if (majorChangeError) {
+      return Failure(majorChangeError);
     }
 
     // Only rotate customBotId when version actually changes
@@ -176,54 +157,59 @@ export class BotService {
     });
 
     if (result.success) {
-      // Fetch updated bot and custom bot data for event payload
-      const botResult = await this.botRepository.findOne(uid, id);
-      if (botResult.success) {
-        const customBotResult =
-          await this.customBotService.getUserSpecificVersion(
-            uid,
-            validationResult.data.name,
-            validationResult.data.version,
-          );
-
-        if (customBotResult.success) {
-          const customBot = customBotResult.data;
-          const topics = this.getTopicsForBotType(customBot);
-
-          if (topics) {
-            // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-            const eventPayload = {
-              id: botResult.data.id,
-              config: {
-                ...updateBotDto.config,
-                customBotId: validationResult.data.id,
-              },
-              custom: {
-                config: customBot.config,
-                createdAt: customBot.createdAt,
-                updatedAt: customBot.updatedAt,
-                filePath: customBot.filePath || "",
-                version: customBot.version,
-              },
-            };
-
-            // Publish bot update event to appropriate runtime service
-            const publishResult = await this.natsService.publish(
-              topics.UPDATED,
-              eventPayload,
-            );
-            if (!publishResult.success) {
-              this.logger.error(
-                { error: publishResult.error, botId: botResult.data.id },
-                "Failed to publish bot update event",
-              );
-            }
-          }
-        }
-      }
+      await this.publishBotUpdated(uid, id, updateBotDto.config, newCustomBot);
     }
 
     return result;
+  }
+
+  /**
+   * The event carries the user's copy of the custom bot version, re-read
+   * after the update, while customBotId stays the globally validated one.
+   */
+  private async publishBotUpdated(
+    uid: string,
+    id: string,
+    config: BotConfig,
+    newCustomBot: CustomBot,
+  ): Promise<void> {
+    const botResult = await this.botRepository.findOne(uid, id);
+    if (!botResult.success) return;
+
+    const customBotResult = await this.customBotService.getUserSpecificVersion(
+      uid,
+      newCustomBot.name,
+      newCustomBot.version,
+    );
+    if (!customBotResult.success) return;
+
+    const customBot = customBotResult.data;
+    const topics = this.getTopicsForBotType(customBot);
+    if (!topics) return;
+
+    await this.publishBotEvent(
+      topics.UPDATED,
+      customBotEventPayload(
+        botResult.data.id,
+        config,
+        newCustomBot.id,
+        customBot,
+      ),
+      botResult.data.id,
+      "Failed to publish bot update event",
+    );
+  }
+
+  private async publishBotEvent(
+    topic: string,
+    payload: Record<string, unknown>,
+    botId: string,
+    failureMessage: string,
+  ): Promise<void> {
+    const publishResult = await this.natsService.publish(topic, payload);
+    if (!publishResult.success) {
+      this.logger.error({ error: publishResult.error, botId }, failureMessage);
+    }
   }
 
   async remove(id: string): Promise<Result<BotDeleteResult, string>> {
@@ -235,30 +221,11 @@ export class BotService {
       return Failure("Bot not found");
     }
 
-    // Get custom bot data to determine correct topic
-    let topics = null;
-    const configType = botResult.data.config?.type;
-    const configVersion = botResult.data.config?.version;
-    if (configType && configVersion) {
-      const [_, name] = configType.split("/");
-      if (!name?.trim()) {
-        this.logger.warn(
-          { type: configType },
-          "Invalid bot type: missing name after '/'",
-        );
-        return Failure("Invalid bot type: missing name after '/'");
-      }
-      const customBotResult =
-        await this.customBotService.getUserSpecificVersion(
-          uid,
-          name,
-          configVersion,
-        );
-
-      if (customBotResult.success) {
-        topics = this.getTopicsForBotType(customBotResult.data);
-      }
+    const topicsResult = await this.topicsForExistingBot(uid, botResult.data);
+    if (!topicsResult.success) {
+      return Failure(topicsResult.error);
     }
+    const topics = topicsResult.data;
 
     const result = await this.botRepository.remove(uid, id);
 
@@ -270,51 +237,76 @@ export class BotService {
     // not here. The GC periodically sweeps orphaned artifacts after the
     // bot container has fully exited and done its final sync.
 
-    // Check if custom bot version is now orphaned
-    const deleteResult: BotDeleteResult = {};
-    if (botResult.data.customBotId) {
-      const orphanResult = await this.customBotService.checkOrphaned(
-        botResult.data.customBotId,
-      );
-      if (!orphanResult.success) {
-        this.logger.warn(
-          {
-            botId: botResult.data.id,
-            customBotId: botResult.data.customBotId,
-            error: orphanResult.error,
-          },
-          "Failed to check if custom bot version is orphaned",
-        );
-      } else if (orphanResult.data.orphaned) {
-        deleteResult.orphanedVersion = {
-          name: orphanResult.data.name,
-          version: orphanResult.data.version,
-          customBotId: botResult.data.customBotId,
-        };
-      }
-    }
+    const deleteResult = await this.describeOrphanedVersion(botResult.data);
 
     if (topics) {
-      // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-      const eventPayload = {
-        id: botResult.data.id,
-        config: botResult.data.config,
-      };
-
-      // Publish bot deletion event to appropriate runtime service
-      const publishResult = await this.natsService.publish(
+      await this.publishBotEvent(
         topics.DELETED,
-        eventPayload,
+        { id: botResult.data.id, config: botResult.data.config },
+        botResult.data.id,
+        "Failed to publish bot deletion event",
       );
-      if (!publishResult.success) {
-        this.logger.error(
-          { error: publishResult.error, botId: botResult.data.id },
-          "Failed to publish bot deletion event",
-        );
-      }
     }
 
     return Ok(deleteResult);
+  }
+
+  /**
+   * Only a malformed type blocks deletion. A bot with no type/version, or
+   * whose custom bot version is gone, is still deleted, just without an
+   * event (null topics).
+   */
+  private async topicsForExistingBot(
+    uid: string,
+    bot: Bot,
+  ): Promise<Result<BotTopics | null, string>> {
+    const configType = bot.config?.type;
+    const configVersion = bot.config?.version;
+    if (!configType || !configVersion) return Ok(null);
+
+    const [_, name] = configType.split("/");
+    if (!name?.trim()) {
+      this.logger.warn(
+        { type: configType },
+        "Invalid bot type: missing name after '/'",
+      );
+      return Failure("Invalid bot type: missing name after '/'");
+    }
+
+    const customBotResult = await this.customBotService.getUserSpecificVersion(
+      uid,
+      name,
+      configVersion,
+    );
+    if (!customBotResult.success) return Ok(null);
+    return Ok(this.getTopicsForBotType(customBotResult.data));
+  }
+
+  /** A failed orphan check is logged and reported as "not orphaned". */
+  private async describeOrphanedVersion(bot: Bot): Promise<BotDeleteResult> {
+    const deleteResult: BotDeleteResult = {};
+    if (!bot.customBotId) return deleteResult;
+
+    const orphanResult = await this.customBotService.checkOrphaned(
+      bot.customBotId,
+    );
+    if (!orphanResult.success) {
+      this.logger.warn(
+        {
+          botId: bot.id,
+          customBotId: bot.customBotId,
+          error: orphanResult.error,
+        },
+        "Failed to check if custom bot version is orphaned",
+      );
+    } else if (orphanResult.data.orphaned) {
+      deleteResult.orphanedVersion = {
+        name: orphanResult.data.name,
+        version: orphanResult.data.version,
+        customBotId: bot.customBotId,
+      };
+    }
+    return deleteResult;
   }
 
   private async validateBotTypeAndConfig(
@@ -379,7 +371,7 @@ export class BotService {
 
   private getTopicsForBotType(
     customBot: CustomBot,
-  ): { CREATED: string; UPDATED: string; DELETED: string } | null {
+  ): BotTopics | null {
     const botType = customBot.config.type;
 
     if (botType === "realtime") {
@@ -392,3 +384,38 @@ export class BotService {
     }
   }
 }
+
+const majorVersionChangeError = (
+  currentVersion: string | undefined,
+  newVersion: string | undefined,
+): string | null => {
+  if (
+    currentVersion &&
+    newVersion &&
+    semver.major(currentVersion) !== semver.major(newVersion)
+  ) {
+    return (
+      `Major version upgrade (${currentVersion} -> ${newVersion}) requires delete and redeploy. ` +
+      `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`
+    );
+  }
+  return null;
+};
+
+// The runtime's bot-scheduler subscriber expects this flat structure.
+const customBotEventPayload = (
+  botId: string,
+  config: BotConfig,
+  customBotId: string,
+  customBot: CustomBot,
+): Record<string, unknown> => ({
+  id: botId,
+  config: { ...config, customBotId },
+  custom: {
+    config: customBot.config,
+    createdAt: customBot.createdAt,
+    updatedAt: customBot.updatedAt,
+    filePath: customBot.filePath || "",
+    version: customBot.version,
+  },
+});

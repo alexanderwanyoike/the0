@@ -63,93 +63,121 @@ export class BotQueryService {
     }
 
     try {
-      const timeoutMs = (request.timeoutSec || 30) * 1000;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      const response = await fetch(`${this.runtimeUrl}/query`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bot_id: botId,
-          query_path: request.queryPath,
-          params: request.params || {},
-          timeout_sec: request.timeoutSec || 30,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
+      const response = await this.postQuery(botId, request);
       if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(
-          {
-            botId,
-            queryPath: request.queryPath,
-            status: response.status,
-            error: errorText,
-          },
-          "Query request failed",
-        );
-
-        if (response.status === 404) {
-          return Failure({
-            code: BotQueryErrorCode.BOT_NOT_FOUND,
-            message: "Bot not found in runtime",
-          });
-        }
-
-        return Failure({
-          code: BotQueryErrorCode.QUERY_FAILED,
-          message: `Query failed: ${errorText}`,
-        });
+        return await this.runtimeErrorResponse(botId, request, response);
       }
-
-      const result = await response.json();
-
-      return Ok({
-        status: result.status || "ok",
-        data: result.data,
-        error: result.error,
-        duration: result.duration || 0,
-        timestamp: result.timestamp || new Date().toISOString(),
-      });
+      return Ok(toQueryResult(await response.json()));
     } catch (error: unknown) {
-      const err = error as {
-        name?: string;
-        code?: string;
-        cause?: { code?: string };
-      };
-      if (err.name === "AbortError") {
-        return Failure({
-          code: BotQueryErrorCode.TIMEOUT,
-          message: `Query timed out after ${request.timeoutSec || 30} seconds`,
-        });
-      }
-
-      if (err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
-        this.logger.error(
-          { botId, queryPath: request.queryPath, error: errorMessage(error) },
-          "Runtime unavailable",
-        );
-        return Failure({
-          code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
-          message:
-            "Bot runtime is not available. Ensure the bot-runner service is running.",
-        });
-      }
-
-      this.logger.error(
-        { botId, queryPath: request.queryPath, error: errorMessage(error) },
-        "Query execution error",
-      );
-      return Failure({
-        code: BotQueryErrorCode.QUERY_FAILED,
-        message: `Query failed: ${errorMessage(error)}`,
-      });
+      return this.queryFailure(botId, request, error);
     }
   }
+
+  private async postQuery(
+    botId: string,
+    request: QueryRequest,
+  ): Promise<Response> {
+    const timeoutMs = (request.timeoutSec || 30) * 1000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(`${this.runtimeUrl}/query`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        bot_id: botId,
+        query_path: request.queryPath,
+        params: request.params || {},
+        timeout_sec: request.timeoutSec || 30,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    return response;
+  }
+
+  private async runtimeErrorResponse(
+    botId: string,
+    request: QueryRequest,
+    response: Response,
+  ): Promise<Result<QueryResult, BotQueryError>> {
+    const errorText = await response.text();
+    this.logger.error(
+      {
+        botId,
+        queryPath: request.queryPath,
+        status: response.status,
+        error: errorText,
+      },
+      "Query request failed",
+    );
+
+    if (response.status === 404) {
+      return Failure({
+        code: BotQueryErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found in runtime",
+      });
+    }
+
+    return Failure({
+      code: BotQueryErrorCode.QUERY_FAILED,
+      message: `Query failed: ${errorText}`,
+    });
+  }
+
+  private queryFailure(
+    botId: string,
+    request: QueryRequest,
+    error: unknown,
+  ): Result<QueryResult, BotQueryError> {
+    const err = error as {
+      name?: string;
+      code?: string;
+      cause?: { code?: string };
+    };
+    if (err.name === "AbortError") {
+      return Failure({
+        code: BotQueryErrorCode.TIMEOUT,
+        message: `Query timed out after ${request.timeoutSec || 30} seconds`,
+      });
+    }
+
+    if (err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
+      this.logger.error(
+        { botId, queryPath: request.queryPath, error: errorMessage(error) },
+        "Runtime unavailable",
+      );
+      return Failure({
+        code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
+        message:
+          "Bot runtime is not available. Ensure the bot-runner service is running.",
+      });
+    }
+
+    this.logger.error(
+      { botId, queryPath: request.queryPath, error: errorMessage(error) },
+      "Query execution error",
+    );
+    return Failure({
+      code: BotQueryErrorCode.QUERY_FAILED,
+      message: `Query failed: ${errorMessage(error)}`,
+    });
+  }
 }
+
+const toQueryResult = (result: {
+  status?: string;
+  data?: unknown;
+  error?: string;
+  duration?: number;
+  timestamp?: string;
+}): QueryResult => ({
+  status: result.status || "ok",
+  data: result.data,
+  error: result.error,
+  duration: result.duration || 0,
+  timestamp: result.timestamp || new Date().toISOString(),
+});

@@ -125,75 +125,14 @@ export class CustomBotService {
     filePath: string,
   ): Promise<Result<CustomBot, string>> {
     try {
-      // Validate config structure
-      const validation = validateCustomBotConfigPayload(config);
-      if (!validation.valid) {
-        return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
-      }
+      const configCheck = this.checkUpdateConfig(name, config);
+      if (!configCheck.success) return Failure(configCheck.error);
 
-      // Ensure the name in config matches the parameter
-      if (config.name !== name) {
-        return Failure("Bot name in config must match the URL parameter");
-      }
+      const ownerCheck = await this.checkUserOwnsExistingBot(userId, name);
+      if (!ownerCheck.success) return Failure(ownerCheck.error);
 
-      if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
-        return Failure(
-          `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
-        );
-      }
-
-      // Check if bot exists
-      const existsResult = await this.customBotRepository.globalBotExists(name);
-      if (!existsResult.success) {
-        return Failure(existsResult.error);
-      }
-
-      if (!existsResult.data) {
-        return Failure(
-          "Custom bot does not exist. Create it first using POST.",
-        );
-      }
-
-      // Check if the user is the owner of the bot
-      const ownershipCheckResult =
-        await this.customBotRepository.checkUserOwnership(userId, name);
-      if (!ownershipCheckResult.success) {
-        return Failure(ownershipCheckResult.error);
-      }
-
-      // Get latest version to compare
-      const latestResult =
-        await this.customBotRepository.getGlobalLatestVersion(name);
-      if (!latestResult.success) {
-        return Failure(latestResult.error);
-      }
-
-      const latestBot = latestResult.data;
-
-      // Check if new version is actually newer
-      const isNewer = this.customBotRepository.isVersionNewer(
-        latestBot.version,
-        config.version,
-      );
-      if (!isNewer) {
-        return Failure(
-          `Version ${config.version} must be greater than current version ${latestBot.version}`,
-        );
-      }
-
-      // Check if this exact version already exists
-      const versionExistsResult =
-        await this.customBotRepository.globalVersionExists(
-          name,
-          config.version,
-        );
-      if (!versionExistsResult.success) {
-        return Failure(versionExistsResult.error);
-      }
-
-      if (versionExistsResult.data) {
-        return Failure(`Version ${config.version} already exists for this bot`);
-      }
+      const versionCheck = await this.checkVersionIsNew(name, config.version);
+      if (!versionCheck.success) return Failure(versionCheck.error);
 
       return await this.storeVersion(
         userId,
@@ -205,6 +144,80 @@ export class CustomBotService {
       this.logger.error({ err: error }, "Error updating custom bot");
       return Failure(`Failed to update custom bot: ${errorMessage(error)}`);
     }
+  }
+
+  private checkUpdateConfig(
+    name: string,
+    config: CustomBotConfig,
+  ): Result<null, string> {
+    const validation = validateCustomBotConfigPayload(config);
+    if (!validation.valid) {
+      return Failure(`Validation failed: ${validation.errors?.join(", ")}`);
+    }
+
+    if (config.name !== name) {
+      return Failure("Bot name in config must match the URL parameter");
+    }
+
+    if (!config.runtime || !SUPPORTED_RUNTIMES.includes(config.runtime)) {
+      return Failure(
+        `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
+      );
+    }
+
+    return Ok(null);
+  }
+
+  private async checkUserOwnsExistingBot(
+    userId: string,
+    name: string,
+  ): Promise<Result<null, string>> {
+    const existsResult = await this.customBotRepository.globalBotExists(name);
+    if (!existsResult.success) {
+      return Failure(existsResult.error);
+    }
+
+    if (!existsResult.data) {
+      return Failure("Custom bot does not exist. Create it first using POST.");
+    }
+
+    const ownershipCheckResult =
+      await this.customBotRepository.checkUserOwnership(userId, name);
+    if (!ownershipCheckResult.success) {
+      return Failure(ownershipCheckResult.error);
+    }
+
+    return Ok(null);
+  }
+
+  private async checkVersionIsNew(
+    name: string,
+    version: string,
+  ): Promise<Result<null, string>> {
+    const latestResult =
+      await this.customBotRepository.getGlobalLatestVersion(name);
+    if (!latestResult.success) {
+      return Failure(latestResult.error);
+    }
+
+    const latestVersion = latestResult.data.version;
+    if (!this.customBotRepository.isVersionNewer(latestVersion, version)) {
+      return Failure(
+        `Version ${version} must be greater than current version ${latestVersion}`,
+      );
+    }
+
+    const versionExistsResult =
+      await this.customBotRepository.globalVersionExists(name, version);
+    if (!versionExistsResult.success) {
+      return Failure(versionExistsResult.error);
+    }
+
+    if (versionExistsResult.data) {
+      return Failure(`Version ${version} already exists for this bot`);
+    }
+
+    return Ok(null);
   }
 
   async getUserCustomBots(
