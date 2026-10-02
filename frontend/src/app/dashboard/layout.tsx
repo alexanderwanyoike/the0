@@ -1,9 +1,9 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
+import { AuthGate } from "@/components/auth/auth-gate";
 import DashboardLayout from "@/components/layouts/dashboard-layout";
 import {
   DashboardBotsProvider,
@@ -62,21 +62,6 @@ function DashboardInner({ children }: { children: ReactNode }) {
       <main className="h-full overflow-auto">{children}</main>
     </div>
   );
-}
-
-function AuthGate({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
-    }
-  }, [user, loading, router]);
-
-  if (loading || !user) return null;
-
-  return <>{children}</>;
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
