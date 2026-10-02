@@ -89,7 +89,7 @@ flowchart LR
 
 The API is NestJS, the runtime and CLI are Go, and the dashboard is Next.js. PostgreSQL holds users and bot definitions, MongoDB holds runtime state, NATS carries events, and an S3-compatible store holds bot code and logs. Bots run as Docker containers under Compose, or as pods and CronJobs on Kubernetes.
 
-> **Beta.** the0 moves fast. Breaking changes ship with a [migration guide](https://docs.the0.app/migration-guides/).
+Upgrading? Every breaking change ships with a [migration guide](https://docs.the0.app/migration-guides/).
 
 ## Contributing
 

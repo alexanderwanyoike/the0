@@ -20,7 +20,7 @@ maintainers:
     url: https://github.com/alexanderwanyoike
 annotations:
   artifacthub.io/license: Apache-2.0
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   artifacthub.io/category: integration-delivery
   artifacthub.io/links: |
     - name: Documentation
