@@ -2027,4 +2027,304 @@ describe("useBotLogs", () => {
       expect(result.current.logs.length).toBe(1);
     });
   });
+
+  describe("exporting logs", () => {
+    it("toasts instead of downloading when there are no logs", async () => {
+      mockAuthFetch.mockResolvedValue(restResponse());
+      const createSpy = jest.spyOn(document, "createElement");
+
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      act(() => {
+        result.current.exportLogs();
+      });
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "No logs to export",
+        description: "There are no logs available to export.",
+        variant: "destructive",
+      });
+      expect(createSpy).not.toHaveBeenCalledWith("a");
+      createSpy.mockRestore();
+    });
+
+    it("downloads the loaded lines as dated plain text", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [{ date: "2024-01-01T10:00:00Z", content: "first\nsecond" }],
+        }),
+      );
+      const originalCreate = URL.createObjectURL;
+      const originalRevoke = URL.revokeObjectURL;
+      const blobs: Blob[] = [];
+      URL.createObjectURL = jest.fn((b: Blob) => {
+        blobs.push(b);
+        return "blob:logs";
+      });
+      URL.revokeObjectURL = jest.fn();
+      const anchor = document.createElement("a");
+      const click = jest.spyOn(anchor, "click").mockImplementation(() => {});
+      const createSpy = jest
+        .spyOn(document, "createElement")
+        .mockImplementation(() => anchor);
+
+      try {
+        const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+        await waitFor(() => expect(result.current.logs).toHaveLength(2));
+
+        act(() => {
+          result.current.exportLogs();
+        });
+
+        const today = new Date().toISOString().split("T")[0];
+        expect(anchor.download).toBe(`bot-bot-1-logs-${today}.txt`);
+        expect(anchor.href).toBe("blob:logs");
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:logs");
+        expect(blobs[0].type).toBe("text/plain");
+        expect(await blobs[0].text()).toBe(
+          "[2024-01-01T10:00:00Z] first\n[2024-01-01T10:00:00Z] second",
+        );
+      } finally {
+        createSpy.mockRestore();
+        URL.createObjectURL = originalCreate;
+        URL.revokeObjectURL = originalRevoke;
+      }
+    });
+  });
+
+  describe("pagination failures", () => {
+    it("surfaces a loadMore failure as an error without a toast or query change", async () => {
+      mockAuthFetch.mockResolvedValueOnce(
+        restResponse({
+          data: [{ date: "2024-01-01T10:00:00Z", content: "page one" }],
+          total: 2,
+          hasMore: true,
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+      );
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+      mockAuthFetch.mockRejectedValueOnce(new Error("page two failed"));
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(result.current.error).toBe("page two failed");
+      expect(mockToast).not.toHaveBeenCalled();
+      expect(result.current.query.offset).toBe(0);
+      expect(result.current.logs.map((l) => l.content)).toEqual(["page one"]);
+      expect(result.current.loadingMore).toBe(false);
+    });
+
+    it("ignores loadMore when the API reported no further pages", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [{ date: "2024-01-01T10:00:00Z", content: "only page" }],
+        }),
+      );
+
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+      await waitFor(() => expect(result.current.logs).toHaveLength(1));
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(restCallCount()).toBe(1);
+    });
+
+    it("resets the offset to zero when the query changes after paginating", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [{ date: "2024-01-01T10:00:00Z", content: "row" }],
+          total: 3,
+          hasMore: true,
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+      );
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+      expect(result.current.query.offset).toBe(1);
+
+      act(() => {
+        result.current.updateQuery({ type: "metrics" });
+      });
+
+      expect(result.current.query.offset).toBe(0);
+      const lastUrl = mockAuthFetch.mock.calls.at(-1)![0] as string;
+      expect(lastUrl).not.toContain("offset=");
+      expect(lastUrl).toContain("type=metrics");
+    });
+  });
+
+  describe("history order and page direction", () => {
+    it("keeps the API order and exposes hasMore (not hasEarlierLogs) without streaming", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [
+            { date: "2024-01-01T10:01:00Z", content: "newest" },
+            { date: "2024-01-01T10:00:00Z", content: "oldest" },
+          ],
+          total: 4,
+          hasMore: true,
+        }),
+      );
+
+      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+      await waitFor(() => expect(result.current.logs).toHaveLength(2));
+
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "newest",
+        "oldest",
+      ]);
+      expect(result.current.hasMore).toBe(true);
+      expect(result.current.hasEarlierLogs).toBe(false);
+      expect(result.current.total).toBe(4);
+    });
+
+    it("advances the earlier-logs offset by one page per successful load", async () => {
+      const streams: ReturnType<typeof createMockSSEStream>[] = [];
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          const s = createMockSSEStream(opts?.signal);
+          streams.push(s);
+          return { ok: true, body: s.stream } as any;
+        }
+        return restResponse({
+          data: [{ date: "2024-01-01T10:00:00Z", content: "Current" }],
+          total: 10,
+          hasMore: true,
+        });
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            initialQuery: { limit: 2, offset: 0, sort: "desc" },
+          }),
+        );
+        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+        expect(result.current.hasMore).toBe(false);
+
+        await act(async () => {
+          await result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          await result.current.loadEarlierLogs();
+        });
+
+        const restUrls = mockAuthFetch.mock.calls
+          .map((c) => c[0] as string)
+          .filter((u) => !u.includes("/stream"));
+        expect(restUrls[1]).toContain("offset=2");
+        expect(restUrls[2]).toContain("offset=4");
+        expect(result.current.loadingEarlier).toBe(false);
+      } finally {
+        streams.forEach((s) => s.controller.close());
+      }
+    });
+  });
+
+  describe("live update parsing", () => {
+    it("drops an update event without log content and keeps streaming later ones", async () => {
+      let stream: ReturnType<typeof createMockSSEStream> | null = null;
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          stream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: stream.stream } as any;
+        }
+        return restResponse({
+          data: [{ date: "2024-01-01T10:00:00Z", content: "history" }],
+        });
+      });
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true }),
+        );
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.logs).toHaveLength(1);
+        });
+
+        act(() => {
+          stream!.controller.push("update", "{not json");
+          stream!.controller.push("update", {
+            content: "after bad line",
+            timestamp: "2024-01-01T10:05:00Z",
+          });
+        });
+
+        await waitFor(() => {
+          expect(result.current.logs.map((l) => l.content)).toEqual([
+            "history",
+            "after bad line",
+          ]);
+        });
+        expect(result.current.total).toBe(2);
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to parse update SSE event:",
+          expect.any(Error),
+        );
+      } finally {
+        errorSpy.mockRestore();
+        (stream as ReturnType<typeof createMockSSEStream> | null)?.controller.close();
+      }
+    });
+
+    it("splits a multi-line update into one entry per non-empty line", async () => {
+      let stream: ReturnType<typeof createMockSSEStream> | null = null;
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          stream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: stream.stream } as any;
+        }
+        return restResponse();
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({ botId: "bot-1", streaming: true }),
+        );
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.loading).toBe(false);
+        });
+
+        act(() => {
+          stream!.controller.push("update", {
+            content: "line a\n\nline b",
+            timestamp: "2024-01-01T10:05:00Z",
+          });
+        });
+
+        await waitFor(() => {
+          expect(result.current.logs.map((l) => l.content)).toEqual([
+            "line a",
+            "line b",
+          ]);
+        });
+        expect(result.current.logs[0].date).toBe("2024-01-01T10:05:00Z");
+        expect(result.current.total).toBe(2);
+      } finally {
+        (stream as ReturnType<typeof createMockSSEStream> | null)?.controller.close();
+      }
+    });
+  });
 });
