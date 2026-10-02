@@ -142,22 +142,15 @@ export class BotService {
 
     const { uid } = this.request.user;
 
-    // Block breaking (major) version changes — require delete/redeploy for those
     const currentBot = await this.botRepository.findOne(uid, id);
     if (!currentBot.success) {
       return Failure("Bot not found");
     }
     const currentVersion = currentBot.data.config?.version;
     const newVersion = updateBotDto.config?.version;
-    if (
-      currentVersion &&
-      newVersion &&
-      semver.major(currentVersion) !== semver.major(newVersion)
-    ) {
-      return Failure(
-        `Major version upgrade (${currentVersion} -> ${newVersion}) requires delete and redeploy. ` +
-          `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`,
-      );
+    const majorChangeError = majorVersionChangeError(currentVersion, newVersion);
+    if (majorChangeError) {
+      return Failure(majorChangeError);
     }
 
     // Only rotate customBotId when version actually changes
@@ -176,54 +169,59 @@ export class BotService {
     });
 
     if (result.success) {
-      // Fetch updated bot and custom bot data for event payload
-      const botResult = await this.botRepository.findOne(uid, id);
-      if (botResult.success) {
-        const customBotResult =
-          await this.customBotService.getUserSpecificVersion(
-            uid,
-            validationResult.data.name,
-            validationResult.data.version,
-          );
-
-        if (customBotResult.success) {
-          const customBot = customBotResult.data;
-          const topics = this.getTopicsForBotType(customBot);
-
-          if (topics) {
-            // Format event data for runtime subscriber (bot-scheduler expects flat structure)
-            const eventPayload = {
-              id: botResult.data.id,
-              config: {
-                ...updateBotDto.config,
-                customBotId: validationResult.data.id,
-              },
-              custom: {
-                config: customBot.config,
-                createdAt: customBot.createdAt,
-                updatedAt: customBot.updatedAt,
-                filePath: customBot.filePath || "",
-                version: customBot.version,
-              },
-            };
-
-            // Publish bot update event to appropriate runtime service
-            const publishResult = await this.natsService.publish(
-              topics.UPDATED,
-              eventPayload,
-            );
-            if (!publishResult.success) {
-              this.logger.error(
-                { error: publishResult.error, botId: botResult.data.id },
-                "Failed to publish bot update event",
-              );
-            }
-          }
-        }
-      }
+      await this.publishBotUpdated(uid, id, updateBotDto.config, newCustomBot);
     }
 
     return result;
+  }
+
+  /**
+   * The event carries the user's copy of the custom bot version, re-read
+   * after the update, while customBotId stays the globally validated one.
+   */
+  private async publishBotUpdated(
+    uid: string,
+    id: string,
+    config: BotConfig,
+    newCustomBot: CustomBot,
+  ): Promise<void> {
+    const botResult = await this.botRepository.findOne(uid, id);
+    if (!botResult.success) return;
+
+    const customBotResult = await this.customBotService.getUserSpecificVersion(
+      uid,
+      newCustomBot.name,
+      newCustomBot.version,
+    );
+    if (!customBotResult.success) return;
+
+    const customBot = customBotResult.data;
+    const topics = this.getTopicsForBotType(customBot);
+    if (!topics) return;
+
+    await this.publishBotEvent(
+      topics.UPDATED,
+      customBotEventPayload(
+        botResult.data.id,
+        config,
+        newCustomBot.id,
+        customBot,
+      ),
+      botResult.data.id,
+      "Failed to publish bot update event",
+    );
+  }
+
+  private async publishBotEvent(
+    topic: string,
+    payload: Record<string, unknown>,
+    botId: string,
+    failureMessage: string,
+  ): Promise<void> {
+    const publishResult = await this.natsService.publish(topic, payload);
+    if (!publishResult.success) {
+      this.logger.error({ error: publishResult.error, botId }, failureMessage);
+    }
   }
 
   async remove(id: string): Promise<Result<BotDeleteResult, string>> {
@@ -392,3 +390,38 @@ export class BotService {
     }
   }
 }
+
+const majorVersionChangeError = (
+  currentVersion: string | undefined,
+  newVersion: string | undefined,
+): string | null => {
+  if (
+    currentVersion &&
+    newVersion &&
+    semver.major(currentVersion) !== semver.major(newVersion)
+  ) {
+    return (
+      `Major version upgrade (${currentVersion} -> ${newVersion}) requires delete and redeploy. ` +
+      `In-place updates are only supported for minor/patch bumps to preserve state compatibility.`
+    );
+  }
+  return null;
+};
+
+// The runtime's bot-scheduler subscriber expects this flat structure.
+const customBotEventPayload = (
+  botId: string,
+  config: BotConfig,
+  customBotId: string,
+  customBot: CustomBot,
+): Record<string, unknown> => ({
+  id: botId,
+  config: { ...config, customBotId },
+  custom: {
+    config: customBot.config,
+    createdAt: customBot.createdAt,
+    updatedAt: customBot.updatedAt,
+    filePath: customBot.filePath || "",
+    version: customBot.version,
+  },
+});
