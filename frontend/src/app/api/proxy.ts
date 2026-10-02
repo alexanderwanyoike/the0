@@ -106,6 +106,45 @@ export async function proxyBotApiWithErrorEnvelope(
   }
 }
 
+/**
+ * Login and token validation carry their credentials in the body, so the
+ * caller's Authorization header is deliberately not forwarded. The error
+ * messages name the authentication service because JwtAuthService shows
+ * them on the login form.
+ */
+export async function proxyAuthPost(
+  req: NextRequest,
+  endpoint: "login" | "validate",
+) {
+  const botApiUrl = process.env.BOT_API_URL;
+  if (!botApiUrl) {
+    return NextResponse.json(
+      { success: false, message: "Authentication service misconfigured" },
+      { status: 500 },
+    );
+  }
+  try {
+    const body = await req.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(`${botApiUrl}/auth/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error(`Error proxying auth ${endpoint}:`, error);
+    return NextResponse.json(
+      { success: false, message: "Authentication service unavailable" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function readJsonRequest(req: NextRequest): Promise<unknown> {
   try {
     return await req.json();
