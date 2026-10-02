@@ -50,6 +50,15 @@ jobs:
       continue-on-error: true
       run: yarn -s fallow --format markdown --score >> "$GITHUB_STEP_SUMMARY"
 
+    - name: ESLint report (non-blocking)
+      working-directory: ./api
+      continue-on-error: true
+      run: |
+        { echo '### api: ESLint'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        yarn -s eslint "{src,apps,libs,test}/**/*.ts" --no-color >> "$GITHUB_STEP_SUMMARY" 2>&1 || status=$?
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        exit "${status:-0}"
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
