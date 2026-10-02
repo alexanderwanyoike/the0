@@ -101,6 +101,8 @@
     "hono": "^4.12.25",
     "multer": "^2.3.0",
     "@tootallnate/once": "^3.0.1",
+    "eslint/ajv": "^6.14.0",
+    "eslint/@eslint/eslintrc/ajv": "^6.14.0",
     "ajv": "^8.20.0",
     "body-parser": "^2.2.1",
     "brace-expansion": "^1.1.21",
