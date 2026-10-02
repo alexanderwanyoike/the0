@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
   GatewayTimeoutException,
+  UnprocessableEntityException,
   CanActivate,
 } from "@nestjs/common";
 import { BotQueryController } from "../bot-query.controller";
@@ -122,6 +123,24 @@ describe("BotQueryController", () => {
           query_path: "/portfolio",
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it("should throw UnprocessableEntityException when the bot defines no queries", async () => {
+      const message = "This bot defines no queries.";
+      mockBotQueryService.executeQuery.mockResolvedValue({
+        success: false,
+        data: null,
+        error: {
+          code: BotQueryErrorCode.NO_QUERY_ENTRYPOINT,
+          message,
+        },
+      });
+
+      await expect(
+        controller.executeQuery("no-query-bot", {
+          query_path: "/status",
+        }),
+      ).rejects.toThrow(new UnprocessableEntityException(message));
     });
 
     it("should throw ServiceUnavailableException when runtime unavailable", async () => {

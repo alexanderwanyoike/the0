@@ -8,6 +8,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
   GatewayTimeoutException,
+  UnprocessableEntityException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -71,6 +72,10 @@ export class BotQueryController {
   @ApiResponse({ status: 200, description: "Query executed successfully" })
   @ApiResponse({ status: 400, description: "Invalid query request" })
   @ApiResponse({ status: 404, description: "Bot not found" })
+  @ApiResponse({
+    status: 422,
+    description: "Bot defines no queries (no query entrypoint)",
+  })
   @ApiResponse({ status: 503, description: "Runtime unavailable" })
   @ApiResponse({ status: 504, description: "Query timeout" })
   async executeQuery(
@@ -96,6 +101,8 @@ export class BotQueryController {
       switch (result.error?.code) {
         case BotQueryErrorCode.BOT_NOT_FOUND:
           throw new NotFoundException("Bot not found or access denied");
+        case BotQueryErrorCode.NO_QUERY_ENTRYPOINT:
+          throw new UnprocessableEntityException(result.error.message);
         case BotQueryErrorCode.RUNTIME_UNAVAILABLE:
           throw new ServiceUnavailableException(result.error.message);
         case BotQueryErrorCode.TIMEOUT:
