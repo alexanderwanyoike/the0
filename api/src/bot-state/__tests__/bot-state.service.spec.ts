@@ -108,6 +108,41 @@ describe("BotStateService", () => {
     }
   });
 
+  const statePath = `${testBotId}/state.tar.gz`;
+  const notFound = () =>
+    Object.assign(new Error("Not Found"), { code: "NotFound" });
+
+  const writeStateArchive = async (
+    dest: string,
+    files: Record<string, string>,
+  ) => {
+    const srcDir = fs.mkdtempSync(path.join(tempDir, "src-"));
+    const stateDir = path.join(srcDir, ".the0-state");
+    fs.mkdirSync(stateDir);
+    for (const [name, content] of Object.entries(files)) {
+      fs.writeFileSync(path.join(stateDir, name), content);
+    }
+    await tar.c({ gzip: true, file: dest, cwd: srcDir }, [".the0-state"]);
+  };
+
+  const downloadedDirs: string[] = [];
+  const storeState = (files: Record<string, string>) => {
+    mockMinioClient.statObject.mockResolvedValueOnce({
+      size: 100,
+      etag: "etag-1",
+    });
+    mockMinioClient.fGetObject.mockImplementation(
+      async (_bucket: string, _path: string, dest: string) => {
+        downloadedDirs.push(path.dirname(dest));
+        await writeStateArchive(dest, files);
+      },
+    );
+  };
+
+  beforeEach(() => {
+    downloadedDirs.length = 0;
+  });
+
   describe("listKeys", () => {
     it("should return failure when bot not found", async () => {
       mockBotService.findOne = jest
@@ -201,38 +236,141 @@ describe("BotStateService", () => {
     });
   });
 
-  describe("deleting a key from stored state", () => {
-    const statePath = `${testBotId}/state.tar.gz`;
-    const notFound = () =>
-      Object.assign(new Error("Not Found"), { code: "NotFound" });
+  describe("reading a key from stored state", () => {
+    it("rejects a malformed bot ID before checking ownership", async () => {
+      const result = await service.getKey("../other-bot", "portfolio");
 
-    const writeStateArchive = async (
-      dest: string,
-      files: Record<string, string>,
-    ) => {
-      const srcDir = fs.mkdtempSync(path.join(tempDir, "src-"));
-      const stateDir = path.join(srcDir, ".the0-state");
-      fs.mkdirSync(stateDir);
-      for (const [name, content] of Object.entries(files)) {
-        fs.writeFileSync(path.join(stateDir, name), content);
-      }
-      await tar.c({ gzip: true, file: dest, cwd: srcDir }, [".the0-state"]);
-    };
+      expect(result).toEqual(
+        Failure({
+          code: BotStateErrorCode.STORAGE_ERROR,
+          message: "Invalid bot ID format",
+        }),
+      );
+      expect(mockBotService.findOne).not.toHaveBeenCalled();
+    });
 
-    const downloadedDirs: string[] = [];
-    const storeState = (files: Record<string, string>) => {
+    it("reports a missing key when no state archive exists", async () => {
+      mockMinioClient.statObject.mockRejectedValueOnce(notFound());
+
+      const result = await service.getKey(testBotId, "portfolio");
+
+      expect(result).toEqual(
+        Failure({
+          code: BotStateErrorCode.KEY_NOT_FOUND,
+          message: "State key not found",
+        }),
+      );
+      expect(mockMinioClient.fGetObject).not.toHaveBeenCalled();
+    });
+
+    it("reports a missing key that is not in the archive", async () => {
+      storeState({ "other.json": "2" });
+
+      const result = await service.getKey(testBotId, "portfolio");
+
+      expect(result.error?.code).toBe(BotStateErrorCode.KEY_NOT_FOUND);
+      expect(fs.existsSync(downloadedDirs[0])).toBe(false);
+    });
+
+    it("returns the parsed value and cleans up the temp dir", async () => {
+      storeState({ "portfolio.json": '{"cash":100,"positions":["BTC"]}' });
+
+      const result = await service.getKey(testBotId, "portfolio");
+
+      expect(result).toEqual(Ok({ cash: 100, positions: ["BTC"] }));
+      expect(mockMinioClient.fGetObject).toHaveBeenCalledWith(
+        "bot-state",
+        statePath,
+        expect.stringMatching(/state\.tar\.gz$/),
+      );
+      expect(downloadedDirs).toHaveLength(1);
+      expect(fs.existsSync(downloadedDirs[0])).toBe(false);
+    });
+
+    it("refuses to read a value over the configured size limit", async () => {
+      const smallLimitConfig = {
+        get: jest.fn((key: string) =>
+          key === "MAX_STATE_FILE_SIZE_MB" ? "1" : undefined,
+        ),
+      } as unknown as ConfigService;
+      const limitedService = new BotStateService(
+        mockMinioClient as any,
+        smallLimitConfig,
+        mockBotService as any,
+        mockLogger as any,
+      );
+      const oneMbAndAByte = " ".repeat(1024 * 1024) + "1";
+      storeState({ "portfolio.json": oneMbAndAByte });
+
+      const result = await limitedService.getKey(testBotId, "portfolio");
+
+      expect(result).toEqual(
+        Failure({
+          code: BotStateErrorCode.FILE_TOO_LARGE,
+          message: "State file exceeds maximum size limit (1MB)",
+        }),
+      );
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        {
+          botId: testBotId,
+          key: "portfolio",
+          size: 1024 * 1024 + 1,
+          maxSize: 1024 * 1024,
+        },
+        "State file exceeds maximum size",
+      );
+      expect(fs.existsSync(downloadedDirs[0])).toBe(false);
+    });
+
+    it("reports invalid JSON in the stored value", async () => {
+      storeState({ "portfolio.json": "{not json" });
+
+      const result = await service.getKey(testBotId, "portfolio");
+
+      expect(result).toEqual(
+        Failure({
+          code: BotStateErrorCode.INVALID_JSON,
+          message: "State file contains invalid JSON",
+        }),
+      );
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: expect.any(SyntaxError), botId: testBotId, key: "portfolio" },
+        "Invalid JSON in state file",
+      );
+    });
+
+    it("returns a storage error when the archive cannot be read", async () => {
+      const failure = new Error("stat failed");
+      mockMinioClient.statObject.mockRejectedValueOnce(failure);
+
+      const result = await service.getKey(testBotId, "portfolio");
+
+      expect(result).toEqual(
+        Failure({
+          code: BotStateErrorCode.STORAGE_ERROR,
+          message: "Failed to get state key",
+        }),
+      );
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: failure, botId: testBotId, key: "portfolio" },
+        "Error getting state key",
+      );
+    });
+
+    it("returns a storage error when the archive exceeds the download limit", async () => {
       mockMinioClient.statObject.mockResolvedValueOnce({
-        size: 100,
+        size: 100 * 1024 * 1024 + 1,
         etag: "etag-1",
       });
-      mockMinioClient.fGetObject.mockImplementation(
-        async (_bucket: string, _path: string, dest: string) => {
-          downloadedDirs.push(path.dirname(dest));
-          await writeStateArchive(dest, files);
-        },
-      );
-    };
 
+      const result = await service.getKey(testBotId, "portfolio");
+
+      expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
+      expect(mockMinioClient.fGetObject).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("deleting a key from stored state", () => {
     // The service deletes its temp dir after uploading, so the archive must
     // be inspected while fPutObject is still running.
     const captureUploads = () => {
@@ -246,10 +384,6 @@ describe("BotStateService", () => {
       );
       return uploads;
     };
-
-    beforeEach(() => {
-      downloadedDirs.length = 0;
-    });
 
     it("returns false without downloading when no state archive exists", async () => {
       mockMinioClient.statObject.mockRejectedValueOnce(notFound());
@@ -460,7 +594,6 @@ describe("BotStateService", () => {
   // No public method reaches these branches today: deleteKey always leaves
   // the state directory in place and always passes an ETag.
   describe("uploading state outside deleteKey", () => {
-    const statePath = `${testBotId}/state.tar.gz`;
     const upload = (dir: string, expectedEtag?: string): Promise<boolean> =>
       (service as any).uploadStateWithLocking(testBotId, dir, expectedEtag);
 

@@ -7,6 +7,7 @@ import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 import * as tar from "tar";
 import * as fs from "fs/promises";
+import type { Stats } from "fs";
 import * as path from "path";
 import * as os from "os";
 
@@ -158,24 +159,11 @@ export class BotStateService {
     botId: string,
     key: string,
   ): Promise<Result<unknown, BotStateError>> {
-    // Validate bot ID to prevent path traversal
-    if (!this.isValidBotId(botId)) {
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Invalid bot ID format",
-      });
+    const accessError = await this.checkBotAccess(botId);
+    if (accessError) {
+      return Failure(accessError);
     }
 
-    // Verify bot ownership
-    const botResult = await this.botService.findOne(botId);
-    if (!botResult.success) {
-      return Failure({
-        code: BotStateErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      });
-    }
-
-    // Validate key using allowlist regex
     if (!this.isValidKey(key)) {
       return Failure({
         code: BotStateErrorCode.INVALID_KEY,
@@ -193,51 +181,8 @@ export class BotStateService {
       }
 
       try {
-        const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
-
-        // Check if file exists
-        let stats;
-        try {
-          stats = await fs.stat(filepath);
-        } catch {
-          return Failure({
-            code: BotStateErrorCode.KEY_NOT_FOUND,
-            message: "State key not found",
-          });
-        }
-
-        // Check file size before reading
-        if (stats.size > this.maxStateFileSize) {
-          this.logger.warn(
-            { botId, key, size: stats.size, maxSize: this.maxStateFileSize },
-            "State file exceeds maximum size",
-          );
-          return Failure({
-            code: BotStateErrorCode.FILE_TOO_LARGE,
-            message: `State file exceeds maximum size limit (${Math.round(this.maxStateFileSize / 1024 / 1024)}MB)`,
-          });
-        }
-
-        const content = await fs.readFile(filepath, "utf-8");
-
-        // Parse JSON with specific error handling
-        let value: unknown;
-        try {
-          value = JSON.parse(content);
-        } catch (parseError: unknown) {
-          this.logger.error(
-            { err: parseError, botId, key },
-            "Invalid JSON in state file",
-          );
-          return Failure({
-            code: BotStateErrorCode.INVALID_JSON,
-            message: "State file contains invalid JSON",
-          });
-        }
-
-        return Ok(value);
+        return await this.readStateValue(tempDir, botId, key);
       } finally {
-        // Cleanup temp directory
         await fs.rm(tempDir, { recursive: true, force: true });
       }
     } catch (error: unknown) {
@@ -245,6 +190,81 @@ export class BotStateService {
       return Failure({
         code: BotStateErrorCode.STORAGE_ERROR,
         message: "Failed to get state key",
+      });
+    }
+  }
+
+  /**
+   * The ID format is checked first so a path-traversal ID never reaches the
+   * ownership lookup.
+   */
+  private async checkBotAccess(botId: string): Promise<BotStateError | null> {
+    if (!this.isValidBotId(botId)) {
+      return {
+        code: BotStateErrorCode.STORAGE_ERROR,
+        message: "Invalid bot ID format",
+      };
+    }
+
+    const botResult = await this.botService.findOne(botId);
+    if (!botResult.success) {
+      return {
+        code: BotStateErrorCode.BOT_NOT_FOUND,
+        message: "Bot not found or access denied",
+      };
+    }
+
+    return null;
+  }
+
+  private async readStateValue(
+    tempDir: string,
+    botId: string,
+    key: string,
+  ): Promise<Result<unknown, BotStateError>> {
+    const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
+
+    let stats: Stats;
+    try {
+      stats = await fs.stat(filepath);
+    } catch {
+      return Failure({
+        code: BotStateErrorCode.KEY_NOT_FOUND,
+        message: "State key not found",
+      });
+    }
+
+    // Checked before reading so an oversized value is never loaded into memory.
+    if (stats.size > this.maxStateFileSize) {
+      this.logger.warn(
+        { botId, key, size: stats.size, maxSize: this.maxStateFileSize },
+        "State file exceeds maximum size",
+      );
+      return Failure({
+        code: BotStateErrorCode.FILE_TOO_LARGE,
+        message: `State file exceeds maximum size limit (${Math.round(this.maxStateFileSize / 1024 / 1024)}MB)`,
+      });
+    }
+
+    const content = await fs.readFile(filepath, "utf-8");
+    return this.parseStateValue(content, botId, key);
+  }
+
+  private parseStateValue(
+    content: string,
+    botId: string,
+    key: string,
+  ): Result<unknown, BotStateError> {
+    try {
+      return Ok(JSON.parse(content));
+    } catch (parseError: unknown) {
+      this.logger.error(
+        { err: parseError, botId, key },
+        "Invalid JSON in state file",
+      );
+      return Failure({
+        code: BotStateErrorCode.INVALID_JSON,
+        message: "State file contains invalid JSON",
       });
     }
   }
