@@ -9,12 +9,3 @@ export const STATUS_CONFIG: any = {
     description: "Bot is ready for deployment",
   },
 };
-
-export const BOT_TYPE_COLORS: any = {
-  "real-time":
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300",
-  scheduled:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300",
-  "event-driven":
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300",
-};

@@ -59,16 +59,3 @@ export interface CustomBotWithVersions {
 // Combined bot + selected version view used in detail panels
 export type CustomBotCurrentView = CustomBotWithVersions &
   Pick<CustomBotVersion, "version" | "status" | "config" | "filePath">;
-
-// Single Custom Bot Document
-export interface CustomBot {
-  id: string;
-  name: string;
-  version: string;
-  userId: string;
-  status: CustomBotStatus;
-  config: CustomBotConfig;
-  filePath: string;
-  createdAt: Date;
-  updatedAt: Date;
-}

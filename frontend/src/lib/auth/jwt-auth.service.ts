@@ -2,7 +2,7 @@ import {
   AuthUser,
   LoginCredentials,
   AuthResponse,
-  ApiResponse,
+  AuthApiResponse,
   Result,
 } from "./types";
 
@@ -22,7 +22,7 @@ export class JwtAuthService {
         body: JSON.stringify(credentials),
       });
 
-      const data: ApiResponse<AuthResponse> = await response.json();
+      const data: AuthApiResponse<AuthResponse> = await response.json();
 
       if (!response.ok) {
         return {
@@ -67,7 +67,7 @@ export class JwtAuthService {
         body: JSON.stringify({ token }),
       });
 
-      const data: ApiResponse<AuthUser> = await response.json();
+      const data: AuthApiResponse<AuthUser> = await response.json();
 
       if (!response.ok) {
         return {
@@ -117,7 +117,7 @@ export class JwtAuthService {
         },
       });
 
-      const data: ApiResponse<AuthUser> = await response.json();
+      const data: AuthApiResponse<AuthUser> = await response.json();
 
       if (!response.ok) {
         // If token is invalid, remove it
