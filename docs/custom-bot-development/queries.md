@@ -358,6 +358,25 @@ entrypoints:
   query: target/scala-3.3.1/my-bot-assembly.jar:QueryMain
 ```
 
+### Built-in Queries
+
+When the query entrypoint starts the SDK's query runner (`query.run()` in Python and Node.js), every SDK registers two queries, unless the bot defines its own handler for the same path:
+
+| Path | Returns |
+|------|---------|
+| `/health` | `{"status": "ok"}` |
+| `/info` | `{"available_queries": [...]}`, every path the bot answers |
+
+`/info` is the quickest way to find out what a bot can answer:
+
+```bash
+the0 bot query <bot_id> /info
+```
+
+### Bots Without a Query Entrypoint
+
+A bot whose `bot-config.yaml` declares no `query` entrypoint has no queries at all, built-in ones included. Querying it returns `422` with "This bot defines no queries". The bot's own entrypoint is never run in its place.
+
 ## Invoking Queries
 
 ### CLI
@@ -377,10 +396,10 @@ the0 bot query <bot_id> /portfolio --raw
 
 ```bash
 # HTTP request
-curl -X POST "https://api.the0.app/bot/<bot_id>/query" \
-  -H "Authorization: Bearer $TOKEN" \
+curl -X POST "$THE0_API_URL/query/<bot_id>" \
+  -H "Authorization: ApiKey $THE0_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"path": "/status", "params": {}}'
+  -d '{"query_path": "/status", "params": {}}'
 ```
 
 ## Common Patterns
