@@ -133,12 +133,8 @@ func (r *k8sBotResolver) ResolveBot(ctx context.Context, botID string) (string, 
 	if err == nil {
 		for _, bot := range bots {
 			if bot.ID == botID {
-				// Check if bot has query entrypoint
-				if bot.CustomBotVersion.Config.Entrypoints == nil {
-					return "", fmt.Errorf("bot %s does not have entrypoints configured", botID)
-				}
 				if _, hasQuery := bot.CustomBotVersion.Config.Entrypoints["query"]; !hasQuery {
-					return "", fmt.Errorf("bot %s does not have a query entrypoint", botID)
+					return "", fmt.Errorf("%w: %s", query.ErrNoQueryEntrypoint, botID)
 				}
 				// Return empty - executor will handle pod IP lookup
 				return "", nil
@@ -152,12 +148,8 @@ func (r *k8sBotResolver) ResolveBot(ctx context.Context, botID string) (string, 
 		if err == nil {
 			for _, schedule := range schedules {
 				if schedule.ID == botID {
-					// Check if schedule has query entrypoint
-					if schedule.CustomBotVersion.Config.Entrypoints == nil {
-						return "", fmt.Errorf("bot %s does not have entrypoints configured", botID)
-					}
 					if _, hasQuery := schedule.CustomBotVersion.Config.Entrypoints["query"]; !hasQuery {
-						return "", fmt.Errorf("bot %s does not have a query entrypoint", botID)
+						return "", fmt.Errorf("%w: %s", query.ErrNoQueryEntrypoint, botID)
 					}
 					// Return empty - executor will handle scheduled query execution
 					return "", nil
