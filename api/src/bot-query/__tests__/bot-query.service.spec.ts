@@ -11,6 +11,7 @@ describe("BotQueryService", () => {
   let mockBotService: jest.Mocked<BotService>;
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockFetch: jest.SpyInstance;
+  let mockLogger: ReturnType<typeof createMockLogger>;
 
   const testBot = createMockBot({
     id: "test-bot-id",
@@ -43,7 +44,7 @@ describe("BotQueryService", () => {
         },
         {
           provide: PinoLogger,
-          useValue: createMockLogger(),
+          useValue: (mockLogger = createMockLogger()),
         },
       ],
     }).compile();
@@ -287,6 +288,201 @@ describe("BotQueryService", () => {
           body: expect.stringContaining('"params":{}'),
         }),
       );
+    });
+  });
+
+  describe("executeQuery response mapping", () => {
+    beforeEach(() => {
+      mockBotService.findOne.mockResolvedValue({
+        success: true,
+        data: testBot,
+        error: null,
+      });
+    });
+
+    it("should fill defaults when the runtime omits optional fields", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { a: 1 } }),
+      } as Response);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({
+        status: "ok",
+        data: { a: 1 },
+        error: undefined,
+        duration: 0,
+        timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      });
+    });
+
+    it("should pass through the runtime's query error", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            status: "error",
+            error: "handler threw",
+            duration: 12,
+            timestamp: "2026-01-04T12:00:00Z",
+          }),
+      } as Response);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.data).toEqual({
+        status: "error",
+        data: undefined,
+        error: "handler threw",
+        duration: 12,
+        timestamp: "2026-01-04T12:00:00Z",
+      });
+    });
+
+    it("should log and report the body of a failed runtime response", async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("Internal server error"),
+      } as Response);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.error).toEqual({
+        code: BotQueryErrorCode.QUERY_FAILED,
+        message: "Query failed: Internal server error",
+      });
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        {
+          botId: "test-bot-id",
+          queryPath: "/portfolio",
+          status: 500,
+          error: "Internal server error",
+        },
+        "Query request failed",
+      );
+    });
+  });
+
+  describe("executeQuery transport failures", () => {
+    beforeEach(() => {
+      mockBotService.findOne.mockResolvedValue({
+        success: true,
+        data: testBot,
+        error: null,
+      });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should abort the request once the timeout elapses", async () => {
+      jest.useFakeTimers();
+      mockFetch.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal!.addEventListener("abort", () => {
+              const abortError = new Error("Aborted");
+              abortError.name = "AbortError";
+              reject(abortError);
+            });
+          }),
+      );
+
+      const pending = service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+        timeoutSec: 2,
+      });
+      await jest.advanceTimersByTimeAsync(2000);
+      const result = await pending;
+
+      expect(result.error).toEqual({
+        code: BotQueryErrorCode.TIMEOUT,
+        message: "Query timed out after 2 seconds",
+      });
+    });
+
+    it("should report the default timeout in the timeout message", async () => {
+      const abortError = new Error("Aborted");
+      abortError.name = "AbortError";
+      mockFetch.mockRejectedValue(abortError);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.error?.message).toBe("Query timed out after 30 seconds");
+    });
+
+    it("should detect a refused connection reported through the error cause", async () => {
+      const fetchError = Object.assign(new TypeError("fetch failed"), {
+        cause: { code: "ECONNREFUSED" },
+      });
+      mockFetch.mockRejectedValue(fetchError);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.error).toEqual({
+        code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
+        message:
+          "Bot runtime is not available. Ensure the bot-runner service is running.",
+      });
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        {
+          botId: "test-bot-id",
+          queryPath: "/portfolio",
+          error: "fetch failed",
+        },
+        "Runtime unavailable",
+      );
+    });
+
+    it("should report other transport errors as query failures", async () => {
+      mockFetch.mockRejectedValue(new Error("socket hang up"));
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.error).toEqual({
+        code: BotQueryErrorCode.QUERY_FAILED,
+        message: "Query failed: socket hang up",
+      });
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        {
+          botId: "test-bot-id",
+          queryPath: "/portfolio",
+          error: "socket hang up",
+        },
+        "Query execution error",
+      );
+    });
+
+    it("should report an unreadable response body as a query failure", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.reject(new Error("Unexpected token")),
+      } as unknown as Response);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/portfolio",
+      });
+
+      expect(result.error).toEqual({
+        code: BotQueryErrorCode.QUERY_FAILED,
+        message: "Query failed: Unexpected token",
+      });
     });
   });
 });
