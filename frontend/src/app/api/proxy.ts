@@ -59,6 +59,53 @@ export async function proxyBotApi(
   }
 }
 
+/**
+ * Keeps the older response contract the api-keys clients still depend on
+ * (upstream errors wrapped in `{ error }`, 200 on any success, a 500
+ * envelope on failure), which proxyBotApi does not. Prefer proxyBotApi for
+ * new routes.
+ */
+export async function proxyBotApiWithErrorEnvelope(
+  req: NextRequest,
+  path: string,
+  method: string,
+  failureMessage: string,
+  { forwardJsonBody = false }: { forwardJsonBody?: boolean } = {},
+) {
+  try {
+    const body = forwardJsonBody ? JSON.stringify(await req.json()) : undefined;
+    const response = await fetch(`${process.env.BOT_API_URL}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: req.headers.get("Authorization"),
+      } as HeadersInit,
+      body,
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: await response.json() },
+        { status: response.status },
+      );
+    }
+
+    return NextResponse.json(await response.json());
+  } catch (error) {
+    console.error(`${failureMessage}:`, error);
+    return NextResponse.json(
+      {
+        error: {
+          message: failureMessage,
+          statusCode: 500,
+          error: "Internal Server Error",
+        },
+      },
+      { status: 500 },
+    );
+  }
+}
+
 export async function readJsonRequest(req: NextRequest): Promise<unknown> {
   try {
     return await req.json();
