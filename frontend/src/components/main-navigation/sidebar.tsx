@@ -59,12 +59,7 @@ export function Sidebar({
             </span>
           </div>
           {!isCollapsed && (
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-lg font-bold">{APP_NAME}</span>
-              <span className="px-1 py-0.5 text-[8px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 rounded-full border border-orange-200 dark:border-orange-800">
-                BETA
-              </span>
-            </div>
+            <span className="font-mono text-lg font-bold">{APP_NAME}</span>
           )}
         </Link>
       </div>
