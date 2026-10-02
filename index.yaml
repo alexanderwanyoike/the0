@@ -4,6 +4,54 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: fixed
+          description: Bot queries reach the bot-controller under any release name - RUNTIME_QUERY_URL now follows the chart's fullname instead of a hardcoded the0-bot-controller host, which broke queries on releases not named "the0" (including Flux's <namespace>-<name> default)
+        - kind: added
+          description: A chart render test checks in-cluster URLs against the Services the chart creates, and runs on chart PRs
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.16.1
+    created: "2026-10-02T16:35:00.830638925Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 684d1a3761d352dc2ab5e5d0b70e7a12dd331ec643bfcc3502c5914b5e2ed603
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.11.1/the0-0.11.1.tgz
+    version: 0.11.1
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: changed
           description: the0 is out of beta - the BETA labels are gone from the dashboard and landing page, and the chart is no longer marked as a prerelease
         - kind: changed
@@ -2221,4 +2269,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-02T16:17:20.441117245Z"
+generated: "2026-10-02T16:35:00.831081111Z"
