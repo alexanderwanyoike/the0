@@ -101,19 +101,18 @@ Working examples for each language live in [`example-bots/`](example-bots).
 The API ships an [MCP server](https://docs.the0.app/integrations/mcp), so Claude Code or any MCP client can list, deploy and debug your bots. Create an API key in the dashboard, then:
 
 ```bash
-claude mcp add the0 --transport http http://localhost:3000/mcp --header "x-api-key: $THE0_API_KEY"
+claude mcp add the0 --transport http http://localhost:3000/mcp \
+  --header "x-api-key: $THE0_API_KEY"
 ```
 
 ## How it fits together
 
 ```mermaid
 flowchart LR
-    CLI[CLI] --> API
-    Web[Web dashboard] --> API
-    Agents[MCP clients] --> API
-    API[API] -- NATS --> Runner[Bot runner]
+    Clients["CLI, dashboard, MCP"] --> API
+    API -- NATS --> Runner[Bot runner]
     API -- NATS --> Scheduler[Bot scheduler]
-    Runner --> Bots[[Your bots, one container each]]
+    Runner --> Bots[[Your bots]]
     Scheduler --> Bots
 ```
 
