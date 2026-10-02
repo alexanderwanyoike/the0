@@ -150,7 +150,7 @@ the0Api:
     # Required root admin email. Set THE0_ADMIN_PASSWORD through extraEnv with
     # a Secret reference; the API fails startup when either value is missing.
     # THE0_ADMIN_EMAIL: "admin@example.com"
-    RUNTIME_QUERY_URL: "http://the0-bot-controller:9477"
+    # RUNTIME_QUERY_URL defaults to this release's bot-controller Service.
     # Swagger UI at /docs and the OpenAPI spec at /docs-json. Off for chart
     # installs, since the api may be reachable from outside; set "true" to
     # serve them.
