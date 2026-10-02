@@ -29,6 +29,14 @@ export interface LogEntry {
   timestamp: string | null;
 }
 
+interface DatedLogsRead {
+  entries: LogEntry[];
+  metricsHasMore: boolean;
+}
+
+const dayLogPath = (botId: string, date: string): string =>
+  `logs/${botId}/${date}.log`;
+
 @Injectable({ scope: Scope.REQUEST })
 export class LogsService {
   private static readonly TAIL_BYTES = 512 * 1024; // 512KB
@@ -82,53 +90,14 @@ export class LogsService {
     }
 
     try {
-      const entries: LogEntry[] = [];
-
-      const sortOrder = query.sort || "desc";
-
+      const { entries, metricsHasMore } = await this.readDatedLogs(
+        botId,
+        dates,
+        query,
+      );
       // For metrics we know the exact filtered count before truncation, so
       // hasMore can be computed precisely instead of the >=limit heuristic
       // used for raw logs (whose streams stop early at the limit).
-      let metricsHasMore = false;
-
-      if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
-        // Single date, non-metrics: tail for latest entries (returns newest-first)
-        const logPath = `logs/${botId}/${dates[0]}.log`;
-        await this.tailFilteredLogs(logPath, dates[0], query, entries);
-        if (sortOrder === "asc") entries.reverse();
-      } else {
-        // Multi-date or metrics: stream from start (returns oldest-first)
-        const skipped = { count: 0 };
-        if (sortOrder === "desc") {
-          // For desc on the stream path, read entries in chronological order,
-          // reverse to newest-first, then apply offset and limit.
-          // Cap total reads to prevent memory exhaustion on huge ranges.
-          const maxRead = Math.max(query.offset + query.limit, 10000);
-          const cappedQuery = { ...query, offset: 0, limit: maxRead };
-          for (const date of dates) {
-            const logPath = `logs/${botId}/${date}.log`;
-            await this.streamFilteredLogs(logPath, date, cappedQuery, entries, skipped);
-            if (entries.length >= maxRead) break;
-          }
-          entries.reverse();
-          metricsHasMore = entries.length > query.offset + query.limit;
-          entries.splice(0, query.offset);
-          if (entries.length > query.limit) entries.length = query.limit;
-        } else {
-          for (const date of dates) {
-            const logPath = `logs/${botId}/${date}.log`;
-            await this.streamFilteredLogs(logPath, date, query, entries, skipped);
-            // Metric streams don't stop at the limit mid-file (the whole day
-            // is read), so one extra entry past the limit is the hasMore
-            // sentinel; raw-log streams stop exactly at the limit.
-            if (entries.length > query.limit) break;
-            if (query.type !== "metrics" && entries.length >= query.limit) break;
-          }
-          metricsHasMore = entries.length > query.limit;
-          if (entries.length > query.limit) entries.length = query.limit;
-        }
-      }
-
       const hasMore =
         query.type === "metrics"
           ? metricsHasMore
@@ -138,6 +107,89 @@ export class LogsService {
       this.logger.error({ err: error }, "Error fetching logs");
       return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
+  }
+
+  private async readDatedLogs(
+    botId: string,
+    dates: string[],
+    query: LogsQuery,
+  ): Promise<DatedLogsRead> {
+    const sortOrder = query.sort || "desc";
+
+    if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
+      // Single date, non-metrics: tail for latest entries (returns newest-first)
+      const entries: LogEntry[] = [];
+      await this.tailFilteredLogs(
+        dayLogPath(botId, dates[0]),
+        dates[0],
+        query,
+        entries,
+      );
+      if (sortOrder === "asc") entries.reverse();
+      return { entries, metricsHasMore: false };
+    }
+
+    // Multi-date or metrics: stream from start (returns oldest-first)
+    return sortOrder === "desc"
+      ? this.streamDatesNewestFirst(botId, dates, query)
+      : this.streamDatesOldestFirst(botId, dates, query);
+  }
+
+  /**
+   * Reads entries in chronological order, reverses to newest-first, then
+   * applies offset and limit. Total reads are capped to prevent memory
+   * exhaustion on huge ranges.
+   */
+  private async streamDatesNewestFirst(
+    botId: string,
+    dates: string[],
+    query: LogsQuery,
+  ): Promise<DatedLogsRead> {
+    const entries: LogEntry[] = [];
+    const skipped = { count: 0 };
+    const maxRead = Math.max(query.offset + query.limit, 10000);
+    const cappedQuery = { ...query, offset: 0, limit: maxRead };
+    for (const date of dates) {
+      await this.streamFilteredLogs(
+        dayLogPath(botId, date),
+        date,
+        cappedQuery,
+        entries,
+        skipped,
+      );
+      if (entries.length >= maxRead) break;
+    }
+    entries.reverse();
+    const metricsHasMore = entries.length > query.offset + query.limit;
+    entries.splice(0, query.offset);
+    if (entries.length > query.limit) entries.length = query.limit;
+    return { entries, metricsHasMore };
+  }
+
+  private async streamDatesOldestFirst(
+    botId: string,
+    dates: string[],
+    query: LogsQuery,
+  ): Promise<DatedLogsRead> {
+    const entries: LogEntry[] = [];
+    const skipped = { count: 0 };
+    for (const date of dates) {
+      await this.streamFilteredLogs(
+        dayLogPath(botId, date),
+        date,
+        query,
+        entries,
+        skipped,
+      );
+      // Metric streams don't stop at the limit mid-file (the whole day
+      // is read), so one extra entry past the limit is the hasMore
+      // sentinel; raw-log streams stop exactly at the limit.
+      if (entries.length > query.limit) break;
+      if (query.type !== "metrics" && entries.length >= query.limit) break;
+    }
+    const metricsHasMore = entries.length > query.limit;
+    if (entries.length > query.limit) entries.length = query.limit;
+    return { entries, metricsHasMore };
   }
 
   /**
@@ -158,7 +210,7 @@ export class LogsService {
     // (day files are already time-ordered internally).
     let collected: LogEntry[] = [];
     for (const date of dates) {
-      const logPath = `logs/${botId}/${date}.log`;
+      const logPath = dayLogPath(botId, date);
       const dayEntries: LogEntry[] = [];
       if (query.type === "metrics") {
         // Metric lines are sparse; stream the whole day file. Offset is
@@ -245,7 +297,9 @@ export class LogsService {
       for (const line of lines) {
         if (!this.collectLine(line, logDate, query, entries, skipped)) continue;
         if (query.type !== "metrics" && entries.length >= query.limit) {
-          (stream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.();
+          (
+            stream as NodeJS.ReadableStream & { destroy?: () => void }
+          ).destroy?.();
           return;
         }
       }
@@ -326,7 +380,7 @@ export class LogsService {
     }
   }
 
-  /** Lines without a timestamp are kept: they cannot be placed in the window. */
+  /** Lines without a timestamp are kept: they cannot be placed in a window. */
   private static isOutsideTimeWindow(
     entry: LogEntry,
     query: LogsQuery,
