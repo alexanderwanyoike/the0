@@ -12,9 +12,9 @@ the0 runs it, schedules it, keeps its state, streams its logs and gives it a liv
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/alexanderwanyoike/the0?filter=v*)](https://github.com/alexanderwanyoike/the0/releases)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/the0)](https://artifacthub.io/packages/search?repo=the0)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/g5mp57nK)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/8xpMh3RR3)
 
-[Docs](https://docs.the0.app) · [Quick start](#quick-start) · [Build a bot](https://docs.the0.app/custom-bot-development/) · [Discord](https://discord.gg/g5mp57nK)
+[Docs](https://docs.the0.app) · [Quick start](#quick-start) · [Build a bot](https://docs.the0.app/custom-bot-development/) · [Discord](https://discord.gg/8xpMh3RR3)
 
 </div>
 
@@ -93,7 +93,7 @@ The API is NestJS, the runtime and CLI are Go, and the dashboard is Next.js. Pos
 
 ## Contributing
 
-Bug reports, ideas and pull requests are all welcome, AI-assisted ones included as long as they come with tests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or say hello on [Discord](https://discord.gg/g5mp57nK).
+Bug reports, ideas and pull requests are all welcome, AI-assisted ones included as long as they come with tests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or say hello on [Discord](https://discord.gg/8xpMh3RR3).
 
 ## License
 
