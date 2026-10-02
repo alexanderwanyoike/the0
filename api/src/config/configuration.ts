@@ -34,4 +34,11 @@ export default () => ({
   // providers that bill compute time on idle connections. Enable when
   // you want Kubernetes to gate pod traffic on deep dependency health.
   HEALTH_CHECK_DATABASE: process.env.HEALTH_CHECK_DATABASE === "true",
+
+  // Some deployments expose the API to the internet, so production serves
+  // the Swagger docs only when an operator opts in.
+  SWAGGER_ENABLED:
+    process.env.SWAGGER_ENABLED === undefined
+      ? process.env.NODE_ENV !== "production"
+      : process.env.SWAGGER_ENABLED === "true",
 });
