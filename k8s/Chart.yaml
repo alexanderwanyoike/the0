@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.11.0
-appVersion: "1.16.0"
+version: 0.11.1
+appVersion: "1.16.1"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,12 +30,10 @@ annotations:
     - name: Discord
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
-    - kind: changed
-      description: the0 is out of beta - the BETA labels are gone from the dashboard and landing page, and the chart is no longer marked as a prerelease
-    - kind: changed
-      description: Discord links in the docs, READMEs and chart point at the new community invite
-    - kind: removed
-      description: The stale ROADMAP.md
+    - kind: fixed
+      description: Bot queries reach the bot-controller under any release name - RUNTIME_QUERY_URL now follows the chart's fullname instead of a hardcoded the0-bot-controller host, which broke queries on releases not named "the0" (including Flux's <namespace>-<name> default)
+    - kind: added
+      description: A chart render test checks in-cluster URLs against the Services the chart creates, and runs on chart PRs
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
