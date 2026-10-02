@@ -22,6 +22,23 @@ describe("ApiKeyService", () => {
     updatedAt: new Date(),
   };
 
+  // A stored row carries columns the response must not leak.
+  const storedApiKey = {
+    ...mockApiKey,
+    lastUsedAt: new Date(),
+    keyValue: "raw-column",
+  };
+  const expectedResponse = {
+    id: storedApiKey.id,
+    userId: storedApiKey.userId,
+    name: storedApiKey.name,
+    key: storedApiKey.key,
+    isActive: storedApiKey.isActive,
+    createdAt: storedApiKey.createdAt,
+    updatedAt: storedApiKey.updatedAt,
+    lastUsedAt: storedApiKey.lastUsedAt,
+  };
+
   const mockUser: UserRecord = {
     id: "user-123",
     username: "testuser",
@@ -72,6 +89,17 @@ describe("ApiKeyService", () => {
   });
 
   describe("createApiKey", () => {
+    it("should return only the API key response fields", async () => {
+      repository.findAll.mockResolvedValue(Ok([]));
+      repository.createApiKey.mockResolvedValue(Ok(storedApiKey));
+
+      const result = await service.createApiKey("user-123", {
+        name: "Test API Key",
+      });
+
+      expect(result.data).toStrictEqual(expectedResponse);
+    });
+
     it("should create an API key successfully", async () => {
       const createDto: CreateApiKeyDto = { name: "Test API Key" };
       repository.findAll.mockResolvedValue(Ok([]));
@@ -112,6 +140,14 @@ describe("ApiKeyService", () => {
   });
 
   describe("getUserApiKeys", () => {
+    it("should return only the API key response fields", async () => {
+      repository.findAll.mockResolvedValue(Ok([storedApiKey]));
+
+      const result = await service.getUserApiKeys("user-123");
+
+      expect(result.data).toStrictEqual([expectedResponse]);
+    });
+
     it("should return user API keys with full key", async () => {
       repository.findAll.mockResolvedValue(Ok([mockApiKey]));
 
@@ -135,6 +171,14 @@ describe("ApiKeyService", () => {
   });
 
   describe("getApiKeyById", () => {
+    it("should return only the API key response fields", async () => {
+      repository.findOne.mockResolvedValue(Ok(storedApiKey));
+
+      const result = await service.getApiKeyById("user-123", "test-id");
+
+      expect(result.data).toStrictEqual(expectedResponse);
+    });
+
     it("should return specific API key with full key", async () => {
       repository.findOne.mockResolvedValue(Ok(mockApiKey));
 
