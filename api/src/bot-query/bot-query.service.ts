@@ -6,6 +6,7 @@ import { Result, Ok, Failure, errorMessage } from "@/common/result";
 
 export enum BotQueryErrorCode {
   BOT_NOT_FOUND = "BOT_NOT_FOUND",
+  NO_QUERY_ENTRYPOINT = "NO_QUERY_ENTRYPOINT",
   QUERY_FAILED = "QUERY_FAILED",
   RUNTIME_UNAVAILABLE = "RUNTIME_UNAVAILABLE",
   TIMEOUT = "TIMEOUT",
@@ -119,6 +120,14 @@ export class BotQueryService {
       return Failure({
         code: BotQueryErrorCode.BOT_NOT_FOUND,
         message: "Bot not found in runtime",
+      });
+    }
+
+    if (response.status === 422) {
+      return Failure({
+        code: BotQueryErrorCode.NO_QUERY_ENTRYPOINT,
+        message:
+          "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them.",
       });
     }
 

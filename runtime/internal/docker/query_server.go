@@ -53,7 +53,7 @@ func (e *dockerQueryExecutor) ExecuteQuery(ctx context.Context, req query.Reques
 	// Convert bot to executable
 	executable := botToExecutable(bot, isRunning, containerID)
 	if executable == nil {
-		return &query.Response{Status: "error", Error: fmt.Sprintf("bot %s does not have a query entrypoint", req.BotID)}
+		return &query.Response{Status: "error", Error: fmt.Sprintf("%v: %s", query.ErrNoQueryEntrypoint, req.BotID)}
 	}
 
 	resp, _ := e.handler.ExecuteQuery(ctx, req, *executable, containerID)
@@ -71,12 +71,8 @@ func (r *dockerBotResolver) ResolveBot(ctx context.Context, botID string) (strin
 		return "", fmt.Errorf("bot not found: %s", botID)
 	}
 
-	// Check if bot has query entrypoint
-	if bot.CustomBotVersion.Config.Entrypoints == nil {
-		return "", fmt.Errorf("bot %s does not have entrypoints configured", botID)
-	}
 	if _, hasQuery := bot.CustomBotVersion.Config.Entrypoints["query"]; !hasQuery {
-		return "", fmt.Errorf("bot %s does not have a query entrypoint", botID)
+		return "", fmt.Errorf("%w: %s", query.ErrNoQueryEntrypoint, botID)
 	}
 
 	// Return empty string for target IP - executor will handle resolution

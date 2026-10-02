@@ -142,6 +142,33 @@ describe("BotQueryService", () => {
       expect(result.error?.message).toBe("Bot not found in runtime");
     });
 
+    it("should return NO_QUERY_ENTRYPOINT when the bot defines no queries", async () => {
+      mockBotService.findOne.mockResolvedValue({
+        success: true,
+        data: testBot,
+        error: null,
+      });
+
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 422,
+        text: () =>
+          Promise.resolve(
+            '{"status":"error","error":"bot has no query entrypoint: test-bot-id"}',
+          ),
+      } as Response);
+
+      const result = await service.executeQuery("test-bot-id", {
+        queryPath: "/status",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe(BotQueryErrorCode.NO_QUERY_ENTRYPOINT);
+      expect(result.error?.message).toBe(
+        "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them.",
+      );
+    });
+
     it("should return QUERY_FAILED when runtime returns error", async () => {
       mockBotService.findOne.mockResolvedValue({
         success: true,

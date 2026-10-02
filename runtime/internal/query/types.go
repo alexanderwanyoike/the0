@@ -3,8 +3,14 @@ package query
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
+
+// ErrNoQueryEntrypoint marks a bot whose config declares no query entrypoint,
+// so it has nothing to answer queries with. It is kept apart from "bot not
+// found" because the bot does exist, and callers report it differently.
+var ErrNoQueryEntrypoint = errors.New("bot has no query entrypoint")
 
 // Request represents a query to execute against a bot.
 type Request struct {
