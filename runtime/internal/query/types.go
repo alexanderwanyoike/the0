@@ -33,6 +33,17 @@ func ErrorResponse(err string, start time.Time) *Response {
 	}
 }
 
+// FailedRunResponse builds the response for a query process that exited
+// non-zero. SDKs write their own error to the result file before exiting, such
+// as an unknown path along with the paths the bot does handle, and that says
+// more than the process output, which is only read when no result was written.
+func FailedRunResponse(result []byte, processOutput func() string, start time.Time) *Response {
+	if len(result) > 0 {
+		return ParseQueryOutput(result, start)
+	}
+	return ErrorResponse(processOutput(), start)
+}
+
 // DefaultTimeout is the default query timeout in seconds.
 const DefaultTimeout = 30
 

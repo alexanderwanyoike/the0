@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"runtime/internal/util"
@@ -86,13 +87,18 @@ func (e *RealtimeExecutor) Execute(ctx context.Context, req Request, targetIP st
 // parseQueryOutput parses the JSON output from a query execution.
 func parseQueryOutput(data []byte, start time.Time) *Response {
 	var output struct {
-		Status string          `json:"status"`
-		Data   json.RawMessage `json:"data"`
-		Error  string          `json:"error"`
+		Status    string          `json:"status"`
+		Data      json.RawMessage `json:"data"`
+		Error     string          `json:"error"`
+		Available []string        `json:"available"`
 	}
 
 	if err := json.Unmarshal(data, &output); err != nil {
 		return ErrorResponse(fmt.Sprintf("failed to parse query response: %v (body: %s)", err, string(data)), start)
+	}
+
+	if output.Error != "" && len(output.Available) > 0 {
+		output.Error = fmt.Sprintf("%s (available: %s)", output.Error, strings.Join(output.Available, ", "))
 	}
 
 	return &Response{
