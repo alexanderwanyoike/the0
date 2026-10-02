@@ -135,6 +135,51 @@ describe("McpController", () => {
           expect(tool.inputSchema).toHaveProperty("required");
         }
       });
+
+      it("should advertise the required arguments each tool handler reads", async () => {
+        const result = await controller.handleRpc({
+          jsonrpc: "2.0" as const,
+          id: 1,
+          method: "tools/list",
+        });
+        const tools = (result.result as any).tools;
+
+        const requiredByTool = Object.fromEntries(
+          tools.map((t: any) => [t.name, t.inputSchema.required]),
+        );
+        expect(requiredByTool).toEqual({
+          auth_status: [],
+          bot_list: [],
+          bot_get: ["bot_id"],
+          bot_deploy: ["config"],
+          bot_update: ["bot_id", "config"],
+          bot_delete: ["bot_id"],
+          logs_get: ["bot_id"],
+          logs_summary: ["bot_id"],
+          bot_state_list: ["bot_id"],
+          bot_state_get: ["bot_id", "key"],
+          bot_query: ["bot_id", "query_path"],
+          custom_bot_list: [],
+          custom_bot_get: ["name"],
+          custom_bot_schema: ["name"],
+        });
+      });
+
+      it("should take the bot_deploy name inside config, where the handler reads it", async () => {
+        const result = await controller.handleRpc({
+          jsonrpc: "2.0" as const,
+          id: 1,
+          method: "tools/list",
+        });
+        const deploy = (result.result as any).tools.find(
+          (t: any) => t.name === "bot_deploy",
+        );
+
+        expect(Object.keys(deploy.inputSchema.properties)).toEqual(["config"]);
+        expect(deploy.inputSchema.properties.config.description).toContain(
+          "name",
+        );
+      });
     });
 
     describe("tools/call", () => {
