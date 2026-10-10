@@ -84,9 +84,9 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	}
 	queryExecutable.QueryResultKey = resultKey
 
+	// Backstop for the resolver's check; see query.ErrNoQueryEntrypoint.
 	if _, ok := queryExecutable.EntrypointFiles["query"]; !ok {
-		err := fmt.Errorf("%w: %s", query.ErrNoQueryEntrypoint, executable.ID)
-		return query.ErrorResponse(err.Error(), start), err
+		return query.NoQueryEntrypointResponse(executable.ID, start), query.NoQueryEntrypointError(executable.ID)
 	}
 
 	h.logger.Info("Executing scheduled query: bot=%s path=%s", req.BotID, req.QueryPath)

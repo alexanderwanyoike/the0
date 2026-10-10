@@ -420,6 +420,6 @@ func TestQueryHandler_ScheduledQueryWithoutQueryEntrypoint(t *testing.T) {
 	}, "")
 
 	assert.ErrorIs(t, err, query.ErrNoQueryEntrypoint)
-	assert.Equal(t, "error", response.Status)
+	assert.Equal(t, http.StatusUnprocessableEntity, response.HTTPStatus())
 	assert.Equal(t, "bot has no query entrypoint: test-bot", response.Error)
 }

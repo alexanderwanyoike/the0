@@ -416,3 +416,22 @@ func TestQueryServer_HandleQuery_NoQueryEntrypoint(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 	assert.Equal(t, "bot has no query entrypoint: no-query-bot", result.Error)
 }
+
+func TestDockerQueryExecutor_BotWithoutQueryEntrypoint(t *testing.T) {
+	resolver := newMockBotResolver()
+	resolver.addBot(&model.Bot{
+		ID: "no-query-bot",
+		CustomBotVersion: model.CustomBotVersion{
+			Config: model.APIBotConfig{Runtime: "python3.11", Entrypoints: map[string]string{"bot": "main.py"}},
+		},
+	}, "")
+	executor := &dockerQueryExecutor{
+		handler:     NewQueryHandler(QueryHandlerConfig{Runner: &mockDockerRunner{}, Logger: &util.DefaultLogger{}}),
+		botResolver: resolver,
+	}
+
+	response := executor.ExecuteQuery(context.Background(), query.Request{BotID: "no-query-bot", QueryPath: "/health"}, "")
+
+	assert.Equal(t, http.StatusUnprocessableEntity, response.HTTPStatus())
+	assert.Equal(t, "bot has no query entrypoint: no-query-bot", response.Error)
+}
