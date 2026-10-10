@@ -157,11 +157,7 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Send response
 	w.Header().Set("Content-Type", "application/json")
-	if response.Status == "error" {
-		w.WriteHeader(http.StatusInternalServerError)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
+	w.WriteHeader(response.HTTPStatus())
 	json.NewEncoder(w).Encode(response)
 }
 

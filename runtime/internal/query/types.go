@@ -4,13 +4,30 @@ package query
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"time"
 )
 
 // ErrNoQueryEntrypoint marks a bot whose config declares no query entrypoint,
 // so it has nothing to answer queries with. It is kept apart from "bot not
 // found" because the bot does exist, and callers report it differently.
+// Nothing runs the bot entrypoint in its place: that would run the bot
+// itself, trading included, just to answer a question.
 var ErrNoQueryEntrypoint = errors.New("bot has no query entrypoint")
+
+// NoQueryEntrypointError reports that the given bot has no query entrypoint.
+func NoQueryEntrypointError(botID string) error {
+	return fmt.Errorf("%w: %s", ErrNoQueryEntrypoint, botID)
+}
+
+// NoQueryEntrypointResponse is the response for a bot with no query
+// entrypoint, answered as 422 like the resolver's rejection.
+func NoQueryEntrypointResponse(botID string, start time.Time) *Response {
+	response := ErrorResponse(NoQueryEntrypointError(botID).Error(), start)
+	response.httpStatus = http.StatusUnprocessableEntity
+	return response
+}
 
 // Request represents a query to execute against a bot.
 type Request struct {
@@ -27,6 +44,20 @@ type Response struct {
 	Error     string          `json:"error,omitempty"`     // Error message if status is "error"
 	Duration  time.Duration   `json:"duration"`            // Execution time
 	Timestamp time.Time       `json:"timestamp"`           // When the query was executed
+
+	httpStatus int
+}
+
+// HTTPStatus is the status the query server answers with: 200 for a result,
+// 500 for an error, unless the response was built with a more specific one.
+func (r *Response) HTTPStatus() int {
+	if r.httpStatus != 0 {
+		return r.httpStatus
+	}
+	if r.Status == "error" {
+		return http.StatusInternalServerError
+	}
+	return http.StatusOK
 }
 
 // ErrorResponse creates an error response with the given message.
