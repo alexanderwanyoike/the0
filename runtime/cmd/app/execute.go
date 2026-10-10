@@ -16,6 +16,7 @@ import (
 	"runtime/internal/constants"
 	"runtime/internal/daemon"
 	"runtime/internal/execute"
+	"runtime/internal/query"
 	"runtime/internal/util"
 )
 
@@ -259,12 +260,27 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	return exitCode
 }
 
+// ephemeralQueryEntrypoint returns the file a query runs, which is only ever
+// the query entrypoint (see query.ErrNoQueryEntrypoint).
+func ephemeralQueryEntrypoint(cfg *execute.Config) (string, error) {
+	if cfg.QueryEntrypoint == "" {
+		return "", fmt.Errorf("QUERY_ENTRYPOINT is not set: %w", query.ErrNoQueryEntrypoint)
+	}
+	return cfg.QueryEntrypoint, nil
+}
+
 // runEphemeralQuery runs a single query and exits.
 // Queries run directly without wrappers - the SDK's query.run() handles everything.
 func runEphemeralQuery(cfg *execute.Config, logger *util.DefaultLogger) int {
 	ctx := context.Background()
 
 	logger.Info("Running ephemeral query: %s", cfg.QueryPath)
+
+	entrypoint, err := ephemeralQueryEntrypoint(cfg)
+	if err != nil {
+		logger.Info("Refusing query: %v", err)
+		return 1
+	}
 
 	// Download code
 	if err := downloadCode(ctx, cfg, logger); err != nil {
@@ -281,13 +297,6 @@ func runEphemeralQuery(cfg *execute.Config, logger *util.DefaultLogger) int {
 	if err := os.MkdirAll("/query", 0755); err != nil {
 		logger.Info("Failed to create query directory: %v", err)
 		return 1
-	}
-
-	// Execute query using the query entrypoint or main entrypoint
-	// Queries run directly without wrappers
-	entrypoint := cfg.Entrypoint
-	if cfg.QueryEntrypoint != "" {
-		entrypoint = cfg.QueryEntrypoint
 	}
 
 	exitCode := executeQueryProcess(ctx, cfg, entrypoint, logger)
