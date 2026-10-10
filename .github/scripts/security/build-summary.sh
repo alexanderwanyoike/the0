@@ -42,19 +42,19 @@ fi
 
 trivy_files=("${artifacts_dir}"/reports/trivy-*.json)
 if [[ "${#trivy_files[@]}" -gt 0 ]]; then
-  trivy_critical="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "CRITICAL") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown") | select(($accepted | index(.)) | not)] | unique | length' "${trivy_files[@]}")"
-  trivy_high="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "HIGH") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown") | select(($accepted | index(.)) | not)] | unique | length' "${trivy_files[@]}")"
+  trivy_critical="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "CRITICAL") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown") | select(IN($accepted[]) | not)] | unique | length' "${trivy_files[@]}")"
+  trivy_high="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | .Results[]? | (.Vulnerabilities[]?, .Misconfigurations[]?, .Secrets[]?) | select((.Severity // "UNKNOWN") == "HIGH") | (.VulnerabilityID // .ID // .RuleID // .Title // "unknown") | select(IN($accepted[]) | not)] | unique | length' "${trivy_files[@]}")"
 fi
 
 yarn_files=("${artifacts_dir}"/reports/yarn-audit-*.jsonl)
 if [[ "${#yarn_files[@]}" -gt 0 ]]; then
-  yarn_critical="$(jq -R -s '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "critical") | (.data.advisory.github_advisory_id // (.data.advisory.id | tostring))] | unique | length' "${yarn_files[@]}")"
-  yarn_high="$(jq -R -s '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "high") | (.data.advisory.github_advisory_id // (.data.advisory.id | tostring))] | unique | length' "${yarn_files[@]}")"
+  yarn_critical="$(jq -R -s --argjson accepted "${accepted_ids}" '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "critical") | (.data.advisory.github_advisory_id // (.data.advisory.id | tostring)) | select(IN($accepted[]) | not)] | unique | length' "${yarn_files[@]}")"
+  yarn_high="$(jq -R -s --argjson accepted "${accepted_ids}" '[split("\n")[] | select(length > 0) | fromjson? | select(.type == "auditAdvisory" and .data.advisory.severity == "high") | (.data.advisory.github_advisory_id // (.data.advisory.id | tostring)) | select(IN($accepted[]) | not)] | unique | length' "${yarn_files[@]}")"
 fi
 
 govuln_files=("${artifacts_dir}"/reports/govulncheck-*.json)
 if [[ "${#govuln_files[@]}" -gt 0 ]]; then
-  govuln_findings="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv | select(($accepted | index(.)) | not)] | unique | length' "${govuln_files[@]}")"
+  govuln_findings="$(jq -s --argjson accepted "${accepted_ids}" '[.[] | select(.finding?.osv? != null) | select((.finding.trace[0]?.function // "") != "") | .finding.osv | select(IN($accepted[]) | not)] | unique | length' "${govuln_files[@]}")"
 fi
 
 dotnet_files=("${artifacts_dir}"/reports/dotnet-audit-*.json)
