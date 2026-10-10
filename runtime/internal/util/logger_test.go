@@ -188,9 +188,10 @@ func TestSlogStyleLogging(t *testing.T) {
 		var buf bytes.Buffer
 		logger := NewLoggerWithWriter(&buf)
 
-		// slog-style key-value pairs - use interface type to avoid go vet false positive
-		var l Logger = logger
-		l.Info("test message", "key1", "value1", "key2", 42)
+		// Call through a func value: go vet infers Info is a printf wrapper and
+		// since Go 1.26 sees through interface values, but not func values.
+		info := logger.Info
+		info("test message", "key1", "value1", "key2", 42)
 
 		output := buf.String()
 
