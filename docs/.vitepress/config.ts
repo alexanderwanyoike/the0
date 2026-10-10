@@ -35,6 +35,7 @@ export default withMermaid(defineConfig({
       { text: 'Getting Started', link: '/welcome-to-the0' },
       { text: 'CLI', link: '/the0-cli/' },
       { text: 'Bot Development', link: '/custom-bot-development/' },
+      { text: 'Recipes', link: '/recipes/' },
     ],
 
     sidebar: [
@@ -94,6 +95,14 @@ export default withMermaid(defineConfig({
           { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },
           { text: 'Deployment', link: '/custom-bot-development/deployment' },
+        ]
+      },
+      {
+        text: 'Recipes',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/recipes/' },
+          { text: 'Macro Event Guard', link: '/recipes/macro-event-guard' },
         ]
       },
       {
