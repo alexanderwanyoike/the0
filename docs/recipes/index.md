@@ -1,42 +1,31 @@
 ---
 title: "Recipes"
-description: "Complete, runnable bots that solve a real problem, contributed by the community"
+description: "In-depth walkthroughs of complete bots, from first file to deployment"
 order: 4
 ---
 
 # Recipes
 
-Recipes are complete bots you can deploy as they are, or copy and adapt. Each
-one solves a concrete problem with real data, and the full source lives in the
-[`example-bots/`](https://github.com/alexanderwanyoike/the0/tree/dev/example-bots)
-directory of the repository.
+The language quick starts introduce each building block on its own. Recipes go
+deeper: each one takes a complete, working bot and walks through how it is
+built, file by file, explaining the design decisions along the way.
 
-The language quick starts teach the building blocks one at a time. Recipes show
-those blocks working together: configuration schemas, metrics, persistent state
-and query handlers in a single bot.
+By the end of a recipe you will have seen configuration schemas, metrics,
+persistent state and query handlers working together in a real bot, and you
+will have a codebase you can deploy as it is or adapt into your own.
+
+Every recipe is backed by a runnable example in the
+[`example-bots/`](https://github.com/alexanderwanyoike/the0/tree/dev/example-bots)
+directory.
 
 ## Available Recipes
 
-| Recipe | Type | Runtime | What it does | Contributed by |
-|--------|------|---------|--------------|----------------|
-| [Macro Event Guard](./macro-event-guard) | Scheduled | Python 3.11 | Flags upcoming CPI, payrolls and central-bank releases so you can stand aside around them | [Robert Tidball](https://github.com/roberttidball) |
+| Recipe | You will learn | Language | Bot type |
+|--------|----------------|----------|----------|
+| [Macro Event Guard](./macro-event-guard) | Calling an external API safely, normalising untrusted data, emitting metrics, sharing state with query handlers | Python | Scheduled |
 
-## Contributing a Recipe
+## Suggesting a Recipe
 
-Recipes are how the0 works with third-party data providers. The SDKs stay
-vendor-neutral, so they will not ship clients for external APIs. A recipe is
-the right place for that integration instead: a self-contained bot that calls
-the provider directly or depends on the provider's own package.
-
-To contribute one, open a pull request against `dev` that adds a directory
-under `example-bots/` with:
-
-- `bot-config.yaml`, `bot-schema.json` and a sample `config.json`
-- The bot entrypoint and, where it helps, a query entrypoint
-- A `README.md` covering what the bot does, its configuration and the metrics it emits
-- An entry in `example-bots/README.md`
-
-Use [`python-macro-event-guard`](https://github.com/alexanderwanyoike/the0/tree/dev/example-bots/python-macro-event-guard)
-as a reference for layout and tone. If the recipe needs an API key, keep it out
-of URLs, logs and query responses. Once it is merged, the recipe gets a page
-here with credit to you.
+Built a bot that would make a good walkthrough? Open a pull request adding it
+under `example-bots/`, or start a discussion on
+[Discord](https://discord.gg/8xpMh3RR3).
