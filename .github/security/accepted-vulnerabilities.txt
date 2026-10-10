@@ -11,3 +11,9 @@ GO-2026-4887
 GO-2026-4883
 GO-2026-5746
 GO-2026-5617
+
+# braces stack-exhaustion DoS through deeply nested patterns. Every release up
+# to 3.0.3 (the latest) is affected and there is no patched version. It only
+# reaches us through build and test tooling (jest, ts-loader, tailwindcss via
+# micromatch), which never expands untrusted patterns.
+GHSA-vfj7-8cjw-p6xm
