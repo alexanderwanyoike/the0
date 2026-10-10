@@ -4,6 +4,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -96,6 +97,9 @@ func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.R
 
 	// Generate pod spec for the query
 	pod, err := h.podGenerator.GenerateQueryPod(bot, req.QueryPath, req.Params)
+	if errors.Is(err, query.ErrNoQueryEntrypoint) {
+		return query.NoQueryEntrypointResponse(bot.ID, start), nil
+	}
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to generate query pod spec: %v", err), start), nil
 	}

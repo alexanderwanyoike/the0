@@ -84,14 +84,9 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	}
 	queryExecutable.QueryResultKey = resultKey
 
-	// Add query entrypoint file if not present
-	if queryExecutable.EntrypointFiles == nil {
-		queryExecutable.EntrypointFiles = make(map[string]string)
-	}
-	// The query entrypoint uses the same file as the bot entrypoint
-	// The SDK detects QUERY_PATH and runs query mode instead of bot mode
+	// Backstop for the resolver's check; see query.ErrNoQueryEntrypoint.
 	if _, ok := queryExecutable.EntrypointFiles["query"]; !ok {
-		queryExecutable.EntrypointFiles["query"] = queryExecutable.EntrypointFiles["bot"]
+		return query.NoQueryEntrypointResponse(executable.ID, start), query.NoQueryEntrypointError(executable.ID)
 	}
 
 	h.logger.Info("Executing scheduled query: bot=%s path=%s", req.BotID, req.QueryPath)

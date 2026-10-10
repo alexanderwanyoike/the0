@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"runtime/internal/model"
+	"runtime/internal/query"
 	runtimepkg "runtime/internal/runtime"
 )
 
@@ -196,10 +197,9 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 		return nil, err
 	}
 
-	// Use query entrypoint if available, otherwise fall back to bot entrypoint
-	entrypoint := botConfig.entrypoint
-	if botConfig.queryEntrypoint != "" {
-		entrypoint = botConfig.queryEntrypoint
+	// See query.ErrNoQueryEntrypoint for why there is no bot-entrypoint fallback.
+	if botConfig.queryEntrypoint == "" {
+		return nil, query.NoQueryEntrypointError(bot.ID)
 	}
 
 	// Build the pod for query execution
@@ -213,7 +213,8 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 			LabelRuntime:          botConfig.runtime,
 			LabelManagedBy:        g.config.ControllerName,
 		}).
-		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, entrypoint, bot.Config).
+		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.queryEntrypoint, bot.Config).
+		WithQueryEntrypoint(botConfig.queryEntrypoint).
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
 		ForQuery(queryPath, queryParams)

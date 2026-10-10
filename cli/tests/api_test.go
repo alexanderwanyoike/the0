@@ -669,6 +669,18 @@ func TestAPIClient_ExecuteBotQuery(t *testing.T) {
 			errorContains: "bot not found",
 		},
 		{
+			name:  "bot defines no queries",
+			botID: "no-query-bot",
+			request: &internal.BotQueryRequest{
+				QueryPath:  "/status",
+				TimeoutSec: 30,
+			},
+			statusCode:    422,
+			responseBody:  `{"statusCode": 422, "message": "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them.", "error": "Unprocessable Entity"}`,
+			expectedError: true,
+			errorContains: "This bot defines no queries",
+		},
+		{
 			name:  "unauthorized",
 			botID: "bot-789",
 			request: &internal.BotQueryRequest{
