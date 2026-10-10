@@ -179,7 +179,7 @@ func (h *K8sQueryHandler) waitForJob(ctx context.Context, jobName string) (bool,
 // jobResponse builds the query response for a finished Job from the result it
 // left in MinIO, falling back to the pod logs.
 func (h *K8sQueryHandler) jobResponse(ctx context.Context, jobName, resultKey string, failed bool, start time.Time) *query.Response {
-	result, err := h.takeResult(ctx, resultKey)
+	result, err := storage.TakeQueryResult(ctx, h.resultManager, resultKey, h.logger)
 	if failed {
 		return query.FailedRunResponse(result, func() string {
 			logs, _ := h.getJobPodLogs(ctx, jobName)
@@ -192,20 +192,6 @@ func (h *K8sQueryHandler) jobResponse(ctx context.Context, jobName, resultKey st
 	}
 
 	return query.ParseQueryOutput(result, start)
-}
-
-// takeResult downloads a query result from MinIO and deletes it.
-func (h *K8sQueryHandler) takeResult(ctx context.Context, resultKey string) ([]byte, error) {
-	data, err := h.resultManager.Download(ctx, resultKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if delErr := h.resultManager.Delete(ctx, resultKey); delErr != nil {
-		h.logger.Info("Warning: failed to delete query result from MinIO: %v", delErr)
-	}
-
-	return data, nil
 }
 
 // getJobPodLogs retrieves logs from the pod created by a Job (fallback for errors).

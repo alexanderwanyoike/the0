@@ -106,7 +106,7 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to execute query container: %v", err), start), err
 	}
-	resultData, err := h.takeResult(ctx, queryExecutable.QueryResultKey)
+	resultData, err := storage.TakeQueryResult(ctx, h.resultManager, queryExecutable.QueryResultKey, h.logger)
 	if result.ExitCode != 0 {
 		return query.FailedRunResponse(resultData, func() string {
 			return fmt.Sprintf("query container exited with code %d: %s", result.ExitCode, result.Output)
@@ -117,22 +117,6 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	}
 
 	return query.ParseQueryOutput(resultData, start), nil
-}
-
-// takeResult downloads a query result and removes it from storage.
-func (h *QueryHandler) takeResult(ctx context.Context, key string) ([]byte, error) {
-	resultData, err := h.resultManager.Download(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cleanupCancel()
-	if err := h.resultManager.Delete(cleanupCtx, key); err != nil {
-		h.logger.Info("Warning: failed to delete query result from MinIO: %v", err)
-	}
-
-	return resultData, nil
 }
 
 func newQueryResultKey(botID string) (string, error) {
