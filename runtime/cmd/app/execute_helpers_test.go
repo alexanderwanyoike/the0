@@ -618,3 +618,19 @@ func TestDownloadState_MissingMinIOConfig(t *testing.T) {
 
 // Note: Helper functions startMinIOTestContainer, createTestBotZip, and createStateTarGz
 // are shared with daemon_test.go and defined there.
+
+func TestEphemeralQueryEntrypoint(t *testing.T) {
+	t.Run("runs the query entrypoint", func(t *testing.T) {
+		entrypoint, err := ephemeralQueryEntrypoint(&execute.Config{Entrypoint: "query.py", QueryEntrypoint: "query.py"})
+
+		require.NoError(t, err)
+		assert.Equal(t, "query.py", entrypoint)
+	})
+
+	t.Run("never falls back to the bot entrypoint", func(t *testing.T) {
+		entrypoint, err := ephemeralQueryEntrypoint(&execute.Config{Entrypoint: "main.py"})
+
+		assert.Error(t, err)
+		assert.Empty(t, entrypoint)
+	})
+}

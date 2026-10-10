@@ -4,6 +4,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -135,6 +136,10 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve the bot
 	targetIP, err := s.resolver.ResolveBot(r.Context(), req.BotID)
+	if errors.Is(err, ErrNoQueryEntrypoint) {
+		s.sendError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 	if err != nil {
 		s.sendError(w, http.StatusNotFound, err.Error())
 		return
@@ -152,11 +157,7 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Send response
 	w.Header().Set("Content-Type", "application/json")
-	if response.Status == "error" {
-		w.WriteHeader(http.StatusInternalServerError)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
+	w.WriteHeader(response.HTTPStatus())
 	json.NewEncoder(w).Encode(response)
 }
 

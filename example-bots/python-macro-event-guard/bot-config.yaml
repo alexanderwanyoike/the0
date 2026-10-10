@@ -1,0 +1,25 @@
+# Macro Event Guard Bot Configuration
+# A scheduled bot that flags upcoming market-moving macro releases
+
+name: macro-event-guard
+description: "Watches the official macro release calendar and flags when a top-tier release is close"
+version: 1.0.0
+author: "the0"
+type: scheduled
+runtime: python3.11
+
+entrypoints:
+  bot: main.py
+  query: query.py
+
+schema:
+  bot: bot-schema.json
+
+readme: README.md
+
+hasFrontend: false
+
+metadata:
+  categories: [risk, macro]
+  tags: [example, economic-calendar, real-data]
+  complexity: beginner

@@ -11,3 +11,16 @@ GO-2026-4887
 GO-2026-4883
 GO-2026-5746
 GO-2026-5617
+
+# braces stack-exhaustion DoS through deeply nested patterns. Every release up
+# to 3.0.3 (the latest) is affected and there is no patched version. It only
+# reaches us through build and test tooling (jest, ts-loader, tailwindcss via
+# micromatch), which never expands untrusted patterns.
+GHSA-vfj7-8cjw-p6xm
+
+# tinypool prototype pollution gadgets reaching RCE through worker options.
+# Fixed only in tinypool 2.1.2+, which needs Node 20+, while the Node.js SDK
+# still supports and tests on Node 18 with vitest 3 (tinypool ^1). Test
+# runner only; it never handles untrusted input.
+GHSA-5gmw-xhrv-c9v3
+GHSA-85c8-ppgw-ccpr

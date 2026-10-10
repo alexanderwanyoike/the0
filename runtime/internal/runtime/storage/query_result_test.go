@@ -302,3 +302,74 @@ func BenchmarkQueryResultManager_Download(b *testing.B) {
 		_, _ = manager.Download(ctx, key)
 	}
 }
+
+type recordingQueryResults struct {
+	data         []byte
+	downloadErr  error
+	deleteErr    error
+	deletedKey   string
+	deleteCtxErr error
+	deleteCalled bool
+}
+
+func (r *recordingQueryResults) Upload(ctx context.Context, key string, data []byte) error {
+	return nil
+}
+
+func (r *recordingQueryResults) Download(ctx context.Context, key string) ([]byte, error) {
+	return r.data, r.downloadErr
+}
+
+func (r *recordingQueryResults) Delete(ctx context.Context, key string) error {
+	r.deleteCalled = true
+	r.deletedKey = key
+	r.deleteCtxErr = ctx.Err()
+	return r.deleteErr
+}
+
+type nopLogger struct{}
+
+func (nopLogger) Info(msg string, args ...interface{}) {}
+
+func TestTakeQueryResult(t *testing.T) {
+	t.Run("returns the result and deletes it", func(t *testing.T) {
+		results := &recordingQueryResults{data: []byte(`{"status":"ok"}`)}
+
+		data, err := TakeQueryResult(context.Background(), results, "bot/1/result.json", nopLogger{})
+
+		require.NoError(t, err)
+		assert.Equal(t, `{"status":"ok"}`, string(data))
+		assert.Equal(t, "bot/1/result.json", results.deletedKey)
+	})
+
+	t.Run("still deletes after the query's context has ended", func(t *testing.T) {
+		results := &recordingQueryResults{data: []byte(`{"status":"ok"}`)}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := TakeQueryResult(ctx, results, "bot/1/result.json", nopLogger{})
+
+		require.NoError(t, err)
+		assert.True(t, results.deleteCalled)
+		assert.NoError(t, results.deleteCtxErr)
+	})
+
+	t.Run("leaves the result alone when it cannot be downloaded", func(t *testing.T) {
+		results := &recordingQueryResults{downloadErr: assert.AnError}
+
+		data, err := TakeQueryResult(context.Background(), results, "bot/1/result.json", nopLogger{})
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, data)
+		assert.False(t, results.deleteCalled)
+	})
+
+	t.Run("returns the result even when the delete fails", func(t *testing.T) {
+		results := &recordingQueryResults{data: []byte(`{"status":"ok"}`), deleteErr: assert.AnError}
+
+		data, err := TakeQueryResult(context.Background(), results, "bot/1/result.json", nopLogger{})
+
+		require.NoError(t, err)
+		assert.Equal(t, `{"status":"ok"}`, string(data))
+	})
+}

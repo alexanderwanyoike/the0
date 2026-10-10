@@ -84,14 +84,9 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	}
 	queryExecutable.QueryResultKey = resultKey
 
-	// Add query entrypoint file if not present
-	if queryExecutable.EntrypointFiles == nil {
-		queryExecutable.EntrypointFiles = make(map[string]string)
-	}
-	// The query entrypoint uses the same file as the bot entrypoint
-	// The SDK detects QUERY_PATH and runs query mode instead of bot mode
+	// Backstop for the resolver's check; see query.ErrNoQueryEntrypoint.
 	if _, ok := queryExecutable.EntrypointFiles["query"]; !ok {
-		queryExecutable.EntrypointFiles["query"] = queryExecutable.EntrypointFiles["bot"]
+		return query.NoQueryEntrypointResponse(executable.ID, start), query.NoQueryEntrypointError(executable.ID)
 	}
 
 	h.logger.Info("Executing scheduled query: bot=%s path=%s", req.BotID, req.QueryPath)
@@ -106,19 +101,14 @@ func (h *QueryHandler) executeScheduledQuery(ctx context.Context, req query.Requ
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to execute query container: %v", err), start), err
 	}
+	resultData, err := storage.TakeQueryResult(ctx, h.resultManager, queryExecutable.QueryResultKey, h.logger)
 	if result.ExitCode != 0 {
-		return query.ErrorResponse(fmt.Sprintf("query container exited with code %d: %s", result.ExitCode, result.Output), start), nil
+		return query.FailedRunResponse(resultData, func() string {
+			return fmt.Sprintf("query container exited with code %d: %s", result.ExitCode, result.Output)
+		}, start), nil
 	}
-
-	resultData, err := h.resultManager.Download(ctx, queryExecutable.QueryResultKey)
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to download query result: %v", err), start), nil
-	}
-
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cleanupCancel()
-	if err := h.resultManager.Delete(cleanupCtx, queryExecutable.QueryResultKey); err != nil {
-		h.logger.Info("Warning: failed to delete query result from MinIO: %v", err)
 	}
 
 	return query.ParseQueryOutput(resultData, start), nil

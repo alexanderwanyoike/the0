@@ -1,0 +1,10 @@
+{
+  "name": "my-macro-event-guard",
+  "type": "scheduled/macro-event-guard",
+  "version": "1.0.0",
+  "schedule": "*/15 * * * *",
+  "currencies": ["USD"],
+  "min_tier": 1,
+  "lookahead_hours": 24,
+  "guard_minutes": 30
+}

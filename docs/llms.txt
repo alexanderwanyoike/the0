@@ -22,6 +22,8 @@
   - [Testing](/custom-bot-development/testing): Testing strategies
   - [Deployment](/custom-bot-development/deployment): Deployment process
   - [Compliance](/custom-bot-development/compliance): Code review requirements
+- [Recipes](/recipes/): In-depth walkthroughs of complete bots
+  - [Macro Event Guard](/recipes/macro-event-guard): Build a scheduled Python bot that flags upcoming macro releases
 
 ## Key Concepts
 
