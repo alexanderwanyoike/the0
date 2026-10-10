@@ -183,3 +183,13 @@ func TestParseQueryOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestParseQueryOutput_UnknownPathListsAvailablePaths(t *testing.T) {
+	response := ParseQueryOutput(
+		[]byte(`{"status":"error","error":"No handler for path: /status","available":["/today","/history"]}`),
+		time.Now(),
+	)
+
+	assert.Equal(t, "error", response.Status)
+	assert.Equal(t, "No handler for path: /status (available: /today, /history)", response.Error)
+}

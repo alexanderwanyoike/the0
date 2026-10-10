@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 )
@@ -101,4 +102,22 @@ func (m *queryResultManager) Delete(ctx context.Context, key string) error {
 	}
 	m.logger.Info("Deleted query result", "key", key)
 	return nil
+}
+
+// TakeQueryResult downloads a query result and deletes it from storage. The
+// delete gets its own short deadline, so a query that ran into its timeout
+// still cleans up the result it left behind.
+func TakeQueryResult(ctx context.Context, results QueryResultManager, key string, logger Logger) ([]byte, error) {
+	data, err := results.Download(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := results.Delete(cleanupCtx, key); err != nil {
+		logger.Info("Warning: failed to delete query result from MinIO: %v", err)
+	}
+
+	return data, nil
 }
