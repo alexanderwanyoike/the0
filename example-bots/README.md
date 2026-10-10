@@ -11,6 +11,12 @@ This directory contains example bots demonstrating how to build custom trading b
 | [python-portfolio-tracker](./python-portfolio-tracker/) | Scheduled | Python 3.11 | Simulates portfolio tracking with value history and trades |
 | [typescript-price-alerts](./typescript-price-alerts/) | Realtime | Node.js 22 | Monitors prices and emits alerts/signals |
 
+### Macro Event Guard (Real Release Calendar)
+
+| Example | Type | Runtime | Description |
+|---------|------|---------|-------------|
+| [python-macro-event-guard](./python-macro-event-guard/) | Scheduled | Python 3.11 | Flags upcoming CPI, payrolls and central-bank releases from the FXMacroData calendar |
+
 ### SMA Crossover Strategy (Yahoo Finance Data)
 
 These examples implement the same Simple Moving Average (SMA) crossover trading strategy across different languages, using real market data from Yahoo Finance:

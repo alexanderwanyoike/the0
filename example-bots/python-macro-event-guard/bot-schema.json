@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Macro Event Guard Configuration",
+  "description": "Configuration for the macro event guard bot",
+  "properties": {
+    "currencies": {
+      "type": "array",
+      "description": "Currencies whose release calendars to watch (USD works without an API key)",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z]{3}$"
+      },
+      "default": ["USD"]
+    },
+    "min_tier": {
+      "type": "integer",
+      "description": "Highest market tier to include (1 = top-tier releases only, 3 = everything)",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 3
+    },
+    "lookahead_hours": {
+      "type": "number",
+      "description": "How far ahead to list upcoming releases",
+      "default": 24,
+      "minimum": 1,
+      "maximum": 336
+    },
+    "guard_minutes": {
+      "type": "number",
+      "description": "Minutes either side of a release that count as a risk window",
+      "default": 30,
+      "minimum": 0,
+      "maximum": 240
+    },
+    "api_key": {
+      "type": "string",
+      "description": "FXMacroData API key, needed for currencies other than USD",
+      "default": ""
+    }
+  },
+  "additionalProperties": false
+}
