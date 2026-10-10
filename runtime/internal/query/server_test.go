@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -222,6 +223,32 @@ func TestServer_HandleQuery_BotNotFound(t *testing.T) {
 	assert.Contains(t, response.Error, "bot not found")
 
 	resolver.AssertExpectations(t)
+}
+
+func TestServer_HandleQuery_NoQueryEntrypoint(t *testing.T) {
+	resolver := &MockBotResolver{}
+	resolver.On("ResolveBot", mock.Anything, "bot-1").
+		Return("", fmt.Errorf("%w: bot-1", ErrNoQueryEntrypoint))
+	executor := &MockExecutor{}
+
+	server := NewServer(ServerConfig{
+		Resolver: resolver,
+		Executor: executor,
+	})
+
+	body := `{"bot_id":"bot-1","query_path":"/status"}`
+	req := httptest.NewRequest(http.MethodPost, "/query", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	server.HandleQuery(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	var response Response
+	_ = json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "error", response.Status)
+	assert.Equal(t, "bot has no query entrypoint: bot-1", response.Error)
+	executor.AssertNotCalled(t, "ExecuteQuery", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestServer_HandleQuery_ExecutorError(t *testing.T) {
@@ -545,4 +572,41 @@ func BenchmarkServer_HandleQuery_Success(b *testing.B) {
 		w := httptest.NewRecorder()
 		server.HandleQuery(w, req)
 	}
+}
+
+func TestNoQueryEntrypointError(t *testing.T) {
+	err := NoQueryEntrypointError("bot-1")
+
+	assert.ErrorIs(t, err, ErrNoQueryEntrypoint)
+	assert.Equal(t, "bot has no query entrypoint: bot-1", err.Error())
+}
+
+func TestResponse_HTTPStatus(t *testing.T) {
+	assert.Equal(t, http.StatusOK, (&Response{Status: "ok"}).HTTPStatus())
+	assert.Equal(t, http.StatusInternalServerError, ErrorResponse("boom", time.Now()).HTTPStatus())
+
+	noQuery := NoQueryEntrypointResponse("bot-1", time.Now())
+	assert.Equal(t, http.StatusUnprocessableEntity, noQuery.HTTPStatus())
+	assert.Equal(t, "error", noQuery.Status)
+	assert.Equal(t, "bot has no query entrypoint: bot-1", noQuery.Error)
+}
+
+func TestServer_HandleQuery_ExecutorFindsNoQueryEntrypoint(t *testing.T) {
+	resolver := &MockBotResolver{}
+	resolver.On("ResolveBot", mock.Anything, "bot-1").Return("", nil)
+	executor := &MockExecutor{}
+	executor.On("ExecuteQuery", mock.Anything, mock.Anything, "").
+		Return(NoQueryEntrypointResponse("bot-1", time.Now()))
+
+	server := NewServer(ServerConfig{Resolver: resolver, Executor: executor})
+
+	req := httptest.NewRequest(http.MethodPost, "/query", strings.NewReader(`{"bot_id":"bot-1","query_path":"/health"}`))
+	w := httptest.NewRecorder()
+
+	server.HandleQuery(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	var response Response
+	_ = json.NewDecoder(w.Body).Decode(&response)
+	assert.Equal(t, "bot has no query entrypoint: bot-1", response.Error)
 }
