@@ -63,7 +63,7 @@
     "typescript": "^5.0.0"
   },
   "resolutions": {
-    "handlebars": "^4.7.9",
+    "handlebars": "^4.7.10",
     "minimatch": "5.1.8",
     "picomatch": "^2.3.2",
     "rollup": "^4.59.0",
