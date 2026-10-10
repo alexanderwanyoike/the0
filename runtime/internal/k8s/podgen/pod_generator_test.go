@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"runtime/internal/model"
+	"runtime/internal/query"
 )
 
 func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
@@ -261,9 +262,37 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 	assert.Equal(t, "/status", envMap["QUERY_PATH"])
 	assert.Contains(t, envMap["QUERY_PARAMS"], "key")
 
-	// Should use query entrypoint when available
 	assert.Equal(t, "query.py", envMap["ENTRYPOINT"])
+	assert.Equal(t, "query.py", envMap["QUERY_ENTRYPOINT"])
 	assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "query", MountPath: "/query"})
+}
+
+func TestPodGenerator_GenerateQueryPod_RefusesBotWithoutQueryEntrypoint(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+	})
+	bot := model.Bot{
+		ID: "no-query",
+		CustomBotVersion: model.CustomBotVersion{
+			Version:  "1.0.0",
+			FilePath: "bot/1.0.0",
+			Config: model.APIBotConfig{
+				Name:        "bot",
+				Runtime:     "python3.11",
+				Entrypoints: map[string]string{"bot": "main.py"},
+			},
+		},
+	}
+
+	pod, err := generator.GenerateQueryPod(bot, "/health", nil)
+
+	assert.ErrorIs(t, err, query.ErrNoQueryEntrypoint)
+	assert.Nil(t, pod)
 }
 
 func TestPodGenerator_ValidationErrors(t *testing.T) {
