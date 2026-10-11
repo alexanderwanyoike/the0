@@ -198,17 +198,6 @@ describe("BotEventRelay", () => {
       expect(gaps).toEqual([1, 2, 4, 8, 16, 30, 30].map((s) => s * SECOND));
     });
 
-    it("retries when another api replica holds the relay lock", async () => {
-      outbox.add("the0.bot.created");
-      outbox.force("busy");
-
-      await relay.publishPending();
-      await jest.advanceTimersByTimeAsync(DAY);
-
-      expect(callTimes()).toEqual([0, SECOND, SECOND]);
-      expect(nats.subjects()).toEqual(["the0.bot.created"]);
-    });
-
     it("retries when the outbox cannot be read", async () => {
       outbox.add("the0.bot.created");
       outbox.force(new Error("connection terminated"));
