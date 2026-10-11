@@ -13,19 +13,19 @@ func TestSettle_HandledEventIsAcked(t *testing.T) {
 	v, _ := settle(nil, 1, defaultBackoff)
 	assert.Equal(t, verdictAck, v)
 
-	v, _ = settle(nil, maxDeliver, defaultBackoff)
-	assert.Equal(t, verdictAck, v, "a last attempt that succeeds is acked too")
+	v, _ = settle(nil, 25, defaultBackoff)
+	assert.Equal(t, verdictAck, v, "an event that succeeds after many failures is acked too")
 }
 
 func TestSettle_FailedEventIsRetriedWithGrowingDelays(t *testing.T) {
 	failure := errors.New("mongo unavailable")
 	want := map[uint64]time.Duration{
-		1:              time.Second,
-		2:              2 * time.Second,
-		3:              4 * time.Second,
-		6:              32 * time.Second,
-		7:              time.Minute,
-		maxDeliver - 1: time.Minute,
+		1:  time.Second,
+		2:  2 * time.Second,
+		3:  4 * time.Second,
+		6:  32 * time.Second,
+		7:  time.Minute,
+		19: time.Minute,
 	}
 	for delivered, delay := range want {
 		v, got := settle(failure, delivered, defaultBackoff)
@@ -34,9 +34,12 @@ func TestSettle_FailedEventIsRetriedWithGrowingDelays(t *testing.T) {
 	}
 }
 
-func TestSettle_FailedEventIsDroppedAfterTheLastDelivery(t *testing.T) {
-	v, _ := settle(errors.New("mongo unavailable"), maxDeliver, defaultBackoff)
-	assert.Equal(t, verdictDrop, v)
+func TestSettle_FailedEventIsRetriedHoweverOftenItFails(t *testing.T) {
+	for _, delivered := range []uint64{20, 21, 1000} {
+		v, delay := settle(errors.New("mongo unavailable"), delivered, defaultBackoff)
+		assert.Equal(t, verdictRetry, v, "delivery %d: only a permanent failure may drop an event", delivered)
+		assert.Equal(t, time.Minute, delay, "delivery %d", delivered)
+	}
 }
 
 func TestSettle_EventThatCanNeverSucceedIsDroppedAtOnce(t *testing.T) {
