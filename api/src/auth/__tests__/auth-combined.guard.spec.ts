@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { AuthCombinedGuard } from "../auth-combined.guard";
-import { ActorVia } from "../actor.decorators";
+import { ActorVia, AllowAnonymous } from "../actor.decorators";
 import { AuthService } from "../auth.service";
 import { ApiKeyService } from "../../api-key/api-key.service";
 import { Ok, Failure } from "../../common/result";
@@ -16,6 +16,11 @@ class RestRoute {
 
 @ActorVia("mcp")
 class McpRoute {
+  handle() {}
+}
+
+@AllowAnonymous()
+class AnonymousRoute {
   handle() {}
 }
 
@@ -186,6 +191,63 @@ describe("AuthCombinedGuard", () => {
       await expect(
         guard.canActivate(contextFor({ headers: {} }, McpRoute)),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe("on a route that allows anonymous callers", () => {
+    it("lets a request without credentials through with no Actor", async () => {
+      const request = { headers: {} };
+
+      await expect(
+        guard.canActivate(contextFor(request, AnonymousRoute)),
+      ).resolves.toBe(true);
+      expect(request).not.toHaveProperty("actor");
+    });
+
+    it("lets a request whose credentials do not validate through with no Actor", async () => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Failure("API key not found or inactive"),
+      );
+      mockAuthService.validateToken.mockResolvedValue(Failure("Invalid token"));
+      const badKey = { headers: { "x-api-key": "the0_unknown" } };
+      const badJwt = { headers: { authorization: "Bearer expired" } };
+
+      await expect(
+        guard.canActivate(contextFor(badKey, AnonymousRoute)),
+      ).resolves.toBe(true);
+      await expect(
+        guard.canActivate(contextFor(badJwt, AnonymousRoute)),
+      ).resolves.toBe(true);
+      expect(badKey).not.toHaveProperty("actor");
+      expect(badJwt).not.toHaveProperty("actor");
+    });
+
+    it("still attaches the Actor for valid credentials", async () => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "agent" }),
+      );
+      const request = { headers: { "x-api-key": "the0_secret" } };
+
+      await guard.canActivate(contextFor(request, AnonymousRoute));
+
+      expect(request).toMatchObject({
+        actor: { userId: "user-1", via: "api-key", apiKeyId: "key-1" },
+      });
+    });
+
+    it("passes a database outage through as service unavailable", async () => {
+      mockApiKeyService.validateApiKey.mockRejectedValue(
+        new ServiceUnavailableException("Database temporarily unavailable"),
+      );
+
+      await expect(
+        guard.canActivate(
+          contextFor(
+            { headers: { "x-api-key": "the0_secret" } },
+            AnonymousRoute,
+          ),
+        ),
+      ).rejects.toThrow(ServiceUnavailableException);
     });
   });
 
