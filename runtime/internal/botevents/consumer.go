@@ -4,6 +4,7 @@ package botevents
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/internal/util"
 	"sync"
@@ -26,7 +27,8 @@ const (
 	// Lifecycle events are rare and dropping one (a delete especially) leaves
 	// a bot in the wrong state, so a failing event is retried for about a
 	// quarter of an hour, long enough to ride out a Mongo restart.
-	maxDeliver = 20
+	maxDeliver     = 20
+	rebindInterval = 2 * time.Second
 )
 
 // Handler applies one event. An error has the event redelivered later,
@@ -46,9 +48,10 @@ type Config struct {
 type Consumer struct {
 	js       jetstream.JetStream
 	cfg      Config
-	consume  jetstream.ConsumeContext
 	ready    atomic.Bool
 	inflight sync.WaitGroup
+	stop     chan struct{}
+	done     chan struct{}
 	stopOnce sync.Once
 }
 
@@ -57,7 +60,7 @@ func NewConsumer(nc *nats.Conn, cfg Config) (*Consumer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
 	}
-	return &Consumer{js: js, cfg: cfg}, nil
+	return &Consumer{js: js, cfg: cfg, stop: make(chan struct{})}, nil
 }
 
 func consumerConfig(cfg Config) jetstream.ConsumerConfig {
@@ -78,20 +81,20 @@ func consumerConfig(cfg Config) jetstream.ConsumerConfig {
 	}
 }
 
+// The runtime can start before the api has created the stream (Docker
+// Compose only waits for NATS to be healthy), so a missing stream is not an
+// error: the consumer binds once it exists.
 func (c *Consumer) Start(ctx context.Context) error {
-	cons, err := c.js.CreateOrUpdateConsumer(ctx, StreamName, consumerConfig(c.cfg))
-	if err != nil {
+	cons, err := c.bind(ctx)
+	if err != nil && !errors.Is(err, jetstream.ErrStreamNotFound) {
 		return fmt.Errorf("failed to bind consumer %s to stream %s: %w", c.cfg.Name, StreamName, err)
 	}
-	cc, err := cons.Consume(c.handle, jetstream.ConsumeErrHandler(func(_ jetstream.ConsumeContext, err error) {
-		c.cfg.Logger.Warn("Event consumer error", "consumer", c.cfg.Name, "error", err)
-	}))
 	if err != nil {
-		return fmt.Errorf("failed to consume %s: %w", c.cfg.Name, err)
+		c.cfg.Logger.Warn("Event stream not created yet, binding once the api creates it",
+			"stream", StreamName, "consumer", c.cfg.Name)
 	}
-	c.consume = cc
-	c.ready.Store(true)
-	c.cfg.Logger.Info("Consuming lifecycle events", "stream", StreamName, "consumer", c.cfg.Name, "subjects", c.cfg.Subjects)
+	c.done = make(chan struct{})
+	go c.run(cons)
 	return nil
 }
 
@@ -103,13 +106,56 @@ func (c *Consumer) Ready() bool {
 // yet handled stays unacknowledged and is redelivered after ackWait.
 func (c *Consumer) Stop() {
 	c.stopOnce.Do(func() {
-		c.ready.Store(false)
-		if c.consume != nil {
-			c.consume.Stop()
-			<-c.consume.Closed()
+		close(c.stop)
+		if c.done != nil {
+			<-c.done
 		}
 		c.inflight.Wait()
 	})
+}
+
+func (c *Consumer) bind(ctx context.Context) (jetstream.Consumer, error) {
+	return c.js.CreateOrUpdateConsumer(ctx, StreamName, consumerConfig(c.cfg))
+}
+
+func (c *Consumer) run(cons jetstream.Consumer) {
+	defer close(c.done)
+	for {
+		if cons != nil {
+			c.consume(cons)
+		}
+		select {
+		case <-c.stop:
+			return
+		case <-time.After(rebindInterval):
+		}
+		var err error
+		if cons, err = c.bind(context.Background()); err != nil {
+			c.cfg.Logger.Warn("Failed to bind event consumer, will try again",
+				"stream", StreamName, "consumer", c.cfg.Name, "retry_in", rebindInterval.String(), "error", err)
+		}
+	}
+}
+
+// The consume context also closes on its own when the consumer is deleted
+// (for example with its stream), which sends run back to binding.
+func (c *Consumer) consume(cons jetstream.Consumer) {
+	cc, err := cons.Consume(c.handle, jetstream.ConsumeErrHandler(func(_ jetstream.ConsumeContext, err error) {
+		c.cfg.Logger.Warn("Event consumer error", "consumer", c.cfg.Name, "error", err)
+	}))
+	if err != nil {
+		c.cfg.Logger.Error("Failed to consume events", "consumer", c.cfg.Name, "error", err)
+		return
+	}
+	c.ready.Store(true)
+	c.cfg.Logger.Info("Consuming lifecycle events", "stream", StreamName, "consumer", c.cfg.Name, "subjects", c.cfg.Subjects)
+	select {
+	case <-c.stop:
+	case <-cc.Closed():
+	}
+	c.ready.Store(false)
+	cc.Stop()
+	<-cc.Closed()
 }
 
 func (c *Consumer) handle(msg jetstream.Msg) {
