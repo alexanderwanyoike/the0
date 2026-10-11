@@ -42,14 +42,16 @@ export class AuthCombinedGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const via = this.routeOption<ActorChannel>(context, ACTOR_VIA_KEY);
 
-    const jwtToken = extractAuthHeaderToken(request, "Bearer");
-    if (jwtToken) {
-      return this.validateJwtToken(request, jwtToken, via ?? "jwt");
-    }
-
+    // x-api-key wins over anything in Authorization: MCP clients send their
+    // key there, sometimes beside an unrelated or stale Authorization header.
     const apiKey = extractApiKey(request);
     if (apiKey) {
       return this.validateApiKey(request, apiKey, via ?? "api-key");
+    }
+
+    const jwtToken = extractAuthHeaderToken(request, "Bearer");
+    if (jwtToken) {
+      return this.validateJwtToken(request, jwtToken, via ?? "jwt");
     }
 
     throw new UnauthorizedException(
