@@ -18,13 +18,10 @@ import (
 // the bot's runtime.
 const frontendNodeImage = "node:22-slim"
 
-// FrontendVendor handles frontend bundle building via npm
+// FrontendVendor handles frontend bundle building via npm. It is deliberately
+// not in the dependency vendor registry: deploy builds the bundle in its own
+// step through BuildFrontendIfNeeded, and registering it here builds it twice.
 type FrontendVendor struct{}
-
-// init registers the Frontend vendor
-func init() {
-	RegisterVendor(&FrontendVendor{})
-}
 
 // Name returns the vendor name
 func (v *FrontendVendor) Name() string {

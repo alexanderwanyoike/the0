@@ -244,6 +244,31 @@ func TestPerformVendoringIfNeeded_DockerNotAvailable(t *testing.T) {
 	}
 }
 
+func TestPerformVendoringIfNeeded_LeavesFrontendToFrontendStep(t *testing.T) {
+	// Deploy runs dependency vendoring and then BuildFrontendIfNeeded, so the
+	// frontend is built once only if vendoring skips it. With no docker on
+	// PATH, a step that tries to build fails fast, which shows which step
+	// builds without running a container.
+	t.Setenv("PATH", t.TempDir())
+
+	tmpDir := t.TempDir()
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("Failed to create frontend directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "package.json"), []byte(`{"name": "frontend"}`), 0644); err != nil {
+		t.Fatalf("Failed to create frontend/package.json: %v", err)
+	}
+
+	if err := internal.PerformVendoringIfNeeded(tmpDir, ""); err != nil {
+		t.Errorf("Expected dependency vendoring not to build the frontend, got: %v", err)
+	}
+
+	if err := internal.BuildFrontendIfNeeded(tmpDir); err == nil {
+		t.Error("Expected the frontend step to build the frontend")
+	}
+}
+
 func TestCustomBotDeployCommand_WithVendoring(t *testing.T) {
 	// Test that the deploy command includes vendoring step
 	cmd := cmd.NewDeployCmd()
