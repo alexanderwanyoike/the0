@@ -26,7 +26,8 @@ const PRUNE_EVERY_MS = 60 * 60 * 1000;
  * Publishes the bot event outbox to JetStream in commit order. It drains
  * on startup and whenever asked after a commit, and polls only while
  * events are left unpublished: an idle api issues no queries, so a
- * serverless Postgres can suspend.
+ * serverless Postgres can suspend. Whoever commits events must therefore
+ * call publishPending, without waiting for it.
  */
 @Injectable()
 export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {

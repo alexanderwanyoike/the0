@@ -103,7 +103,6 @@ export class BotEventOutbox {
     });
   }
 
-  /** Deletes events published before `cutoff`, returning how many. */
   async prunePublishedBefore(cutoff: Date): Promise<number> {
     const db = getDatabase() as Executor;
     const removed = await db

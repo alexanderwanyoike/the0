@@ -38,7 +38,6 @@ describe("BotEventOutbox", () => {
       .map((row) => row.id)
       .sort();
 
-  /** A publisher that records what it is given and rejects some ids. */
   function publisher(rejectIds: number[] = []) {
     const seen: PendingBotEvent[] = [];
     const publish = async (event: PendingBotEvent) => {

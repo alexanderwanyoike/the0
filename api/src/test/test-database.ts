@@ -71,7 +71,6 @@ export async function stopTestDatabase(): Promise<void> {
   db = null;
 }
 
-/** Empties every table, restarting id sequences. */
 export async function resetTestDatabase(): Promise<void> {
   if (!client) throw new Error("Call startTestDatabase() first");
   const { rows } = await client.query<{ tablename: string }>(

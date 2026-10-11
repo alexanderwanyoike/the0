@@ -13,11 +13,9 @@ const SECOND = 1000;
 const HOUR = 60 * 60 * SECOND;
 const DAY = 24 * HOUR;
 
-/** Behaves like BotEventOutbox over an in-memory list of events. */
 class FakeOutbox {
   events: PendingBotEvent[] = [];
   published = new Set<number>();
-  /** When each publishPending call happened, in fake-clock milliseconds. */
   calls: number[] = [];
   prunedBefore: Date[] = [];
   private forced: (PublishOutcome | Error)[] = [];
@@ -34,7 +32,6 @@ class FakeOutbox {
     }
   }
 
-  /** The next calls return or throw these instead of publishing. */
   force(...outcomes: (PublishOutcome | Error)[]) {
     this.forced.push(...outcomes);
   }
@@ -64,7 +61,6 @@ class FakeOutbox {
   }
 }
 
-/** Accepts every publish, except the next `failures` ones. */
 class FakeNats {
   failures = 0;
   publish = jest.fn(async () => {
