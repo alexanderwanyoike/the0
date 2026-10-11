@@ -172,33 +172,23 @@ describe("POST /mcp", () => {
     });
 
     it.each(keyHeaders)(
-      "accepts the key in $header and hands the tool an mcp Actor",
+      "accepts the key in $header and passes its mcp Actor through to BotService",
       async ({ headers }) => {
         botRepository.findAll.mockResolvedValue(Ok([]));
         const handleToolCall = jest.spyOn(
           McpService.prototype,
           "handleToolCall",
         );
+        const findAll = jest.spyOn(BotService.prototype, "findAll");
 
         const res = await rpcWithHeaders({ id: 5, ...botList }, headers);
 
         expect(res.body.result.isError).toBeUndefined();
         expect(apiKeyService.validateApiKey).toHaveBeenCalledWith("the0_valid");
         expect(handleToolCall).toHaveBeenCalledWith("bot_list", {}, keyActor);
+        expect(findAll).toHaveBeenCalledWith(keyActor);
         expect(botRepository.findAll).toHaveBeenCalledWith("user-1");
         handleToolCall.mockRestore();
-      },
-    );
-
-    it.each(keyHeaders)(
-      "reaches BotService with the mcp Actor of a key in $header",
-      async ({ headers }) => {
-        botRepository.findAll.mockResolvedValue(Ok([]));
-        const findAll = jest.spyOn(BotService.prototype, "findAll");
-
-        await rpcWithHeaders({ id: 6, ...botList }, headers);
-
-        expect(findAll).toHaveBeenCalledWith(keyActor);
         findAll.mockRestore();
       },
     );
