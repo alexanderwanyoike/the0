@@ -5,6 +5,66 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: "Chart metadata is valid again: 0.11.2 shipped an Artifact Hub changes annotation that was not valid YAML, so Artifact Hub could not index it. The chart is otherwise the same as 0.11.2"
+        - kind: fixed
+          description: "Querying a path a bot does not define returns the bot's own error and the paths it does answer, e.g. 'No handler for path: /status (available: /today, /history, /health, /info)', instead of the runtime job's logs"
+        - kind: fixed
+          description: "Querying a bot with no query entrypoint answers 422 'This bot defines no queries' instead of 404 'bot not found'"
+        - kind: security
+          description: "A query never runs a bot's main entrypoint: Kubernetes query pods and the in-container runner refuse a bot without a query entrypoint, and query pods now set QUERY_ENTRYPOINT"
+        - kind: fixed
+          description: "Query results are removed from object storage even when the query hits its timeout"
+        - kind: security
+          description: "Runtime and CLI built with Go 1.26.9 (net/http, crypto/tls and net/textproto advisories), with mongo-driver, moby/go-archive, x/crypto and x/net bumps"
+        - kind: security
+          description: "Cleared yarn audit findings in proxy-addr (api), handlebars (React SDK), vue and source-map-js (docs, frontend)"
+        - kind: added
+          description: "Docs Recipes section with step-by-step build walkthroughs, starting with the python-macro-event-guard example bot"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.16.2
+    created: "2026-10-11T08:50:59.385096467Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 2bfd82efb20645b19d3e671e3fc5aec94e5d7931e63938691c7e169d45b1c290
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.11.3/the0-0.11.3.tgz
+    version: 0.11.3
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: Querying a path a bot does not define returns the bot's own error and the paths it does answer, e.g. "No handler for path: /status (available: /today, /history, /health, /info)", instead of the runtime job's logs
         - kind: fixed
           description: Querying a bot with no query entrypoint answers 422 "This bot defines no queries" instead of 404 "bot not found"
@@ -2327,4 +2387,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-10T21:37:59.120012816Z"
+generated: "2026-10-11T08:50:59.385415066Z"
