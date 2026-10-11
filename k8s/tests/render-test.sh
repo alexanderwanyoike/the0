@@ -41,6 +41,9 @@ check "api RUNTIME_QUERY_URL honours an explicit override" \
 check "api RUNTIME_QUERY_URL is set once when overridden" \
   "$override" "$(api_env the0 RUNTIME_QUERY_URL --set the0Api.env.RUNTIME_QUERY_URL="$override" | paste -sd ' ')"
 
+check "Artifact Hub annotations are valid and quoted" \
+  "ok" "$(python3 "$CHART_DIR/tests/check-annotations.py" "$CHART_DIR/Chart.yaml")"
+
 if ((failures > 0)); then
   echo "$failures check(s) failed"
   exit 1
