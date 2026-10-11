@@ -14,6 +14,17 @@ export function extractAuthHeaderToken(
   return type === scheme && token ? token : null;
 }
 
+export function extractApiKey(request: Request): string | null {
+  const fromAuthorization = extractAuthHeaderToken(request, "ApiKey");
+  if (fromAuthorization) {
+    return fromAuthorization;
+  }
+
+  // The header MCP clients and their published configs send the key in.
+  const header = request.headers["x-api-key"];
+  return typeof header === "string" && header ? header : null;
+}
+
 export function toAuthenticatedJwtUser(user: AuthUser): AuthenticatedUser {
   return {
     uid: user.id,

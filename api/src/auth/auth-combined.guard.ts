@@ -7,7 +7,11 @@ import {
 import { AuthService } from "./auth.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthenticatedRequest } from "./auth.types";
-import { extractAuthHeaderToken, toAuthenticatedJwtUser } from "./request-auth";
+import {
+  extractApiKey,
+  extractAuthHeaderToken,
+  toAuthenticatedJwtUser,
+} from "./request-auth";
 
 @Injectable()
 export class AuthCombinedGuard implements CanActivate {
@@ -24,7 +28,7 @@ export class AuthCombinedGuard implements CanActivate {
       return this.validateJwtToken(request, jwtToken);
     }
 
-    const apiKey = extractAuthHeaderToken(request, "ApiKey");
+    const apiKey = extractApiKey(request);
     if (apiKey) {
       return this.validateApiKey(request, apiKey);
     }
