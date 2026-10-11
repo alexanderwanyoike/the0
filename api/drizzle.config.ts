@@ -35,6 +35,7 @@ export default defineConfig(databaseType === 'sqlite'
         './src/database/schema/users.ts',
         './src/database/schema/custom-bots.ts',
         './src/database/schema/bots.ts',
+        './src/database/schema/bot-event-outbox.ts',
       ],
       out: './src/database/migrations',
       dialect: 'postgresql',
