@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Runs netlify-ignore.sh against a throwaway repo. Netlify skips the build when
-# the ignore command exits 0 and builds on any other exit code.
+# Runs the ignore command from docs/netlify.toml against a throwaway repo.
+# Netlify skips a build when that command exits 0 and builds otherwise.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")" && pwd)/netlify-ignore.sh"
+DOCS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+IGNORE=$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["build"].get("ignore", ""))' "$DOCS_DIR/netlify.toml")
 repo=$(mktemp -d)
 trap 'rm -rf "$repo"' EXIT
 failures=0
@@ -12,32 +13,34 @@ git -C "$repo" init -q
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name test
 mkdir -p "$repo/docs" "$repo/api"
+# The ignore command may call scripts relative to the base directory.
+cp -R "$DOCS_DIR/scripts" "$repo/docs/scripts"
 commit() { git -C "$repo" add -A && git -C "$repo" commit -qm "$1" && git -C "$repo" rev-parse HEAD; }
 
 echo one >"$repo/docs/page.md"; echo one >"$repo/api/app.ts"
-first=$(commit first)
+preview_build=$(commit "dev head, built as a deploy preview")
 echo two >"$repo/api/app.ts"
-api_only=$(commit "api only")
-echo two >"$repo/docs/page.md"
-docs_change=$(commit "docs change")
+release_merge=$(commit "release merge on main, same docs")
 
 check() {
-  local description=$1 expected=$2 cached=$3 current=$4 code
-  (cd "$repo/docs" && CACHED_COMMIT_REF=$cached COMMIT_REF=$current bash "$SCRIPT" >/dev/null 2>&1)
+  local description=$1 cached=$2 current=$3 code
+  if [[ -z $IGNORE ]]; then
+    echo "FAIL $description: netlify.toml sets no ignore command, so Netlify's own content check applies"
+    failures=$((failures + 1))
+    return
+  fi
+  (cd "$repo/docs" && CONTEXT=production CACHED_COMMIT_REF=$cached COMMIT_REF=$current bash -c "$IGNORE" >/dev/null 2>&1)
   code=$?
-  if [[ $expected == skip && $code -eq 0 ]] || [[ $expected == build && $code -ne 0 ]]; then
+  if ((code != 0)); then
     echo "ok   $description"
   else
-    echo "FAIL $description: expected $expected, exit code $code"
+    echo "FAIL $description: the ignore command exited 0, so Netlify cancels the build"
     failures=$((failures + 1))
   fi
 }
 
-check "builds when Netlify has no cache (cached ref equals the commit)" build "$docs_change" "$docs_change"
-check "builds when there is no cached ref at all" build "" "$docs_change"
-check "builds when the docs changed" build "$api_only" "$docs_change"
-check "builds when the cached commit is unknown" build "0000000000000000000000000000000000000000" "$docs_change"
-check "skips when nothing under the base directory changed" skip "$first" "$api_only"
+check "production builds after a deploy preview already built the same docs" "$preview_build" "$release_merge"
+check "production builds without a build cache" "$release_merge" "$release_merge"
 
 if ((failures > 0)); then
   echo "$failures check(s) failed"

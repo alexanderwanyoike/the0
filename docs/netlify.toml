@@ -2,7 +2,11 @@
   base = "docs"
   publish = ".vitepress/dist"
   command = "yarn build"
-  ignore = "bash scripts/netlify-ignore.sh"
+  # Always build. Netlify skips a build when this exits 0. Comparing against
+  # CACHED_COMMIT_REF canceled every production deploy, because the release
+  # PR's deploy preview has already built the same docs by the time main
+  # builds. Only releases push to main, so skipping saves nothing.
+  ignore = "exit 1"
 
 [build.environment]
   NODE_VERSION = "22"
