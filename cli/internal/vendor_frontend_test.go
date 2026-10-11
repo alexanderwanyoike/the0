@@ -3,136 +3,76 @@ package internal
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestFrontendVendor_Name(t *testing.T) {
-	v := &FrontendVendor{}
-	if v.Name() != "Frontend" {
-		t.Errorf("Expected 'Frontend', got '%s'", v.Name())
-	}
-}
+func TestBuildFrontendIfNeeded_BuildsWheneverFrontendPackageJSONExists(t *testing.T) {
+	// With no docker on PATH, a build attempt fails fast with the Docker
+	// error, which tells a build from a skip without running a container.
+	t.Setenv("PATH", t.TempDir())
 
-func TestFrontendVendor_DockerImage(t *testing.T) {
-	v := &FrontendVendor{}
-	// Frontend uses the same Node image
-	if v.DockerImage() != "node:22-slim" {
-		t.Errorf("Expected 'node:22-slim', got '%s'", v.DockerImage())
-	}
-}
-
-func TestFrontendVendor_Detect_WithFrontendPackageJson(t *testing.T) {
-	tmpDir := t.TempDir()
-	frontendDir := filepath.Join(tmpDir, "frontend")
-	if err := os.MkdirAll(frontendDir, 0755); err != nil {
-		t.Fatalf("Failed to create frontend directory: %v", err)
-	}
-	packageJsonPath := filepath.Join(frontendDir, "package.json")
-	if err := os.WriteFile(packageJsonPath, []byte(`{"name": "frontend"}`), 0644); err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
-	}
-
-	v := &FrontendVendor{}
-	if !v.Detect(tmpDir) {
-		t.Error("Expected Detect to return true when frontend/package.json exists")
-	}
-}
-
-func TestFrontendVendor_Detect_WithoutFrontend(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	v := &FrontendVendor{}
-	if v.Detect(tmpDir) {
-		t.Error("Expected Detect to return false when frontend/package.json doesn't exist")
-	}
-}
-
-func TestFrontendVendor_Detect_RootPackageJsonOnly(t *testing.T) {
-	tmpDir := t.TempDir()
-	// Create package.json in root (not in frontend/)
-	packageJsonPath := filepath.Join(tmpDir, "package.json")
-	if err := os.WriteFile(packageJsonPath, []byte(`{"name": "root"}`), 0644); err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
+	tests := []struct {
+		name      string
+		dirs      []string
+		files     map[string]string
+		wantBuild bool
+	}{
+		{
+			name: "no frontend directory",
+		},
+		{
+			name: "frontend directory without package.json",
+			dirs: []string{"frontend"},
+		},
+		{
+			name:  "package.json at the project root only",
+			files: map[string]string{"package.json": `{"name": "root"}`},
+		},
+		{
+			name:      "package.json in the frontend directory",
+			files:     map[string]string{"frontend/package.json": `{"name": "frontend"}`},
+			wantBuild: true,
+		},
+		{
+			name: "existing bundle is rebuilt",
+			files: map[string]string{
+				"frontend/package.json":   `{"name": "frontend"}`,
+				"frontend/dist/bundle.js": "// old bundle",
+			},
+			wantBuild: true,
+		},
 	}
 
-	v := &FrontendVendor{}
-	if v.Detect(tmpDir) {
-		t.Error("Expected Detect to return false when only root package.json exists (no frontend/)")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			projectPath := t.TempDir()
+			for _, dir := range tt.dirs {
+				if err := os.MkdirAll(filepath.Join(projectPath, dir), 0755); err != nil {
+					t.Fatalf("Failed to create %s: %v", dir, err)
+				}
+			}
+			for name, content := range tt.files {
+				path := filepath.Join(projectPath, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+					t.Fatalf("Failed to create the directory for %s: %v", name, err)
+				}
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+					t.Fatalf("Failed to create %s: %v", name, err)
+				}
+			}
 
-func TestFrontendVendor_ShouldVendor_NoFrontend(t *testing.T) {
-	tmpDir := t.TempDir()
+			err := BuildFrontendIfNeeded(projectPath)
 
-	v := &FrontendVendor{}
-	shouldVendor, err := v.ShouldVendor(tmpDir)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if shouldVendor {
-		t.Error("Expected ShouldVendor to return false when no frontend/package.json")
-	}
-}
-
-func TestFrontendVendor_ShouldVendor_WithFrontend(t *testing.T) {
-	tmpDir := t.TempDir()
-	frontendDir := filepath.Join(tmpDir, "frontend")
-	if err := os.MkdirAll(frontendDir, 0755); err != nil {
-		t.Fatalf("Failed to create frontend directory: %v", err)
-	}
-	packageJsonPath := filepath.Join(frontendDir, "package.json")
-	if err := os.WriteFile(packageJsonPath, []byte(`{"name": "frontend"}`), 0644); err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
-	}
-
-	v := &FrontendVendor{}
-	shouldVendor, err := v.ShouldVendor(tmpDir)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if !shouldVendor {
-		t.Error("Expected ShouldVendor to return true when frontend/package.json exists")
-	}
-}
-
-func TestFrontendVendor_ShouldVendor_AlwaysBuilds(t *testing.T) {
-	tmpDir := t.TempDir()
-	frontendDir := filepath.Join(tmpDir, "frontend")
-	if err := os.MkdirAll(frontendDir, 0755); err != nil {
-		t.Fatalf("Failed to create frontend directory: %v", err)
-	}
-	packageJsonPath := filepath.Join(frontendDir, "package.json")
-	if err := os.WriteFile(packageJsonPath, []byte(`{"name": "frontend"}`), 0644); err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
-	}
-
-	// Create dist directory (simulating a previous build)
-	distDir := filepath.Join(frontendDir, "dist")
-	if err := os.MkdirAll(distDir, 0755); err != nil {
-		t.Fatalf("Failed to create dist directory: %v", err)
-	}
-	bundlePath := filepath.Join(distDir, "bundle.js")
-	if err := os.WriteFile(bundlePath, []byte("// old bundle"), 0644); err != nil {
-		t.Fatalf("Failed to create bundle.js: %v", err)
-	}
-
-	v := &FrontendVendor{}
-	shouldVendor, err := v.ShouldVendor(tmpDir)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	// Frontend always builds when detected - doesn't check cache
-	if !shouldVendor {
-		t.Error("Expected ShouldVendor to return true even with existing dist/bundle.js")
-	}
-}
-
-func TestBuildFrontendIfNeeded_NoFrontend(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Should return nil when no frontend exists
-	err := BuildFrontendIfNeeded(tmpDir)
-	if err != nil {
-		t.Fatalf("Unexpected error when no frontend: %v", err)
+			if !tt.wantBuild {
+				if err != nil {
+					t.Errorf("Expected the build to be skipped, got: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "docker unavailable for frontend build") {
+				t.Errorf("Expected a build attempt, got: %v", err)
+			}
+		})
 	}
 }
