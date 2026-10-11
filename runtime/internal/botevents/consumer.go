@@ -200,8 +200,8 @@ func (c *Consumer) handle(msg jetstream.Msg) {
 		delivered = meta.NumDelivered
 		sequence = meta.Sequence.Stream
 	}
-	log := []interface{}{"consumer", c.cfg.Name, "subject", msg.Subject(), "sequence", sequence, "delivery", delivered}
-	c.cfg.Logger.Info("Received lifecycle event", log...)
+	fields := []interface{}{"consumer", c.cfg.Name, "subject", msg.Subject(), "sequence", sequence, "delivery", delivered}
+	c.cfg.Logger.Info("Received lifecycle event", fields...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), handlerTimeout)
 	err := c.cfg.Handler(ctx, msg.Subject(), msg.Data())
@@ -210,16 +210,16 @@ func (c *Consumer) handle(msg jetstream.Msg) {
 	var settleErr error
 	switch v, delay := settle(err, delivered); v {
 	case verdictAck:
-		c.cfg.Logger.Info("Handled lifecycle event", log...)
+		c.cfg.Logger.Info("Handled lifecycle event", fields...)
 		settleErr = msg.Ack()
 	case verdictRetry:
-		c.cfg.Logger.Error("Failed to handle lifecycle event, will retry", append(log, "retry_in", delay.String(), "error", err)...)
+		c.cfg.Logger.Error("Failed to handle lifecycle event, will retry", append(fields, "retry_in", delay.String(), "error", err)...)
 		settleErr = msg.NakWithDelay(delay)
 	case verdictDrop:
-		c.cfg.Logger.Error("Dropping lifecycle event that cannot be handled", append(log, "error", err)...)
+		c.cfg.Logger.Error("Dropping lifecycle event that cannot be handled", append(fields, "error", err)...)
 		settleErr = msg.Term()
 	}
 	if settleErr != nil {
-		c.cfg.Logger.Error("Failed to settle lifecycle event", append(log, "error", settleErr)...)
+		c.cfg.Logger.Error("Failed to settle lifecycle event", append(fields, "error", settleErr)...)
 	}
 }
