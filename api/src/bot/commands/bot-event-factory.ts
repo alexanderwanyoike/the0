@@ -7,6 +7,7 @@ import { BotConfig } from "@/database/schema/bots";
 import { BOT_TOPICS, SCHEDULED_BOT_TOPICS } from "../bot.constants";
 import { BotEvent } from "../bot-event-outbox";
 import { Bot } from "../entities/bot.entity";
+import { customBotNameOf } from "./custom-bot-name";
 
 type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
 
@@ -61,18 +62,15 @@ export class BotEventFactory {
     const configVersion = bot.config?.version;
     if (!configType || !configVersion) return Ok([]);
 
-    const name = configType.split("/")[1];
-    if (!name?.trim()) {
-      this.logger.warn(
-        { type: configType },
-        "Invalid bot type: missing name after '/'",
-      );
-      return Failure("Invalid bot type: missing name after '/'");
+    const name = customBotNameOf(configType);
+    if (!name.success) {
+      this.logger.warn({ type: configType }, name.error);
+      return Failure(name.error);
     }
 
     const customBotResult = await this.customBotService.getUserSpecificVersion(
       userId,
-      name,
+      name.data,
       configVersion,
     );
     if (!customBotResult.success) return Ok([]);
