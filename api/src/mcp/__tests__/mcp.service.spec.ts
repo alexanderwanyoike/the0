@@ -106,7 +106,7 @@ function createBotStore(seed: Bot[]) {
 describe("McpService", () => {
   let service: McpService;
   let store: ReturnType<typeof createBotStore>;
-  let relay: { publishPending: jest.Mock };
+  let relay: { publishCommitted: jest.Mock };
   let customBotService: jest.Mocked<CustomBotService>;
   let logsService: jest.Mocked<LogsService>;
   let botStateService: { listKeys: jest.Mock; getKey: jest.Mock };
@@ -176,7 +176,7 @@ describe("McpService", () => {
   beforeEach(async () => {
     store = createBotStore([callerBot, otherUsersBot]);
 
-    relay = { publishPending: jest.fn() };
+    relay = { publishCommitted: jest.fn() };
 
     const mockCustomBotService = {
       getAllGlobalCustomBots: jest.fn(),
@@ -345,7 +345,7 @@ describe("McpService", () => {
             }),
           }),
         ]);
-        expect(relay.publishPending).toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith(store.events);
       });
 
       it("requires a name in the config", async () => {

@@ -44,6 +44,7 @@ export class BotController {
     @CurrentActor() actor: Actor,
     @Body() createBotDto: CreateBotDto,
   ) {
+    // Spread into a plain object, as MCP sends, so both build the same command.
     const result = await this.commandBus.execute(
       new DeployBot(actor, { ...createBotDto }),
     );
@@ -84,6 +85,7 @@ export class BotController {
     @Param("id") id: string,
     @Body() updateBotDto: UpdateBotDto,
   ) {
+    // Spread into a plain object, as MCP sends, so both build the same command.
     const result = await this.commandBus.execute(
       new UpdateBot(actor, id, { ...updateBotDto }),
     );

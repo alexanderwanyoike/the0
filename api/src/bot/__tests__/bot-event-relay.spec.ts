@@ -129,6 +129,20 @@ describe("BotEventRelay", () => {
       expect(outbox.calledAt).toHaveLength(251);
     });
 
+    it("drains for events a command committed, and issues no query when it committed none", async () => {
+      relay.publishCommitted([]);
+      await relay.settled();
+      expect(outbox.calledAt).toEqual([]);
+
+      outbox.add("the0.bot.created");
+      relay.publishCommitted([
+        { botId: "bot-1", subject: "the0.bot.created", payload: {} },
+      ]);
+      await relay.settled();
+
+      expect(nats.subjects()).toEqual(["the0.bot.created"]);
+    });
+
     it("folds requests made before a drain starts into that drain", async () => {
       outbox.add("the0.bot.created");
 

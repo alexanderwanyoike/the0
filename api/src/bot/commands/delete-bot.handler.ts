@@ -32,7 +32,7 @@ export class DeleteBotHandler
     actor,
     botId,
   }: DeleteBot): Promise<Result<BotDeleteResult, string>> {
-    // Fetch bot data before deletion for event payload
+    // Read first: the delete event carries the config the bot was stored with.
     const botResult = await this.bots.findOne(actor.userId, botId);
     if (!botResult.success) {
       return Failure("Bot not found");
@@ -55,7 +55,7 @@ export class DeleteBotHandler
     if (!result.success) {
       return Failure(result.error);
     }
-    if (events.length > 0) void this.relay.publishPending();
+    this.relay.publishCommitted(events);
 
     // Note: MinIO log/state cleanup is handled by the runtime GC process,
     // not here. The GC periodically sweeps orphaned artifacts after the

@@ -50,7 +50,6 @@ export class UpdateBotHandler
       return Failure(majorChangeError);
     }
 
-    // Only rotate customBotId when version actually changes
     const newCustomBot = resolved.data;
     const versionChanged =
       currentVersion && newVersion
@@ -78,7 +77,7 @@ export class UpdateBotHandler
       events,
     );
 
-    if (result.success && events.length > 0) void this.relay.publishPending();
+    if (result.success) this.relay.publishCommitted(events);
     return result;
   }
 }

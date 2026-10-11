@@ -109,7 +109,7 @@ describe("BotController - Enhanced Tests", () => {
         },
         {
           provide: BotEventRelay,
-          useValue: { publishPending: jest.fn() },
+          useValue: { publishCommitted: jest.fn() },
         },
         {
           provide: PinoLogger,
