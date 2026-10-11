@@ -5,9 +5,9 @@ import { MODULE_METADATA } from "@nestjs/common/constants";
 import { AppModule } from "@/app.module";
 
 /**
- * ADR 0001: every change to a Bot goes through a Bot command, so no module
- * may reach into another module's repository. This runs in `yarn test`,
- * which blocks CI, because ESLint does not.
+ * Every change to a Bot goes through a Bot command, so no module may reach
+ * into another module's repository. This runs in `yarn test`, which blocks
+ * CI, because ESLint does not.
  */
 
 const SRC = resolve(__dirname, "..");
