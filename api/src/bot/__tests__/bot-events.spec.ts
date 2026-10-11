@@ -165,16 +165,7 @@ describe("bot events", () => {
     await stopTestDatabase();
   });
 
-  beforeEach(async () => {
-    await resetTestDatabase();
-    await db.insert(usersTable).values({
-      id: OWNER,
-      username: "owner",
-      email: "owner@example.com",
-      passwordHash: "hash",
-    });
-
-    nats = new FakeNats();
+  async function startApi() {
     moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AdminBootstrapService)
       .useValue({})
@@ -185,6 +176,19 @@ describe("bot events", () => {
       .compile();
     await moduleRef.init();
     bots = moduleRef.get(BotService);
+  }
+
+  beforeEach(async () => {
+    await resetTestDatabase();
+    await db.insert(usersTable).values({
+      id: OWNER,
+      username: "owner",
+      email: "owner@example.com",
+      passwordHash: "hash",
+    });
+
+    nats = new FakeNats();
+    await startApi();
   });
 
   afterEach(async () => {
