@@ -4,7 +4,12 @@ import {
   BotEventOutbox,
   PendingBotEvent,
 } from "../bot-event-outbox";
+import { BotEventRelay } from "../bot-event-relay";
 import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
+import { NatsService } from "@/nats/nats.service";
+import { Ok, Result } from "@/common/result";
+import { PinoLogger } from "nestjs-pino";
+import { createMockLogger } from "@/test/mock-logger";
 import { useTestDatabase } from "@/test/test-database";
 
 jest.mock(
@@ -13,6 +18,23 @@ jest.mock(
 );
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+class DedupingStream {
+  stored: string[] = [];
+
+  async publish(
+    _subject: string,
+    _payload: unknown,
+    options: { msgId?: string },
+  ): Promise<Result<void, string>> {
+    // Yield, so two relays publishing at once interleave.
+    await new Promise((resolve) => setImmediate(resolve));
+    if (!this.stored.includes(options.msgId!)) {
+      this.stored.push(options.msgId!);
+    }
+    return Ok(undefined);
+  }
+}
 
 describe("BotEventOutbox", () => {
   const db = useTestDatabase();
@@ -124,6 +146,30 @@ describe("BotEventOutbox", () => {
       });
 
       expect(probe).toBe("answered");
+    });
+  });
+
+  describe("keep a bot's events in order when two relays drain at once", () => {
+    it("stores each event once, in id order", async () => {
+      await appendEvents(
+        ...Array.from({ length: 20 }, (_, i) => `the0.bot.event-${i + 1}`),
+      );
+      const stream = new DedupingStream();
+      const relay = () =>
+        new BotEventRelay(
+          new BotEventOutbox(),
+          stream as unknown as NatsService,
+          createMockLogger() as unknown as PinoLogger,
+        );
+      const [first, second] = [relay(), relay()];
+
+      await Promise.all([first.publishPending(), second.publishPending()]);
+      await Promise.all([first.onModuleDestroy(), second.onModuleDestroy()]);
+
+      expect(stream.stored).toEqual(
+        Array.from({ length: 20 }, (_, i) => String(i + 1)),
+      );
+      expect(await unpublishedIds()).toEqual([]);
     });
   });
 
