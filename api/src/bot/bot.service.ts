@@ -11,8 +11,10 @@ import { CustomBot, BotType, BotDeleteResult } from "@/custom-bot/custom-bot.typ
 import { Actor } from "@/auth/actor";
 import { BotConfig } from "@/database/schema/bots";
 // UserBotsService removed for OSS version
-import { NatsService } from "@/nats/nats.service";
 import * as semver from "semver";
+import { createId } from "@paralleldrive/cuid2";
+import { BotEvent } from "./bot-event-outbox";
+import { BotEventRelay } from "./bot-event-relay";
 import {
   BOT_TYPE_PATTERN,
   BOT_TOPICS,
@@ -28,7 +30,7 @@ export class BotService {
     private readonly botValidator: BotValidator,
     private readonly customBotService: CustomBotService,
     // UserBotsService removed for OSS version
-    private readonly natsService: NatsService,
+    private readonly relay: BotEventRelay,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -65,41 +67,56 @@ export class BotService {
     const hasCustomFrontend =
       validationResult.data.config?.hasFrontend ?? false;
 
-    const result = await this.botRepository.create({
-      ...createBotDto,
-      config: { ...createBotDto.config, hasFrontend: hasCustomFrontend },
-      userId: uid,
-      topic: "the0-scheduled-custom-bot",
-      customBotId: validationResult.data.id,
-    });
+    const id = createId();
+    const events = this.createdEvents(
+      id,
+      createBotDto.config,
+      validationResult.data,
+    );
+    const result = await this.botRepository.createWithEvents(
+      {
+        ...createBotDto,
+        id,
+        config: { ...createBotDto.config, hasFrontend: hasCustomFrontend },
+        userId: uid,
+        topic: "the0-scheduled-custom-bot",
+        customBotId: validationResult.data.id,
+      },
+      events,
+    );
 
     if (!result.success) {
       return Failure(result.error);
     }
 
-    await this.publishBotCreated(
-      result.data.id,
-      createBotDto.config,
-      validationResult.data,
-    );
-
-    return this.botRepository.findOne(uid, result.data.id);
+    this.announce(events);
+    return this.botRepository.findOne(uid, id);
   }
 
-  private async publishBotCreated(
+  private createdEvents(
     botId: string,
     config: BotConfig,
     customBot: CustomBot,
-  ): Promise<void> {
+  ): BotEvent[] {
     const topics = this.getTopicsForBotType(customBot);
-    if (!topics) return;
+    if (!topics) return [];
 
-    await this.publishBotEvent(
-      topics.CREATED,
-      customBotEventPayload(botId, config, customBot.id, customBot),
-      botId,
-      "Failed to publish bot creation event",
-    );
+    return [
+      {
+        botId,
+        subject: topics.CREATED,
+        payload: customBotEventPayload(botId, config, customBot.id, customBot),
+      },
+    ];
+  }
+
+  /**
+   * The events are already committed: this only asks the relay to publish
+   * them now instead of on its next retry. The command does not wait for
+   * JetStream.
+   */
+  private announce(events: BotEvent[]): void {
+    if (events.length > 0) void this.relay.publishPending();
   }
 
   findAll(actor: Actor): Promise<Result<Bot[], string>> {
@@ -148,68 +165,60 @@ export class BotService {
       currentVersion && newVersion
         ? !semver.eq(currentVersion, newVersion)
         : true;
-    const result = await this.botRepository.update(uid, id, {
-      ...updateBotDto,
-      config: { ...updateBotDto.config, hasFrontend: hasCustomFrontend },
-      customBotId: versionChanged
-        ? newCustomBot.id
-        : currentBot.data.customBotId,
-    });
+    const events = await this.updatedEvents(
+      uid,
+      id,
+      updateBotDto.config,
+      newCustomBot,
+    );
+    const result = await this.botRepository.updateWithEvents(
+      uid,
+      id,
+      {
+        ...updateBotDto,
+        config: { ...updateBotDto.config, hasFrontend: hasCustomFrontend },
+        customBotId: versionChanged
+          ? newCustomBot.id
+          : currentBot.data.customBotId,
+      },
+      events,
+    );
 
     if (result.success) {
-      await this.publishBotUpdated(uid, id, updateBotDto.config, newCustomBot);
+      this.announce(events);
     }
 
     return result;
   }
 
   /**
-   * The event carries the user's copy of the custom bot version, re-read
-   * after the update, while customBotId stays the globally validated one.
+   * The event carries the user's copy of the custom bot version, while
+   * customBotId stays the globally validated one.
    */
-  private async publishBotUpdated(
+  private async updatedEvents(
     uid: string,
     id: string,
     config: BotConfig,
     newCustomBot: CustomBot,
-  ): Promise<void> {
-    const botResult = await this.botRepository.findOne(uid, id);
-    if (!botResult.success) return;
-
+  ): Promise<BotEvent[]> {
     const customBotResult = await this.customBotService.getUserSpecificVersion(
       uid,
       newCustomBot.name,
       newCustomBot.version,
     );
-    if (!customBotResult.success) return;
+    if (!customBotResult.success) return [];
 
     const customBot = customBotResult.data;
     const topics = this.getTopicsForBotType(customBot);
-    if (!topics) return;
+    if (!topics) return [];
 
-    await this.publishBotEvent(
-      topics.UPDATED,
-      customBotEventPayload(
-        botResult.data.id,
-        config,
-        newCustomBot.id,
-        customBot,
-      ),
-      botResult.data.id,
-      "Failed to publish bot update event",
-    );
-  }
-
-  private async publishBotEvent(
-    topic: string,
-    payload: Record<string, unknown>,
-    botId: string,
-    failureMessage: string,
-  ): Promise<void> {
-    const publishResult = await this.natsService.publish(topic, payload);
-    if (!publishResult.success) {
-      this.logger.error({ error: publishResult.error, botId }, failureMessage);
-    }
+    return [
+      {
+        botId: id,
+        subject: topics.UPDATED,
+        payload: customBotEventPayload(id, config, newCustomBot.id, customBot),
+      },
+    ];
   }
 
   async remove(
@@ -230,26 +239,27 @@ export class BotService {
     }
     const topics = topicsResult.data;
 
-    const result = await this.botRepository.remove(uid, id);
+    const events: BotEvent[] = topics
+      ? [
+          {
+            botId: botResult.data.id,
+            subject: topics.DELETED,
+            payload: { id: botResult.data.id, config: botResult.data.config },
+          },
+        ]
+      : [];
+    const result = await this.botRepository.removeWithEvents(uid, id, events);
 
     if (!result.success) {
       return Failure(result.error);
     }
+    this.announce(events);
 
     // Note: MinIO log/state cleanup is handled by the runtime GC process,
     // not here. The GC periodically sweeps orphaned artifacts after the
     // bot container has fully exited and done its final sync.
 
     const deleteResult = await this.describeOrphanedVersion(botResult.data);
-
-    if (topics) {
-      await this.publishBotEvent(
-        topics.DELETED,
-        { id: botResult.data.id, config: botResult.data.config },
-        botResult.data.id,
-        "Failed to publish bot deletion event",
-      );
-    }
 
     return Ok(deleteResult);
   }

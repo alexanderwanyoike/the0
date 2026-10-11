@@ -13,7 +13,7 @@ import { ConfigModule } from "@nestjs/config";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiKeyService } from "@/api-key/api-key.service";
-import { NatsService } from "@/nats/nats.service";
+import { BotEventRelay } from "../bot-event-relay";
 // FeatureGateService removed for OSS version
 import { Ok } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
@@ -106,10 +106,8 @@ describe("BotController - Enhanced Tests", () => {
           useValue: {},
         },
         {
-          provide: NatsService,
-          useValue: {
-            publish: jest.fn().mockResolvedValue(Ok(null)),
-          },
+          provide: BotEventRelay,
+          useValue: { publishPending: jest.fn() },
         },
         {
           provide: PinoLogger,
@@ -156,7 +154,7 @@ describe("BotController - Enhanced Tests", () => {
         data: [],
       });
 
-      jest.spyOn(repository, "create").mockResolvedValue({
+      jest.spyOn(repository, "createWithEvents").mockResolvedValue({
         success: true,
         error: null,
         data: mockBot({
@@ -187,20 +185,24 @@ describe("BotController - Enhanced Tests", () => {
         userId: uid,
         topic: "the0-scheduled-custom-bot",
       });
-      expect(repository.create).toHaveBeenCalledWith({
-        ...validBot,
-        config: {
-          ...validBot.config,
-          hasFrontend: false, // Added by bot.service from custom bot config
+      expect(repository.createWithEvents).toHaveBeenCalledWith(
+        {
+          ...validBot,
+          id: expect.any(String),
+          config: {
+            ...validBot.config,
+            hasFrontend: false, // Added by bot.service from custom bot config
+          },
+          userId: uid,
+          topic: "the0-scheduled-custom-bot",
+          customBotId: mockCustomBot.id,
         },
-        userId: uid,
-        topic: "the0-scheduled-custom-bot",
-        customBotId: mockCustomBot.id,
-      });
+        expect.any(Array),
+      );
     });
 
     it("should throw BadRequestException when service fails", async () => {
-      jest.spyOn(repository, "create").mockResolvedValue({
+      jest.spyOn(repository, "createWithEvents").mockResolvedValue({
         success: false,
         error: "Creation failed",
         data: null,
@@ -421,7 +423,7 @@ describe("BotController - Enhanced Tests", () => {
           data: mockCustomBot,
         });
 
-      jest.spyOn(repository, "update").mockResolvedValue({
+      jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: true,
         error: null,
         data: updatedBot,
@@ -430,15 +432,20 @@ describe("BotController - Enhanced Tests", () => {
       const result = await controller.update(actor, "test-id", updateData);
 
       expect(result).toEqual(updatedBot);
-      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
-        ...updateData,
-        config: { ...updateData.config, hasFrontend: false },
-        customBotId: existingBot.customBotId,
-      });
+      expect(repository.updateWithEvents).toHaveBeenCalledWith(
+        uid,
+        "test-id",
+        {
+          ...updateData,
+          config: { ...updateData.config, hasFrontend: false },
+          customBotId: existingBot.customBotId,
+        },
+        expect.any(Array),
+      );
     });
 
     it("should throw BadRequestException when update fails", async () => {
-      jest.spyOn(repository, "update").mockResolvedValue({
+      jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: false,
         error: "Update failed",
         data: null,
@@ -493,7 +500,7 @@ describe("BotController - Enhanced Tests", () => {
         data: botToRemove,
       });
 
-      jest.spyOn(repository, "remove").mockResolvedValue({
+      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: true,
         error: null,
         data: null,
@@ -501,11 +508,15 @@ describe("BotController - Enhanced Tests", () => {
 
       const result = await controller.remove(actor, "test-id");
       expect(result).toBeDefined();
-      expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
+      expect(repository.removeWithEvents).toHaveBeenCalledWith(
+        uid,
+        "test-id",
+        expect.any(Array),
+      );
     });
 
     it("should throw BadRequestException when removal fails", async () => {
-      jest.spyOn(repository, "remove").mockResolvedValue({
+      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
         error: "Bot not found",
         data: null,
@@ -517,7 +528,7 @@ describe("BotController - Enhanced Tests", () => {
     });
 
     it("should handle unauthorized removal attempt", async () => {
-      jest.spyOn(repository, "remove").mockResolvedValue({
+      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
         error: "Unauthorized",
         data: null,
