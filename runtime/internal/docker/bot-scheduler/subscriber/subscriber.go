@@ -204,20 +204,7 @@ func (s *NATSSubscriber) setupSubscription(ctx context.Context, subject string) 
 	sub, err := s.natsConn.QueueSubscribe(subject, queueGroup, func(msg *nats.Msg) {
 		s.logger.Info("Received message", "subject", subject, "data", string(msg.Data))
 
-		// Process the message based on the subject
-		var err error
-		switch subject {
-		case SubjectBotScheduleCreated:
-			err = s.handleCreate(ctx, msg)
-		case SubjectBotScheduleUpdated:
-			err = s.handleUpdate(ctx, msg)
-		case SubjectBotScheduleDeleted:
-			err = s.handleDelete(ctx, msg)
-		default:
-			err = fmt.Errorf("unknown subject: %s", subject)
-		}
-
-		if err != nil {
+		if err := s.handle(ctx, subject, msg.Data); err != nil {
 			s.logger.Error("Failed to process message", "subject", subject, "error", err)
 			// In NATS, we can implement retry logic here or send to a dead letter queue
 			// For now, we'll just log the error and continue
@@ -235,6 +222,19 @@ func (s *NATSSubscriber) setupSubscription(ctx context.Context, subject string) 
 	s.logger.Info("Subscribed to subject", "subject", subject, "queue_group", queueGroup)
 
 	return nil
+}
+
+func (s *NATSSubscriber) handle(ctx context.Context, subject string, data []byte) error {
+	switch subject {
+	case SubjectBotScheduleCreated:
+		return s.handleCreate(ctx, data)
+	case SubjectBotScheduleUpdated:
+		return s.handleUpdate(ctx, data)
+	case SubjectBotScheduleDeleted:
+		return s.handleDelete(ctx, data)
+	default:
+		return fmt.Errorf("unknown subject: %s", subject)
+	}
 }
 
 // IsReady returns true if the subscriber has active subscriptions.
@@ -362,8 +362,8 @@ func (s *NATSSubscriber) findOrCreatePartition(ctx context.Context) (int32, erro
 	return newPartitionID, nil
 }
 
-func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
@@ -389,8 +389,8 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error 
 	return s.upsertBotSchedule(ctx, collection, *message, segmentId)
 }
 
-func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
@@ -449,8 +449,8 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error 
 	return nil
 }
 
-func (s *NATSSubscriber) handleDelete(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleDelete(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse message: %v", err)
 	}
