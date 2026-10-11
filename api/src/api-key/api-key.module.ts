@@ -8,6 +8,6 @@ import { UserModule } from "@/user/user.module";
   imports: [UserModule],
   controllers: [ApiKeyController],
   providers: [ApiKeyService, ApiKeyRepository],
-  exports: [ApiKeyService, ApiKeyRepository],
+  exports: [ApiKeyService],
 })
 export class ApiKeyModule {}

@@ -13,6 +13,6 @@ import { UserService } from "./user.service";
     AdminMutationLockRepository,
     AdminBootstrapService,
   ],
-  exports: [UserService, UserRepository, AdminMutationLockRepository],
+  exports: [UserService],
 })
 export class UserModule {}

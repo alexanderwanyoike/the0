@@ -43,6 +43,6 @@ import { CommandBusModule } from "@/command-bus/command-bus.module";
     UpdateBotHandler,
     DeleteBotHandler,
   ],
-  exports: [BotService, BotRepository, BotValidator],
+  exports: [BotService],
 })
 export class BotModule {}
