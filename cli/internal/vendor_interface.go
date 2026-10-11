@@ -7,9 +7,9 @@ import (
 )
 
 // DependencyVendor handles detection and installation of dependencies for a specific language/tool.
-// Each vendor (Python, Node.js, Frontend) implements this interface.
+// Each vendor (Python, Node.js) implements this interface.
 type DependencyVendor interface {
-	// Name returns the vendor name for logging (e.g., "Python", "Node.js", "Frontend")
+	// Name returns the vendor name for logging (e.g., "Python", "Node.js")
 	Name() string
 
 	// Detect checks if this vendor applies to the given project path.
