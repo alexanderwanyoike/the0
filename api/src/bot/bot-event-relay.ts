@@ -11,10 +11,13 @@ import {
   PublishOutcome,
 } from "./bot-event-outbox";
 
-const BATCH_SIZE = 100;
 // Kept short because the outbox transaction, and the relay lock, stay open
 // while a publish waits for its ack.
 const PUBLISH_TIMEOUT_MS = 2000;
+// The outbox bounds its statements in Postgres; this also covers a call
+// stuck below them, such as a dropped connection, which would otherwise
+// keep every later drain waiting behind it.
+const OUTBOX_CALL_TIMEOUT_MS = 10_000;
 const RETRY_BASE_MS = 1000;
 const RETRY_CAP_MS = 30_000;
 // Matches the THE0_EVENTS stream's max_age: past it, JetStream has dropped
@@ -26,7 +29,8 @@ const PRUNE_EVERY_MS = 60 * 60 * 1000;
  * Publishes the bot event outbox to JetStream in commit order. It drains
  * on startup and whenever asked after a commit, and polls only while
  * events are left unpublished: an idle api issues no queries, so a
- * serverless Postgres can suspend.
+ * serverless Postgres can suspend. Whoever commits events must therefore
+ * call publishPending, without waiting for it.
  */
 @Injectable()
 export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {
@@ -80,11 +84,11 @@ export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {
     let outcome: PublishOutcome;
     try {
       do {
-        outcome = await this.outbox.publishPending(
-          (event) => this.publish(event),
-          BATCH_SIZE,
+        outcome = await withTimeout(
+          this.outbox.publishNext((event) => this.publish(event)),
+          OUTBOX_CALL_TIMEOUT_MS,
         );
-      } while (outcome === "more");
+      } while (outcome === "published");
     } catch (err) {
       this.logger.error({ err }, "Could not read the bot event outbox");
       outcome = "failed";
@@ -152,4 +156,16 @@ export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {
       this.logger.warn({ err }, "Could not prune published bot events");
     }
   }
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Bot event outbox call timed out after ${ms}ms`)),
+      ms,
+    );
+    timer.unref();
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }

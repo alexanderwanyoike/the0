@@ -1,13 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
-import { PgliteDatabase } from "drizzle-orm/pglite";
 import { AppModule } from "@/app.module";
 import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
 import { BotService } from "../bot.service";
 import { appendBotEvents } from "../bot-event-outbox";
 import { NatsService } from "@/nats/nats.service";
 import { Failure, Ok, Result } from "@/common/result";
-import { usersTable } from "@/database/schema/users";
 import {
   customBotsTable,
   CustomBotConfig,
@@ -15,11 +13,7 @@ import {
 import { BotConfig } from "@/database/schema/bots";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockActor } from "@/test/mock-actor";
-import {
-  resetTestDatabase,
-  startTestDatabase,
-  stopTestDatabase,
-} from "@/test/test-database";
+import { TEST_OWNER_ID, useTestDatabase } from "@/test/test-database";
 
 jest.mock(
   "@/database/connection",
@@ -80,8 +74,11 @@ async function waitFor(condition: () => boolean, timeoutMs = 4000) {
   }
 }
 
-const OWNER = "user-1";
-const actor = mockActor({ userId: OWNER, via: "api-key", apiKeyId: "key-1" });
+const actor = mockActor({
+  userId: TEST_OWNER_ID,
+  via: "api-key",
+  apiKeyId: "key-1",
+});
 const UPLOADED_AT = new Date("2026-01-02T03:04:05.000Z");
 
 function customBotConfig(
@@ -109,7 +106,7 @@ function customBotConfig(
 }
 
 describe("bot events", () => {
-  let db: PgliteDatabase;
+  const db = useTestDatabase();
   let moduleRef: TestingModule;
   let nats: FakeNats;
   let bots: BotService;
@@ -120,16 +117,18 @@ describe("bot events", () => {
     type: "scheduled" | "realtime",
   ) {
     const config = customBotConfig(name, version, type);
-    await db.insert(customBotsTable).values({
-      id: `${name}-${version}`,
-      userId: OWNER,
-      name,
-      version,
-      config,
-      filePath: `custom-bots/${name}/${version}.zip`,
-      createdAt: UPLOADED_AT,
-      updatedAt: UPLOADED_AT,
-    });
+    await db()
+      .insert(customBotsTable)
+      .values({
+        id: `${name}-${version}`,
+        userId: TEST_OWNER_ID,
+        name,
+        version,
+        config,
+        filePath: `custom-bots/${name}/${version}.zip`,
+        createdAt: UPLOADED_AT,
+        updatedAt: UPLOADED_AT,
+      });
     return {
       id: `${name}-${version}`,
       custom: {
@@ -158,14 +157,6 @@ describe("bot events", () => {
     return result.data!.id;
   }
 
-  beforeAll(async () => {
-    db = await startTestDatabase();
-  });
-
-  afterAll(async () => {
-    await stopTestDatabase();
-  });
-
   async function startApi() {
     moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AdminBootstrapService)
@@ -180,14 +171,6 @@ describe("bot events", () => {
   }
 
   beforeEach(async () => {
-    await resetTestDatabase();
-    await db.insert(usersTable).values({
-      id: OWNER,
-      username: "owner",
-      email: "owner@example.com",
-      passwordHash: "hash",
-    });
-
     nats = new FakeNats();
     await startApi();
   });
@@ -281,7 +264,7 @@ describe("bot events", () => {
   describe("publish events left over from before a restart", () => {
     it("publishes the outbox's unpublished events when the api starts", async () => {
       await moduleRef.close();
-      await appendBotEvents(db, [
+      await appendBotEvents(db(), [
         {
           botId: "bot-1",
           subject: "the0.bot-schedule.deleted",

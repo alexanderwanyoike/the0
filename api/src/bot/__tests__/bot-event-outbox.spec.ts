@@ -1,17 +1,11 @@
-import { PgliteDatabase } from "drizzle-orm/pglite";
 import { BotRepository } from "../bot.repository";
 import { BotEvent } from "../bot-event-outbox";
 import { Failure } from "@/common/result";
-import { usersTable } from "@/database/schema/users";
 import { customBotsTable } from "@/database/schema/custom-bots";
 import { botsTable } from "@/database/schema/bots";
 import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
 import { mockBotConfig } from "@/test/mock-bot";
-import {
-  resetTestDatabase,
-  startTestDatabase,
-  stopTestDatabase,
-} from "@/test/test-database";
+import { TEST_OWNER_ID, useTestDatabase } from "@/test/test-database";
 
 jest.mock(
   "@/database/connection",
@@ -23,7 +17,7 @@ jest.mock("pino", () => ({
   default: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn() }),
 }));
 
-const OWNER = "user-1";
+const OWNER = TEST_OWNER_ID;
 const CUSTOM_BOT = "sma-bot-1.0.0";
 // Longer than the subject column, so storing the event fails.
 const UNSTORABLE_SUBJECT = "x".repeat(300);
@@ -33,12 +27,12 @@ function event(botId: string, subject: string): BotEvent {
 }
 
 describe("BotRepository writes with events", () => {
-  let db: PgliteDatabase;
+  const db = useTestDatabase();
   let repository: BotRepository;
 
   const outboxRows = () =>
-    db.select().from(botEventOutboxTable).orderBy(botEventOutboxTable.id);
-  const botRows = () => db.select().from(botsTable);
+    db().select().from(botEventOutboxTable).orderBy(botEventOutboxTable.id);
+  const botRows = () => db().select().from(botsTable);
 
   const newBot = (id: string, userId = OWNER) => ({
     id,
@@ -49,30 +43,20 @@ describe("BotRepository writes with events", () => {
     customBotId: CUSTOM_BOT,
   });
 
-  beforeAll(async () => {
-    db = await startTestDatabase();
+  beforeAll(() => {
     repository = new BotRepository();
   });
 
-  afterAll(async () => {
-    await stopTestDatabase();
-  });
-
   beforeEach(async () => {
-    await resetTestDatabase();
-    await db.insert(usersTable).values({
-      id: OWNER,
-      username: "owner",
-      email: "owner@example.com",
-      passwordHash: "hash",
-    });
-    await db.insert(customBotsTable).values({
-      id: CUSTOM_BOT,
-      userId: OWNER,
-      name: "sma-bot",
-      version: "1.0.0",
-      config: {} as never,
-    });
+    await db()
+      .insert(customBotsTable)
+      .values({
+        id: CUSTOM_BOT,
+        userId: OWNER,
+        name: "sma-bot",
+        version: "1.0.0",
+        config: {} as never,
+      });
   });
 
   describe("commit a bot change and its events together", () => {

@@ -20,7 +20,11 @@ import { botsTable } from "@/database/schema/bots";
  *     "@/database/connection",
  *     () => jest.requireActual("@/test/test-database").connection,
  *   );
+ *   const db = useTestDatabase();
  */
+
+/** The user every test database starts with, to own test bots. */
+export const TEST_OWNER_ID = "user-1";
 
 const MIGRATIONS_DIR = join(__dirname, "..", "database", "migrations");
 
@@ -37,7 +41,7 @@ let db: PgliteDatabase | null = null;
 
 export const connection = {
   getDatabase: () => {
-    if (!db) throw new Error("Call startTestDatabase() first");
+    if (!db) throw new Error("Call useTestDatabase() first");
     return db;
   },
   getTables: () => tables,
@@ -58,25 +62,43 @@ async function migrate(pg: PGlite): Promise<void> {
   }
 }
 
-export async function startTestDatabase(): Promise<PgliteDatabase> {
+async function startTestDatabase(): Promise<PgliteDatabase> {
   client = new PGlite();
   await migrate(client);
   db = drizzle(client);
   return db;
 }
 
-export async function stopTestDatabase(): Promise<void> {
+async function stopTestDatabase(): Promise<void> {
   await client?.close();
   client = null;
   db = null;
 }
 
-/** Empties every table, restarting id sequences. */
-export async function resetTestDatabase(): Promise<void> {
-  if (!client) throw new Error("Call startTestDatabase() first");
+async function resetTestDatabase(): Promise<void> {
   const { rows } = await client.query<{ tablename: string }>(
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
   );
   const names = rows.map(({ tablename }) => `"${tablename}"`).join(", ");
   await client.exec(`TRUNCATE ${names} RESTART IDENTITY CASCADE`);
+}
+
+/**
+ * Starts the database for the enclosing describe block and, before each
+ * test, empties it and seeds TEST_OWNER_ID. Call it before the block's own
+ * hooks so they run against the fresh database.
+ */
+export function useTestDatabase(): () => PgliteDatabase {
+  beforeAll(startTestDatabase);
+  afterAll(stopTestDatabase);
+  beforeEach(async () => {
+    await resetTestDatabase();
+    await db!.insert(usersTable).values({
+      id: TEST_OWNER_ID,
+      username: "owner",
+      email: "owner@example.com",
+      passwordHash: "hash",
+    });
+  });
+  return () => db!;
 }
