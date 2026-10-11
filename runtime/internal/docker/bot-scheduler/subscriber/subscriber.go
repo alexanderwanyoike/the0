@@ -404,7 +404,7 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to update bot schedule: %v", err)
 	}
-	if result.ModifiedCount == 0 {
+	if result.MatchedCount == 0 {
 		return fmt.Errorf("no bot schedule found with ID: %s", message.ID)
 	}
 
