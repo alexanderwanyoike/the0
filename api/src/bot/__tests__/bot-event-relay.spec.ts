@@ -18,7 +18,7 @@ class FakeOutbox {
   published = new Set<number>();
   calledAt: number[] = [];
   prunedBefore: Date[] = [];
-  private forced: (PublishOutcome | Error)[] = [];
+  private forced: (PublishOutcome | Error | "hang")[] = [];
 
   add(...subjects: string[]) {
     for (const subject of subjects) {
@@ -32,7 +32,7 @@ class FakeOutbox {
     }
   }
 
-  force(...outcomes: (PublishOutcome | Error)[]) {
+  force(...outcomes: (PublishOutcome | Error | "hang")[]) {
     this.forced.push(...outcomes);
   }
 
@@ -41,6 +41,7 @@ class FakeOutbox {
   ): Promise<PublishOutcome> {
     this.calledAt.push(Date.now());
     const forced = this.forced.shift();
+    if (forced === "hang") return new Promise<never>(() => undefined);
     if (forced instanceof Error) throw forced;
     if (forced) return forced;
 
@@ -202,6 +203,19 @@ describe("BotEventRelay", () => {
       await jest.advanceTimersByTimeAsync(DAY);
 
       expect(callTimes()).toEqual([0, SECOND, SECOND]);
+      expect(nats.subjects()).toEqual(["the0.bot.created"]);
+    });
+
+    it("gives up on an outbox call that hangs after 10s, then retries and publishes", async () => {
+      outbox.add("the0.bot.created");
+      outbox.force("hang");
+
+      const firstDrain = relay.publishPending();
+      await jest.advanceTimersByTimeAsync(10 * SECOND);
+      await firstDrain;
+      await jest.advanceTimersByTimeAsync(DAY);
+
+      expect(callTimes()).toEqual([0, 11 * SECOND, 11 * SECOND]);
       expect(nats.subjects()).toEqual(["the0.bot.created"]);
     });
 
