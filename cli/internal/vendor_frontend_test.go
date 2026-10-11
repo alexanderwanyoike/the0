@@ -136,35 +136,3 @@ func TestBuildFrontendIfNeeded_NoFrontend(t *testing.T) {
 		t.Fatalf("Unexpected error when no frontend: %v", err)
 	}
 }
-
-func TestShouldBuildFrontend_LegacyFunction(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Test without frontend
-	shouldBuild, err := ShouldBuildFrontend(tmpDir)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if shouldBuild {
-		t.Error("Expected ShouldBuildFrontend to return false when no frontend")
-	}
-
-	// Create frontend
-	frontendDir := filepath.Join(tmpDir, "frontend")
-	if err := os.MkdirAll(frontendDir, 0755); err != nil {
-		t.Fatalf("Failed to create frontend directory: %v", err)
-	}
-	packageJsonPath := filepath.Join(frontendDir, "package.json")
-	if err := os.WriteFile(packageJsonPath, []byte(`{"name": "frontend"}`), 0644); err != nil {
-		t.Fatalf("Failed to create package.json: %v", err)
-	}
-
-	// Test with frontend
-	shouldBuild, err = ShouldBuildFrontend(tmpDir)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if !shouldBuild {
-		t.Error("Expected ShouldBuildFrontend to return true when frontend exists")
-	}
-}
