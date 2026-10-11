@@ -68,10 +68,15 @@ export class BotService {
       validationResult.data.config?.hasFrontend ?? false;
 
     const id = createId();
-    const events = this.createdEvents(
+    const events = botEvents(
       id,
-      createBotDto.config,
-      validationResult.data,
+      this.getTopicsForBotType(validationResult.data)?.CREATED,
+      customBotEventPayload(
+        id,
+        createBotDto.config,
+        validationResult.data.id,
+        validationResult.data,
+      ),
     );
     const result = await this.botRepository.createWithEvents(
       {
@@ -91,23 +96,6 @@ export class BotService {
 
     this.announce(events);
     return this.botRepository.findOne(uid, id);
-  }
-
-  private createdEvents(
-    botId: string,
-    config: BotConfig,
-    customBot: CustomBot,
-  ): BotEvent[] {
-    const topics = this.getTopicsForBotType(customBot);
-    if (!topics) return [];
-
-    return [
-      {
-        botId,
-        subject: topics.CREATED,
-        payload: customBotEventPayload(botId, config, customBot.id, customBot),
-      },
-    ];
   }
 
   private announce(events: BotEvent[]): void {
@@ -204,16 +192,11 @@ export class BotService {
     if (!customBotResult.success) return [];
 
     const customBot = customBotResult.data;
-    const topics = this.getTopicsForBotType(customBot);
-    if (!topics) return [];
-
-    return [
-      {
-        botId: id,
-        subject: topics.UPDATED,
-        payload: customBotEventPayload(id, config, newCustomBot.id, customBot),
-      },
-    ];
+    return botEvents(
+      id,
+      this.getTopicsForBotType(customBot)?.UPDATED,
+      customBotEventPayload(id, config, newCustomBot.id, customBot),
+    );
   }
 
   async remove(
@@ -234,15 +217,10 @@ export class BotService {
     }
     const topics = topicsResult.data;
 
-    const events: BotEvent[] = topics
-      ? [
-          {
-            botId: botResult.data.id,
-            subject: topics.DELETED,
-            payload: { id: botResult.data.id, config: botResult.data.config },
-          },
-        ]
-      : [];
+    const events = botEvents(botResult.data.id, topics?.DELETED, {
+      id: botResult.data.id,
+      config: botResult.data.config,
+    });
     const result = await this.botRepository.removeWithEvents(uid, id, events);
 
     if (!result.success) {
@@ -409,6 +387,13 @@ const majorVersionChangeError = (
   }
   return null;
 };
+
+/** No subject means the runtime is not told about the change. */
+const botEvents = (
+  botId: string,
+  subject: string | undefined,
+  payload: Record<string, unknown>,
+): BotEvent[] => (subject ? [{ botId, subject, payload }] : []);
 
 // The runtime's bot-scheduler subscriber expects this flat structure.
 const customBotEventPayload = (
