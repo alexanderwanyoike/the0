@@ -5,6 +5,60 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: "Failed Python and Node bot runs now fail: a bot that calls the0.error(), exits non-zero or raises an uncaught exception ends its run with a non-zero exit and logs its error message, instead of being recorded as a success. A bot's own success result and data are no longer overwritten"
+        - kind: changed
+          description: "Kubernetes no longer retries a failed scheduled run (Job backoffLimit 0, as in Docker mode), so a run that failed after placing an order cannot place it again. The next run comes from the schedule, and existing CronJobs are updated on the first reconcile"
+        - kind: security
+          description: "MCP bot tools go through the same bot service as the REST API and CLI: config validation and the major version guard apply, the runtime hears about MCP deploys, updates and deletes, and deleting a bot you do not own reports not found. A partial-config bot_update is now rejected, as it is over REST"
+        - kind: fixed
+          description: "Realtime bot queries deliver their params in the URL query string, where every SDK query server reads them. Null params stay out of the query string"
+        - kind: fixed
+          description: "the0 custom-bot deploy builds a custom bot's frontend once per deploy instead of twice"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.16.3
+    created: "2026-10-11T13:09:03.903138862Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: d0b1343d353f5cb52de6e1949b0593bb01d0d870829d708ec15caaff991c28e2
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.11.4/the0-0.11.4.tgz
+    version: 0.11.4
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: "Chart metadata is valid again: 0.11.2 shipped an Artifact Hub changes annotation that was not valid YAML, so Artifact Hub could not index it. The chart is otherwise the same as 0.11.2"
         - kind: fixed
           description: "Querying a path a bot does not define returns the bot's own error and the paths it does answer, e.g. 'No handler for path: /status (available: /today, /history, /health, /info)', instead of the runtime job's logs"
@@ -2387,4 +2441,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-11T08:50:59.385415066Z"
+generated: "2026-10-11T13:09:03.903797804Z"
