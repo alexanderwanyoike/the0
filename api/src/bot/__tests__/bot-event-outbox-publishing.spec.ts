@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   appendBotEvents,
   BotEventOutbox,
@@ -100,6 +101,29 @@ describe("BotEventOutbox", () => {
 
       expect(await outbox.publishNext(publish)).toBe("drained");
       expect(seen).toEqual([]);
+    });
+  });
+
+  describe("hold no database transaction across the publish", () => {
+    it("lets other queries run while the publish waits for its ack", async () => {
+      await appendEvents("the0.bot.created");
+      let probe: string | undefined;
+
+      await outbox.publishNext(async () => {
+        // PGlite has one connection and queues every query behind an open
+        // transaction, so the probe answers in time only if none is open.
+        probe = await Promise.race([
+          db()
+            .execute(sql`SELECT 1`)
+            .then(() => "answered"),
+          new Promise<string>((resolve) =>
+            setTimeout(() => resolve("blocked"), 500),
+          ),
+        ]);
+        return true;
+      });
+
+      expect(probe).toBe("answered");
     });
   });
 
