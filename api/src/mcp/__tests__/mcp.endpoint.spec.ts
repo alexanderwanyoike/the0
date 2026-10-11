@@ -198,6 +198,22 @@ describe("POST /mcp", () => {
       },
     );
 
+    it("uses a valid x-api-key even when a stale Authorization header is sent too", async () => {
+      botRepository.findAll.mockResolvedValue(Ok([]));
+      authService.validateToken.mockResolvedValue(Failure("Invalid token"));
+      const findAll = jest.spyOn(BotService.prototype, "findAll");
+
+      const res = await rpcWithHeaders(
+        { id: 7, ...botList },
+        { authorization: "Bearer stale", "x-api-key": "the0_valid" },
+      );
+
+      expect(res.body.error).toBeUndefined();
+      expect(res.body.result.isError).toBeUndefined();
+      expect(findAll).toHaveBeenCalledWith(keyActor);
+      findAll.mockRestore();
+    });
+
     it("runs a tool for the user of a JWT", async () => {
       botRepository.findAll.mockResolvedValue(Ok([]));
 

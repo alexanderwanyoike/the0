@@ -90,6 +90,18 @@ describe("/bot routes", () => {
       },
     );
 
+    it("uses a valid x-api-key even when a stale Authorization header is sent too", async () => {
+      authService.validateToken.mockResolvedValue(Failure("Invalid token"));
+
+      const res = await request(app.getHttpServer())
+        .get("/bot")
+        .set({ authorization: "Bearer stale", "x-api-key": "the0_valid" });
+
+      expect(res.status).toBe(200);
+      expect(authService.validateToken).not.toHaveBeenCalled();
+      expect(botRepository.findAll).toHaveBeenCalledWith("user-1");
+    });
+
     it("treats another user's bot as not found", async () => {
       apiKeyService.validateApiKey.mockResolvedValue(
         Ok({ id: "key-2", userId: "user-2", name: "cli" }),

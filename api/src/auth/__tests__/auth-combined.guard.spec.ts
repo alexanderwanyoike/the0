@@ -278,7 +278,7 @@ describe("AuthCombinedGuard", () => {
       expect(request).toMatchObject({ user: { uid: "user-1" } });
     });
 
-    it("prefers the Authorization header when x-api-key is also sent", async () => {
+    it("uses x-api-key when an Authorization header is also sent", async () => {
       mockApiKeyService.validateApiKey.mockResolvedValue(
         Ok({ id: "key-1", userId: "user-1", name: "ci" }),
       );
@@ -294,8 +294,24 @@ describe("AuthCombinedGuard", () => {
 
       expect(mockApiKeyService.validateApiKey).toHaveBeenCalledTimes(1);
       expect(mockApiKeyService.validateApiKey).toHaveBeenCalledWith(
-        "the0_authorization",
+        "the0_header",
       );
+    });
+
+    it("authenticates a valid x-api-key sent beside a stale Bearer token", async () => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "ci" }),
+      );
+      mockAuthService.validateToken.mockResolvedValue(Failure("Invalid token"));
+      const request = {
+        headers: { authorization: "Bearer stale", "x-api-key": "the0_secret" },
+      };
+
+      await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+      expect(mockAuthService.validateToken).not.toHaveBeenCalled();
+      expect(request).toMatchObject({
+        actor: { userId: "user-1", via: "api-key", apiKeyId: "key-1" },
+      });
     });
 
     it("rejects an x-api-key that does not validate", async () => {
