@@ -10,7 +10,6 @@ import { Bot } from "@/bot/entities/bot.entity";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { LogsService } from "@/logs/logs.service";
-import { ApiKeyService } from "@/api-key/api-key.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 import { NatsService } from "@/nats/nats.service";
@@ -206,7 +205,6 @@ describe("McpService", () => {
         { provide: NatsService, useValue: natsService },
         { provide: CustomBotService, useValue: mockCustomBotService },
         { provide: LogsService, useValue: mockLogsService },
-        { provide: ApiKeyService, useValue: { validateApiKey: jest.fn() } },
         { provide: BotStateService, useValue: mockBotStateService },
         { provide: BotQueryService, useValue: mockBotQueryService },
         { provide: PinoLogger, useValue: createMockLogger() },

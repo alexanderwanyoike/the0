@@ -17,7 +17,6 @@ import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
-import { ApiKeyService } from "@/api-key/api-key.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 
@@ -29,7 +28,6 @@ export class McpService {
     private readonly botQueryService: BotQueryService,
     private readonly customBotService: CustomBotService,
     private readonly logsService: LogsService,
-    private readonly apiKeyService: ApiKeyService,
     private readonly logger: PinoLogger,
   ) {}
 
