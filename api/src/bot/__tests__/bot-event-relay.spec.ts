@@ -16,7 +16,7 @@ const DAY = 24 * HOUR;
 class FakeOutbox {
   events: PendingBotEvent[] = [];
   published = new Set<number>();
-  calls: number[] = [];
+  calledAt: number[] = [];
   prunedBefore: Date[] = [];
   private forced: (PublishOutcome | Error)[] = [];
 
@@ -40,7 +40,7 @@ class FakeOutbox {
     publish: (event: PendingBotEvent) => Promise<boolean>,
     limit: number,
   ): Promise<PublishOutcome> {
-    this.calls.push(Date.now());
+    this.calledAt.push(Date.now());
     const forced = this.forced.shift();
     if (forced instanceof Error) throw forced;
     if (forced) return forced;
@@ -61,7 +61,7 @@ class FakeOutbox {
   }
 }
 
-class FakeNats {
+class FlakyNats {
   failures = 0;
   publish = jest.fn(async () => {
     if (this.failures > 0) {
@@ -78,17 +78,17 @@ class FakeNats {
 
 describe("BotEventRelay", () => {
   let outbox: FakeOutbox;
-  let nats: FakeNats;
+  let nats: FlakyNats;
   let relay: BotEventRelay;
   let startedAt: number;
 
-  const callTimes = () => outbox.calls.map((time) => time - startedAt);
+  const callTimes = () => outbox.calledAt.map((time) => time - startedAt);
 
   beforeEach(() => {
     jest.useFakeTimers();
     startedAt = Date.now();
     outbox = new FakeOutbox();
-    nats = new FakeNats();
+    nats = new FlakyNats();
     relay = new BotEventRelay(
       outbox as unknown as BotEventOutbox,
       nats as unknown as NatsService,
@@ -129,7 +129,7 @@ describe("BotEventRelay", () => {
       await relay.publishPending();
 
       expect(nats.publish).toHaveBeenCalledTimes(250);
-      expect(outbox.calls).toHaveLength(3);
+      expect(outbox.calledAt).toHaveLength(3);
     });
 
     it("folds requests made before a drain starts into that drain", async () => {
@@ -141,7 +141,7 @@ describe("BotEventRelay", () => {
         relay.publishPending(),
       ]);
 
-      expect(outbox.calls).toHaveLength(1);
+      expect(outbox.calledAt).toHaveLength(1);
     });
   });
 
@@ -152,7 +152,7 @@ describe("BotEventRelay", () => {
 
       await jest.advanceTimersByTimeAsync(DAY);
 
-      expect(outbox.calls).toEqual([startedAt]);
+      expect(outbox.calledAt).toEqual([startedAt]);
     });
   });
 
@@ -246,7 +246,7 @@ describe("BotEventRelay", () => {
       await relay.onModuleDestroy();
       await jest.advanceTimersByTimeAsync(DAY);
 
-      expect(outbox.calls).toHaveLength(1);
+      expect(outbox.calledAt).toHaveLength(1);
     });
   });
 });
