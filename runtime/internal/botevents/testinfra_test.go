@@ -127,6 +127,12 @@ func (r *recorder) has(payload string) bool {
 	return false
 }
 
+func (r *recorder) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.handled)
+}
+
 func (r *recorder) waitFor(t *testing.T, payload string) {
 	t.Helper()
 	require.Eventually(t, func() bool { return r.has(payload) }, 15*time.Second, 50*time.Millisecond,
