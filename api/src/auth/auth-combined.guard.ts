@@ -4,9 +4,12 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { AuthService } from "./auth.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthenticatedRequest } from "./auth.types";
+import { ActorChannel } from "./actor";
+import { ACTOR_VIA_KEY } from "./actor.decorators";
 import {
   extractApiKey,
   extractAuthHeaderToken,
@@ -18,19 +21,24 @@ export class AuthCombinedGuard implements CanActivate {
   constructor(
     private readonly authService: AuthService,
     private readonly apiKeyService: ApiKeyService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const via = this.reflector.getAllAndOverride<ActorChannel | undefined>(
+      ACTOR_VIA_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     const jwtToken = extractAuthHeaderToken(request, "Bearer");
     if (jwtToken) {
-      return this.validateJwtToken(request, jwtToken);
+      return this.validateJwtToken(request, jwtToken, via ?? "jwt");
     }
 
     const apiKey = extractApiKey(request);
     if (apiKey) {
-      return this.validateApiKey(request, apiKey);
+      return this.validateApiKey(request, apiKey, via ?? "api-key");
     }
 
     throw new UnauthorizedException(
@@ -41,6 +49,7 @@ export class AuthCombinedGuard implements CanActivate {
   private async validateJwtToken(
     request: AuthenticatedRequest,
     token: string,
+    via: ActorChannel,
   ): Promise<boolean> {
     const result = await this.authService.validateToken(token);
 
@@ -49,7 +58,7 @@ export class AuthCombinedGuard implements CanActivate {
     }
 
     request.user = toAuthenticatedJwtUser(result.data);
-    request.actor = { userId: result.data.id, via: "jwt" };
+    request.actor = { userId: result.data.id, via };
 
     return true;
   }
@@ -57,6 +66,7 @@ export class AuthCombinedGuard implements CanActivate {
   private async validateApiKey(
     request: AuthenticatedRequest,
     apiKey: string,
+    via: ActorChannel,
   ): Promise<boolean> {
     const result = await this.apiKeyService.validateApiKey(apiKey);
 
@@ -78,7 +88,7 @@ export class AuthCombinedGuard implements CanActivate {
     };
     request.actor = {
       userId: result.data.userId,
-      via: "api-key",
+      via,
       apiKeyId: result.data.id,
     };
 
