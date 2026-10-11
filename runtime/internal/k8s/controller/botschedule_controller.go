@@ -18,8 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/model"
 	"runtime/internal/util"
 )
 
@@ -312,10 +312,10 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 			Name:      generateCronJobName(schedule.ID),
 			Namespace: c.config.Namespace,
 			Labels: map[string]string{
-				LabelScheduleID:        schedule.ID,
-				podgen.LabelCustomBotID:    schedule.CustomBotVersion.Config.Name,
-				podgen.LabelRuntime:        schedule.CustomBotVersion.Config.Runtime,
-				LabelScheduleManagedBy: c.config.ControllerName,
+				LabelScheduleID:         schedule.ID,
+				podgen.LabelCustomBotID: schedule.CustomBotVersion.Config.Name,
+				podgen.LabelRuntime:     schedule.CustomBotVersion.Config.Runtime,
+				LabelScheduleManagedBy:  c.config.ControllerName,
 			},
 			Annotations: map[string]string{
 				AnnotationScheduleHash: configHash,
@@ -332,10 +332,10 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								LabelScheduleID:            schedule.ID,
-								podgen.LabelCustomBotID:    schedule.CustomBotVersion.Config.Name,
-								podgen.LabelManagedBy:      c.config.ControllerName,
-								podgen.LabelBotID:          schedule.ID, // Use schedule ID as bot ID for log collection
+								LabelScheduleID:         schedule.ID,
+								podgen.LabelCustomBotID: schedule.CustomBotVersion.Config.Name,
+								podgen.LabelManagedBy:   c.config.ControllerName,
+								podgen.LabelBotID:       schedule.ID, // Use schedule ID as bot ID for log collection
 							},
 						},
 						Spec: *podSpec, // Use the full pod spec from podGenerator (includes init containers + sidecar)
