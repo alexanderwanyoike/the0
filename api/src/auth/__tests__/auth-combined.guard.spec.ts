@@ -46,6 +46,11 @@ describe("AuthCombinedGuard", () => {
     jest.clearAllMocks();
   });
 
+  const contextFor = (request: Record<string, unknown>) =>
+    ({
+      switchToHttp: () => ({ getRequest: () => request }),
+    }) as ExecutionContext;
+
   it("should be defined", () => {
     expect(guard).toBeDefined();
   });
@@ -108,12 +113,35 @@ describe("AuthCombinedGuard", () => {
     );
   });
 
-  describe("ApiKey authentication", () => {
-    const contextFor = (request: Record<string, unknown>) =>
-      ({
-        switchToHttp: () => ({ getRequest: () => request }),
-      }) as ExecutionContext;
+  describe("the Actor it attaches", () => {
+    it("a JWT gives a jwt Actor for the token's user", async () => {
+      const request = { headers: { authorization: "Bearer valid-jwt-token" } };
+      mockAuthService.validateToken.mockResolvedValue(
+        Ok({ id: "user-1", username: "u", email: "u@example.com" }),
+      );
 
+      await guard.canActivate(contextFor(request));
+
+      expect(request).toMatchObject({
+        actor: { userId: "user-1", via: "jwt" },
+      });
+    });
+
+    it("an ApiKey gives an api-key Actor naming the key", async () => {
+      const request = { headers: { authorization: "ApiKey the0_secret" } };
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "ci" }),
+      );
+
+      await guard.canActivate(contextFor(request));
+
+      expect(request).toMatchObject({
+        actor: { userId: "user-1", via: "api-key", apiKeyId: "key-1" },
+      });
+    });
+  });
+
+  describe("ApiKey authentication", () => {
     it("accepts a valid key and attaches its owner to the request", async () => {
       const request = { headers: { authorization: "ApiKey the0_secret" } };
       mockApiKeyService.validateApiKey.mockResolvedValue(
