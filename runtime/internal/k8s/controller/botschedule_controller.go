@@ -18,8 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/model"
 	"runtime/internal/util"
 )
 
@@ -33,6 +33,11 @@ const (
 	// AnnotationScheduleHash stores a hash of the schedule config for change detection.
 	AnnotationScheduleHash = "the0.app/schedule-hash"
 )
+
+// scheduledRunBackoffLimit is 0 because a failed scheduled run may already have
+// acted (placed an order, say), so retrying it could act twice. The next run comes
+// from the schedule, as in Docker mode, which never retries.
+const scheduledRunBackoffLimit int32 = 0
 
 // BotScheduleRepository provides access to bot schedule data from MongoDB.
 type BotScheduleRepository interface {
@@ -305,17 +310,17 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 
 	successfulJobsHistory := int32(3)
 	failedJobsHistory := int32(1)
-	backoffLimit := int32(2)
+	backoffLimit := scheduledRunBackoffLimit
 
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      generateCronJobName(schedule.ID),
 			Namespace: c.config.Namespace,
 			Labels: map[string]string{
-				LabelScheduleID:        schedule.ID,
-				podgen.LabelCustomBotID:    schedule.CustomBotVersion.Config.Name,
-				podgen.LabelRuntime:        schedule.CustomBotVersion.Config.Runtime,
-				LabelScheduleManagedBy: c.config.ControllerName,
+				LabelScheduleID:         schedule.ID,
+				podgen.LabelCustomBotID: schedule.CustomBotVersion.Config.Name,
+				podgen.LabelRuntime:     schedule.CustomBotVersion.Config.Runtime,
+				LabelScheduleManagedBy:  c.config.ControllerName,
 			},
 			Annotations: map[string]string{
 				AnnotationScheduleHash: configHash,
@@ -332,10 +337,10 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								LabelScheduleID:            schedule.ID,
-								podgen.LabelCustomBotID:    schedule.CustomBotVersion.Config.Name,
-								podgen.LabelManagedBy:      c.config.ControllerName,
-								podgen.LabelBotID:          schedule.ID, // Use schedule ID as bot ID for log collection
+								LabelScheduleID:         schedule.ID,
+								podgen.LabelCustomBotID: schedule.CustomBotVersion.Config.Name,
+								podgen.LabelManagedBy:   c.config.ControllerName,
+								podgen.LabelBotID:       schedule.ID, // Use schedule ID as bot ID for log collection
 							},
 						},
 						Spec: *podSpec, // Use the full pod spec from podGenerator (includes init containers + sidecar)
@@ -353,7 +358,16 @@ func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedu
 		existingHash = cronJob.Annotations[AnnotationScheduleHash]
 	}
 	currentHash := computeScheduleHash(schedule, c.config.NATSURL, c.config.RuntimeImage)
-	return existingHash != currentHash
+	return existingHash != currentHash || backoffLimitDrifted(cronJob)
+}
+
+// backoffLimitDrifted reads the limit off the live CronJob because the hash only
+// covers inputs: a CronJob created with another limit would otherwise keep it
+// until an unrelated input, such as the runtime image tag, happened to change.
+// A nil limit means the Kubernetes default of 6.
+func backoffLimitDrifted(cronJob *batchv1.CronJob) bool {
+	limit := cronJob.Spec.JobTemplate.Spec.BackoffLimit
+	return limit == nil || *limit != scheduledRunBackoffLimit
 }
 
 // scheduleToBot converts a BotSchedule to a Bot model for the image builder.
