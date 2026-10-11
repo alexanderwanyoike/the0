@@ -11,6 +11,9 @@ import signal
 import traceback
 import threading
 import logging
+from datetime import datetime, timezone
+
+DEFAULT_SUCCESS = {"status": "success", "message": "Bot executed successfully"}
 
 # Signal handling for graceful shutdown
 main_thread = None
@@ -37,6 +40,49 @@ def write_result(data):
     except Exception as e:
         print(f"RESULT_ERROR: Failed to write result file: {e}", file=sys.stderr)
 
+def clear_stale_result():
+    try:
+        os.remove(get_result_file_path())
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        print(f"RESULT_ERROR: Failed to remove stale result file: {e}", file=sys.stderr)
+
+def read_result():
+    try:
+        with open(get_result_file_path()) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+def settle_result(fallback):
+    """Keep the result the bot wrote this run, or record the fallback; return the run's result."""
+    if os.path.exists(get_result_file_path()):
+        return read_result()
+    write_result(fallback)
+    return fallback
+
+def report_error(result):
+    # The SDK's error() only writes result.json, which nothing reads for bot
+    # runs, so without this line a failed run leaves no trace in the logs.
+    if not isinstance(result, dict) or result.get("status") != "error":
+        return
+    entry = {
+        "level": "error",
+        "message": result.get("message", "Bot reported an error"),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    print(json.dumps(entry), file=sys.stderr)
+
+def exit_code_of(exc):
+    # Same mapping the interpreter applies when SystemExit reaches the top level.
+    if exc.code is None:
+        return 0
+    if isinstance(exc.code, int):
+        return exc.code
+    print(exc.code, file=sys.stderr)
+    return 1
+
 def force_exit():
     print("SIGNAL: Timeout reached, forcing exit", file=sys.stderr)
     sys.exit(0)
@@ -49,8 +95,24 @@ def graceful_exit(status, message):
     sys.exit(0)
 
 def run_main_with_callback(main_func, bot_id, config):
+    """Run the bot and return its exit code and failure message, or None on shutdown."""
+    outcome = {"exit_code": 0, "message": None}
+
+    def run_bot():
+        # A thread swallows SystemExit and uncaught exceptions, so the SDK's
+        # error() (sys.exit(1)) and a crash would otherwise look like success.
+        try:
+            main_func(bot_id, config)
+        except SystemExit as e:
+            outcome["exit_code"] = exit_code_of(e)
+        except BaseException as e:
+            print(f"EXECUTE_ERROR: Bot execution failed: {e}", file=sys.stderr)
+            print(f"EXECUTE_ERROR: Traceback: {traceback.format_exc()}", file=sys.stderr)
+            outcome["exit_code"] = 1
+            outcome["message"] = str(e)
+
     # The bot's main function is NOT changed. It doesn't know about the event.
-    main_thread = threading.Thread(target=main_func, args=(bot_id, config))
+    main_thread = threading.Thread(target=run_bot)
     main_thread.daemon = True # Allows main thread to exit even if this one is running
     main_thread.start()
 
@@ -59,10 +121,12 @@ def run_main_with_callback(main_func, bot_id, config):
         if shutdown_event.is_set():
             print("SIGNAL: Shutdown detected, exiting main process.", file=sys.stderr)
             # We don't wait for the thread, we just exit the script.
-            return # Return control to the main function's final block
+            return None
 
         # Wait for 1 second at a time
         main_thread.join(timeout=1.0)
+
+    return outcome
 
 def setup_environment():
     """Setup Python environment and working directory"""
@@ -139,22 +203,26 @@ def main():
     # Parse configuration
     bot_id, config, script_path = parse_config()
 
+    # A result.json from an earlier run in the same code directory must not
+    # pass for one this run's bot wrote.
+    clear_stale_result()
+
     # Import main module
     main_func = import_main_module(script_path)
 
     # Execute the main function
-    try:
-        result = run_main_with_callback(main_func, bot_id, config)
-        if shutdown_event.is_set():
-            write_result({"status": "terminated", "message": "Bot execution terminated by signal"})
-            sys.exit(0) # Exit gracefully if shutdown event is set
-        else:
-            write_result({"status": "success", "message": "Bot executed successfully"})
-    except Exception as e:
-        print(f"EXECUTE_ERROR: Bot execution failed: {e}", file=sys.stderr)
-        print(f"EXECUTE_ERROR: Traceback: {traceback.format_exc()}", file=sys.stderr)
-        write_result({"status": "error", "message": str(e)})
-        sys.exit(1)
+    outcome = run_main_with_callback(main_func, bot_id, config)
+    if shutdown_event.is_set():
+        settle_result({"status": "terminated", "message": "Bot execution terminated by signal"})
+        sys.exit(0) # Exit gracefully if shutdown event is set
+
+    exit_code = outcome["exit_code"]
+    if exit_code == 0:
+        fallback = DEFAULT_SUCCESS
+    else:
+        fallback = {"status": "error", "message": outcome["message"] or f"Bot exited with code {exit_code}"}
+    report_error(settle_result(fallback))
+    sys.exit(exit_code)
 
 if __name__ == "__main__":
     main()
