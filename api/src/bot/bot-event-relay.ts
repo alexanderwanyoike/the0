@@ -11,7 +11,6 @@ import {
   PublishOutcome,
 } from "./bot-event-outbox";
 
-const BATCH_SIZE = 100;
 // Kept short because the outbox transaction, and the relay lock, stay open
 // while a publish waits for its ack.
 const PUBLISH_TIMEOUT_MS = 2000;
@@ -81,11 +80,8 @@ export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {
     let outcome: PublishOutcome;
     try {
       do {
-        outcome = await this.outbox.publishPending(
-          (event) => this.publish(event),
-          BATCH_SIZE,
-        );
-      } while (outcome === "more");
+        outcome = await this.outbox.publishNext((event) => this.publish(event));
+      } while (outcome === "published");
     } catch (err) {
       this.logger.error({ err }, "Could not read the bot event outbox");
       outcome = "failed";

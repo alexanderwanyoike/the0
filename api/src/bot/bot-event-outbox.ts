@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { asc, inArray, isNull, lt, sql } from "drizzle-orm";
+import { asc, eq, isNull, lt, sql } from "drizzle-orm";
 import { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { getDatabase } from "@/database/connection";
 import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
@@ -20,11 +20,11 @@ export interface PendingBotEvent {
 }
 
 /**
- * drained: nothing was left to publish. more: a full batch went out and
- * more may be waiting. failed: the publisher rejected an event. busy:
+ * published: one event went out and more may be waiting. drained: nothing
+ * was left to publish. failed: the publisher rejected the event. busy:
  * another relay holds the lock.
  */
-export type PublishOutcome = "drained" | "more" | "failed" | "busy";
+export type PublishOutcome = "published" | "drained" | "failed" | "busy";
 
 /** A database, or a transaction already open on one. */
 export type Executor = PgDatabase<PgQueryResultHKT>;
@@ -50,13 +50,12 @@ export async function appendBotEvents(
 @Injectable()
 export class BotEventOutbox {
   /**
-   * Passes up to `limit` unpublished events to `publish` in id order and
-   * marks the ones it accepts. Stops at the first rejection, so no event
-   * overtakes an earlier one.
+   * Passes the oldest unpublished event to `publish` and marks it if
+   * accepted. One event per transaction keeps the lock, and a pooled
+   * connection, for at most one publish.
    */
-  async publishPending(
+  async publishNext(
     publish: (event: PendingBotEvent) => Promise<boolean>,
-    limit: number,
   ): Promise<PublishOutcome> {
     const db = getDatabase() as Executor;
     const table = botEventOutboxTable;
@@ -70,7 +69,7 @@ export class BotEventOutbox {
         .from(sql`(SELECT 1) AS relay_lock`);
       if (!locked) return "busy";
 
-      const pending = await tx
+      const [next] = await tx
         .select({
           id: table.id,
           botId: table.botId,
@@ -80,26 +79,15 @@ export class BotEventOutbox {
         .from(table)
         .where(isNull(table.publishedAt))
         .orderBy(asc(table.id))
-        .limit(limit);
+        .limit(1);
+      if (!next) return "drained";
+      if (!(await publish(next))) return "failed";
 
-      const accepted: number[] = [];
-      let outcome: PublishOutcome =
-        pending.length === limit ? "more" : "drained";
-      for (const event of pending) {
-        if (!(await publish(event))) {
-          outcome = "failed";
-          break;
-        }
-        accepted.push(event.id);
-      }
-
-      if (accepted.length > 0) {
-        await tx
-          .update(table)
-          .set({ publishedAt: new Date() })
-          .where(inArray(table.id, accepted));
-      }
-      return outcome;
+      await tx
+        .update(table)
+        .set({ publishedAt: new Date() })
+        .where(eq(table.id, next.id));
+      return "published";
     });
   }
 
