@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -200,6 +201,7 @@ type receivedQuery struct {
 	requestURI string
 	path       string
 	params     map[string]string
+	body       string
 }
 
 // queryBotServer runs a query against a stand-in for a bot's query server
@@ -214,7 +216,12 @@ func queryBotServer(t *testing.T, queryPath string, params map[string]interface{
 		for key, values := range r.URL.Query() {
 			params[key] = values[0]
 		}
-		received <- receivedQuery{requestURI: r.RequestURI, path: r.URL.Path, params: params}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		received <- receivedQuery{requestURI: r.RequestURI, path: r.URL.Path, params: params, body: string(body)}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "data": params})
@@ -270,11 +277,6 @@ func TestRealtimeExecutor_ParamsReachBotAsURLQueryString(t *testing.T) {
 			expected: map[string]string{"live": "true", "verbose": "false"},
 		},
 		{
-			name:     "null arrives as JSON text",
-			params:   map[string]interface{}{"cursor": nil},
-			expected: map[string]string{"cursor": "null"},
-		},
-		{
 			name: "object arrives as JSON text",
 			params: map[string]interface{}{
 				"range": map[string]interface{}{"from": "2026-01-01", "to": "2026-02-01"},
@@ -316,6 +318,27 @@ func TestRealtimeExecutor_NoParamsLeavesQueryStringOut(t *testing.T) {
 			assert.Equal(t, "/portfolio", received.requestURI)
 		})
 	}
+}
+
+func TestRealtimeExecutor_NullParamsStayOutOfQueryString(t *testing.T) {
+	t.Run("null param is left out alongside other params", func(t *testing.T) {
+		response, received := queryBotServer(t, "/portfolio", map[string]interface{}{
+			"cursor": nil,
+			"symbol": "BTC",
+		})
+
+		assert.Equal(t, "ok", response.Status, response.Error)
+		assert.Equal(t, map[string]string{"symbol": "BTC"}, received.params)
+		assert.JSONEq(t, `{"cursor":null,"symbol":"BTC"}`, received.body)
+	})
+
+	t.Run("only null params add no query string", func(t *testing.T) {
+		response, received := queryBotServer(t, "/portfolio", map[string]interface{}{"cursor": nil})
+
+		assert.Equal(t, "ok", response.Status, response.Error)
+		assert.Equal(t, "/portfolio", received.requestURI)
+		assert.JSONEq(t, `{"cursor":null}`, received.body)
+	})
 }
 
 func TestRealtimeExecutor_QueryStringInPathCombinesWithParams(t *testing.T) {
