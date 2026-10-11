@@ -4,6 +4,7 @@ import { PgliteDatabase } from "drizzle-orm/pglite";
 import { AppModule } from "@/app.module";
 import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
 import { BotService } from "../bot.service";
+import { appendBotEvents } from "../bot-event-outbox";
 import { NatsService } from "@/nats/nats.service";
 import { Failure, Ok, Result } from "@/common/result";
 import { usersTable } from "@/database/schema/users";
@@ -274,6 +275,29 @@ describe("bot events", () => {
         subject: "the0.bot-schedule.deleted",
         payload: { id, config: { ...config, hasFrontend: false } },
       });
+    });
+  });
+
+  describe("publish events left over from before a restart", () => {
+    it("publishes the outbox's unpublished events when the api starts", async () => {
+      await moduleRef.close();
+      await appendBotEvents(db, [
+        {
+          botId: "bot-1",
+          subject: "the0.bot-schedule.deleted",
+          payload: { id: "bot-1", config: { symbol: "AAPL" } },
+        },
+      ]);
+
+      await startApi();
+
+      await waitFor(() => nats.published.length === 1);
+      expect(nats.published).toEqual([
+        {
+          subject: "the0.bot-schedule.deleted",
+          payload: { id: "bot-1", config: { symbol: "AAPL" } },
+        },
+      ]);
     });
   });
 
