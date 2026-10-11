@@ -51,6 +51,7 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("MONGO_URI")
 
 	// Get unique database for this test
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_created")
 	collectionName := "bots"
 
@@ -142,6 +143,7 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_created_duplicate")
 	collectionName := "bots"
 
@@ -208,6 +210,7 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_updated")
 	collectionName := "bots"
 
@@ -317,6 +320,7 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_updated_not_found")
 	collectionName := "bots"
 
@@ -380,6 +384,7 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted")
 	collectionName := "bots"
 
@@ -463,6 +468,7 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted_not_found")
 	collectionName := "bots"
 
@@ -512,6 +518,7 @@ func TestSubscriber_WrappedEventFormat(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("wrapped_event")
 	collectionName := "bots"
 
@@ -585,6 +592,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("invalid_json")
 	collectionName := "bots"
 
@@ -651,6 +659,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("graceful_shutdown")
 	collectionName := "bots"
 

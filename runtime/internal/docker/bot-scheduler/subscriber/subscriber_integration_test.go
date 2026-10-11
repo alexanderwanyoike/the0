@@ -63,6 +63,7 @@ func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("MONGO_URI")
 
 	// Get unique database for this test
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_created")
 	collectionName := "bot_schedules"
 
@@ -150,6 +151,7 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_created_duplicate")
 	collectionName := "bot_schedules"
 
@@ -223,6 +225,7 @@ func TestSubscriber_BotScheduleUpdated_UpdatesMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_updated")
 	collectionName := "bot_schedules"
 
@@ -311,6 +314,7 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_updated_not_found")
 	collectionName := "bot_schedules"
 
@@ -373,6 +377,7 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_deleted")
 	collectionName := "bot_schedules"
 
@@ -457,6 +462,7 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_deleted_not_found")
 	collectionName := "bot_schedules"
 
@@ -505,6 +511,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("invalid_json")
 	collectionName := "bot_schedules"
 
@@ -568,6 +575,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	sharedInfra.resetEventsStream(t)
 	db := sharedInfra.GetDatabase("graceful_shutdown")
 	collectionName := "bot_schedules"
 
