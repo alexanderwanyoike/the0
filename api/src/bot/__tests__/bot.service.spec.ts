@@ -13,7 +13,7 @@ import { Ok, Failure } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
-import { Actor } from "@/auth/actor";
+import { mockActor } from "@/test/mock-actor";
 
 describe("BotService - Enhanced Tests", () => {
   let service: BotService;
@@ -24,7 +24,7 @@ describe("BotService - Enhanced Tests", () => {
   let logger: ReturnType<typeof createMockLogger>;
   // FeatureGateService removed for OSS version
   const uid = "test-user-id";
-  const actor: Actor = { userId: uid, via: "jwt" };
+  const actor = mockActor({ userId: uid });
 
   const mockCustomBot = {
     id: "test-custom-bot",
@@ -450,11 +450,11 @@ describe("BotService - Enhanced Tests", () => {
   });
 
   describe("ownership follows the Actor", () => {
-    const mcpActor: Actor = {
+    const mcpActor = mockActor({
       userId: "mcp-user-id",
       via: "mcp",
       apiKeyId: "key-1",
-    };
+    });
 
     it("reads bots as the Actor's user, whatever the channel", async () => {
       jest.spyOn(repository, "findAll").mockResolvedValue(Ok([]));
@@ -492,11 +492,11 @@ describe("BotService - Enhanced Tests", () => {
       jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
       jest.spyOn(repository, "update").mockResolvedValue(Ok(mockBot()));
       jest.spyOn(repository, "remove").mockResolvedValue(Ok(undefined));
-      const otherUser: Actor = {
+      const otherUser = mockActor({
         userId: "other-user-id",
         via: "api-key",
         apiKeyId: "key-2",
-      };
+      });
 
       const updated = await service.update(otherUser, "test-id", {
         config: mockBotConfig({

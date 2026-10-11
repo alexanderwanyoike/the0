@@ -10,7 +10,7 @@ import {
 import { BotQueryController } from "../bot-query.controller";
 import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
-import { Actor } from "@/auth/actor";
+import { mockActor } from "@/test/mock-actor";
 
 // Mock guard that always allows access
 const mockAuthGuard: CanActivate = {
@@ -20,7 +20,7 @@ const mockAuthGuard: CanActivate = {
 describe("BotQueryController", () => {
   let controller: BotQueryController;
   let mockBotQueryService: jest.Mocked<BotQueryService>;
-  const actor: Actor = { userId: "test-user-id", via: "jwt" };
+  const actor = mockActor();
 
   beforeEach(async () => {
     mockBotQueryService = {

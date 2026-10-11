@@ -4,18 +4,14 @@ import { BotStateService, BotStateErrorCode } from "../bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
 import { Ok, Failure } from "@/common/result";
-import { Actor } from "@/auth/actor";
+import { mockActor } from "@/test/mock-actor";
 
 describe("BotStateController", () => {
   let controller: BotStateController;
   let mockBotStateService: jest.Mocked<Partial<BotStateService>>;
 
   const testBotId = "test-bot-id";
-  const actor: Actor = {
-    userId: "test-user-id",
-    via: "api-key",
-    apiKeyId: "key-1",
-  };
+  const actor = mockActor({ via: "api-key", apiKeyId: "key-1" });
 
   beforeEach(async () => {
     mockBotStateService = {

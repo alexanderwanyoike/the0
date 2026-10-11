@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
 import { McpService } from "../mcp.service";
-import { Actor } from "@/auth/actor";
+import { mockActor } from "@/test/mock-actor";
 import { BotService } from "@/bot/bot.service";
 import { BotRepository } from "@/bot/bot.repository";
 import { BotValidator } from "@/bot/bot.validator";
@@ -100,7 +100,7 @@ describe("McpService", () => {
 
   const userId = "user-123";
   const otherUserId = "user-456";
-  const actor: Actor = { userId, via: "mcp", apiKeyId: "key-123" };
+  const actor = mockActor({ userId, via: "mcp", apiKeyId: "key-123" });
 
   const callerBot = mockBot({
     id: "bot-123",

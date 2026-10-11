@@ -18,6 +18,7 @@ import { LogsService } from "@/logs/logs.service";
 import { NatsService } from "@/nats/nats.service";
 import { mockBot } from "@/test/mock-bot";
 import { createMockLogger } from "@/test/mock-logger";
+import { mockActor } from "@/test/mock-actor";
 
 describe("POST /mcp", () => {
   let app: INestApplication;
@@ -88,7 +89,11 @@ describe("POST /mcp", () => {
       headers: { authorization: "ApiKey the0_valid" },
     },
   ];
-  const keyActor = { userId: "user-1", via: "mcp", apiKeyId: "key-1" };
+  const keyActor = mockActor({
+    userId: "user-1",
+    via: "mcp",
+    apiKeyId: "key-1",
+  });
 
   describe("completes the MCP handshake", () => {
     it("answers initialize with the protocol version and tool capability", async () => {

@@ -1,16 +1,20 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { McpController } from "../mcp.controller";
 import { McpService } from "../mcp.service";
-import { Actor } from "@/auth/actor";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { createMockLogger } from "@/test/mock-logger";
 import { PinoLogger } from "nestjs-pino";
+import { mockActor } from "@/test/mock-actor";
 
 describe("McpController", () => {
   let controller: McpController;
   let mcpService: jest.Mocked<McpService>;
 
-  const actor: Actor = { userId: "user-123", via: "mcp", apiKeyId: "key-123" };
+  const actor = mockActor({
+    userId: "user-123",
+    via: "mcp",
+    apiKeyId: "key-123",
+  });
 
   beforeEach(async () => {
     const mockMcpService = {

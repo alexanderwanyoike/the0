@@ -8,7 +8,7 @@ import { ConfigService } from "@nestjs/config";
 import { BotService } from "@/bot/bot.service";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
-import { Actor } from "@/auth/actor";
+import { mockActor } from "@/test/mock-actor";
 import { Ok, Failure } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as fs from "fs";
@@ -25,7 +25,7 @@ describe("BotStateService", () => {
   let tempDir: string;
 
   const testUid = "test-user-id";
-  const actor: Actor = { userId: testUid, via: "jwt" };
+  const actor = mockActor({ userId: testUid });
   const testBotId = "test-bot-id";
 
   const mockBot = {

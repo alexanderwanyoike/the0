@@ -4,8 +4,8 @@ import { PinoLogger } from "nestjs-pino";
 import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
 import { BotService } from "@/bot/bot.service";
 import { createMockLogger } from "@/test/mock-logger";
-import { Actor } from "@/auth/actor";
 import { mockBot as createMockBot, mockBotConfig } from "@/test/mock-bot";
+import { mockActor } from "@/test/mock-actor";
 
 describe("BotQueryService", () => {
   let service: BotQueryService;
@@ -13,7 +13,7 @@ describe("BotQueryService", () => {
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockFetch: jest.SpyInstance;
   let mockLogger: ReturnType<typeof createMockLogger>;
-  const actor: Actor = { userId: "test-user-id", via: "jwt" };
+  const actor = mockActor();
 
   const testBot = createMockBot({
     id: "test-bot-id",

@@ -19,7 +19,7 @@ import { Ok } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
-import { Actor } from "@/auth/actor";
+import { mockActor } from "@/test/mock-actor";
 
 describe("BotController - Enhanced Tests", () => {
   let controller: BotController;
@@ -28,7 +28,7 @@ describe("BotController - Enhanced Tests", () => {
   let validator: BotValidator;
   let customBotService: CustomBotService;
   const uid = "test-user-id";
-  const actor: Actor = { userId: uid, via: "jwt" };
+  const actor = mockActor({ userId: uid });
 
   const mockCustomBot = {
     id: "test-custom-bot",
