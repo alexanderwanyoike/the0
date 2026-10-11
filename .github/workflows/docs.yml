@@ -33,6 +33,9 @@ jobs:
         cache: 'yarn'
         cache-dependency-path: docs/yarn.lock
 
+    - name: Test the Netlify ignore rule
+      run: bash docs/scripts/netlify-ignore.test.sh
+
     - name: Install dependencies
       working-directory: ./docs
       run: yarn install --frozen-lockfile
