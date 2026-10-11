@@ -25,8 +25,7 @@ const (
 	SubjectBotScheduleDeleted = "the0.bot-schedule.deleted"
 )
 
-// ConsumerName is the durable JetStream consumer every runtime replica shares
-// for these subjects.
+// ConsumerName names this subscriber's durable consumer (botevents.Config.Name).
 const ConsumerName = "runtime-bot-schedule-events"
 
 type BotScheduleMessage struct {

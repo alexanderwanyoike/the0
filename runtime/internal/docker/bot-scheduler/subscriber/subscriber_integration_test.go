@@ -62,8 +62,8 @@ func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	// Get unique database for this test
 	events.ResetStream(t)
+	// Get unique database for this test
 	db := sharedInfra.GetDatabase("bot_schedule_created")
 	collectionName := "bot_schedules"
 

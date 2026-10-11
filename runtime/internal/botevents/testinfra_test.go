@@ -97,8 +97,8 @@ func (r *recorder) waitFor(t *testing.T, payload string) {
 		"event %q should be handled", payload)
 }
 
-// newConsumer builds a consumer that records what it handles and is stopped
-// when the test ends.
+// newConsumer builds a consumer around handler and stops it when the test
+// ends.
 func newConsumer(t *testing.T, handler botevents.Handler) *botevents.Consumer {
 	t.Helper()
 	consumer, err := botevents.NewConsumer(natsConn, botevents.Config{
