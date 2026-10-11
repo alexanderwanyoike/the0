@@ -228,6 +228,21 @@ describe("McpService", () => {
         const data = JSON.parse(result.content[0].text);
         expect(data.valid).toBe(true);
       });
+
+      it("words the status for any credential, not only an API key", async () => {
+        const jwtCaller = mockActor({ userId, via: "mcp" });
+
+        const result = await service.handleToolCall(
+          "auth_status",
+          {},
+          jwtCaller,
+        );
+
+        expect(parse(result)).toEqual({
+          valid: true,
+          message: "Credentials are valid",
+        });
+      });
     });
 
     describe("reading bots shows only the caller's own", () => {
