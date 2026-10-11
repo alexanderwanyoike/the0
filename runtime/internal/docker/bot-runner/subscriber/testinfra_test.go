@@ -2,16 +2,20 @@ package natssubscriber
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"runtime/internal/model"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -86,6 +90,67 @@ func (ti *TestInfrastructure) resetEventsStream(t *testing.T) {
 	if _, err := ti.js.CreateStream(ctx, eventsStream); err != nil {
 		t.Fatalf("failed to create %s: %v", eventsStream.Name, err)
 	}
+}
+
+const testCollection = "bots"
+
+// startSubscriber starts a subscriber writing to db and stops it when the
+// test ends.
+func startSubscriber(t *testing.T, db *mongo.Database) *NATSSubscriber {
+	t.Helper()
+	t.Setenv("MONGO_URI", sharedInfra.MongoURI)
+	subscriber, err := NewNATSSubscriber(context.Background(), SubscriberOptions{
+		NATSUrl:            sharedInfra.NATSURL,
+		DBName:             db.Name(),
+		CollectionName:     testCollection,
+		MaxRetries:         3,
+		MaxBotPerPartition: 10,
+		Logger:             &testLogger{t: t},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = subscriber.Stop() })
+	require.NoError(t, subscriber.Start(context.Background()))
+	return subscriber
+}
+
+// publishEvent publishes like the api does: into JetStream, waiting for the
+// stream to store the event.
+func publishEvent(t *testing.T, subject string, event any) {
+	t.Helper()
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+	_, err = sharedInfra.js.Publish(context.Background(), subject, payload)
+	require.NoError(t, err)
+}
+
+func testBotMessage(id string) BotMessage {
+	return BotMessage{
+		ID:     id,
+		Config: map[string]interface{}{"symbol": "BTC/USD"},
+		CustomBotVersion: model.CustomBotVersion{
+			Config: model.APIBotConfig{
+				Runtime:     "python3.11",
+				Entrypoints: map[string]string{"bot": "main.py"},
+			},
+			Version: "1.0.0",
+		},
+	}
+}
+
+// insertBot stores a bot as an earlier created event would have, in
+// partition 1 with the given bot count.
+func insertBot(t *testing.T, db *mongo.Database, id string, partitionBotCount int) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := db.Collection(testCollection).InsertOne(ctx, model.Bot{
+		ID:               id,
+		SegmentId:        1,
+		Config:           map[string]interface{}{"symbol": "BTC/USD"},
+		CustomBotVersion: testBotMessage(id).CustomBotVersion,
+	})
+	require.NoError(t, err)
+	_, err = db.Collection("partitions").InsertOne(ctx, bson.M{"_id": int32(1), "bot_count": partitionBotCount})
+	require.NoError(t, err)
 }
 
 // TestMain runs once before all tests in the package
