@@ -12,6 +12,8 @@ import {
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { BotStateService, BotStateErrorCode } from "./bot-state.service";
+import { Actor } from "@/auth/actor";
+import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
@@ -30,8 +32,8 @@ export class BotStateController {
     description: "State keys retrieved successfully",
   })
   @ApiResponse({ status: 404, description: "Bot not found" })
-  async listKeys(@Param("botId") botId: string) {
-    const result = await this.botStateService.listKeys(botId);
+  async listKeys(@CurrentActor() actor: Actor, @Param("botId") botId: string) {
+    const result = await this.botStateService.listKeys(actor, botId);
 
     if (!result.success) {
       switch (result.error?.code) {
@@ -59,8 +61,12 @@ export class BotStateController {
   })
   @ApiResponse({ status: 400, description: "Invalid state key" })
   @ApiResponse({ status: 404, description: "Bot or state key not found" })
-  async getKey(@Param("botId") botId: string, @Param("key") key: string) {
-    const result = await this.botStateService.getKey(botId, key);
+  async getKey(
+    @CurrentActor() actor: Actor,
+    @Param("botId") botId: string,
+    @Param("key") key: string,
+  ) {
+    const result = await this.botStateService.getKey(actor, botId, key);
 
     if (!result.success) {
       switch (result.error?.code) {
@@ -99,8 +105,12 @@ export class BotStateController {
     description:
       "Concurrent modification - state was modified by another operation",
   })
-  async deleteKey(@Param("botId") botId: string, @Param("key") key: string) {
-    const result = await this.botStateService.deleteKey(botId, key);
+  async deleteKey(
+    @CurrentActor() actor: Actor,
+    @Param("botId") botId: string,
+    @Param("key") key: string,
+  ) {
+    const result = await this.botStateService.deleteKey(actor, botId, key);
 
     if (!result.success) {
       switch (result.error?.code) {
@@ -131,8 +141,11 @@ export class BotStateController {
   @ApiParam({ name: "botId", description: "Bot identifier" })
   @ApiResponse({ status: 200, description: "Bot state cleared successfully" })
   @ApiResponse({ status: 404, description: "Bot not found" })
-  async clearState(@Param("botId") botId: string) {
-    const result = await this.botStateService.clearState(botId);
+  async clearState(
+    @CurrentActor() actor: Actor,
+    @Param("botId") botId: string,
+  ) {
+    const result = await this.botStateService.clearState(actor, botId);
 
     if (!result.success) {
       switch (result.error?.code) {

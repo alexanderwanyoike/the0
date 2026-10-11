@@ -1,6 +1,7 @@
-import { Injectable, Scope, Inject } from "@nestjs/common";
+import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
+import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
 import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
@@ -49,7 +50,7 @@ interface StateDownloadResult {
   etag: string;
 }
 
-@Injectable({ scope: Scope.REQUEST })
+@Injectable()
 export class BotStateService {
   private stateBucket: string;
   private maxStateFileSize: number;
@@ -95,7 +96,10 @@ export class BotStateService {
   /**
    * List all state keys for a bot.
    */
-  async listKeys(botId: string): Promise<Result<StateKey[], BotStateError>> {
+  async listKeys(
+    actor: Actor,
+    botId: string,
+  ): Promise<Result<StateKey[], BotStateError>> {
     // Validate bot ID to prevent path traversal
     if (!this.isValidBotId(botId)) {
       return Failure({
@@ -105,7 +109,7 @@ export class BotStateService {
     }
 
     // Verify bot ownership
-    const botResult = await this.botService.findOne(botId);
+    const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
       return Failure({
         code: BotStateErrorCode.BOT_NOT_FOUND,
@@ -156,10 +160,11 @@ export class BotStateService {
    * Get a specific state value.
    */
   async getKey(
+    actor: Actor,
     botId: string,
     key: string,
   ): Promise<Result<unknown, BotStateError>> {
-    const accessError = await this.checkBotAccess(botId);
+    const accessError = await this.checkBotAccess(actor, botId);
     if (accessError) {
       return Failure(accessError);
     }
@@ -198,7 +203,10 @@ export class BotStateService {
    * The ID format is checked first so a path-traversal ID never reaches the
    * ownership lookup.
    */
-  private async checkBotAccess(botId: string): Promise<BotStateError | null> {
+  private async checkBotAccess(
+    actor: Actor,
+    botId: string,
+  ): Promise<BotStateError | null> {
     if (!this.isValidBotId(botId)) {
       return {
         code: BotStateErrorCode.STORAGE_ERROR,
@@ -206,7 +214,7 @@ export class BotStateService {
       };
     }
 
-    const botResult = await this.botService.findOne(botId);
+    const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
       return {
         code: BotStateErrorCode.BOT_NOT_FOUND,
@@ -274,11 +282,12 @@ export class BotStateService {
    * Uses optimistic locking to prevent race conditions that could cause data loss.
    */
   async deleteKey(
+    actor: Actor,
     botId: string,
     key: string,
   ): Promise<Result<boolean, BotStateError>> {
     // Verify bot ownership
-    const botResult = await this.botService.findOne(botId);
+    const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
       return Failure({
         code: BotStateErrorCode.BOT_NOT_FOUND,
@@ -358,7 +367,10 @@ export class BotStateService {
   /**
    * Clear all state for a bot.
    */
-  async clearState(botId: string): Promise<Result<boolean, BotStateError>> {
+  async clearState(
+    actor: Actor,
+    botId: string,
+  ): Promise<Result<boolean, BotStateError>> {
     // Validate bot ID to prevent path traversal
     if (!this.isValidBotId(botId)) {
       return Failure({
@@ -368,7 +380,7 @@ export class BotStateService {
     }
 
     // Verify bot ownership
-    const botResult = await this.botService.findOne(botId);
+    const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
       return Failure({
         code: BotStateErrorCode.BOT_NOT_FOUND,

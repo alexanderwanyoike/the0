@@ -1,5 +1,4 @@
-import { Injectable, Type } from "@nestjs/common";
-import { ContextIdFactory, ModuleRef } from "@nestjs/core";
+import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
 import {
   MCP_TOOL_NAMES,
@@ -25,31 +24,14 @@ import { BotQueryService } from "@/bot-query/bot-query.service";
 @Injectable()
 export class McpService {
   constructor(
+    private readonly botService: BotService,
+    private readonly botStateService: BotStateService,
+    private readonly botQueryService: BotQueryService,
     private readonly customBotService: CustomBotService,
     private readonly logsService: LogsService,
     private readonly apiKeyService: ApiKeyService,
     private readonly logger: PinoLogger,
-    private readonly moduleRef: ModuleRef,
   ) {}
-
-  /**
-   * Resolve a request-scoped service under a synthetic request context that
-   * carries the MCP caller's identity. The bot, bot-state and bot-query
-   * services enforce ownership by reading request.user, so this makes their
-   * existing authorization apply to MCP calls exactly as it does to HTTP
-   * requests.
-   */
-  private async resolveForUser<T>(
-    provider: Type<T>,
-    userId: string,
-  ): Promise<T> {
-    const contextId = ContextIdFactory.create();
-    this.moduleRef.registerRequestByContextId(
-      { user: { uid: userId } },
-      contextId,
-    );
-    return this.moduleRef.resolve(provider, contextId, { strict: false });
-  }
 
   async handleToolCall(
     name: string,
@@ -181,8 +163,7 @@ export class McpService {
 
   // Bot Handlers
   private async handleBotList(actor: Actor) {
-    const botService = await this.resolveForUser(BotService, actor.userId);
-    const result = await botService.findAll();
+    const result = await this.botService.findAll(actor);
     if (!result.success) {
       throw new Error(result.error || "Failed to list bots");
     }
@@ -198,8 +179,7 @@ export class McpService {
   }
 
   private async handleBotGet(input: BotGetInput, actor: Actor) {
-    const botService = await this.resolveForUser(BotService, actor.userId);
-    const result = await botService.findOne(input.bot_id);
+    const result = await this.botService.findOne(actor, input.bot_id);
     if (!result.success) {
       throw new Error(result.error || "Bot not found");
     }
@@ -214,8 +194,10 @@ export class McpService {
       throw new Error("Config must include a 'name' field");
     }
 
-    const botService = await this.resolveForUser(BotService, actor.userId);
-    const result = await botService.create({ name, config: input.config });
+    const result = await this.botService.create(actor, {
+      name,
+      config: input.config,
+    });
     if (!result.success) {
       throw new Error(result.error || "Failed to deploy bot");
     }
@@ -231,8 +213,7 @@ export class McpService {
   }
 
   private async handleBotUpdate(input: BotUpdateInput, actor: Actor) {
-    const botService = await this.resolveForUser(BotService, actor.userId);
-    const result = await botService.update(input.bot_id, {
+    const result = await this.botService.update(actor, input.bot_id, {
       config: input.config,
       ...(input.name && { name: input.name }),
     });
@@ -249,8 +230,7 @@ export class McpService {
   }
 
   private async handleBotDelete(input: BotDeleteInput, actor: Actor) {
-    const botService = await this.resolveForUser(BotService, actor.userId);
-    const result = await botService.remove(input.bot_id);
+    const result = await this.botService.remove(actor, input.bot_id);
     if (!result.success) {
       throw new Error(result.error || "Failed to delete bot");
     }
@@ -327,11 +307,7 @@ export class McpService {
     if (!input.bot_id) {
       throw new Error("bot_id is required");
     }
-    const botStateService = await this.resolveForUser(
-      BotStateService,
-      actor.userId,
-    );
-    const result = await botStateService.listKeys(input.bot_id);
+    const result = await this.botStateService.listKeys(actor, input.bot_id);
     if (!result.success) {
       throw new Error(result.error?.message || "Failed to list state keys");
     }
@@ -345,11 +321,11 @@ export class McpService {
     if (!input.key) {
       throw new Error("key is required");
     }
-    const botStateService = await this.resolveForUser(
-      BotStateService,
-      actor.userId,
+    const result = await this.botStateService.getKey(
+      actor,
+      input.bot_id,
+      input.key,
     );
-    const result = await botStateService.getKey(input.bot_id, input.key);
     if (!result.success) {
       throw new Error(result.error?.message || "Failed to get state value");
     }
@@ -364,15 +340,15 @@ export class McpService {
     if (!input.query_path) {
       throw new Error("query_path is required");
     }
-    const botQueryService = await this.resolveForUser(
-      BotQueryService,
-      actor.userId,
+    const result = await this.botQueryService.executeQuery(
+      actor,
+      input.bot_id,
+      {
+        queryPath: input.query_path,
+        params: input.params,
+        timeoutSec: input.timeout_sec,
+      },
     );
-    const result = await botQueryService.executeQuery(input.bot_id, {
-      queryPath: input.query_path,
-      params: input.params,
-      timeoutSec: input.timeout_sec,
-    });
     if (!result.success) {
       throw new Error(result.error?.message || "Failed to execute query");
     }

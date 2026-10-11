@@ -1,15 +1,14 @@
-import { Inject, Injectable, Scope } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { CreateBotDto } from "./dto/create-bot.dto";
 import { UpdateBotDto } from "./dto/update-bot.dto";
 import { BotRepository } from "./bot.repository";
-import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { Bot } from "./entities/bot.entity";
 import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot, BotType, BotDeleteResult } from "@/custom-bot/custom-bot.types";
-import { AuthenticatedRequest } from "@/auth/auth.types";
+import { Actor } from "@/auth/actor";
 import { BotConfig } from "@/database/schema/bots";
 // UserBotsService removed for OSS version
 import { NatsService } from "@/nats/nats.service";
@@ -22,10 +21,9 @@ import {
 
 type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
 
-@Injectable({ scope: Scope.REQUEST })
+@Injectable()
 export class BotService {
   constructor(
-    @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     private readonly botRepository: BotRepository,
     private readonly botValidator: BotValidator,
     private readonly customBotService: CustomBotService,
@@ -34,8 +32,11 @@ export class BotService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async create(createBotDto: CreateBotDto): Promise<Result<Bot, string>> {
-    const { uid } = this.request.user;
+  async create(
+    actor: Actor,
+    createBotDto: CreateBotDto,
+  ): Promise<Result<Bot, string>> {
+    const uid = actor.userId;
 
     const validationResult = await this.validateBotTypeAndConfig(
       createBotDto.config,
@@ -101,14 +102,12 @@ export class BotService {
     );
   }
 
-  findAll(): Promise<Result<Bot[], string>> {
-    const { uid } = this.request.user;
-    return this.botRepository.findAll(uid);
+  findAll(actor: Actor): Promise<Result<Bot[], string>> {
+    return this.botRepository.findAll(actor.userId);
   }
 
-  findOne(id: string): Promise<Result<Bot, string>> {
-    const { uid } = this.request.user;
-    return this.botRepository.findOne(uid, id);
+  findOne(actor: Actor, id: string): Promise<Result<Bot, string>> {
+    return this.botRepository.findOne(actor.userId, id);
   }
 
   findOneByUserId(userId: string, id: string): Promise<Result<Bot, string>> {
@@ -116,6 +115,7 @@ export class BotService {
   }
 
   async update(
+    actor: Actor,
     id: string,
     updateBotDto: UpdateBotDto,
   ): Promise<Result<Bot, string>> {
@@ -128,7 +128,7 @@ export class BotService {
       );
     }
 
-    const { uid } = this.request.user;
+    const uid = actor.userId;
 
     const currentBot = await this.botRepository.findOne(uid, id);
     if (!currentBot.success) {
@@ -212,8 +212,11 @@ export class BotService {
     }
   }
 
-  async remove(id: string): Promise<Result<BotDeleteResult, string>> {
-    const { uid } = this.request.user;
+  async remove(
+    actor: Actor,
+    id: string,
+  ): Promise<Result<BotDeleteResult, string>> {
+    const uid = actor.userId;
 
     // Fetch bot data before deletion for event payload
     const botResult = await this.botRepository.findOne(uid, id);
