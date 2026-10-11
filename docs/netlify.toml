@@ -2,6 +2,7 @@
   base = "docs"
   publish = ".vitepress/dist"
   command = "yarn build"
+  ignore = "bash scripts/netlify-ignore.sh"
 
 [build.environment]
   NODE_VERSION = "20"
