@@ -49,6 +49,7 @@ type Config struct {
 type Consumer struct {
 	js       jetstream.JetStream
 	cfg      Config
+	retry    backoff
 	ready    atomic.Bool
 	inflight sync.WaitGroup
 	stop     chan struct{}
@@ -61,7 +62,7 @@ func NewConsumer(nc *nats.Conn, cfg Config) (*Consumer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
 	}
-	return &Consumer{js: js, cfg: cfg, stop: make(chan struct{})}, nil
+	return &Consumer{js: js, cfg: cfg, retry: defaultBackoff, stop: make(chan struct{})}, nil
 }
 
 func consumerConfig(cfg Config) jetstream.ConsumerConfig {
@@ -208,7 +209,7 @@ func (c *Consumer) handle(msg jetstream.Msg) {
 	cancel()
 
 	var settleErr error
-	switch v, delay := settle(err, delivered); v {
+	switch v, delay := settle(err, delivered, c.retry); v {
 	case verdictAck:
 		c.cfg.Logger.Info("Handled lifecycle event", fields...)
 		settleErr = msg.Ack()

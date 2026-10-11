@@ -10,10 +10,10 @@ import (
 )
 
 func TestSettle_HandledEventIsAcked(t *testing.T) {
-	v, _ := settle(nil, 1)
+	v, _ := settle(nil, 1, defaultBackoff)
 	assert.Equal(t, verdictAck, v)
 
-	v, _ = settle(nil, maxDeliver)
+	v, _ = settle(nil, maxDeliver, defaultBackoff)
 	assert.Equal(t, verdictAck, v, "a last attempt that succeeds is acked too")
 }
 
@@ -28,20 +28,20 @@ func TestSettle_FailedEventIsRetriedWithGrowingDelays(t *testing.T) {
 		maxDeliver - 1: time.Minute,
 	}
 	for delivered, delay := range want {
-		v, got := settle(failure, delivered)
+		v, got := settle(failure, delivered, defaultBackoff)
 		assert.Equal(t, verdictRetry, v, "delivery %d", delivered)
 		assert.Equal(t, delay, got, "delivery %d", delivered)
 	}
 }
 
 func TestSettle_FailedEventIsDroppedAfterTheLastDelivery(t *testing.T) {
-	v, _ := settle(errors.New("mongo unavailable"), maxDeliver)
+	v, _ := settle(errors.New("mongo unavailable"), maxDeliver, defaultBackoff)
 	assert.Equal(t, verdictDrop, v)
 }
 
 func TestSettle_EventThatCanNeverSucceedIsDroppedAtOnce(t *testing.T) {
 	malformed := Permanent(errors.New("invalid JSON"))
-	v, _ := settle(fmt.Errorf("handling the0.bot.created: %w", malformed), 1)
+	v, _ := settle(fmt.Errorf("handling the0.bot.created: %w", malformed), 1, defaultBackoff)
 	assert.Equal(t, verdictDrop, v)
 }
 

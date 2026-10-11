@@ -13,10 +13,19 @@ const (
 	verdictDrop
 )
 
-const (
-	firstRetryDelay = time.Second
-	maxRetryDelay   = time.Minute
-)
+type backoff struct {
+	first, max time.Duration
+}
+
+var defaultBackoff = backoff{first: time.Second, max: time.Minute}
+
+func (b backoff) delay(delivered uint64) time.Duration {
+	delay := b.first
+	for i := uint64(1); i < delivered && delay < b.max; i++ {
+		delay *= 2
+	}
+	return min(delay, b.max)
+}
 
 type permanentError struct{ err error }
 
@@ -29,7 +38,7 @@ func Permanent(err error) error {
 	return permanentError{err: err}
 }
 
-func settle(err error, delivered uint64) (verdict, time.Duration) {
+func settle(err error, delivered uint64, retry backoff) (verdict, time.Duration) {
 	if err == nil {
 		return verdictAck, 0
 	}
@@ -37,9 +46,5 @@ func settle(err error, delivered uint64) (verdict, time.Duration) {
 	if errors.As(err, &permanent) || delivered >= maxDeliver {
 		return verdictDrop, 0
 	}
-	delay := firstRetryDelay
-	for i := uint64(1); i < delivered && delay < maxRetryDelay; i++ {
-		delay *= 2
-	}
-	return verdictRetry, min(delay, maxRetryDelay)
+	return verdictRetry, retry.delay(delivered)
 }
