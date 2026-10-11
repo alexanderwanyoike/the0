@@ -40,14 +40,18 @@ export class BotEventFactory {
   }
 
   /**
-   * Only a malformed type blocks deletion. A bot with no type/version, or
-   * whose custom bot version is gone, is still deleted, just without an
-   * event.
+   * Only a malformed type blocks deletion. When the Bot's Custom bot
+   * version cannot be found, the delete goes out on both the realtime and
+   * the scheduled subject: the runtime ignores a delete for a bot it does
+   * not hold, and must not keep running one it does.
    */
   async deleted(bot: Bot): Promise<Result<BotEvent[], string>> {
+    const payload = { id: bot.id, config: bot.config };
     const configType = bot.config?.type;
     const configVersion = bot.config?.version;
-    if (!configType || !configVersion) return Ok([]);
+    if (!configType || !configVersion) {
+      return Ok(deletedOnEverySubject(bot.id, payload));
+    }
 
     const name = customBotNameOf(configType);
     if (!name.success) {
@@ -60,13 +64,12 @@ export class BotEventFactory {
         name.data,
         configVersion,
       );
-    if (!customBotResult.success) return Ok([]);
+    if (!customBotResult.success) {
+      return Ok(deletedOnEverySubject(bot.id, payload));
+    }
 
     return Ok(
-      botEvents(bot.id, this.topicsFor(customBotResult.data)?.DELETED, {
-        id: bot.id,
-        config: bot.config,
-      }),
+      botEvents(bot.id, this.topicsFor(customBotResult.data)?.DELETED, payload),
     );
   }
 
@@ -90,6 +93,14 @@ const botEvents = (
   subject: string | undefined,
   payload: Record<string, unknown>,
 ): BotEvent[] => (subject ? [{ botId, subject, payload }] : []);
+
+const deletedOnEverySubject = (
+  botId: string,
+  payload: Record<string, unknown>,
+): BotEvent[] =>
+  [BOT_TOPICS.DELETED, SCHEDULED_BOT_TOPICS.DELETED].flatMap((subject) =>
+    botEvents(botId, subject, payload),
+  );
 
 // The runtime's bot-scheduler subscriber expects this flat structure.
 const customBotEventPayload = (
