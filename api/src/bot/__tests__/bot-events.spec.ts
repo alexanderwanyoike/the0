@@ -272,4 +272,70 @@ describe("bot events", () => {
       });
     });
   });
+
+  describe("deliver events whose first publish failed", () => {
+    beforeEach(async () => {
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      await uploadCustomBot("sma-bot", "1.1.0", "scheduled");
+    });
+
+    it("delivers a deployed bot's event after its publish failed", async () => {
+      nats.failNextPublish();
+
+      await deploy(scheduledConfig("1.0.0"));
+
+      await waitFor(() => nats.published.length === 1);
+      expect(nats.subjects()).toEqual(["the0.bot-schedule.created"]);
+    });
+
+    it("delivers an updated bot's event after its publish failed", async () => {
+      const id = await deploy(scheduledConfig("1.0.0"));
+      await waitFor(() => nats.published.length === 1);
+      nats.failNextPublish();
+
+      const result = await bots.update(actor, id, {
+        config: scheduledConfig("1.1.0"),
+      });
+
+      expect(result.success).toBe(true);
+      await waitFor(() => nats.published.length === 2);
+      expect(nats.subjects()[1]).toBe("the0.bot-schedule.updated");
+    });
+
+    it("delivers a deleted bot's event after its publish failed, so the runtime stops it", async () => {
+      const id = await deploy(scheduledConfig("1.0.0"));
+      await waitFor(() => nats.published.length === 1);
+      nats.failNextPublish();
+
+      const result = await bots.remove(actor, id);
+
+      expect(result.success).toBe(true);
+      await waitFor(() => nats.published.length === 2);
+      expect(nats.subjects()[1]).toBe("the0.bot-schedule.deleted");
+    });
+
+    it("lets bot commands succeed while NATS is down and sends their events in commit order once it is back", async () => {
+      nats.goDown();
+
+      const first = await deploy(scheduledConfig("1.0.0"));
+      const updated = await bots.update(actor, first, {
+        config: scheduledConfig("1.1.0"),
+      });
+      const removed = await bots.remove(actor, first);
+      const second = await deploy(scheduledConfig("1.0.0", "MSFT"));
+      nats.comeBack();
+
+      expect(updated.success).toBe(true);
+      expect(removed.success).toBe(true);
+      await waitFor(() => nats.published.length === 4);
+      expect(
+        nats.published.map(({ subject, payload }) => [subject, payload.id]),
+      ).toEqual([
+        ["the0.bot-schedule.created", first],
+        ["the0.bot-schedule.updated", first],
+        ["the0.bot-schedule.deleted", first],
+        ["the0.bot-schedule.created", second],
+      ]);
+    });
+  });
 });
