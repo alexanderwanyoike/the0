@@ -2,7 +2,7 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.11.2
+version: 0.11.3
 appVersion: "1.16.2"
 kubeVersion: ">=1.21.0-0"
 keywords:
@@ -31,19 +31,21 @@ annotations:
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: fixed
-      description: Querying a path a bot does not define returns the bot's own error and the paths it does answer, e.g. "No handler for path: /status (available: /today, /history, /health, /info)", instead of the runtime job's logs
+      description: "Chart metadata is valid again: 0.11.2 shipped an Artifact Hub changes annotation that was not valid YAML, so Artifact Hub could not index it. The chart is otherwise the same as 0.11.2"
     - kind: fixed
-      description: Querying a bot with no query entrypoint answers 422 "This bot defines no queries" instead of 404 "bot not found"
-    - kind: security
-      description: A query never runs a bot's main entrypoint - Kubernetes query pods and the in-container runner refuse a bot without a query entrypoint, and query pods now set QUERY_ENTRYPOINT
+      description: "Querying a path a bot does not define returns the bot's own error and the paths it does answer, e.g. 'No handler for path: /status (available: /today, /history, /health, /info)', instead of the runtime job's logs"
     - kind: fixed
-      description: Query results are removed from object storage even when the query hits its timeout
+      description: "Querying a bot with no query entrypoint answers 422 'This bot defines no queries' instead of 404 'bot not found'"
     - kind: security
-      description: Runtime and CLI built with Go 1.26.9 (net/http, crypto/tls and net/textproto advisories), with mongo-driver, moby/go-archive, x/crypto and x/net bumps
+      description: "A query never runs a bot's main entrypoint: Kubernetes query pods and the in-container runner refuse a bot without a query entrypoint, and query pods now set QUERY_ENTRYPOINT"
+    - kind: fixed
+      description: "Query results are removed from object storage even when the query hits its timeout"
     - kind: security
-      description: Cleared yarn audit findings in proxy-addr (api), handlebars (React SDK), vue and source-map-js (docs, frontend)
+      description: "Runtime and CLI built with Go 1.26.9 (net/http, crypto/tls and net/textproto advisories), with mongo-driver, moby/go-archive, x/crypto and x/net bumps"
+    - kind: security
+      description: "Cleared yarn audit findings in proxy-addr (api), handlebars (React SDK), vue and source-map-js (docs, frontend)"
     - kind: added
-      description: Docs Recipes section with step-by-step build walkthroughs, starting with the python-macro-event-guard example bot
+      description: "Docs Recipes section with step-by-step build walkthroughs, starting with the python-macro-event-guard example bot"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
