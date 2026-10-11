@@ -44,7 +44,7 @@ export class McpService {
 
       switch (name) {
         case MCP_TOOL_NAMES.AUTH_STATUS:
-          result = { valid: true, message: "API key is valid" };
+          result = { valid: true, message: "Credentials are valid" };
           break;
 
         case MCP_TOOL_NAMES.BOT_LIST:
