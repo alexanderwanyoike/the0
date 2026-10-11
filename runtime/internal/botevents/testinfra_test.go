@@ -85,6 +85,12 @@ func (r *recorder) has(payload string) bool {
 	return false
 }
 
+func (r *recorder) all() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.handled...)
+}
+
 func (r *recorder) count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
