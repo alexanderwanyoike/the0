@@ -1,5 +1,4 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { ModuleRef } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { McpService } from "../mcp.service";
 import { Actor } from "@/auth/actor";
@@ -99,7 +98,6 @@ describe("McpService", () => {
   let logsService: jest.Mocked<LogsService>;
   let botStateService: { listKeys: jest.Mock; getKey: jest.Mock };
   let botQueryService: { executeQuery: jest.Mock };
-  let moduleRef: ModuleRef;
 
   const userId = "user-123";
   const otherUserId = "user-456";
@@ -220,7 +218,6 @@ describe("McpService", () => {
     logsService = module.get(LogsService);
     botStateService = mockBotStateService;
     botQueryService = mockBotQueryService;
-    moduleRef = module.get(ModuleRef);
   });
 
   describe("handleToolCall", () => {
@@ -605,29 +602,10 @@ describe("McpService", () => {
         );
 
         expect(result.isError).toBeUndefined();
-        expect(botStateService.listKeys).toHaveBeenCalledWith("bot-123");
+        expect(botStateService.listKeys).toHaveBeenCalledWith(actor, "bot-123");
         const data = JSON.parse(result.content[0].text);
         expect(data.bot_id).toBe("bot-123");
         expect(data.keys).toEqual([{ key: "positions", size: 128 }]);
-      });
-
-      it("should resolve the state service in a request context carrying the calling user", async () => {
-        botStateService.listKeys.mockResolvedValue(Ok([]));
-        const registerRequest = jest.spyOn(
-          moduleRef,
-          "registerRequestByContextId",
-        );
-
-        await service.handleToolCall(
-          "bot_state_list",
-          { bot_id: "bot-123" },
-          actor,
-        );
-
-        expect(registerRequest).toHaveBeenCalledWith(
-          { user: { uid: userId } },
-          expect.anything(),
-        );
       });
 
       it("should surface access errors", async () => {
@@ -680,6 +658,7 @@ describe("McpService", () => {
 
         expect(result.isError).toBeUndefined();
         expect(botStateService.getKey).toHaveBeenCalledWith(
+          actor,
           "bot-123",
           "positions",
         );
@@ -728,11 +707,15 @@ describe("McpService", () => {
         );
 
         expect(result.isError).toBeUndefined();
-        expect(botQueryService.executeQuery).toHaveBeenCalledWith("bot-123", {
-          queryPath: "/positions",
-          params: { symbol: "AAPL" },
-          timeoutSec: 10,
-        });
+        expect(botQueryService.executeQuery).toHaveBeenCalledWith(
+          actor,
+          "bot-123",
+          {
+            queryPath: "/positions",
+            params: { symbol: "AAPL" },
+            timeoutSec: 10,
+          },
+        );
         const data = JSON.parse(result.content[0].text);
         expect(data.status).toBe("success");
         expect(data.data).toEqual({ price: 42 });

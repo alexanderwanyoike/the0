@@ -10,6 +10,8 @@ import { AuthService } from "@/auth/auth.service";
 import { BotRepository } from "@/bot/bot.repository";
 import { BotService } from "@/bot/bot.service";
 import { BotValidator } from "@/bot/bot.validator";
+import { BotQueryService } from "@/bot-query/bot-query.service";
+import { BotStateService } from "@/bot-state/bot-state.service";
 import { Failure, Ok } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
@@ -36,6 +38,8 @@ describe("POST /mcp", () => {
         { provide: CustomBotService, useValue: {} },
         { provide: NatsService, useValue: {} },
         { provide: LogsService, useValue: {} },
+        { provide: BotStateService, useValue: {} },
+        { provide: BotQueryService, useValue: {} },
         { provide: PinoLogger, useValue: createMockLogger() },
       ],
     }).compile();
@@ -76,6 +80,15 @@ describe("POST /mcp", () => {
     method: "tools/call",
     params: { name: "bot_list", arguments: {} },
   };
+
+  const keyHeaders = [
+    { header: "x-api-key", headers: { "x-api-key": "the0_valid" } },
+    {
+      header: "Authorization: ApiKey",
+      headers: { authorization: "ApiKey the0_valid" },
+    },
+  ];
+  const keyActor = { userId: "user-1", via: "mcp", apiKeyId: "key-1" };
 
   describe("completes the MCP handshake", () => {
     it("answers initialize with the protocol version and tool capability", async () => {
@@ -158,13 +171,7 @@ describe("POST /mcp", () => {
       ]);
     });
 
-    it.each([
-      { header: "x-api-key", headers: { "x-api-key": "the0_valid" } },
-      {
-        header: "Authorization: ApiKey",
-        headers: { authorization: "ApiKey the0_valid" },
-      },
-    ])(
+    it.each(keyHeaders)(
       "accepts the key in $header and hands the tool an mcp Actor",
       async ({ headers }) => {
         botRepository.findAll.mockResolvedValue(Ok([]));
@@ -177,17 +184,22 @@ describe("POST /mcp", () => {
 
         expect(res.body.result.isError).toBeUndefined();
         expect(apiKeyService.validateApiKey).toHaveBeenCalledWith("the0_valid");
-        expect(handleToolCall).toHaveBeenCalledWith(
-          "bot_list",
-          {},
-          {
-            userId: "user-1",
-            via: "mcp",
-            apiKeyId: "key-1",
-          },
-        );
+        expect(handleToolCall).toHaveBeenCalledWith("bot_list", {}, keyActor);
         expect(botRepository.findAll).toHaveBeenCalledWith("user-1");
         handleToolCall.mockRestore();
+      },
+    );
+
+    it.each(keyHeaders)(
+      "reaches BotService with the mcp Actor of a key in $header",
+      async ({ headers }) => {
+        botRepository.findAll.mockResolvedValue(Ok([]));
+        const findAll = jest.spyOn(BotService.prototype, "findAll");
+
+        await rpcWithHeaders({ id: 6, ...botList }, headers);
+
+        expect(findAll).toHaveBeenCalledWith(keyActor);
+        findAll.mockRestore();
       },
     );
 

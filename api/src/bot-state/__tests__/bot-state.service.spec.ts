@@ -8,7 +8,7 @@ import { ConfigService } from "@nestjs/config";
 import { BotService } from "@/bot/bot.service";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
-import { REQUEST } from "@nestjs/core";
+import { Actor } from "@/auth/actor";
 import { Ok, Failure } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as fs from "fs";
@@ -25,6 +25,7 @@ describe("BotStateService", () => {
   let tempDir: string;
 
   const testUid = "test-user-id";
+  const actor: Actor = { userId: testUid, via: "jwt" };
   const testBotId = "test-bot-id";
 
   const mockBot = {
@@ -91,14 +92,10 @@ describe("BotStateService", () => {
           provide: PinoLogger,
           useValue: (mockLogger = createMockLogger()),
         },
-        {
-          provide: REQUEST,
-          useValue: { user: { uid: testUid } },
-        },
       ],
     }).compile();
 
-    service = await module.resolve<BotStateService>(BotStateService);
+    service = module.get<BotStateService>(BotStateService);
   });
 
   afterEach(() => {
@@ -149,7 +146,7 @@ describe("BotStateService", () => {
         .fn()
         .mockResolvedValue(Failure("Not found"));
 
-      const result = await service.listKeys("nonexistent-bot");
+      const result = await service.listKeys(actor, "nonexistent-bot");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
@@ -160,11 +157,11 @@ describe("BotStateService", () => {
         .fn()
         .mockResolvedValue(Failure("Access denied"));
 
-      const result = await service.listKeys(testBotId);
+      const result = await service.listKeys(actor, testBotId);
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
-      expect(mockBotService.findOne).toHaveBeenCalledWith(testBotId);
+      expect(mockBotService.findOne).toHaveBeenCalledWith(actor, testBotId);
     });
   });
 
@@ -174,35 +171,39 @@ describe("BotStateService", () => {
         .fn()
         .mockResolvedValue(Failure("Not found"));
 
-      const result = await service.getKey("nonexistent-bot", "portfolio");
+      const result = await service.getKey(
+        actor,
+        "nonexistent-bot",
+        "portfolio",
+      );
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
     });
 
     it("should reject invalid keys with forward slash", async () => {
-      const result = await service.getKey(testBotId, "../escape");
+      const result = await service.getKey(actor, testBotId, "../escape");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject invalid keys with backslash", async () => {
-      const result = await service.getKey(testBotId, "..\\escape");
+      const result = await service.getKey(actor, testBotId, "..\\escape");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject invalid keys with double dots", async () => {
-      const result = await service.getKey(testBotId, "..");
+      const result = await service.getKey(actor, testBotId, "..");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject empty key", async () => {
-      const result = await service.getKey(testBotId, "");
+      const result = await service.getKey(actor, testBotId, "");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
@@ -215,21 +216,25 @@ describe("BotStateService", () => {
         .fn()
         .mockResolvedValue(Failure("Not found"));
 
-      const result = await service.deleteKey("nonexistent-bot", "portfolio");
+      const result = await service.deleteKey(
+        actor,
+        "nonexistent-bot",
+        "portfolio",
+      );
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
     });
 
     it("should reject invalid keys with path separators", async () => {
-      const result = await service.deleteKey(testBotId, "../escape");
+      const result = await service.deleteKey(actor, testBotId, "../escape");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
     });
 
     it("should reject empty key", async () => {
-      const result = await service.deleteKey(testBotId, "");
+      const result = await service.deleteKey(actor, testBotId, "");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
@@ -238,7 +243,7 @@ describe("BotStateService", () => {
 
   describe("reading a key from stored state", () => {
     it("rejects a malformed bot ID before checking ownership", async () => {
-      const result = await service.getKey("../other-bot", "portfolio");
+      const result = await service.getKey(actor, "../other-bot", "portfolio");
 
       expect(result).toEqual(
         Failure({
@@ -252,7 +257,7 @@ describe("BotStateService", () => {
     it("reports a missing key when no state archive exists", async () => {
       mockMinioClient.statObject.mockRejectedValueOnce(notFound());
 
-      const result = await service.getKey(testBotId, "portfolio");
+      const result = await service.getKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(
         Failure({
@@ -266,7 +271,7 @@ describe("BotStateService", () => {
     it("reports a missing key that is not in the archive", async () => {
       storeState({ "other.json": "2" });
 
-      const result = await service.getKey(testBotId, "portfolio");
+      const result = await service.getKey(actor, testBotId, "portfolio");
 
       expect(result.error?.code).toBe(BotStateErrorCode.KEY_NOT_FOUND);
       expect(fs.existsSync(downloadedDirs[0])).toBe(false);
@@ -275,7 +280,7 @@ describe("BotStateService", () => {
     it("returns the parsed value and cleans up the temp dir", async () => {
       storeState({ "portfolio.json": '{"cash":100,"positions":["BTC"]}' });
 
-      const result = await service.getKey(testBotId, "portfolio");
+      const result = await service.getKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(Ok({ cash: 100, positions: ["BTC"] }));
       expect(mockMinioClient.fGetObject).toHaveBeenCalledWith(
@@ -302,7 +307,7 @@ describe("BotStateService", () => {
       const oneMbAndAByte = " ".repeat(1024 * 1024) + "1";
       storeState({ "portfolio.json": oneMbAndAByte });
 
-      const result = await limitedService.getKey(testBotId, "portfolio");
+      const result = await limitedService.getKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(
         Failure({
@@ -325,7 +330,7 @@ describe("BotStateService", () => {
     it("reports invalid JSON in the stored value", async () => {
       storeState({ "portfolio.json": "{not json" });
 
-      const result = await service.getKey(testBotId, "portfolio");
+      const result = await service.getKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(
         Failure({
@@ -343,7 +348,7 @@ describe("BotStateService", () => {
       const failure = new Error("stat failed");
       mockMinioClient.statObject.mockRejectedValueOnce(failure);
 
-      const result = await service.getKey(testBotId, "portfolio");
+      const result = await service.getKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(
         Failure({
@@ -363,7 +368,7 @@ describe("BotStateService", () => {
         etag: "etag-1",
       });
 
-      const result = await service.getKey(testBotId, "portfolio");
+      const result = await service.getKey(actor, testBotId, "portfolio");
 
       expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
       expect(mockMinioClient.fGetObject).not.toHaveBeenCalled();
@@ -372,9 +377,16 @@ describe("BotStateService", () => {
 
   describe("deleting a key from stored state", () => {
     it("looks up ownership before validating the bot ID format", async () => {
-      const result = await service.deleteKey("../other-bot", "portfolio");
+      const result = await service.deleteKey(
+        actor,
+        "../other-bot",
+        "portfolio",
+      );
 
-      expect(mockBotService.findOne).toHaveBeenCalledWith("../other-bot");
+      expect(mockBotService.findOne).toHaveBeenCalledWith(
+        actor,
+        "../other-bot",
+      );
       expect(result).toEqual(
         Failure({
           code: BotStateErrorCode.STORAGE_ERROR,
@@ -401,7 +413,7 @@ describe("BotStateService", () => {
     it("returns false without downloading when no state archive exists", async () => {
       mockMinioClient.statObject.mockRejectedValueOnce(notFound());
 
-      const result = await service.deleteKey(testBotId, "portfolio");
+      const result = await service.deleteKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(Ok(false));
       expect(mockMinioClient.fGetObject).not.toHaveBeenCalled();
@@ -410,7 +422,7 @@ describe("BotStateService", () => {
     it("returns false without writing when the key is absent", async () => {
       storeState({ "other.json": "2" });
 
-      const result = await service.deleteKey(testBotId, "portfolio");
+      const result = await service.deleteKey(actor, testBotId, "portfolio");
 
       expect(result).toEqual(Ok(false));
       expect(mockMinioClient.statObject).toHaveBeenCalledTimes(1);
@@ -427,7 +439,7 @@ describe("BotStateService", () => {
         mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
         const uploads = captureUploads();
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(Ok(true));
         expect(mockMinioClient.statObject).toHaveBeenNthCalledWith(
@@ -449,7 +461,7 @@ describe("BotStateService", () => {
         mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
         captureUploads();
 
-        await service.deleteKey(testBotId, "portfolio");
+        await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(downloadedDirs).toHaveLength(1);
         expect(fs.existsSync(downloadedDirs[0])).toBe(false);
@@ -458,7 +470,7 @@ describe("BotStateService", () => {
       it("reports a concurrent modification without uploading when the ETag changed", async () => {
         mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-2" });
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(
           Failure({
@@ -478,7 +490,7 @@ describe("BotStateService", () => {
       it("reports a concurrent modification when the archive was deleted meanwhile", async () => {
         mockMinioClient.statObject.mockRejectedValueOnce(notFound());
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result.error?.code).toBe(
           BotStateErrorCode.CONCURRENT_MODIFICATION,
@@ -494,7 +506,7 @@ describe("BotStateService", () => {
         const failure = new Error("stat failed");
         mockMinioClient.statObject.mockRejectedValueOnce(failure);
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(
           Failure({
@@ -515,7 +527,7 @@ describe("BotStateService", () => {
           new Error("put failed"),
         );
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
       });
@@ -526,7 +538,7 @@ describe("BotStateService", () => {
         storeState({ "portfolio.json": "1" });
         mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(Ok(true));
         expect(mockMinioClient.statObject).toHaveBeenCalledTimes(2);
@@ -541,7 +553,7 @@ describe("BotStateService", () => {
         storeState({ "portfolio.json": "1", "notes.txt": "x" });
         mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-1" });
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(Ok(true));
         expect(mockMinioClient.removeObject).toHaveBeenCalledTimes(1);
@@ -552,7 +564,7 @@ describe("BotStateService", () => {
         storeState({ "portfolio.json": "1" });
         mockMinioClient.statObject.mockResolvedValueOnce({ etag: "etag-2" });
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result.error?.code).toBe(
           BotStateErrorCode.CONCURRENT_MODIFICATION,
@@ -568,7 +580,7 @@ describe("BotStateService", () => {
         storeState({ "portfolio.json": "1" });
         mockMinioClient.statObject.mockRejectedValueOnce(notFound());
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(Ok(true));
         expect(mockMinioClient.removeObject).toHaveBeenCalledWith(
@@ -584,7 +596,7 @@ describe("BotStateService", () => {
           new Error("stat failed"),
         );
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
         expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
@@ -597,7 +609,7 @@ describe("BotStateService", () => {
           new Error("remove failed"),
         );
 
-        const result = await service.deleteKey(testBotId, "portfolio");
+        const result = await service.deleteKey(actor, testBotId, "portfolio");
 
         expect(result).toEqual(Ok(true));
       });
@@ -708,7 +720,7 @@ describe("BotStateService", () => {
         .fn()
         .mockResolvedValue(Failure("Not found"));
 
-      const result = await service.clearState("nonexistent-bot");
+      const result = await service.clearState(actor, "nonexistent-bot");
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
@@ -719,11 +731,11 @@ describe("BotStateService", () => {
         .fn()
         .mockResolvedValue(Failure("Access denied"));
 
-      const result = await service.clearState(testBotId);
+      const result = await service.clearState(actor, testBotId);
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
-      expect(mockBotService.findOne).toHaveBeenCalledWith(testBotId);
+      expect(mockBotService.findOne).toHaveBeenCalledWith(actor, testBotId);
     });
   });
 
@@ -739,7 +751,7 @@ describe("BotStateService", () => {
 
     invalidKeys.forEach(({ key, description }) => {
       it(`should reject ${description}`, async () => {
-        const result = await service.getKey(testBotId, key);
+        const result = await service.getKey(actor, testBotId, key);
         expect(result.success).toBe(false);
         expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
       });

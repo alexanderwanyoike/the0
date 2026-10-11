@@ -2,7 +2,6 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BotService } from "../bot.service";
 import { BotRepository } from "../bot.repository";
 import { Bot } from "../entities/bot.entity";
-import { REQUEST } from "@nestjs/core";
 import { BotValidator } from "../bot.validator";
 import { HttpModule } from "@nestjs/axios";
 import { ConfigModule } from "@nestjs/config";
@@ -14,6 +13,7 @@ import { Ok, Failure } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
+import { Actor } from "@/auth/actor";
 
 describe("BotService - Enhanced Tests", () => {
   let service: BotService;
@@ -24,6 +24,7 @@ describe("BotService - Enhanced Tests", () => {
   let logger: ReturnType<typeof createMockLogger>;
   // FeatureGateService removed for OSS version
   const uid = "test-user-id";
+  const actor: Actor = { userId: uid, via: "jwt" };
 
   const mockCustomBot = {
     id: "test-custom-bot",
@@ -100,10 +101,6 @@ describe("BotService - Enhanced Tests", () => {
           },
         },
         {
-          provide: REQUEST,
-          useValue: { user: { uid } },
-        },
-        {
           provide: PinoLogger,
           useValue: createMockLogger(),
         },
@@ -111,7 +108,7 @@ describe("BotService - Enhanced Tests", () => {
       ],
     }).compile();
 
-    service = await module.resolve<BotService>(BotService);
+    service = module.get<BotService>(BotService);
     repository = module.get<BotRepository>(BotRepository);
     validator = module.get<BotValidator>(BotValidator);
     natsService = module.get(NatsService);
@@ -168,7 +165,7 @@ describe("BotService - Enhanced Tests", () => {
           topic: "the0-scheduled-custom-bot",
         }),
       });
-      const result = await service.create(validBotData);
+      const result = await service.create(actor, validBotData);
 
       expect(result.success).toBe(true);
       expect(result.data.id).toBe("test-id");
@@ -194,7 +191,7 @@ describe("BotService - Enhanced Tests", () => {
         }),
       };
 
-      const result = await service.create(invalidTypeBot);
+      const result = await service.create(actor, invalidTypeBot);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Invalid bot type format");
@@ -209,7 +206,7 @@ describe("BotService - Enhanced Tests", () => {
         }),
       };
 
-      const result = await service.create(invalidVersionBot);
+      const result = await service.create(actor, invalidVersionBot);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Invalid version format");
@@ -226,7 +223,7 @@ describe("BotService - Enhanced Tests", () => {
           data: null,
         });
 
-      const result = await service.create(validBotData);
+      const result = await service.create(actor, validBotData);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("not found");
@@ -239,7 +236,7 @@ describe("BotService - Enhanced Tests", () => {
         data: null,
       });
 
-      const result = await service.create(validBotData);
+      const result = await service.create(actor, validBotData);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Missing required field");
@@ -249,7 +246,7 @@ describe("BotService - Enhanced Tests", () => {
       jest.spyOn(repository, "create").mockResolvedValue(Failure("db down"));
       jest.spyOn(repository, "findOne");
 
-      const result = await service.create(validBotData);
+      const result = await service.create(actor, validBotData);
 
       expect(result).toEqual(Failure("db down"));
       expect(natsService.publish).not.toHaveBeenCalled();
@@ -264,7 +261,7 @@ describe("BotService - Enhanced Tests", () => {
       });
 
       it("should publish the creation with the validated custom bot", async () => {
-        const result = await service.create(validBotData);
+        const result = await service.create(actor, validBotData);
 
         expect(result).toEqual(Ok(createdBot));
         expect(natsService.publish).toHaveBeenCalledWith(
@@ -290,7 +287,7 @@ describe("BotService - Enhanced Tests", () => {
       it("should log and still return the bot when publishing fails", async () => {
         natsService.publish.mockResolvedValue(Failure("nats down"));
 
-        const result = await service.create(validBotData);
+        const result = await service.create(actor, validBotData);
 
         expect(result).toEqual(Ok(createdBot));
         expect(logger.error).toHaveBeenCalledWith(
@@ -307,7 +304,7 @@ describe("BotService - Enhanced Tests", () => {
           }),
         );
 
-        const result = await service.create(validBotData);
+        const result = await service.create(actor, validBotData);
 
         expect(result).toEqual(Ok(createdBot));
         expect(natsService.publish).not.toHaveBeenCalled();
@@ -333,7 +330,7 @@ describe("BotService - Enhanced Tests", () => {
             data: { ...mockCustomBot, userId: uid, status: "active" },
           });
 
-        const result = await service.create(validBotData);
+        const result = await service.create(actor, validBotData);
 
         expect(result.success).toBe(true);
       });
@@ -349,7 +346,7 @@ describe("BotService - Enhanced Tests", () => {
             topic: "the0-scheduled-custom-bot",
           }),
         });
-        const result = await service.create(validBotData);
+        const result = await service.create(actor, validBotData);
 
         expect(result.success).toBe(true);
       });
@@ -379,7 +376,7 @@ describe("BotService - Enhanced Tests", () => {
           }),
         });
 
-        const result = await service.create(validBotData);
+        const result = await service.create(actor, validBotData);
 
         expect(result.success).toBe(true);
         // OSS version allows all bots - no approval gate
@@ -400,7 +397,7 @@ describe("BotService - Enhanced Tests", () => {
         data: bots,
       });
 
-      const result = await service.findAll();
+      const result = await service.findAll(actor);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(bots);
@@ -414,7 +411,7 @@ describe("BotService - Enhanced Tests", () => {
         data: null,
       });
 
-      const result = await service.findAll();
+      const result = await service.findAll(actor);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Database error");
@@ -431,7 +428,7 @@ describe("BotService - Enhanced Tests", () => {
         data: bot,
       });
 
-      const result = await service.findOne("test-id");
+      const result = await service.findOne(actor, "test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(bot);
@@ -445,10 +442,79 @@ describe("BotService - Enhanced Tests", () => {
         data: null,
       });
 
-      const result = await service.findOne("nonexistent-id");
+      const result = await service.findOne(actor, "nonexistent-id");
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Bot not found");
+    });
+  });
+
+  describe("ownership follows the Actor", () => {
+    const mcpActor: Actor = {
+      userId: "mcp-user-id",
+      via: "mcp",
+      apiKeyId: "key-1",
+    };
+
+    it("reads bots as the Actor's user, whatever the channel", async () => {
+      jest.spyOn(repository, "findAll").mockResolvedValue(Ok([]));
+      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+
+      await service.findAll(mcpActor);
+      await service.findOne(mcpActor, "test-id");
+
+      expect(repository.findAll).toHaveBeenCalledWith("mcp-user-id");
+      expect(repository.findOne).toHaveBeenCalledWith("mcp-user-id", "test-id");
+    });
+
+    it("deploys the bot for the Actor's user", async () => {
+      validator.validate = jest.fn().mockReturnValue(Ok(null));
+      const created = mockBot({ id: "test-id", userId: "mcp-user-id" });
+      jest.spyOn(repository, "create").mockResolvedValue(Ok(created));
+      jest.spyOn(repository, "findOne").mockResolvedValue(Ok(created));
+
+      await service.create(mcpActor, {
+        name: "Test Bot",
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "1.0.0",
+        }),
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "mcp-user-id" }),
+      );
+      expect(repository.findOne).toHaveBeenCalledWith("mcp-user-id", "test-id");
+    });
+
+    it("cannot update or delete a bot the Actor's user does not own", async () => {
+      validator.validate = jest.fn().mockReturnValue(Ok(null));
+      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest.spyOn(repository, "update").mockResolvedValue(Ok(mockBot()));
+      jest.spyOn(repository, "remove").mockResolvedValue(Ok(undefined));
+      const otherUser: Actor = {
+        userId: "other-user-id",
+        via: "api-key",
+        apiKeyId: "key-2",
+      };
+
+      const updated = await service.update(otherUser, "test-id", {
+        config: mockBotConfig({
+          type: "scheduled/test-custom-bot",
+          version: "1.0.0",
+        }),
+      });
+      const removed = await service.remove(otherUser, "test-id");
+
+      expect(updated).toEqual(Failure("Bot not found"));
+      expect(removed).toEqual(Failure("Bot not found"));
+      expect(repository.findOne).toHaveBeenCalledWith(
+        "other-user-id",
+        "test-id",
+      );
+      expect(repository.update).not.toHaveBeenCalled();
+      expect(repository.remove).not.toHaveBeenCalled();
+      expect(natsService.publish).not.toHaveBeenCalled();
     });
   });
 
@@ -500,7 +566,7 @@ describe("BotService - Enhanced Tests", () => {
         data: updatedBot,
       });
 
-      const result = await service.update("test-id", updateData);
+      const result = await service.update(actor, "test-id", updateData);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(updatedBot);
@@ -537,7 +603,7 @@ describe("BotService - Enhanced Tests", () => {
         data: mockBot({ id: "test-id", ...patchUpdateData }),
       });
 
-      const result = await service.update("test-id", patchUpdateData);
+      const result = await service.update(actor, "test-id", patchUpdateData);
 
       expect(result.success).toBe(true);
       expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
@@ -579,7 +645,7 @@ describe("BotService - Enhanced Tests", () => {
         data: mockBot({ id: "test-id", ...patchUpdateData }),
       });
 
-      const result = await service.update("test-id", patchUpdateData);
+      const result = await service.update(actor, "test-id", patchUpdateData);
 
       expect(result.success).toBe(true);
       expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
@@ -596,7 +662,7 @@ describe("BotService - Enhanced Tests", () => {
         data: mockBot({ id: "test-id", ...updateData }),
       });
 
-      const result = await service.update("test-id", updateData);
+      const result = await service.update(actor, "test-id", updateData);
 
       expect(result.success).toBe(true);
       // customBotId should be preserved from the existing bot record, not rotated
@@ -634,7 +700,7 @@ describe("BotService - Enhanced Tests", () => {
         }),
       };
 
-      const result = await service.update("test-id", majorUpdateData);
+      const result = await service.update(actor, "test-id", majorUpdateData);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Major version upgrade");
@@ -673,7 +739,7 @@ describe("BotService - Enhanced Tests", () => {
         data: mockBot({ id: "test-id", ...minorUpdateData }),
       });
 
-      const result = await service.update("test-id", minorUpdateData);
+      const result = await service.update(actor, "test-id", minorUpdateData);
 
       expect(result.success).toBe(true);
     });
@@ -709,7 +775,7 @@ describe("BotService - Enhanced Tests", () => {
         data: mockBot({ id: "test-id", ...patchUpdateData }),
       });
 
-      const result = await service.update("test-id", patchUpdateData);
+      const result = await service.update(actor, "test-id", patchUpdateData);
 
       expect(result.success).toBe(true);
     });
@@ -721,7 +787,7 @@ describe("BotService - Enhanced Tests", () => {
         data: null,
       });
 
-      const result = await service.update("test-id", updateData);
+      const result = await service.update(actor, "test-id", updateData);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Invalid configuration");
@@ -734,7 +800,7 @@ describe("BotService - Enhanced Tests", () => {
         data: null,
       });
 
-      const result = await service.update("test-id", updateData);
+      const result = await service.update(actor, "test-id", updateData);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Update failed");
@@ -744,7 +810,7 @@ describe("BotService - Enhanced Tests", () => {
       jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
       jest.spyOn(repository, "update");
 
-      const result = await service.update("test-id", updateData);
+      const result = await service.update(actor, "test-id", updateData);
 
       expect(result).toEqual(Failure("Bot not found"));
       expect(repository.update).not.toHaveBeenCalled();
@@ -763,7 +829,7 @@ describe("BotService - Enhanced Tests", () => {
       );
       jest.spyOn(repository, "update").mockResolvedValue(Ok(existingBot));
 
-      await service.update("test-id", updateData);
+      await service.update(actor, "test-id", updateData);
 
       expect(repository.update).toHaveBeenCalledWith(
         uid,
@@ -778,7 +844,7 @@ describe("BotService - Enhanced Tests", () => {
       });
 
       it("should publish the update with the user's custom bot version", async () => {
-        const result = await service.update("test-id", updateData);
+        const result = await service.update(actor, "test-id", updateData);
 
         expect(result).toEqual(Ok(existingBot));
         expect(mockCustomBotService.getUserSpecificVersion).toHaveBeenCalledWith(
@@ -807,7 +873,7 @@ describe("BotService - Enhanced Tests", () => {
           .fn()
           .mockResolvedValue(Ok({ ...mockCustomBot, filePath: undefined }));
 
-        await service.update("test-id", updateData);
+        await service.update(actor, "test-id", updateData);
 
         expect(natsService.publish).toHaveBeenCalledWith(
           "the0.bot-schedule.updated",
@@ -820,7 +886,7 @@ describe("BotService - Enhanced Tests", () => {
       it("should log and still succeed when publishing fails", async () => {
         natsService.publish.mockResolvedValue(Failure("nats down"));
 
-        const result = await service.update("test-id", updateData);
+        const result = await service.update(actor, "test-id", updateData);
 
         expect(result.success).toBe(true);
         expect(logger.error).toHaveBeenCalledWith(
@@ -835,7 +901,7 @@ describe("BotService - Enhanced Tests", () => {
           .mockResolvedValueOnce(Ok(existingBot))
           .mockResolvedValueOnce(Failure("gone"));
 
-        const result = await service.update("test-id", updateData);
+        const result = await service.update(actor, "test-id", updateData);
 
         expect(result.success).toBe(true);
         expect(mockCustomBotService.getUserSpecificVersion).not.toHaveBeenCalled();
@@ -847,7 +913,7 @@ describe("BotService - Enhanced Tests", () => {
           .fn()
           .mockResolvedValue(Failure("not found"));
 
-        const result = await service.update("test-id", updateData);
+        const result = await service.update(actor, "test-id", updateData);
 
         expect(result.success).toBe(true);
         expect(natsService.publish).not.toHaveBeenCalled();
@@ -861,7 +927,7 @@ describe("BotService - Enhanced Tests", () => {
           }),
         );
 
-        const result = await service.update("test-id", updateData);
+        const result = await service.update(actor, "test-id", updateData);
 
         expect(result.success).toBe(true);
         expect(natsService.publish).not.toHaveBeenCalled();
@@ -874,7 +940,7 @@ describe("BotService - Enhanced Tests", () => {
       it("should not publish when the repository update fails", async () => {
         jest.spyOn(repository, "update").mockResolvedValue(Failure("nope"));
 
-        await service.update("test-id", updateData);
+        await service.update(actor, "test-id", updateData);
 
         expect(natsService.publish).not.toHaveBeenCalled();
       });
@@ -907,7 +973,7 @@ describe("BotService - Enhanced Tests", () => {
         .fn()
         .mockResolvedValue(Ok({ orphaned: false, name: "test-bot", version: "1.0.0" }));
 
-      const result = await service.remove("test-id");
+      const result = await service.remove(actor, "test-id");
 
       expect(result.success).toBe(true);
       expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
@@ -940,7 +1006,7 @@ describe("BotService - Enhanced Tests", () => {
         .fn()
         .mockResolvedValue(Ok({ orphaned: true, name: "test-bot", version: "1.0.0" }));
 
-      const result = await service.remove("test-id");
+      const result = await service.remove(actor, "test-id");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual({
@@ -959,7 +1025,7 @@ describe("BotService - Enhanced Tests", () => {
         data: null,
       });
 
-      const result = await service.remove("test-id");
+      const result = await service.remove(actor, "test-id");
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Bot not found");
@@ -986,7 +1052,7 @@ describe("BotService - Enhanced Tests", () => {
       it("should fail when the bot does not exist", async () => {
         jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Failure("Bot not found"));
         expect(repository.remove).not.toHaveBeenCalled();
@@ -1000,7 +1066,7 @@ describe("BotService - Enhanced Tests", () => {
           }),
         );
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(
           Failure("Invalid bot type: missing name after '/'"),
@@ -1013,7 +1079,7 @@ describe("BotService - Enhanced Tests", () => {
       });
 
       it("should publish the deletion after the orphan check", async () => {
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
         expect(mockCustomBotService.getUserSpecificVersion).toHaveBeenCalledWith(
@@ -1036,7 +1102,7 @@ describe("BotService - Enhanced Tests", () => {
           .fn()
           .mockResolvedValue(Failure("not found"));
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
         expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
@@ -1051,7 +1117,7 @@ describe("BotService - Enhanced Tests", () => {
           }),
         );
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
         expect(mockCustomBotService.getUserSpecificVersion).not.toHaveBeenCalled();
@@ -1061,7 +1127,7 @@ describe("BotService - Enhanced Tests", () => {
       it("should neither check orphans nor publish when removal fails", async () => {
         jest.spyOn(repository, "remove").mockResolvedValue(Failure("db down"));
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Failure("db down"));
         expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
@@ -1073,7 +1139,7 @@ describe("BotService - Enhanced Tests", () => {
           Failure("lookup failed"),
         );
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
         expect(logger.warn).toHaveBeenCalledWith(
@@ -1092,7 +1158,7 @@ describe("BotService - Enhanced Tests", () => {
           .spyOn(repository, "findOne")
           .mockResolvedValue(Ok({ ...botToRemove, customBotId: null }));
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
         expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
@@ -1101,7 +1167,7 @@ describe("BotService - Enhanced Tests", () => {
       it("should log and still succeed when publishing the deletion fails", async () => {
         natsService.publish.mockResolvedValue(Failure("nats down"));
 
-        const result = await service.remove("test-id");
+        const result = await service.remove(actor, "test-id");
 
         expect(result).toEqual(Ok({}));
         expect(logger.error).toHaveBeenCalledWith(

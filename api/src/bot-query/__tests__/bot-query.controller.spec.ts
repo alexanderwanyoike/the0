@@ -10,6 +10,7 @@ import {
 import { BotQueryController } from "../bot-query.controller";
 import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { Actor } from "@/auth/actor";
 
 // Mock guard that always allows access
 const mockAuthGuard: CanActivate = {
@@ -19,6 +20,7 @@ const mockAuthGuard: CanActivate = {
 describe("BotQueryController", () => {
   let controller: BotQueryController;
   let mockBotQueryService: jest.Mocked<BotQueryService>;
+  const actor: Actor = { userId: "test-user-id", via: "jwt" };
 
   beforeEach(async () => {
     mockBotQueryService = {
@@ -56,7 +58,7 @@ describe("BotQueryController", () => {
         error: null,
       });
 
-      const result = await controller.executeQuery("test-bot-id", {
+      const result = await controller.executeQuery(actor, "test-bot-id", {
         query_path: "/portfolio",
         params: { symbol: "BTC" },
       });
@@ -65,6 +67,7 @@ describe("BotQueryController", () => {
       expect(result.data).toEqual(queryResult);
       expect(result.message).toBe("Query executed successfully");
       expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith(
+        actor,
         "test-bot-id",
         {
           queryPath: "/portfolio",
@@ -86,11 +89,12 @@ describe("BotQueryController", () => {
         error: null,
       });
 
-      await controller.executeQuery("test-bot-id", {
+      await controller.executeQuery(actor, "test-bot-id", {
         query_path: "portfolio",
       });
 
       expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith(
+        actor,
         "test-bot-id",
         {
           queryPath: "/portfolio",
@@ -102,7 +106,7 @@ describe("BotQueryController", () => {
 
     it("should throw BadRequestException when query_path is missing", async () => {
       await expect(
-        controller.executeQuery("test-bot-id", {
+        controller.executeQuery(actor, "test-bot-id", {
           query_path: "",
         }),
       ).rejects.toThrow(BadRequestException);
@@ -119,7 +123,7 @@ describe("BotQueryController", () => {
       });
 
       await expect(
-        controller.executeQuery("nonexistent-bot", {
+        controller.executeQuery(actor, "nonexistent-bot", {
           query_path: "/portfolio",
         }),
       ).rejects.toThrow(NotFoundException);
@@ -137,7 +141,7 @@ describe("BotQueryController", () => {
       });
 
       await expect(
-        controller.executeQuery("no-query-bot", {
+        controller.executeQuery(actor, "no-query-bot", {
           query_path: "/status",
         }),
       ).rejects.toThrow(new UnprocessableEntityException(message));
@@ -154,7 +158,7 @@ describe("BotQueryController", () => {
       });
 
       await expect(
-        controller.executeQuery("test-bot-id", {
+        controller.executeQuery(actor, "test-bot-id", {
           query_path: "/portfolio",
         }),
       ).rejects.toThrow(ServiceUnavailableException);
@@ -171,7 +175,7 @@ describe("BotQueryController", () => {
       });
 
       await expect(
-        controller.executeQuery("test-bot-id", {
+        controller.executeQuery(actor, "test-bot-id", {
           query_path: "/portfolio",
         }),
       ).rejects.toThrow(GatewayTimeoutException);
@@ -188,7 +192,7 @@ describe("BotQueryController", () => {
       });
 
       await expect(
-        controller.executeQuery("test-bot-id", {
+        controller.executeQuery(actor, "test-bot-id", {
           query_path: "/portfolio",
         }),
       ).rejects.toThrow(BadRequestException);
@@ -206,12 +210,13 @@ describe("BotQueryController", () => {
         error: null,
       });
 
-      await controller.executeQuery("test-bot-id", {
+      await controller.executeQuery(actor, "test-bot-id", {
         query_path: "/portfolio",
         timeout_sec: 60,
       });
 
       expect(mockBotQueryService.executeQuery).toHaveBeenCalledWith(
+        actor,
         "test-bot-id",
         {
           queryPath: "/portfolio",

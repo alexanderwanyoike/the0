@@ -4,12 +4,18 @@ import { BotStateService, BotStateErrorCode } from "../bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
 import { Ok, Failure } from "@/common/result";
+import { Actor } from "@/auth/actor";
 
 describe("BotStateController", () => {
   let controller: BotStateController;
   let mockBotStateService: jest.Mocked<Partial<BotStateService>>;
 
   const testBotId = "test-bot-id";
+  const actor: Actor = {
+    userId: "test-user-id",
+    via: "api-key",
+    apiKeyId: "key-1",
+  };
 
   beforeEach(async () => {
     mockBotStateService = {
@@ -43,11 +49,14 @@ describe("BotStateController", () => {
       ];
       mockBotStateService.listKeys!.mockResolvedValue(Ok(keys));
 
-      const result = await controller.listKeys(testBotId);
+      const result = await controller.listKeys(actor, testBotId);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(keys);
-      expect(mockBotStateService.listKeys).toHaveBeenCalledWith(testBotId);
+      expect(mockBotStateService.listKeys).toHaveBeenCalledWith(
+        actor,
+        testBotId,
+      );
     });
 
     it("should throw NotFoundException when bot not found", async () => {
@@ -58,7 +67,7 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.listKeys(testBotId)).rejects.toThrow(
+      await expect(controller.listKeys(actor, testBotId)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -71,7 +80,7 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.listKeys(testBotId)).rejects.toThrow(
+      await expect(controller.listKeys(actor, testBotId)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -82,11 +91,12 @@ describe("BotStateController", () => {
       const stateValue = { AAPL: 100, GOOGL: 50 };
       mockBotStateService.getKey!.mockResolvedValue(Ok(stateValue));
 
-      const result = await controller.getKey(testBotId, "portfolio");
+      const result = await controller.getKey(actor, testBotId, "portfolio");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(stateValue);
       expect(mockBotStateService.getKey).toHaveBeenCalledWith(
+        actor,
         testBotId,
         "portfolio",
       );
@@ -100,9 +110,9 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.getKey(testBotId, "nonexistent")).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.getKey(actor, testBotId, "nonexistent"),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it("should throw NotFoundException when bot not found", async () => {
@@ -113,9 +123,9 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.getKey(testBotId, "portfolio")).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.getKey(actor, testBotId, "portfolio"),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it("should throw BadRequestException for invalid key", async () => {
@@ -126,9 +136,9 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.getKey(testBotId, "../escape")).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.getKey(actor, testBotId, "../escape"),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -136,17 +146,26 @@ describe("BotStateController", () => {
     it("should return deleted true when key existed", async () => {
       mockBotStateService.deleteKey!.mockResolvedValue(Ok(true));
 
-      const result = await controller.deleteKey(testBotId, "portfolio");
+      const result = await controller.deleteKey(actor, testBotId, "portfolio");
 
       expect(result.success).toBe(true);
       expect(result.data.deleted).toBe(true);
       expect(result.message).toContain("deleted successfully");
+      expect(mockBotStateService.deleteKey).toHaveBeenCalledWith(
+        actor,
+        testBotId,
+        "portfolio",
+      );
     });
 
     it("should return deleted false when key did not exist", async () => {
       mockBotStateService.deleteKey!.mockResolvedValue(Ok(false));
 
-      const result = await controller.deleteKey(testBotId, "nonexistent");
+      const result = await controller.deleteKey(
+        actor,
+        testBotId,
+        "nonexistent",
+      );
 
       expect(result.success).toBe(true);
       expect(result.data.deleted).toBe(false);
@@ -162,7 +181,7 @@ describe("BotStateController", () => {
       );
 
       await expect(
-        controller.deleteKey(testBotId, "portfolio"),
+        controller.deleteKey(actor, testBotId, "portfolio"),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -175,7 +194,7 @@ describe("BotStateController", () => {
       );
 
       await expect(
-        controller.deleteKey(testBotId, "../escape"),
+        controller.deleteKey(actor, testBotId, "../escape"),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -184,11 +203,15 @@ describe("BotStateController", () => {
     it("should return cleared true on success", async () => {
       mockBotStateService.clearState!.mockResolvedValue(Ok(true));
 
-      const result = await controller.clearState(testBotId);
+      const result = await controller.clearState(actor, testBotId);
 
       expect(result.success).toBe(true);
       expect(result.data.cleared).toBe(true);
       expect(result.message).toContain("cleared successfully");
+      expect(mockBotStateService.clearState).toHaveBeenCalledWith(
+        actor,
+        testBotId,
+      );
     });
 
     it("should throw NotFoundException when bot not found", async () => {
@@ -199,7 +222,7 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.clearState(testBotId)).rejects.toThrow(
+      await expect(controller.clearState(actor, testBotId)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -212,7 +235,7 @@ describe("BotStateController", () => {
         }),
       );
 
-      await expect(controller.clearState(testBotId)).rejects.toThrow(
+      await expect(controller.clearState(actor, testBotId)).rejects.toThrow(
         BadRequestException,
       );
     });
