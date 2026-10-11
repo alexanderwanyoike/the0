@@ -47,6 +47,17 @@ func TestDelivery_ScheduleDeletedWhileStopped_IsRemovedOnStart(t *testing.T) {
 	require.NoError(t, err, "a schedule deleted while the runtime was down should stop running once it starts")
 }
 
+func TestDelivery_NATSOutage_DoesNotEndConsumption(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	subscriber := startSubscriber(t, sharedInfra.GetDatabase("nats_outage"))
+
+	require.Equal(t, -1, subscriber.natsConn.Opts.MaxReconnect,
+		"the subscriber must keep reconnecting however long NATS is away, or it stops consuming until restarted")
+}
+
 func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
