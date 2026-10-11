@@ -1,15 +1,10 @@
-import { PgliteDatabase } from "drizzle-orm/pglite";
 import {
   appendBotEvents,
   BotEventOutbox,
   PendingBotEvent,
 } from "../bot-event-outbox";
 import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
-import {
-  resetTestDatabase,
-  startTestDatabase,
-  stopTestDatabase,
-} from "@/test/test-database";
+import { useTestDatabase } from "@/test/test-database";
 
 jest.mock(
   "@/database/connection",
@@ -19,12 +14,12 @@ jest.mock(
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("BotEventOutbox", () => {
-  let db: PgliteDatabase;
-  let outbox: BotEventOutbox;
+  const db = useTestDatabase();
+  const outbox = new BotEventOutbox();
 
   const appendEvents = (...subjects: string[]) =>
     appendBotEvents(
-      db,
+      db(),
       subjects.map((subject) => ({
         botId: "bot-1",
         subject,
@@ -33,7 +28,7 @@ describe("BotEventOutbox", () => {
     );
 
   const unpublishedIds = async () =>
-    (await db.select().from(botEventOutboxTable))
+    (await db().select().from(botEventOutboxTable))
       .filter((row) => row.publishedAt === null)
       .map((row) => row.id)
       .sort();
@@ -46,19 +41,6 @@ describe("BotEventOutbox", () => {
     };
     return { seen, publish };
   }
-
-  beforeAll(async () => {
-    db = await startTestDatabase();
-    outbox = new BotEventOutbox();
-  });
-
-  afterAll(async () => {
-    await stopTestDatabase();
-  });
-
-  beforeEach(async () => {
-    await resetTestDatabase();
-  });
 
   describe("hand unpublished events to the publisher in commit order", () => {
     it("publishes each event once, with its outbox id, and marks it published", async () => {
@@ -130,33 +112,35 @@ describe("BotEventOutbox", () => {
   describe("forget published events after the retention", () => {
     it("deletes events published before the cutoff and keeps the rest", async () => {
       const now = Date.now();
-      await db.insert(botEventOutboxTable).values([
-        {
-          botId: "old",
-          subject: "the0.bot.created",
-          payload: "{}",
-          publishedAt: new Date(now - 8 * DAY_MS),
-        },
-        {
-          botId: "recent",
-          subject: "the0.bot.created",
-          payload: "{}",
-          publishedAt: new Date(now - DAY_MS),
-        },
-        {
-          botId: "stuck",
-          subject: "the0.bot.created",
-          payload: "{}",
-          createdAt: new Date(now - 30 * DAY_MS),
-        },
-      ]);
+      await db()
+        .insert(botEventOutboxTable)
+        .values([
+          {
+            botId: "old",
+            subject: "the0.bot.created",
+            payload: "{}",
+            publishedAt: new Date(now - 8 * DAY_MS),
+          },
+          {
+            botId: "recent",
+            subject: "the0.bot.created",
+            payload: "{}",
+            publishedAt: new Date(now - DAY_MS),
+          },
+          {
+            botId: "stuck",
+            subject: "the0.bot.created",
+            payload: "{}",
+            createdAt: new Date(now - 30 * DAY_MS),
+          },
+        ]);
 
       const removed = await outbox.prunePublishedBefore(
         new Date(now - 7 * DAY_MS),
       );
 
       expect(removed).toBe(1);
-      const left = await db.select().from(botEventOutboxTable);
+      const left = await db().select().from(botEventOutboxTable);
       expect(left.map((row) => row.botId).sort()).toEqual(["recent", "stuck"]);
     });
   });
