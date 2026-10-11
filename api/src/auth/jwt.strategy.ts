@@ -8,14 +8,14 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { USER_ROLES } from "@/user/user.constants";
-import { UserRepository } from "@/user/user.repository";
+import { UserService } from "@/user/user.service";
 import { UserRecord } from "@/user/user.types";
 import { isConnectionError } from "@/common/database-errors";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    private readonly users: UserRepository,
+    private readonly users: UserService,
     private readonly logger: PinoLogger,
     configService: ConfigService,
   ) {

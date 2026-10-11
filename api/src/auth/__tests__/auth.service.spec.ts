@@ -3,6 +3,8 @@ import { ServiceUnavailableException } from "@nestjs/common";
 import { AuthService } from "../auth.service";
 import { JwtService } from "@nestjs/jwt";
 import { UserRepository } from "@/user/user.repository";
+import { UserService } from "@/user/user.service";
+import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRecord } from "@/user/user.types";
 import * as bcrypt from "bcrypt";
@@ -46,6 +48,8 @@ describe("AuthService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        UserService,
+        { provide: AdminMutationLockRepository, useValue: {} },
         {
           provide: JwtService,
           useValue: {
