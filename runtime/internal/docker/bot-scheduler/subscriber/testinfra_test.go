@@ -324,8 +324,8 @@ func startTestInfrastructure() *TestInfrastructure {
 	js, err := jetstream.New(nc)
 	if err != nil {
 		nc.Close()
-		natsC.Terminate(ctx)
-		mongoC.Terminate(ctx)
+		_ = natsC.Terminate(ctx)
+		_ = mongoC.Terminate(ctx)
 		panic(fmt.Sprintf("Failed to create JetStream context: %v", err))
 	}
 
