@@ -175,6 +175,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   async publish(
     topic: string,
     payload: Record<string, unknown> | unknown[],
+    options: { msgId?: string; timeoutMs?: number } = {},
   ): Promise<Result<void, string>> {
     if (!this.connection) {
       return Failure("NATS connection not established");
@@ -183,7 +184,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     try {
       const jetStream = this.connection.jetstream();
       await jetStream.publish(topic, this.sc.encode(JSON.stringify(payload)), {
-        timeout: 5000, // 5 second timeout
+        ...(options.msgId ? { msgID: options.msgId } : {}),
+        timeout: options.timeoutMs ?? 5000,
       });
       return Ok(undefined);
     } catch (error: unknown) {
