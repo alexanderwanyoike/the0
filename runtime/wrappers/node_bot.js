@@ -9,6 +9,10 @@ const path = require('path');
 
 const controller = new AbortController();
 
+const DEFAULT_SUCCESS = {"status": "success", "message": "Bot executed successfully"};
+
+let failureMessage = null;
+
 function getResultFilePath() {
     const codeMountDir = process.env.CODE_MOUNT_DIR || 'bot';
     return '/' + codeMountDir + '/result.json';
@@ -21,6 +25,54 @@ function writeResult(data) {
     } catch (error) {
         console.error('RESULT_ERROR: Failed to write result file: ' + error.message);
     }
+}
+
+function clearStaleResult() {
+    try {
+        fs.unlinkSync(getResultFilePath());
+    } catch (error) {
+        if (error.code !== 'ENOENT') {
+            console.error('RESULT_ERROR: Failed to remove stale result file: ' + error.message);
+        }
+    }
+}
+
+function botWroteResult() {
+    return fs.existsSync(getResultFilePath());
+}
+
+function readResult() {
+    try {
+        return JSON.parse(fs.readFileSync(getResultFilePath(), 'utf8'));
+    } catch (error) {
+        return null;
+    }
+}
+
+function reportError(result) {
+    // The SDK's error() only writes result.json, which nothing reads for bot
+    // runs, so without this line a failed run leaves no trace in the logs.
+    if (!result || result.status !== 'error') {
+        return;
+    }
+    console.error(JSON.stringify({
+        level: 'error',
+        message: result.message !== undefined ? result.message : 'Bot reported an error',
+        timestamp: new Date().toISOString(),
+    }));
+}
+
+function settleResult(exitCode) {
+    let result;
+    if (botWroteResult()) {
+        result = readResult();
+    } else {
+        result = exitCode === 0
+            ? DEFAULT_SUCCESS
+            : {"status": "error", "message": failureMessage || 'Bot exited with code ' + exitCode};
+        writeResult(result);
+    }
+    reportError(result);
 }
 
 function handleSignal(signal) {
@@ -83,19 +135,29 @@ function main() {
     // Parse configuration
     const { botId, config, scriptPath } = parseConfig();
 
+    // A result.json from an earlier run in the same code directory must not
+    // pass for one this run's bot wrote.
+    clearStaleResult();
+
     // Import main module
     const mainFunc = importMainModule(scriptPath);
+
+    // The SDK's error() calls process.exit from inside the bot, so the result
+    // is settled on exit rather than after main settles.
+    process.on('exit', settleResult);
 
     // Execute the main function with graceful shutdown support
     Promise.resolve(mainFunc(botId, config))
         .then(result => {
-            const output = result || {"status": "success", "message": "Bot executed successfully"};
-            writeResult(output);
-            process.exit(0);
+            if (result && !botWroteResult()) {
+                writeResult(result);
+            }
+            // No argument, so an exit code the bot set through process.exitCode is kept.
+            process.exit();
         })
         .catch(error => {
             console.error('EXECUTE_ERROR: Bot execution failed: ' + error.message, error.stack);
-            writeResult({ "status": "error", "message": error.message });
+            failureMessage = error.message;
             process.exit(1);
         });
 }
