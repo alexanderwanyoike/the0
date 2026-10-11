@@ -2,3 +2,8 @@ repositoryID: 97e7af7c-6950-4e8c-98ee-0c1f00fc2d45
 owners:
   - name: Alexander Wanyoike
     email: alex.m.wanyoike@gmail.com
+# 0.11.2 shipped an artifacthub.io/changes annotation that is not valid YAML,
+# so Artifact Hub can never index it; 0.11.3 is the same chart, fixed.
+ignore:
+  - name: the0
+    version: ^0\.11\.2$
