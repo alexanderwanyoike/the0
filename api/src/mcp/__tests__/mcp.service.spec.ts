@@ -411,7 +411,11 @@ describe("McpService", () => {
       });
 
       it("should require a bot_id", async () => {
-        const result = await service.handleToolCall("bot_state_list", {}, userId);
+        const result = await service.handleToolCall(
+          "bot_state_list",
+          {},
+          userId,
+        );
 
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain("bot_id");
