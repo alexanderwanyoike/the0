@@ -200,6 +200,21 @@ func waitForEventsHandled(t *testing.T) {
 	require.NoError(t, err, "every published event should be handled")
 }
 
+// waitForEventsWaiting waits until n events are stored for the consumer and
+// not yet delivered, which is how a stopped subscriber leaves new events.
+func waitForEventsWaiting(t *testing.T, n uint64) {
+	t.Helper()
+	err := waitFor(15*time.Second, func() bool {
+		consumer, err := sharedInfra.js.Consumer(context.Background(), eventsStream.Name, ConsumerName)
+		if err != nil {
+			return false
+		}
+		info, err := consumer.Info(context.Background())
+		return err == nil && info.NumPending == n
+	})
+	require.NoError(t, err, "%d event(s) should be waiting for the next start", n)
+}
+
 // consumerInfo reports the subscriber's consumer. Its Delivered.Consumer
 // counts every delivery, redeliveries included.
 func consumerInfo(t *testing.T) *jetstream.ConsumerInfo {

@@ -193,18 +193,13 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	payload, _ := json.Marshal(scheduleEvent)
 
 	// Publish twice
-	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
-	time.Sleep(100 * time.Millisecond)
-	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
+	_, err = sharedInfra.js.Publish(ctx, SubjectBotScheduleCreated, payload)
+	require.NoError(t, err)
+	_, err = sharedInfra.js.Publish(ctx, SubjectBotScheduleCreated, payload)
+	require.NoError(t, err)
+	waitForEventsHandled(t)
 
 	collection := db.Collection(collectionName)
-	err = waitFor(20*time.Second, func() bool {
-		count, _ := collection.CountDocuments(ctx, bson.M{"id": "duplicate-schedule"})
-		return count >= 1
-	})
-	require.NoError(t, err, "first create should be processed")
-	// The duplicate is not observable once handled, so give it a window.
-	time.Sleep(300 * time.Millisecond)
 
 	// Verify only one schedule exists
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "duplicate-schedule"})
@@ -486,10 +481,9 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	deleteEvent := BotScheduleEvent{ID: "does-not-exist"}
 	payload, _ := json.Marshal(deleteEvent)
 
-	err = sharedInfra.natsConn.Publish(SubjectBotScheduleDeleted, payload)
+	_, err = sharedInfra.js.Publish(ctx, SubjectBotScheduleDeleted, payload)
 	require.NoError(t, err)
-
-	time.Sleep(200 * time.Millisecond)
+	waitForEventsHandled(t)
 
 	// Should not crash or error - verify subscriber still running
 	collection := db.Collection(collectionName)
@@ -535,8 +529,6 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	invalidPayload := []byte(`{invalid json}`)
 	err = sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, invalidPayload)
 	require.NoError(t, err)
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Subscriber should still be running - publish valid message
 	validEvent := BotScheduleEvent{
@@ -628,8 +620,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	laterEvent := BotScheduleEvent{ID: "after-shutdown"}
 	laterPayload, _ := json.Marshal(laterEvent)
 	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, laterPayload)
-
-	time.Sleep(200 * time.Millisecond)
+	waitForEventsWaiting(t, 1)
 
 	// "after-shutdown" should not exist because subscriber was stopped
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})
