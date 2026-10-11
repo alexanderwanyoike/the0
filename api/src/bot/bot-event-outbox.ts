@@ -60,6 +60,11 @@ export class BotEventOutbox {
     const db = getDatabase() as Executor;
     const table = botEventOutboxTable;
     return db.transaction(async (tx) => {
+      // postgres.js sets no timeouts, so without these a hung statement, or
+      // a client that stalls mid-publish, would hold the relay lock for good.
+      await tx.execute(
+        sql`SELECT set_config('statement_timeout', '2s', true), set_config('lock_timeout', '1s', true), set_config('idle_in_transaction_session_timeout', '5s', true)`,
+      );
       // Transaction-level, because Neon's pooler runs in transaction mode,
       // where a session-level lock would not stay with this connection.
       const [{ locked }] = await tx
