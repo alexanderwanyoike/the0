@@ -270,12 +270,6 @@ func ShouldPerformNodeVendoring(projectPath string) (bool, error) {
 	return vendor.ShouldVendor(projectPath)
 }
 
-// ShouldBuildFrontend checks if frontend building should be performed
-func ShouldBuildFrontend(projectPath string) (bool, error) {
-	vendor := &FrontendVendor{}
-	return vendor.ShouldVendor(projectPath)
-}
-
 // Legacy VendorManager methods for backward compatibility
 
 // CheckRequirementsFile checks if requirements.txt exists in the project
@@ -296,12 +290,6 @@ func (vm *VendorManager) CheckTypeScriptFiles() bool {
 	return vendor.hasTypeScriptFiles(vm.projectPath)
 }
 
-// CheckFrontendExists checks if a frontend directory with package.json exists
-func (vm *VendorManager) CheckFrontendExists() bool {
-	vendor := &FrontendVendor{}
-	return vendor.Detect(vm.projectPath)
-}
-
 // PerformVendoring performs the complete Python vendoring process
 func (vm *VendorManager) PerformVendoring() error {
 	vendor := &PythonVendor{}
@@ -311,12 +299,6 @@ func (vm *VendorManager) PerformVendoring() error {
 // PerformNodeVendoring performs Node.js package vendoring
 func (vm *VendorManager) PerformNodeVendoring(hasTypeScript bool) error {
 	vendor := &NodeVendor{}
-	return vendor.Vendor(vm)
-}
-
-// BuildFrontend builds the frontend bundle in a Docker container
-func (vm *VendorManager) BuildFrontend() error {
-	vendor := &FrontendVendor{}
 	return vendor.Vendor(vm)
 }
 

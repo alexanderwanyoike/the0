@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.11.3
-appVersion: "1.16.2"
+version: 0.11.4
+appVersion: "1.16.3"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,21 +31,15 @@ annotations:
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: fixed
-      description: "Chart metadata is valid again: 0.11.2 shipped an Artifact Hub changes annotation that was not valid YAML, so Artifact Hub could not index it. The chart is otherwise the same as 0.11.2"
-    - kind: fixed
-      description: "Querying a path a bot does not define returns the bot's own error and the paths it does answer, e.g. 'No handler for path: /status (available: /today, /history, /health, /info)', instead of the runtime job's logs"
-    - kind: fixed
-      description: "Querying a bot with no query entrypoint answers 422 'This bot defines no queries' instead of 404 'bot not found'"
+      description: "Failed Python and Node bot runs now fail: a bot that calls the0.error(), exits non-zero or raises an uncaught exception ends its run with a non-zero exit and logs its error message, instead of being recorded as a success. A bot's own success result and data are no longer overwritten"
+    - kind: changed
+      description: "Kubernetes no longer retries a failed scheduled run (Job backoffLimit 0, as in Docker mode), so a run that failed after placing an order cannot place it again. The next run comes from the schedule, and existing CronJobs are updated on the first reconcile"
     - kind: security
-      description: "A query never runs a bot's main entrypoint: Kubernetes query pods and the in-container runner refuse a bot without a query entrypoint, and query pods now set QUERY_ENTRYPOINT"
+      description: "MCP bot tools go through the same bot service as the REST API and CLI: config validation and the major version guard apply, the runtime hears about MCP deploys, updates and deletes, and deleting a bot you do not own reports not found. A partial-config bot_update is now rejected, as it is over REST"
     - kind: fixed
-      description: "Query results are removed from object storage even when the query hits its timeout"
-    - kind: security
-      description: "Runtime and CLI built with Go 1.26.9 (net/http, crypto/tls and net/textproto advisories), with mongo-driver, moby/go-archive, x/crypto and x/net bumps"
-    - kind: security
-      description: "Cleared yarn audit findings in proxy-addr (api), handlebars (React SDK), vue and source-map-js (docs, frontend)"
-    - kind: added
-      description: "Docs Recipes section with step-by-step build walkthroughs, starting with the python-macro-event-guard example bot"
+      description: "Realtime bot queries deliver their params in the URL query string, where every SDK query server reads them. Null params stay out of the query string"
+    - kind: fixed
+      description: "the0 custom-bot deploy builds a custom bot's frontend once per deploy instead of twice"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

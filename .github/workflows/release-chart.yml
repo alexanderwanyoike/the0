@@ -6,7 +6,6 @@ on:
     paths:
       - "k8s/**"
   pull_request:
-    branches: [main, dev]
     paths:
       - "k8s/**"
   workflow_dispatch:

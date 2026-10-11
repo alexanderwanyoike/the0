@@ -244,6 +244,31 @@ func TestPerformVendoringIfNeeded_DockerNotAvailable(t *testing.T) {
 	}
 }
 
+func TestPerformVendoringIfNeeded_LeavesFrontendToFrontendStep(t *testing.T) {
+	// Deploy runs dependency vendoring and then BuildFrontendIfNeeded, so the
+	// frontend is built once only if vendoring skips it. With no docker on
+	// PATH, a step that tries to build fails fast, which shows which step
+	// builds without running a container.
+	t.Setenv("PATH", t.TempDir())
+
+	tmpDir := t.TempDir()
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("Failed to create frontend directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "package.json"), []byte(`{"name": "frontend"}`), 0644); err != nil {
+		t.Fatalf("Failed to create frontend/package.json: %v", err)
+	}
+
+	if err := internal.PerformVendoringIfNeeded(tmpDir, ""); err != nil {
+		t.Errorf("Expected dependency vendoring not to build the frontend, got: %v", err)
+	}
+
+	if err := internal.BuildFrontendIfNeeded(tmpDir); err == nil {
+		t.Error("Expected the frontend step to build the frontend")
+	}
+}
+
 func TestCustomBotDeployCommand_WithVendoring(t *testing.T) {
 	// Test that the deploy command includes vendoring step
 	cmd := cmd.NewDeployCmd()
@@ -825,142 +850,5 @@ func TestNodeModulesCleanupBackup(t *testing.T) {
 	// Backup should be gone
 	if _, err := os.Stat(backupPath); !os.IsNotExist(err) {
 		t.Error("Backup directory should be removed after cleanup")
-	}
-}
-
-// Frontend Build Tests
-
-func TestCheckFrontendExists(t *testing.T) {
-	tests := []struct {
-		name           string
-		setupFunc      func(string) error
-		expectedExists bool
-	}{
-		{
-			name: "frontend/package.json exists",
-			setupFunc: func(dir string) error {
-				frontendDir := filepath.Join(dir, "frontend")
-				if err := os.MkdirAll(frontendDir, 0755); err != nil {
-					return err
-				}
-				packageJson := `{"name": "bot-frontend", "dependencies": {"react": "^19.0.0"}}`
-				return os.WriteFile(filepath.Join(frontendDir, "package.json"), []byte(packageJson), 0644)
-			},
-			expectedExists: true,
-		},
-		{
-			name: "frontend directory exists but no package.json",
-			setupFunc: func(dir string) error {
-				frontendDir := filepath.Join(dir, "frontend")
-				return os.MkdirAll(frontendDir, 0755)
-			},
-			expectedExists: false,
-		},
-		{
-			name: "no frontend directory",
-			setupFunc: func(dir string) error {
-				return nil
-			},
-			expectedExists: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir, err := os.MkdirTemp("", "vendor-test-")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
-
-			if err := tt.setupFunc(tmpDir); err != nil {
-				t.Fatalf("Setup failed: %v", err)
-			}
-
-			vm, err := internal.NewVendorManager(tmpDir)
-			if err != nil {
-				t.Skipf("Failed to create vendor manager: %v", err)
-			}
-			defer vm.Close()
-
-			exists := vm.CheckFrontendExists()
-			if exists != tt.expectedExists {
-				t.Errorf("Expected frontend exists = %v, got %v", tt.expectedExists, exists)
-			}
-		})
-	}
-}
-
-func TestShouldBuildFrontend(t *testing.T) {
-	tests := []struct {
-		name        string
-		setupFunc   func(string) error
-		shouldBuild bool
-		expectError bool
-	}{
-		{
-			name: "no frontend directory",
-			setupFunc: func(dir string) error {
-				return nil
-			},
-			shouldBuild: false,
-		},
-		{
-			name: "frontend/package.json exists - should always build",
-			setupFunc: func(dir string) error {
-				frontendDir := filepath.Join(dir, "frontend")
-				if err := os.MkdirAll(frontendDir, 0755); err != nil {
-					return err
-				}
-				packageJson := `{"name": "bot-frontend"}`
-				return os.WriteFile(filepath.Join(frontendDir, "package.json"), []byte(packageJson), 0644)
-			},
-			shouldBuild: true,
-		},
-		{
-			name: "frontend with existing bundle - should still build (no caching)",
-			setupFunc: func(dir string) error {
-				frontendDir := filepath.Join(dir, "frontend")
-				distDir := filepath.Join(frontendDir, "dist")
-				if err := os.MkdirAll(distDir, 0755); err != nil {
-					return err
-				}
-				packageJson := `{"name": "bot-frontend"}`
-				if err := os.WriteFile(filepath.Join(frontendDir, "package.json"), []byte(packageJson), 0644); err != nil {
-					return err
-				}
-				// Create an existing bundle
-				return os.WriteFile(filepath.Join(distDir, "bundle.js"), []byte("// old bundle"), 0644)
-			},
-			shouldBuild: true, // Always build - no caching
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir, err := os.MkdirTemp("", "vendor-test-")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
-
-			if err := tt.setupFunc(tmpDir); err != nil {
-				t.Fatalf("Setup failed: %v", err)
-			}
-
-			shouldBuild, err := internal.ShouldBuildFrontend(tmpDir)
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if shouldBuild != tt.shouldBuild {
-					t.Errorf("Expected shouldBuild = %v, got %v", tt.shouldBuild, shouldBuild)
-				}
-			}
-		})
 	}
 }

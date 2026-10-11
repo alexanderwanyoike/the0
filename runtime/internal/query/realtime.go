@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -60,6 +61,9 @@ func (e *RealtimeExecutor) Execute(ctx context.Context, req Request, targetIP st
 		return ErrorResponse(fmt.Sprintf("failed to create HTTP request: %v", err), start)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if err := addParamsToQuery(httpReq.URL, req.Params); err != nil {
+		return ErrorResponse(fmt.Sprintf("failed to add query params to URL: %v", err), start)
+	}
 
 	// Execute request
 	timeout := time.Duration(req.TimeoutSec) * time.Second
@@ -82,6 +86,48 @@ func (e *RealtimeExecutor) Execute(ctx context.Context, req Request, targetIP st
 
 	// Parse response JSON
 	return parseQueryOutput(body, start)
+}
+
+// addParamsToQuery puts params in the URL query string as well as the JSON
+// body, because SDK query servers read params only from the query string.
+// A param replaces a key of the same name already in the path, since SDKs
+// disagree on which of a repeated key wins. A null param stays out, because
+// handlers fall back to a default for a missing key and the string "null"
+// would defeat that.
+func addParamsToQuery(u *url.URL, params map[string]interface{}) error {
+	if len(params) == 0 {
+		return nil
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return fmt.Errorf("invalid query string in path: %w", err)
+	}
+	for key, value := range params {
+		if value == nil {
+			continue
+		}
+		text, err := paramText(value)
+		if err != nil {
+			return fmt.Errorf("param %q: %w", key, err)
+		}
+		query.Set(key, text)
+	}
+	u.RawQuery = query.Encode()
+	return nil
+}
+
+// paramText renders a param as SDKs expect to read it from a query string:
+// a string as itself (JSON would wrap it in quotes) and anything else as its
+// JSON text.
+func paramText(value interface{}) (string, error) {
+	if text, ok := value.(string); ok {
+		return text, nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }
 
 // parseQueryOutput parses the JSON output from a query execution.

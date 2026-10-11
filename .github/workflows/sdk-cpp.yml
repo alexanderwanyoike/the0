@@ -7,7 +7,6 @@ on:
       - 'sdk/cpp/**'
       - '.github/workflows/sdk-cpp.yml'
   pull_request:
-    branches: [ main, dev ]
     paths:
       - 'sdk/cpp/**'
       - '.github/workflows/sdk-cpp.yml'
