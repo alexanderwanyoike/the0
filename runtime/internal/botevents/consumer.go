@@ -29,6 +29,7 @@ const (
 	// quarter of an hour, long enough to ride out a Mongo restart.
 	maxDeliver     = 20
 	rebindInterval = 2 * time.Second
+	backlogTimeout = 30 * time.Second
 )
 
 // Handler applies one event. An error has the event redelivered later,
@@ -95,7 +96,38 @@ func (c *Consumer) Start(ctx context.Context) error {
 	}
 	c.done = make(chan struct{})
 	go c.run(cons)
+	if cons != nil {
+		c.awaitBacklog(ctx, cons)
+	}
 	return nil
+}
+
+// The first bind after a deploy replays up to 7 days of events. Returning
+// before they are applied would let the first reconcile see half of the
+// replay (a deleted bot's create without its delete) and start that bot.
+// The wait is bounded so an event that keeps failing cannot block startup.
+func (c *Consumer) awaitBacklog(ctx context.Context, cons jetstream.Consumer) {
+	deadline := time.Now().Add(backlogTimeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		info, err := cons.Info(ctx)
+		if err == nil && info.NumPending == 0 && info.NumAckPending == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			c.cfg.Logger.Warn("Starting before the event backlog is handled",
+				"consumer", c.cfg.Name, "timeout", backlogTimeout.String(), "error", err)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stop:
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func (c *Consumer) Ready() bool {
