@@ -170,7 +170,7 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	require.NoError(t, err)
 
 	scheduleEvent := BotScheduleEvent{
-		ID:     "duplicate-schedule",
+		ID: "duplicate-schedule",
 		Config: map[string]interface{}{
 			"test":     "value",
 			"schedule": "0 0 * * *",
@@ -332,7 +332,7 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 
 	// Publish bot-schedule.updated for non-existent schedule
 	updatedEvent := BotScheduleEvent{
-		ID:     "new-schedule-from-update",
+		ID: "new-schedule-from-update",
 		Config: map[string]interface{}{
 			"created":  "from update",
 			"schedule": "0 0 * * *",
@@ -394,9 +394,9 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 
 	// Insert schedule to delete
 	scheduleToDelete := model.BotSchedule{
-		ID:        "delete-me",
-		SegmentId: 1,
-		Config:    map[string]interface{}{"test": "value"},
+		ID:               "delete-me",
+		SegmentId:        1,
+		Config:           map[string]interface{}{"test": "value"},
 		CustomBotVersion: model.CustomBotVersion{Version: "1.0.0"},
 	}
 
@@ -533,7 +533,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 
 	// Subscriber should still be running - publish valid message
 	validEvent := BotScheduleEvent{
-		ID:     "after-invalid",
+		ID: "after-invalid",
 		Config: map[string]interface{}{
 			"test":     "value",
 			"schedule": "0 0 * * *",
@@ -589,7 +589,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	// Publish some events
 	for i := 0; i < 5; i++ {
 		event := BotScheduleEvent{
-			ID:     fmt.Sprintf("shutdown-schedule-%d", i),
+			ID: fmt.Sprintf("shutdown-schedule-%d", i),
 			Config: map[string]interface{}{
 				"index":    i,
 				"schedule": "0 0 * * *",
