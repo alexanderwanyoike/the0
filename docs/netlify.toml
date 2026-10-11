@@ -5,7 +5,7 @@
   ignore = "bash scripts/netlify-ignore.sh"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
 
 [[redirects]]
   from = "/*"
