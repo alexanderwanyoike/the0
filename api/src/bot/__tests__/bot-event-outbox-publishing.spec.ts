@@ -42,16 +42,22 @@ describe("BotEventOutbox", () => {
     return { seen, publish };
   }
 
-  describe("hand unpublished events to the publisher in commit order", () => {
-    it("publishes each event once, with its outbox id, and marks it published", async () => {
+  describe("hand unpublished events to the publisher in commit order, one per transaction", () => {
+    it("publishes the oldest unpublished event, with its outbox id, and marks it published", async () => {
       await appendEvents("the0.bot.created", "the0.bot.updated");
       const { seen, publish } = publisher();
 
-      const outcome = await outbox.publishPending(publish, 100);
-      const again = await outbox.publishPending(publish, 100);
+      const first = await outbox.publishNext(publish);
+      const unpublishedAfterFirst = await unpublishedIds();
+      const second = await outbox.publishNext(publish);
+      const third = await outbox.publishNext(publish);
 
-      expect(outcome).toBe("drained");
-      expect(again).toBe("drained");
+      expect([first, second, third]).toEqual([
+        "published",
+        "published",
+        "drained",
+      ]);
+      expect(unpublishedAfterFirst).toEqual([2]);
       expect(seen).toEqual([
         {
           id: 1,
@@ -77,34 +83,22 @@ describe("BotEventOutbox", () => {
       );
       const first = publisher([2]);
 
-      const outcome = await outbox.publishPending(first.publish, 100);
-
-      expect(outcome).toBe("failed");
+      expect(await outbox.publishNext(first.publish)).toBe("published");
+      expect(await outbox.publishNext(first.publish)).toBe("failed");
       expect(first.seen.map((event) => event.id)).toEqual([1, 2]);
       expect(await unpublishedIds()).toEqual([2, 3]);
 
       const retry = publisher();
-      expect(await outbox.publishPending(retry.publish, 100)).toBe("drained");
+      expect(await outbox.publishNext(retry.publish)).toBe("published");
+      expect(await outbox.publishNext(retry.publish)).toBe("published");
+      expect(await outbox.publishNext(retry.publish)).toBe("drained");
       expect(retry.seen.map((event) => event.id)).toEqual([2, 3]);
-    });
-
-    it("reports more when a batch fills up, and carries on from there", async () => {
-      await appendEvents(
-        "the0.bot.created",
-        "the0.bot.updated",
-        "the0.bot.deleted",
-      );
-      const { seen, publish } = publisher();
-
-      expect(await outbox.publishPending(publish, 2)).toBe("more");
-      expect(await outbox.publishPending(publish, 2)).toBe("drained");
-      expect(seen.map((event) => event.id)).toEqual([1, 2, 3]);
     });
 
     it("reports drained when there is nothing to publish", async () => {
       const { seen, publish } = publisher();
 
-      expect(await outbox.publishPending(publish, 100)).toBe("drained");
+      expect(await outbox.publishNext(publish)).toBe("drained");
       expect(seen).toEqual([]);
     });
   });

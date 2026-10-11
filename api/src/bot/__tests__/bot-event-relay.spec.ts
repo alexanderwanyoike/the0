@@ -36,23 +36,19 @@ class FakeOutbox {
     this.forced.push(...outcomes);
   }
 
-  async publishPending(
+  async publishNext(
     publish: (event: PendingBotEvent) => Promise<boolean>,
-    limit: number,
   ): Promise<PublishOutcome> {
     this.calledAt.push(Date.now());
     const forced = this.forced.shift();
     if (forced instanceof Error) throw forced;
     if (forced) return forced;
 
-    const pending = this.events
-      .filter((event) => !this.published.has(event.id))
-      .slice(0, limit);
-    for (const event of pending) {
-      if (!(await publish(event))) return "failed";
-      this.published.add(event.id);
-    }
-    return pending.length === limit ? "more" : "drained";
+    const next = this.events.find((event) => !this.published.has(event.id));
+    if (!next) return "drained";
+    if (!(await publish(next))) return "failed";
+    this.published.add(next.id);
+    return "published";
   }
 
   async prunePublishedBefore(cutoff: Date): Promise<number> {
@@ -123,13 +119,13 @@ describe("BotEventRelay", () => {
       );
     });
 
-    it("keeps draining while full batches come back", async () => {
+    it("publishes one event per outbox call until the outbox is empty", async () => {
       outbox.add(...Array.from({ length: 250 }, () => "the0.bot.updated"));
 
       await relay.publishPending();
 
       expect(nats.publish).toHaveBeenCalledTimes(250);
-      expect(outbox.calledAt).toHaveLength(3);
+      expect(outbox.calledAt).toHaveLength(251);
     });
 
     it("folds requests made before a drain starts into that drain", async () => {
@@ -141,7 +137,8 @@ describe("BotEventRelay", () => {
         relay.publishPending(),
       ]);
 
-      expect(outbox.calledAt).toHaveLength(1);
+      expect(nats.publish).toHaveBeenCalledTimes(1);
+      expect(outbox.calledAt).toHaveLength(2);
     });
   });
 
@@ -164,7 +161,13 @@ describe("BotEventRelay", () => {
       await relay.publishPending();
       await jest.advanceTimersByTimeAsync(DAY);
 
-      expect(callTimes()).toEqual([0, SECOND, 3 * SECOND, 7 * SECOND]);
+      expect(callTimes()).toEqual([
+        0,
+        SECOND,
+        3 * SECOND,
+        7 * SECOND,
+        7 * SECOND,
+      ]);
       expect(outbox.published).toEqual(new Set([1]));
     });
 
@@ -175,9 +178,8 @@ describe("BotEventRelay", () => {
       await relay.publishPending();
       await jest.advanceTimersByTimeAsync(DAY);
 
-      const gaps = callTimes()
-        .slice(1)
-        .map((time, i) => time - callTimes()[i]);
+      const attempts = [...new Set(callTimes())];
+      const gaps = attempts.slice(1).map((time, i) => time - attempts[i]);
       expect(gaps).toEqual([1, 2, 4, 8, 16, 30, 30].map((s) => s * SECOND));
     });
 
@@ -188,7 +190,7 @@ describe("BotEventRelay", () => {
       await relay.publishPending();
       await jest.advanceTimersByTimeAsync(DAY);
 
-      expect(callTimes()).toEqual([0, SECOND]);
+      expect(callTimes()).toEqual([0, SECOND, SECOND]);
       expect(nats.subjects()).toEqual(["the0.bot.created"]);
     });
 
@@ -199,7 +201,7 @@ describe("BotEventRelay", () => {
       await relay.publishPending();
       await jest.advanceTimersByTimeAsync(DAY);
 
-      expect(callTimes()).toEqual([0, SECOND]);
+      expect(callTimes()).toEqual([0, SECOND, SECOND]);
       expect(nats.subjects()).toEqual(["the0.bot.created"]);
     });
 
@@ -213,7 +215,7 @@ describe("BotEventRelay", () => {
       await relay.publishPending();
       await jest.advanceTimersByTimeAsync(DAY);
 
-      expect(callTimes()).toEqual([0, SECOND / 2]);
+      expect(callTimes()).toEqual([0, SECOND / 2, SECOND / 2, SECOND / 2]);
       expect(nats.subjects()).toEqual([
         "the0.bot.created",
         "the0.bot.created",
