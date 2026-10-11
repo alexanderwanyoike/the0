@@ -94,6 +94,36 @@ func pythonBot(t *testing.T, mainPy string) botFixture {
 	return botFixture{interpreter: interpreter, wrapper: wrapperPath(t, "python_bot.py"), script: "main.py", dir: dir}
 }
 
+// nodeSDKStandIn has the result.json contract of the0-node's success() and
+// error() (sdk/nodejs/src/index.ts), which cannot be loaded here without a
+// TypeScript build.
+const nodeSDKStandIn = `const fs = require('fs');
+
+function writeResult(result) {
+    fs.writeFileSync('/' + (process.env.CODE_MOUNT_DIR || 'bot') + '/result.json', JSON.stringify(result));
+}
+
+exports.success = function (message, data) {
+    writeResult({ status: 'success', message, ...(data && { data }) });
+};
+
+exports.error = function (message, data) {
+    writeResult({ status: 'error', message, ...(data && { data }) });
+    process.exit(1);
+};
+`
+
+func nodeBot(t *testing.T, mainJs string) botFixture {
+	t.Helper()
+	interpreter := requireInterpreter(t, "node")
+
+	dir := t.TempDir()
+	writeBotFile(t, filepath.Join(dir, "node_modules", "the0-node", "index.js"), nodeSDKStandIn)
+	writeBotFile(t, filepath.Join(dir, "main.js"), mainJs)
+
+	return botFixture{interpreter: interpreter, wrapper: wrapperPath(t, "node_bot.js"), script: "main.js", dir: dir}
+}
+
 func runWrapper(t *testing.T, bot botFixture, earlierResult string) wrapperRun {
 	t.Helper()
 	resultPath := filepath.Join(bot.dir, "result.json")
@@ -178,6 +208,41 @@ def main(bot_id, config):
 			exitCode: 3,
 			message:  "Bot exited with code 3",
 		},
+		{
+			name: "node bot calls error",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { error } = require('the0-node');
+
+exports.main = async function (botId, config) {
+    error('broker rejected the order');
+};
+`)
+			},
+			exitCode: 1,
+			message:  "broker rejected the order",
+		},
+		{
+			name: "node bot rejects",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {
+    throw new Error('exchange unreachable');
+};
+`)
+			},
+			exitCode: 1,
+			message:  "exchange unreachable",
+		},
+		{
+			name: "node bot exits with its own code",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {
+    process.exit(3);
+};
+`)
+			},
+			exitCode: 3,
+			message:  "Bot exited with code 3",
+		},
 	}
 
 	for _, tc := range cases {
@@ -204,6 +269,26 @@ func TestBotWrapper_KeepsTheResultTheBotWrote(t *testing.T) {
 
 def main(bot_id, config):
     the0.success("order filled", {"order_id": "o-42"})
+`)
+			},
+		},
+		{
+			name: "node bot calls success with data and returns nothing",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { success } = require('the0-node');
+
+exports.main = async function (botId, config) {
+    success('order filled', { order_id: 'o-42' });
+};
+`)
+			},
+		},
+		{
+			name: "node bot returns its result",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {
+    return { status: 'success', message: 'order filled', data: { order_id: 'o-42' } };
+};
 `)
 			},
 		},
@@ -234,6 +319,13 @@ func TestBotWrapper_PlainReturnRecordsTheDefaultSuccess(t *testing.T) {
 			bot: func(t *testing.T) botFixture {
 				return pythonBot(t, `def main(bot_id, config):
     return None
+`)
+			},
+		},
+		{
+			name: "node",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {};
 `)
 			},
 		},
