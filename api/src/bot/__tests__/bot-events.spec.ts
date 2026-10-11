@@ -7,6 +7,8 @@ import { CommandBus } from "@/command-bus/command-bus";
 import { appendBotEvents } from "../bot-event-outbox";
 import { BotEventRelay } from "../bot-event-relay";
 import { usersTable } from "@/database/schema/users";
+import { botsTable } from "@/database/schema/bots";
+import { eq } from "drizzle-orm";
 import { NatsService } from "@/nats/nats.service";
 import { Failure, Ok, Result } from "@/common/result";
 import {
@@ -310,6 +312,38 @@ describe("bot events", () => {
         config: { ...config, customBotId: next.id },
         custom: next.custom,
       });
+    });
+  });
+
+  describe("announce a delete even when the Bot's Custom bot version is gone", () => {
+    it("publishes the delete on both subjects, so the runtime stops the bot whichever kind it is", async () => {
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const relay = moduleRef.get(BotEventRelay);
+      const id = await deploy(scheduledConfig("1.0.0"));
+      await relay.settled();
+      const missingVersion = {
+        ...scheduledConfig("9.9.9"),
+        hasFrontend: false,
+      };
+      await db()
+        .update(botsTable)
+        .set({ config: missingVersion })
+        .where(eq(botsTable.id, id));
+
+      const removed = await commands.execute(new DeleteBot(actor, id));
+      await relay.settled();
+
+      expect(removed.success).toBe(true);
+      expect(nats.published.slice(1)).toEqual([
+        {
+          subject: "the0.bot.deleted",
+          payload: { id, config: missingVersion },
+        },
+        {
+          subject: "the0.bot-schedule.deleted",
+          payload: { id, config: missingVersion },
+        },
+      ]);
     });
   });
 

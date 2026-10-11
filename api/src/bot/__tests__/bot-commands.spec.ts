@@ -1007,29 +1007,33 @@ describe("Bot commands", () => {
         expect(relay.publishCommitted).toHaveBeenCalledTimes(1);
       });
 
-      it("should delete without an event when the custom bot version is unavailable", async () => {
+      it("should announce the delete on both subjects when the custom bot version is gone", async () => {
         mockCustomBotService.getGlobalSpecificVersion = jest
           .fn()
           .mockResolvedValue(Failure("not found"));
 
         const result = await remove(actor, "test-id");
 
+        const payload = { id: "test-id", config: botToRemove.config };
+        const events = [
+          { botId: "test-id", subject: "the0.bot.deleted", payload },
+          { botId: "test-id", subject: "the0.bot-schedule.deleted", payload },
+        ];
         expect(result).toEqual(Ok({}));
         expect(repository.removeWithEvents).toHaveBeenCalledWith(
           uid,
           "test-id",
-          [],
+          events,
         );
-        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
+        expect(relay.publishCommitted).toHaveBeenCalledWith(events);
       });
 
-      it("should skip the custom bot lookup when the version is missing", async () => {
-        jest.spyOn(repository, "findOne").mockResolvedValue(
-          Ok({
-            ...botToRemove,
-            config: { ...botToRemove.config, version: undefined },
-          }),
-        );
+      it("should skip the custom bot lookup when the version is missing, and announce the delete on both subjects", async () => {
+        const unversioned = mockBot({
+          ...botToRemove,
+          config: { ...botToRemove.config, version: undefined },
+        });
+        jest.spyOn(repository, "findOne").mockResolvedValue(Ok(unversioned));
 
         const result = await remove(actor, "test-id");
 
@@ -1040,9 +1044,12 @@ describe("Bot commands", () => {
         expect(repository.removeWithEvents).toHaveBeenCalledWith(
           uid,
           "test-id",
-          [],
+          ["the0.bot.deleted", "the0.bot-schedule.deleted"].map((subject) => ({
+            botId: "test-id",
+            subject,
+            payload: { id: "test-id", config: unversioned.config },
+          })),
         );
-        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
       });
 
       it("should neither check orphans nor ask the relay to publish when removal fails", async () => {
