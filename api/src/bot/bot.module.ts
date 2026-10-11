@@ -4,6 +4,8 @@ import { BotController } from "./bot.controller";
 import { BotRepository } from "./bot.repository";
 import { HttpModule } from "@nestjs/axios";
 import { BotValidator } from "./bot.validator";
+import { BotEventOutbox } from "./bot-event-outbox";
+import { BotEventRelay } from "./bot-event-relay";
 import { ConfigModule } from "@nestjs/config";
 import { CustomBotModule } from "@/custom-bot/custom-bot.module";
 import { ApiKeyModule } from "@/api-key/api-key.module";
@@ -22,7 +24,13 @@ import { LoggerModule } from "@/logger/logger.module";
     LoggerModule,
   ],
   controllers: [BotController],
-  providers: [BotService, BotRepository, BotValidator],
+  providers: [
+    BotService,
+    BotRepository,
+    BotValidator,
+    BotEventOutbox,
+    BotEventRelay,
+  ],
   exports: [BotService, BotRepository, BotValidator],
 })
 export class BotModule {}

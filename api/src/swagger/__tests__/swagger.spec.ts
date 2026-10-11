@@ -10,6 +10,7 @@ import { AppModule } from "@/app.module";
 import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
 import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { BotEventRelay } from "@/bot/bot-event-relay";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import configuration from "@/config/configuration";
 import { NatsService } from "@/nats/nats.service";
@@ -48,6 +49,8 @@ async function createApp(swaggerEnabled: boolean): Promise<INestApplication> {
     .overrideProvider(NatsService)
     .useValue({})
     .overrideProvider(AdminBootstrapService)
+    .useValue({})
+    .overrideProvider(BotEventRelay)
     .useValue({})
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
