@@ -168,6 +168,30 @@ describe("NatsService", () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe("NATS connection not established");
     });
+
+    it("waits five seconds for the JetStream ack by default", async () => {
+      await service.publish("the0.bot.created", { id: "bot-1" });
+
+      expect(natsMocks.mockJetStream.publish).toHaveBeenCalledWith(
+        "the0.bot.created",
+        Buffer.from(JSON.stringify({ id: "bot-1" })),
+        { timeout: 5000 },
+      );
+    });
+
+    it("sends the message id, so JetStream drops a repeated publish, and the ack timeout it is given", async () => {
+      await service.publish(
+        "the0.bot.created",
+        { id: "bot-1" },
+        { msgId: "42", timeoutMs: 2000 },
+      );
+
+      expect(natsMocks.mockJetStream.publish).toHaveBeenCalledWith(
+        "the0.bot.created",
+        Buffer.from(JSON.stringify({ id: "bot-1" })),
+        { msgID: "42", timeout: 2000 },
+      );
+    });
   });
 
   describe("Stream Setup", () => {
