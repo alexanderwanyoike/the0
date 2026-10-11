@@ -5,9 +5,19 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { AuthCombinedGuard } from "../auth-combined.guard";
+import { ActorVia } from "../actor.decorators";
 import { AuthService } from "../auth.service";
 import { ApiKeyService } from "../../api-key/api-key.service";
 import { Ok, Failure } from "../../common/result";
+
+class RestRoute {
+  handle() {}
+}
+
+@ActorVia("mcp")
+class McpRoute {
+  handle() {}
+}
 
 describe("AuthCombinedGuard", () => {
   let guard: AuthCombinedGuard;
@@ -46,25 +56,26 @@ describe("AuthCombinedGuard", () => {
     jest.clearAllMocks();
   });
 
-  const contextFor = (request: Record<string, unknown>) =>
+  const contextFor = (
+    request: Record<string, unknown>,
+    route: { new (): { handle(): void } } = RestRoute,
+  ) =>
     ({
       switchToHttp: () => ({ getRequest: () => request }),
-    }) as ExecutionContext;
+      getHandler: () => route.prototype.handle,
+      getClass: () => route,
+    }) as unknown as ExecutionContext;
 
   it("should be defined", () => {
     expect(guard).toBeDefined();
   });
 
   it("should allow access with valid JWT token", async () => {
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: {
-            authorization: "Bearer valid-jwt-token",
-          },
-        }),
-      }),
-    } as ExecutionContext;
+    const mockContext = contextFor({
+      headers: {
+        authorization: "Bearer valid-jwt-token",
+      },
+    });
 
     const mockUser = {
       id: "test-id",
@@ -84,13 +95,7 @@ describe("AuthCombinedGuard", () => {
   });
 
   it("should throw exception without any authentication", async () => {
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: {},
-        }),
-      }),
-    } as ExecutionContext;
+    const mockContext = contextFor({ headers: {} });
 
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
       "Authentication required. Provide Bearer JWT token or ApiKey.",
@@ -135,6 +140,52 @@ describe("AuthCombinedGuard", () => {
       expect(request).toMatchObject({
         actor: { userId: "user-1", via: "api-key", apiKeyId: "key-1" },
       });
+    });
+  });
+
+  describe("on a route whose Actors arrive through MCP", () => {
+    beforeEach(() => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "agent" }),
+      );
+      mockAuthService.validateToken.mockResolvedValue(
+        Ok({ id: "user-1", username: "u", email: "u@example.com" }),
+      );
+    });
+
+    it.each([
+      { header: "x-api-key", headers: { "x-api-key": "the0_secret" } },
+      {
+        header: "Authorization: ApiKey",
+        headers: { authorization: "ApiKey the0_secret" },
+      },
+    ])(
+      "gives a key sent in $header an mcp Actor naming the key",
+      async ({ headers }) => {
+        const request = { headers };
+
+        await guard.canActivate(contextFor(request, McpRoute));
+
+        expect(request).toMatchObject({
+          actor: { userId: "user-1", via: "mcp", apiKeyId: "key-1" },
+        });
+      },
+    );
+
+    it("gives a JWT an mcp Actor", async () => {
+      const request = { headers: { authorization: "Bearer valid-jwt-token" } };
+
+      await guard.canActivate(contextFor(request, McpRoute));
+
+      expect(request).toMatchObject({
+        actor: { userId: "user-1", via: "mcp" },
+      });
+    });
+
+    it("still rejects a request without credentials", async () => {
+      await expect(
+        guard.canActivate(contextFor({ headers: {} }, McpRoute)),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
