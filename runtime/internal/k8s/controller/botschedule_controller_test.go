@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/k8s/podgen"
@@ -199,6 +200,7 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 	configHash := computeScheduleHash(schedule, "", "")
+	noRetries := int32(0)
 
 	mockRepo := &MockBotScheduleRepository{
 		Schedules: []model.BotSchedule{schedule},
@@ -217,6 +219,9 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 		},
 		Spec: batchv1.CronJobSpec{
 			Schedule: "0 9 * * *",
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{BackoffLimit: &noRetries},
+			},
 		},
 	}
 
@@ -232,6 +237,65 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	assert.Equal(t, 0, mockCronClient.CreateCalled)
 	assert.Equal(t, 0, mockCronClient.UpdateCalled)
 	assert.Equal(t, 0, mockCronClient.DeleteCalled)
+}
+
+func TestBotScheduleController_Reconcile_ScheduledRunsAreNotRetried(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller"},
+		&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+		mockCronClient,
+	)
+
+	require.NoError(t, controller.Reconcile(context.Background()))
+
+	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+	require.NotNil(t, cronJob)
+	jobSpec := cronJob.Spec.JobTemplate.Spec
+	require.NotNil(t, jobSpec.BackoffLimit, "an unset backoffLimit lets Kubernetes retry a failed run 6 times")
+	assert.Equal(t, int32(0), *jobSpec.BackoffLimit, "a failed scheduled run must not be retried")
+	assert.Equal(t, corev1.RestartPolicyNever, jobSpec.Template.Spec.RestartPolicy,
+		"a failed bot container must not be restarted in place either")
+}
+
+func TestBotScheduleController_Reconcile_StopsRetriesOnExistingCronJobs(t *testing.T) {
+	previousLimit := int32(2)
+	cases := []struct {
+		name         string
+		backoffLimit *int32
+	}{
+		{name: "limit of 2 set by earlier releases", backoffLimit: &previousLimit},
+		{name: "unset limit, which Kubernetes defaults to 6", backoffLimit: nil},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+			mockCronClient := NewMockK8sCronJobClient()
+			controller := NewBotScheduleController(
+				BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller"},
+				&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+				mockCronClient,
+			)
+
+			// Seed the CronJob this controller generates, so the retry limit is the only difference
+			// and the schedule hash still matches.
+			require.NoError(t, controller.Reconcile(context.Background()))
+			require.Equal(t, 1, mockCronClient.CreateCalled)
+			mockCronClient.CronJobs["the0/schedule-schedule-1"].Spec.JobTemplate.Spec.BackoffLimit = tc.backoffLimit
+
+			require.NoError(t, controller.Reconcile(context.Background()))
+
+			assert.Equal(t, 1, mockCronClient.UpdateCalled,
+				"a CronJob that still retries failed runs must be updated without any other change")
+			cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+			require.NotNil(t, cronJob)
+			require.NotNil(t, cronJob.Spec.JobTemplate.Spec.BackoffLimit)
+			assert.Equal(t, int32(0), *cronJob.Spec.JobTemplate.Spec.BackoffLimit)
+		})
+	}
 }
 
 func TestConvertToK8sCronFormat(t *testing.T) {
