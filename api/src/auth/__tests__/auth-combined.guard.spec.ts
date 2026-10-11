@@ -121,7 +121,7 @@ describe("AuthCombinedGuard", () => {
       });
     });
 
-    it("an x-api-key gives the same api-key Actor", async () => {
+    it("an x-api-key gives an api-key Actor naming the key", async () => {
       const request = { headers: { "x-api-key": "the0_secret" } };
       mockApiKeyService.validateApiKey.mockResolvedValue(
         Ok({ id: "key-1", userId: "user-1", name: "ci" }),
