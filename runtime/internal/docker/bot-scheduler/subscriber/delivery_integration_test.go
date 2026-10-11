@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"runtime/internal/botevents/eventstest"
+
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -22,10 +24,10 @@ func TestDelivery_ScheduleCreatedWhileStopped_IsHandledOnStart(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("created_while_stopped")
 
-	publishEvent(t, SubjectBotScheduleCreated, testScheduleEvent("created-while-stopped", "0 0 * * *"))
+	events.PublishJSON(t, SubjectBotScheduleCreated, testScheduleEvent("created-while-stopped", "0 0 * * *"))
 	startSubscriber(t, db)
 
 	err := waitFor(10*time.Second, func() bool { return countSchedules(db, "created-while-stopped") == 1 })
@@ -36,11 +38,11 @@ func TestDelivery_ScheduleDeletedWhileStopped_IsRemovedOnStart(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("deleted_while_stopped")
 	insertSchedule(t, db, "deleted-while-stopped", 1)
 
-	publishEvent(t, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "deleted-while-stopped"})
+	events.PublishJSON(t, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "deleted-while-stopped"})
 	startSubscriber(t, db)
 
 	err := waitFor(10*time.Second, func() bool { return countSchedules(db, "deleted-while-stopped") == 0 })
@@ -51,7 +53,7 @@ func TestDelivery_NATSOutage_DoesNotEndConsumption(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	subscriber := startSubscriber(t, sharedInfra.GetDatabase("nats_outage"))
 
 	require.Equal(t, -1, subscriber.natsConn.Opts.MaxReconnect,
@@ -62,14 +64,14 @@ func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("failed_event_retried")
-	rejectWrites(t, db)
+	eventstest.RejectWrites(t, db, testCollection)
 	startSubscriber(t, db)
 
-	publishEvent(t, SubjectBotScheduleCreated, testScheduleEvent("retried-schedule", "0 0 * * *"))
-	waitForCreateAttempts(t, db, 1)
-	acceptWrites(t, db)
+	events.PublishJSON(t, SubjectBotScheduleCreated, testScheduleEvent("retried-schedule", "0 0 * * *"))
+	eventstest.WaitForCreateAttempts(t, db, 1)
+	eventstest.AcceptWrites(t, db, testCollection)
 
 	err := waitFor(15*time.Second, func() bool { return countSchedules(db, "retried-schedule") == 1 })
 	require.NoError(t, err, "a create that failed should be retried until the schedule is stored")
@@ -79,16 +81,16 @@ func TestDelivery_RetriedCreate_IsNotOvertakenByItsDelete(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("retried_create_then_delete")
-	rejectWrites(t, db)
+	eventstest.RejectWrites(t, db, testCollection)
 	startSubscriber(t, db)
 
-	publishEvent(t, SubjectBotScheduleCreated, testScheduleEvent("created-then-deleted", "0 0 * * *"))
-	waitForCreateAttempts(t, db, 1)
-	publishEvent(t, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "created-then-deleted"})
-	acceptWrites(t, db)
-	waitForEventsHandled(t)
+	events.PublishJSON(t, SubjectBotScheduleCreated, testScheduleEvent("created-then-deleted", "0 0 * * *"))
+	eventstest.WaitForCreateAttempts(t, db, 1)
+	events.PublishJSON(t, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "created-then-deleted"})
+	eventstest.AcceptWrites(t, db, testCollection)
+	events.WaitForHandled(t)
 
 	require.Zero(t, countSchedules(db, "created-then-deleted"),
 		"the delete must apply after the create it follows, or the deleted schedule keeps running")

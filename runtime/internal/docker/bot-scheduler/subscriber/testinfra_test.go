@@ -2,10 +2,9 @@ package subscriber
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
+	"runtime/internal/botevents/eventstest"
 	"runtime/internal/model"
 	"testing"
 	"time"
@@ -28,6 +27,9 @@ import (
 // IMPORTANT: Tests using sharedInfra MUST NOT call t.Parallel() because they
 // share the same containers. Tests run sequentially by default in Go.
 var sharedInfra *TestInfrastructure
+
+// events is THE0_EVENTS and this subscriber's durable consumer on it.
+var events eventstest.Events
 
 // TestInfrastructure manages NATS and MongoDB testcontainers for integration tests
 type TestInfrastructure struct {
@@ -62,36 +64,6 @@ func (ti *TestInfrastructure) GetDatabase(testName string) *mongo.Database {
 	return ti.mongoClient.Database(dbName)
 }
 
-// eventsStream mirrors the THE0_EVENTS stream the api creates on startup
-// (api/src/nats/nats.service.ts). The runtime only binds to it.
-var eventsStream = jetstream.StreamConfig{
-	Name: "THE0_EVENTS",
-	Subjects: []string{
-		"the0.bot.created",
-		"the0.bot.updated",
-		"the0.bot.deleted",
-		"the0.bot-schedule.created",
-		"the0.bot-schedule.updated",
-		"the0.bot-schedule.deleted",
-	},
-	Retention: jetstream.LimitsPolicy,
-	MaxAge:    7 * 24 * time.Hour,
-	Storage:   jetstream.FileStorage,
-}
-
-// resetEventsStream recreates THE0_EVENTS, dropping earlier tests' events and
-// consumers, so each test starts from an empty stream.
-func (ti *TestInfrastructure) resetEventsStream(t *testing.T) {
-	t.Helper()
-	ctx := context.Background()
-	if err := ti.js.DeleteStream(ctx, eventsStream.Name); err != nil && !errors.Is(err, jetstream.ErrStreamNotFound) {
-		t.Fatalf("failed to delete %s: %v", eventsStream.Name, err)
-	}
-	if _, err := ti.js.CreateStream(ctx, eventsStream); err != nil {
-		t.Fatalf("failed to create %s: %v", eventsStream.Name, err)
-	}
-}
-
 const testCollection = "bot_schedules"
 
 // startSubscriber starts a subscriber writing to db and stops it when the
@@ -111,16 +83,6 @@ func startSubscriber(t *testing.T, db *mongo.Database) *NATSSubscriber {
 	t.Cleanup(func() { _ = subscriber.Stop() })
 	require.NoError(t, subscriber.Start(context.Background()))
 	return subscriber
-}
-
-// publishEvent publishes like the api does: into JetStream, waiting for the
-// stream to store the event.
-func publishEvent(t *testing.T, subject string, event any) {
-	t.Helper()
-	payload, err := json.Marshal(event)
-	require.NoError(t, err)
-	_, err = sharedInfra.js.Publish(context.Background(), subject, payload)
-	require.NoError(t, err)
 }
 
 func testScheduleEvent(id, schedule string) BotScheduleEvent {
@@ -154,83 +116,12 @@ func insertSchedule(t *testing.T, db *mongo.Database, id string, partitionBotCou
 	require.NoError(t, err)
 }
 
-// rejectWrites makes every write to the schedules collection fail, as a
-// store that is down would.
-func rejectWrites(t *testing.T, db *mongo.Database) {
-	t.Helper()
-	validator := bson.M{"field-no-schedule-has": bson.M{"$exists": true}}
-	err := db.CreateCollection(context.Background(), testCollection, options.CreateCollection().SetValidator(validator))
-	require.NoError(t, err)
-}
-
-func acceptWrites(t *testing.T, db *mongo.Database) {
-	t.Helper()
-	cmd := bson.D{{Key: "collMod", Value: testCollection}, {Key: "validator", Value: bson.M{}}}
-	require.NoError(t, db.RunCommand(context.Background(), cmd).Err())
-}
-
-// waitForCreateAttempts waits until the create handler has run n times. It
-// claims a partition slot before writing the schedule, so the claims count
-// its attempts even when the write itself is rejected.
-func waitForCreateAttempts(t *testing.T, db *mongo.Database, n int) {
-	t.Helper()
-	err := waitFor(10*time.Second, func() bool {
-		var partition struct {
-			BotCount int `bson:"bot_count"`
-		}
-		err := db.Collection("partitions").FindOne(context.Background(), bson.M{}).Decode(&partition)
-		return err == nil && partition.BotCount >= n
-	})
-	require.NoError(t, err, "the create handler should have run %d time(s)", n)
-}
-
-// waitForEventsHandled waits until the consumer has nothing left to deliver
-// and nothing awaiting acknowledgement, so a test can assert on the end state
-// without guessing how long handling takes.
-func waitForEventsHandled(t *testing.T) {
-	t.Helper()
-	err := waitFor(15*time.Second, func() bool {
-		consumer, err := sharedInfra.js.Consumer(context.Background(), eventsStream.Name, ConsumerName)
-		if err != nil {
-			return false
-		}
-		info, err := consumer.Info(context.Background())
-		return err == nil && info.NumPending == 0 && info.NumAckPending == 0
-	})
-	require.NoError(t, err, "every published event should be handled")
-}
-
-// waitForEventsWaiting waits until n events are stored for the consumer and
-// not yet delivered, which is how a stopped subscriber leaves new events.
-func waitForEventsWaiting(t *testing.T, n uint64) {
-	t.Helper()
-	err := waitFor(15*time.Second, func() bool {
-		consumer, err := sharedInfra.js.Consumer(context.Background(), eventsStream.Name, ConsumerName)
-		if err != nil {
-			return false
-		}
-		info, err := consumer.Info(context.Background())
-		return err == nil && info.NumPending == n
-	})
-	require.NoError(t, err, "%d event(s) should be waiting for the next start", n)
-}
-
-// consumerInfo reports the subscriber's consumer. Its Delivered.Consumer
-// counts every delivery, redeliveries included.
-func consumerInfo(t *testing.T) *jetstream.ConsumerInfo {
-	t.Helper()
-	consumer, err := sharedInfra.js.Consumer(context.Background(), eventsStream.Name, ConsumerName)
-	require.NoError(t, err)
-	info, err := consumer.Info(context.Background())
-	require.NoError(t, err)
-	return info
-}
-
 // TestMain runs once before all tests in the package
 // This is the standard Go pattern for shared test setup/teardown
 func TestMain(m *testing.M) {
 	// Start test infrastructure once for all tests
 	sharedInfra = startTestInfrastructure()
+	events = eventstest.Events{JS: sharedInfra.js, Consumer: ConsumerName}
 
 	// Run all tests sequentially (do not use -parallel flag with this package)
 	exitCode := m.Run()
@@ -247,36 +138,10 @@ func TestMain(m *testing.M) {
 func startTestInfrastructure() *TestInfrastructure {
 	ctx := context.Background()
 
-	// Start NATS container
-	natsReq := testcontainers.ContainerRequest{
-		Image:        "nats:2.10-alpine",
-		Cmd:          []string{"-js"},
-		ExposedPorts: []string{"4222/tcp"},
-		WaitingFor: wait.ForAll(
-			wait.ForListeningPort("4222/tcp"),
-			wait.ForLog("Server is ready"),
-		).WithDeadline(60 * time.Second),
-	}
-
-	natsC, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: natsReq,
-		Started:          true,
-	})
+	natsC, natsURL, err := eventstest.StartNATS(ctx)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to start NATS container: %v", err))
+		panic(err.Error())
 	}
-
-	natsHost, err := natsC.Host(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get NATS host: %v", err))
-	}
-
-	natsPort, err := natsC.MappedPort(ctx, "4222")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get NATS port: %v", err))
-	}
-
-	natsURL := fmt.Sprintf("nats://%s:%s", natsHost, natsPort.Port())
 
 	// Start MongoDB container
 	mongoReq := testcontainers.ContainerRequest{

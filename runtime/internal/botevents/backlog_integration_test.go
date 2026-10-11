@@ -1,4 +1,4 @@
-package botevents
+package botevents_test
 
 import (
 	"context"
@@ -12,17 +12,17 @@ func TestBacklog_StartReturnsOnceTheBacklogIsHandled(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	deleteEventsStream(t)
-	createEventsStream(t)
+	events.DeleteStream(t)
+	events.CreateStream(t)
 	const backlog = 50
 	for i := range backlog {
 		publish(t, fmt.Sprintf("event-%d", i))
 	}
-	events := &recorder{}
-	consumer := newConsumer(t, events.handle)
+	handled := &recorder{}
+	consumer := newConsumer(t, handled.handle)
 
 	require.NoError(t, consumer.Start(context.Background()))
 
-	require.Equal(t, backlog, events.count(),
+	require.Equal(t, backlog, handled.count(),
 		"the first reconcile after Start must not see a half-applied backlog")
 }

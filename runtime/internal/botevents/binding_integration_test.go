@@ -1,4 +1,4 @@
-package botevents
+package botevents_test
 
 import (
 	"context"
@@ -11,32 +11,32 @@ func TestBinding_StartedBeforeTheStreamExists_HandlesEventsOnceItDoes(t *testing
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	deleteEventsStream(t)
-	events := &recorder{}
-	consumer := newConsumer(t, events.handle)
+	events.DeleteStream(t)
+	handled := &recorder{}
+	consumer := newConsumer(t, handled.handle)
 
 	require.NoError(t, consumer.Start(context.Background()),
 		"the runtime can start before the api has created the stream")
 
-	createEventsStream(t)
+	events.CreateStream(t)
 	publish(t, "first-event")
-	events.waitFor(t, "first-event")
+	handled.waitFor(t, "first-event")
 }
 
 func TestBinding_StreamRecreatedWhileRunning_KeepsHandlingEvents(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
-	deleteEventsStream(t)
-	createEventsStream(t)
-	events := &recorder{}
-	consumer := newConsumer(t, events.handle)
+	events.DeleteStream(t)
+	events.CreateStream(t)
+	handled := &recorder{}
+	consumer := newConsumer(t, handled.handle)
 	require.NoError(t, consumer.Start(context.Background()))
 	publish(t, "before-recreate")
-	events.waitFor(t, "before-recreate")
+	handled.waitFor(t, "before-recreate")
 
-	deleteEventsStream(t)
-	createEventsStream(t)
+	events.DeleteStream(t)
+	events.CreateStream(t)
 	publish(t, "after-recreate")
-	events.waitFor(t, "after-recreate")
+	handled.waitFor(t, "after-recreate")
 }

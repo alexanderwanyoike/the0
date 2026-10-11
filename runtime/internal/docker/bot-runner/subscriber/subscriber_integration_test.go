@@ -51,7 +51,7 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("MONGO_URI")
 
 	// Get unique database for this test
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_created")
 	collectionName := "bots"
 
@@ -143,7 +143,7 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_created_duplicate")
 	collectionName := "bots"
 
@@ -180,11 +180,9 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	payload, _ := json.Marshal(botMessage)
 
 	// Publish twice
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotCreated, payload)
-	require.NoError(t, err)
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotCreated, payload)
-	require.NoError(t, err)
-	waitForEventsHandled(t)
+	events.Publish(t, SubjectBotCreated, payload)
+	events.Publish(t, SubjectBotCreated, payload)
+	events.WaitForHandled(t)
 
 	collection := db.Collection(collectionName)
 
@@ -207,7 +205,7 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_updated")
 	collectionName := "bots"
 
@@ -317,7 +315,7 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_updated_not_found")
 	collectionName := "bots"
 
@@ -381,7 +379,7 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted")
 	collectionName := "bots"
 
@@ -432,9 +430,8 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	}
 
 	payload, _ := json.Marshal(deleteMessage)
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotDeleted, payload)
-	require.NoError(t, err)
-	waitForEventsHandled(t)
+	events.Publish(t, SubjectBotDeleted, payload)
+	events.WaitForHandled(t)
 
 	// Verify bot was deleted
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "delete-me"})
@@ -463,7 +460,7 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted_not_found")
 	collectionName := "bots"
 
@@ -487,9 +484,8 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 	deleteMessage := BotMessage{ID: "does-not-exist"}
 	payload, _ := json.Marshal(deleteMessage)
 
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotDeleted, payload)
-	require.NoError(t, err)
-	waitForEventsHandled(t)
+	events.Publish(t, SubjectBotDeleted, payload)
+	events.WaitForHandled(t)
 
 	// Should not crash or error - verify subscriber still running
 	collection := db.Collection(collectionName)
@@ -511,7 +507,7 @@ func TestSubscriber_WrappedEventFormat(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("wrapped_event")
 	collectionName := "bots"
 
@@ -585,7 +581,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("invalid_json")
 	collectionName := "bots"
 
@@ -647,7 +643,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("graceful_shutdown")
 	collectionName := "bots"
 
@@ -704,7 +700,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	laterMessage := BotMessage{ID: "after-shutdown"}
 	laterPayload, _ := json.Marshal(laterMessage)
 	sharedInfra.natsConn.Publish(SubjectBotCreated, laterPayload)
-	waitForEventsWaiting(t, 1)
+	events.WaitForWaiting(t, 1)
 
 	// "after-shutdown" should not exist because subscriber was stopped
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})

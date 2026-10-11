@@ -63,7 +63,7 @@ func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("MONGO_URI")
 
 	// Get unique database for this test
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_created")
 	collectionName := "bot_schedules"
 
@@ -151,7 +151,7 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_created_duplicate")
 	collectionName := "bot_schedules"
 
@@ -193,11 +193,9 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	payload, _ := json.Marshal(scheduleEvent)
 
 	// Publish twice
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotScheduleCreated, payload)
-	require.NoError(t, err)
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotScheduleCreated, payload)
-	require.NoError(t, err)
-	waitForEventsHandled(t)
+	events.Publish(t, SubjectBotScheduleCreated, payload)
+	events.Publish(t, SubjectBotScheduleCreated, payload)
+	events.WaitForHandled(t)
 
 	collection := db.Collection(collectionName)
 
@@ -220,7 +218,7 @@ func TestSubscriber_BotScheduleUpdated_UpdatesMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_updated")
 	collectionName := "bot_schedules"
 
@@ -309,7 +307,7 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_updated_not_found")
 	collectionName := "bot_schedules"
 
@@ -372,7 +370,7 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_deleted")
 	collectionName := "bot_schedules"
 
@@ -457,7 +455,7 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_deleted_not_found")
 	collectionName := "bot_schedules"
 
@@ -481,9 +479,8 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	deleteEvent := BotScheduleEvent{ID: "does-not-exist"}
 	payload, _ := json.Marshal(deleteEvent)
 
-	_, err = sharedInfra.js.Publish(ctx, SubjectBotScheduleDeleted, payload)
-	require.NoError(t, err)
-	waitForEventsHandled(t)
+	events.Publish(t, SubjectBotScheduleDeleted, payload)
+	events.WaitForHandled(t)
 
 	// Should not crash or error - verify subscriber still running
 	collection := db.Collection(collectionName)
@@ -505,7 +502,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("invalid_json")
 	collectionName := "bot_schedules"
 
@@ -567,7 +564,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
-	sharedInfra.resetEventsStream(t)
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("graceful_shutdown")
 	collectionName := "bot_schedules"
 
@@ -620,7 +617,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	laterEvent := BotScheduleEvent{ID: "after-shutdown"}
 	laterPayload, _ := json.Marshal(laterEvent)
 	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, laterPayload)
-	waitForEventsWaiting(t, 1)
+	events.WaitForWaiting(t, 1)
 
 	// "after-shutdown" should not exist because subscriber was stopped
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})

@@ -1,8 +1,7 @@
-package botevents
+package botevents_test
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,37 +9,24 @@ import (
 	"testing"
 	"time"
 
+	"runtime/internal/botevents"
+	"runtime/internal/botevents/eventstest"
+
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // Integration tests share one NATS container and must not call t.Parallel.
 var (
 	natsConn *nats.Conn
-	js       jetstream.JetStream
+	events   eventstest.Events
 )
 
-const testSubject = "the0.bot.created"
-
-// eventsStream mirrors the THE0_EVENTS stream the api creates on startup
-// (api/src/nats/nats.service.ts).
-var eventsStream = jetstream.StreamConfig{
-	Name: StreamName,
-	Subjects: []string{
-		"the0.bot.created",
-		"the0.bot.updated",
-		"the0.bot.deleted",
-		"the0.bot-schedule.created",
-		"the0.bot-schedule.updated",
-		"the0.bot-schedule.deleted",
-	},
-	Retention: jetstream.LimitsPolicy,
-	MaxAge:    7 * 24 * time.Hour,
-	Storage:   jetstream.FileStorage,
-}
+const (
+	testSubject  = "the0.bot.created"
+	testConsumer = "test-consumer"
+)
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -49,33 +35,19 @@ func TestMain(m *testing.M) {
 	}
 
 	ctx := context.Background()
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "nats:2.10-alpine",
-			Cmd:          []string{"-js"},
-			ExposedPorts: []string{"4222/tcp"},
-			WaitingFor: wait.ForAll(
-				wait.ForListeningPort("4222/tcp"),
-				wait.ForLog("Server is ready"),
-			).WithDeadline(60 * time.Second),
-		},
-		Started: true,
-	})
+	container, url, err := eventstest.StartNATS(ctx)
 	if err != nil {
-		panic(fmt.Sprintf("failed to start NATS container: %v", err))
-	}
-	url, err := container.PortEndpoint(ctx, "4222/tcp", "nats")
-	if err != nil {
-		panic(fmt.Sprintf("failed to get NATS endpoint: %v", err))
+		panic(err.Error())
 	}
 	natsConn, err = nats.Connect(url)
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect to NATS: %v", err))
 	}
-	js, err = jetstream.New(natsConn)
+	js, err := jetstream.New(natsConn)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create JetStream context: %v", err))
 	}
+	events = eventstest.Events{JS: js, Consumer: testConsumer}
 
 	code := m.Run()
 
@@ -84,23 +56,9 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func deleteEventsStream(t *testing.T) {
-	t.Helper()
-	if err := js.DeleteStream(context.Background(), StreamName); err != nil && !errors.Is(err, jetstream.ErrStreamNotFound) {
-		t.Fatalf("failed to delete %s: %v", StreamName, err)
-	}
-}
-
-func createEventsStream(t *testing.T) {
-	t.Helper()
-	_, err := js.CreateStream(context.Background(), eventsStream)
-	require.NoError(t, err)
-}
-
 func publish(t *testing.T, payload string) {
 	t.Helper()
-	_, err := js.Publish(context.Background(), testSubject, []byte(payload))
-	require.NoError(t, err)
+	events.Publish(t, testSubject, []byte(payload))
 }
 
 // recorder is a Handler that remembers the payloads it handled.
@@ -141,10 +99,10 @@ func (r *recorder) waitFor(t *testing.T, payload string) {
 
 // newConsumer builds a consumer that records what it handles and is stopped
 // when the test ends.
-func newConsumer(t *testing.T, handler Handler) *Consumer {
+func newConsumer(t *testing.T, handler botevents.Handler) *botevents.Consumer {
 	t.Helper()
-	consumer, err := NewConsumer(natsConn, Config{
-		Name:     "test-consumer",
+	consumer, err := botevents.NewConsumer(natsConn, botevents.Config{
+		Name:     testConsumer,
 		Subjects: []string{testSubject},
 		Handler:  handler,
 		Logger:   testLogger{t: t},
