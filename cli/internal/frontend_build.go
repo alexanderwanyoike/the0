@@ -18,46 +18,14 @@ import (
 // the bot's runtime.
 const frontendNodeImage = "node:22-slim"
 
-// FrontendVendor handles frontend bundle building via npm. It is deliberately
-// not in the dependency vendor registry: deploy builds the bundle in its own
-// step through BuildFrontendIfNeeded, and registering it here builds it twice.
-type FrontendVendor struct{}
-
-// Name returns the vendor name
-func (v *FrontendVendor) Name() string {
-	return "Frontend"
+// Only a missing package.json skips the build. Any other stat error still
+// builds, so the problem surfaces instead of a deploy without its bundle.
+func hasFrontend(projectPath string) bool {
+	_, err := os.Stat(filepath.Join(projectPath, "frontend", "package.json"))
+	return !os.IsNotExist(err)
 }
 
-// DockerImage returns the Docker image used for building
-func (v *FrontendVendor) DockerImage() string {
-	return frontendNodeImage
-}
-
-// Detect checks if frontend/package.json exists
-func (v *FrontendVendor) Detect(projectPath string) bool {
-	frontendPackageJson := filepath.Join(projectPath, "frontend", "package.json")
-	_, err := os.Stat(frontendPackageJson)
-	return err == nil
-}
-
-// ShouldVendor checks if frontend building should be performed.
-// Always returns true if frontend/package.json exists - we don't cache builds
-// to ensure fresh bundles after any source changes.
-func (v *FrontendVendor) ShouldVendor(projectPath string) (bool, error) {
-	frontendPath := filepath.Join(projectPath, "frontend")
-	packageJsonPath := filepath.Join(frontendPath, "package.json")
-
-	// Check if frontend/package.json exists
-	if _, err := os.Stat(packageJsonPath); os.IsNotExist(err) {
-		return false, nil
-	}
-
-	// Always build when frontend exists - don't trust cached builds
-	return true, nil
-}
-
-// Vendor performs the Docker-based frontend bundle building
-func (v *FrontendVendor) Vendor(vm *VendorManager) error {
+func buildFrontend(vm *VendorManager) error {
 	blue := color.New(color.FgBlue)
 	green := color.New(color.FgGreen)
 
@@ -68,12 +36,12 @@ func (v *FrontendVendor) Vendor(vm *VendorManager) error {
 	os.RemoveAll(distPath)
 
 	// Step 1: Pull Node image if needed
-	if err := v.pullImage(vm); err != nil {
+	if err := pullFrontendImage(vm); err != nil {
 		return fmt.Errorf("failed to pull Node image: %v", err)
 	}
 
 	// Step 2: Run frontend build container
-	containerID, err := v.runContainer(vm)
+	containerID, err := runFrontendBuildContainer(vm)
 	if err != nil {
 		return fmt.Errorf("failed to run frontend build container: %v", err)
 	}
@@ -93,8 +61,7 @@ func (v *FrontendVendor) Vendor(vm *VendorManager) error {
 	return nil
 }
 
-// pullImage pulls the Node.js image if it doesn't exist locally
-func (v *FrontendVendor) pullImage(vm *VendorManager) error {
+func pullFrontendImage(vm *VendorManager) error {
 	ctx := context.Background()
 
 	// Check if image exists locally
@@ -135,8 +102,7 @@ func (v *FrontendVendor) pullImage(vm *VendorManager) error {
 	return nil
 }
 
-// runContainer creates and runs a container for frontend building
-func (v *FrontendVendor) runContainer(vm *VendorManager) (string, error) {
+func runFrontendBuildContainer(vm *VendorManager) (string, error) {
 	ctx := context.Background()
 
 	// Generate unique container name
@@ -256,19 +222,14 @@ func (v *FrontendVendor) runContainer(vm *VendorManager) (string, error) {
 	return resp.ID, nil
 }
 
-// BuildFrontendIfNeeded builds frontend only if needed and Docker is available
-// This is a convenience function for backward compatibility
+// BuildFrontendIfNeeded builds the bundle whenever the project has a
+// frontend, even if dist/bundle.js already exists, so a deploy never ships a
+// bundle older than its source.
 func BuildFrontendIfNeeded(projectPath string) error {
 	blue := color.New(color.FgBlue)
 	red := color.New(color.FgRed)
 
-	vendor := &FrontendVendor{}
-	shouldBuild, err := vendor.ShouldVendor(projectPath)
-	if err != nil {
-		return err
-	}
-
-	if !shouldBuild {
+	if !hasFrontend(projectPath) {
 		return nil
 	}
 
@@ -293,7 +254,7 @@ func BuildFrontendIfNeeded(projectPath string) error {
 		return fmt.Errorf("docker daemon not running for frontend build")
 	}
 
-	if err := vendor.Vendor(vm); err != nil {
+	if err := buildFrontend(vm); err != nil {
 		return fmt.Errorf("frontend build failed: %v", err)
 	}
 
