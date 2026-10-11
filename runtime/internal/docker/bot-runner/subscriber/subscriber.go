@@ -163,7 +163,7 @@ func NewNATSSubscriber(
 	}
 
 	// Create NATS connection
-	natsConn, err := nats.Connect(opts.NATSUrl, nats.MaxReconnects(-1), nats.ReconnectWait(time.Second))
+	natsConn, err := botevents.Connect(opts.NATSUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
 	}
