@@ -91,7 +91,9 @@ func (e *RealtimeExecutor) Execute(ctx context.Context, req Request, targetIP st
 // addParamsToQuery puts params in the URL query string as well as the JSON
 // body, because SDK query servers read params only from the query string.
 // A param replaces a key of the same name already in the path, since SDKs
-// disagree on which of a repeated key wins.
+// disagree on which of a repeated key wins. A null param stays out, because
+// handlers fall back to a default for a missing key and the string "null"
+// would defeat that.
 func addParamsToQuery(u *url.URL, params map[string]interface{}) error {
 	if len(params) == 0 {
 		return nil
@@ -101,6 +103,9 @@ func addParamsToQuery(u *url.URL, params map[string]interface{}) error {
 		return fmt.Errorf("invalid query string in path: %w", err)
 	}
 	for key, value := range params {
+		if value == nil {
+			continue
+		}
 		text, err := paramText(value)
 		if err != nil {
 			return fmt.Errorf("param %q: %w", key, err)
