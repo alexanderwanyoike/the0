@@ -24,10 +24,7 @@ const (
 	// Handlers give up well inside ackWait, so the server never redelivers an
 	// event while its first attempt is still running.
 	handlerTimeout = ackWait / 2
-	// Lifecycle events are rare and dropping one (a delete especially) leaves
-	// a bot in the wrong state, so a failing event is retried for about a
-	// quarter of an hour, long enough to ride out a Mongo restart.
-	maxDeliver     = 20
+	quietAttempts  = 3
 	rebindInterval = 2 * time.Second
 	backlogTimeout = 30 * time.Second
 )
@@ -75,7 +72,10 @@ func consumerConfig(cfg Config) jetstream.ConsumerConfig {
 		DeliverPolicy: jetstream.DeliverAllPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		AckWait:       ackWait,
-		MaxDeliver:    maxDeliver,
+		// Only a Permanent error drops an event. A transient failure is retried
+		// until it succeeds: a stall is visible and recovers in order, while a
+		// dropped delete would leave a bot trading.
+		MaxDeliver: -1,
 		// One event in flight across all replicas: a retried event must not be
 		// overtaken by a later one for the same bot, or a delete could land
 		// before the create it follows and leave the bot running.
@@ -214,7 +214,12 @@ func (c *Consumer) handle(msg jetstream.Msg) {
 		c.cfg.Logger.Info("Handled lifecycle event", fields...)
 		settleErr = msg.Ack()
 	case verdictRetry:
-		c.cfg.Logger.Error("Failed to handle lifecycle event, will retry", append(fields, "retry_in", delay.String(), "error", err)...)
+		retryFields := append(fields, "retry_in", delay.String(), "error", err)
+		if delivered <= quietAttempts {
+			c.cfg.Logger.Warn("Failed to handle lifecycle event, will retry", retryFields...)
+		} else {
+			c.cfg.Logger.Error("Lifecycle event still failing, later events wait behind it", retryFields...)
+		}
 		settleErr = msg.NakWithDelay(delay)
 	case verdictDrop:
 		c.cfg.Logger.Error("Dropping lifecycle event that cannot be handled", append(fields, "error", err)...)

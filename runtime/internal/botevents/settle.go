@@ -43,7 +43,7 @@ func settle(err error, delivered uint64, retry backoff) (verdict, time.Duration)
 		return verdictAck, 0
 	}
 	var permanent permanentError
-	if errors.As(err, &permanent) || delivered >= maxDeliver {
+	if errors.As(err, &permanent) {
 		return verdictDrop, 0
 	}
 	return verdictRetry, retry.delay(delivered)
