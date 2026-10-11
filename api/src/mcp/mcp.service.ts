@@ -14,6 +14,7 @@ import {
   CustomBotGetInput,
   CustomBotSchemaInput,
 } from "./mcp.types";
+import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
@@ -53,7 +54,7 @@ export class McpService {
   async handleToolCall(
     name: string,
     args: Record<string, unknown>,
-    userId?: string,
+    actor: Actor,
   ): Promise<{
     content: Array<{ type: string; text: string }>;
     isError?: boolean;
@@ -67,69 +68,69 @@ export class McpService {
           break;
 
         case MCP_TOOL_NAMES.BOT_LIST:
-          result = await this.handleBotList(userId);
+          result = await this.handleBotList(actor);
           break;
 
         case MCP_TOOL_NAMES.BOT_GET:
           result = await this.handleBotGet(
             args as unknown as BotGetInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.BOT_DEPLOY:
           result = await this.handleBotDeploy(
             args as unknown as BotDeployInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.BOT_UPDATE:
           result = await this.handleBotUpdate(
             args as unknown as BotUpdateInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.BOT_DELETE:
           result = await this.handleBotDelete(
             args as unknown as BotDeleteInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.LOGS_GET:
           result = await this.handleLogsGet(
             args as unknown as LogsGetInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.LOGS_SUMMARY:
           result = await this.handleLogsSummary(
             args as unknown as { bot_id: string },
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.BOT_STATE_LIST:
           result = await this.handleBotStateList(
             args as unknown as BotStateListInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.BOT_STATE_GET:
           result = await this.handleBotStateGet(
             args as unknown as BotStateGetInput,
-            userId,
+            actor,
           );
           break;
 
         case MCP_TOOL_NAMES.BOT_QUERY:
           result = await this.handleBotQuery(
             args as unknown as BotQueryInput,
-            userId,
+            actor,
           );
           break;
 
@@ -179,11 +180,8 @@ export class McpService {
   }
 
   // Bot Handlers
-  private async handleBotList(userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-    const botService = await this.resolveForUser(BotService, userId);
+  private async handleBotList(actor: Actor) {
+    const botService = await this.resolveForUser(BotService, actor.userId);
     const result = await botService.findAll();
     if (!result.success) {
       throw new Error(result.error || "Failed to list bots");
@@ -199,11 +197,8 @@ export class McpService {
     }));
   }
 
-  private async handleBotGet(input: BotGetInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-    const botService = await this.resolveForUser(BotService, userId);
+  private async handleBotGet(input: BotGetInput, actor: Actor) {
+    const botService = await this.resolveForUser(BotService, actor.userId);
     const result = await botService.findOne(input.bot_id);
     if (!result.success) {
       throw new Error(result.error || "Bot not found");
@@ -211,11 +206,7 @@ export class McpService {
     return result.data;
   }
 
-  private async handleBotDeploy(input: BotDeployInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-
+  private async handleBotDeploy(input: BotDeployInput, actor: Actor) {
     // REST gets CreateBotDto's required name from the global ValidationPipe,
     // which tool arguments never pass through; BotService validates the rest.
     const name = input.config?.name;
@@ -223,7 +214,7 @@ export class McpService {
       throw new Error("Config must include a 'name' field");
     }
 
-    const botService = await this.resolveForUser(BotService, userId);
+    const botService = await this.resolveForUser(BotService, actor.userId);
     const result = await botService.create({ name, config: input.config });
     if (!result.success) {
       throw new Error(result.error || "Failed to deploy bot");
@@ -239,11 +230,8 @@ export class McpService {
     };
   }
 
-  private async handleBotUpdate(input: BotUpdateInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-    const botService = await this.resolveForUser(BotService, userId);
+  private async handleBotUpdate(input: BotUpdateInput, actor: Actor) {
+    const botService = await this.resolveForUser(BotService, actor.userId);
     const result = await botService.update(input.bot_id, {
       config: input.config,
       ...(input.name && { name: input.name }),
@@ -260,11 +248,8 @@ export class McpService {
     };
   }
 
-  private async handleBotDelete(input: BotDeleteInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
-    const botService = await this.resolveForUser(BotService, userId);
+  private async handleBotDelete(input: BotDeleteInput, actor: Actor) {
+    const botService = await this.resolveForUser(BotService, actor.userId);
     const result = await botService.remove(input.bot_id);
     if (!result.success) {
       throw new Error(result.error || "Failed to delete bot");
@@ -273,10 +258,7 @@ export class McpService {
   }
 
   // Logs Handlers
-  private async handleLogsGet(input: LogsGetInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+  private async handleLogsGet(input: LogsGetInput, actor: Actor) {
     // Cap limit to prevent context overflow
     const limit = Math.min(input.limit || 100, 500);
     const result = await this.logsService.getLogs(
@@ -287,7 +269,7 @@ export class McpService {
         limit,
         offset: 0,
       },
-      userId,
+      actor.userId,
     );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs");
@@ -300,10 +282,7 @@ export class McpService {
     };
   }
 
-  private async handleLogsSummary(input: { bot_id: string }, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+  private async handleLogsSummary(input: { bot_id: string }, actor: Actor) {
     // Get recent logs to analyze - use today's date as default
     const today = new Date();
     const todayStr =
@@ -318,7 +297,7 @@ export class McpService {
         limit: 100,
         offset: 0,
       },
-      userId,
+      actor.userId,
     );
     if (!result.success) {
       throw new Error(result.error || "Failed to get logs for summary");
@@ -344,14 +323,14 @@ export class McpService {
   }
 
   // Bot State Handlers
-  private async handleBotStateList(input: BotStateListInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+  private async handleBotStateList(input: BotStateListInput, actor: Actor) {
     if (!input.bot_id) {
       throw new Error("bot_id is required");
     }
-    const botStateService = await this.resolveForUser(BotStateService, userId);
+    const botStateService = await this.resolveForUser(
+      BotStateService,
+      actor.userId,
+    );
     const result = await botStateService.listKeys(input.bot_id);
     if (!result.success) {
       throw new Error(result.error?.message || "Failed to list state keys");
@@ -359,17 +338,17 @@ export class McpService {
     return { bot_id: input.bot_id, keys: result.data };
   }
 
-  private async handleBotStateGet(input: BotStateGetInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+  private async handleBotStateGet(input: BotStateGetInput, actor: Actor) {
     if (!input.bot_id) {
       throw new Error("bot_id is required");
     }
     if (!input.key) {
       throw new Error("key is required");
     }
-    const botStateService = await this.resolveForUser(BotStateService, userId);
+    const botStateService = await this.resolveForUser(
+      BotStateService,
+      actor.userId,
+    );
     const result = await botStateService.getKey(input.bot_id, input.key);
     if (!result.success) {
       throw new Error(result.error?.message || "Failed to get state value");
@@ -378,17 +357,17 @@ export class McpService {
   }
 
   // Bot Query Handlers
-  private async handleBotQuery(input: BotQueryInput, userId?: string) {
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+  private async handleBotQuery(input: BotQueryInput, actor: Actor) {
     if (!input.bot_id) {
       throw new Error("bot_id is required");
     }
     if (!input.query_path) {
       throw new Error("query_path is required");
     }
-    const botQueryService = await this.resolveForUser(BotQueryService, userId);
+    const botQueryService = await this.resolveForUser(
+      BotQueryService,
+      actor.userId,
+    );
     const result = await botQueryService.executeQuery(input.bot_id, {
       queryPath: input.query_path,
       params: input.params,

@@ -31,5 +31,9 @@ export const ApiJwtOrApiKeyAuth = () =>
     Unauthorized(),
   );
 
+/** Documents AuthCombinedGuard routes that also allow anonymous callers, so never answer 401. */
+export const ApiOptionalJwtOrApiKeyAuth = () =>
+  applyDecorators(ApiBearerAuth(BEARER_AUTH), ApiSecurity(API_KEY_AUTH));
+
 export const ApiKeySecurity = () =>
   applyDecorators(ApiSecurity(API_KEY_AUTH), Unauthorized());

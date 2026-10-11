@@ -2,15 +2,21 @@ import {
   Controller,
   Post,
   Body,
-  Headers,
   HttpCode,
   HttpStatus,
-  UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiHeader, ApiBody } from "@nestjs/swagger";
 import { McpService } from "./mcp.service";
 import { MCP_TOOL_DEFINITIONS } from "./mcp.types";
-import { ApiKeyService } from "@/api-key/api-key.service";
+import { Actor } from "@/auth/actor";
+import {
+  ActorVia,
+  AllowAnonymous,
+  CurrentActor,
+} from "@/auth/actor.decorators";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { ApiOptionalJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { PinoLogger } from "nestjs-pino";
 
 /**
@@ -38,11 +44,15 @@ interface JsonRpcResponse {
 }
 
 @ApiTags("mcp")
+@ApiOptionalJwtOrApiKeyAuth()
 @Controller("mcp")
+@UseGuards(AuthCombinedGuard)
+@ActorVia("mcp")
+// initialize, tools/list and ping stay open; tools/call requires an Actor below.
+@AllowAnonymous()
 export class McpController {
   constructor(
     private readonly mcpService: McpService,
-    private readonly apiKeyService: ApiKeyService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -72,18 +82,9 @@ export class McpController {
   })
   async handleRpc(
     @Body() request: JsonRpcRequest,
-    @Headers("x-api-key") apiKey?: string,
+    @CurrentActor() actor?: Actor,
   ): Promise<JsonRpcResponse> {
     this.logger.info({ method: request.method }, "MCP request received");
-
-    // Validate API key
-    let userId: string | undefined;
-    if (apiKey) {
-      const validation = await this.apiKeyService.validateApiKey(apiKey);
-      if (validation.success && validation.data) {
-        userId = validation.data.userId;
-      }
-    }
 
     try {
       // Handle different MCP methods
@@ -106,7 +107,7 @@ export class McpController {
           });
 
         case "tools/call":
-          if (!apiKey || !userId) {
+          if (!actor) {
             return this.createErrorResponse(
               request.id,
               -32001,
@@ -130,7 +131,7 @@ export class McpController {
           const result = await this.mcpService.handleToolCall(
             toolName,
             toolArgs,
-            userId,
+            actor,
           );
           return this.createResponse(request.id, result);
 

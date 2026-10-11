@@ -1,5 +1,15 @@
-import { SetMetadata } from "@nestjs/common";
-import { ActorChannel } from "./actor";
+import {
+  createParamDecorator,
+  ExecutionContext,
+  SetMetadata,
+} from "@nestjs/common";
+import { Actor, ActorChannel } from "./actor";
+import { AuthenticatedRequest } from "./auth.types";
+
+export const CurrentActor = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): Actor | undefined =>
+    ctx.switchToHttp().getRequest<AuthenticatedRequest>().actor,
+);
 
 export const ACTOR_VIA_KEY = "auth:actorVia";
 
