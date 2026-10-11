@@ -32,6 +32,7 @@ jest.mock("nats", () => {
       info: jest.fn().mockResolvedValue(undefined),
       add: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
     },
   };
 
@@ -233,6 +234,43 @@ describe("NatsService", () => {
           max_bytes: 128 * 1024 * 1024,
         }),
       );
+    });
+
+    describe("keep repeated bot events out of THE0_EVENTS for an hour", () => {
+      const HOUR_NS = 60 * 60 * 1000 * 1000000;
+
+      it("creates THE0_EVENTS with a one-hour duplicate window", () => {
+        expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "THE0_EVENTS",
+            retention: "limits",
+            max_age: 7 * 24 * 60 * 60 * 1000 * 1000000,
+            duplicate_window: HOUR_NS,
+          }),
+        );
+      });
+
+      it("updates an existing THE0_EVENTS in place, never deleting it", async () => {
+        await service.onModuleDestroy();
+        jest.clearAllMocks();
+        natsMocks.mockJetStreamManager.streams.add.mockRejectedValue(
+          Object.assign(new Error("stream name already in use"), {
+            api_error: { err_code: 10058 },
+          }),
+        );
+
+        await service.onModuleInit();
+
+        expect(
+          natsMocks.mockJetStreamManager.streams.update,
+        ).toHaveBeenCalledWith(
+          "THE0_EVENTS",
+          expect.objectContaining({ duplicate_window: HOUR_NS }),
+        );
+        expect(
+          natsMocks.mockJetStreamManager.streams.delete,
+        ).not.toHaveBeenCalled();
+      });
     });
   });
 

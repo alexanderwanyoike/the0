@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { asc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
 import { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { getDatabase } from "@/database/connection";
 import { botEventOutboxTable } from "@/database/schema/bot-event-outbox";
@@ -21,16 +21,12 @@ export interface PendingBotEvent {
 
 /**
  * published: one event went out and more may be waiting. drained: nothing
- * was left to publish. failed: the publisher rejected the event. busy:
- * another relay holds the lock.
+ * was left to publish. failed: the publisher rejected the event.
  */
-export type PublishOutcome = "published" | "drained" | "failed" | "busy";
+export type PublishOutcome = "published" | "drained" | "failed";
 
 /** A database, or a transaction already open on one. */
 export type Executor = PgDatabase<PgQueryResultHKT>;
-
-// Any fixed key works, as long as no other advisory lock on this database uses it.
-const RELAY_LOCK_KEY = 4810917311;
 
 /** Stores events as part of the caller's transaction. */
 export async function appendBotEvents(
@@ -51,49 +47,35 @@ export async function appendBotEvents(
 export class BotEventOutbox {
   /**
    * Passes the oldest unpublished event to `publish` and marks it if
-   * accepted. One event per transaction keeps the lock, and a pooled
-   * connection, for at most one publish.
+   * accepted, with no transaction or lock held across the publish. Several
+   * relays may run at once: each moves on only after JetStream acks, so a
+   * bot's later event never goes out before an earlier one is stored, and
+   * a repeat carries the same Nats-Msg-Id, which JetStream drops.
    */
   async publishNext(
     publish: (event: PendingBotEvent) => Promise<boolean>,
   ): Promise<PublishOutcome> {
     const db = getDatabase() as Executor;
     const table = botEventOutboxTable;
-    return db.transaction(async (tx) => {
-      // postgres.js sets no timeouts, so without these a hung statement, or
-      // a client that stalls mid-publish, would hold the relay lock for good.
-      await tx.execute(
-        sql`SELECT set_config('statement_timeout', '2s', true), set_config('lock_timeout', '1s', true), set_config('idle_in_transaction_session_timeout', '5s', true)`,
-      );
-      // Transaction-level, because Neon's pooler runs in transaction mode,
-      // where a session-level lock would not stay with this connection.
-      const [{ locked }] = await tx
-        .select({
-          locked: sql<boolean>`pg_try_advisory_xact_lock(${sql.raw(String(RELAY_LOCK_KEY))})`,
-        })
-        .from(sql`(SELECT 1) AS relay_lock`);
-      if (!locked) return "busy";
+    const [next] = await db
+      .select({
+        id: table.id,
+        botId: table.botId,
+        subject: table.subject,
+        payload: table.payload,
+      })
+      .from(table)
+      .where(isNull(table.publishedAt))
+      .orderBy(asc(table.id))
+      .limit(1);
+    if (!next) return "drained";
+    if (!(await publish(next))) return "failed";
 
-      const [next] = await tx
-        .select({
-          id: table.id,
-          botId: table.botId,
-          subject: table.subject,
-          payload: table.payload,
-        })
-        .from(table)
-        .where(isNull(table.publishedAt))
-        .orderBy(asc(table.id))
-        .limit(1);
-      if (!next) return "drained";
-      if (!(await publish(next))) return "failed";
-
-      await tx
-        .update(table)
-        .set({ publishedAt: new Date() })
-        .where(eq(table.id, next.id));
-      return "published";
-    });
+    await db
+      .update(table)
+      .set({ publishedAt: sql`now()` })
+      .where(and(eq(table.id, next.id), isNull(table.publishedAt)));
+    return "published";
   }
 
   async prunePublishedBefore(cutoff: Date): Promise<number> {
