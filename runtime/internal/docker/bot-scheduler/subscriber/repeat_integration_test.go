@@ -48,6 +48,29 @@ func requireRepeatIsHarmless(t *testing.T, db *mongo.Database, subject string, e
 		"every repeated %s event should be acknowledged on its first delivery, not retried", subject)
 }
 
+func TestRepeat_ScheduleCreated_LeavesTheSameState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	db := sharedInfra.GetDatabase("schedule_created_repeatedly")
+	startSubscriber(t, db)
+
+	requireRepeatIsHarmless(t, db, SubjectBotScheduleCreated, testScheduleEvent("created-repeatedly", "0 0 * * *"))
+}
+
+func TestRepeat_ScheduleDeleted_LeavesTheSameState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	db := sharedInfra.GetDatabase("schedule_deleted_repeatedly")
+	insertSchedule(t, db, "deleted-repeatedly", 2)
+	startSubscriber(t, db)
+
+	requireRepeatIsHarmless(t, db, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "deleted-repeatedly"})
+}
+
 func TestRepeat_ScheduleUpdated_LeavesTheSameState(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

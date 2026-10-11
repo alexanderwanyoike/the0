@@ -199,6 +199,17 @@ func waitForEventsHandled(t *testing.T) {
 	require.NoError(t, err, "every published event should be handled")
 }
 
+// consumerInfo reports the subscriber's consumer. Its Delivered.Consumer
+// counts every delivery, redeliveries included.
+func consumerInfo(t *testing.T) *jetstream.ConsumerInfo {
+	t.Helper()
+	consumer, err := sharedInfra.js.Consumer(context.Background(), eventsStream.Name, ConsumerName)
+	require.NoError(t, err)
+	info, err := consumer.Info(context.Background())
+	require.NoError(t, err)
+	return info
+}
+
 // TestMain runs once before all tests in the package
 // This is the standard Go pattern for shared test setup/teardown
 func TestMain(m *testing.M) {
