@@ -17,6 +17,11 @@ jest.mock(
   "@/database/connection",
   () => jest.requireActual("@/test/test-database").connection,
 );
+// The failure cases are expected, so their error logs are noise here.
+jest.mock("pino", () => ({
+  __esModule: true,
+  default: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn() }),
+}));
 
 const OWNER = "user-1";
 const CUSTOM_BOT = "sma-bot-1.0.0";
