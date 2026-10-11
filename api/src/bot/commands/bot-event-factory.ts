@@ -11,7 +11,11 @@ import { customBotNameOf } from "./custom-bot-name";
 
 type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
 
-/** Builds the events the runtime receives for each Bot command. */
+/**
+ * Builds the events the runtime receives for each Bot command. Custom bots
+ * are looked up in the Catalogue, not among the Actor's uploads, so a Bot
+ * running another user's Custom bot is announced like any other.
+ */
 @Injectable()
 export class BotEventFactory {
   constructor(
@@ -27,28 +31,11 @@ export class BotEventFactory {
     );
   }
 
-  /**
-   * The event carries the user's copy of the custom bot version, while
-   * customBotId stays the globally validated one.
-   */
-  async updated(
-    userId: string,
-    botId: string,
-    config: BotConfig,
-    newCustomBot: CustomBot,
-  ): Promise<BotEvent[]> {
-    const customBotResult = await this.customBotService.getUserSpecificVersion(
-      userId,
-      newCustomBot.name,
-      newCustomBot.version,
-    );
-    if (!customBotResult.success) return [];
-
-    const customBot = customBotResult.data;
+  updated(botId: string, config: BotConfig, customBot: CustomBot): BotEvent[] {
     return botEvents(
       botId,
       this.topicsFor(customBot)?.UPDATED,
-      customBotEventPayload(botId, config, newCustomBot.id, customBot),
+      customBotEventPayload(botId, config, customBot.id, customBot),
     );
   }
 
@@ -57,7 +44,7 @@ export class BotEventFactory {
    * whose custom bot version is gone, is still deleted, just without an
    * event.
    */
-  async deleted(userId: string, bot: Bot): Promise<Result<BotEvent[], string>> {
+  async deleted(bot: Bot): Promise<Result<BotEvent[], string>> {
     const configType = bot.config?.type;
     const configVersion = bot.config?.version;
     if (!configType || !configVersion) return Ok([]);
@@ -68,11 +55,11 @@ export class BotEventFactory {
       return Failure(name.error);
     }
 
-    const customBotResult = await this.customBotService.getUserSpecificVersion(
-      userId,
-      name.data,
-      configVersion,
-    );
+    const customBotResult =
+      await this.customBotService.getGlobalSpecificVersion(
+        name.data,
+        configVersion,
+      );
     if (!customBotResult.success) return Ok([]);
 
     return Ok(

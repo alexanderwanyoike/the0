@@ -183,13 +183,6 @@ describe("McpService", () => {
       getAllGlobalVersions: jest.fn(),
       getGlobalLatestVersion: jest.fn(),
       getGlobalSpecificVersion: jest.fn(findInCatalogue),
-      // The update and delete events are built from the caller's own
-      // copy of the custom bot; answering from the shared catalogue keeps
-      // these tests about MCP rather than about that lookup.
-      getUserSpecificVersion: jest.fn(
-        (_uid: string, name: string, version: string) =>
-          findInCatalogue(name, version),
-      ),
       checkOrphaned: jest
         .fn()
         .mockResolvedValue(

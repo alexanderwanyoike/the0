@@ -38,10 +38,7 @@ export class DeleteBotHandler
       return Failure("Bot not found");
     }
 
-    const eventsResult = await this.events.deleted(
-      actor.userId,
-      botResult.data,
-    );
+    const eventsResult = await this.events.deleted(botResult.data);
     if (!eventsResult.success) {
       return Failure(eventsResult.error);
     }
