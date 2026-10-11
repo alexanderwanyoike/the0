@@ -7,7 +7,7 @@ import { Bot } from "./entities/bot.entity";
 import { Failure, Ok, Result } from "@/common/result";
 import { BotValidator } from "./bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
-import { CustomBot, BotType, BotDeleteResult } from "@/custom-bot/custom-bot.types";
+import { CustomBot, BotDeleteResult } from "@/custom-bot/custom-bot.types";
 import { Actor } from "@/auth/actor";
 import { BotConfig } from "@/database/schema/bots";
 // UserBotsService removed for OSS version
@@ -46,21 +46,6 @@ export class BotService {
 
     if (!validationResult.success) {
       return Failure(validationResult.error);
-    }
-
-    // Get bot type from config
-    const botType = this.getBotTypeFromConfig(validationResult.data);
-
-    // Feature gates removed for OSS version - allow all bot types
-
-    // Check deployment authorization
-    const deploymentAuthResult = await this.checkDeploymentAuthorization(
-      uid,
-      validationResult.data,
-    );
-
-    if (!deploymentAuthResult.success) {
-      return Failure(deploymentAuthResult.error);
     }
 
     // Get hasFrontend flag from the validated custom bot
@@ -277,7 +262,7 @@ export class BotService {
     const configVersion = bot.config?.version;
     if (!configType || !configVersion) return Ok(null);
 
-    const [_, name] = configType.split("/");
+    const name = configType.split("/")[1];
     if (!name?.trim()) {
       this.logger.warn(
         { type: configType },
@@ -343,7 +328,7 @@ export class BotService {
       return Failure("Invalid version format. Expected format: x.y.z");
     }
 
-    const [_, name] = type.split("/");
+    const name = type.split("/")[1];
     if (!name?.trim()) {
       return Failure("Invalid bot type: missing name after '/'");
     }
@@ -368,18 +353,6 @@ export class BotService {
     }
 
     return { success: true, error: null, data: customBot };
-  }
-
-  private async checkDeploymentAuthorization(
-    userId: string,
-    customBot: CustomBot,
-  ): Promise<Result<void, string>> {
-    // OSS version - all bots are deployable by their owners or anyone (free access)
-    return { success: true, error: null, data: null };
-  }
-
-  private getBotTypeFromConfig(customBot: CustomBot): BotType {
-    return customBot.config.type;
   }
 
   private getTopicsForBotType(
