@@ -111,9 +111,8 @@ export class BotService {
   }
 
   /**
-   * The events are already committed: this only asks the relay to publish
-   * them now instead of on its next retry. The command does not wait for
-   * JetStream.
+   * The relay does not poll an idle outbox, so it must be told about newly
+   * committed events. The command does not wait for JetStream.
    */
   private announce(events: BotEvent[]): void {
     if (events.length > 0) void this.relay.publishPending();
