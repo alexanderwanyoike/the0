@@ -20,7 +20,7 @@ describe("Bot commands", () => {
   let repository: BotRepository;
   let validator: BotValidator;
   let mockCustomBotService: CustomBotService;
-  let relay: { publishPending: jest.Mock };
+  let relay: { publishCommitted: jest.Mock };
   let logger: ReturnType<typeof createMockLogger>;
   const uid = "test-user-id";
   const actor = mockActor({ userId: uid });
@@ -93,7 +93,7 @@ describe("Bot commands", () => {
         },
         {
           provide: BotEventRelay,
-          useValue: { publishPending: jest.fn() },
+          useValue: { publishCommitted: jest.fn() },
         },
         {
           provide: PinoLogger,
@@ -256,7 +256,7 @@ describe("Bot commands", () => {
       const result = await deploy(actor, validBotData);
 
       expect(result).toEqual(Failure("db down"));
-      expect(relay.publishPending).not.toHaveBeenCalled();
+      expect(relay.publishCommitted).not.toHaveBeenCalled();
       expect(repository.findOne).not.toHaveBeenCalled();
     });
 
@@ -296,11 +296,11 @@ describe("Bot commands", () => {
       it("should ask the relay to publish once the bot is stored", async () => {
         await deploy(actor, validBotData);
 
-        const storeOrder = (repository.createWithEvents as jest.Mock).mock
-          .invocationCallOrder[0];
-        expect(relay.publishPending).toHaveBeenCalledTimes(1);
-        expect(storeOrder).toBeLessThan(
-          relay.publishPending.mock.invocationCallOrder[0],
+        const store = repository.createWithEvents as jest.Mock;
+        const [, events] = store.mock.calls[0];
+        expect(relay.publishCommitted).toHaveBeenCalledWith(events);
+        expect(store.mock.invocationCallOrder[0]).toBeLessThan(
+          relay.publishCommitted.mock.invocationCallOrder[0],
         );
       });
 
@@ -321,7 +321,7 @@ describe("Bot commands", () => {
           expect.anything(),
           [],
         );
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
       });
     });
   });
@@ -386,7 +386,7 @@ describe("Bot commands", () => {
       );
       expect(repository.updateWithEvents).not.toHaveBeenCalled();
       expect(repository.removeWithEvents).not.toHaveBeenCalled();
-      expect(relay.publishPending).not.toHaveBeenCalled();
+      expect(relay.publishCommitted).not.toHaveBeenCalled();
     });
   });
 
@@ -767,7 +767,7 @@ describe("Bot commands", () => {
             },
           ],
         );
-        expect(relay.publishPending).toHaveBeenCalledTimes(1);
+        expect(relay.publishCommitted).toHaveBeenCalledTimes(1);
       });
 
       it("should send an empty filePath when the custom bot has none", async () => {
@@ -805,7 +805,7 @@ describe("Bot commands", () => {
           expect.anything(),
           [],
         );
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
       });
 
       it("should skip the event for an unknown bot type", async () => {
@@ -827,7 +827,7 @@ describe("Bot commands", () => {
           expect.anything(),
           [],
         );
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
         expect(logger.warn).toHaveBeenCalledWith(
           { botType: "other" },
           "Unknown bot type",
@@ -841,7 +841,7 @@ describe("Bot commands", () => {
 
         await update(actor, "test-id", updateData);
 
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).not.toHaveBeenCalled();
       });
     });
   });
@@ -1005,7 +1005,7 @@ describe("Bot commands", () => {
             },
           ],
         );
-        expect(relay.publishPending).toHaveBeenCalledTimes(1);
+        expect(relay.publishCommitted).toHaveBeenCalledTimes(1);
       });
 
       it("should delete without an event when the custom bot version is unavailable", async () => {
@@ -1021,7 +1021,7 @@ describe("Bot commands", () => {
           "test-id",
           [],
         );
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
       });
 
       it("should skip the custom bot lookup when the version is missing", async () => {
@@ -1043,7 +1043,7 @@ describe("Bot commands", () => {
           "test-id",
           [],
         );
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith([]);
       });
 
       it("should neither check orphans nor ask the relay to publish when removal fails", async () => {
@@ -1055,7 +1055,7 @@ describe("Bot commands", () => {
 
         expect(result).toEqual(Failure("db down"));
         expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
-        expect(relay.publishPending).not.toHaveBeenCalled();
+        expect(relay.publishCommitted).not.toHaveBeenCalled();
       });
 
       it("should warn and continue when the orphan check fails", async () => {
@@ -1074,7 +1074,7 @@ describe("Bot commands", () => {
           },
           "Failed to check if custom bot version is orphaned",
         );
-        expect(relay.publishPending).toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalled();
       });
 
       it("should skip the orphan check when the bot has no customBotId", async () => {

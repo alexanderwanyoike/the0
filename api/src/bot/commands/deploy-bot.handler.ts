@@ -53,7 +53,7 @@ export class DeployBotHandler
       return Failure(result.error);
     }
 
-    if (events.length > 0) void this.relay.publishPending();
+    this.relay.publishCommitted(events);
     return this.bots.findOne(actor.userId, id);
   }
 }

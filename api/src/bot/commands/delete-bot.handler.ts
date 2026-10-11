@@ -55,7 +55,7 @@ export class DeleteBotHandler
     if (!result.success) {
       return Failure(result.error);
     }
-    if (events.length > 0) void this.relay.publishPending();
+    this.relay.publishCommitted(events);
 
     // Note: MinIO log/state cleanup is handled by the runtime GC process,
     // not here. The GC periodically sweeps orphaned artifacts after the

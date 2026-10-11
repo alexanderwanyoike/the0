@@ -77,7 +77,7 @@ export class UpdateBotHandler
       events,
     );
 
-    if (result.success && events.length > 0) void this.relay.publishPending();
+    if (result.success) this.relay.publishCommitted(events);
     return result;
   }
 }
