@@ -7,7 +7,6 @@ on:
       - 'sdk/rust/**'
       - '.github/workflows/sdk-rust.yml'
   pull_request:
-    branches: [ main, dev ]
     paths:
       - 'sdk/rust/**'
       - '.github/workflows/sdk-rust.yml'
