@@ -1,6 +1,7 @@
 package natssubscriber
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -52,4 +53,24 @@ func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
 
 	err := WaitForDocument(db.Collection(testCollection), bson.M{"id": "retried-bot"}, 15*time.Second)
 	require.NoError(t, err, "a create that failed should be retried until the bot is stored")
+}
+
+func TestDelivery_RetriedCreate_IsNotOvertakenByItsDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	db := sharedInfra.GetDatabase("retried_create_then_delete")
+	rejectWrites(t, db)
+	startSubscriber(t, db)
+
+	publishEvent(t, SubjectBotCreated, testBotMessage("created-then-deleted"))
+	waitForCreateAttempts(t, db, 1)
+	publishEvent(t, SubjectBotDeleted, BotMessage{ID: "created-then-deleted"})
+	acceptWrites(t, db)
+	waitForEventsHandled(t)
+
+	count, err := db.Collection(testCollection).CountDocuments(context.Background(), bson.M{"id": "created-then-deleted"})
+	require.NoError(t, err)
+	require.Zero(t, count, "the delete must apply after the create it follows, or the deleted bot keeps running")
 }

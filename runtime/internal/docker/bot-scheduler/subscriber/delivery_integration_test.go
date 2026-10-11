@@ -63,3 +63,22 @@ func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
 	err := waitFor(15*time.Second, func() bool { return countSchedules(db, "retried-schedule") == 1 })
 	require.NoError(t, err, "a create that failed should be retried until the schedule is stored")
 }
+
+func TestDelivery_RetriedCreate_IsNotOvertakenByItsDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	db := sharedInfra.GetDatabase("retried_create_then_delete")
+	rejectWrites(t, db)
+	startSubscriber(t, db)
+
+	publishEvent(t, SubjectBotScheduleCreated, testScheduleEvent("created-then-deleted", "0 0 * * *"))
+	waitForCreateAttempts(t, db, 1)
+	publishEvent(t, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "created-then-deleted"})
+	acceptWrites(t, db)
+	waitForEventsHandled(t)
+
+	require.Zero(t, countSchedules(db, "created-then-deleted"),
+		"the delete must apply after the create it follows, or the deleted schedule keeps running")
+}

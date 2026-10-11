@@ -184,6 +184,22 @@ func waitForCreateAttempts(t *testing.T, db *mongo.Database, n int) {
 	require.NoError(t, err, "the create handler should have run %d time(s)", n)
 }
 
+// waitForEventsHandled waits until the consumer has nothing left to deliver
+// and nothing awaiting acknowledgement, so a test can assert on the end state
+// without guessing how long handling takes.
+func waitForEventsHandled(t *testing.T) {
+	t.Helper()
+	err := waitFor(15*time.Second, func() bool {
+		consumer, err := sharedInfra.js.Consumer(context.Background(), eventsStream.Name, ConsumerName)
+		if err != nil {
+			return false
+		}
+		info, err := consumer.Info(context.Background())
+		return err == nil && info.NumPending == 0 && info.NumAckPending == 0
+	})
+	require.NoError(t, err, "every published event should be handled")
+}
+
 // TestMain runs once before all tests in the package
 // This is the standard Go pattern for shared test setup/teardown
 func TestMain(m *testing.M) {
