@@ -32,7 +32,7 @@ export class DeleteBotHandler
     actor,
     botId,
   }: DeleteBot): Promise<Result<BotDeleteResult, string>> {
-    // Fetch bot data before deletion for event payload
+    // Read first: the delete event carries the config the bot was stored with.
     const botResult = await this.bots.findOne(actor.userId, botId);
     if (!botResult.success) {
       return Failure("Bot not found");
