@@ -1,5 +1,6 @@
 import { Request } from "express";
 import { UserRole } from "@/user/user.constants";
+import { Actor } from "./actor";
 
 export interface AuthUser {
   id: string;
@@ -30,4 +31,6 @@ export interface AuthenticatedUser {
 /** Express request with authenticated user attached */
 export interface AuthenticatedRequest extends Request {
   user: AuthenticatedUser;
+  /** Set only by AuthCombinedGuard, the one place Actors are created. */
+  actor?: Actor;
 }

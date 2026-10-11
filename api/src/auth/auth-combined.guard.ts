@@ -45,6 +45,7 @@ export class AuthCombinedGuard implements CanActivate {
     }
 
     request.user = toAuthenticatedJwtUser(result.data);
+    request.actor = { userId: result.data.id, via: "jwt" };
 
     return true;
   }
@@ -70,6 +71,11 @@ export class AuthCombinedGuard implements CanActivate {
       isEmailVerified: true,
       role: "user",
       authType: "apikey",
+    };
+    request.actor = {
+      userId: result.data.userId,
+      via: "api-key",
+      apiKeyId: result.data.id,
     };
 
     return true;
