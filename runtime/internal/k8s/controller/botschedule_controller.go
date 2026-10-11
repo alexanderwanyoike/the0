@@ -34,6 +34,11 @@ const (
 	AnnotationScheduleHash = "the0.app/schedule-hash"
 )
 
+// scheduledRunBackoffLimit is 0 because a failed scheduled run may already have
+// acted (placed an order, say), so retrying it could act twice. The next run comes
+// from the schedule, as in Docker mode, which never retries.
+const scheduledRunBackoffLimit int32 = 0
+
 // BotScheduleRepository provides access to bot schedule data from MongoDB.
 type BotScheduleRepository interface {
 	// FindAllEnabled returns all schedules that should be running.
@@ -305,7 +310,7 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 
 	successfulJobsHistory := int32(3)
 	failedJobsHistory := int32(1)
-	backoffLimit := int32(2)
+	backoffLimit := scheduledRunBackoffLimit
 
 	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -353,7 +358,16 @@ func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedu
 		existingHash = cronJob.Annotations[AnnotationScheduleHash]
 	}
 	currentHash := computeScheduleHash(schedule, c.config.NATSURL, c.config.RuntimeImage)
-	return existingHash != currentHash
+	return existingHash != currentHash || backoffLimitDrifted(cronJob)
+}
+
+// backoffLimitDrifted reads the limit off the live CronJob because the hash only
+// covers inputs: a CronJob created with another limit would otherwise keep it
+// until an unrelated input, such as the runtime image tag, happened to change.
+// A nil limit means the Kubernetes default of 6.
+func backoffLimitDrifted(cronJob *batchv1.CronJob) bool {
+	limit := cronJob.Spec.JobTemplate.Spec.BackoffLimit
+	return limit == nil || *limit != scheduledRunBackoffLimit
 }
 
 // scheduleToBot converts a BotSchedule to a Bot model for the image builder.
