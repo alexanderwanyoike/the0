@@ -9,7 +9,7 @@ import { AuthService } from "./auth.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthenticatedRequest } from "./auth.types";
 import { ActorChannel } from "./actor";
-import { ACTOR_VIA_KEY } from "./actor.decorators";
+import { ACTOR_VIA_KEY, ALLOW_ANONYMOUS_KEY } from "./actor.decorators";
 import {
   extractApiKey,
   extractAuthHeaderToken,
@@ -25,11 +25,22 @@ export class AuthCombinedGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    try {
+      return await this.authenticate(context);
+    } catch (error) {
+      if (
+        error instanceof UnauthorizedException &&
+        this.routeOption<boolean>(context, ALLOW_ANONYMOUS_KEY)
+      ) {
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  private async authenticate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const via = this.reflector.getAllAndOverride<ActorChannel | undefined>(
-      ACTOR_VIA_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const via = this.routeOption<ActorChannel>(context, ACTOR_VIA_KEY);
 
     const jwtToken = extractAuthHeaderToken(request, "Bearer");
     if (jwtToken) {
@@ -44,6 +55,16 @@ export class AuthCombinedGuard implements CanActivate {
     throw new UnauthorizedException(
       "Authentication required. Provide Bearer JWT token or ApiKey.",
     );
+  }
+
+  private routeOption<T>(
+    context: ExecutionContext,
+    key: string,
+  ): T | undefined {
+    return this.reflector.getAllAndOverride<T | undefined>(key, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
   }
 
   private async validateJwtToken(
