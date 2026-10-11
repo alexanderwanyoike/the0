@@ -3,7 +3,6 @@ import { ConfigService } from "@nestjs/config";
 import { JwtModule, type JwtSignOptions } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { AuthController } from "./auth.controller";
-import { AdminBootstrapService } from "./admin-bootstrap.service";
 import { AdminJwtGuard } from "./admin-jwt.guard";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./jwt-auth.guard";
@@ -30,13 +29,7 @@ import { UserModule } from "@/user/user.module";
     ApiKeyModule,
     UserModule,
   ],
-  providers: [
-    JwtStrategy,
-    AuthService,
-    AdminBootstrapService,
-    AdminJwtGuard,
-    JwtAuthGuard,
-  ],
+  providers: [JwtStrategy, AuthService, AdminJwtGuard, JwtAuthGuard],
   exports: [
     PassportModule,
     JwtModule,
