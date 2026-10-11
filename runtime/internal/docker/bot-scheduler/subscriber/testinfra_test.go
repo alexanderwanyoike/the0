@@ -154,6 +154,36 @@ func insertSchedule(t *testing.T, db *mongo.Database, id string, partitionBotCou
 	require.NoError(t, err)
 }
 
+// rejectWrites makes every write to the schedules collection fail, as a
+// store that is down would.
+func rejectWrites(t *testing.T, db *mongo.Database) {
+	t.Helper()
+	validator := bson.M{"field-no-schedule-has": bson.M{"$exists": true}}
+	err := db.CreateCollection(context.Background(), testCollection, options.CreateCollection().SetValidator(validator))
+	require.NoError(t, err)
+}
+
+func acceptWrites(t *testing.T, db *mongo.Database) {
+	t.Helper()
+	cmd := bson.D{{Key: "collMod", Value: testCollection}, {Key: "validator", Value: bson.M{}}}
+	require.NoError(t, db.RunCommand(context.Background(), cmd).Err())
+}
+
+// waitForCreateAttempts waits until the create handler has run n times. It
+// claims a partition slot before writing the schedule, so the claims count
+// its attempts even when the write itself is rejected.
+func waitForCreateAttempts(t *testing.T, db *mongo.Database, n int) {
+	t.Helper()
+	err := waitFor(10*time.Second, func() bool {
+		var partition struct {
+			BotCount int `bson:"bot_count"`
+		}
+		err := db.Collection("partitions").FindOne(context.Background(), bson.M{}).Decode(&partition)
+		return err == nil && partition.BotCount >= n
+	})
+	require.NoError(t, err, "the create handler should have run %d time(s)", n)
+}
+
 // TestMain runs once before all tests in the package
 // This is the standard Go pattern for shared test setup/teardown
 func TestMain(m *testing.M) {

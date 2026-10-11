@@ -36,3 +36,20 @@ func TestDelivery_BotDeletedWhileStopped_IsRemovedOnStart(t *testing.T) {
 	err := WaitForDocumentCount(db.Collection(testCollection), bson.M{"id": "deleted-while-stopped"}, 0, 10*time.Second)
 	require.NoError(t, err, "a bot deleted while the runtime was down should stop being run once it starts")
 }
+
+func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	db := sharedInfra.GetDatabase("failed_event_retried")
+	rejectWrites(t, db)
+	startSubscriber(t, db)
+
+	publishEvent(t, SubjectBotCreated, testBotMessage("retried-bot"))
+	waitForCreateAttempts(t, db, 1)
+	acceptWrites(t, db)
+
+	err := WaitForDocument(db.Collection(testCollection), bson.M{"id": "retried-bot"}, 15*time.Second)
+	require.NoError(t, err, "a create that failed should be retried until the bot is stored")
+}

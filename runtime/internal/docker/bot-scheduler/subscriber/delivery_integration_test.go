@@ -46,3 +46,20 @@ func TestDelivery_ScheduleDeletedWhileStopped_IsRemovedOnStart(t *testing.T) {
 	err := waitFor(10*time.Second, func() bool { return countSchedules(db, "deleted-while-stopped") == 0 })
 	require.NoError(t, err, "a schedule deleted while the runtime was down should stop running once it starts")
 }
+
+func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	sharedInfra.resetEventsStream(t)
+	db := sharedInfra.GetDatabase("failed_event_retried")
+	rejectWrites(t, db)
+	startSubscriber(t, db)
+
+	publishEvent(t, SubjectBotScheduleCreated, testScheduleEvent("retried-schedule", "0 0 * * *"))
+	waitForCreateAttempts(t, db, 1)
+	acceptWrites(t, db)
+
+	err := waitFor(15*time.Second, func() bool { return countSchedules(db, "retried-schedule") == 1 })
+	require.NoError(t, err, "a create that failed should be retried until the schedule is stored")
+}
