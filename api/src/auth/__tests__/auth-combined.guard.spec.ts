@@ -83,22 +83,6 @@ describe("AuthCombinedGuard", () => {
     expect(authService.validateToken).toHaveBeenCalledWith("valid-jwt-token");
   });
 
-  it("should throw exception without JWT token", async () => {
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: {
-            "x-api-key": "valid-api-key",
-          },
-        }),
-      }),
-    } as ExecutionContext;
-
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      "Authentication required. Provide Bearer JWT token or ApiKey.",
-    );
-  });
-
   it("should throw exception without any authentication", async () => {
     const mockContext = {
       switchToHttp: () => ({
@@ -124,6 +108,19 @@ describe("AuthCombinedGuard", () => {
 
       expect(request).toMatchObject({
         actor: { userId: "user-1", via: "jwt" },
+      });
+    });
+
+    it("an x-api-key gives the same api-key Actor", async () => {
+      const request = { headers: { "x-api-key": "the0_secret" } };
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "ci" }),
+      );
+
+      await guard.canActivate(contextFor(request));
+
+      expect(request).toMatchObject({
+        actor: { userId: "user-1", via: "api-key", apiKeyId: "key-1" },
       });
     });
 
@@ -153,6 +150,51 @@ describe("AuthCombinedGuard", () => {
         "the0_secret",
       );
       expect(request).toMatchObject({ user: { uid: "user-1" } });
+    });
+
+    it("accepts a key sent in the x-api-key header", async () => {
+      const request = { headers: { "x-api-key": "the0_secret" } };
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "ci" }),
+      );
+
+      await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+      expect(mockApiKeyService.validateApiKey).toHaveBeenCalledWith(
+        "the0_secret",
+      );
+      expect(request).toMatchObject({ user: { uid: "user-1" } });
+    });
+
+    it("prefers the Authorization header when x-api-key is also sent", async () => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Ok({ id: "key-1", userId: "user-1", name: "ci" }),
+      );
+
+      await guard.canActivate(
+        contextFor({
+          headers: {
+            authorization: "ApiKey the0_authorization",
+            "x-api-key": "the0_header",
+          },
+        }),
+      );
+
+      expect(mockApiKeyService.validateApiKey).toHaveBeenCalledTimes(1);
+      expect(mockApiKeyService.validateApiKey).toHaveBeenCalledWith(
+        "the0_authorization",
+      );
+    });
+
+    it("rejects an x-api-key that does not validate", async () => {
+      mockApiKeyService.validateApiKey.mockResolvedValue(
+        Failure("API key not found or inactive"),
+      );
+
+      const error = await guard
+        .canActivate(contextFor({ headers: { "x-api-key": "the0_unknown" } }))
+        .catch((e: unknown) => e);
+
+      expect(error).toEqual(new UnauthorizedException("Invalid API key"));
     });
 
     it("answers a rejected key with a generic message that hides the reason", async () => {
