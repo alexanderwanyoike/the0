@@ -20,6 +20,7 @@ import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
 import { mockActor } from "@/test/mock-actor";
+import { BOT_COMMAND_PROVIDERS } from "@/test/bot-command-providers";
 
 describe("BotController - Enhanced Tests", () => {
   let controller: BotController;
@@ -94,6 +95,7 @@ describe("BotController - Enhanced Tests", () => {
       imports: [ConfigModule],
       controllers: [BotController],
       providers: [
+        ...BOT_COMMAND_PROVIDERS,
         BotService,
         BotRepository,
         BotValidator,
@@ -119,6 +121,7 @@ describe("BotController - Enhanced Tests", () => {
       .overrideGuard(AuthCombinedGuard)
       .useValue(mockForceGuard)
       .compile();
+    await module.init();
 
     repository = module.get<BotRepository>(BotRepository);
     controller = module.get<BotController>(BotController);

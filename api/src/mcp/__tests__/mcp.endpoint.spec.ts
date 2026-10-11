@@ -7,12 +7,11 @@ import { McpService } from "../mcp.service";
 import { MCP_TOOL_DEFINITIONS } from "../mcp.types";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthService } from "@/auth/auth.service";
-import { BotEventRelay } from "@/bot/bot-event-relay";
 import { BotRepository } from "@/bot/bot.repository";
 import { BotService } from "@/bot/bot.service";
-import { BotValidator } from "@/bot/bot.validator";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
+import { CommandBus } from "@/command-bus/command-bus";
 import { Failure, Ok } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
@@ -35,9 +34,8 @@ describe("POST /mcp", () => {
         { provide: ApiKeyService, useValue: apiKeyService },
         { provide: AuthService, useValue: authService },
         { provide: BotRepository, useValue: botRepository },
-        { provide: BotValidator, useValue: {} },
+        { provide: CommandBus, useValue: {} },
         { provide: CustomBotService, useValue: {} },
-        { provide: BotEventRelay, useValue: {} },
         { provide: LogsService, useValue: {} },
         { provide: BotStateService, useValue: {} },
         { provide: BotQueryService, useValue: {} },

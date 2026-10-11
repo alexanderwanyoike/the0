@@ -24,13 +24,18 @@ import { Actor } from "@/auth/actor";
 import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
+import { CommandBus } from "@/command-bus/command-bus";
+import { DeleteBot, DeployBot, UpdateBot } from "./commands/bot-commands";
 
 @ApiTags("bots")
 @ApiJwtOrApiKeyAuth()
 @Controller("bot")
 @UseGuards(AuthCombinedGuard)
 export class BotController {
-  constructor(private readonly botService: BotService) {}
+  constructor(
+    private readonly botService: BotService,
+    private readonly commandBus: CommandBus,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "Deploy a bot instance from a custom bot" })
@@ -39,7 +44,9 @@ export class BotController {
     @CurrentActor() actor: Actor,
     @Body() createBotDto: CreateBotDto,
   ) {
-    const result = await this.botService.create(actor, createBotDto);
+    const result = await this.commandBus.execute(
+      new DeployBot(actor, { ...createBotDto }),
+    );
     if (!result.success) {
       throw new BadRequestException(result.error);
     }
@@ -77,7 +84,9 @@ export class BotController {
     @Param("id") id: string,
     @Body() updateBotDto: UpdateBotDto,
   ) {
-    const result = await this.botService.update(actor, id, updateBotDto);
+    const result = await this.commandBus.execute(
+      new UpdateBot(actor, id, { ...updateBotDto }),
+    );
     if (!result.success) {
       throw new BadRequestException(result.error);
     }
@@ -89,7 +98,7 @@ export class BotController {
   @ApiParam({ name: "id", description: "Bot instance ID" })
   @ApiBadRequestResponse({ description: "Bot could not be deleted" })
   async remove(@CurrentActor() actor: Actor, @Param("id") id: string) {
-    const result = await this.botService.remove(actor, id);
+    const result = await this.commandBus.execute(new DeleteBot(actor, id));
     if (!result.success) {
       throw new BadRequestException(result.error);
     }

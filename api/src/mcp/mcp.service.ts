@@ -15,6 +15,8 @@ import {
 } from "./mcp.types";
 import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
+import { DeleteBot, DeployBot, UpdateBot } from "@/bot/commands/bot-commands";
+import { CommandBus } from "@/command-bus/command-bus";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
@@ -24,6 +26,7 @@ import { BotQueryService } from "@/bot-query/bot-query.service";
 export class McpService {
   constructor(
     private readonly botService: BotService,
+    private readonly commandBus: CommandBus,
     private readonly botStateService: BotStateService,
     private readonly botQueryService: BotQueryService,
     private readonly customBotService: CustomBotService,
@@ -186,16 +189,15 @@ export class McpService {
 
   private async handleBotDeploy(input: BotDeployInput, actor: Actor) {
     // REST gets CreateBotDto's required name from the global ValidationPipe,
-    // which tool arguments never pass through; BotService validates the rest.
+    // which tool arguments never pass through; DeployBot validates the rest.
     const name = input.config?.name;
     if (!name) {
       throw new Error("Config must include a 'name' field");
     }
 
-    const result = await this.botService.create(actor, {
-      name,
-      config: input.config,
-    });
+    const result = await this.commandBus.execute(
+      new DeployBot(actor, { name, config: input.config }),
+    );
     if (!result.success) {
       throw new Error(result.error || "Failed to deploy bot");
     }
@@ -211,10 +213,12 @@ export class McpService {
   }
 
   private async handleBotUpdate(input: BotUpdateInput, actor: Actor) {
-    const result = await this.botService.update(actor, input.bot_id, {
-      config: input.config,
-      ...(input.name && { name: input.name }),
-    });
+    const result = await this.commandBus.execute(
+      new UpdateBot(actor, input.bot_id, {
+        config: input.config,
+        ...(input.name && { name: input.name }),
+      }),
+    );
     if (!result.success) {
       throw new Error(result.error || "Failed to update bot");
     }
@@ -228,7 +232,9 @@ export class McpService {
   }
 
   private async handleBotDelete(input: BotDeleteInput, actor: Actor) {
-    const result = await this.botService.remove(actor, input.bot_id);
+    const result = await this.commandBus.execute(
+      new DeleteBot(actor, input.bot_id),
+    );
     if (!result.success) {
       throw new Error(result.error || "Failed to delete bot");
     }

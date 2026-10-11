@@ -17,6 +17,7 @@ import { BotQueryService } from "@/bot-query/bot-query.service";
 import { Ok, Failure } from "@/common/result";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
+import { BOT_COMMAND_PROVIDERS } from "@/test/bot-command-providers";
 
 const CATALOGUE_VERSIONS = ["1.0.0", "1.1.0", "2.0.0"];
 
@@ -182,7 +183,7 @@ describe("McpService", () => {
       getAllGlobalVersions: jest.fn(),
       getGlobalLatestVersion: jest.fn(),
       getGlobalSpecificVersion: jest.fn(findInCatalogue),
-      // BotService builds update and delete events from the caller's own
+      // The update and delete events are built from the caller's own
       // copy of the custom bot; answering from the shared catalogue keeps
       // these tests about MCP rather than about that lookup.
       getUserSpecificVersion: jest.fn(
@@ -211,6 +212,7 @@ describe("McpService", () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        ...BOT_COMMAND_PROVIDERS,
         McpService,
         BotService,
         BotValidator,
@@ -223,6 +225,7 @@ describe("McpService", () => {
         { provide: PinoLogger, useValue: createMockLogger() },
       ],
     }).compile();
+    await module.init();
 
     service = module.get<McpService>(McpService);
     customBotService = module.get(CustomBotService);

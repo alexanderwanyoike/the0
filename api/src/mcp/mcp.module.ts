@@ -8,6 +8,7 @@ import { ApiKeyModule } from "@/api-key/api-key.module";
 import { LoggerModule } from "@/logger/logger.module";
 import { BotStateModule } from "@/bot-state/bot-state.module";
 import { BotQueryModule } from "@/bot-query/bot-query.module";
+import { CommandBusModule } from "@/command-bus/command-bus.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { BotQueryModule } from "@/bot-query/bot-query.module";
     LoggerModule,
     BotStateModule,
     BotQueryModule,
+    CommandBusModule,
   ],
   controllers: [McpController],
   providers: [McpService],
