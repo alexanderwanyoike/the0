@@ -27,6 +27,10 @@ const (
 	quietAttempts  = 3
 	rebindInterval = 2 * time.Second
 	backlogTimeout = 30 * time.Second
+	// A new consumer starts this far back: enough to cover the gap while
+	// runtime pods are replaced, without walking the stream's 7 days of
+	// history and acting on states that have changed since.
+	startWindow = 10 * time.Minute
 )
 
 // Handler applies one event. An error has the event redelivered later,
@@ -47,6 +51,7 @@ type Consumer struct {
 	js       jetstream.JetStream
 	cfg      Config
 	retry    backoff
+	now      func() time.Time
 	ready    atomic.Bool
 	inflight sync.WaitGroup
 	stop     chan struct{}
@@ -59,19 +64,15 @@ func NewConsumer(nc *nats.Conn, cfg Config) (*Consumer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
 	}
-	return &Consumer{js: js, cfg: cfg, retry: defaultBackoff, stop: make(chan struct{})}, nil
+	return &Consumer{js: js, cfg: cfg, retry: defaultBackoff, now: time.Now, stop: make(chan struct{})}, nil
 }
 
 func consumerConfig(cfg Config) jetstream.ConsumerConfig {
 	return jetstream.ConsumerConfig{
 		Durable:        cfg.Name,
 		FilterSubjects: cfg.Subjects,
-		// Only applies when the consumer is first created: it then replays what
-		// the stream still holds, so nothing published before the runtime first
-		// bound is lost. The handlers are safe to repeat.
-		DeliverPolicy: jetstream.DeliverAllPolicy,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		AckWait:       ackWait,
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		AckWait:        ackWait,
 		// Only a Permanent error drops an event. A transient failure is retried
 		// until it succeeds: a stall is visible and recovers in order, while a
 		// dropped delete would leave a bot trading.
@@ -103,10 +104,11 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return nil
 }
 
-// The first bind after a deploy replays up to 7 days of events. Returning
-// before they are applied would let the first reconcile see half of the
-// replay (a deleted bot's create without its delete) and start that bot.
-// The wait is bounded so an event that keeps failing cannot block startup.
+// Returning before the events published while the runtime was down (or,
+// for a new consumer, inside its start window) are applied would let the
+// first reconcile see half of them, such as a deleted bot's create without
+// its delete, and start that bot. The wait is bounded so an event that keeps
+// failing cannot block startup.
 func (c *Consumer) awaitBacklog(ctx context.Context, cons jetstream.Consumer) {
 	deadline := time.Now().Add(backlogTimeout)
 	ticker := time.NewTicker(50 * time.Millisecond)
@@ -148,7 +150,31 @@ func (c *Consumer) Stop() {
 }
 
 func (c *Consumer) bind(ctx context.Context) (jetstream.Consumer, error) {
-	return c.js.CreateOrUpdateConsumer(ctx, StreamName, consumerConfig(c.cfg))
+	cons, err := c.resumeOrCreate(ctx)
+	if errors.Is(err, jetstream.ErrConsumerExists) {
+		// Another replica created it between the lookup and the create.
+		cons, err = c.resumeOrCreate(ctx)
+	}
+	return cons, err
+}
+
+func (c *Consumer) resumeOrCreate(ctx context.Context) (jetstream.Consumer, error) {
+	cfg := consumerConfig(c.cfg)
+	existing, err := c.js.Consumer(ctx, StreamName, c.cfg.Name)
+	if err == nil {
+		// An existing consumer's position is what carries events across
+		// restarts, and the server refuses to move its start anyway.
+		cfg.DeliverPolicy = existing.CachedInfo().Config.DeliverPolicy
+		cfg.OptStartTime = existing.CachedInfo().Config.OptStartTime
+		return c.js.UpdateConsumer(ctx, StreamName, cfg)
+	}
+	if !errors.Is(err, jetstream.ErrConsumerNotFound) {
+		return nil, err
+	}
+	start := c.now().Add(-startWindow)
+	cfg.DeliverPolicy = jetstream.DeliverByStartTimePolicy
+	cfg.OptStartTime = &start
+	return c.js.CreateConsumer(ctx, StreamName, cfg)
 }
 
 func (c *Consumer) run(cons jetstream.Consumer) {
