@@ -11,12 +11,11 @@ import {
   PublishOutcome,
 } from "./bot-event-outbox";
 
-// Kept short because the outbox transaction, and the relay lock, stay open
-// while a publish waits for its ack.
+// Each drain waits for one ack at a time, so a slow NATS should fail fast
+// into the backoff rather than stall the queue.
 const PUBLISH_TIMEOUT_MS = 2000;
-// The outbox bounds its statements in Postgres; this also covers a call
-// stuck below them, such as a dropped connection, which would otherwise
-// keep every later drain waiting behind it.
+// postgres.js sets no query timeout, so a call stuck on a dropped
+// connection would otherwise keep every later drain waiting behind it.
 const OUTBOX_CALL_TIMEOUT_MS = 10_000;
 const RETRY_BASE_MS = 1000;
 const RETRY_CAP_MS = 30_000;

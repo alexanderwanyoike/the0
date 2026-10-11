@@ -65,7 +65,7 @@ describe("BotEventOutbox", () => {
     return { seen, publish };
   }
 
-  describe("hand unpublished events to the publisher in commit order, one per transaction", () => {
+  describe("hand unpublished events to the publisher in commit order, one at a time", () => {
     it("publishes the oldest unpublished event, with its outbox id, and marks it published", async () => {
       await appendEvents("the0.bot.created", "the0.bot.updated");
       const { seen, publish } = publisher();
