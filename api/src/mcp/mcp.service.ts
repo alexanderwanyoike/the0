@@ -14,7 +14,7 @@ import {
   CustomBotGetInput,
   CustomBotSchemaInput,
 } from "./mcp.types";
-import { BotRepository } from "@/bot/bot.repository";
+import { BotService } from "@/bot/bot.service";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
 import { ApiKeyService } from "@/api-key/api-key.service";
@@ -24,7 +24,6 @@ import { BotQueryService } from "@/bot-query/bot-query.service";
 @Injectable()
 export class McpService {
   constructor(
-    private readonly botRepository: BotRepository,
     private readonly customBotService: CustomBotService,
     private readonly logsService: LogsService,
     private readonly apiKeyService: ApiKeyService,
@@ -34,9 +33,10 @@ export class McpService {
 
   /**
    * Resolve a request-scoped service under a synthetic request context that
-   * carries the MCP caller's identity. The bot-state and bot-query services
-   * enforce ownership by reading request.user, so this makes their existing
-   * authorization apply to MCP calls exactly as it does to HTTP requests.
+   * carries the MCP caller's identity. The bot, bot-state and bot-query
+   * services enforce ownership by reading request.user, so this makes their
+   * existing authorization apply to MCP calls exactly as it does to HTTP
+   * requests.
    */
   private async resolveForUser<T>(
     provider: Type<T>,
@@ -183,7 +183,8 @@ export class McpService {
     if (!userId) {
       throw new Error("Authentication required");
     }
-    const result = await this.botRepository.findAll(userId);
+    const botService = await this.resolveForUser(BotService, userId);
+    const result = await botService.findAll();
     if (!result.success) {
       throw new Error(result.error || "Failed to list bots");
     }
@@ -202,7 +203,8 @@ export class McpService {
     if (!userId) {
       throw new Error("Authentication required");
     }
-    const result = await this.botRepository.findOne(userId, input.bot_id);
+    const botService = await this.resolveForUser(BotService, userId);
+    const result = await botService.findOne(input.bot_id);
     if (!result.success) {
       throw new Error(result.error || "Bot not found");
     }
@@ -214,43 +216,15 @@ export class McpService {
       throw new Error("Authentication required");
     }
 
-    const {
-      name: configName,
-      type: configType,
-      version: configVersion,
-    } = input.config;
-
-    if (!configName || !configType || !configVersion) {
-      throw new Error(
-        "Config must include 'name', 'type', and 'version' fields",
-      );
+    // REST gets CreateBotDto's required name from the global ValidationPipe,
+    // which tool arguments never pass through; BotService validates the rest.
+    const name = input.config?.name;
+    if (!name) {
+      throw new Error("Config must include a 'name' field");
     }
 
-    // Extract custom bot name from type (e.g., "scheduled/alpaca-mixture-of-experts" -> "alpaca-mixture-of-experts")
-    const customBotName = configType.includes("/")
-      ? configType.split("/")[1]
-      : configType;
-
-    // Look up the custom bot to get its ID
-    const customBotResult =
-      await this.customBotService.getGlobalSpecificVersion(
-        customBotName,
-        configVersion,
-      );
-
-    if (!customBotResult.success || !customBotResult.data) {
-      throw new Error(
-        `Custom bot '${customBotName}' version '${configVersion}' not found`,
-      );
-    }
-
-    const result = await this.botRepository.create({
-      name: configName,
-      config: input.config,
-      userId,
-      topic: "the0-scheduled-custom-bot",
-      customBotId: customBotResult.data.id,
-    });
+    const botService = await this.resolveForUser(BotService, userId);
+    const result = await botService.create({ name, config: input.config });
     if (!result.success) {
       throw new Error(result.error || "Failed to deploy bot");
     }
@@ -269,15 +243,11 @@ export class McpService {
     if (!userId) {
       throw new Error("Authentication required");
     }
-    const updateData: Record<string, unknown> = { config: input.config };
-    if (input.name) {
-      updateData.name = input.name;
-    }
-    const result = await this.botRepository.update(
-      userId,
-      input.bot_id,
-      updateData,
-    );
+    const botService = await this.resolveForUser(BotService, userId);
+    const result = await botService.update(input.bot_id, {
+      config: input.config,
+      ...(input.name && { name: input.name }),
+    });
     if (!result.success) {
       throw new Error(result.error || "Failed to update bot");
     }
@@ -294,7 +264,8 @@ export class McpService {
     if (!userId) {
       throw new Error("Authentication required");
     }
-    const result = await this.botRepository.remove(userId, input.bot_id);
+    const botService = await this.resolveForUser(BotService, userId);
+    const result = await botService.remove(input.bot_id);
     if (!result.success) {
       throw new Error(result.error || "Failed to delete bot");
     }

@@ -7,9 +7,12 @@ import { McpService } from "../mcp.service";
 import { MCP_TOOL_DEFINITIONS } from "../mcp.types";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { BotRepository } from "@/bot/bot.repository";
+import { BotService } from "@/bot/bot.service";
+import { BotValidator } from "@/bot/bot.validator";
 import { Failure, Ok } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
+import { NatsService } from "@/nats/nats.service";
 import { mockBot } from "@/test/mock-bot";
 import { createMockLogger } from "@/test/mock-logger";
 
@@ -23,9 +26,12 @@ describe("POST /mcp", () => {
       controllers: [McpController],
       providers: [
         McpService,
+        BotService,
         { provide: ApiKeyService, useValue: apiKeyService },
         { provide: BotRepository, useValue: botRepository },
+        { provide: BotValidator, useValue: {} },
         { provide: CustomBotService, useValue: {} },
+        { provide: NatsService, useValue: {} },
         { provide: LogsService, useValue: {} },
         { provide: PinoLogger, useValue: createMockLogger() },
       ],
