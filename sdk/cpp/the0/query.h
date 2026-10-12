@@ -34,6 +34,7 @@
 #include "the0.h"
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -59,6 +60,7 @@
 #else
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #endif
@@ -537,6 +539,29 @@ struct HttpRequest {
 // Params are small; these bound what one client can make the server hold.
 constexpr std::size_t MAX_REQUEST_HEAD_BYTES = 64 * 1024;
 constexpr std::size_t MAX_REQUEST_BODY_BYTES = 1024 * 1024;
+// The server reads one connection at a time, so a client that stops sending
+// would otherwise hold up every query after it.
+constexpr int REQUEST_TIMEOUT_SECONDS = 5;
+
+inline void limit_wait_for_request(int client_fd) {
+#ifdef _WIN32
+    DWORD timeout = REQUEST_TIMEOUT_SECONDS * 1000;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+#else
+    timeval timeout{};
+    timeout.tv_sec = REQUEST_TIMEOUT_SECONDS;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+#endif
+}
+
+/** Why a recv() that returned `received` ended the request early. */
+inline std::string unfinished_request(long received, const char* part) {
+    if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return "The client sent no complete request within " + std::to_string(REQUEST_TIMEOUT_SECONDS) +
+               " seconds";
+    }
+    return std::string("The request ended before its ") + part + " did";
+}
 
 inline std::string trim(const std::string& text) {
     const auto first = text.find_first_not_of(" \t\r\n");
@@ -571,7 +596,7 @@ inline std::optional<HttpRequest> read_request(int client_fd) {
             if (received.empty()) {
                 return std::nullopt;
             }
-            request.error = "The request ended before its head did";
+            request.error = unfinished_request(static_cast<long>(n), "head");
             return request;
         }
         received.append(buffer, static_cast<std::size_t>(n));
@@ -616,7 +641,7 @@ inline std::optional<HttpRequest> read_request(int client_fd) {
     while (request.body.size() < content_length) {
         auto n = recv(client_fd, buffer, sizeof(buffer), 0);
         if (n <= 0) {
-            request.error = "The request ended before its body did";
+            request.error = unfinished_request(static_cast<long>(n), "body");
             return request;
         }
         request.body.append(buffer, static_cast<std::size_t>(n));
@@ -692,6 +717,7 @@ inline void run_server() {
         int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
         if (client_fd < 0) continue;
 
+        detail::limit_wait_for_request(client_fd);
         auto http_request = detail::read_request(client_fd);
         if (!http_request) {
 #ifdef _WIN32
