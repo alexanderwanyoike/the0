@@ -37,6 +37,7 @@ use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// Global handler registry
@@ -48,6 +49,18 @@ static CURRENT_PARAMS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None)
 
 /// Global config
 static CONFIG: Mutex<Option<Value>> = Mutex::new(None);
+
+const QUERY_RESULT_PATH: &str = "/query/result.json";
+
+static QUERY_RESULT_PATH_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Test-only: point ephemeral query results at `path` instead of
+/// `/query/result.json`, which tests cannot write. The runtime always reads
+/// `/query/result.json`, so bots must not call this.
+#[doc(hidden)]
+pub fn set_result_path(path: impl Into<PathBuf>) {
+    *QUERY_RESULT_PATH_OVERRIDE.lock().unwrap() = Some(path.into());
+}
 
 /// Error thrown when attempting to modify state during query execution.
 #[derive(Debug)]
@@ -205,12 +218,21 @@ pub fn run() {
 /// Write query result to /query/result.json file (matches Python SDK behavior).
 /// This avoids stdout pollution from runtime logs mixing with query results.
 fn write_result(result: Value) {
-    let result_path = "/query/result.json";
-    if let Err(e) = fs::create_dir_all("/query") {
-        eprintln!("RESULT_ERROR: Failed to create /query directory: {}", e);
+    let result_path = QUERY_RESULT_PATH_OVERRIDE
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(QUERY_RESULT_PATH));
+    let result_dir = result_path.parent().unwrap_or(Path::new("/"));
+    if let Err(e) = fs::create_dir_all(result_dir) {
+        eprintln!(
+            "RESULT_ERROR: Failed to create {} directory: {}",
+            result_dir.display(),
+            e
+        );
         return;
     }
-    if let Err(e) = fs::write(result_path, result.to_string()) {
+    if let Err(e) = fs::write(&result_path, result.to_string()) {
         eprintln!("RESULT_ERROR: Failed to write result file: {}", e);
     }
 }
