@@ -27,6 +27,7 @@ import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
 import { URL } from "url";
+import { log } from "./log";
 
 export { ReadOnlyStateError } from "./state";
 
@@ -262,12 +263,7 @@ async function runServer(): Promise<void> {
   });
 
   server.listen(port, "0.0.0.0", () => {
-    console.error(
-      JSON.stringify({
-        _log: "info",
-        message: `Query server started on port ${port}`,
-      })
-    );
+    log(`Query server started on port ${port}`);
   });
 }
 
