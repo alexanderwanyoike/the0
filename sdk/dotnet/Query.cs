@@ -340,18 +340,18 @@ public static class Query
 
         while (true)
         {
+            HttpListenerContext? context = null;
             try
             {
-                var context = listener.GetContext();
+                context = listener.GetContext();
                 HandleRequest(context);
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine(JsonSerializer.Serialize(new
-                {
-                    _log = "error",
-                    message = $"Error handling request: {e.Message}"
-                }));
+                Input.Log($"Error handling request: {e.Message}", level: Input.LogLevel.Error);
+                // A request that failed outside its handler may have no response
+                // yet; closing it stops the client waiting for one.
+                context?.Response.Abort();
             }
         }
     }
