@@ -120,12 +120,16 @@ error msg = do
 
 -- | Output a success result carrying @data@ to the result file.
 successWithData :: ToJSON a => String -> a -> IO ()
-successWithData msg _ = success msg
+successWithData msg payload = result $ object
+    ["status" .= ("success" :: String), "message" .= msg, "data" .= payload]
 
 -- | Output an error result carrying @data@ to the result file and exit with
 -- code 1, as 'The0.Input.error' does.
 errorWithData :: ToJSON a => String -> a -> IO b
-errorWithData msg _ = The0.Input.error msg
+errorWithData msg payload = do
+    result $ object ["status" .= ("error" :: String), "message" .= msg, "data" .= payload]
+    logError msg Nothing
+    exitWith (ExitFailure 1)
 
 -- | Output a custom JSON result to the result file.
 --
