@@ -249,7 +249,8 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 ///
 /// # Errors
 ///
-/// Returns `StateError::ReadOnly` if called during query execution (queries are read-only).
+/// Returns `StateError::ReadOnly` if called during query execution (queries are read-only),
+/// and `StateError::InvalidKey` for an invalid key.
 ///
 /// # Example
 ///
@@ -262,9 +263,7 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 /// ```
 pub fn delete(key: &str) -> Result<bool, StateError> {
     check_write_allowed()?;
-    if validate_key(key).is_err() {
-        return Ok(false);
-    }
+    validate_key(key)?;
     let filepath = get_key_path(key);
     Ok(fs::remove_file(&filepath).is_ok())
 }
