@@ -52,57 +52,20 @@ Execution Modes:
 	},
 }
 
-var (
-	executeQueryPath       string
-	executeQueryServerOnly bool
-	executeSkipSync        bool
-	executeSkipQueryServer bool
-)
+var executeFlags *launch.Flags
 
 func init() {
-	executeCmd.Flags().StringVar(&executeQueryPath, "query", "", "Execute a query (ephemeral mode) with the given path")
-	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
-	executeCmd.Flags().BoolVar(&executeSkipSync, "skip-sync", false, "Skip starting sync subprocess (for K8s where sync is a sidecar)")
-	executeCmd.Flags().BoolVar(&executeSkipQueryServer, "skip-query-server", false, "Skip starting query server subprocess (for K8s where query is a sidecar)")
+	executeFlags = launch.BindFlags(executeCmd.Flags())
 	rootCmd.AddCommand(executeCmd)
 }
 
-// loadExecuteConfig loads configuration from environment variables.
+// loadExecuteConfig reads the launch this container was started with.
 func loadExecuteConfig() (*launch.Settings, error) {
-	cfg := &launch.Settings{
-		BotID:           os.Getenv("BOT_ID"),
-		CodeFile:        os.Getenv("CODE_FILE"),
-		Runtime:         os.Getenv("RUNTIME"),
-		Entrypoint:      os.Getenv("ENTRYPOINT"),
-		BotConfig:       os.Getenv("BOT_CONFIG"),
-		BotType:         os.Getenv("BOT_TYPE"),
-		QueryEntrypoint: os.Getenv("QUERY_ENTRYPOINT"),
-		QueryPath:       os.Getenv("QUERY_PATH"),
-		QueryParams:     os.Getenv("QUERY_PARAMS"),
-		QueryResultKey:  os.Getenv("QUERY_RESULT_KEY"),
-		CodePath:        getEnv("CODE_PATH", constants.DefaultCodePath),
-		StatePath:       getEnv("STATE_PATH", constants.DefaultStatePath),
-		LogsPath:        getEnv("LOGS_PATH", constants.DefaultLogsPath),
-		IsScheduled:     os.Getenv("IS_SCHEDULED") == "true",
+	cfg, err := launch.Read(executeFlags, os.LookupEnv)
+	if err != nil {
+		return nil, err
 	}
-
-	// Override query path from CLI flag if provided
-	if executeQueryPath != "" {
-		cfg.QueryPath = executeQueryPath
-	}
-
-	// Validate required fields
-	if cfg.BotID == "" {
-		return nil, fmt.Errorf("BOT_ID environment variable is required")
-	}
-	if cfg.Runtime == "" {
-		return nil, fmt.Errorf("RUNTIME environment variable is required")
-	}
-	if cfg.Entrypoint == "" {
-		return nil, fmt.Errorf("ENTRYPOINT environment variable is required")
-	}
-
-	return cfg, nil
+	return &cfg, nil
 }
 
 // runExecute is the main entry point for bot execution.
@@ -118,18 +81,14 @@ func runExecute() int {
 
 	logger.Info("Bot ID: %s, Runtime: %s, Entrypoint: %s", cfg.BotID, cfg.Runtime, cfg.Entrypoint)
 
-	// Mode: Query server only (K8s sidecar)
-	if executeQueryServerOnly {
+	switch cfg.Mode {
+	case launch.Server:
 		return runQueryServerOnly(cfg, logger)
-	}
-
-	// Mode: Ephemeral query execution
-	if cfg.QueryPath != "" {
+	case launch.Query:
 		return runEphemeralQuery(cfg, logger)
+	default:
+		return runBot(cfg, logger)
 	}
-
-	// Mode: Normal bot execution
-	return runBot(cfg, logger)
 }
 
 // runBot executes a bot with optional sync and query server subprocesses.
@@ -203,7 +162,7 @@ func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	}
 
 	// Step 3: Start sync runner in-process (unless skipped for K8s)
-	if !executeSkipSync {
+	if !cfg.SkipSync {
 		syncRunner = daemon.NewSyncRunner(daemon.SyncOptions{
 			BotID:     cfg.BotID,
 			StatePath: cfg.StatePath,
@@ -227,7 +186,7 @@ func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	}
 
 	// Step 4: Start query server subprocess (for realtime bots, unless skipped)
-	if cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !executeSkipQueryServer {
+	if cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !cfg.SkipQueryServer {
 		var err error
 		queryCmd, err = startQueryServerProcess(cfg, logger)
 		if err != nil {
@@ -240,7 +199,7 @@ func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 				queryCmd.Wait()
 			}
 		}()
-	} else if executeSkipQueryServer && cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" {
+	} else if cfg.SkipQueryServer && cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" {
 		logger.Info("Skipping query server subprocess (--skip-query-server flag set)")
 	}
 

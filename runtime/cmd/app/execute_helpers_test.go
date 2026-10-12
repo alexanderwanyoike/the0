@@ -467,8 +467,8 @@ func TestLoadExecuteConfig_QueryPathFlagOverride(t *testing.T) {
 	}()
 
 	// Set flag override
-	executeQueryPath = "/flag-query-path"
-	defer func() { executeQueryPath = "" }()
+	require.NoError(t, executeCmd.Flags().Set("query", "/flag-query-path"))
+	defer func() { require.NoError(t, executeCmd.Flags().Set("query", "")) }()
 
 	cfg, err := loadExecuteConfig()
 
