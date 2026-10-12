@@ -458,14 +458,22 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 	cmd := execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 
 	// Set up output: both stdout and optionally log file
+	var stderr io.Writer = os.Stderr
 	if logFile != nil {
 		cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+		stderr = io.MultiWriter(os.Stderr, logFile)
 	} else {
 		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
 	}
+	cmd.Stderr = stderr
 	cmd.Env = execute.BuildBotEnv(cfg)
+
+	// A result.json shipped in the code, or left by an earlier container in the
+	// same pod (an emptyDir outlives a container restart), must not decide this run.
+	resultPath := execute.BotResultPath(cfg.CodePath)
+	if err := execute.ClearBotResult(resultPath); err != nil {
+		logger.Info("Failed to remove stale result file: %v", err)
+	}
 
 	logger.Info("Executing: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
@@ -492,14 +500,22 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 		deps.ProcessExecutor.Kill(cmd)
 		return 1
 	case err := <-done:
+		exitCode := 0
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				return exitErr.ExitCode()
+				exitCode = exitErr.ExitCode()
+			} else {
+				logger.Info("Process error: %v", err)
+				exitCode = 1
 			}
-			logger.Info("Process error: %v", err)
-			return 1
 		}
-		return 0
+		outcome := execute.SettleRun(exitCode, resultPath)
+		if outcome.Failure != "" {
+			if _, err := stderr.Write(execute.RunFailedLine(outcome.Failure, time.Now())); err != nil {
+				logger.Info("Failed to write the run summary: %v", err)
+			}
+		}
+		return outcome.ExitCode
 	}
 }
 
