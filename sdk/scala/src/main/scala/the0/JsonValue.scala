@@ -77,6 +77,7 @@ object JsonValue {
     private def obj(depth: Int): JsonValue = {
       pos += 1
       val fields = scala.collection.immutable.VectorMap.newBuilder[String, JsonValue]
+      val keys = scala.collection.mutable.HashSet.empty[String]
       skipWhitespace()
       if (peek == '}') pos += 1
       else {
@@ -84,6 +85,8 @@ object JsonValue {
         while (more) {
           skipWhitespace()
           val key = string()
+          // The bot contract reads an object with a duplicate key as unreadable, not as last-one-wins.
+          if (!keys.add(key)) fail()
           skipWhitespace()
           expect(':')
           fields += key -> value(depth + 1)
