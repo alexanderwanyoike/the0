@@ -33,8 +33,10 @@
 #include "state.h"
 #include "the0.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -519,6 +521,97 @@ inline void run_ephemeral(const std::string& query_path) {
     }
 }
 
+namespace detail {
+
+/** The parts of one HTTP request the query server uses. */
+struct HttpRequest {
+    std::string target;
+    std::string body;
+};
+
+inline std::string trim(const std::string& text) {
+    const auto first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return "";
+    }
+    return text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+}
+
+inline bool same_header_name(const std::string& name, const char* wanted) {
+    return std::equal(name.begin(), name.end(), wanted, wanted + std::strlen(wanted),
+                      [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
+}
+
+/**
+ * Reads one HTTP request: its head, then a body of Content-Length bytes.
+ * Gives nothing when the client sends no complete head.
+ */
+inline std::optional<HttpRequest> read_request(int client_fd) {
+    std::string received;
+    char buffer[4096];
+    std::size_t head_end;
+    while ((head_end = received.find("\r\n\r\n")) == std::string::npos) {
+        auto n = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (n <= 0) {
+            return std::nullopt;
+        }
+        received.append(buffer, static_cast<std::size_t>(n));
+    }
+
+    std::istringstream head(received.substr(0, head_end));
+    std::string request_line;
+    std::getline(head, request_line);
+    std::istringstream request_words(request_line);
+    std::string method;
+    HttpRequest request;
+    request_words >> method >> request.target;
+
+    std::size_t content_length = 0;
+    std::string header;
+    while (std::getline(head, header)) {
+        const auto colon = header.find(':');
+        if (colon != std::string::npos && same_header_name(trim(header.substr(0, colon)), "content-length")) {
+            try {
+                content_length = std::stoul(trim(header.substr(colon + 1)));
+            } catch (const std::exception&) {
+                content_length = 0;
+            }
+        }
+    }
+
+    request.body = received.substr(head_end + 4);
+    while (request.body.size() < content_length) {
+        auto n = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (n <= 0) {
+            break;
+        }
+        request.body.append(buffer, static_cast<std::size_t>(n));
+    }
+    if (request.body.size() > content_length) {
+        request.body.resize(content_length);
+    }
+    return request;
+}
+
+/**
+ * A JSON object body supplies the params with their JSON types; otherwise
+ * they come from the query string.
+ */
+inline Request query_request(const HttpRequest& http_request) {
+    const auto query_start = http_request.target.find('?');
+    const std::string path = http_request.target.substr(0, query_start);
+    if (auto values = json_object(http_request.body)) {
+        return Request::from_values(path, *values);
+    }
+    std::map<std::string, std::string> params;
+    if (query_start != std::string::npos) {
+        params = parse_query_string(http_request.target.substr(query_start + 1));
+    }
+    return Request(path, params);
+}
+
+} // namespace detail
+
 /**
  * Start HTTP server on port 9476 for realtime bots.
  */
@@ -567,10 +660,8 @@ inline void run_server() {
         int client_fd = accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
         if (client_fd < 0) continue;
 
-        // Read request
-        char buffer[4096] = {0};
-        ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        if (bytes_read <= 0) {
+        auto http_request = detail::read_request(client_fd);
+        if (!http_request) {
 #ifdef _WIN32
             closesocket(client_fd);
 #else
@@ -579,22 +670,7 @@ inline void run_server() {
             continue;
         }
 
-        // Parse HTTP request line
-        std::string request(buffer, bytes_read);
-        std::istringstream iss(request);
-        std::string method, path_with_query, http_version;
-        iss >> method >> path_with_query >> http_version;
-
-        // Parse path and query string
-        std::string path = path_with_query;
-        std::map<std::string, std::string> params;
-        size_t query_pos = path_with_query.find('?');
-        if (query_pos != std::string::npos) {
-            path = path_with_query.substr(0, query_pos);
-            params = parse_query_string(path_with_query.substr(query_pos + 1));
-        }
-
-        auto answer = detail::answer(Request(path, params));
+        auto answer = detail::answer(detail::query_request(*http_request));
         std::string response_body = the0::detail::to_json_text(answer.body);
 
         // Send response
