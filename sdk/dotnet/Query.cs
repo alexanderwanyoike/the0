@@ -87,7 +87,7 @@ public static class Query
             JsonParams.TryGetPropertyValue(key, out var value) ? value.Deserialize<T>() : defaultValue;
 
         /// <summary>
-        /// Get a parameter value.
+        /// Get a parameter as text: a string as itself, any other JSON value as its JSON text.
         /// </summary>
         /// <param name="key">The parameter key</param>
         /// <returns>The parameter value or null if not found</returns>
@@ -95,7 +95,7 @@ public static class Query
             Params.TryGetValue(key, out var value) ? value : null;
 
         /// <summary>
-        /// Get a parameter value with a default.
+        /// Get a parameter as text, with a default: a string as itself, any other JSON value as its JSON text.
         /// </summary>
         /// <param name="key">The parameter key</param>
         /// <param name="defaultValue">The default value if not found</param>
@@ -108,7 +108,10 @@ public static class Query
     /// Register a query handler (Express-like).
     /// </summary>
     /// <param name="path">The query path to handle (e.g., "/portfolio", "/signals")</param>
-    /// <param name="handler">Handler function that receives request and returns response object</param>
+    /// <param name="handler">
+    /// Handler function that receives request and returns response object. A handler that
+    /// throws answers {"status": "error", "error": message}.
+    /// </param>
     /// <example>
     /// <code>
     /// Query.Handler("/portfolio", req => {

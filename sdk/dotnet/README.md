@@ -84,23 +84,30 @@ if (config.TryGetValue("symbol", out var symbol))
 }
 ```
 
-### `Input.Success(message)`
+### `Input.Success(message, data?)`
 
-Output a success result.
+Output a success result. `data` is optional and can be any JSON-serializable value.
 
 ```csharp
 Input.Success("Trade executed successfully");
 // Output: {"status":"success","message":"Trade executed successfully"}
+
+Input.Success("Trade executed", new { trade_id = "12345", filled = 0.5 });
+// Output: {"status":"success","message":"Trade executed","data":{"trade_id":"12345","filled":0.5}}
 ```
 
-### `Input.Error(message)`
+### `Input.Error(message, data?)`
 
-Output an error result and exit with code 1.
+Output an error result, print the message to stderr as an error log line, and exit with code 1. `data` is optional and goes in the result only.
 
 ```csharp
 Input.Error("Failed to connect to exchange");
 // Output: {"status":"error","message":"Failed to connect to exchange"}
+// Stderr: {"level":"error","message":"Failed to connect to exchange","timestamp":"..."}
 // Process exits with code 1
+
+Input.Error("Trade failed", new { code = "INSUFFICIENT_FUNDS", available = 100 });
+// Output: {"status":"error","message":"Trade failed","data":{"code":"INSUFFICIENT_FUNDS","available":100}}
 ```
 
 ### `Input.Result(data)`
@@ -121,8 +128,10 @@ Emit a metric for the platform to collect.
 
 ```csharp
 Input.Metric("price", new { symbol = "BTC/USD", value = 45000.0 });
-// Output to stdout: {"_metric":"price","symbol":"BTC/USD","value":45000,"timestamp":"..."}
+// Output to stdout: {"_metric":"price","symbol":"BTC/USD","value":45000,"timestamp":"2026-10-12T09:30:00.123Z"}
 ```
+
+Metric and log lines carry a UTC ISO 8601 `timestamp`.
 
 ### `Input.Log(message, data?, level?)`
 
@@ -141,6 +150,36 @@ Input.Log("Order placed", new { orderId = "12345", symbol = "BTC" });
 // Log with data and level
 Input.Log("Order failed", new { orderId = "12345" }, LogLevel.Error);
 ```
+
+### `Query`
+
+A query entrypoint registers handlers and then calls `Query.Run()`, which answers one query when `QUERY_PATH` is set, serves HTTP on port 9476 for a realtime bot, and otherwise answers `/info`. `/health` and `/info` are built in.
+
+```csharp
+Query.Handler("/signals", req =>
+{
+    // Params are JSON values. Get<T> and JsonParams hand them over typed.
+    var limit = req.Get("limit", 10);
+    var symbols = req.Get<List<string>>("symbols") ?? new List<string>();
+
+    // Get(key) and Params hand them over as text: a string as itself,
+    // any other value as its JSON text ("10", "true", "[\"AAPL\"]").
+    var symbol = req.Get("symbol", "BTC/USD");
+
+    if (limit > 100)
+    {
+        // A handler that throws answers {"status":"error","error":"..."}.
+        throw new ArgumentException("limit must be at most 100");
+    }
+    return new { symbol, symbols, limit };
+});
+
+Query.Run();
+```
+
+`Get<T>` throws a `JsonException` when the param's value is not a `T`. In server mode, a request with no JSON object body takes its params from the URL query string, and every value is then a string.
+
+State is read-only during an ephemeral query: `State.Set`, `State.Delete` and `State.Clear` throw `ReadOnlyStateError`, the SDK's one read-only error type.
 
 ## Environment Variables
 

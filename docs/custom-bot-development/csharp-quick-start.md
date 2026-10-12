@@ -307,7 +307,7 @@ var amount = config?["amount"]?.GetValue<double>() ?? 100.0;
 
 ### Input.Metric(type, data)
 
-Emits a metric to the platform dashboard:
+Emits a metric to the platform dashboard, as a JSON line on stdout with a UTC ISO 8601 `timestamp`:
 
 ```csharp
 Input.Metric("price", new { symbol = "AAPL", value = 150.25, change_pct = 1.5 });
@@ -316,30 +316,33 @@ Input.Metric("signal", new { type = "BUY", confidence = 0.85 });
 
 ### Input.Log(message, data, level)
 
-Writes a structured log message:
+Writes a structured log message, as a JSON line on stderr with a UTC ISO 8601 `timestamp`:
 
 ```csharp
 Input.Log("Processing symbol", new { symbol });
 Input.Log("API error", new { error = ex.Message }, LogLevel.Error);
 ```
 
-### Input.Success(message)
+### Input.Success(message, data)
 
-Reports successful execution for scheduled bots:
+Reports successful execution for scheduled bots. `data` is optional:
 
 ```csharp
 Input.Success("Analysis complete");
+Input.Success("Analysis complete", new { signals = 3 });
 ```
 
-### Input.Error(message)
+### Input.Error(message, data)
 
-Reports failure and terminates with exit code 1:
+Reports failure: writes the error result, prints the message to the logs as an error line, and terminates with exit code 1. `data` is optional and goes in the result only:
 
 ```csharp
 if (string.IsNullOrEmpty(apiKey))
 {
     Input.Error("API key is required");
 }
+
+Input.Error("Order rejected", new { code = "INSUFFICIENT_FUNDS" });
 ```
 
 ### Input.Result(data)
