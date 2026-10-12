@@ -69,10 +69,7 @@ object Input {
    *
    * @param message The success message to include in the output
    */
-  def success(message: String): Unit = {
-    val escaped = escapeJson(message)
-    writeResult(s"""{"status":"success","message":"$escaped"}""")
-  }
+  def success(message: String): Unit = writeOutcome("success", message, None)
 
   /**
    * Output a success result with data to the result file.
@@ -80,7 +77,7 @@ object Input {
    * @param message The success message to include in the output
    * @param data JSON text placed under the result's "data" key
    */
-  def success(message: String, data: String): Unit = success(message)
+  def success(message: String, data: String): Unit = writeOutcome("success", message, Some(data))
 
   /**
    * Output an error result to the result file, print the message to stderr as an
@@ -88,20 +85,27 @@ object Input {
    *
    * @param message The error message to include in the output
    */
-  def error(message: String): Nothing = {
-    val escaped = escapeJson(message)
-    writeResult(s"""{"status":"error","message":"$escaped"}""")
-    log(message, level = LogLevel.Error)
-    sys.exit(1)
-  }
+  def error(message: String): Nothing = fail(message, None)
 
   /**
-   * Output an error result with data to the result file and exit with code 1.
+   * Output an error result with data to the result file, print the message to stderr
+   * as an error log line, and exit with code 1. The data goes in the result only.
    *
    * @param message The error message to include in the output
    * @param data JSON text placed under the result's "data" key
    */
-  def error(message: String, data: String): Nothing = error(message)
+  def error(message: String, data: String): Nothing = fail(message, Some(data))
+
+  private def fail(message: String, data: Option[String]): Nothing = {
+    writeOutcome("error", message, data)
+    log(message, level = LogLevel.Error)
+    sys.exit(1)
+  }
+
+  private def writeOutcome(status: String, message: String, data: Option[String]): Unit = {
+    val dataField = data.fold("")(json => s""","data":$json""")
+    writeResult(s"""{"status":"$status","message":"${escapeJson(message)}"$dataField}""")
+  }
 
   /**
    * Output a custom result to the result file.
