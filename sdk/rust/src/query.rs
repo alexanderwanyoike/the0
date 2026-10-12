@@ -292,9 +292,10 @@ fn run_server() {
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).expect("Failed to bind to port");
 
-    eprintln!(
-        "{}",
-        json!({"_log": "info", "message": format!("Query server started on port {}", port)})
+    crate::input::log(
+        &format!("Query server started on port {}", port),
+        None,
+        None,
     );
 
     for stream in listener.incoming() {
