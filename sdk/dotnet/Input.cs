@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -19,6 +20,12 @@ public static class Input
             return $"/{mountDir}/result.json";
         }
     }
+
+    /// <summary>
+    /// The current time as a UTC ISO 8601 string, the form metric and log lines carry.
+    /// </summary>
+    private static string Timestamp() =>
+        DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Write result to the result file.
@@ -129,7 +136,7 @@ public static class Input
     {
         var jsonObj = JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject();
         jsonObj["_metric"] = metricType;
-        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        jsonObj["timestamp"] = Timestamp();
         Console.WriteLine(jsonObj.ToJsonString());
     }
 
@@ -171,7 +178,7 @@ public static class Input
 
         jsonObj["level"] = level.ToString().ToLower();
         jsonObj["message"] = message;
-        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        jsonObj["timestamp"] = Timestamp();
 
         Console.Error.WriteLine(jsonObj.ToJsonString());
     }
