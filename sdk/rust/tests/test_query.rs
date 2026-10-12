@@ -92,8 +92,16 @@ fn query_request_get_returns_a_non_string_param_as_its_json_text() {
     assert_eq!(req.get("live"), Some("true".to_string()));
     assert_eq!(req.get("symbols"), Some(r#"["AAPL","MSFT"]"#.to_string()));
     assert_eq!(req.get("filter"), Some(r#"{"side":"buy"}"#.to_string()));
-    assert_eq!(req.get("cursor"), Some("null".to_string()));
     assert_eq!(req.get_or("limit", "10"), "5");
+}
+
+#[test]
+fn query_request_get_treats_a_null_param_as_absent() {
+    let req = typed_request();
+
+    assert_eq!(req.get("cursor"), None);
+    assert_eq!(req.get_or("cursor", "start"), "start");
+    assert!(!req.params.contains_key("cursor"));
 }
 
 #[test]
