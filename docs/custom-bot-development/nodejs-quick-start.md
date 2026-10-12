@@ -354,7 +354,7 @@ success("Analysis complete", { processed: 100 });
 
 ### error(message)
 
-Reports failure and terminates with exit code 1:
+Reports failure: writes an error result, prints the message to the bot's logs as an error line, and terminates with exit code 1:
 
 ```typescript
 import { error } from "the0-node";

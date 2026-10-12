@@ -21,6 +21,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { log, type LogLevel } from './log';
+
+export { log };
+export type { LogLevel };
 
 /**
  * Bot configuration parsed from environment variables
@@ -138,9 +142,10 @@ export function success(message: string, data?: Record<string, unknown>): void {
 }
 
 /**
- * Output an error result and exit with code 1.
+ * Output an error result, log the message and exit with code 1.
  *
- * Writes a JSON result with status "error" and terminates the process.
+ * Writes a JSON result with status "error", prints the message to stderr as
+ * an error log line and terminates the process.
  *
  * @param message - Error message to include in the result
  * @param data - Optional additional error context
@@ -164,6 +169,7 @@ export function error(message: string, data?: Record<string, unknown>): never {
     message,
     ...(data && { data }),
   });
+  log(message, 'error');
   process.exit(1);
 }
 
@@ -238,62 +244,6 @@ export function metric(type: string, data: Record<string, unknown>): void {
       timestamp: new Date().toISOString(),
     })
   );
-}
-
-/**
- * Log levels supported by the platform
- */
-export type LogLevel = 'info' | 'warn' | 'error';
-
-/**
- * Log a structured message to the bot's log output.
- *
- * Use this for debugging and monitoring. Messages appear in
- * the bot's log viewer in the platform as structured JSON.
- *
- * @param message - Message to log
- * @param dataOrLevel - Optional structured data object or log level
- * @param level - Optional log level (defaults to 'info')
- *
- * @example
- * ```typescript
- * // Simple log (defaults to info level)
- * log('Starting trade execution');
- *
- * // Log with level
- * log('Connection lost', 'warn');
- * log('Trade failed', 'error');
- *
- * // Log with structured data (pino-style)
- * log('Order placed', { orderId: '12345', symbol: 'BTC/USD' });
- *
- * // Log with data and level
- * log('Order failed', { orderId: '12345', reason: 'insufficient funds' }, 'error');
- * ```
- */
-export function log(
-  message: string,
-  dataOrLevel?: Record<string, unknown> | LogLevel,
-  level?: LogLevel
-): void {
-  let data: Record<string, unknown> | undefined;
-  let logLevel: LogLevel = 'info';
-
-  if (typeof dataOrLevel === 'string') {
-    logLevel = dataOrLevel;
-  } else if (dataOrLevel) {
-    data = dataOrLevel;
-    logLevel = level || 'info';
-  }
-
-  const entry = {
-    level: logLevel,
-    message,
-    ...data,
-    timestamp: new Date().toISOString(),
-  };
-
-  console.error(JSON.stringify(entry));
 }
 
 /**

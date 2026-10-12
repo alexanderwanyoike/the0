@@ -211,7 +211,7 @@ The runner picks its mode from the environment:
 Params are JSON values. A param keeps its type (string, number, boolean, array, object or `null`), and every SDK hands it to handlers without loss.
 - **Ephemeral queries** read params from `QUERY_PARAMS`, a JSON object. When it is missing, is not JSON, or is JSON but not an object, there are no params.
 - **The query server** reads params from the request body when the body is a JSON object. Otherwise (no body, or a body that isn't a JSON object), it reads them from the URL query string, URL-decoded, and every value is a string. The runtime sends both a body and a query string, so a manual `curl` call with a query string keeps working.
-- **Typed server params break string handlers.** An SDK whose query server used to read only the query string now hands realtime handlers typed params. A handler that treated every param as a string, or decoded object params from their JSON text (the runtime has sent them that way in the query string), must change. The Python SDK makes this change in 0.4.0.
+- **Typed server params break string handlers.** An SDK whose query server used to read only the query string now hands realtime handlers typed params. A handler that treated every param as a string, or decoded object params from their JSON text (the runtime has sent them that way in the query string), must change. The Python SDK (`the0-sdk`) and the Node.js SDK (`the0-node`) make this change in 0.4.0. Node.js's `QueryRequest` types still declare params as strings.
 - **Accessors.**
   - Python's request object and Node.js's `req.params` and `req.get()` hand over the JSON values as they are.
   - The Rust, .NET, Scala, Haskell and C++ SDKs keep their string accessor, which returns a non-string value as its JSON text instead of dropping it. They also gain a typed accessor.
@@ -263,7 +263,8 @@ It reads the response body whatever the status code.
 | SDK | Harness |
 |---|---|
 | Python | `sdk/python/tests/test_contract.py` |
-| Node.js, Rust, .NET, Scala, Haskell, C++ | not yet |
+| Node.js | `sdk/nodejs/src/contract.test.ts` |
+| Rust, .NET, Scala, Haskell, C++ | not yet |
 
 ## Bringing the SDKs into line
 
@@ -272,14 +273,14 @@ These are the rules each SDK does not follow yet. The SDKs come into line one at
 | Rule | Not followed yet by |
 |---|---|
 | `success()` and `error()` accept optional `data` (these SDKs take a message only) | Rust, .NET, Scala, Haskell, C++ |
-| `error()` prints its message on stderr | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| `error()` prints its message on stderr | Rust, .NET, Scala, Haskell, C++ |
 | Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Rust, .NET, Scala, Haskell, C++ |
-| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Node.js, Rust, .NET, Scala, Haskell, C++ |
-| One read-only error type (these SDKs define a second, unused type in the query module) | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Rust, .NET, Scala, Haskell, C++ |
+| One read-only error type (these SDKs define a second, unused type in the query module) | Rust, .NET, Scala, Haskell, C++ |
 | `state.delete()` fails in query mode (Rust returns `false` instead) | Rust |
 | Ephemeral query params keep their JSON types | Rust and .NET (drop every param when any is not a string), Scala (keeps only string pairs), Haskell and C++ (turn every value into a string) |
-| The query server reads the JSON body | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| The query server reads the JSON body | Rust, .NET, Scala, Haskell, C++ |
 | The query server URL-decodes the query string | Rust |
-| The query server's 404 includes `available` | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| The query server's 404 includes `available` | Rust, .NET, Scala, Haskell, C++ |
 | `/info` lists `/info` | Rust |
 | A query handler can report an error (a Rust handler can only panic, which ends the process; Rust gains a way that keeps existing handlers compiling) | Rust |
