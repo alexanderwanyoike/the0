@@ -138,7 +138,7 @@ fn main() {
     });
 
     query::handler("/signals", |req| {
-        let limit: i32 = req.get("limit", "10").parse().unwrap_or(10);
+        let limit: i32 = req.get_or("limit", "10").parse().unwrap_or(10);
         let persisted: PersistedState = state::get("bot_state").unwrap_or_default();
 
         json!({

@@ -27,21 +27,39 @@
 //!         json!({ "symbol": symbol, "active": true })
 //!     });
 //!
+//!     // A handler that can fail, reading a param with its JSON type.
+//!     query::try_handler("/trades", |req| {
+//!         let limit = req.get_as::<usize>("limit").unwrap_or(10);
+//!         let trades: Vec<String> = state::get("trades")?;
+//!         Ok(json!({ "trades": trades.into_iter().take(limit).collect::<Vec<_>>() }))
+//!     });
+//!
 //!     query::run();
 //! }
 //! ```
+//!
+//! # Params
+//!
+//! Params are JSON values. An ephemeral query reads them from `QUERY_PARAMS`;
+//! the query server reads them from a JSON object body, or else from the URL
+//! query string, where every value is a string. [`QueryRequest::get`] returns
+//! a param as text (a non-string value as its JSON text), and
+//! [`QueryRequest::get_as`] and [`QueryRequest::values`] keep the JSON types.
 
+use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+type Handler = Box<dyn Fn(&QueryRequest) -> Result<Value, HandlerError> + Send + Sync>;
+
 /// Global handler registry
-static HANDLERS: Mutex<Option<HashMap<String, Box<dyn Fn(&QueryRequest) -> Value + Send + Sync>>>> =
-    Mutex::new(None);
+static HANDLERS: Mutex<Option<HashMap<String, Handler>>> = Mutex::new(None);
 
 /// Global current params
 static CURRENT_PARAMS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
@@ -49,54 +67,105 @@ static CURRENT_PARAMS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None)
 /// Global config
 static CONFIG: Mutex<Option<Value>> = Mutex::new(None);
 
-/// Error thrown when attempting to modify state during query execution.
-#[derive(Debug)]
-pub struct ReadOnlyStateError {
-    pub message: String,
+const QUERY_RESULT_PATH: &str = "/query/result.json";
+
+static QUERY_RESULT_PATH_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Test-only: point ephemeral query results at `path` instead of
+/// `/query/result.json`, which tests cannot write. The runtime always reads
+/// `/query/result.json`, so bots must not call this.
+#[doc(hidden)]
+pub fn set_result_path(path: impl Into<PathBuf>) {
+    *QUERY_RESULT_PATH_OVERRIDE.lock().unwrap() = Some(path.into());
 }
 
-impl std::fmt::Display for ReadOnlyStateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for ReadOnlyStateError {}
-
-impl ReadOnlyStateError {
-    pub fn new(message: &str) -> Self {
-        Self {
-            message: message.to_string(),
-        }
-    }
-}
+/// The error state writes fail with during a query: `state::set`,
+/// `state::delete` and `state::clear` return it as
+/// `StateError::ReadOnly(ReadOnlyStateError)`.
+pub use crate::state::ReadOnlyStateError;
 
 /// Request object passed to handlers (Express-like).
 #[derive(Debug, Clone)]
 pub struct QueryRequest {
     /// The query path being requested (e.g., "/portfolio")
     pub path: String,
-    /// Dictionary of query parameters
+    /// The params as text: a string as it is, any other JSON value as its
+    /// JSON text, and a `null` left out. [`QueryRequest::values`] keeps
+    /// their JSON types.
     pub params: HashMap<String, String>,
+    values: HashMap<String, Value>,
 }
 
 impl QueryRequest {
-    /// Create a new QueryRequest
+    /// Create a new QueryRequest whose params are all strings.
     pub fn new(path: &str, params: HashMap<String, String>) -> Self {
+        let values = params
+            .iter()
+            .map(|(key, value)| (key.clone(), Value::String(value.clone())))
+            .collect();
         Self {
             path: path.to_string(),
             params,
+            values,
         }
     }
 
-    /// Get a parameter value with optional default.
+    /// Create a QueryRequest from params with their JSON types.
+    pub fn from_values(path: &str, values: HashMap<String, Value>) -> Self {
+        // The runtime leaves a null param out of the query string, so text
+        // handlers have always seen it as absent.
+        let params = values
+            .iter()
+            .filter_map(|(key, value)| {
+                let text = match value {
+                    Value::Null => return None,
+                    Value::String(text) => text.clone(),
+                    other => other.to_string(),
+                };
+                Some((key.clone(), text))
+            })
+            .collect();
+        Self {
+            path: path.to_string(),
+            params,
+            values,
+        }
+    }
+
+    /// Every param with its JSON type.
+    pub fn values(&self) -> &HashMap<String, Value> {
+        &self.values
+    }
+
+    /// A param deserialized into `T`, or `None` when it is missing or does
+    /// not deserialize into `T`. A string param that does not deserialize
+    /// into `T` is parsed as JSON first, so `get_as::<u32>` reads `"5"` from
+    /// a URL query string as 5. Asked for a `String`, it gives any other
+    /// value except `null` as its JSON text, as [`QueryRequest::get`] does.
+    pub fn get_as<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+        let value = self.values.get(key)?;
+        if let Ok(typed) = T::deserialize(value) {
+            return Some(typed);
+        }
+        match value {
+            Value::String(text) => serde_json::from_str(text).ok(),
+            Value::Null => None,
+            other => T::deserialize(Value::String(other.to_string())).ok(),
+        }
+    }
+
+    /// Get a parameter as text: a string as it is, any other JSON value as
+    /// its JSON text. A `null` param is `None`, as a missing one is.
     pub fn get(&self, key: &str) -> Option<String> {
         self.params.get(key).cloned()
     }
 
-    /// Get a parameter value with a default.
+    /// Get a parameter as text, like [`QueryRequest::get`], with a default.
     pub fn get_or(&self, key: &str, default: &str) -> String {
-        self.params.get(key).cloned().unwrap_or_else(|| default.to_string())
+        self.params
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| default.to_string())
     }
 }
 
@@ -122,13 +191,40 @@ pub fn handler<F>(path: &str, handler_fn: F)
 where
     F: Fn(&QueryRequest) -> Value + Send + Sync + 'static,
 {
-    let mut handlers = HANDLERS.lock().unwrap();
-    if handlers.is_none() {
-        *handlers = Some(HashMap::new());
-    }
-    if let Some(ref mut h) = *handlers {
-        h.insert(path.to_string(), Box::new(handler_fn));
-    }
+    try_handler(path, move |req| Ok(handler_fn(req)));
+}
+
+/// The error a handler registered with [`try_handler`] fails with. Any error
+/// type converts into it with `?`.
+pub type HandlerError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Register a query handler that can fail.
+///
+/// A handler that returns `Err` answers `{"status": "error", "error": <message>}`:
+/// the query server responds 500 and keeps serving, and an ephemeral query
+/// exits 1.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use the0_sdk::query;
+/// use the0_sdk::state;
+/// use serde_json::json;
+///
+/// query::try_handler("/portfolio", |_req| {
+///     let positions: Vec<String> = state::get("positions")?;
+///     Ok(json!({ "positions": positions }))
+/// });
+/// ```
+pub fn try_handler<F>(path: &str, handler_fn: F)
+where
+    F: Fn(&QueryRequest) -> Result<Value, HandlerError> + Send + Sync + 'static,
+{
+    HANDLERS
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashMap::new)
+        .insert(path.to_string(), Box::new(handler_fn));
 }
 
 /// Get current query parameters (alternative to request object).
@@ -176,15 +272,16 @@ pub fn run() {
         }
         if let Some(ref mut h) = *handlers {
             h.entry("/health".to_string())
-                .or_insert_with(|| Box::new(|_| json!({"status": "ok"})));
+                .or_insert_with(|| Box::new(|_| Ok(json!({"status": "ok"}))));
 
-            // Store paths for /info handler
-            let paths: Vec<String> = h.keys().cloned().collect();
-            h.entry("/info".to_string())
-                .or_insert_with(move || {
-                    let paths = paths.clone();
-                    Box::new(move |_| json!({"available_queries": paths}))
-                });
+            if !h.contains_key("/info") {
+                let mut paths: Vec<String> = h.keys().cloned().collect();
+                paths.push("/info".to_string());
+                h.insert(
+                    "/info".to_string(),
+                    Box::new(move |_| Ok(json!({"available_queries": paths}))),
+                );
+            }
         }
     }
 
@@ -203,61 +300,80 @@ pub fn run() {
 /// Write query result to /query/result.json file (matches Python SDK behavior).
 /// This avoids stdout pollution from runtime logs mixing with query results.
 fn write_result(result: Value) {
-    let result_path = "/query/result.json";
-    if let Err(e) = fs::create_dir_all("/query") {
-        eprintln!("RESULT_ERROR: Failed to create /query directory: {}", e);
+    let result_path = QUERY_RESULT_PATH_OVERRIDE
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(QUERY_RESULT_PATH));
+    let result_dir = result_path.parent().unwrap_or(Path::new("/"));
+    if let Err(e) = fs::create_dir_all(result_dir) {
+        eprintln!(
+            "RESULT_ERROR: Failed to create {} directory: {}",
+            result_dir.display(),
+            e
+        );
         return;
     }
-    if let Err(e) = fs::write(result_path, result.to_string()) {
+    if let Err(e) = fs::write(&result_path, result.to_string()) {
         eprintln!("RESULT_ERROR: Failed to write result file: {}", e);
+    }
+}
+
+/// What a query comes to in either mode: the status the query server answers
+/// with, and the body both modes send. An ephemeral query exits 0 only on 200.
+struct Answer {
+    status: u16,
+    body: Value,
+}
+
+/// Run the handler registered for the request's path, or report that there
+/// is none.
+fn answer(request: QueryRequest) -> Answer {
+    *CURRENT_PARAMS.lock().unwrap() = Some(request.params.clone());
+
+    let path = request.path.as_str();
+    let handlers = HANDLERS.lock().unwrap();
+    let h = handlers.as_ref().expect("run() registers the built-ins");
+    match h.get(path) {
+        Some(handler_fn) => match handler_fn(&request) {
+            Ok(data) => Answer {
+                status: 200,
+                body: json!({"status": "ok", "data": data}),
+            },
+            Err(e) => Answer {
+                status: 500,
+                body: json!({"status": "error", "error": e.to_string()}),
+            },
+        },
+        None => Answer {
+            status: 404,
+            body: json!({
+                "status": "error",
+                "error": format!("No handler for path: {}", path),
+                "available": h.keys().cloned().collect::<Vec<String>>()
+            }),
+        },
     }
 }
 
 /// Execute a single query and write result to /query/result.json.
 fn run_ephemeral(query_path: &str) {
-    // Parse parameters from environment
-    let params_str = env::var("QUERY_PARAMS").unwrap_or_else(|_| "{}".to_string());
-    let params: HashMap<String, String> =
-        serde_json::from_str(&params_str).unwrap_or_default();
+    let params = env::var("QUERY_PARAMS")
+        .ok()
+        .and_then(|text| json_object_params(&text))
+        .unwrap_or_default();
 
-    {
-        let mut current = CURRENT_PARAMS.lock().unwrap();
-        *current = Some(params.clone());
+    let answer = answer(QueryRequest::from_values(query_path, params));
+    write_result(answer.body);
+    if answer.status != 200 {
+        std::process::exit(1);
     }
+}
 
-    // Find handler
-    let result = {
-        let handlers = HANDLERS.lock().unwrap();
-        if let Some(ref h) = *handlers {
-            if let Some(handler_fn) = h.get(query_path) {
-                let req = QueryRequest::new(query_path, params);
-                Some(handler_fn(&req))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
-
-    match result {
-        Some(data) => {
-            write_result(json!({"status": "ok", "data": data}));
-        }
-        None => {
-            let handlers = HANDLERS.lock().unwrap();
-            let available: Vec<String> = handlers
-                .as_ref()
-                .map(|h| h.keys().cloned().collect())
-                .unwrap_or_default();
-            write_result(json!({
-                "status": "error",
-                "error": format!("No handler for path: {}", query_path),
-                "available": available
-            }));
-            std::process::exit(1);
-        }
-    }
+/// Params from JSON text holding an object, with their JSON types; `None`
+/// for anything else.
+fn json_object_params(text: &str) -> Option<HashMap<String, Value>> {
+    serde_json::from_str(text).ok()
 }
 
 /// Start HTTP server on port 9476 for realtime bots.
@@ -267,12 +383,12 @@ fn run_server() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9476);
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
-        .expect("Failed to bind to port");
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).expect("Failed to bind to port");
 
-    eprintln!(
-        "{}",
-        json!({"_log": "info", "message": format!("Query server started on port {}", port)})
+    crate::input::log(
+        &format!("Query server started on port {}", port),
+        None,
+        None,
     );
 
     for stream in listener.incoming() {
@@ -284,86 +400,168 @@ fn run_server() {
 
 /// Handle an HTTP connection.
 fn handle_connection(mut stream: TcpStream) {
-    let buf_reader = BufReader::new(&stream);
-    let request_line = buf_reader.lines().next();
-
-    let (status, response_body) = match request_line {
-        Some(Ok(line)) => {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                let path_with_query = parts[1];
-                let (path, query_string) = if let Some(idx) = path_with_query.find('?') {
-                    (&path_with_query[..idx], Some(&path_with_query[idx + 1..]))
-                } else {
-                    (path_with_query, None)
-                };
-
-                // Parse query parameters
-                let params: HashMap<String, String> = query_string
-                    .map(|qs| {
-                        qs.split('&')
-                            .filter_map(|pair| {
-                                let mut parts = pair.splitn(2, '=');
-                                Some((
-                                    parts.next()?.to_string(),
-                                    parts.next().unwrap_or("").to_string(),
-                                ))
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                {
-                    let mut current = CURRENT_PARAMS.lock().unwrap();
-                    *current = Some(params.clone());
-                }
-
-                // Find and execute handler
-                let result = {
-                    let handlers = HANDLERS.lock().unwrap();
-                    if let Some(ref h) = *handlers {
-                        if let Some(handler_fn) = h.get(path) {
-                            let req = QueryRequest::new(path, params);
-                            Some(Ok(handler_fn(&req)))
-                        } else {
-                            Some(Err(format!("No handler for path: {}", path)))
-                        }
-                    } else {
-                        Some(Err("No handlers registered".to_string()))
-                    }
-                };
-
-                match result {
-                    Some(Ok(data)) => {
-                        ("200 OK", json!({"status": "ok", "data": data}).to_string())
-                    }
-                    Some(Err(err)) => {
-                        ("404 Not Found", json!({"status": "error", "error": err}).to_string())
-                    }
-                    None => (
-                        "500 Internal Server Error",
-                        json!({"status": "error", "error": "Internal error"}).to_string(),
-                    ),
-                }
-            } else {
-                (
-                    "400 Bad Request",
-                    json!({"status": "error", "error": "Invalid request"}).to_string(),
-                )
-            }
-        }
-        _ => (
-            "400 Bad Request",
-            json!({"status": "error", "error": "Failed to read request"}).to_string(),
-        ),
+    let answer = match read_request(&stream) {
+        Ok((target, body)) => answer(query_request(&target, &body)),
+        Err(error) => bad_request(error),
     };
 
+    let body = answer.body.to_string();
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        status,
-        response_body.len(),
-        response_body
+        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        answer.status,
+        reason_phrase(answer.status),
+        body.len(),
+        body
     );
 
     stream.write_all(response.as_bytes()).ok();
+}
+
+/// The request target and body of one HTTP request.
+fn read_request(stream: &TcpStream) -> Result<(String, Vec<u8>), &'static str> {
+    let mut reader = BufReader::new(stream);
+    let mut request_line = String::new();
+    match reader.read_line(&mut request_line) {
+        Ok(0) | Err(_) => return Err("Failed to read request"),
+        Ok(_) => {}
+    }
+    let target = request_line
+        .split_whitespace()
+        .nth(1)
+        .ok_or("Invalid request")?
+        .to_string();
+
+    let mut content_length = 0;
+    loop {
+        let mut header = String::new();
+        if reader
+            .read_line(&mut header)
+            .map_err(|_| "Failed to read request")?
+            == 0
+        {
+            break;
+        }
+        let header = header.trim_end();
+        if header.is_empty() {
+            break;
+        }
+        if let Some((name, value)) = header.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().map_err(|_| "Invalid request")?;
+            }
+        }
+    }
+
+    let mut body = Vec::new();
+    reader
+        .take(content_length)
+        .read_to_end(&mut body)
+        .map_err(|_| "Failed to read request")?;
+    Ok((target, body))
+}
+
+/// A JSON object body supplies the params with their JSON types; otherwise
+/// they come from the query string.
+fn query_request(target: &str, body: &[u8]) -> QueryRequest {
+    let (path, query_string) = match target.split_once('?') {
+        Some((path, query_string)) => (path, Some(query_string)),
+        None => (target, None),
+    };
+    match std::str::from_utf8(body).ok().and_then(json_object_params) {
+        Some(values) => QueryRequest::from_values(path, values),
+        None => QueryRequest::new(
+            path,
+            query_string.map(query_string_params).unwrap_or_default(),
+        ),
+    }
+}
+
+fn query_string_params(query_string: &str) -> HashMap<String, String> {
+    query_string
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| {
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (url_decode(key), url_decode(value))
+        })
+        .collect()
+}
+
+/// Decodes `application/x-www-form-urlencoded` text: `+` is a space and
+/// `%XX` is a byte. Bytes that do not form UTF-8 become U+FFFD.
+fn url_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let hex_digit = |at: usize| {
+        bytes
+            .get(at)
+            .and_then(|&byte| (byte as char).to_digit(16))
+            .map(|digit| digit as u8)
+    };
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            if let (Some(high), Some(low)) = (hex_digit(i + 1), hex_digit(i + 2)) {
+                decoded.push(high * 16 + low);
+                i += 3;
+                continue;
+            }
+        }
+        decoded.push(if bytes[i] == b'+' { b' ' } else { bytes[i] });
+        i += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn bad_request(error: &str) -> Answer {
+    Answer {
+        status: 400,
+        body: json!({"status": "error", "error": error}),
+    }
+}
+
+fn reason_phrase(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        _ => "Internal Server Error",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{query_string_params, url_decode};
+    use std::collections::HashMap;
+
+    #[test]
+    fn query_string_params_skip_empty_pairs() {
+        let expected: HashMap<String, String> = [("a", "1"), ("b", "")]
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+
+        assert_eq!(query_string_params("a=1&&b"), expected);
+        assert_eq!(query_string_params("a=1&b&"), expected);
+        assert_eq!(query_string_params(""), HashMap::new());
+    }
+
+    #[test]
+    fn url_decode_turns_plus_into_a_space_and_percent_escapes_into_bytes() {
+        assert_eq!(url_decode("two+words"), "two words");
+        assert_eq!(url_decode("BTC%2FUSD"), "BTC/USD");
+        assert_eq!(url_decode("caf%C3%A9"), "caf\u{e9}");
+    }
+
+    #[test]
+    fn url_decode_keeps_a_percent_sign_that_starts_no_escape() {
+        assert_eq!(url_decode("100%"), "100%");
+        assert_eq!(url_decode("%zz"), "%zz");
+        assert_eq!(url_decode("%2"), "%2");
+    }
+
+    #[test]
+    fn url_decode_replaces_bytes_that_are_not_utf8() {
+        assert_eq!(url_decode("%FF"), "\u{fffd}");
+    }
 }
