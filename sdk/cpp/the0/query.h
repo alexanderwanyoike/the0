@@ -435,8 +435,16 @@ inline void run_server() {
         auto& handlers = get_handlers();
         auto it = handlers.find(path);
         if (it == handlers.end()) {
+            std::vector<std::string> available;
+            for (const auto& kv : handlers) {
+                available.push_back(kv.first);
+            }
             status = "404 Not Found";
-            response_body = json{{"status", "error"}, {"error", "No handler for path: " + path}}.dump();
+            response_body = json{
+                {"status", "error"},
+                {"error", "No handler for path: " + path},
+                {"available", available}
+            }.dump();
         } else {
             try {
                 Request req(path, params);
