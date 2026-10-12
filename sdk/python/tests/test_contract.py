@@ -36,7 +36,7 @@ def case_paths():
     return sorted(glob.glob(os.path.join(CASES_DIR, "*.json")))
 
 
-def case_name(path):
+def file_stem(path):
     return os.path.splitext(os.path.basename(path))[0]
 
 
@@ -135,7 +135,7 @@ def read_state(state_dir):
     state = {}
     for path in files:
         with open(path) as f:
-            state[case_name(path)] = json.load(f)
+            state[file_stem(path)] = json.load(f)
     return state
 
 
@@ -297,7 +297,7 @@ class TestContractCases(unittest.TestCase):
         self.assertTrue(case_paths(), f"no contract cases in {CASES_DIR}")
 
     def test_known_failures_name_real_cases(self):
-        names = {case_name(path) for path in case_paths()}
+        names = {file_stem(path) for path in case_paths()}
         self.assertEqual(set(KNOWN_FAILURES) - names, set())
 
 
@@ -312,10 +312,10 @@ def _case_test(path):
 
 for _path in case_paths():
     _test = _case_test(_path)
-    _test.__doc__ = f"contract case {case_name(_path)}"
-    if case_name(_path) in KNOWN_FAILURES:
+    _test.__doc__ = f"contract case {file_stem(_path)}"
+    if file_stem(_path) in KNOWN_FAILURES:
         _test = unittest.expectedFailure(_test)
-    setattr(TestContractCases, "test_" + case_name(_path).replace("-", "_"), _test)
+    setattr(TestContractCases, "test_" + file_stem(_path).replace("-", "_"), _test)
 
 
 if __name__ == "__main__":
