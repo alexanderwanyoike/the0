@@ -82,14 +82,25 @@ public static class Query
 
         /// <summary>
         /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
+        /// Asked for a string, it returns a non-string value as its JSON text, as <see cref="Get(string)"/> does.
         /// </summary>
         /// <typeparam name="T">The type to deserialize to</typeparam>
         /// <param name="key">The parameter key</param>
         /// <param name="defaultValue">The value to return when the parameter is missing</param>
         /// <returns>The parameter's value, or the default</returns>
         /// <exception cref="JsonException">The parameter's value is not a <typeparamref name="T"/></exception>
-        public T? Get<T>(string key, T? defaultValue = default) =>
-            JsonParams.TryGetPropertyValue(key, out var value) ? value.Deserialize<T>() : defaultValue;
+        public T? Get<T>(string key, T? defaultValue = default)
+        {
+            if (!JsonParams.TryGetPropertyValue(key, out var value))
+            {
+                return defaultValue;
+            }
+            if (typeof(T) == typeof(string) && value != null)
+            {
+                return (T)(object)AsText(value);
+            }
+            return value.Deserialize<T>();
+        }
 
         /// <summary>
         /// Get a parameter as text: a string as itself, any other JSON value as its JSON text.
