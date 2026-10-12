@@ -97,6 +97,47 @@ fn query_request_get_returns_a_non_string_param_as_its_json_text() {
 }
 
 #[test]
+fn query_request_values_keep_their_json_types() {
+    let req = typed_request();
+
+    assert_eq!(req.values()["limit"], json!(5));
+    assert_eq!(req.values()["filter"], json!({"side": "buy"}));
+    assert_eq!(req.values()["cursor"], Value::Null);
+}
+
+#[test]
+fn query_request_get_as_deserializes_a_param() {
+    let req = typed_request();
+
+    assert_eq!(req.get_as::<u32>("limit"), Some(5));
+    assert_eq!(req.get_as::<bool>("live"), Some(true));
+    assert_eq!(
+        req.get_as::<Vec<String>>("symbols"),
+        Some(vec!["AAPL".to_string(), "MSFT".to_string()])
+    );
+    assert_eq!(req.get_as::<Option<String>>("cursor"), Some(None));
+}
+
+#[test]
+fn query_request_get_as_is_none_for_a_missing_or_mistyped_param() {
+    let req = typed_request();
+
+    assert_eq!(req.get_as::<u32>("offset"), None);
+    assert_eq!(req.get_as::<u32>("symbol"), None);
+}
+
+#[test]
+fn query_request_new_gives_string_values() {
+    let mut params = std::collections::HashMap::new();
+    params.insert("limit".to_string(), "5".to_string());
+
+    let req = query::QueryRequest::new("/test", params);
+
+    assert_eq!(req.values()["limit"], json!("5"));
+    assert_eq!(req.get_as::<u32>("limit"), None);
+}
+
+#[test]
 fn state_set_throws_in_query_mode() {
     let mut env = EnvGuard::new();
     env.set("QUERY_PATH", "/portfolio");
