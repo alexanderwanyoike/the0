@@ -471,12 +471,10 @@ fn query_request(target: &str, body: &[u8]) -> QueryRequest {
 fn query_string_params(query_string: &str) -> HashMap<String, String> {
     query_string
         .split('&')
-        .filter_map(|pair| {
-            let mut parts = pair.splitn(2, '=');
-            Some((
-                url_decode(parts.next()?),
-                url_decode(parts.next().unwrap_or("")),
-            ))
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| {
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (url_decode(key), url_decode(value))
         })
         .collect()
 }
