@@ -2,7 +2,7 @@ package the0
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterEach
-import java.io.File
+import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.file.Files
 import java.net.{InetAddress, ServerSocket, Socket, URI}
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
@@ -202,6 +202,29 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
         assert(response.toOption.exists(_.contains(""""data": {"limit":"5"}""")), s"Should answer from the query string: $response")
       }
     } finally Query.readTimeoutMillis = defaultTimeout
+  }
+
+  test("the query server prints a failed connection as an error log line") {
+    val defaultTimeout = Query.readTimeoutMillis
+    Query.readTimeoutMillis = 100
+    val errors = new ByteArrayOutputStream()
+    val originalErr = System.err
+    try {
+      Using.resource(new ServerSocket(0, 0, InetAddress.getLoopbackAddress)) { server =>
+        // A client that connects and never sends a request makes the read time out.
+        Using.resource(new Socket(InetAddress.getLoopbackAddress, server.getLocalPort)) { _ =>
+          System.setErr(new PrintStream(errors, true))
+          Query.serveConnection(server)
+        }
+      }
+    } finally {
+      System.setErr(originalErr)
+      Query.readTimeoutMillis = defaultTimeout
+    }
+    val line = Try(ujson.read(errors.toString(StandardCharsets.UTF_8)))
+    val keys = line.toOption.flatMap(_.objOpt).map(_.keySet.toSet)
+    assert(keys == Some(Set("level", "message", "timestamp")), s"Should be a log line: $errors")
+    assert(line.toOption.map(_("level").str) == Some("error"), s"Should be at level error: $errors")
   }
 
   // Serves one request on an in-process query server and returns the response body.
