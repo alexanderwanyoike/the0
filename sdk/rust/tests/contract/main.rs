@@ -33,16 +33,8 @@ const PORT_ATTEMPTS: usize = 3;
 // says how the list is kept.
 const KNOWN_FAILURES: &[(&str, &str)] = &[
     (
-        "query-ephemeral-handler-error",
-        "a handler can only fail by panicking",
-    ),
-    (
         "query-ephemeral-params",
         "every param is dropped when any is not a string",
-    ),
-    (
-        "query-server-handler-error",
-        "a handler can only fail by panicking, which stops the server",
     ),
     (
         "query-server-params-json-body",

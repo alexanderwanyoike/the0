@@ -34,11 +34,7 @@ pub fn main(case_path: &str, query_result_path: &str) {
         .expect("contract_bot: a query case needs handlers");
     for (path, steps) in handlers {
         let steps = steps.as_array().cloned().unwrap_or_default();
-        query::handler(path, move |req| match run_steps(&steps, Some(req)) {
-            Ok(value) => value,
-            // A Rust handler has no other way to fail.
-            Err(e) => panic!("{e}"),
-        });
+        query::try_handler(path, move |req| run_steps(&steps, Some(req)));
     }
     query::run();
 }
