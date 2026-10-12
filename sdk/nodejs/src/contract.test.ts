@@ -21,9 +21,7 @@ const SERVER_START_TIMEOUT_MS = 30_000;
 
 // Cases this SDK does not pass yet, each with the reason. A listed case that
 // starts passing fails the suite, so the list cannot go stale.
-const KNOWN_FAILURES: Record<string, string> = {
-  "query-server-start-line": "the query server's start line uses _log and has no timestamp",
-};
+const KNOWN_FAILURES: Record<string, string> = {};
 
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
