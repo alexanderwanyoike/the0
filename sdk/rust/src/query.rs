@@ -328,14 +328,22 @@ fn answer(request: QueryRequest) -> Answer {
 
 /// Execute a single query and write result to /query/result.json.
 fn run_ephemeral(query_path: &str) {
-    let params_str = env::var("QUERY_PARAMS").unwrap_or_else(|_| "{}".to_string());
-    let params: HashMap<String, String> = serde_json::from_str(&params_str).unwrap_or_default();
+    let params = env::var("QUERY_PARAMS")
+        .ok()
+        .and_then(|text| json_object_params(&text))
+        .unwrap_or_default();
 
-    let answer = answer(QueryRequest::new(query_path, params));
+    let answer = answer(QueryRequest::from_values(query_path, params));
     write_result(answer.body);
     if answer.status != 200 {
         std::process::exit(1);
     }
+}
+
+/// Params from JSON text holding an object, with their JSON types; `None`
+/// for anything else.
+fn json_object_params(text: &str) -> Option<HashMap<String, Value>> {
+    serde_json::from_str(text).ok()
 }
 
 /// Start HTTP server on port 9476 for realtime bots.
