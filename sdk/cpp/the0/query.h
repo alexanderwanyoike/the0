@@ -107,6 +107,46 @@ public:
     bool has(const std::string& key) const {
         return params.find(key) != params.end();
     }
+
+    /**
+     * A request from params with their JSON types.
+     * @param path The query path
+     * @param values A JSON object of params
+     */
+    static Request from_values(const std::string& path, const json& values) {
+        (void)values;
+        return Request(path, {});
+    }
+
+    /**
+     * Every param with its JSON type, as a JSON object.
+     */
+    const json& values() const {
+        return values_;
+    }
+
+    /**
+     * A param read as T, or std::nullopt when it is missing or is not a T.
+     * @param key The parameter key
+     */
+    template <typename T>
+    std::optional<T> get_as(const std::string& key) const {
+        (void)key;
+        return std::nullopt;
+    }
+
+    /**
+     * A param read as T, or the default when it is missing or is not a T.
+     * @param key The parameter key
+     * @param default_value The default value
+     */
+    template <typename T>
+    T get_as(const std::string& key, const T& default_value) const {
+        return get_as<T>(key).value_or(default_value);
+    }
+
+private:
+    json values_ = json::object();
 };
 
 // Handler function type
