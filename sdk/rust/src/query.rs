@@ -525,7 +525,20 @@ fn reason_phrase(status: u16) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::url_decode;
+    use super::{query_string_params, url_decode};
+    use std::collections::HashMap;
+
+    #[test]
+    fn query_string_params_skip_empty_pairs() {
+        let expected: HashMap<String, String> = [("a", "1"), ("b", "")]
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+
+        assert_eq!(query_string_params("a=1&&b"), expected);
+        assert_eq!(query_string_params("a=1&b&"), expected);
+        assert_eq!(query_string_params(""), HashMap::new());
+    }
 
     #[test]
     fn url_decode_turns_plus_into_a_space_and_percent_escapes_into_bytes() {
