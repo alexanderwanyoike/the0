@@ -3,6 +3,7 @@
 use libtest_mimic::{Arguments, Failed, Trial};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
@@ -90,7 +91,15 @@ fn trials() -> Vec<Trial> {
 }
 
 fn check_case(path: &Path, known_failure: Option<&str>) -> Result<(), Failed> {
-    let (problems, output) = run_case(path);
+    let text = fs::read_to_string(path).expect("cannot read the case");
+    let case: Value = serde_json::from_str(&text).expect("the case is not JSON");
+    let (problems, output) = run_case(&case, |sandbox| {
+        vec![
+            CONTRACT_BOT_ARG.into(),
+            path.into(),
+            sandbox.query_result().into(),
+        ]
+    });
     match (problems.is_empty(), known_failure) {
         (true, None) | (false, Some(_)) => Ok(()),
         (true, Some(reason)) => Err(format!(
@@ -101,25 +110,28 @@ fn check_case(path: &Path, known_failure: Option<&str>) -> Result<(), Failed> {
     }
 }
 
-fn run_case(path: &Path) -> (Vec<String>, String) {
-    let text = fs::read_to_string(path).expect("cannot read the case");
-    let case: Value = serde_json::from_str(&text).expect("the case is not JSON");
+/// Runs `case` against the bot this binary plays when started with
+/// `bot_args(sandbox)`, and returns the mismatches and the bot's output.
+pub fn run_case(
+    case: &Value,
+    bot_args: impl Fn(&Sandbox) -> Vec<OsString>,
+) -> (Vec<String>, String) {
     let serves_http = case.get("requests").is_some();
     let mut attempt = 1;
     loop {
-        let sandbox = Sandbox::new(&case, serves_http.then(free_port));
-        let run = run_contract_bot(&case, path, &sandbox);
+        let sandbox = Sandbox::new(case, serves_http.then(free_port));
+        let run = run_bot(case, bot_args(&sandbox), &sandbox);
         if run.exited_before_serving && attempt < PORT_ATTEMPTS {
             attempt += 1;
             continue;
         }
-        return (compare(&case, &sandbox, &run), run.output());
+        return (compare(case, &sandbox, &run), run.output());
     }
 }
 
 /// The directories the runtime gives a bot, rooted in a temporary directory
 /// that is removed on drop.
-struct Sandbox {
+pub struct Sandbox {
     root: TempDir,
     port: Option<u16>,
 }
@@ -153,7 +165,7 @@ impl Sandbox {
         self.root.path().join("state").join(".the0-state")
     }
 
-    fn query_result(&self) -> PathBuf {
+    pub fn query_result(&self) -> PathBuf {
         self.root.path().join("query").join("result.json")
     }
 
@@ -207,18 +219,16 @@ impl Run {
     }
 }
 
-fn run_contract_bot(case: &Value, case_path: &Path, sandbox: &Sandbox) -> Run {
+fn run_bot(case: &Value, bot_args: Vec<OsString>, sandbox: &Sandbox) -> Run {
     let mut child = Command::new(std::env::current_exe().expect("cannot find this test binary"))
-        .arg(CONTRACT_BOT_ARG)
-        .arg(case_path)
-        .arg(sandbox.query_result())
+        .args(bot_args)
         .env_clear()
         .envs(sandbox.env(case))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("cannot start the contract bot");
+        .expect("cannot start the bot");
     let stdout = capture(child.stdout.take().unwrap());
     let stderr = capture(child.stderr.take().unwrap());
 
