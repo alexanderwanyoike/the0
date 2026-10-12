@@ -6,8 +6,13 @@ import {
   CustomBotVersion,
 } from "./custom-bot.types";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { isForeignKeyViolation } from "@/common/database-errors";
+import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
 import * as semver from "semver";
+
+export type RemoveVersionsFailure =
+  | { reason: "in-use" }
+  | { reason: "error"; message: string };
 
 @Injectable()
 export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
@@ -221,23 +226,35 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     }
   }
 
+  async removeVersion(
+    userId: string,
+    id: string,
+  ): Promise<Result<void, RemoveVersionsFailure>> {
+    return this.removeWhere(
+      and(eq(this.table.userId, userId), eq(this.table.id, id)),
+    );
+  }
+
   async removeAllByName(
     userId: string,
     name: string,
-  ): Promise<Result<void, string>> {
-    try {
-      await this.db
-        .delete(this.table)
-        .where(
-          and(
-            eq(this.table.userId, userId),
-            eq(this.table[this.keyField], name),
-          ),
-        );
+  ): Promise<Result<void, RemoveVersionsFailure>> {
+    return this.removeWhere(
+      and(eq(this.table.userId, userId), eq(this.table[this.keyField], name)),
+    );
+  }
 
+  private async removeWhere(
+    condition: SQL | undefined,
+  ): Promise<Result<void, RemoveVersionsFailure>> {
+    try {
+      await this.db.delete(this.table).where(condition);
       return Ok(null);
     } catch (error: unknown) {
-      return Failure(errorMessage(error));
+      if (isForeignKeyViolation(error)) {
+        return Failure({ reason: "in-use" });
+      }
+      return Failure({ reason: "error", message: errorMessage(error) });
     }
   }
 
