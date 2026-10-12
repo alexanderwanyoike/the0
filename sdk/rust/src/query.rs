@@ -194,12 +194,14 @@ pub fn run() {
             h.entry("/health".to_string())
                 .or_insert_with(|| Box::new(|_| json!({"status": "ok"})));
 
-            // Store paths for /info handler
-            let paths: Vec<String> = h.keys().cloned().collect();
-            h.entry("/info".to_string()).or_insert_with(move || {
-                let paths = paths.clone();
-                Box::new(move |_| json!({"available_queries": paths}))
-            });
+            if !h.contains_key("/info") {
+                let mut paths: Vec<String> = h.keys().cloned().collect();
+                paths.push("/info".to_string());
+                h.insert(
+                    "/info".to_string(),
+                    Box::new(move |_| json!({"available_queries": paths})),
+                );
+            }
         }
     }
 
