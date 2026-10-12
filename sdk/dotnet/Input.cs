@@ -96,8 +96,9 @@ public static class Input
     public static void Success(string message, object? data) => Success(message);
 
     /// <summary>
-    /// Output an error result to the result file and exit with code 1.
+    /// Output an error result to the result file, log the message and exit with code 1.
     /// Writes a JSON object with status "error" and the provided message,
+    /// prints the message to stderr as an error log line,
     /// then terminates the process with exit code 1.
     /// </summary>
     /// <param name="message">The error message to include in the output</param>
@@ -105,6 +106,7 @@ public static class Input
     {
         var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
         WriteResult($"{{\"status\":\"error\",\"message\":\"{escaped}\"}}");
+        Log(message, level: LogLevel.Error);
         Environment.Exit(1);
     }
 
