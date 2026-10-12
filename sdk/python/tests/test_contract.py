@@ -24,6 +24,8 @@ CONTRACT_BOT = os.path.join(TESTS_DIR, "contract_bot.py")
 
 RUN_TIMEOUT_SECONDS = 60
 SERVER_START_TIMEOUT_SECONDS = 30
+# sdk/contract/README.md, step 5, says why a server case may need a fresh port.
+PORT_ATTEMPTS = 3
 
 # Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 # says how the list is kept.
@@ -182,6 +184,7 @@ class Run(NamedTuple):
     stderr: str
     # Mismatches found while the process ran, such as HTTP responses.
     problems: List[str]
+    exited_before_serving: bool = False
 
     def output(self):
         return f"exit code: {self.exit_code}\n--- stdout\n{self.stdout}--- stderr\n{self.stderr}"
@@ -227,38 +230,47 @@ def run_case(path):
     with open(path) as f:
         case = json.load(f)
     serves_http = "requests" in case
-    sandbox = Sandbox(case, free_port() if serves_http else None)
-    try:
-        command = [sys.executable, CONTRACT_BOT, path, sandbox.query_result]
-        if serves_http:
-            run = run_server(case, sandbox, command)
-        else:
-            process = subprocess.run(
-                command,
-                env=sandbox.env(case),
-                capture_output=True,
-                text=True,
-                timeout=RUN_TIMEOUT_SECONDS,
-            )
-            run = Run(process.returncode, process.stdout, process.stderr, [])
+    for attempt in range(1, PORT_ATTEMPTS + 1):
+        sandbox = Sandbox(case, free_port() if serves_http else None)
+        try:
+            run = run_contract_bot(case, path, sandbox, serves_http)
+            if run.exited_before_serving and attempt < PORT_ATTEMPTS:
+                continue
+            return compare(case, sandbox, run), run.output()
+        finally:
+            sandbox.remove()
 
-        problems = list(run.problems)
-        expect = case.get("expect", {})
-        if "exit_code" in expect:
-            problems += mismatches(expect["exit_code"], run.exit_code, "exit_code")
-        for stream, text in (("stdout", run.stdout), ("stderr", run.stderr)):
-            if stream in expect:
-                problems += line_mismatches(expect[stream], text, stream)
-        if "result" in expect:
-            result_path = os.path.join(sandbox.code_dir, "result.json")
-            problems += file_mismatches(expect["result"], result_path, "result")
-        if "query_result" in expect:
-            problems += file_mismatches(expect["query_result"], sandbox.query_result, "query_result")
-        if "state_after" in expect:
-            problems += mismatches(expect["state_after"], read_state(sandbox.state_dir), "state_after")
-        return problems, run.output()
-    finally:
-        sandbox.remove()
+
+def run_contract_bot(case, path, sandbox, serves_http):
+    command = [sys.executable, CONTRACT_BOT, path, sandbox.query_result]
+    if serves_http:
+        return run_server(case, sandbox, command)
+    process = subprocess.run(
+        command,
+        env=sandbox.env(case),
+        capture_output=True,
+        text=True,
+        timeout=RUN_TIMEOUT_SECONDS,
+    )
+    return Run(process.returncode, process.stdout, process.stderr, [])
+
+
+def compare(case, sandbox, run):
+    problems = list(run.problems)
+    expect = case.get("expect", {})
+    if "exit_code" in expect:
+        problems += mismatches(expect["exit_code"], run.exit_code, "exit_code")
+    for stream, text in (("stdout", run.stdout), ("stderr", run.stderr)):
+        if stream in expect:
+            problems += line_mismatches(expect[stream], text, stream)
+    if "result" in expect:
+        result_path = os.path.join(sandbox.code_dir, "result.json")
+        problems += file_mismatches(expect["result"], result_path, "result")
+    if "query_result" in expect:
+        problems += file_mismatches(expect["query_result"], sandbox.query_result, "query_result")
+    if "state_after" in expect:
+        problems += mismatches(expect["state_after"], read_state(sandbox.state_dir), "state_after")
+    return problems
 
 
 def run_server(case, sandbox, command):
@@ -270,10 +282,12 @@ def run_server(case, sandbox, command):
         text=True,
     )
     problems = []
+    exited_before_serving = False
     try:
         not_ready = wait_for_port(sandbox.port, process)
         if not_ready:
             problems.append(not_ready)
+            exited_before_serving = process.poll() is not None
         else:
             for index, request in enumerate(case["requests"]):
                 where = f"requests[{index}] {request['method']} {request['target']}"
@@ -290,7 +304,7 @@ def run_server(case, sandbox, command):
         except subprocess.TimeoutExpired:
             process.kill()
             stdout, stderr = process.communicate()
-    return Run(process.returncode, stdout, stderr, problems)
+    return Run(process.returncode, stdout, stderr, problems, exited_before_serving)
 
 
 class TestContractCases(unittest.TestCase):
