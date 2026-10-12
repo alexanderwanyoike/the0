@@ -30,6 +30,7 @@
 #define THE0_QUERY_H
 
 #include <nlohmann/json.hpp>
+#include "state.h"
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -59,13 +60,11 @@ namespace query {
 using json = nlohmann::json;
 
 /**
- * Error thrown when attempting to modify state during query execution.
+ * The error state writes fail with during a query: state::set(),
+ * state::remove() and state::clear() throw it. A handler that catches it
+ * catches what state throws.
  */
-class ReadOnlyStateError : public std::runtime_error {
-public:
-    explicit ReadOnlyStateError(const std::string& msg)
-        : std::runtime_error(msg) {}
-};
+using ReadOnlyStateError = the0::state::ReadOnlyStateError;
 
 /**
  * Request object passed to handlers (Express-like).
