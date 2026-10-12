@@ -177,7 +177,11 @@ Query.Handler("/signals", req =>
 Query.Run();
 ```
 
-`Get<T>` throws a `JsonException` when the param's value is not a `T`. In server mode, a request with no JSON object body takes its params from the URL query string, and every value is then a string.
+In server mode, a request with no JSON object body takes its params from the URL query string, and every value is then a string. The accessors handle that and `null` params:
+- **`Get<T>` parses a string param as `T`,** so `req.Get("limit", 10)` reads `?limit=50` as 50. It throws a `JsonException` when the value is not a `T` either way.
+- **`Get<string>` reads like `Get(key)`:** a non-string value as its JSON text.
+- **`Get(key)`, `Params` and `Get<string>` treat a `null` param as absent,** so the default applies.
+- **The other `Get<T>` calls read a `null` param as `null`,** or as the default when `T` cannot hold `null` (`req.Get("cursor", 0)` gives 0). `JsonParams` keeps every `null`.
 
 State is read-only during an ephemeral query: `State.Set`, `State.Delete` and `State.Clear` throw `ReadOnlyStateError`, the SDK's one read-only error type.
 
