@@ -250,7 +250,10 @@ def _run_server():
 
             parsed = urlparse(self.path)
             path = parsed.path
-            _current_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+            params = self._json_body_params()
+            if params is None:
+                params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+            _current_params = params
 
             handler_fn = _handlers.get(path)
             if not handler_fn:
@@ -263,6 +266,24 @@ def _run_server():
                 self._send_json(200, {"status": "ok", "data": result})
             except Exception as e:
                 self._send_json(500, {"status": "error", "error": str(e)})
+
+        def _json_body_params(self):
+            """Params from a JSON object body, which keeps their types.
+
+            None means use the query string instead: the runtime sends params
+            in both, and manual curl calls use only the query string.
+            """
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return None
+            if length <= 0:
+                return None
+            try:
+                body = json.loads(self.rfile.read(length))
+            except ValueError:
+                return None
+            return body if isinstance(body, dict) else None
 
         def _send_json(self, status: int, data: dict):
             self.send_response(status)
