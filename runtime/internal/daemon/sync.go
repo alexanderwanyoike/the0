@@ -12,6 +12,7 @@ import (
 
 	"runtime/internal/constants"
 	"runtime/internal/k8s/health"
+	"runtime/internal/launch"
 	miniologger "runtime/internal/minio-logger"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
@@ -229,7 +230,7 @@ func (r *SyncRunner) run() {
 // newLogPublisherFromEnv creates a LogPublisher from NATS_URL env var.
 // Returns nil if NATS_URL is not set or connection fails.
 func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
-	natsURL := os.Getenv("NATS_URL")
+	natsURL := launch.ReadNATSURL(os.LookupEnv)
 	if natsURL == "" {
 		return nil
 	}
