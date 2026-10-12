@@ -270,6 +270,19 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 		}
 	})
 
+	t.Run("a query without params sends them as {} on both backends", func(t *testing.T) {
+		executable := dockerQueryExecutable()
+		executable.QueryParams = nil
+		pod, err := generator.GenerateQueryPod(roundTripBot, roundTripQueryPath, nil, roundTripResultKey)
+		require.NoError(t, err)
+
+		for _, s := range []sent{dockerSent(t, executable), podSent(container(t, pod.Spec.Containers, "bot"))} {
+			got, err := read(t, s.command, s.env)
+			require.NoError(t, err)
+			assert.Equal(t, "{}", got.QueryParams)
+		}
+	})
+
 	t.Run("kubernetes sync sidecar", func(t *testing.T) {
 		want := inPod(launchOf(launch.Run, "realtime"), true, true)
 		syncEnv := podSent(container(t, realtimePod.Spec.InitContainers, "sync")).env
