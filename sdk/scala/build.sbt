@@ -36,6 +36,14 @@ lazy val root = (project in file("."))
   .settings(
     name := "the0-sdk",
     libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % "3.2.18" % Test
+      "org.scalatest" %% "scalatest" % "3.2.18" % Test,
+      "com.lihaoyi" %% "ujson" % "4.0.2" % Test
+    ),
+    // ContractSpec starts each contract case in a JVM of its own, which needs the test
+    // classpath; javaOptions only reach the tests when they run in a forked JVM.
+    Test / fork := true,
+    Test / javaOptions ++= Seq(
+      s"-Dthe0.contract.classpath=${(Test / fullClasspath).value.files.mkString(java.io.File.pathSeparator)}",
+      s"-Dthe0.contract.cases=${(baseDirectory.value / ".." / "contract" / "cases").getCanonicalPath}"
     )
   )
