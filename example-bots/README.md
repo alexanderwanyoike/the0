@@ -147,7 +147,7 @@ The TypeScript examples use `the0-node` from npm:
 ```json
 {
   "dependencies": {
-    "the0-node": "^0.3.1"
+    "the0-node": "^0.4.0"
   }
 }
 ```
