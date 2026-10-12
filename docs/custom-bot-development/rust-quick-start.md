@@ -381,7 +381,7 @@ let amount = config["amount"].as_f64().unwrap_or(100.0);
 
 ### input::metric(type, data)
 
-Emits a metric to the platform dashboard:
+Emits a metric to the platform dashboard. The SDK adds a UTC ISO 8601 `timestamp` to each one:
 
 ```rust
 use the0_sdk::input;
@@ -401,24 +401,29 @@ input::metric("signal", &json!({
 
 ### input::success(message)
 
-Reports successful execution for scheduled bots:
+Reports successful execution for scheduled bots. `input::success_with_data` adds a `data` field to the result:
 
 ```rust
 use the0_sdk::input;
+use serde_json::json;
 
 input::success("Analysis complete");
+input::success_with_data("Analysis complete", &json!({ "processed": 100 }));
 ```
 
 ### input::error(message)
 
-Reports failure and terminates with exit code 1. This function does not return:
+Reports failure: writes an error result, prints the message to the bot's logs as an error line, and terminates with exit code 1. This function does not return. `input::error_with_data` adds a `data` field to the result; the log line carries only the message:
 
 ```rust
 use the0_sdk::input;
+use serde_json::json;
 
 if prices.is_empty() {
     input::error("No price data available");
 }
+
+input::error_with_data("Order rejected", &json!({ "code": "INSUFFICIENT_FUNDS" }));
 ```
 
 ### input::result(data)
@@ -435,6 +440,27 @@ input::result(&json!({
     "filled_amount": 0.5
 }));
 ```
+
+### query::try_handler(path, handler)
+
+Registers a [query](./queries) handler that can fail. An `Err` answers the query with `{"status": "error", "error": <message>}`, and `?` converts any error. `query::handler` registers a handler that cannot fail.
+
+Params are JSON values. `req.get(key)` returns a param as text, with a number, boolean, array or object as its JSON text. `req.get_as::<T>(key)` deserializes it into `T`, and `req.values()` returns every param with its JSON type:
+
+```rust
+use the0_sdk::{query, state};
+use serde_json::json;
+
+query::try_handler("/signals", |req| {
+    let limit = req.get_as::<usize>("limit").unwrap_or(10);
+    let signals: Vec<String> = state::get("signals")?;
+    Ok(json!({ "signals": signals.into_iter().take(limit).collect::<Vec<_>>() }))
+});
+
+query::run();
+```
+
+During a query, `state::set`, `state::delete` and `state::clear` fail with `StateError::ReadOnly`, which holds a `query::ReadOnlyStateError`.
 
 ## Building
 
