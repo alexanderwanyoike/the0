@@ -40,6 +40,19 @@ namespace the0 {
 
 using json = nlohmann::json;
 
+namespace detail {
+
+/**
+ * `value` as one line of JSON text. A std::string holds bytes, and dump()
+ * throws on bytes that are not UTF-8, so those become U+FFFD instead: what
+ * the SDK prints or writes is always JSON, and printing it never throws.
+ */
+inline std::string to_json_text(const json& value) {
+    return value.dump(-1, ' ', false, json::error_handler_t::replace);
+}
+
+} // namespace detail
+
 /**
  * Get the path to the result file.
  */
@@ -146,7 +159,7 @@ inline std::string iso_timestamp(std::chrono::system_clock::time_point time) {
 inline void metric(const std::string& metric_type, json data) {
     data["_metric"] = metric_type;
     data["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
-    std::cout << data.dump() << std::endl;
+    std::cout << detail::to_json_text(data) << std::endl;
 }
 
 /**
@@ -196,13 +209,13 @@ inline void log(const std::string& message, const json& data = json::object(), L
     output["level"] = log_level_str(level);
     output["message"] = message;
     output["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
-    std::cerr << output.dump() << std::endl;
+    std::cerr << detail::to_json_text(output) << std::endl;
 }
 
 namespace detail {
 
 [[noreturn]] inline void exit_with_error(const json& error_result) {
-    write_result(error_result.dump());
+    write_result(to_json_text(error_result));
     log(error_result["message"].get<std::string>(), json::object(), LogLevel::Error);
     std::exit(1);
 }
@@ -222,7 +235,7 @@ inline void success(const std::string& message) {
         {"status", "success"},
         {"message", message}
     };
-    write_result(r.dump());
+    write_result(detail::to_json_text(r));
 }
 
 /**
@@ -237,7 +250,7 @@ inline void success(const std::string& message, const json& data) {
         {"message", message},
         {"data", data}
     };
-    write_result(r.dump());
+    write_result(detail::to_json_text(r));
 }
 
 /**
@@ -282,7 +295,7 @@ inline void success(const std::string& message, const json& data) {
  * @param data The JSON object to output
  */
 inline void result(const json& data) {
-    write_result(data.dump());
+    write_result(detail::to_json_text(data));
 }
 
 /**
@@ -303,7 +316,7 @@ inline void result(const std::string& status, const std::string& message, const 
     for (auto& [key, value] : data.items()) {
         output[key] = value;
     }
-    write_result(output.dump());
+    write_result(detail::to_json_text(output));
 }
 
 } // namespace the0

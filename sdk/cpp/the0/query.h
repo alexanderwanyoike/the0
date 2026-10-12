@@ -296,7 +296,7 @@ inline void write_result(const json& result) {
         }
         std::ofstream file(result_path);
         if (file.is_open()) {
-            file << result.dump();
+            file << the0::detail::to_json_text(result);
             file.close();
         } else {
             std::cerr << "RESULT_ERROR: Failed to open result file for writing" << std::endl;
@@ -440,20 +440,20 @@ inline void run_server() {
                 available.push_back(kv.first);
             }
             status = "404 Not Found";
-            response_body = json{
+            response_body = the0::detail::to_json_text(json{
                 {"status", "error"},
                 {"error", "No handler for path: " + path},
                 {"available", available}
-            }.dump();
+            });
         } else {
             try {
                 Request req(path, params);
                 json data = it->second(req);
                 status = "200 OK";
-                response_body = json{{"status", "ok"}, {"data", data}}.dump();
+                response_body = the0::detail::to_json_text(json{{"status", "ok"}, {"data", data}});
             } catch (const std::exception& e) {
                 status = "500 Internal Server Error";
-                response_body = json{{"status", "error"}, {"error", e.what()}}.dump();
+                response_body = the0::detail::to_json_text(json{{"status", "error"}, {"error", e.what()}});
             }
         }
 
