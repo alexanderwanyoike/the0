@@ -198,7 +198,7 @@ object JsonValue {
     private def fail(): Nothing = throw new NotJson
   }
 
-  private def quote(text: String): String = {
+  private[the0] def quote(text: String): String = {
     val out = new StringBuilder("\"")
     text.foreach {
       case '"' => out.append("\\\"")
