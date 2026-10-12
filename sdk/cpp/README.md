@@ -129,6 +129,7 @@ the0::log("Order placed", {{"order_id", "o-1"}, {"qty", 2}});
 ### Output
 
 - Timestamps are UTC ISO 8601 strings with milliseconds, ending in `Z`.
+- Each metric and log line is flushed as it is printed, so a realtime bot's lines reach its logs straight away.
 - Results, metric lines and log lines go through nlohmann/json, so quotes, backslashes and control characters are escaped, in the metric type too.
 - Text that is not valid UTF-8 is written with U+FFFD in place of the bad bytes, so writing it never throws.
 - `data` must not use the SDK's own keys (`_metric`, `level`, `message`, `timestamp`).
@@ -205,7 +206,7 @@ int main() {
 
 **Errors.** A handler fails by throwing. The response is `{"status": "error", "error": <message>}`: the query server answers 500 and keeps serving, and an ephemeral query exits 1. The message is `what()` for a `std::exception` and the text for a thrown `const char*` or `std::string`. A path with no handler is an error too, with `available` listing the paths the bot answers; the query server answers it with 404.
 
-**The query server** answers every request with `Content-Type: application/json` and `Connection: close`. It reads a body by its `Content-Length`. It answers 400 when it cannot read a request: a `Content-Length` that is not a number, a body over 1 MiB, a `Transfer-Encoding` body, or a client that sends no complete request within 5 seconds. It prints its start line and its error lines as log lines.
+**The query server** answers every request with `Content-Type: application/json` and `Connection: close`. It reads a body by its `Content-Length`. It answers 400 when it cannot read a request: a `Content-Length` that is not a number, a body over 1 MiB, a `Transfer-Encoding` body, or a client that sends no complete request within 10 seconds. A client that connects and sends nothing for 10 seconds is closed without an answer. It prints its start line and its error lines as log lines.
 
 `the0::query::get_config()` returns the bot's config, and `the0::query::get_params()` the current params as text.
 
