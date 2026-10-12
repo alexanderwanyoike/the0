@@ -148,18 +148,13 @@ type sent struct {
 func dockerSent(t *testing.T, executable model.Executable) sent {
 	t.Helper()
 	config, _ := docker.ContainerConfig(dockerConfig, executable, roundTripImage)
-	command := []string(config.Cmd)
-	if len(command) == 0 {
-		// The runtime image's CMD (runtime/Dockerfile).
-		command = []string{launch.Binary, "execute"}
-	}
 	var env []launch.Var
 	for _, entry := range config.Env {
 		name, value, ok := strings.Cut(entry, "=")
 		require.True(t, ok, "env entry %q", entry)
 		env = append(env, launch.Var{Name: name, Value: value})
 	}
-	return sent{command: command, env: env}
+	return sent{command: config.Cmd, env: env}
 }
 
 func podSent(c corev1.Container) sent {
