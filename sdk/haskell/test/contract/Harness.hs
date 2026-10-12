@@ -59,7 +59,6 @@ knownFailures :: [(String, String)]
 knownFailures =
     [ ("query-ephemeral-params", "ephemeral params turn every value into a string")
     , ("query-server-params-json-body", "the query server reads params from the query string only")
-    , ("query-server-start-line", "the start line is {\"_log\": \"info\", ...} with no timestamp")
     , ("query-server-unknown-path", "the query server's 404 has no available list")
     ]
 
