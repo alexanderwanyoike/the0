@@ -399,12 +399,16 @@ std::optional<Response> parse_response(const std::string& raw, std::string& erro
 }
 
 /**
- * The bytes of a request. A C++-only `raw` field is sent as it is, for
- * requests a well-behaved client would never send.
+ * The bytes of a request, in the parts it is sent in. A C++-only `raw`
+ * field is sent as it is, for requests a well-behaved client would never
+ * send; as an array, its parts are sent `pause_ms` apart.
  */
-std::string request_message(int port, const json& request) {
+std::vector<std::string> request_parts(int port, const json& request) {
     if (request.contains("raw")) {
-        return request["raw"].get<std::string>();
+        if (request["raw"].is_array()) {
+            return request["raw"].get<std::vector<std::string>>();
+        }
+        return {request["raw"].get<std::string>()};
     }
     const std::string method = request.at("method").get<std::string>();
     const std::string target = request.at("target").get<std::string>();
@@ -424,7 +428,7 @@ std::string request_message(int port, const json& request) {
     if (!body.empty() || method == "POST") {
         message += "Content-Length: " + std::to_string(body.size()) + "\r\n";
     }
-    return message + "\r\n" + body;
+    return {message + "\r\n" + body};
 }
 
 /**
@@ -433,7 +437,7 @@ std::string request_message(int port, const json& request) {
  */
 std::optional<Response> send_request(int port, const json& request, std::string& error,
                                      std::vector<int>& held) {
-    const std::string message = request_message(port, request);
+    const std::vector<std::string> parts = request_parts(port, request);
 
     int fd = connect_to(port);
     if (fd < 0) {
@@ -444,16 +448,22 @@ std::optional<Response> send_request(int port, const json& request, std::string&
     timeout.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(RUN_TIMEOUT).count();
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-    size_t sent = 0;
-    while (sent < message.size()) {
-        ssize_t n = send(fd, message.data() + sent, message.size() - sent, SEND_FLAGS);
-        if (n <= 0) {
-            if (n < 0 && errno == EINTR) continue;
-            // The server may answer before reading a body it does not want;
-            // its response is still worth reading.
-            break;
+    for (size_t part = 0; part < parts.size(); ++part) {
+        if (part > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(request.value("pause_ms", 0)));
         }
-        sent += static_cast<size_t>(n);
+        const std::string& message = parts[part];
+        size_t sent = 0;
+        while (sent < message.size()) {
+            ssize_t n = send(fd, message.data() + sent, message.size() - sent, SEND_FLAGS);
+            if (n <= 0) {
+                if (n < 0 && errno == EINTR) continue;
+                // The server may answer before reading a body it does not
+                // want; its response is still worth reading.
+                break;
+            }
+            sent += static_cast<size_t>(n);
+        }
     }
 
     // C++-only: a client that gives up, resetting the connection after
