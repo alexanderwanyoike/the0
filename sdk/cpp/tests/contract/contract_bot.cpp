@@ -95,14 +95,15 @@ json perform(const json& step, const Request* request, const Bound& bound) {
     }
     if (op == "success") {
         if (args.contains("data")) {
-            throw std::runtime_error("this SDK's success() takes no data");
+            the0::success(text("message"), args["data"]);
+        } else {
+            the0::success(text("message"));
         }
-        the0::success(text("message"));
         return nullptr;
     }
     if (op == "error") {
         if (args.contains("data")) {
-            throw std::runtime_error("this SDK's error() takes no data");
+            the0::error(text("message"), args["data"]);
         }
         the0::error(text("message"));
     }

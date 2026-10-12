@@ -69,6 +69,24 @@ TEST_SUITE("the0::success") {
         CHECK(json["message"] == "");
     }
 
+    TEST_CASE("writes no data key without data") {
+        ResultFileContext ctx;
+        the0::success("Bought 0.5 BTC");
+
+        auto json = the0::json::parse(ctx.read_result());
+        CHECK_FALSE(json.contains("data"));
+    }
+
+    TEST_CASE("puts data under the data key") {
+        ResultFileContext ctx;
+        the0::success("Bought 0.5 BTC", {{"order_id", "o-1"}, {"filled", 0.5}});
+
+        auto json = the0::json::parse(ctx.read_result());
+        CHECK(json["status"] == "success");
+        CHECK(json["message"] == "Bought 0.5 BTC");
+        CHECK(json["data"] == the0::json{{"order_id", "o-1"}, {"filled", 0.5}});
+    }
+
     TEST_CASE("handles very long messages") {
         ResultFileContext ctx;
         std::string long_message(10000, 'x');
