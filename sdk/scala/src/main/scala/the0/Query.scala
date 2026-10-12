@@ -272,7 +272,8 @@ object Query {
           // Find and execute handler
           handlers.get(path) match {
             case None =>
-              sendResponse(writer, 404, s"""{"status": "error", "error": "No handler for path: $path"}""")
+              val available = handlers.keys.toSeq.map(p => s""""$p"""").mkString(",")
+              sendResponse(writer, 404, s"""{"status": "error", "error": "No handler for path: $path", "available": [$available]}""")
 
             case Some(fn) =>
               try {
