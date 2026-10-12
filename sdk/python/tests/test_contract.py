@@ -190,7 +190,8 @@ class Run(NamedTuple):
 class Sandbox:
     """The directories the runtime gives a bot, rooted in a temporary directory."""
 
-    def __init__(self, case):
+    def __init__(self, case, port):
+        self.port = port
         self.root = tempfile.mkdtemp(prefix="the0-contract-")
         self.code_dir = os.path.join(self.root, "bot")
         self.state_dir = os.path.join(self.root, "state", ".the0-state")
@@ -202,7 +203,6 @@ class Sandbox:
             for key, value in case["state_before"].items():
                 with open(os.path.join(self.state_dir, key + ".json"), "w") as f:
                     json.dump(value, f)
-        self.port = free_port() if "requests" in case else None
 
     def env(self, case):
         placeholders = {
@@ -226,10 +226,11 @@ class Sandbox:
 def run_case(path):
     with open(path) as f:
         case = json.load(f)
-    sandbox = Sandbox(case)
+    serves_http = "requests" in case
+    sandbox = Sandbox(case, free_port() if serves_http else None)
     try:
         command = [sys.executable, CONTRACT_BOT, path, sandbox.query_result]
-        if "requests" in case:
+        if serves_http:
             run = run_server(case, sandbox, command)
         else:
             process = subprocess.run(
