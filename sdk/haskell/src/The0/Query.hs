@@ -102,7 +102,12 @@ getParamAs req key = Map.lookup key (reqValues req) >>= \value ->
         Error _ -> Nothing
 
 textView :: Request -> (String, Map.Map String String)
-textView (RequestValues path values) = (path, Map.map valueToString values)
+textView (RequestValues path values) = (path, Map.mapMaybe text values)
+  where
+    -- The runtime leaves a null param out of the query string, so text
+    -- handlers have always seen it as absent.
+    text Null = Nothing
+    text value = Just (valueToString value)
 
 -- | Get a parameter value from the request.
 getParam :: Request -> String -> String -> String
