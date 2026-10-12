@@ -97,14 +97,17 @@ fn state_write_fails_with_the_query_modules_read_only_error() {
 }
 
 #[test]
-fn state_delete_returns_false_in_query_mode() {
+fn state_delete_throws_in_query_mode() {
     let mut env = EnvGuard::new();
     env.set("QUERY_PATH", "/portfolio");
     env.set("STATE_DIR", "/tmp/the0-test-state");
 
-    // delete returns false in query mode (can't modify state)
-    let result = state::delete("test_key").unwrap();
-    assert!(!result);
+    let result = state::delete("test_key");
+
+    assert!(
+        matches!(result, Err(state::StateError::ReadOnly(_))),
+        "{result:?}"
+    );
 }
 
 #[test]

@@ -32,19 +32,26 @@ const PORT_ATTEMPTS: usize = 3;
 // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 // says how the list is kept.
 const KNOWN_FAILURES: &[(&str, &str)] = &[
-    ("query-ephemeral-handler-error", "a handler can only fail by panicking"),
-    ("query-ephemeral-params", "every param is dropped when any is not a string"),
     (
-        "query-ephemeral-read-only-before-key-check",
-        "state fails with StateError::ReadOnly, not query::ReadOnlyStateError; delete() returns false",
+        "query-ephemeral-handler-error",
+        "a handler can only fail by panicking",
     ),
     (
-        "query-ephemeral-state-read-only",
-        "state fails with StateError::ReadOnly, not query::ReadOnlyStateError; delete() returns false",
+        "query-ephemeral-params",
+        "every param is dropped when any is not a string",
     ),
-    ("query-server-handler-error", "a handler can only fail by panicking, which stops the server"),
-    ("query-server-params-json-body", "the server reads params from the query string only"),
-    ("query-server-params-query-string", "the server does not URL-decode the query string"),
+    (
+        "query-server-handler-error",
+        "a handler can only fail by panicking, which stops the server",
+    ),
+    (
+        "query-server-params-json-body",
+        "the server reads params from the query string only",
+    ),
+    (
+        "query-server-params-query-string",
+        "the server does not URL-decode the query string",
+    ),
 ];
 
 fn main() {
