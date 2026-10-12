@@ -326,6 +326,11 @@ pub mod input {
         }
 
         #[test]
+        fn iso_timestamp_skips_the_leap_day_of_a_century_year() {
+            assert_eq!(at(4_107_542_400, 0), "2100-03-01T00:00:00.000Z");
+        }
+
+        #[test]
         fn iso_timestamp_handles_the_last_second_of_a_year() {
             assert_eq!(at(1_735_689_599, 999), "2024-12-31T23:59:59.999Z");
         }
