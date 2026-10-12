@@ -133,6 +133,12 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     }
   }
 
+  test("params with a duplicate key give no params") {
+    for (text <- Seq("""{"limit":5,"limit":7}""", """{"filter":{"side":"buy","side":"sell"}}""")) {
+      assert(Query.paramsFromJson(text) == Map.empty, s"Should give no params for: $text")
+    }
+  }
+
   test("params the parser cannot hold give no params instead of failing") {
     val deep = "{\"a\":" + "[" * 100000 + "]" * 100000 + "}"
     for (text <- Seq(deep, """{"limit":1e99999999999}""")) {
@@ -165,6 +171,13 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     val body = serveOne("/unicode")
     val data = body.toOption.flatMap(text => Try(ujson.read(text)("data").str).toOption)
     assert(data == Some("café €"), s"Should read the whole body: $body")
+  }
+
+  test("the query server falls back to the query string when the body has a duplicate key") {
+    Query.handler("/echo-params") { req => JsonValue.Obj(req.jsonParams).render }
+    val body = serveOne("/echo-params?limit=5", Some("""{"limit":7,"limit":8}"""))
+    val data = body.toOption.flatMap(text => Try(ujson.read(text)("data")).toOption)
+    assert(data == Some(ujson.Obj("limit" -> "5")), s"Should answer from the query string: $body")
   }
 
   // Serves one request on an in-process query server and returns the response body.
