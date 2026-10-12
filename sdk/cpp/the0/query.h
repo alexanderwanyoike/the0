@@ -40,6 +40,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -309,10 +310,26 @@ inline void write_result(const json& result) {
 
 namespace detail {
 
-/** The JSON object `text` holds, or nothing when it holds anything else. */
+/**
+ * The JSON object `text` holds, or nothing when it holds anything else. An
+ * object that repeats a key at any depth counts as unreadable, as the bot
+ * contract reads it, where nlohmann/json alone would keep the last value.
+ */
 inline std::optional<json> json_object(const std::string& text) {
-    json value = json::parse(text, nullptr, false);
-    if (value.is_discarded() || !value.is_object()) {
+    std::vector<std::set<std::string>> keys_seen;
+    bool duplicate_key = false;
+    auto check_keys = [&](int, json::parse_event_t event, json& parsed) {
+        if (event == json::parse_event_t::object_start) {
+            keys_seen.emplace_back();
+        } else if (event == json::parse_event_t::key) {
+            duplicate_key |= !keys_seen.back().insert(parsed.get<std::string>()).second;
+        } else if (event == json::parse_event_t::object_end) {
+            keys_seen.pop_back();
+        }
+        return true;
+    };
+    json value = json::parse(text, check_keys, false);
+    if (duplicate_key || value.is_discarded() || !value.is_object()) {
         return std::nullopt;
     }
     return value;
