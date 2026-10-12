@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace The0.Tests;
@@ -180,6 +182,78 @@ public class QueryTests : IDisposable
         var req = new Query.QueryRequest("/test", new Dictionary<string, string>());
 
         Assert.Equal("default", req.Get("missing", "default"));
+    }
+
+    private static Query.QueryRequest TypedRequest() =>
+        new("/test", JsonNode.Parse(
+            """{"symbol":"BTC/USD","limit":5,"live":true,"symbols":["AAPL","MSFT"],"filter":{"side":"buy"},"cursor":null}"""
+        )!.AsObject());
+
+    [Fact]
+    public void QueryRequest_JsonParamsHoldsEveryParamAsItsJsonValue()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(
+            """{"symbol":"BTC/USD","limit":5,"live":true,"symbols":["AAPL","MSFT"],"filter":{"side":"buy"},"cursor":null}""",
+            req.JsonParams.ToJsonString());
+    }
+
+    [Fact]
+    public void QueryRequest_JsonParamsHoldsStringParamsAsJsonStrings()
+    {
+        var req = new Query.QueryRequest("/test", new Dictionary<string, string> { ["limit"] = "5" });
+
+        Assert.Equal("""{"limit":"5"}""", req.JsonParams.ToJsonString());
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetDeserializesTheValue()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(5, req.Get<int>("limit"));
+        Assert.True(req.Get<bool>("live"));
+        Assert.Equal(new List<string> { "AAPL", "MSFT" }, req.Get<List<string>>("symbols"));
+        Assert.Equal("buy", req.Get<Dictionary<string, string>>("filter")!["side"]);
+        Assert.Null(req.Get<int?>("cursor"));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetReturnsDefaultForMissing()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(10, req.Get("offset", 10));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetThrowsWhenTheValueIsNotThatType()
+    {
+        var req = TypedRequest();
+
+        Assert.Throws<JsonException>(() => req.Get<int>("symbol"));
+    }
+
+    [Fact]
+    public void QueryRequest_StringGetReturnsAStringParamAsIs()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("BTC/USD", req.Get("symbol"));
+        Assert.Equal("BTC/USD", req.Params["symbol"]);
+    }
+
+    [Fact]
+    public void QueryRequest_StringGetReturnsAnyOtherParamAsItsJsonText()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("5", req.Get("limit"));
+        Assert.Equal("true", req.Get("live", "false"));
+        Assert.Equal("""["AAPL","MSFT"]""", req.Get("symbols"));
+        Assert.Equal("""{"side":"buy"}""", req.Params["filter"]);
+        Assert.Equal("null", req.Get("cursor"));
     }
 
     #endregion
