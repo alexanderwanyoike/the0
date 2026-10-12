@@ -256,6 +256,14 @@ public class QueryTests : IDisposable
     }
 
     [Fact]
+    public void QueryRequest_StringGetLeavesNonAsciiAndHtmlCharactersUnescaped()
+    {
+        var req = new Query.QueryRequest("/test", JsonNode.Parse("""{"filter":{"name":"é<&'"}}""")!.AsObject());
+
+        Assert.Equal("""{"name":"é<&'"}""", req.Get("filter"));
+    }
+
+    [Fact]
     public void QueryRequest_StringAccessorsTreatANullParamAsAbsent()
     {
         var req = TypedRequest();
