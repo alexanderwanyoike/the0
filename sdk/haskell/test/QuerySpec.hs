@@ -155,6 +155,11 @@ spec = do
             Query.getParam typedRequest "filter" "" `shouldBe` "{\"side\":\"buy\"}"
             Map.lookup "live" (reqParams typedRequest) `shouldBe` Just "true"
 
+        it "the string accessors keep non-ASCII text in a non-string param's JSON text" $ do
+            let req = RequestValues "/echo" (Map.fromList [("filter", object ["name" .= ("café ✓" :: String)])])
+            Query.getParam req "filter" "" `shouldBe` "{\"name\":\"café ✓\"}"
+            Query.getParamAs req "filter" `shouldBe` Just ("{\"name\":\"café ✓\"}" :: String)
+
         it "the string accessors treat a null param as absent" $ do
             Query.getParam typedRequest "cursor" "none" `shouldBe` "none"
             Map.member "cursor" (reqParams typedRequest) `shouldBe` False
