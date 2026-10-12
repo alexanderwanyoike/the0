@@ -274,7 +274,7 @@ def _run_server():
             except Exception as e:
                 self._send_json(500, {"status": "error", "error": str(e)})
 
-        def _json_body_params(self):
+        def _json_body_params(self) -> Optional[Dict[str, Any]]:
             """Params from a JSON object body, or None to use the query string."""
             try:
                 length = int(self.headers.get("Content-Length") or 0)
