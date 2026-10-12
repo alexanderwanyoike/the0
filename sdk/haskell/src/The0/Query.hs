@@ -185,47 +185,45 @@ writeResult result = do
 -- | Execute single query and write result to /query/result.json.
 runEphemeral :: String -> IO ()
 runEphemeral queryPath = do
-    -- Parse parameters from environment
     mParamsStr <- lookupEnv "QUERY_PARAMS"
-    case mParamsStr of
-        Just paramsStr -> case decode (BL.pack paramsStr) of
-            Just (Object o) -> do
-                let params = Map.fromList [(T.unpack (toText k), valueToString v) | (k, v) <- KM.toList o]
-                writeIORef currentParamsRef params
-            _ -> writeIORef currentParamsRef Map.empty
-        Nothing -> writeIORef currentParamsRef Map.empty
+    let params = case mParamsStr >>= decode . BL.pack of
+            Just (Object o) -> Map.fromList [(T.unpack (toText k), valueToString v) | (k, v) <- KM.toList o]
+            _ -> Map.empty
+    outcome <- answer (Request queryPath params)
+    writeResult (answerBody outcome)
+    when (answerStatus outcome /= 200) $ exitWith (ExitFailure 1)
 
-    -- Find and execute handler
+-- | What a query comes to in either mode: the status the query server
+-- answers with, and the body both modes send. An ephemeral query exits 0
+-- only on 200.
+data Answer = Answer
+    { answerStatus :: Int
+    , answerBody   :: Value
+    }
+
+-- | Run the handler registered for the request's path, or report that there
+-- is none.
+answer :: Request -> IO Answer
+answer req = do
+    writeIORef currentParamsRef (reqParams req)
     handlers <- readIORef handlerRegistry
-    params <- readIORef currentParamsRef
-    case Map.lookup queryPath handlers of
-        Nothing -> do
-            let available = Map.keys handlers
-            writeResult $ object
-                [ "status" .= ("error" :: String)
-                , "error" .= ("No handler for path: " ++ queryPath)
-                , "available" .= available
-                ]
-            exitWith (ExitFailure 1)
-
+    case Map.lookup (reqPath req) handlers of
+        Nothing -> return $ Answer 404 $ object
+            [ "status" .= ("error" :: String)
+            , "error" .= ("No handler for path: " ++ reqPath req)
+            , "available" .= Map.keys handlers
+            ]
         Just fn -> do
-            let req = Request queryPath params
-            result <- (Right <$> fn req) `catch` handleError
-            case result of
-                Left err -> do
-                    writeResult $ object
-                        [ "status" .= ("error" :: String)
-                        , "error" .= err
-                        ]
-                    exitWith (ExitFailure 1)
-                Right val ->
-                    writeResult $ object
-                        [ "status" .= ("ok" :: String)
-                        , "data" .= val
-                        ]
-  where
-    handleError :: SomeException -> IO (Either String Value)
-    handleError e = return $ Left (show e)
+            result <- (Right <$> fn req) `catch` \(e :: SomeException) -> return (Left (show e))
+            return $ case result of
+                Left err -> Answer 500 $ object
+                    [ "status" .= ("error" :: String)
+                    , "error" .= err
+                    ]
+                Right val -> Answer 200 $ object
+                    [ "status" .= ("ok" :: String)
+                    , "data" .= val
+                    ]
 
 -- | Start HTTP server on port 9476 for realtime bots.
 runServer :: IO ()
@@ -269,40 +267,10 @@ handleConnection sock = do
             case parts of
                 (_method:pathWithQuery:_) -> do
                     let (path, params) = parsePathAndQuery pathWithQuery
-                    writeIORef currentParamsRef params
-
-                    handlers <- readIORef handlerRegistry
-                    (status, body) <- case Map.lookup path handlers of
-                        Nothing -> return
-                            ( "404 Not Found"
-                            , encode $ object
-                                [ "status" .= ("error" :: String)
-                                , "error" .= ("No handler for path: " ++ path)
-                                , "available" .= Map.keys handlers
-                                ]
-                            )
-                        Just fn -> do
-                            let req = Request path params
-                            result <- (Right <$> fn req) `catch` (\e -> return $ Left (show (e :: SomeException)))
-                            case result of
-                                Left err -> return
-                                    ( "500 Internal Server Error"
-                                    , encode $ object
-                                        [ "status" .= ("error" :: String)
-                                        , "error" .= err
-                                        ]
-                                    )
-                                Right val -> return
-                                    ( "200 OK"
-                                    , encode $ object
-                                        [ "status" .= ("ok" :: String)
-                                        , "data" .= val
-                                        ]
-                                    )
-
-                    let bodyStr = BL.toStrict body
+                    outcome <- answer (Request path params)
+                    let bodyStr = BL.toStrict (encode (answerBody outcome))
                         response = BS.pack (concatMap (++ "\r\n")
-                            [ "HTTP/1.1 " ++ status
+                            [ "HTTP/1.1 " ++ show (answerStatus outcome) ++ " " ++ reasonPhrase (answerStatus outcome)
                             , "Content-Type: application/json"
                             , "Content-Length: " ++ show (BS.length bodyStr)
                             , ""
@@ -312,6 +280,11 @@ handleConnection sock = do
         _ -> return ()
 
     close sock
+
+reasonPhrase :: Int -> String
+reasonPhrase 200 = "OK"
+reasonPhrase 404 = "Not Found"
+reasonPhrase _ = "Internal Server Error"
 
 -- | Parse path and query string from URL.
 parsePathAndQuery :: String -> (String, Map.Map String String)
