@@ -52,13 +52,14 @@ object Query {
    * keep `params` and `jsonParams` in step.
    *
    * @param path The query path
-   * @param params Each parameter as text: a string as itself, any other JSON value as its JSON text
+   * @param params Each parameter as text: a string as itself, any other JSON value as its
+   *               JSON text, leaving out null parameters
    * @param jsonParams Each parameter as the JSON value it was sent as
    */
   case class Request(path: String, params: Map[String, String], jsonParams: Map[String, JsonValue]) {
     /**
      * Get a parameter value as text: a string as itself, any other JSON value as its
-     * JSON text, such as `5`, `true`, `null` or `{"side":"buy"}`.
+     * JSON text, such as `5`, `true` or `{"side":"buy"}`. A null parameter counts as absent.
      * @param key The parameter key
      * @return Some(value) if found, None otherwise
      */
@@ -98,9 +99,10 @@ object Query {
      * Build a request whose parameters keep their JSON types.
      */
     def fromJson(path: String, jsonParams: Map[String, JsonValue]): Request = {
-      val text = jsonParams.map {
+      // The runtime leaves null params out of the query string, so a default still applies.
+      val text = jsonParams.collect {
         case (key, JsonValue.Str(value)) => key -> value
-        case (key, value) => key -> value.render
+        case (key, value) if value != JsonValue.Null => key -> value.render
       }
       Request(path, text, jsonParams)
     }
