@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.11.4
-appVersion: "1.16.3"
+version: 0.12.0
+appVersion: "1.17.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,15 +31,19 @@ annotations:
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: fixed
-      description: "Failed Python and Node bot runs now fail: a bot that calls the0.error(), exits non-zero or raises an uncaught exception ends its run with a non-zero exit and logs its error message, instead of being recorded as a success. A bot's own success result and data are no longer overwritten"
+      description: "A bot change reaches the runtime even when NATS is down at that moment: the change and its event are saved together in a new outbox table (migration 0007), and a relay keeps sending the event until JetStream confirms it. Requests no longer wait on NATS"
+    - kind: fixed
+      description: "The runtime reads bot events through durable JetStream consumers, so events published while it is restarting are no longer lost, a failed event is retried instead of dropped, and handlers are safe to repeat"
+    - kind: fixed
+      description: "Updates and deletes of a bot running another user's custom bot now reach the runtime, and a delete whose custom bot version is no longer in the catalogue is sent to both the realtime and the scheduled subject"
+    - kind: fixed
+      description: "A schedule update that changes nothing no longer fails and holds up later schedule events"
     - kind: changed
-      description: "Kubernetes no longer retries a failed scheduled run (Job backoffLimit 0, as in Docker mode), so a run that failed after placing an order cannot place it again. The next run comes from the schedule, and existing CronJobs are updated on the first reconcile"
-    - kind: security
-      description: "MCP bot tools go through the same bot service as the REST API and CLI: config validation and the major version guard apply, the runtime hears about MCP deploys, updates and deletes, and deleting a bot you do not own reports not found. A partial-config bot_update is now rejected, as it is over REST"
-    - kind: fixed
-      description: "Realtime bot queries deliver their params in the URL query string, where every SDK query server reads them. Null params stay out of the query string"
-    - kind: fixed
-      description: "the0 custom-bot deploy builds a custom bot's frontend once per deploy instead of twice"
+      description: "Bot deploy, update and delete are commands through one command bus shared by REST and MCP, each carrying who made the change; repositories are private to their modules, enforced by a test in the api's test suite"
+    - kind: changed
+      description: "One auth guard serves REST and MCP: API keys are accepted in x-api-key on every route, and x-api-key wins when a request also sends Authorization"
+    - kind: changed
+      description: "THE0_EVENTS keeps message ids for one hour to drop repeated publishes; the setting is updated in place on the existing stream"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
