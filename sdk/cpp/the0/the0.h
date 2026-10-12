@@ -203,12 +203,13 @@ inline std::string result_file_path() {
  * Write result to the result file.
  */
 inline void write_result(const std::string& content) {
-    std::ofstream f(result_file_path());
+    const std::string path = result_file_path();
+    std::ofstream f(path);
     if (f.is_open()) {
         f << content;
         f.close();
     } else {
-        std::cerr << "RESULT_ERROR: Failed to write result file" << std::endl;
+        log("Failed to write the result file " + path, json::object(), LogLevel::Error);
     }
 }
 

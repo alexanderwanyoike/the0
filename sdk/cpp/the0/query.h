@@ -453,10 +453,12 @@ inline void write_result(const json& result) {
             file << the0::detail::to_json_text(result);
             file.close();
         } else {
-            std::cerr << "RESULT_ERROR: Failed to open result file for writing" << std::endl;
+            the0::log("Failed to write the query result file " + result_path.string(), json::object(),
+                      the0::LogLevel::Error);
         }
     } catch (const std::exception& e) {
-        std::cerr << "RESULT_ERROR: Failed to write result file: " << e.what() << std::endl;
+        the0::log("Failed to write the query result file " + result_path.string() + ": " + e.what(),
+                  json::object(), the0::LogLevel::Error);
     }
 }
 
