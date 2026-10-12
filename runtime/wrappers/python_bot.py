@@ -11,7 +11,6 @@ import signal
 import traceback
 import threading
 import logging
-from datetime import datetime, timezone
 
 DEFAULT_SUCCESS = {"status": "success", "message": "Bot executed successfully"}
 
@@ -64,18 +63,6 @@ def settle_result(fallback):
 
 def is_error_result(result):
     return isinstance(result, dict) and result.get("status") == "error"
-
-def report_error(result):
-    # The SDK's error() only writes result.json, which nothing reads for bot
-    # runs, so without this line a failed run leaves no trace in the logs.
-    if not is_error_result(result):
-        return
-    entry = {
-        "level": "error",
-        "message": result.get("message", "Bot reported an error"),
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    print(json.dumps(entry), file=sys.stderr)
 
 def exit_code_of(exc):
     # Same mapping the interpreter applies when SystemExit reaches the top level.
@@ -225,7 +212,6 @@ def main():
     else:
         fallback = {"status": "error", "message": outcome["message"] or f"Bot exited with code {exit_code}"}
     result = settle_result(fallback)
-    report_error(result)
     # The bot's result is its own verdict on the run, so an error result fails
     # the run even when the bot returned normally.
     if exit_code == 0 and is_error_result(result):

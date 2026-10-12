@@ -53,19 +53,6 @@ function isErrorResult(result) {
     return !!result && result.status === 'error';
 }
 
-function reportError(result) {
-    // The SDK's error() only writes result.json, which nothing reads for bot
-    // runs, so without this line a failed run leaves no trace in the logs.
-    if (!isErrorResult(result)) {
-        return;
-    }
-    console.error(JSON.stringify({
-        level: 'error',
-        message: result.message !== undefined ? result.message : 'Bot reported an error',
-        timestamp: new Date().toISOString(),
-    }));
-}
-
 function settleResult(exitCode) {
     let result;
     if (botWroteResult()) {
@@ -76,7 +63,6 @@ function settleResult(exitCode) {
             : {"status": "error", "message": failureMessage || 'Bot exited with code ' + exitCode};
         writeResult(result);
     }
-    reportError(result);
     // The bot's result is its own verdict on the run, so an error result fails
     // the run even when the bot returned normally. Node reads process.exitCode
     // again after the 'exit' listeners, so setting it here still takes effect.
