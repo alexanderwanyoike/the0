@@ -101,7 +101,10 @@ getParamAs req key = Map.lookup key (reqValues req) >>= \value ->
     case (fromJSON value, value) of
         (Success typed, _) -> Just typed
         (Error _, String text) -> decodeStrict (TE.encodeUtf8 text)
-        (Error _, _) -> Nothing
+        (Error _, Null) -> Nothing
+        (Error _, other) -> case fromJSON (String (T.pack (valueToString other))) of
+            Success typed -> Just typed
+            Error _ -> Nothing
 
 textView :: Request -> (String, Map.Map String String)
 textView (RequestValues path values) = (path, Map.mapMaybe text values)
