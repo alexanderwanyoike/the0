@@ -237,7 +237,10 @@ async function runServer(): Promise<void> {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://localhost:${port}`);
     const path = url.pathname;
-    currentParams = Object.fromEntries(url.searchParams);
+    // The declared string type predates JSON params; values reach handlers
+    // with their JSON types, as they already do in ephemeral mode.
+    const bodyParams = jsonBodyParams(await readBody(req)) as Record<string, string> | undefined;
+    currentParams = bodyParams ?? Object.fromEntries(url.searchParams);
 
     const fn = handlers.get(path);
     if (!fn) {
@@ -265,6 +268,40 @@ async function runServer(): Promise<void> {
       })
     );
   });
+}
+
+/**
+ * Read a request's whole body as text; a failed read counts as no body.
+ */
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => (body += chunk));
+    req.on("end", () => resolve(body));
+    req.on("error", () => resolve(""));
+  });
+}
+
+/**
+ * Params from a JSON object body, which keeps their types.
+ *
+ * Undefined means use the query string instead: the runtime sends params in
+ * both, and manual curl calls use only the query string.
+ */
+function jsonBodyParams(body: string): Record<string, unknown> | undefined {
+  if (body === "") {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Not JSON, so not a params body.
+  }
+  return undefined;
 }
 
 /**
