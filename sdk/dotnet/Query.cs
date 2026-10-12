@@ -36,8 +36,8 @@ public static class Query
         public string Path { get; }
 
         /// <summary>
-        /// Every parameter as text: a string as itself, any other JSON value
-        /// (including null) as its JSON text.
+        /// Every parameter as text: a string as itself, any other JSON value as
+        /// its JSON text. A null parameter is left out, so defaults apply.
         /// </summary>
         public Dictionary<string, string> Params { get; }
 
@@ -66,11 +66,13 @@ public static class Query
         {
             Path = path;
             JsonParams = @params;
-            Params = @params.ToDictionary(param => param.Key, param => AsText(param.Value));
+            Params = @params
+                .Where(param => param.Value is not null)
+                .ToDictionary(param => param.Key, param => AsText(param.Value!));
         }
 
-        private static string AsText(JsonNode? value) =>
-            value?.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value?.ToJsonString() ?? "null";
+        private static string AsText(JsonNode value) =>
+            value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value.ToJsonString();
 
         /// <summary>
         /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
