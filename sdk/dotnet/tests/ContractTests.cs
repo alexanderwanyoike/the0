@@ -20,7 +20,6 @@ public class ContractTests
     // says how the list is kept.
     private static readonly Dictionary<string, string> KnownFailures = new()
     {
-        ["query-ephemeral-params"] = "a non-string value in QUERY_PARAMS drops every param, and the typed accessors are stubs",
         ["query-server-params-json-body"] = "the query server reads only the query string, and the typed accessors are stubs",
         ["query-server-start-line"] = "the start line is {\"_log\": \"info\"} with no timestamp",
         ["query-server-unknown-path"] = "the 404 does not list the available paths",
