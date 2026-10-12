@@ -384,4 +384,4 @@ parseQueryString query =
 -- | Convert a Value to a String for simple cases.
 valueToString :: Value -> String
 valueToString (String t) = T.unpack t
-valueToString v = BL.unpack (encode v)
+valueToString v = T.unpack (TE.decodeUtf8 (BL.toStrict (encode v)))
