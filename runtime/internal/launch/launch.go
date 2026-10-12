@@ -10,6 +10,7 @@
 package launch
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -147,6 +148,19 @@ func (s Settings) Command() []string {
 		command = append(command, "--skip-query-server")
 	}
 	return command
+}
+
+// QueryParams is how a query launch sends params: as JSON object text, which
+// is {} when there are none.
+func QueryParams(params map[string]interface{}) (string, error) {
+	if len(params) == 0 {
+		return "{}", nil
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal query params: %w", err)
+	}
+	return string(data), nil
 }
 
 // Var is one environment variable.

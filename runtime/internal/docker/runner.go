@@ -265,11 +265,9 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 	}
 
 	if executable.QueryPath != "" {
-		queryParams := "{}"
-		if executable.QueryParams != nil {
-			if data, err := json.Marshal(executable.QueryParams); err == nil {
-				queryParams = string(data)
-			}
+		queryParams, err := launch.QueryParams(executable.QueryParams)
+		if err != nil {
+			queryParams = "{}"
 		}
 		settings.Mode = launch.Query
 		settings.QueryPath = executable.QueryPath

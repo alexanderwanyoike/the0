@@ -225,12 +225,9 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 	settings.Entrypoint = botConfig.queryEntrypoint
 	settings.QueryEntrypoint = botConfig.queryEntrypoint
 	settings.QueryPath = queryPath
-	if len(queryParams) > 0 {
-		paramsJSON, err := json.Marshal(queryParams)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal query params: %w", err)
-		}
-		settings.QueryParams = string(paramsJSON)
+	settings.QueryParams, err = launch.QueryParams(queryParams)
+	if err != nil {
+		return nil, err
 	}
 	settings.QueryResultKey = resultKey
 
