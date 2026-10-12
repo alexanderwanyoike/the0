@@ -15,6 +15,7 @@ Thank you for your interest in contributing to the0! This document provides guid
 - [Testing Requirements](#testing-requirements)
 - [Documentation Standards](#documentation-standards)
 - [Pull Request Process](#pull-request-process)
+- [Releasing SDKs](#releasing-sdks)
 - [Communication](#communication)
 - [Recognition](#recognition)
 - [License](#license)
@@ -283,6 +284,44 @@ go test ./...
 - **Squash and merge** for feature branches
 - **Merge commit** for release branches
 - Maintainers will handle the merge
+
+## Releasing SDKs
+
+SDKs ship with platform releases. To release a new SDK version:
+
+1. Bump the version in the SDK's manifest, in a normal PR to `dev`.
+2. Release the platform as usual. Pushing the `vX.Y.Z` tag runs `.github/workflows/sdk-publish.yml` and `.github/workflows/sdk-npm-publish.yml`. Each registry gets its own job, which publishes only when that registry does not have the version yet, so every bumped SDK publishes and the rest are skipped.
+
+| SDK | Version lives in | Published to |
+|---|---|---|
+| Python | `sdk/python/pyproject.toml` | PyPI `the0-sdk` |
+| Rust | `sdk/rust/Cargo.toml` | crates.io `the0-sdk` |
+| .NET | `sdk/dotnet/The0.csproj` (`<Version>`) | nuget.org `The0.Sdk` |
+| Scala | `sdk/scala/build.sbt` | GitHub Packages `dev.the0:the0-sdk_3` |
+| Node.js | `sdk/nodejs/package.json` | npm `the0-node` |
+| React | `sdk/react/package.json` | npm `the0-react` |
+| Haskell | `sdk/haskell/the0-sdk.cabal` | nothing: bots pin the release tag |
+| C++ | `sdk/cpp/CMakeLists.txt` | nothing: bots fetch the release tag |
+
+A failed job does not stop the others. Fix the cause and re-run the failed job on the tag; anything already published is skipped.
+
+**Dry run.** `sdk-publish.yml` takes a `dry_run` input on manual runs. It runs the version checks, tests, builds and the crates.io and nuget.org token exchanges, and skips only the publish steps. GitHub only dispatches workflows that exist on the default branch, so this works once the workflow is on `dev`:
+
+```bash
+gh workflow run sdk-publish.yml --ref <branch> -f dry_run=true
+```
+
+Only SDKs whose version is not on its registry yet get past the version check. PyPI exchanges its token inside the publish step, so only a real release proves the PyPI setup.
+
+### One-time registry setup
+
+Publishing uses trusted publishing (OIDC), so the repository holds no long-lived registry tokens. Each registry must trust the workflow once:
+
+- **PyPI:** on the `the0-sdk` project, open Manage, then Publishing, and add a GitHub publisher with owner `alexanderwanyoike`, repository `the0`, workflow `sdk-publish.yml`, and no environment.
+- **crates.io:** on the `the0-sdk` crate, open Settings, then Trusted Publishing, and add a GitHub publisher with owner `alexanderwanyoike`, repository `the0`, workflow `sdk-publish.yml`, and no environment.
+- **nuget.org:** from your username menu, open Trusted Publishing and add a policy owned by the account that owns `The0.Sdk`, with repository owner `alexanderwanyoike`, repository `the0`, workflow file `sdk-publish.yml`, and no environment. Then add a repository variable (Settings, Secrets and variables, Actions, Variables) named `NUGET_USER` holding that account's nuget.org username (the profile name, not the email address).
+- **GitHub Packages:** nothing to do. The job publishes with the workflow's own `GITHUB_TOKEN`, and Maven packages inherit the repository's permissions.
+- **npm:** already set up. `the0-node` and `the0-react` trust `sdk-npm-publish.yml`, so that file must never be renamed.
 
 ## Communication
 
