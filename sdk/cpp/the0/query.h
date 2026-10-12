@@ -580,8 +580,9 @@ struct HttpRequest {
 constexpr std::size_t MAX_REQUEST_HEAD_BYTES = 64 * 1024;
 constexpr std::size_t MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 // The server reads one connection at a time, so a client that stops sending
-// would otherwise hold up every query after it.
-constexpr int REQUEST_TIMEOUT_SECONDS = 5;
+// would otherwise hold up every query after it. 10 seconds, as in the Scala
+// and Haskell query servers.
+constexpr int REQUEST_TIMEOUT_SECONDS = 10;
 
 inline void limit_wait_for_request(int client_fd) {
 #ifdef _WIN32
