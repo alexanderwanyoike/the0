@@ -427,8 +427,12 @@ std::string request_message(int port, const json& request) {
     return message + "\r\n" + body;
 }
 
-/** One request on a new connection, then the whole response. */
-std::optional<Response> send_request(int port, const json& request, std::string& error) {
+/**
+ * One request on a new connection, then the whole response. A connection
+ * the request holds open goes into `held`, for the caller to close.
+ */
+std::optional<Response> send_request(int port, const json& request, std::string& error,
+                                     std::vector<int>& held) {
     const std::string message = request_message(port, request);
 
     int fd = connect_to(port);
@@ -462,6 +466,14 @@ std::optional<Response> send_request(int port, const json& request, std::string&
         setsockopt(fd, SOL_SOCKET, SO_LINGER, &reset, sizeof(reset));
         close(fd);
         error = "the client reset the connection";
+        return std::nullopt;
+    }
+
+    // C++-only: a client that stalls, keeping the connection open without
+    // reading a response until the case ends.
+    if (request.value("hold", false)) {
+        held.push_back(fd);
+        error = "the client holds the connection open";
         return std::nullopt;
     }
 
@@ -640,12 +652,13 @@ struct Run {
     }
 };
 
-std::vector<std::string> request_mismatches(int port, size_t index, const json& request) {
+std::vector<std::string> request_mismatches(int port, size_t index, const json& request,
+                                            std::vector<int>& held) {
     const std::string at = "requests[" + std::to_string(index) + "] " +
                            request.at("method").get<std::string>() + " " +
                            request.at("target").get<std::string>();
     std::string error;
-    auto response = send_request(port, request, error);
+    auto response = send_request(port, request, error, held);
     // C++-only: a request without `expect` checks nothing about its answer;
     // the requests after it show whether the server kept serving.
     if (!request.contains("expect")) return {};
@@ -685,10 +698,12 @@ Run run_bot(const json& test_case, const fs::path& case_path, const Sandbox& san
             run.problems.push_back(*not_ready);
         } else {
             const json& requests = test_case.at("requests");
+            std::vector<int> held;
             for (size_t i = 0; i < requests.size(); ++i) {
-                auto more = request_mismatches(*port, i, requests[i]);
+                auto more = request_mismatches(*port, i, requests[i], held);
                 run.problems.insert(run.problems.end(), more.begin(), more.end());
             }
+            for (int fd : held) close(fd);
         }
         child.stop();
     } else if (!child.wait_until(Clock::now() + RUN_TIMEOUT)) {

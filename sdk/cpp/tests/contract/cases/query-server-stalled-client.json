@@ -1,0 +1,33 @@
+{
+  "description": "A client that stops in the middle of its request, keeping the connection open, holds the server up only for a few seconds: the server gives up on it with an error log line and answers the next request.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "return", "value": "echo"}]},
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/echo",
+      "raw": "GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n",
+      "hold": true
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ],
+  "expect": {
+    "stdout": [],
+    "stderr": [
+      {"level": "info", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}},
+      {"level": "error", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}}
+    ]
+  }
+}
