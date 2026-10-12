@@ -47,7 +47,7 @@ import qualified Data.Text as T
 import System.Environment (lookupEnv)
 import The0.Internal.Env (lookupEnvBytes)
 import System.Exit (exitWith, ExitCode(ExitFailure))
-import System.IO (hPutStrLn, stderr)
+import System.IO (hFlush, hPutStrLn, stderr, stdout)
 import Control.Exception (catch, evaluate, SomeException)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
@@ -157,6 +157,9 @@ metric metricType val = do
         withMeta = insert (fromString "_metric") (String $ T.pack metricType) $
                    insert (fromString "timestamp") (toJSON ts) baseObj
     BL.putStrLn $ encode (Object withMeta)
+    -- stdout is a pipe in a container, which GHC block-buffers, so a
+    -- realtime bot's metrics would otherwise reach its logs late.
+    hFlush stdout
 
 -- | Log levels supported by the platform.
 data LogLevel = Info | Warn | Error
