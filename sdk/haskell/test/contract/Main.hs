@@ -12,6 +12,7 @@ module Main (main) where
 import qualified ContractBot
 import qualified Harness
 import qualified HaskellBot
+import GHC.IO.Encoding (setFileSystemEncoding, utf8)
 import System.Environment (getArgs)
 import Test.Hspec (hspec)
 
@@ -23,6 +24,10 @@ main = do
             | role == Harness.contractBotArg -> ContractBot.main casePath queryResultPath
         [role, queryResultPath]
             | role == HaskellBot.haskellBotArg -> HaskellBot.main queryResultPath
-        _ -> hspec $ do
-            Harness.spec
-            HaskellBot.spec
+        _ -> do
+            -- Case environments hold UTF-8 text, which a runner without a
+            -- UTF-8 locale cannot otherwise pass to the bot.
+            setFileSystemEncoding utf8
+            hspec $ do
+                Harness.spec
+                HaskellBot.spec
