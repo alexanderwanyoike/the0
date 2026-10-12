@@ -194,10 +194,11 @@ runBot case_ exe args sandbox = do
             ready <- waitForPort port process
             case ready of
                 Right () -> do
-                    problems <- concat <$> forM (zip [0 ..] (arrayField "requests" case_))
+                    outcomes <- forM (zip [0 ..] (arrayField "requests" case_))
                         (uncurry (requestMismatches port))
                     status <- stop process
-                    pure (problems, False, status)
+                    mapM_ close (concatMap snd outcomes)
+                    pure (concatMap fst outcomes, False, status)
                 Left notReady -> do
                     exited <- isJust <$> getProcessExitCode process
                     status <- stop process
@@ -302,10 +303,14 @@ data Response = Response
     , responseBody :: BS.ByteString
     }
 
-requestMismatches :: Int -> Int -> Value -> IO [String]
+-- | The mismatches in one request's response, and any connection it leaves
+-- open until the server stops.
+requestMismatches :: Int -> Int -> Value -> IO ([String], [Socket])
 requestMismatches port index request
-    | field "reset" request == Just (Bool True) = [] <$ reset port method target
-    | otherwise = responseMismatches at expected <$> send port method target request
+    | field "reset" request == Just (Bool True) = ([], []) <$ reset port method target
+    | field "idle" request == Just (Bool True) = (\sock -> ([], [sock])) <$> idle port
+    | otherwise = (\response -> (responseMismatches at expected response, []))
+        <$> send port method target request
   where
     method = textField "method" request
     target = textField "target" request
@@ -338,6 +343,14 @@ reset port method target =
         connect sock (loopback (fromIntegral port))
         sendAll sock (BC.pack (method ++ " " ++ target ++ " HTTP/1.1\r\n"))
         setSockOpt sock Linger (StructLinger 1 0)
+
+-- | This SDK's own cases only: a request marked @"idle": true@ opens a
+-- connection and sends nothing on it until the server stops.
+idle :: Int -> IO Socket
+idle port = do
+    sock <- socket AF_INET Stream defaultProtocol
+    connect sock (loopback (fromIntegral port))
+    pure sock
 
 -- | One request on a new connection, then the whole response.
 send :: Int -> String -> String -> Value -> IO (Either String Response)
