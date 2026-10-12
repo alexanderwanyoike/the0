@@ -76,7 +76,7 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
-import The0.Input (logInfo)
+import The0.Input (logError, logInfo)
 import The0.Internal.Env (lookupEnvBytes)
 import The0.State (ReadOnlyStateError(..))
 
@@ -291,14 +291,11 @@ runServer = do
 serverLoop :: Socket -> IO ()
 serverLoop sock = do
     (clientSock, _) <- accept sock
-    handleConnection clientSock `catch` logError
+    handleConnection clientSock `catch` logFailure
     serverLoop sock
   where
-    logError :: SomeException -> IO ()
-    logError e = hPutStrLn stderr $ BL.unpack $ encode $ object
-        [ "_log" .= ("error" :: String)
-        , "message" .= ("Error handling request: " ++ show e)
-        ]
+    logFailure :: SomeException -> IO ()
+    logFailure e = logError ("Error handling request: " ++ show e) Nothing
 
 handleConnection :: Socket -> IO ()
 handleConnection sock = flip finally (close sock) $ do
