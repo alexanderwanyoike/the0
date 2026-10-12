@@ -153,7 +153,7 @@ fn perform(step: &Value, request: Option<&QueryRequest>, bound: &Bound) -> Resul
             state::set(&text("key"), &args["value"])?;
             Value::Null
         }
-        "state.delete" => Value::Bool(state::delete(&text("key"))),
+        "state.delete" => Value::Bool(state::delete(&text("key"))?),
         "state.list" => json!(state::list()),
         "state.exists" => Value::Bool(state::exists(&text("key"))),
         "state.clear" => {

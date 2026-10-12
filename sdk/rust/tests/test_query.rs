@@ -103,7 +103,7 @@ fn state_delete_returns_false_in_query_mode() {
     env.set("STATE_DIR", "/tmp/the0-test-state");
 
     // delete returns false in query mode (can't modify state)
-    let result = state::delete("test_key");
+    let result = state::delete("test_key").unwrap();
     assert!(!result);
 }
 

@@ -27,7 +27,7 @@
 //!     let keys = state::list();
 //!
 //!     // Delete a key
-//!     state::delete("portfolio");
+//!     state::delete("portfolio").ok();
 //!
 //!     // Clear all state
 //!     state::clear().ok();
@@ -245,27 +245,27 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 ///
 /// # Returns
 ///
-/// `true` if the key existed and was deleted, `false` otherwise.
-/// Also returns `false` if in query mode (queries are read-only).
+/// `Ok(true)` if the key existed and was deleted, `Ok(false)` otherwise.
+/// Also returns `Ok(false)` if in query mode (queries are read-only).
 ///
 /// # Example
 ///
 /// ```rust,no_run
 /// use the0_sdk::state;
 ///
-/// if state::delete("old_data") {
+/// if state::delete("old_data").expect("Failed to delete state") {
 ///     println!("Cleaned up old data");
 /// }
 /// ```
-pub fn delete(key: &str) -> bool {
+pub fn delete(key: &str) -> Result<bool, StateError> {
     if check_write_allowed().is_err() {
-        return false;
+        return Ok(false);
     }
     if validate_key(key).is_err() {
-        return false;
+        return Ok(false);
     }
     let filepath = get_key_path(key);
-    fs::remove_file(&filepath).is_ok()
+    Ok(fs::remove_file(&filepath).is_ok())
 }
 
 /// List all keys in persistent state.
@@ -474,7 +474,7 @@ mod tests {
         let _temp = setup_test_env();
         set("to_delete", &"value").unwrap();
         assert!(exists("to_delete"));
-        let result = delete("to_delete");
+        let result = delete("to_delete").unwrap();
         assert!(result);
         assert!(!exists("to_delete"));
     }
@@ -483,7 +483,7 @@ mod tests {
     #[serial]
     fn test_delete_nonexistent_key() {
         let _temp = setup_test_env();
-        let result = delete("nonexistent");
+        let result = delete("nonexistent").unwrap();
         assert!(!result);
     }
 
