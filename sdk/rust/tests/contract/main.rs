@@ -45,7 +45,6 @@ const KNOWN_FAILURES: &[(&str, &str)] = &[
     ("query-server-handler-error", "a handler can only fail by panicking, which stops the server"),
     ("query-server-params-json-body", "the server reads params from the query string only"),
     ("query-server-params-query-string", "the server does not URL-decode the query string"),
-    ("query-server-unknown-path", "the 404 does not list the available paths"),
 ];
 
 fn main() {
