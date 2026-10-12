@@ -33,7 +33,6 @@ const PORT_ATTEMPTS: usize = 3;
 // says how the list is kept.
 const KNOWN_FAILURES: &[(&str, &str)] = &[
     ("query-ephemeral-handler-error", "a handler can only fail by panicking"),
-    ("query-ephemeral-info", "/info does not list /info"),
     ("query-ephemeral-params", "every param is dropped when any is not a string"),
     (
         "query-ephemeral-read-only-before-key-check",
@@ -44,11 +43,9 @@ const KNOWN_FAILURES: &[(&str, &str)] = &[
         "state fails with StateError::ReadOnly, not query::ReadOnlyStateError; delete() returns false",
     ),
     ("query-server-handler-error", "a handler can only fail by panicking, which stops the server"),
-    ("query-server-ok", "/info does not list /info"),
     ("query-server-params-json-body", "the server reads params from the query string only"),
     ("query-server-params-query-string", "the server does not URL-decode the query string"),
     ("query-server-unknown-path", "the 404 does not list the available paths"),
-    ("query-without-mode", "/info does not list /info"),
 ];
 
 fn main() {
