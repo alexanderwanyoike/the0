@@ -41,33 +41,11 @@ function botWroteResult() {
     return fs.existsSync(getResultFilePath());
 }
 
-function readResult() {
-    try {
-        return JSON.parse(fs.readFileSync(getResultFilePath(), 'utf8'));
-    } catch (error) {
-        return null;
-    }
-}
-
-function isErrorResult(result) {
-    return !!result && result.status === 'error';
-}
-
 function settleResult(exitCode) {
-    let result;
-    if (botWroteResult()) {
-        result = readResult();
-    } else {
-        result = exitCode === 0
+    if (!botWroteResult()) {
+        writeResult(exitCode === 0
             ? DEFAULT_SUCCESS
-            : {"status": "error", "message": failureMessage || 'Bot exited with code ' + exitCode};
-        writeResult(result);
-    }
-    // The bot's result is its own verdict on the run, so an error result fails
-    // the run even when the bot returned normally. Node reads process.exitCode
-    // again after the 'exit' listeners, so setting it here still takes effect.
-    if (exitCode === 0 && isErrorResult(result)) {
-        process.exitCode = 1;
+            : {"status": "error", "message": failureMessage || 'Bot exited with code ' + exitCode});
     }
 }
 
