@@ -97,7 +97,13 @@ impl QueryRequest {
     pub fn from_values(path: &str, values: HashMap<String, Value>) -> Self {
         let params = values
             .iter()
-            .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
+            .map(|(key, value)| {
+                let text = match value {
+                    Value::String(text) => text.clone(),
+                    other => other.to_string(),
+                };
+                (key.clone(), text)
+            })
             .collect();
         Self {
             path: path.to_string(),
