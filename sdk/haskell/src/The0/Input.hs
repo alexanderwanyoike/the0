@@ -91,10 +91,10 @@ resultFilePath = do
     pure $ "/" ++ mountDir ++ "/result.json"
 
 -- | Write result to the result file.
-writeResult :: String -> IO ()
+writeResult :: BL.ByteString -> IO ()
 writeResult content = do
     path <- resultFilePath
-    writeFile path content `catch` handleError
+    BL.writeFile path content `catch` handleError
   where
     handleError :: SomeException -> IO ()
     handleError e = hPutStrLn stderr $ "RESULT_ERROR: Failed to write result file: " ++ show e
@@ -120,7 +120,7 @@ error msg = do
 --
 -- Serializes the provided 'Value' as JSON and writes it.
 result :: Value -> IO ()
-result val = writeResult $ BL.unpack (encode val)
+result val = writeResult (encode val)
 
 -- | Emit a metric to stdout with timestamp.
 --
