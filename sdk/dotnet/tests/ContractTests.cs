@@ -326,11 +326,41 @@ public class ContractTests
         return $"query server did not accept connections within {ServerStartTimeout.TotalSeconds}s";
     }
 
+    /// <summary>
+    /// Sends a request that HttpClient cannot send, such as a malformed one, as raw
+    /// text. The server passes when it answers or closes the connection.
+    /// </summary>
+    private static async Task<List<string>> CheckRawRequest(int port, string raw, string where)
+    {
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", port);
+        var stream = client.GetStream();
+        await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(raw));
+        using var timeout = new CancellationTokenSource(StopTimeout);
+        try
+        {
+            await stream.ReadAsync(new byte[1], timeout.Token);
+            return new List<string>();
+        }
+        catch (OperationCanceledException)
+        {
+            return new List<string> { $"{where}: no answer and the connection stayed open" };
+        }
+        catch (IOException)
+        {
+            return new List<string>();
+        }
+    }
+
     private static async Task<List<string>> CheckRequest(int port, JsonObject request, int index)
     {
         var method = (string)request["method"]!;
         var target = (string)request["target"]!;
         var where = $"requests[{index}] {method} {target}";
+        if (request["raw"] is JsonNode raw)
+        {
+            return await CheckRawRequest(port, (string)raw!, where);
+        }
         var expect = request["expect"]!.AsObject();
 
         using var message = new HttpRequestMessage(new HttpMethod(method), $"http://127.0.0.1:{port}{target}");

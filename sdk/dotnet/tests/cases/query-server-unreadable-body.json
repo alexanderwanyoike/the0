@@ -1,0 +1,32 @@
+{
+  "description": "A request whose body cannot be read (here a chunk size that is not hex) is answered or closed, the server prints an error log line, and it keeps serving.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "return", "value": "echo"}]},
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo",
+      "raw": "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\nZZZ\r\n\r\n"
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ],
+  "expect": {
+    "stdout": [],
+    "stderr": [
+      {"level": "info", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}},
+      {"level": "error", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}}
+    ]
+  }
+}
