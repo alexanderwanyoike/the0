@@ -52,14 +52,15 @@ module The0.Query
     , setResultPath
     ) where
 
-import Control.Exception (catch, SomeException)
+import Control.Exception (catch, finally, SomeException)
 import Control.Monad (forM_, when)
 import Data.Aeson (FromJSON, Result(..), Value(..), decode, decodeStrict, encode, fromJSON, object, (.=), ToJSON)
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Key (fromString, toText)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.IORef
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Char (isSpace, toLower)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -294,29 +295,60 @@ serverLoop sock = do
         ]
 
 handleConnection :: Socket -> IO ()
-handleConnection sock = do
-    request <- recv sock 4096
-    let requestStr = BS.unpack request
-        lines' = lines requestStr
-    case lines' of
-        (requestLine:_) -> do
-            let parts = words requestLine
-            case parts of
-                (_method:pathWithQuery:_) -> do
-                    let (path, params) = parsePathAndQuery pathWithQuery
-                    outcome <- answer (Request path params)
-                    let bodyStr = BL.toStrict (encode (answerBody outcome))
-                        response = BS.pack (concatMap (++ "\r\n")
-                            [ "HTTP/1.1 " ++ show (answerStatus outcome) ++ " " ++ reasonPhrase (answerStatus outcome)
-                            , "Content-Type: application/json"
-                            , "Content-Length: " ++ show (BS.length bodyStr)
-                            , ""
-                            ]) <> bodyStr
-                    sendAll sock response
-                _ -> return ()
-        _ -> return ()
+handleConnection sock = flip finally (close sock) $ do
+    request <- readRequest sock
+    case request of
+        Just (target, body) -> do
+            outcome <- answer (queryRequest target body)
+            let bodyStr = BL.toStrict (encode (answerBody outcome))
+                response = BS.pack (concatMap (++ "\r\n")
+                    [ "HTTP/1.1 " ++ show (answerStatus outcome) ++ " " ++ reasonPhrase (answerStatus outcome)
+                    , "Content-Type: application/json"
+                    , "Content-Length: " ++ show (BS.length bodyStr)
+                    , ""
+                    ]) <> bodyStr
+            sendAll sock response
+        Nothing -> return ()
 
-    close sock
+-- | The request target and body of one HTTP request, or 'Nothing' when the
+-- connection closes before a request line with a target arrives.
+readRequest :: Socket -> IO (Maybe (String, BS.ByteString))
+readRequest sock = readHead BS.empty
+  where
+    readHead buffer = case BS.breakSubstring "\r\n\r\n" buffer of
+        (headBytes, rest) | not (BS.null rest) -> do
+            let headLines = map (BS.takeWhile (/= '\r')) (BS.lines headBytes)
+                contentLength = fromMaybe 0 $ do
+                    value <- lookup "content-length"
+                        [ (map toLower (BS.unpack name), BS.unpack (BS.dropWhile (== ' ') (BS.drop 1 rest')))
+                        | line <- drop 1 headLines
+                        , let (name, rest') = BS.break (== ':') line
+                        ]
+                    case reads value of
+                        [(n, rest'')] | all isSpace rest'' -> Just n
+                        _ -> Nothing
+            body <- readBody contentLength (BS.drop 4 rest)
+            return $ case map BS.unpack . BS.words <$> listToMaybe headLines of
+                Just (_method : target : _) -> Just (target, body)
+                _ -> Nothing
+        _ -> do
+            chunk <- recv sock 4096
+            if BS.null chunk then return Nothing else readHead (buffer <> chunk)
+
+    readBody contentLength received
+        | BS.length received >= contentLength = return (BS.take contentLength received)
+        | otherwise = do
+            chunk <- recv sock (min 65536 (contentLength - BS.length received))
+            if BS.null chunk then return received else readBody contentLength (received <> chunk)
+
+-- | A JSON object body supplies the params with their JSON types; otherwise
+-- they come from the query string.
+queryRequest :: String -> BS.ByteString -> Request
+queryRequest target body =
+    let (path, params) = parsePathAndQuery target
+    in case decodeStrict body of
+        Just (Object o) -> RequestValues path (Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o])
+        _ -> Request path params
 
 reasonPhrase :: Int -> String
 reasonPhrase 200 = "OK"
