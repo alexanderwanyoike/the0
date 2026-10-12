@@ -1,6 +1,7 @@
-import { Injectable, Scope } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
+import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
 
@@ -32,7 +33,7 @@ export interface QueryRequest {
   timeoutSec?: number;
 }
 
-@Injectable({ scope: Scope.REQUEST })
+@Injectable()
 export class BotQueryService {
   private runtimeUrl: string;
 
@@ -51,11 +52,12 @@ export class BotQueryService {
    * Execute a query against a bot.
    */
   async executeQuery(
+    actor: Actor,
     botId: string,
     request: QueryRequest,
   ): Promise<Result<QueryResult, BotQueryError>> {
     // Verify bot exists and user has access
-    const botResult = await this.botService.findOne(botId);
+    const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
       return Failure({
         code: BotQueryErrorCode.BOT_NOT_FOUND,

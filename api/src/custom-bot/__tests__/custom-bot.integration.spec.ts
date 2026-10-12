@@ -11,6 +11,9 @@ import {
   CustomBotWithVersions,
 } from "@/custom-bot/custom-bot.types";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
+import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
+import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 import { NatsService } from "@/nats/nats.service";
 
 // Mock database and storage
@@ -83,6 +86,12 @@ describe("Custom Bot API Integration Tests", () => {
       .useValue({
         canActivate: jest.fn(() => true),
       })
+      .overrideGuard(AdminJwtGuard)
+      .useValue({ canActivate: () => false })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => false })
+      .overrideProvider(AdminBootstrapService)
+      .useValue({})
       .overrideProvider(StorageService)
       .useValue({
         fileExists: jest.fn().mockResolvedValue(Ok(true)),

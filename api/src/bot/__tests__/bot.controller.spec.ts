@@ -1,7 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BotController } from "../bot.controller";
 import { BotService } from "../bot.service";
-import { REQUEST } from "@nestjs/core";
 import { BotRepository } from "../bot.repository";
 import { Bot } from "../entities/bot.entity";
 import {
@@ -14,12 +13,14 @@ import { ConfigModule } from "@nestjs/config";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiKeyService } from "@/api-key/api-key.service";
-import { NatsService } from "@/nats/nats.service";
+import { BotEventRelay } from "../bot-event-relay";
 // FeatureGateService removed for OSS version
 import { Ok } from "@/common/result";
 import { PinoLogger } from "nestjs-pino";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
+import { mockActor } from "@/test/mock-actor";
+import { BOT_COMMAND_PROVIDERS } from "@/test/bot-command-providers";
 
 describe("BotController - Enhanced Tests", () => {
   let controller: BotController;
@@ -28,6 +29,7 @@ describe("BotController - Enhanced Tests", () => {
   let validator: BotValidator;
   let customBotService: CustomBotService;
   const uid = "test-user-id";
+  const actor = mockActor({ userId: uid });
 
   const mockCustomBot = {
     id: "test-custom-bot",
@@ -93,6 +95,7 @@ describe("BotController - Enhanced Tests", () => {
       imports: [ConfigModule],
       controllers: [BotController],
       providers: [
+        ...BOT_COMMAND_PROVIDERS,
         BotService,
         BotRepository,
         BotValidator,
@@ -105,14 +108,8 @@ describe("BotController - Enhanced Tests", () => {
           useValue: {},
         },
         {
-          provide: NatsService,
-          useValue: {
-            publish: jest.fn().mockResolvedValue(Ok(null)),
-          },
-        },
-        {
-          provide: REQUEST,
-          useValue: { user: { uid } },
+          provide: BotEventRelay,
+          useValue: { publishCommitted: jest.fn() },
         },
         {
           provide: PinoLogger,
@@ -124,10 +121,11 @@ describe("BotController - Enhanced Tests", () => {
       .overrideGuard(AuthCombinedGuard)
       .useValue(mockForceGuard)
       .compile();
+    await module.init();
 
     repository = module.get<BotRepository>(BotRepository);
-    controller = await module.resolve<BotController>(BotController);
-    service = await module.resolve<BotService>(BotService);
+    controller = module.get<BotController>(BotController);
+    service = module.get<BotService>(BotService);
     validator = module.get<BotValidator>(BotValidator);
     customBotService = module.get<CustomBotService>(CustomBotService);
 
@@ -159,7 +157,7 @@ describe("BotController - Enhanced Tests", () => {
         data: [],
       });
 
-      jest.spyOn(repository, "create").mockResolvedValue({
+      jest.spyOn(repository, "createWithEvents").mockResolvedValue({
         success: true,
         error: null,
         data: mockBot({
@@ -182,7 +180,7 @@ describe("BotController - Enhanced Tests", () => {
           topic: "the0-scheduled-custom-bot",
         }),
       });
-      const result = await controller.create(validBot);
+      const result = await controller.create(actor, validBot);
 
       expect(result).toMatchObject({
         id: "test-id",
@@ -190,26 +188,30 @@ describe("BotController - Enhanced Tests", () => {
         userId: uid,
         topic: "the0-scheduled-custom-bot",
       });
-      expect(repository.create).toHaveBeenCalledWith({
-        ...validBot,
-        config: {
-          ...validBot.config,
-          hasFrontend: false, // Added by bot.service from custom bot config
+      expect(repository.createWithEvents).toHaveBeenCalledWith(
+        {
+          ...validBot,
+          id: expect.any(String),
+          config: {
+            ...validBot.config,
+            hasFrontend: false, // Added by bot.service from custom bot config
+          },
+          userId: uid,
+          topic: "the0-scheduled-custom-bot",
+          customBotId: mockCustomBot.id,
         },
-        userId: uid,
-        topic: "the0-scheduled-custom-bot",
-        customBotId: mockCustomBot.id,
-      });
+        expect.any(Array),
+      );
     });
 
     it("should throw BadRequestException when service fails", async () => {
-      jest.spyOn(repository, "create").mockResolvedValue({
+      jest.spyOn(repository, "createWithEvents").mockResolvedValue({
         success: false,
         error: "Creation failed",
         data: null,
       });
 
-      await expect(controller.create(validBot)).rejects.toThrow(
+      await expect(controller.create(actor, validBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -220,7 +222,7 @@ describe("BotController - Enhanced Tests", () => {
         config: mockBotConfig({ ...validBot.config, type: "invalid-format" }),
       };
 
-      await expect(controller.create(invalidBot)).rejects.toThrow(
+      await expect(controller.create(actor, invalidBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -234,7 +236,7 @@ describe("BotController - Enhanced Tests", () => {
         }),
       };
 
-      await expect(controller.create(invalidBot)).rejects.toThrow(
+      await expect(controller.create(actor, invalidBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -250,7 +252,7 @@ describe("BotController - Enhanced Tests", () => {
         ],
       });
 
-      await expect(controller.create(validBot)).rejects.toThrow(
+      await expect(controller.create(actor, validBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -264,7 +266,7 @@ describe("BotController - Enhanced Tests", () => {
           data: null,
         });
 
-      await expect(controller.create(validBot)).rejects.toThrow(
+      await expect(controller.create(actor, validBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -276,7 +278,7 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.create(validBot)).rejects.toThrow(
+      await expect(controller.create(actor, validBot)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -297,7 +299,7 @@ describe("BotController - Enhanced Tests", () => {
         data: bots,
       });
 
-      const result = await controller.findAll();
+      const result = await controller.findAll(actor);
 
       expect(result).toEqual(bots);
       expect(repository.findAll).toHaveBeenCalledWith(uid);
@@ -310,7 +312,9 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.findAll()).rejects.toThrow(NotFoundException);
+      await expect(controller.findAll(actor)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it("should return empty array when no bots exist", async () => {
@@ -320,7 +324,7 @@ describe("BotController - Enhanced Tests", () => {
         data: [],
       });
 
-      const result = await controller.findAll();
+      const result = await controller.findAll(actor);
 
       expect(result).toEqual([]);
     });
@@ -340,7 +344,7 @@ describe("BotController - Enhanced Tests", () => {
         data: testBot,
       });
 
-      const result = await controller.findOne("test-id");
+      const result = await controller.findOne(actor, "test-id");
 
       expect(result).toEqual(testBot);
       expect(repository.findOne).toHaveBeenCalledWith(uid, "test-id");
@@ -353,7 +357,7 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.findOne("nonexistent-id")).rejects.toThrow(
+      await expect(controller.findOne(actor, "nonexistent-id")).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -365,7 +369,7 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.findOne("invalid-id")).rejects.toThrow(
+      await expect(controller.findOne(actor, "invalid-id")).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -422,32 +426,37 @@ describe("BotController - Enhanced Tests", () => {
           data: mockCustomBot,
         });
 
-      jest.spyOn(repository, "update").mockResolvedValue({
+      jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: true,
         error: null,
         data: updatedBot,
       });
 
-      const result = await controller.update("test-id", updateData);
+      const result = await controller.update(actor, "test-id", updateData);
 
       expect(result).toEqual(updatedBot);
-      expect(repository.update).toHaveBeenCalledWith(uid, "test-id", {
-        ...updateData,
-        config: { ...updateData.config, hasFrontend: false },
-        customBotId: existingBot.customBotId,
-      });
+      expect(repository.updateWithEvents).toHaveBeenCalledWith(
+        uid,
+        "test-id",
+        {
+          ...updateData,
+          config: { ...updateData.config, hasFrontend: false },
+          customBotId: existingBot.customBotId,
+        },
+        expect.any(Array),
+      );
     });
 
     it("should throw BadRequestException when update fails", async () => {
-      jest.spyOn(repository, "update").mockResolvedValue({
+      jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: false,
         error: "Update failed",
         data: null,
       });
 
-      await expect(controller.update("test-id", updateData)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.update(actor, "test-id", updateData),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when validation fails", async () => {
@@ -457,9 +466,9 @@ describe("BotController - Enhanced Tests", () => {
         data: null,
       });
 
-      await expect(controller.update("test-id", updateData)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.update(actor, "test-id", updateData),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException for invalid bot type on update", async () => {
@@ -471,9 +480,9 @@ describe("BotController - Enhanced Tests", () => {
           data: null,
         });
 
-      await expect(controller.update("test-id", updateData)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.update(actor, "test-id", updateData),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -494,37 +503,41 @@ describe("BotController - Enhanced Tests", () => {
         data: botToRemove,
       });
 
-      jest.spyOn(repository, "remove").mockResolvedValue({
+      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: true,
         error: null,
         data: null,
       });
 
-      const result = await controller.remove("test-id");
+      const result = await controller.remove(actor, "test-id");
       expect(result).toBeDefined();
-      expect(repository.remove).toHaveBeenCalledWith(uid, "test-id");
+      expect(repository.removeWithEvents).toHaveBeenCalledWith(
+        uid,
+        "test-id",
+        expect.any(Array),
+      );
     });
 
     it("should throw BadRequestException when removal fails", async () => {
-      jest.spyOn(repository, "remove").mockResolvedValue({
+      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
         error: "Bot not found",
         data: null,
       });
 
-      await expect(controller.remove("test-id")).rejects.toThrow(
+      await expect(controller.remove(actor, "test-id")).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it("should handle unauthorized removal attempt", async () => {
-      jest.spyOn(repository, "remove").mockResolvedValue({
+      jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
         error: "Unauthorized",
         data: null,
       });
 
-      await expect(controller.remove("test-id")).rejects.toThrow(
+      await expect(controller.remove(actor, "test-id")).rejects.toThrow(
         BadRequestException,
       );
     });

@@ -5,6 +5,8 @@ import { ApiKeyRepository } from "@/api-key/api-key.repository";
 import { CreateApiKeyDto } from "../dto/create-api-key.dto";
 import { Ok, Failure } from "@/common/result";
 import { UserRepository } from "@/user/user.repository";
+import { UserService } from "@/user/user.service";
+import { AdminMutationLockRepository } from "@/user/admin-mutation-lock.repository";
 import { USER_ROLES } from "@/user/user.constants";
 import { UserRecord } from "@/user/user.types";
 
@@ -73,6 +75,8 @@ describe("ApiKeyService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApiKeyService,
+        UserService,
+        { provide: AdminMutationLockRepository, useValue: {} },
         {
           provide: ApiKeyRepository,
           useValue: mockRepository,

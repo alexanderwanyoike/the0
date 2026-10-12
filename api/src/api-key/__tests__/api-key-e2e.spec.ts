@@ -8,6 +8,9 @@ import { ApiKeyRepository } from "@/api-key/api-key.repository";
 import { ApiKeyModule } from "@/api-key/api-key.module";
 import { PassportModule } from "@nestjs/passport";
 import { ConfigModule } from "@nestjs/config";
+import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
+import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
+import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 
 describe("ApiKeyController (e2e)", () => {
   let app: INestApplication;
@@ -51,6 +54,12 @@ describe("ApiKeyController (e2e)", () => {
     })
       .overrideGuard(AuthGuard())
       .useValue(mockGuard)
+      .overrideGuard(AdminJwtGuard)
+      .useValue({ canActivate: () => false })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => false })
+      .overrideProvider(AdminBootstrapService)
+      .useValue({})
       .overrideProvider(ApiKeyRepository)
       .useValue(mockRepositoryMethods)
       .compile();

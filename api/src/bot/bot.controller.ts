@@ -20,21 +20,34 @@ import {
   ApiParam,
   ApiTags,
 } from "@nestjs/swagger";
+import { Actor } from "@/auth/actor";
+import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
+import { CommandBus } from "@/command-bus/command-bus";
+import { DeleteBot, DeployBot, UpdateBot } from "./commands/bot-commands";
 
 @ApiTags("bots")
 @ApiJwtOrApiKeyAuth()
 @Controller("bot")
 @UseGuards(AuthCombinedGuard)
 export class BotController {
-  constructor(private readonly botService: BotService) {}
+  constructor(
+    private readonly botService: BotService,
+    private readonly commandBus: CommandBus,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: "Deploy a bot instance from a custom bot" })
   @ApiBadRequestResponse({ description: "Invalid bot config" })
-  async create(@Body() createBotDto: CreateBotDto) {
-    const result = await this.botService.create(createBotDto);
+  async create(
+    @CurrentActor() actor: Actor,
+    @Body() createBotDto: CreateBotDto,
+  ) {
+    // Spread into a plain object, as MCP sends, so both build the same command.
+    const result = await this.commandBus.execute(
+      new DeployBot(actor, { ...createBotDto }),
+    );
     if (!result.success) {
       throw new BadRequestException(result.error);
     }
@@ -43,8 +56,8 @@ export class BotController {
 
   @Get()
   @ApiOperation({ summary: "List your bot instances" })
-  async findAll() {
-    const result = await this.botService.findAll();
+  async findAll(@CurrentActor() actor: Actor) {
+    const result = await this.botService.findAll(actor);
     if (!result.success) {
       throw new NotFoundException(result.error);
     }
@@ -55,8 +68,8 @@ export class BotController {
   @ApiOperation({ summary: "Get a bot instance" })
   @ApiParam({ name: "id", description: "Bot instance ID" })
   @ApiNotFoundResponse({ description: "Bot not found" })
-  async findOne(@Param("id") id: string) {
-    const result = await this.botService.findOne(id);
+  async findOne(@CurrentActor() actor: Actor, @Param("id") id: string) {
+    const result = await this.botService.findOne(actor, id);
     if (!result.success) {
       throw new NotFoundException(result.error);
     }
@@ -67,8 +80,15 @@ export class BotController {
   @ApiOperation({ summary: "Update a bot instance's config" })
   @ApiParam({ name: "id", description: "Bot instance ID" })
   @ApiBadRequestResponse({ description: "Invalid bot config or bot not found" })
-  async update(@Param("id") id: string, @Body() updateBotDto: UpdateBotDto) {
-    const result = await this.botService.update(id, updateBotDto);
+  async update(
+    @CurrentActor() actor: Actor,
+    @Param("id") id: string,
+    @Body() updateBotDto: UpdateBotDto,
+  ) {
+    // Spread into a plain object, as MCP sends, so both build the same command.
+    const result = await this.commandBus.execute(
+      new UpdateBot(actor, id, { ...updateBotDto }),
+    );
     if (!result.success) {
       throw new BadRequestException(result.error);
     }
@@ -79,8 +99,8 @@ export class BotController {
   @ApiOperation({ summary: "Delete a bot instance" })
   @ApiParam({ name: "id", description: "Bot instance ID" })
   @ApiBadRequestResponse({ description: "Bot could not be deleted" })
-  async remove(@Param("id") id: string) {
-    const result = await this.botService.remove(id);
+  async remove(@CurrentActor() actor: Actor, @Param("id") id: string) {
+    const result = await this.commandBus.execute(new DeleteBot(actor, id));
     if (!result.success) {
       throw new BadRequestException(result.error);
     }

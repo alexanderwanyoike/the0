@@ -5,6 +5,7 @@ import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
 import { BotService } from "@/bot/bot.service";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot as createMockBot, mockBotConfig } from "@/test/mock-bot";
+import { mockActor } from "@/test/mock-actor";
 
 describe("BotQueryService", () => {
   let service: BotQueryService;
@@ -12,6 +13,7 @@ describe("BotQueryService", () => {
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockFetch: jest.SpyInstance;
   let mockLogger: ReturnType<typeof createMockLogger>;
+  const actor = mockActor();
 
   const testBot = createMockBot({
     id: "test-bot-id",
@@ -49,7 +51,7 @@ describe("BotQueryService", () => {
       ],
     }).compile();
 
-    service = await module.resolve<BotQueryService>(BotQueryService);
+    service = module.get<BotQueryService>(BotQueryService);
 
     // Mock global fetch
     mockFetch = jest.spyOn(global, "fetch");
@@ -78,7 +80,7 @@ describe("BotQueryService", () => {
           }),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
         params: { symbol: "BTC" },
       });
@@ -110,13 +112,31 @@ describe("BotQueryService", () => {
         error: "Bot not found",
       });
 
-      const result = await service.executeQuery("nonexistent-bot", {
+      const result = await service.executeQuery(actor, "nonexistent-bot", {
         queryPath: "/portfolio",
       });
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe(BotQueryErrorCode.BOT_NOT_FOUND);
       expect(result.error?.message).toBe("Bot not found or access denied");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("checks the bot belongs to the Actor's user before asking the runtime", async () => {
+      mockBotService.findOne.mockResolvedValue({
+        success: false,
+        data: null,
+        error: "Bot not found",
+      });
+
+      await service.executeQuery(actor, "someone-elses-bot", {
+        queryPath: "/portfolio",
+      });
+
+      expect(mockBotService.findOne).toHaveBeenCalledWith(
+        actor,
+        "someone-elses-bot",
+      );
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -133,7 +153,7 @@ describe("BotQueryService", () => {
         text: () => Promise.resolve("bot not found in runtime"),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -158,7 +178,7 @@ describe("BotQueryService", () => {
           ),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/status",
       });
 
@@ -182,7 +202,7 @@ describe("BotQueryService", () => {
         text: () => Promise.resolve("Internal server error"),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -202,7 +222,7 @@ describe("BotQueryService", () => {
       abortError.name = "AbortError";
       mockFetch.mockRejectedValue(abortError);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
         timeoutSec: 5,
       });
@@ -223,7 +243,7 @@ describe("BotQueryService", () => {
       connError.code = "ECONNREFUSED";
       mockFetch.mockRejectedValue(connError);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -248,7 +268,7 @@ describe("BotQueryService", () => {
           }),
       } as Response);
 
-      await service.executeQuery("test-bot-id", {
+      await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/test",
         timeoutSec: 60,
       });
@@ -277,7 +297,7 @@ describe("BotQueryService", () => {
           }),
       } as Response);
 
-      await service.executeQuery("test-bot-id", {
+      await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/test",
       });
 
@@ -305,7 +325,7 @@ describe("BotQueryService", () => {
           }),
       } as Response);
 
-      await service.executeQuery("test-bot-id", {
+      await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/test",
       });
 
@@ -333,7 +353,7 @@ describe("BotQueryService", () => {
         json: () => Promise.resolve({ data: { a: 1 } }),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -359,7 +379,7 @@ describe("BotQueryService", () => {
           }),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -379,7 +399,7 @@ describe("BotQueryService", () => {
         text: () => Promise.resolve("Internal server error"),
       } as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -425,7 +445,7 @@ describe("BotQueryService", () => {
           }),
       );
 
-      const pending = service.executeQuery("test-bot-id", {
+      const pending = service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
         timeoutSec: 2,
       });
@@ -443,7 +463,7 @@ describe("BotQueryService", () => {
       abortError.name = "AbortError";
       mockFetch.mockRejectedValue(abortError);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -456,7 +476,7 @@ describe("BotQueryService", () => {
       });
       mockFetch.mockRejectedValue(fetchError);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -478,7 +498,7 @@ describe("BotQueryService", () => {
     it("should report other transport errors as query failures", async () => {
       mockFetch.mockRejectedValue(new Error("socket hang up"));
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 
@@ -502,7 +522,7 @@ describe("BotQueryService", () => {
         json: () => Promise.reject(new Error("Unexpected token")),
       } as unknown as Response);
 
-      const result = await service.executeQuery("test-bot-id", {
+      const result = await service.executeQuery(actor, "test-bot-id", {
         queryPath: "/portfolio",
       });
 

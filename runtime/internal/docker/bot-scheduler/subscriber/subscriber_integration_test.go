@@ -62,6 +62,7 @@ func TestSubscriber_BotScheduleCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	// Get unique database for this test
 	db := sharedInfra.GetDatabase("bot_schedule_created")
 	collectionName := "bot_schedules"
@@ -150,6 +151,7 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_created_duplicate")
 	collectionName := "bot_schedules"
 
@@ -170,7 +172,7 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	require.NoError(t, err)
 
 	scheduleEvent := BotScheduleEvent{
-		ID:     "duplicate-schedule",
+		ID: "duplicate-schedule",
 		Config: map[string]interface{}{
 			"test":     "value",
 			"schedule": "0 0 * * *",
@@ -191,18 +193,11 @@ func TestSubscriber_BotScheduleCreated_Duplicate_SkipsCreation(t *testing.T) {
 	payload, _ := json.Marshal(scheduleEvent)
 
 	// Publish twice
-	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
-	time.Sleep(100 * time.Millisecond)
-	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, payload)
+	events.Publish(t, SubjectBotScheduleCreated, payload)
+	events.Publish(t, SubjectBotScheduleCreated, payload)
+	events.WaitForHandled(t)
 
 	collection := db.Collection(collectionName)
-	err = waitFor(20*time.Second, func() bool {
-		count, _ := collection.CountDocuments(ctx, bson.M{"id": "duplicate-schedule"})
-		return count >= 1
-	})
-	require.NoError(t, err, "first create should be processed")
-	// The duplicate is not observable once handled, so give it a window.
-	time.Sleep(300 * time.Millisecond)
 
 	// Verify only one schedule exists
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "duplicate-schedule"})
@@ -223,6 +218,7 @@ func TestSubscriber_BotScheduleUpdated_UpdatesMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_updated")
 	collectionName := "bot_schedules"
 
@@ -311,6 +307,7 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_updated_not_found")
 	collectionName := "bot_schedules"
 
@@ -332,7 +329,7 @@ func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 
 	// Publish bot-schedule.updated for non-existent schedule
 	updatedEvent := BotScheduleEvent{
-		ID:     "new-schedule-from-update",
+		ID: "new-schedule-from-update",
 		Config: map[string]interface{}{
 			"created":  "from update",
 			"schedule": "0 0 * * *",
@@ -373,6 +370,7 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_deleted")
 	collectionName := "bot_schedules"
 
@@ -394,9 +392,9 @@ func TestSubscriber_BotScheduleDeleted_RemovesFromMongo(t *testing.T) {
 
 	// Insert schedule to delete
 	scheduleToDelete := model.BotSchedule{
-		ID:        "delete-me",
-		SegmentId: 1,
-		Config:    map[string]interface{}{"test": "value"},
+		ID:               "delete-me",
+		SegmentId:        1,
+		Config:           map[string]interface{}{"test": "value"},
 		CustomBotVersion: model.CustomBotVersion{Version: "1.0.0"},
 	}
 
@@ -457,6 +455,7 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_schedule_deleted_not_found")
 	collectionName := "bot_schedules"
 
@@ -480,10 +479,8 @@ func TestSubscriber_BotScheduleDeleted_NotFound_NoError(t *testing.T) {
 	deleteEvent := BotScheduleEvent{ID: "does-not-exist"}
 	payload, _ := json.Marshal(deleteEvent)
 
-	err = sharedInfra.natsConn.Publish(SubjectBotScheduleDeleted, payload)
-	require.NoError(t, err)
-
-	time.Sleep(200 * time.Millisecond)
+	events.Publish(t, SubjectBotScheduleDeleted, payload)
+	events.WaitForHandled(t)
 
 	// Should not crash or error - verify subscriber still running
 	collection := db.Collection(collectionName)
@@ -505,6 +502,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("invalid_json")
 	collectionName := "bot_schedules"
 
@@ -529,11 +527,9 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	err = sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, invalidPayload)
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
-
 	// Subscriber should still be running - publish valid message
 	validEvent := BotScheduleEvent{
-		ID:     "after-invalid",
+		ID: "after-invalid",
 		Config: map[string]interface{}{
 			"test":     "value",
 			"schedule": "0 0 * * *",
@@ -568,6 +564,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("graceful_shutdown")
 	collectionName := "bot_schedules"
 
@@ -589,7 +586,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	// Publish some events
 	for i := 0; i < 5; i++ {
 		event := BotScheduleEvent{
-			ID:     fmt.Sprintf("shutdown-schedule-%d", i),
+			ID: fmt.Sprintf("shutdown-schedule-%d", i),
 			Config: map[string]interface{}{
 				"index":    i,
 				"schedule": "0 0 * * *",
@@ -620,8 +617,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	laterEvent := BotScheduleEvent{ID: "after-shutdown"}
 	laterPayload, _ := json.Marshal(laterEvent)
 	sharedInfra.natsConn.Publish(SubjectBotScheduleCreated, laterPayload)
-
-	time.Sleep(200 * time.Millisecond)
+	events.WaitForWaiting(t, 1)
 
 	// "after-shutdown" should not exist because subscriber was stopped
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})

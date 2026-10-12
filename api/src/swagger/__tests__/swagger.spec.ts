@@ -7,9 +7,10 @@ import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { version } from "../../../package.json";
 import { AppModule } from "@/app.module";
-import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
+import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { BotEventRelay } from "@/bot/bot-event-relay";
 import { JwtAuthGuard } from "@/auth/jwt-auth.guard";
 import configuration from "@/config/configuration";
 import { NatsService } from "@/nats/nats.service";
@@ -48,6 +49,8 @@ async function createApp(swaggerEnabled: boolean): Promise<INestApplication> {
     .overrideProvider(NatsService)
     .useValue({})
     .overrideProvider(AdminBootstrapService)
+    .useValue({})
+    .overrideProvider(BotEventRelay)
     .useValue({})
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
@@ -209,7 +212,7 @@ describe("Swagger documentation", () => {
       ["get", "/auth/me", "auth", [JWT]],
       ["get", "/auth/validate-api-key", "auth", [API_KEY]],
       ["post", "/auth/login", "auth", undefined],
-      ["post", "/mcp", "mcp", undefined],
+      ["post", "/mcp", "mcp", [JWT, API_KEY]],
       ["get", "/health", "health", undefined],
       ["get", "/health/ready", "health", undefined],
     ])(

@@ -1,6 +1,6 @@
 {
   "name": "the0-oss-api",
-  "version": "1.16.3",
+  "version": "1.17.0",
   "description": "The0 OSS API - Open source automated trading platform API",
   "author": "The0 Team",
   "private": true,
@@ -14,10 +14,10 @@
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "fallow": "fallow",
-    "test": "jest --runInBand",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --runInBand",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:cov": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
+    "test:debug": "node --experimental-vm-modules --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "db:generate": "DATABASE_TYPE=postgresql drizzle-kit generate",
     "db:migrate": "tsx src/database/migrate.ts",
     "db:push": "drizzle-kit push",
@@ -63,6 +63,7 @@
     "tar": "^7.5.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@nestjs/cli": "^11.0.21",
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^11.1.20",

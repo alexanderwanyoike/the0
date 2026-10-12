@@ -1,0 +1,121 @@
+import { Injectable } from "@nestjs/common";
+import { PinoLogger } from "nestjs-pino";
+import { Failure, Ok, Result } from "@/common/result";
+import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { CustomBot } from "@/custom-bot/custom-bot.types";
+import { BotConfig } from "@/database/schema/bots";
+import { BOT_TOPICS, SCHEDULED_BOT_TOPICS } from "../bot.constants";
+import { BotEvent } from "../bot-event-outbox";
+import { Bot } from "../entities/bot.entity";
+import { customBotNameOf } from "./custom-bot-name";
+
+type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
+
+/**
+ * Builds the events the runtime receives for each Bot command. Custom bots
+ * are looked up in the Catalogue, not among the Actor's uploads, so a Bot
+ * running another user's Custom bot is announced like any other.
+ */
+@Injectable()
+export class BotEventFactory {
+  constructor(
+    private readonly customBotService: CustomBotService,
+    private readonly logger: PinoLogger,
+  ) {}
+
+  created(botId: string, config: BotConfig, customBot: CustomBot): BotEvent[] {
+    return botEvents(
+      botId,
+      this.topicsFor(customBot)?.CREATED,
+      customBotEventPayload(botId, config, customBot.id, customBot),
+    );
+  }
+
+  updated(botId: string, config: BotConfig, customBot: CustomBot): BotEvent[] {
+    return botEvents(
+      botId,
+      this.topicsFor(customBot)?.UPDATED,
+      customBotEventPayload(botId, config, customBot.id, customBot),
+    );
+  }
+
+  /**
+   * Only a malformed type blocks deletion. When the Bot's Custom bot
+   * version cannot be found, the delete goes out on both the realtime and
+   * the scheduled subject: the runtime ignores a delete for a bot it does
+   * not hold, and must not keep running one it does.
+   */
+  async deleted(bot: Bot): Promise<Result<BotEvent[], string>> {
+    const payload = { id: bot.id, config: bot.config };
+    const configType = bot.config?.type;
+    const configVersion = bot.config?.version;
+    if (!configType || !configVersion) {
+      return Ok(deletedOnEverySubject(bot.id, payload));
+    }
+
+    const name = customBotNameOf(configType);
+    if (!name.success) {
+      this.logger.warn({ type: configType }, name.error);
+      return Failure(name.error);
+    }
+
+    const customBotResult =
+      await this.customBotService.getGlobalSpecificVersion(
+        name.data,
+        configVersion,
+      );
+    if (!customBotResult.success) {
+      return Ok(deletedOnEverySubject(bot.id, payload));
+    }
+
+    return Ok(
+      botEvents(bot.id, this.topicsFor(customBotResult.data)?.DELETED, payload),
+    );
+  }
+
+  private topicsFor(customBot: CustomBot): BotTopics | null {
+    const botType = customBot.config.type;
+
+    if (botType === "realtime") {
+      return BOT_TOPICS;
+    } else if (botType === "scheduled") {
+      return SCHEDULED_BOT_TOPICS;
+    } else {
+      this.logger.warn({ botType }, "Unknown bot type");
+      return null;
+    }
+  }
+}
+
+/** No subject means the runtime is not told about the change. */
+const botEvents = (
+  botId: string,
+  subject: string | undefined,
+  payload: Record<string, unknown>,
+): BotEvent[] => (subject ? [{ botId, subject, payload }] : []);
+
+const deletedOnEverySubject = (
+  botId: string,
+  payload: Record<string, unknown>,
+): BotEvent[] =>
+  [BOT_TOPICS.DELETED, SCHEDULED_BOT_TOPICS.DELETED].flatMap((subject) =>
+    botEvents(botId, subject, payload),
+  );
+
+// The runtime's bot-scheduler subscriber expects this flat structure.
+const customBotEventPayload = (
+  botId: string,
+  config: BotConfig,
+  customBotId: string,
+  customBot: CustomBot,
+): Record<string, unknown> => ({
+  id: botId,
+  config: { ...config, customBotId },
+  custom: {
+    config: customBot.config,
+    createdAt: customBot.createdAt,
+    updatedAt: customBot.updatedAt,
+    filePath: customBot.filePath || "",
+    version: customBot.version,
+  },
+});

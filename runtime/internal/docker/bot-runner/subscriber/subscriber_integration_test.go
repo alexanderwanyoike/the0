@@ -50,6 +50,7 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	// Get unique database for this test
 	db := sharedInfra.GetDatabase("bot_created")
 	collectionName := "bots"
@@ -142,6 +143,7 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_created_duplicate")
 	collectionName := "bots"
 
@@ -178,16 +180,11 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	payload, _ := json.Marshal(botMessage)
 
 	// Publish twice
-	sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
-	sharedInfra.natsConn.Flush()
-	time.Sleep(100 * time.Millisecond)
-	sharedInfra.natsConn.Publish(SubjectBotCreated, payload)
-	sharedInfra.natsConn.Flush()
+	events.Publish(t, SubjectBotCreated, payload)
+	events.Publish(t, SubjectBotCreated, payload)
+	events.WaitForHandled(t)
 
-	// Wait for bot to be created (only once despite duplicate events)
 	collection := db.Collection(collectionName)
-	err = WaitForDocument(collection, bson.M{"id": "duplicate-bot"}, 5*time.Second)
-	require.NoError(t, err, "Duplicate bot should appear within 5 seconds")
 
 	// Verify only one bot exists
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "duplicate-bot"})
@@ -208,6 +205,7 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_updated")
 	collectionName := "bots"
 
@@ -317,6 +315,7 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_updated_not_found")
 	collectionName := "bots"
 
@@ -380,6 +379,7 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted")
 	collectionName := "bots"
 
@@ -430,11 +430,8 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	}
 
 	payload, _ := json.Marshal(deleteMessage)
-	err = sharedInfra.natsConn.Publish(SubjectBotDeleted, payload)
-	require.NoError(t, err)
-	sharedInfra.natsConn.Flush()
-
-	time.Sleep(200 * time.Millisecond)
+	events.Publish(t, SubjectBotDeleted, payload)
+	events.WaitForHandled(t)
 
 	// Verify bot was deleted
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "delete-me"})
@@ -463,6 +460,7 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted_not_found")
 	collectionName := "bots"
 
@@ -486,11 +484,8 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 	deleteMessage := BotMessage{ID: "does-not-exist"}
 	payload, _ := json.Marshal(deleteMessage)
 
-	err = sharedInfra.natsConn.Publish(SubjectBotDeleted, payload)
-	require.NoError(t, err)
-	sharedInfra.natsConn.Flush()
-
-	time.Sleep(200 * time.Millisecond)
+	events.Publish(t, SubjectBotDeleted, payload)
+	events.WaitForHandled(t)
 
 	// Should not crash or error - verify subscriber still running
 	collection := db.Collection(collectionName)
@@ -512,6 +507,7 @@ func TestSubscriber_WrappedEventFormat(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("wrapped_event")
 	collectionName := "bots"
 
@@ -585,6 +581,7 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("invalid_json")
 	collectionName := "bots"
 
@@ -604,16 +601,11 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	err = subscriber.Start(ctx)
 	require.NoError(t, err)
 
-	// Small delay to ensure subscriber is fully ready
-	time.Sleep(100 * time.Millisecond)
-
 	// Publish invalid JSON
 	invalidPayload := []byte(`{invalid json}`)
 	err = sharedInfra.natsConn.Publish(SubjectBotCreated, invalidPayload)
 	require.NoError(t, err)
 	sharedInfra.natsConn.Flush()
-
-	time.Sleep(200 * time.Millisecond)
 
 	// Subscriber should still be running - publish valid message
 	validMessage := BotMessage{
@@ -651,6 +643,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	defer os.Unsetenv("NATS_URL")
 	defer os.Unsetenv("MONGO_URI")
 
+	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("graceful_shutdown")
 	collectionName := "bots"
 
@@ -668,9 +661,6 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 
 	err = subscriber.Start(ctx)
 	require.NoError(t, err)
-
-	// Small delay to ensure subscriber is fully ready
-	time.Sleep(100 * time.Millisecond)
 
 	// Publish some events
 	for i := 0; i < 5; i++ {
@@ -710,8 +700,7 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	laterMessage := BotMessage{ID: "after-shutdown"}
 	laterPayload, _ := json.Marshal(laterMessage)
 	sharedInfra.natsConn.Publish(SubjectBotCreated, laterPayload)
-
-	time.Sleep(200 * time.Millisecond)
+	events.WaitForWaiting(t, 1)
 
 	// "after-shutdown" should not exist because subscriber was stopped
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "after-shutdown"})

@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"runtime/internal/model"
+	"runtime/internal/botevents"
 	"runtime/internal/constants"
+	"runtime/internal/model"
 	"runtime/internal/util"
 	"strconv"
 	"sync"
@@ -23,6 +24,9 @@ const (
 	SubjectBotUpdated = "the0.bot.updated"
 	SubjectBotDeleted = "the0.bot.deleted"
 )
+
+// ConsumerName names this subscriber's durable consumer (botevents.Config.Name).
+const ConsumerName = "runtime-bot-events"
 
 type BotMessage struct {
 	ID               string                 `json:"id"`
@@ -113,7 +117,7 @@ type NATSSubscriber struct {
 	collectionName      string
 	maxRetries          int
 	maxBotsPerPartition int
-	subscriptions       []*nats.Subscription
+	events              *botevents.Consumer
 	stopChan            chan struct{}
 	wg                  sync.WaitGroup
 	logger              util.Logger
@@ -158,7 +162,7 @@ func NewNATSSubscriber(
 	}
 
 	// Create NATS connection
-	natsConn, err := nats.Connect(opts.NATSUrl)
+	natsConn, err := botevents.Connect(opts.NATSUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
 	}
@@ -170,7 +174,6 @@ func NewNATSSubscriber(
 		collectionName:      opts.CollectionName,
 		maxRetries:          opts.MaxRetries,
 		maxBotsPerPartition: opts.MaxBotPerPartition,
-		subscriptions:       make([]*nats.Subscription, 0),
 		stopChan:            make(chan struct{}),
 		wg:                  sync.WaitGroup{},
 		logger:              opts.Logger,
@@ -180,65 +183,35 @@ func NewNATSSubscriber(
 func (s *NATSSubscriber) Start(ctx context.Context) error {
 	s.logger.Info("Starting NATS Subscriber...")
 
-	subjects := []string{
-		SubjectBotCreated,
-		SubjectBotUpdated,
-		SubjectBotDeleted,
+	events, err := botevents.NewConsumer(s.natsConn, botevents.Config{
+		Name:     ConsumerName,
+		Subjects: []string{SubjectBotCreated, SubjectBotUpdated, SubjectBotDeleted},
+		Handler:  s.handle,
+		Logger:   s.logger,
+	})
+	if err != nil {
+		return err
 	}
-
-	for _, subject := range subjects {
-		if err := s.setupSubscription(ctx, subject); err != nil {
-			return err
-		}
+	if err := events.Start(ctx); err != nil {
+		return err
 	}
-
-	// Flush to ensure subscriptions are active on server before returning
-	if err := s.natsConn.Flush(); err != nil {
-		return fmt.Errorf("failed to flush NATS connection: %v", err)
-	}
+	s.events = events
 
 	s.logger.Info("NATS Subscriber started successfully")
 	return nil
 }
 
-func (s *NATSSubscriber) setupSubscription(ctx context.Context, subject string) error {
-	// Create queue subscription for load balancing between multiple instances
-	queueGroup := "runtime"
-
-	sub, err := s.natsConn.QueueSubscribe(subject, queueGroup, func(msg *nats.Msg) {
-		s.logger.Info("Received message", "subject", subject, "data", string(msg.Data))
-
-		// Process the message based on the subject
-		var err error
-		switch subject {
-		case SubjectBotCreated:
-			err = s.handleCreate(ctx, msg)
-		case SubjectBotUpdated:
-			err = s.handleUpdate(ctx, msg)
-		case SubjectBotDeleted:
-			err = s.handleDelete(ctx, msg)
-		default:
-			err = fmt.Errorf("unknown subject: %s", subject)
-		}
-
-		if err != nil {
-			s.logger.Error("Failed to process message", "subject", subject, "error", err)
-			// In NATS, we can implement retry logic here or send to a dead letter queue
-			// For now, we'll just log the error and continue
-			return
-		}
-
-		s.logger.Info("Message processed successfully", "subject", subject)
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to subject %s: %v", subject, err)
+func (s *NATSSubscriber) handle(ctx context.Context, subject string, data []byte) error {
+	switch subject {
+	case SubjectBotCreated:
+		return s.handleCreate(ctx, data)
+	case SubjectBotUpdated:
+		return s.handleUpdate(ctx, data)
+	case SubjectBotDeleted:
+		return s.handleDelete(ctx, data)
+	default:
+		return botevents.Permanent(fmt.Errorf("unknown subject: %s", subject))
 	}
-
-	s.subscriptions = append(s.subscriptions, sub)
-	s.logger.Info("Subscribed to subject", "subject", subject, "queue_group", queueGroup)
-
-	return nil
 }
 
 func (s *NATSSubscriber) Stop() error {
@@ -250,11 +223,8 @@ func (s *NATSSubscriber) Stop() error {
 	// Wait for all goroutines to finish
 	s.wg.Wait()
 
-	// Unsubscribe from all subjects
-	for _, sub := range s.subscriptions {
-		if err := sub.Unsubscribe(); err != nil {
-			s.logger.Error("Failed to unsubscribe", "subscription", sub.Subject, "error", err)
-		}
+	if s.events != nil {
+		s.events.Stop()
 	}
 
 	// Close NATS connection
@@ -366,10 +336,10 @@ func (s *NATSSubscriber) findOrCreatePartition(ctx context.Context) (int32, erro
 	return newPartitionID, nil
 }
 
-func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse message: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
 	// Debug logging to see what we actually parsed
@@ -396,10 +366,10 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error 
 	return s.upsertBot(ctx, collection, *message, segmentId)
 }
 
-func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse message: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
@@ -463,10 +433,10 @@ func (s *NATSSubscriber) upsertBot(
 	return nil
 }
 
-func (s *NATSSubscriber) handleDelete(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleDelete(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse message: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)

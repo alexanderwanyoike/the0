@@ -1,33 +1,24 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { McpController } from "../mcp.controller";
 import { McpService } from "../mcp.service";
-import { ApiKeyService } from "@/api-key/api-key.service";
-import { Ok, Failure } from "@/common/result";
+import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { createMockLogger } from "@/test/mock-logger";
 import { PinoLogger } from "nestjs-pino";
+import { mockActor } from "@/test/mock-actor";
 
 describe("McpController", () => {
   let controller: McpController;
   let mcpService: jest.Mocked<McpService>;
-  let apiKeyService: jest.Mocked<ApiKeyService>;
 
-  const mockApiKey = {
-    id: "key-123",
+  const actor = mockActor({
     userId: "user-123",
-    name: "Test Key",
-    key: "the0_testkey",
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+    via: "mcp",
+    apiKeyId: "key-123",
+  });
 
   beforeEach(async () => {
     const mockMcpService = {
       handleToolCall: jest.fn(),
-    };
-
-    const mockApiKeyService = {
-      validateApiKey: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -38,19 +29,17 @@ describe("McpController", () => {
           useValue: mockMcpService,
         },
         {
-          provide: ApiKeyService,
-          useValue: mockApiKeyService,
-        },
-        {
           provide: PinoLogger,
           useValue: createMockLogger(),
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(AuthCombinedGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<McpController>(McpController);
     mcpService = module.get(McpService);
-    apiKeyService = module.get(ApiKeyService);
   });
 
   describe("handleRpc", () => {
@@ -183,7 +172,7 @@ describe("McpController", () => {
     });
 
     describe("tools/call", () => {
-      it("should require authentication", async () => {
+      it("should require an Actor", async () => {
         const request = {
           jsonrpc: "2.0" as const,
           id: 3,
@@ -207,8 +196,6 @@ describe("McpController", () => {
       });
 
       it("should require tool name", async () => {
-        apiKeyService.validateApiKey.mockResolvedValue(Ok(mockApiKey));
-
         const request = {
           jsonrpc: "2.0" as const,
           id: 4,
@@ -218,7 +205,7 @@ describe("McpController", () => {
           },
         };
 
-        const result = await controller.handleRpc(request, "valid-api-key");
+        const result = await controller.handleRpc(request, actor);
 
         expect(result).toEqual({
           jsonrpc: "2.0",
@@ -230,8 +217,7 @@ describe("McpController", () => {
         });
       });
 
-      it("should call McpService.handleToolCall with valid request", async () => {
-        apiKeyService.validateApiKey.mockResolvedValue(Ok(mockApiKey));
+      it("should call McpService.handleToolCall with the Actor", async () => {
         mcpService.handleToolCall.mockResolvedValue({
           content: [{ type: "text", text: '{"bots": []}' }],
         });
@@ -246,48 +232,18 @@ describe("McpController", () => {
           },
         };
 
-        const result = await controller.handleRpc(request, "valid-api-key");
+        const result = await controller.handleRpc(request, actor);
 
-        expect(apiKeyService.validateApiKey).toHaveBeenCalledWith(
-          "valid-api-key",
-        );
         expect(mcpService.handleToolCall).toHaveBeenCalledWith(
           "bot_list",
           {},
-          "user-123",
+          actor,
         );
         expect(result).toEqual({
           jsonrpc: "2.0",
           id: 5,
           result: {
             content: [{ type: "text", text: '{"bots": []}' }],
-          },
-        });
-      });
-
-      it("should not authenticate with invalid API key", async () => {
-        apiKeyService.validateApiKey.mockResolvedValue(
-          Failure("Invalid API key"),
-        );
-
-        const request = {
-          jsonrpc: "2.0" as const,
-          id: 6,
-          method: "tools/call",
-          params: {
-            name: "bot_list",
-            arguments: {},
-          },
-        };
-
-        const result = await controller.handleRpc(request, "invalid-api-key");
-
-        expect(result).toEqual({
-          jsonrpc: "2.0",
-          id: 6,
-          error: {
-            code: -32001,
-            message: "Authentication required. Provide x-api-key header.",
           },
         });
       });
@@ -334,7 +290,6 @@ describe("McpController", () => {
 
     describe("error handling", () => {
       it("should handle service errors gracefully", async () => {
-        apiKeyService.validateApiKey.mockResolvedValue(Ok(mockApiKey));
         mcpService.handleToolCall.mockRejectedValue(new Error("Service error"));
 
         const request = {
@@ -347,7 +302,7 @@ describe("McpController", () => {
           },
         };
 
-        const result = await controller.handleRpc(request, "valid-api-key");
+        const result = await controller.handleRpc(request, actor);
 
         expect(result).toEqual({
           jsonrpc: "2.0",
