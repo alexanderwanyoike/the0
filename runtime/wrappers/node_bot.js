@@ -77,6 +77,12 @@ function settleResult(exitCode) {
         writeResult(result);
     }
     reportError(result);
+    // The bot's result is its own verdict on the run, so an error result fails
+    // the run even when the bot returned normally. Node reads process.exitCode
+    // again after the 'exit' listeners, so setting it here still takes effect.
+    if (exitCode === 0 && isErrorResult(result)) {
+        process.exitCode = 1;
+    }
 }
 
 function handleSignal(signal) {
