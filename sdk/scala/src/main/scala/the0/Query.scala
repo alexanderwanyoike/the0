@@ -44,8 +44,12 @@ object Query {
 
   /**
    * Request object passed to handlers (Express-like).
+   *
+   * @param path The query path
+   * @param params Each parameter as text
+   * @param jsonParams Each parameter as the JSON value it was sent as
    */
-  case class Request(path: String, params: Map[String, String]) {
+  case class Request(path: String, params: Map[String, String], jsonParams: Map[String, JsonValue]) {
     /**
      * Get a parameter value.
      * @param key The parameter key
@@ -66,6 +70,28 @@ object Query {
      * Check if a parameter exists.
      */
     def has(key: String): Boolean = params.contains(key)
+
+    /**
+     * Get a parameter as the JSON value it was sent as.
+     * @param key The parameter key
+     * @return Some(value) if found, None otherwise
+     */
+    def getJson(key: String): Option[JsonValue] = jsonParams.get(key)
+  }
+
+  object Request {
+
+    /**
+     * Build a request whose parameters are all strings, as a URL query string gives them.
+     */
+    def apply(path: String, params: Map[String, String]): Request =
+      Request(path, params, params.map((key, value) => key -> JsonValue.Str(value)))
+
+    /**
+     * Build a request whose parameters keep their JSON types.
+     */
+    def fromJson(path: String, jsonParams: Map[String, JsonValue]): Request =
+      Request(path, jsonParams.collect { case (key, JsonValue.Str(value)) => key -> value }, jsonParams)
   }
 
   // Handler function type
@@ -74,8 +100,8 @@ object Query {
   // Handler registry
   private val handlers: mutable.Map[String, Handler] = mutable.Map.empty
 
-  // Current params
-  private var currentParams: Map[String, String] = Map.empty
+  // Current request
+  private var currentRequest: Request = Request("", Map.empty)
 
   // Bot config
   private var config: String = "{}"
@@ -105,7 +131,13 @@ object Query {
    * Get current query parameters (alternative to request object).
    * @return A copy of the current query parameters
    */
-  def getParams: Map[String, String] = currentParams
+  def getParams: Map[String, String] = currentRequest.params
+
+  /**
+   * Get current query parameters as the JSON values they were sent as.
+   * @return A copy of the current query parameters
+   */
+  def getJsonParams: Map[String, JsonValue] = currentRequest.jsonParams
 
   /**
    * Get the bot configuration as JSON string.
@@ -176,7 +208,7 @@ object Query {
   private def runEphemeral(queryPath: String): Unit = {
     // Parse parameters from environment
     val paramsStr = sys.env.getOrElse("QUERY_PARAMS", "{}")
-    currentParams = parseJsonToMap(paramsStr)
+    currentRequest = Request(queryPath, parseJsonToMap(paramsStr))
 
     // Find and execute handler
     handlers.get(queryPath) match {
@@ -187,8 +219,7 @@ object Query {
 
       case Some(fn) =>
         try {
-          val req = Request(queryPath, currentParams)
-          val data = fn(req)
+          val data = fn(currentRequest)
           writeResult(s"""{"status": "ok", "data": $data}""")
         } catch {
           case e: Exception =>
@@ -235,7 +266,7 @@ object Query {
         } else {
           val pathWithQuery = parts(1)
           val (path, params) = parsePathAndQuery(pathWithQuery)
-          currentParams = params
+          currentRequest = Request(path, params)
 
           // Find and execute handler
           handlers.get(path) match {
@@ -244,8 +275,7 @@ object Query {
 
             case Some(fn) =>
               try {
-                val req = Request(path, params)
-                val data = fn(req)
+                val data = fn(currentRequest)
                 sendResponse(writer, 200, s"""{"status": "ok", "data": $data}""")
               } catch {
                 case e: Exception =>
