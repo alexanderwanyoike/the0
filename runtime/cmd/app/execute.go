@@ -467,6 +467,13 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 	}
 	cmd.Env = execute.BuildBotEnv(cfg)
 
+	// A result.json shipped in the code, or left by an earlier container in the
+	// same pod (an emptyDir outlives a container restart), must not decide this run.
+	resultPath := execute.BotResultPath(cfg.CodePath)
+	if err := execute.ClearBotResult(resultPath); err != nil {
+		logger.Info("Failed to remove stale result file: %v", err)
+	}
+
 	logger.Info("Executing: %s (runtime: %s, entrypoint: %s)", cmd.Path, cfg.Runtime, entrypoint)
 
 	// Run with context for cancellation support using injected dependency
@@ -492,14 +499,16 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 		deps.ProcessExecutor.Kill(cmd)
 		return 1
 	case err := <-done:
+		exitCode := 0
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				return exitErr.ExitCode()
+				exitCode = exitErr.ExitCode()
+			} else {
+				logger.Info("Process error: %v", err)
+				exitCode = 1
 			}
-			logger.Info("Process error: %v", err)
-			return 1
 		}
-		return 0
+		return execute.RunExitCode(exitCode, resultPath)
 	}
 }
 
