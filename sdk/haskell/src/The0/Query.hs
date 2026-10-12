@@ -260,9 +260,7 @@ writeResult result = do
 runEphemeral :: String -> IO ()
 runEphemeral queryPath = do
     mParamsBytes <- lookupEnvBytes "QUERY_PARAMS"
-    let params = case mParamsBytes >>= decodeStrict of
-            Just (Object o) -> Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o]
-            _ -> Map.empty
+    let params = fromMaybe Map.empty (mParamsBytes >>= jsonObjectParams)
     outcome <- answer (RequestValues queryPath params)
     writeResult (answerBody outcome)
     when (answerStatus outcome /= 200) $ exitWith (ExitFailure 1)
@@ -382,9 +380,14 @@ readRequest sock = readHead BS.empty
 queryRequest :: String -> BS.ByteString -> Request
 queryRequest target body =
     let (path, params) = parsePathAndQuery target
-    in case decodeStrict body of
-        Just (Object o) -> RequestValues path (Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o])
-        _ -> Request path params
+    in maybe (Request path params) (RequestValues path) (jsonObjectParams body)
+
+-- | Params from JSON text holding an object, with their JSON types;
+-- 'Nothing' for anything else.
+jsonObjectParams :: BS.ByteString -> Maybe (Map.Map String Value)
+jsonObjectParams bytes = case decodeStrict bytes of
+    Just (Object o) -> Just (Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o])
+    _ -> Nothing
 
 reasonPhrase :: Int -> String
 reasonPhrase 200 = "OK"
