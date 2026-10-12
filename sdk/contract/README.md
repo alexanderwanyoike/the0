@@ -49,6 +49,8 @@ The reference harness is the Python SDK's: `sdk/python/tests/test_contract.py` w
 
    Its exit code is not compared.
 
+   If the process exits before the port accepts connections, run the case again from step 1 with a fresh sandbox and port, up to three attempts in all, and report the last attempt. A harness finds a free port by binding to port 0 and closing the socket, so another process can take the port before the SDK binds it, and the SDK then exits on its bind error.
+
    Otherwise, wait for the process to exit; 60 seconds is the limit.
 
 6. **Compare** everything listed under `expect`, using the [matching rules](#matching). Report every mismatch, not just the first, along with the process's exit code, stdout and stderr.
