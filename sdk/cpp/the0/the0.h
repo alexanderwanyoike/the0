@@ -219,8 +219,9 @@ inline void success(const std::string& message) {
  * Output an error result to the result file and exit with code 1.
  *
  * Writes a JSON object with status "error" and the provided message,
- * then terminates the process with exit code 1.
- * The message is properly escaped for JSON.
+ * prints the message on stderr as an error log line, as
+ * log(message, {}, LogLevel::Error) would, then terminates the process
+ * with exit code 1.
  *
  * @param message The error message to include in the output
  */
@@ -230,6 +231,7 @@ inline void success(const std::string& message) {
         {"message", message}
     };
     write_result(r.dump());
+    log(message, json::object(), LogLevel::Error);
     std::exit(1);
 }
 
