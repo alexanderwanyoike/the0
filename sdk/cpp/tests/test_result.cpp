@@ -108,6 +108,21 @@ TEST_SUITE("the0::success") {
     }
 }
 
+TEST_SUITE("the0::write_result") {
+    TEST_CASE("reports a result it cannot write as an error log line") {
+        SetEnv mount("CODE_MOUNT_DIR", "the0-test-no-such-dir/bot");
+        CaptureStderr capture;
+        the0::success("done");
+
+        std::string output = capture.get();
+        REQUIRE(the0::json::accept(output));
+        auto json = the0::json::parse(output);
+        CHECK(json["level"] == "error");
+        CHECK(json["message"].is_string());
+        CHECK(json["timestamp"].is_string());
+    }
+}
+
 TEST_SUITE("the0::result with json") {
     TEST_CASE("writes custom JSON object to result file") {
         ResultFileContext ctx;

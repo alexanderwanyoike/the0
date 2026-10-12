@@ -119,6 +119,22 @@ TEST_CASE("query::Request") {
     }
 }
 
+TEST_CASE("query::write_result") {
+    SUBCASE("reports a result it cannot write as an error log line") {
+        query::set_result_path("/proc/the0-test-no-such-dir/result.json");
+        CaptureStderr capture;
+        query::write_result(json{{"status", "ok"}, {"data", 1}});
+        query::set_result_path("/query/result.json");
+
+        std::string output = capture.get();
+        REQUIRE(json::accept(output));
+        auto line = json::parse(output);
+        CHECK(line["level"] == "error");
+        CHECK(line["message"].is_string());
+        CHECK(line["timestamp"].is_string());
+    }
+}
+
 TEST_CASE("query::url_decode") {
     SUBCASE("turns a plus into a space and percent escapes into bytes") {
         CHECK(query::url_decode("two+words") == "two words");
