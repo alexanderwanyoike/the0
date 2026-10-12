@@ -4,12 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/internal/botevents/eventstest"
+	"runtime/internal/model"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -23,11 +28,15 @@ import (
 // share the same containers. Tests run sequentially by default in Go.
 var sharedInfra *TestInfrastructure
 
+// events is THE0_EVENTS and this subscriber's durable consumer on it.
+var events eventstest.Events
+
 // TestInfrastructure manages NATS and MongoDB testcontainers for integration tests
 type TestInfrastructure struct {
 	natsContainer  testcontainers.Container
 	mongoContainer testcontainers.Container
 	natsConn       *nats.Conn
+	js             jetstream.JetStream
 	mongoClient    *mongo.Client
 	NATSURL        string
 	MongoURI       string
@@ -51,8 +60,59 @@ func (ti *TestInfrastructure) Close() {
 
 // GetDatabase returns a MongoDB database handle with a unique name for test isolation
 func (ti *TestInfrastructure) GetDatabase(testName string) *mongo.Database {
-	dbName := fmt.Sprintf("test_%s_%d", testName, time.Now().Unix())
+	dbName := fmt.Sprintf("test_%s_%d", testName, time.Now().UnixNano())
 	return ti.mongoClient.Database(dbName)
+}
+
+const testCollection = "bots"
+
+// startSubscriber starts a subscriber writing to db and stops it when the
+// test ends.
+func startSubscriber(t *testing.T, db *mongo.Database) *NATSSubscriber {
+	t.Helper()
+	t.Setenv("MONGO_URI", sharedInfra.MongoURI)
+	subscriber, err := NewNATSSubscriber(context.Background(), SubscriberOptions{
+		NATSUrl:            sharedInfra.NATSURL,
+		DBName:             db.Name(),
+		CollectionName:     testCollection,
+		MaxRetries:         3,
+		MaxBotPerPartition: 10,
+		Logger:             &testLogger{t: t},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = subscriber.Stop() })
+	require.NoError(t, subscriber.Start(context.Background()))
+	return subscriber
+}
+
+func testBotMessage(id string) BotMessage {
+	return BotMessage{
+		ID:     id,
+		Config: map[string]interface{}{"symbol": "BTC/USD"},
+		CustomBotVersion: model.CustomBotVersion{
+			Config: model.APIBotConfig{
+				Runtime:     "python3.11",
+				Entrypoints: map[string]string{"bot": "main.py"},
+			},
+			Version: "1.0.0",
+		},
+	}
+}
+
+// insertBot stores a bot as an earlier created event would have, in
+// partition 1 with the given bot count.
+func insertBot(t *testing.T, db *mongo.Database, id string, partitionBotCount int) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := db.Collection(testCollection).InsertOne(ctx, model.Bot{
+		ID:               id,
+		SegmentId:        1,
+		Config:           map[string]interface{}{"symbol": "BTC/USD"},
+		CustomBotVersion: testBotMessage(id).CustomBotVersion,
+	})
+	require.NoError(t, err)
+	_, err = db.Collection("partitions").InsertOne(ctx, bson.M{"_id": int32(1), "bot_count": partitionBotCount})
+	require.NoError(t, err)
 }
 
 // TestMain runs once before all tests in the package
@@ -60,6 +120,7 @@ func (ti *TestInfrastructure) GetDatabase(testName string) *mongo.Database {
 func TestMain(m *testing.M) {
 	// Start test infrastructure once for all tests
 	sharedInfra = startTestInfrastructure()
+	events = eventstest.Events{JS: sharedInfra.js, Consumer: ConsumerName}
 
 	// Run all tests sequentially (do not use -parallel flag with this package)
 	exitCode := m.Run()
@@ -76,35 +137,10 @@ func TestMain(m *testing.M) {
 func startTestInfrastructure() *TestInfrastructure {
 	ctx := context.Background()
 
-	// Start NATS container
-	natsReq := testcontainers.ContainerRequest{
-		Image:        "nats:latest",
-		ExposedPorts: []string{"4222/tcp"},
-		WaitingFor: wait.ForAll(
-			wait.ForListeningPort("4222/tcp"),
-			wait.ForLog("Server is ready"),
-		).WithDeadline(60 * time.Second),
-	}
-
-	natsC, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: natsReq,
-		Started:          true,
-	})
+	natsC, natsURL, err := eventstest.StartNATS(ctx)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to start NATS container: %v", err))
+		panic(err.Error())
 	}
-
-	natsHost, err := natsC.Host(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get NATS host: %v", err))
-	}
-
-	natsPort, err := natsC.MappedPort(ctx, "4222")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to get NATS port: %v", err))
-	}
-
-	natsURL := fmt.Sprintf("nats://%s:%s", natsHost, natsPort.Port())
 
 	// Start MongoDB container
 	mongoReq := testcontainers.ContainerRequest{
@@ -149,6 +185,14 @@ func startTestInfrastructure() *TestInfrastructure {
 		panic(fmt.Sprintf("Failed to connect to NATS: %v", err))
 	}
 
+	js, err := jetstream.New(nc)
+	if err != nil {
+		nc.Close()
+		_ = natsC.Terminate(ctx)
+		_ = mongoC.Terminate(ctx)
+		panic(fmt.Sprintf("Failed to create JetStream context: %v", err))
+	}
+
 	// Connect MongoDB client
 	clientOpts := options.Client().
 		ApplyURI(mongoURI).
@@ -176,6 +220,7 @@ func startTestInfrastructure() *TestInfrastructure {
 		natsContainer:  natsC,
 		mongoContainer: mongoC,
 		natsConn:       nc,
+		js:             js,
 		mongoClient:    mongoClient,
 		NATSURL:        natsURL,
 		MongoURI:       mongoURI,

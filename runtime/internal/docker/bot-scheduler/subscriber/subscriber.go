@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"runtime/internal/model"
+	"runtime/internal/botevents"
 	"runtime/internal/constants"
+	"runtime/internal/model"
 	"runtime/internal/util"
 	"strconv"
 	"sync"
@@ -23,6 +24,9 @@ const (
 	SubjectBotScheduleUpdated = "the0.bot-schedule.updated"
 	SubjectBotScheduleDeleted = "the0.bot-schedule.deleted"
 )
+
+// ConsumerName names this subscriber's durable consumer (botevents.Config.Name).
+const ConsumerName = "runtime-bot-schedule-events"
 
 type BotScheduleMessage struct {
 	ID     string                 `json:"id"`
@@ -105,7 +109,7 @@ type NATSSubscriber struct {
 	collectionName             string
 	maxRetries                 int
 	maxBotSchedulePerPartition int
-	subscriptions              []*nats.Subscription
+	events                     *botevents.Consumer
 	stopChan                   chan struct{}
 	wg                         sync.WaitGroup
 	logger                     util.Logger
@@ -154,7 +158,7 @@ func NewNATSSubscriber(
 	}
 
 	// Create NATS connection
-	natsConn, err := nats.Connect(opts.NATSUrl)
+	natsConn, err := botevents.Connect(opts.NATSUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
 	}
@@ -166,7 +170,6 @@ func NewNATSSubscriber(
 		collectionName:             opts.CollectionName,
 		maxRetries:                 opts.MaxRetries,
 		maxBotSchedulePerPartition: opts.MaxBotSchedulePerPartition,
-		subscriptions:              make([]*nats.Subscription, 0),
 		stopChan:                   make(chan struct{}),
 		wg:                         sync.WaitGroup{},
 		logger:                     opts.Logger,
@@ -176,79 +179,41 @@ func NewNATSSubscriber(
 func (s *NATSSubscriber) Start(ctx context.Context) error {
 	s.logger.Info("Starting NATS Subscriber...")
 
-	subjects := []string{
-		SubjectBotScheduleCreated,
-		SubjectBotScheduleUpdated,
-		SubjectBotScheduleDeleted,
+	events, err := botevents.NewConsumer(s.natsConn, botevents.Config{
+		Name:     ConsumerName,
+		Subjects: []string{SubjectBotScheduleCreated, SubjectBotScheduleUpdated, SubjectBotScheduleDeleted},
+		Handler:  s.handle,
+		Logger:   s.logger,
+	})
+	if err != nil {
+		return err
 	}
-
-	for _, subject := range subjects {
-		if err := s.setupSubscription(ctx, subject); err != nil {
-			return err
-		}
+	if err := events.Start(ctx); err != nil {
+		return err
 	}
-
-	// Flush to ensure subscriptions are active on server before returning
-	if err := s.natsConn.Flush(); err != nil {
-		return fmt.Errorf("failed to flush NATS connection: %v", err)
-	}
+	s.events = events
 
 	s.logger.Info("NATS Subscriber started successfully")
 	return nil
 }
 
-func (s *NATSSubscriber) setupSubscription(ctx context.Context, subject string) error {
-	// Create queue subscription for load balancing between multiple instances
-	queueGroup := "runtime"
-
-	sub, err := s.natsConn.QueueSubscribe(subject, queueGroup, func(msg *nats.Msg) {
-		s.logger.Info("Received message", "subject", subject, "data", string(msg.Data))
-
-		// Process the message based on the subject
-		var err error
-		switch subject {
-		case SubjectBotScheduleCreated:
-			err = s.handleCreate(ctx, msg)
-		case SubjectBotScheduleUpdated:
-			err = s.handleUpdate(ctx, msg)
-		case SubjectBotScheduleDeleted:
-			err = s.handleDelete(ctx, msg)
-		default:
-			err = fmt.Errorf("unknown subject: %s", subject)
-		}
-
-		if err != nil {
-			s.logger.Error("Failed to process message", "subject", subject, "error", err)
-			// In NATS, we can implement retry logic here or send to a dead letter queue
-			// For now, we'll just log the error and continue
-			return
-		}
-
-		s.logger.Info("Message processed successfully", "subject", subject)
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to subject %s: %v", subject, err)
+func (s *NATSSubscriber) handle(ctx context.Context, subject string, data []byte) error {
+	switch subject {
+	case SubjectBotScheduleCreated:
+		return s.handleCreate(ctx, data)
+	case SubjectBotScheduleUpdated:
+		return s.handleUpdate(ctx, data)
+	case SubjectBotScheduleDeleted:
+		return s.handleDelete(ctx, data)
+	default:
+		return botevents.Permanent(fmt.Errorf("unknown subject: %s", subject))
 	}
-
-	s.subscriptions = append(s.subscriptions, sub)
-	s.logger.Info("Subscribed to subject", "subject", subject, "queue_group", queueGroup)
-
-	return nil
 }
 
-// IsReady returns true if the subscriber has active subscriptions.
-// This can be used to verify the subscriber is ready to receive messages.
+// IsReady reports whether the subscriber is bound to THE0_EVENTS and
+// receiving events.
 func (s *NATSSubscriber) IsReady() bool {
-	if len(s.subscriptions) == 0 {
-		return false
-	}
-	for _, sub := range s.subscriptions {
-		if !sub.IsValid() {
-			return false
-		}
-	}
-	return true
+	return s.events != nil && s.events.Ready()
 }
 
 func (s *NATSSubscriber) Stop() error {
@@ -260,11 +225,8 @@ func (s *NATSSubscriber) Stop() error {
 	// Wait for all goroutines to finish
 	s.wg.Wait()
 
-	// Unsubscribe from all subjects
-	for _, sub := range s.subscriptions {
-		if err := sub.Unsubscribe(); err != nil {
-			s.logger.Error("Failed to unsubscribe", "subscription", sub.Subject, "error", err)
-		}
+	if s.events != nil {
+		s.events.Stop()
 	}
 
 	// Close NATS connection
@@ -362,10 +324,10 @@ func (s *NATSSubscriber) findOrCreatePartition(ctx context.Context) (int32, erro
 	return newPartitionID, nil
 }
 
-func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse message: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
@@ -389,10 +351,10 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, msg *nats.Msg) error 
 	return s.upsertBotSchedule(ctx, collection, *message, segmentId)
 }
 
-func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse message: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
@@ -424,7 +386,7 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error 
 	existingSchedule, existingOk := existingBot.Config["schedule"].(string)
 	newSchedule, newOk := message.Config["schedule"].(string)
 	if !newOk || newSchedule == "" {
-		return fmt.Errorf("missing or invalid schedule in message config")
+		return botevents.Permanent(fmt.Errorf("missing or invalid schedule in message config"))
 	}
 	if !existingOk || existingSchedule != newSchedule {
 		nextTime, err := util.CalculateNextExecutionTime(
@@ -432,7 +394,7 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error 
 			time.Now(),
 		)
 		if err != nil {
-			return fmt.Errorf("failed to calculate next execution time: %v", err)
+			return botevents.Permanent(fmt.Errorf("failed to calculate next execution time: %v", err))
 		}
 		update["$set"].(bson.M)["next_execution_time"] = nextTime.Unix()
 	}
@@ -441,7 +403,7 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error 
 	if err != nil {
 		return fmt.Errorf("failed to update bot schedule: %v", err)
 	}
-	if result.ModifiedCount == 0 {
+	if result.MatchedCount == 0 {
 		return fmt.Errorf("no bot schedule found with ID: %s", message.ID)
 	}
 
@@ -449,10 +411,10 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, msg *nats.Msg) error 
 	return nil
 }
 
-func (s *NATSSubscriber) handleDelete(ctx context.Context, msg *nats.Msg) error {
-	message, err := s.parseEventMessage(msg.Data)
+func (s *NATSSubscriber) handleDelete(ctx context.Context, data []byte) error {
+	message, err := s.parseEventMessage(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse message: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
@@ -496,7 +458,7 @@ func (s *NATSSubscriber) upsertBotSchedule(
 ) error {
 	schedule, ok := message.Config["schedule"].(string)
 	if !ok || schedule == "" {
-		return fmt.Errorf("missing or invalid schedule in message config")
+		return botevents.Permanent(fmt.Errorf("missing or invalid schedule in message config"))
 	}
 
 	nextTime, err := util.CalculateNextExecutionTime(
@@ -504,7 +466,7 @@ func (s *NATSSubscriber) upsertBotSchedule(
 		time.Now(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to calculate next execution time: %v", err)
+		return botevents.Permanent(fmt.Errorf("failed to calculate next execution time: %v", err))
 	}
 
 	// Convert entire Custom map to CustomBotVersion struct using JSON marshaling
