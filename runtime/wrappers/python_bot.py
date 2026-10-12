@@ -62,10 +62,13 @@ def settle_result(fallback):
     write_result(fallback)
     return fallback
 
+def is_error_result(result):
+    return isinstance(result, dict) and result.get("status") == "error"
+
 def report_error(result):
     # The SDK's error() only writes result.json, which nothing reads for bot
     # runs, so without this line a failed run leaves no trace in the logs.
-    if not isinstance(result, dict) or result.get("status") != "error":
+    if not is_error_result(result):
         return
     entry = {
         "level": "error",
@@ -221,7 +224,12 @@ def main():
         fallback = DEFAULT_SUCCESS
     else:
         fallback = {"status": "error", "message": outcome["message"] or f"Bot exited with code {exit_code}"}
-    report_error(settle_result(fallback))
+    result = settle_result(fallback)
+    report_error(result)
+    # The bot's result is its own verdict on the run, so an error result fails
+    # the run even when the bot returned normally.
+    if exit_code == 0 and is_error_result(result):
+        exit_code = 1
     sys.exit(exit_code)
 
 if __name__ == "__main__":

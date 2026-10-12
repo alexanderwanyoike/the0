@@ -94,9 +94,9 @@ func pythonBot(t *testing.T, mainPy string) botFixture {
 	return botFixture{interpreter: interpreter, wrapper: wrapperPath(t, "python_bot.py"), script: "main.py", dir: dir}
 }
 
-// nodeSDKStandIn has the result.json contract of the0-node's success() and
-// error() (sdk/nodejs/src/index.ts), which cannot be loaded here without a
-// TypeScript build.
+// nodeSDKStandIn has the result.json contract of the0-node's success(),
+// error() and result() (sdk/nodejs/src/index.ts), which cannot be loaded here
+// without a TypeScript build.
 const nodeSDKStandIn = `const fs = require('fs');
 
 function writeResult(result) {
@@ -110,6 +110,10 @@ exports.success = function (message, data) {
 exports.error = function (message, data) {
     writeResult({ status: 'error', message, ...(data && { data }) });
     process.exit(1);
+};
+
+exports.result = function (result) {
+    writeResult(result);
 };
 `
 
@@ -197,6 +201,18 @@ def main(bot_id, config):
 			message:  "exchange unreachable",
 		},
 		{
+			name: "python bot writes an error result and returns",
+			bot: func(t *testing.T) botFixture {
+				return pythonBot(t, `import the0
+
+def main(bot_id, config):
+    the0.result({"status": "error", "message": "position limit breached"})
+`)
+			},
+			exitCode: 1,
+			message:  "position limit breached",
+		},
+		{
 			name: "python bot exits with its own code",
 			bot: func(t *testing.T) botFixture {
 				return pythonBot(t, `import sys
@@ -207,6 +223,20 @@ def main(bot_id, config):
 			},
 			exitCode: 3,
 			message:  "Bot exited with code 3",
+		},
+		{
+			name: "python bot writes an error result and exits with its own code",
+			bot: func(t *testing.T) botFixture {
+				return pythonBot(t, `import sys
+import the0
+
+def main(bot_id, config):
+    the0.result({"status": "error", "message": "position limit breached"})
+    sys.exit(3)
+`)
+			},
+			exitCode: 3,
+			message:  "position limit breached",
 		},
 		{
 			name: "node bot calls error",
@@ -233,6 +263,30 @@ exports.main = async function (botId, config) {
 			message:  "exchange unreachable",
 		},
 		{
+			name: "node bot writes an error result and returns",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { result } = require('the0-node');
+
+exports.main = async function (botId, config) {
+    result({ status: 'error', message: 'position limit breached' });
+};
+`)
+			},
+			exitCode: 1,
+			message:  "position limit breached",
+		},
+		{
+			name: "node bot returns an error result",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {
+    return { status: 'error', message: 'position limit breached' };
+};
+`)
+			},
+			exitCode: 1,
+			message:  "position limit breached",
+		},
+		{
 			name: "node bot exits with its own code",
 			bot: func(t *testing.T) botFixture {
 				return nodeBot(t, `exports.main = async function (botId, config) {
@@ -242,6 +296,20 @@ exports.main = async function (botId, config) {
 			},
 			exitCode: 3,
 			message:  "Bot exited with code 3",
+		},
+		{
+			name: "node bot writes an error result and exits with its own code",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { result } = require('the0-node');
+
+exports.main = async function (botId, config) {
+    result({ status: 'error', message: 'position limit breached' });
+    process.exit(3);
+};
+`)
+			},
+			exitCode: 3,
+			message:  "position limit breached",
 		},
 	}
 
