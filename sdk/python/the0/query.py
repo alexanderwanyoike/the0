@@ -301,11 +301,12 @@ def _run_server():
         def log_message(self, format, *args):
             pass  # Suppress default logging
 
+    # Imported here because the0/__init__.py imports this module before it
+    # defines log().
+    from . import log
+
     server = HTTPServer(("0.0.0.0", port), QueryHTTPHandler)
-    print(
-        json.dumps({"_log": "info", "message": f"Query server started on port {port}"}),
-        file=sys.stderr,
-    )
+    log(f"Query server started on port {port}")
     server.serve_forever()
 
 
