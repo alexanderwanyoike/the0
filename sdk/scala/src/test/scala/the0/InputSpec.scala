@@ -4,6 +4,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterEach
 import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.file.Files
+import scala.util.Try
 
 /**
  * Tests for the0 Input module.
@@ -218,6 +219,31 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""_metric":"test""""), s"Should have metric: $output")
     assert(output.contains(""""timestamp":"""), s"Should have timestamp: $output")
   }
+
+  test("metric with empty data prints one JSON object") {
+    val output = captureStdout {
+      Input.metric("ping", "{}")
+    }
+    assert(keys(output) == Some(Set("_metric", "timestamp")), s"Should be one JSON object: $output")
+  }
+
+  test("metric merges data written with whitespace") {
+    val output = captureStdout {
+      Input.metric("price", """ { "value" : 1.5 } """)
+    }
+    assert(keys(output) == Some(Set("_metric", "timestamp", "value")), s"Should merge value: $output")
+  }
+
+  test("log with empty data written with whitespace prints one JSON object") {
+    val output = captureStderr {
+      Input.log("Starting", "{ }")
+    }
+    assert(keys(output) == Some(Set("level", "message", "timestamp")), s"Should be one JSON object: $output")
+  }
+
+  // The keys of the one JSON object the output holds, or None when it is not one.
+  private def keys(output: String): Option[Set[String]] =
+    Try(ujson.read(output)).toOption.flatMap(_.objOpt).map(_.keySet.toSet)
 
   // ============ parse() tests ============
 
