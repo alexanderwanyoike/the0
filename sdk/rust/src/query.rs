@@ -222,49 +222,44 @@ fn write_result(result: Value) {
     }
 }
 
+/// What a query comes to in either mode: the status the query server answers
+/// with, and the body both modes send. An ephemeral query exits 0 only on 200.
+struct Answer {
+    status: u16,
+    body: Value,
+}
+
+/// Run the handler registered for `path`, or report that there is none.
+fn answer(path: &str, params: HashMap<String, String>) -> Answer {
+    *CURRENT_PARAMS.lock().unwrap() = Some(params.clone());
+
+    let handlers = HANDLERS.lock().unwrap();
+    let h = handlers.as_ref().expect("run() registers the built-ins");
+    match h.get(path) {
+        Some(handler_fn) => Answer {
+            status: 200,
+            body: json!({"status": "ok", "data": handler_fn(&QueryRequest::new(path, params))}),
+        },
+        None => Answer {
+            status: 404,
+            body: json!({
+                "status": "error",
+                "error": format!("No handler for path: {}", path),
+                "available": h.keys().cloned().collect::<Vec<String>>()
+            }),
+        },
+    }
+}
+
 /// Execute a single query and write result to /query/result.json.
 fn run_ephemeral(query_path: &str) {
-    // Parse parameters from environment
     let params_str = env::var("QUERY_PARAMS").unwrap_or_else(|_| "{}".to_string());
     let params: HashMap<String, String> = serde_json::from_str(&params_str).unwrap_or_default();
 
-    {
-        let mut current = CURRENT_PARAMS.lock().unwrap();
-        *current = Some(params.clone());
-    }
-
-    // Find handler
-    let result = {
-        let handlers = HANDLERS.lock().unwrap();
-        if let Some(ref h) = *handlers {
-            if let Some(handler_fn) = h.get(query_path) {
-                let req = QueryRequest::new(query_path, params);
-                Some(handler_fn(&req))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
-
-    match result {
-        Some(data) => {
-            write_result(json!({"status": "ok", "data": data}));
-        }
-        None => {
-            let handlers = HANDLERS.lock().unwrap();
-            let available: Vec<String> = handlers
-                .as_ref()
-                .map(|h| h.keys().cloned().collect())
-                .unwrap_or_default();
-            write_result(json!({
-                "status": "error",
-                "error": format!("No handler for path: {}", query_path),
-                "available": available
-            }));
-            std::process::exit(1);
-        }
+    let answer = answer(query_path, params);
+    write_result(answer.body);
+    if answer.status != 200 {
+        std::process::exit(1);
     }
 }
 
@@ -295,78 +290,54 @@ fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&stream);
     let request_line = buf_reader.lines().next();
 
-    let (status, response_body) = match request_line {
-        Some(Ok(line)) => {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                let path_with_query = parts[1];
-                let (path, query_string) = if let Some(idx) = path_with_query.find('?') {
-                    (&path_with_query[..idx], Some(&path_with_query[idx + 1..]))
-                } else {
-                    (path_with_query, None)
-                };
-
-                // Parse query parameters
-                let params: HashMap<String, String> = query_string
-                    .map(|qs| {
-                        qs.split('&')
-                            .filter_map(|pair| {
-                                let mut parts = pair.splitn(2, '=');
-                                Some((
-                                    parts.next()?.to_string(),
-                                    parts.next().unwrap_or("").to_string(),
-                                ))
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                {
-                    let mut current = CURRENT_PARAMS.lock().unwrap();
-                    *current = Some(params.clone());
-                }
-
-                // Find and execute handler
-                let result = {
-                    let handlers = HANDLERS.lock().unwrap();
-                    let h = handlers.as_ref().expect("run() registers the built-ins");
-                    match h.get(path) {
-                        Some(handler_fn) => Ok(handler_fn(&QueryRequest::new(path, params))),
-                        None => Err(h.keys().cloned().collect::<Vec<String>>()),
-                    }
-                };
-
-                match result {
-                    Ok(data) => ("200 OK", json!({"status": "ok", "data": data}).to_string()),
-                    Err(available) => (
-                        "404 Not Found",
-                        json!({
-                            "status": "error",
-                            "error": format!("No handler for path: {}", path),
-                            "available": available
-                        })
-                        .to_string(),
-                    ),
-                }
-            } else {
-                (
-                    "400 Bad Request",
-                    json!({"status": "error", "error": "Invalid request"}).to_string(),
-                )
-            }
-        }
-        _ => (
-            "400 Bad Request",
-            json!({"status": "error", "error": "Failed to read request"}).to_string(),
-        ),
+    let answer = match request_line {
+        Some(Ok(line)) => match line.split_whitespace().nth(1) {
+            Some(target) => match target.split_once('?') {
+                Some((path, query_string)) => answer(path, query_string_params(query_string)),
+                None => answer(target, HashMap::new()),
+            },
+            None => bad_request("Invalid request"),
+        },
+        _ => bad_request("Failed to read request"),
     };
 
+    let body = answer.body.to_string();
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        status,
-        response_body.len(),
-        response_body
+        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        answer.status,
+        reason_phrase(answer.status),
+        body.len(),
+        body
     );
 
     stream.write_all(response.as_bytes()).ok();
+}
+
+fn query_string_params(query_string: &str) -> HashMap<String, String> {
+    query_string
+        .split('&')
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            Some((
+                parts.next()?.to_string(),
+                parts.next().unwrap_or("").to_string(),
+            ))
+        })
+        .collect()
+}
+
+fn bad_request(error: &str) -> Answer {
+    Answer {
+        status: 400,
+        body: json!({"status": "error", "error": error}),
+    }
+}
+
+fn reason_phrase(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        _ => "Internal Server Error",
+    }
 }
