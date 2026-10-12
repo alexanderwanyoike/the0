@@ -36,7 +36,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -370,20 +370,9 @@ fn run_server() {
 
 /// Handle an HTTP connection.
 fn handle_connection(mut stream: TcpStream) {
-    let buf_reader = BufReader::new(&stream);
-    let request_line = buf_reader.lines().next();
-
-    let answer = match request_line {
-        Some(Ok(line)) => match line.split_whitespace().nth(1) {
-            Some(target) => answer(match target.split_once('?') {
-                Some((path, query_string)) => {
-                    QueryRequest::new(path, query_string_params(query_string))
-                }
-                None => QueryRequest::new(target, HashMap::new()),
-            }),
-            None => bad_request("Invalid request"),
-        },
-        _ => bad_request("Failed to read request"),
+    let answer = match read_request(&stream) {
+        Ok((target, body)) => answer(query_request(&target, &body)),
+        Err(error) => bad_request(error),
     };
 
     let body = answer.body.to_string();
@@ -396,6 +385,65 @@ fn handle_connection(mut stream: TcpStream) {
     );
 
     stream.write_all(response.as_bytes()).ok();
+}
+
+/// The request target and body of one HTTP request.
+fn read_request(stream: &TcpStream) -> Result<(String, Vec<u8>), &'static str> {
+    let mut reader = BufReader::new(stream);
+    let mut request_line = String::new();
+    match reader.read_line(&mut request_line) {
+        Ok(0) | Err(_) => return Err("Failed to read request"),
+        Ok(_) => {}
+    }
+    let target = request_line
+        .split_whitespace()
+        .nth(1)
+        .ok_or("Invalid request")?
+        .to_string();
+
+    let mut content_length = 0;
+    loop {
+        let mut header = String::new();
+        if reader
+            .read_line(&mut header)
+            .map_err(|_| "Failed to read request")?
+            == 0
+        {
+            break;
+        }
+        let header = header.trim_end();
+        if header.is_empty() {
+            break;
+        }
+        if let Some((name, value)) = header.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().map_err(|_| "Invalid request")?;
+            }
+        }
+    }
+
+    let mut body = Vec::new();
+    reader
+        .take(content_length)
+        .read_to_end(&mut body)
+        .map_err(|_| "Failed to read request")?;
+    Ok((target, body))
+}
+
+/// A JSON object body supplies the params with their JSON types; otherwise
+/// they come from the query string.
+fn query_request(target: &str, body: &[u8]) -> QueryRequest {
+    let (path, query_string) = match target.split_once('?') {
+        Some((path, query_string)) => (path, Some(query_string)),
+        None => (target, None),
+    };
+    match std::str::from_utf8(body).ok().and_then(json_object_params) {
+        Some(values) => QueryRequest::from_values(path, values),
+        None => QueryRequest::new(
+            path,
+            query_string.map(query_string_params).unwrap_or_default(),
+        ),
+    }
 }
 
 fn query_string_params(query_string: &str) -> HashMap<String, String> {
