@@ -33,17 +33,21 @@
 #include "state.h"
 #include "the0.h"
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <vector>
 
 // Simple socket includes for HTTP server
 #ifdef _WIN32
@@ -68,6 +72,45 @@ using json = nlohmann::json;
  * catches what state throws.
  */
 using ReadOnlyStateError = the0::state::ReadOnlyStateError;
+
+namespace detail {
+
+/**
+ * `value` as a T, or nothing when it is not one. nlohmann/json alone would
+ * turn 0.25 into the int 0 and true into 1, so numbers and booleans must
+ * already be of the kind asked for, and integers must fit.
+ */
+template <typename T>
+std::optional<T> json_as(const json& value) {
+    if constexpr (std::is_same_v<T, bool>) {
+        if (!value.is_boolean()) return std::nullopt;
+    } else if constexpr (std::is_integral_v<T>) {
+        if (!value.is_number_integer()) return std::nullopt;
+        if (value.is_number_unsigned()) {
+            if (value.get<std::uint64_t>() > static_cast<std::uint64_t>(std::numeric_limits<T>::max())) {
+                return std::nullopt;
+            }
+        } else {
+            const auto number = value.get<std::int64_t>();
+            if constexpr (std::is_signed_v<T>) {
+                if (number < std::numeric_limits<T>::min() || number > std::numeric_limits<T>::max()) {
+                    return std::nullopt;
+                }
+            } else if (number < 0 || static_cast<std::uint64_t>(number) > std::numeric_limits<T>::max()) {
+                return std::nullopt;
+            }
+        }
+    } else if constexpr (std::is_floating_point_v<T>) {
+        if (!value.is_number()) return std::nullopt;
+    }
+    try {
+        return value.get<T>();
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+} // namespace detail
 
 /**
  * Request object passed to handlers (Express-like).
@@ -143,8 +186,11 @@ public:
      */
     template <typename T>
     std::optional<T> get_as(const std::string& key) const {
-        (void)key;
-        return std::nullopt;
+        auto it = values_.find(key);
+        if (it == values_.end()) {
+            return std::nullopt;
+        }
+        return detail::json_as<T>(*it);
     }
 
     /**
