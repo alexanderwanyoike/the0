@@ -45,6 +45,21 @@ jobs:
     - name: Build runtime image for integration tests
       run: docker build -t the0/runtime:latest ./runtime
 
+    # The bot contract check (cmd/app/contract_e2e_test.go) runs Node.js bots
+    # on the SDK built from this tree.
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'yarn'
+        cache-dependency-path: sdk/nodejs/yarn.lock
+
+    - name: Build the Node.js SDK
+      working-directory: ./sdk/nodejs
+      run: |
+        yarn install --frozen-lockfile
+        yarn build
+
     - name: Run tests
       working-directory: ./runtime
       run: go test -p 1 ./...
