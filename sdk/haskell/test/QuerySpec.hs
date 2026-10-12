@@ -8,6 +8,7 @@ import The0.State as State
 import Data.Aeson (Value(..), object, (.=), toJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.IO.Temp (withSystemTempDirectory)
@@ -140,6 +141,11 @@ spec = do
             Query.getParamAs fromQueryString "limit" `shouldBe` Just (5 :: Int)
             Query.getParamAs fromQueryString "live" `shouldBe` Just True
             Query.getParamAs typedRequest "count" `shouldBe` Just (7 :: Int)
+
+        it "getParamAs asked for text gives a non-string param as its JSON text and a null as Nothing" $ do
+            Query.getParamAs typedRequest "limit" `shouldBe` Just ("5" :: String)
+            Query.getParamAs typedRequest "filter" `shouldBe` Just ("{\"side\":\"buy\"}" :: T.Text)
+            (Query.getParamAs typedRequest "cursor" :: Maybe String) `shouldBe` Nothing
 
         it "reqValues keeps every param's JSON type" $
             Query.reqValues typedRequest `shouldBe` typedParams
