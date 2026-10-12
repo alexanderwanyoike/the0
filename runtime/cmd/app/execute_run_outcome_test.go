@@ -75,6 +75,36 @@ func TestBotRun_ExitCode(t *testing.T) {
 			script:   writesResult(`{"status":"success","message":"order filled"}`) + exits(2),
 			exitCode: 2,
 		},
+		{
+			name:     "an error result fails a run that exits 0",
+			script:   writesResult(`{"status":"error","message":"position limit breached"}`) + exits(0),
+			exitCode: 1,
+		},
+		{
+			name:     "an error result without a message fails a run that exits 0",
+			script:   writesResult(`{"status":"error"}`) + exits(0),
+			exitCode: 1,
+		},
+		{
+			name:     "a status that is not exactly error is not an error result",
+			script:   writesResult(`{"status":"ERROR","message":"position limit breached"}`) + exits(0),
+			exitCode: 0,
+		},
+		{
+			name:     "an error status below the top level is not an error result",
+			script:   writesResult(`{"order":{"status":"error"}}`) + exits(0),
+			exitCode: 0,
+		},
+		{
+			name:     "a result that is not an object is not an error result",
+			script:   writesResult(`["error"]`) + exits(0),
+			exitCode: 0,
+		},
+		{
+			name:     "a result that is not JSON is not an error result",
+			script:   writesResult(`status: error`) + exits(0),
+			exitCode: 0,
+		},
 	}
 
 	for _, tc := range cases {
