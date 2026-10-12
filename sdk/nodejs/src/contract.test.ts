@@ -21,8 +21,8 @@ const SERVER_START_TIMEOUT_MS = 30_000;
 // sdk/contract/README.md, step 5, says why a server case may need a fresh port.
 const PORT_ATTEMPTS = 3;
 
-// Cases this SDK does not pass yet, each with the reason. A listed case that
-// starts passing fails the suite, so the list cannot go stale.
+// Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
+// says how the list is kept.
 const KNOWN_FAILURES: Record<string, string> = {};
 
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
