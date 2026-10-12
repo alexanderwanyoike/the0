@@ -24,7 +24,9 @@ module The0.Input
     ( parse
     , parseAsMap
     , success
+    , successWithData
     , The0.Input.error
+    , errorWithData
     , result
     , metric
     , The0.Input.log
@@ -34,7 +36,7 @@ module The0.Input
     , LogLevel(..)
     ) where
 
-import Data.Aeson (Value(..), decode, encode, object, (.=), Object, toJSON)
+import Data.Aeson (Value(..), decode, encode, object, (.=), Object, ToJSON, toJSON)
 import Data.Aeson.Key (fromString)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -115,6 +117,15 @@ error msg = do
     result $ object ["status" .= ("error" :: String), "message" .= msg]
     logError msg Nothing
     exitWith (ExitFailure 1)
+
+-- | Output a success result carrying @data@ to the result file.
+successWithData :: ToJSON a => String -> a -> IO ()
+successWithData msg _ = success msg
+
+-- | Output an error result carrying @data@ to the result file and exit with
+-- code 1, as 'The0.Input.error' does.
+errorWithData :: ToJSON a => String -> a -> IO b
+errorWithData msg _ = The0.Input.error msg
 
 -- | Output a custom JSON result to the result file.
 --
