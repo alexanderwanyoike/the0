@@ -54,27 +54,6 @@ inline std::string to_json_text(const json& value) {
 } // namespace detail
 
 /**
- * Get the path to the result file.
- */
-inline std::string result_file_path() {
-    const char* mount = std::getenv("CODE_MOUNT_DIR");
-    return std::string("/") + (mount ? mount : "bot") + "/result.json";
-}
-
-/**
- * Write result to the result file.
- */
-inline void write_result(const std::string& content) {
-    std::ofstream f(result_file_path());
-    if (f.is_open()) {
-        f << content;
-        f.close();
-    } else {
-        std::cerr << "RESULT_ERROR: Failed to write result file" << std::endl;
-    }
-}
-
-/**
  * Parse bot configuration from environment variables.
  *
  * Returns a pair of (bot_id, config) where config is a parsed JSON object.
@@ -210,6 +189,27 @@ inline void log(const std::string& message, const json& data = json::object(), L
     output["message"] = message;
     output["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
     std::cerr << detail::to_json_text(output) << std::endl;
+}
+
+/**
+ * Get the path to the result file.
+ */
+inline std::string result_file_path() {
+    const char* mount = std::getenv("CODE_MOUNT_DIR");
+    return std::string("/") + (mount ? mount : "bot") + "/result.json";
+}
+
+/**
+ * Write result to the result file.
+ */
+inline void write_result(const std::string& content) {
+    std::ofstream f(result_file_path());
+    if (f.is_open()) {
+        f << content;
+        f.close();
+    } else {
+        std::cerr << "RESULT_ERROR: Failed to write result file" << std::endl;
+    }
 }
 
 namespace detail {
