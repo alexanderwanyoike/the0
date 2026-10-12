@@ -48,7 +48,7 @@ module The0.Query
     , setResultPath
     ) where
 
-import Control.Exception (Exception, catch, SomeException)
+import Control.Exception (catch, SomeException)
 import Control.Monad (forM_, when)
 import Data.Aeson (Value(..), decode, encode, object, (.=), ToJSON)
 import qualified Data.Aeson.KeyMap as KM
@@ -68,12 +68,7 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
-
--- | Error thrown when attempting to modify state during query execution.
-newtype ReadOnlyStateError = ReadOnlyStateError String
-    deriving (Show, Eq)
-
-instance Exception ReadOnlyStateError
+import The0.State (ReadOnlyStateError(..))
 
 -- | Request object passed to handlers (Express-like).
 data Request = Request
