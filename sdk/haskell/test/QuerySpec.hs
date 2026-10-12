@@ -143,6 +143,10 @@ spec = do
             Query.getParam typedRequest "filter" "" `shouldBe` "{\"side\":\"buy\"}"
             Map.lookup "live" (reqParams typedRequest) `shouldBe` Just "true"
 
+        it "the string accessors treat a null param as absent" $ do
+            Query.getParam typedRequest "cursor" "none" `shouldBe` "none"
+            Map.member "cursor" (reqParams typedRequest) `shouldBe` False
+
     describe "The0.Query.ReadOnlyStateError" $ do
         it "can be created with a message" $ withTempEnv $ \_ -> do
             let err = Query.ReadOnlyStateError "Test message"
