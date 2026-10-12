@@ -18,7 +18,8 @@ import System.FilePath ((</>))
 import System.IO.Silently (capture_, hCapture, hSilence)
 import System.IO (stderr)
 import System.IO.Temp (withSystemTempDirectory)
-import Control.Exception (catch, finally, try, SomeException)
+import Control.Exception (ErrorCall(..), catch, finally, try, SomeException)
+import System.Directory (doesFileExist)
 
 -- Helper to capture stderr output
 captureStderr :: IO () -> IO String
@@ -30,12 +31,17 @@ captureStderr action = do
 -- returns the result file it wrote, decoded. An exit is caught, so actions
 -- may call 'The0.Input.error'.
 resultFileOf :: IO () -> IO (Either String Value)
-resultFileOf action = withSystemTempDirectory "the0-input-test" $ \dir -> do
+resultFileOf action = inCodeDir $ \dir -> do
+    hSilence [stderr] (action `catch` \(_ :: ExitCode) -> pure ())
+    Aeson.eitherDecodeFileStrict (dir </> "result.json")
+
+-- | Runs @action@ with CODE_MOUNT_DIR pointing at a temporary directory,
+-- which it is given.
+inCodeDir :: (FilePath -> IO a) -> IO a
+inCodeDir action = withSystemTempDirectory "the0-input-test" $ \dir -> do
     original <- lookupEnv "CODE_MOUNT_DIR"
     setEnv "CODE_MOUNT_DIR" (dropWhile (== '/') dir)
-    hSilence [stderr] (action `catch` \(_ :: ExitCode) -> pure ())
-        `finally` maybe (unsetEnv "CODE_MOUNT_DIR") (setEnv "CODE_MOUNT_DIR") original
-    Aeson.eitherDecodeFileStrict (dir </> "result.json")
+    action dir `finally` maybe (unsetEnv "CODE_MOUNT_DIR") (setEnv "CODE_MOUNT_DIR") original
 
 -- | Every control character JSON must escape, plus quotes and backslashes.
 awkwardMessage :: String
@@ -160,6 +166,16 @@ spec = do
             output `shouldContain` "\"timestamp\":"
 
     describe "The0.Input.result" $ do
+        it "fails the bot and writes no file when the value fails to evaluate" $ do
+            (outcome, written) <- inCodeDir $ \dir -> do
+                outcome <- try $ hSilence [stderr] $
+                    result (object ["price" .= (Prelude.error "price feed unavailable" :: Double)])
+                written <- doesFileExist (dir </> "result.json")
+                pure (outcome, written)
+            either (\(ErrorCall message) -> message) (const "no error") outcome
+                `shouldBe` "price feed unavailable"
+            written `shouldBe` False
+
         it "writes non-ASCII text as UTF-8" $ do
             let val = object ["message" .= ("café ✓ 日本" :: String)]
             written <- resultFileOf (result val)
