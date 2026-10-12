@@ -32,6 +32,7 @@ jest.mock("nats", () => {
       info: jest.fn().mockResolvedValue(undefined),
       add: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
     },
   };
 
@@ -168,6 +169,30 @@ describe("NatsService", () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe("NATS connection not established");
     });
+
+    it("waits five seconds for the JetStream ack by default", async () => {
+      await service.publish("the0.bot.created", { id: "bot-1" });
+
+      expect(natsMocks.mockJetStream.publish).toHaveBeenCalledWith(
+        "the0.bot.created",
+        Buffer.from(JSON.stringify({ id: "bot-1" })),
+        { timeout: 5000 },
+      );
+    });
+
+    it("sends the message id, so JetStream drops a repeated publish, and the ack timeout it is given", async () => {
+      await service.publish(
+        "the0.bot.created",
+        { id: "bot-1" },
+        { msgId: "42", timeoutMs: 2000 },
+      );
+
+      expect(natsMocks.mockJetStream.publish).toHaveBeenCalledWith(
+        "the0.bot.created",
+        Buffer.from(JSON.stringify({ id: "bot-1" })),
+        { msgID: "42", timeout: 2000 },
+      );
+    });
   });
 
   describe("Stream Setup", () => {
@@ -209,6 +234,43 @@ describe("NatsService", () => {
           max_bytes: 128 * 1024 * 1024,
         }),
       );
+    });
+
+    describe("keep repeated bot events out of THE0_EVENTS for an hour", () => {
+      const HOUR_NS = 60 * 60 * 1000 * 1000000;
+
+      it("creates THE0_EVENTS with a one-hour duplicate window", () => {
+        expect(natsMocks.mockJetStreamManager.streams.add).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "THE0_EVENTS",
+            retention: "limits",
+            max_age: 7 * 24 * 60 * 60 * 1000 * 1000000,
+            duplicate_window: HOUR_NS,
+          }),
+        );
+      });
+
+      it("updates an existing THE0_EVENTS in place, never deleting it", async () => {
+        await service.onModuleDestroy();
+        jest.clearAllMocks();
+        natsMocks.mockJetStreamManager.streams.add.mockRejectedValue(
+          Object.assign(new Error("stream name already in use"), {
+            api_error: { err_code: 10058 },
+          }),
+        );
+
+        await service.onModuleInit();
+
+        expect(
+          natsMocks.mockJetStreamManager.streams.update,
+        ).toHaveBeenCalledWith(
+          "THE0_EVENTS",
+          expect.objectContaining({ duplicate_window: HOUR_NS }),
+        );
+        expect(
+          natsMocks.mockJetStreamManager.streams.delete,
+        ).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -131,6 +131,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
       ],
       retention: RetentionPolicy.Limits,
       max_age: 7 * 24 * 60 * 60 * 1000 * 1000000, // 7 days in nanoseconds
+      // Longer than any relay stall between reading a bot event and
+      // publishing it, so a late repeat is dropped instead of stored after
+      // a newer event. JetStream's default is 2 minutes.
+      duplicate_window: 60 * 60 * 1000 * 1000000,
       storage: StorageType.File,
     });
 
@@ -175,6 +179,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
   async publish(
     topic: string,
     payload: Record<string, unknown> | unknown[],
+    options: { msgId?: string; timeoutMs?: number } = {},
   ): Promise<Result<void, string>> {
     if (!this.connection) {
       return Failure("NATS connection not established");
@@ -183,7 +188,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     try {
       const jetStream = this.connection.jetstream();
       await jetStream.publish(topic, this.sc.encode(JSON.stringify(payload)), {
-        timeout: 5000, // 5 second timeout
+        ...(options.msgId ? { msgID: options.msgId } : {}),
+        timeout: options.timeoutMs ?? 5000,
       });
       return Ok(undefined);
     } catch (error: unknown) {

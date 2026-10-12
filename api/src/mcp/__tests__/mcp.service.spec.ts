@@ -4,6 +4,8 @@ import { McpService } from "../mcp.service";
 import { mockActor } from "@/test/mock-actor";
 import { BotService } from "@/bot/bot.service";
 import { BotRepository } from "@/bot/bot.repository";
+import { BotEvent } from "@/bot/bot-event-outbox";
+import { BotEventRelay } from "@/bot/bot-event-relay";
 import { BotValidator } from "@/bot/bot.validator";
 import { SCHEDULED_BOT_TOPICS } from "@/bot/bot.constants";
 import { Bot } from "@/bot/entities/bot.entity";
@@ -12,7 +14,6 @@ import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { LogsService } from "@/logs/logs.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
-import { NatsService } from "@/nats/nats.service";
 import { Ok, Failure } from "@/common/result";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
@@ -46,17 +47,21 @@ const findInCatalogue = async (name: string, version: string) =>
     ? Ok<CustomBot, string>(catalogueVersion(version))
     : Failure<CustomBot, string>("Not found");
 
-/** Scopes every query by user, as RoleRepository does in SQL. */
+/**
+ * Scopes every query by user, as RoleRepository does in SQL, and keeps the
+ * events each write commits with it, as the outbox does.
+ */
 function createBotStore(seed: Bot[]) {
   const bots = new Map(seed.map((bot) => [bot.id, bot]));
+  const events: BotEvent[] = [];
   const owned = (userId: string, id: string) => {
     const bot = bots.get(id);
     return bot?.userId === userId ? bot : undefined;
   };
-  let created = 0;
 
   return {
     bots,
+    events,
     async findAll(userId: string) {
       return Ok([...bots.values()].filter((bot) => bot.userId === userId));
     },
@@ -64,26 +69,34 @@ function createBotStore(seed: Bot[]) {
       const bot = owned(userId, id);
       return bot ? Ok(bot) : Failure("Not found");
     },
-    async create(data: Partial<Bot>) {
-      created += 1;
+    async createWithEvents(data: Partial<Bot>, botEvents: BotEvent[]) {
       const bot = {
         ...data,
-        id: `bot-new-${created}`,
         createdAt: new Date(),
         updatedAt: new Date(),
       } as Bot;
       bots.set(bot.id, bot);
+      events.push(...botEvents);
       return Ok(bot);
     },
-    async update(userId: string, id: string, data: Partial<Bot>) {
+    async updateWithEvents(
+      userId: string,
+      id: string,
+      data: Partial<Bot>,
+      botEvents: BotEvent[],
+    ) {
       const bot = owned(userId, id);
       if (!bot) return Failure("Not found");
       const updated = { ...bot, ...data, updatedAt: new Date() };
       bots.set(id, updated);
+      events.push(...botEvents);
       return Ok(updated);
     },
-    async remove(userId: string, id: string) {
-      if (owned(userId, id)) bots.delete(id);
+    async removeWithEvents(userId: string, id: string, botEvents: BotEvent[]) {
+      if (owned(userId, id)) {
+        bots.delete(id);
+        events.push(...botEvents);
+      }
       return Ok(null);
     },
   };
@@ -92,7 +105,7 @@ function createBotStore(seed: Bot[]) {
 describe("McpService", () => {
   let service: McpService;
   let store: ReturnType<typeof createBotStore>;
-  let natsService: { publish: jest.Mock };
+  let relay: { publishPending: jest.Mock };
   let customBotService: jest.Mocked<CustomBotService>;
   let logsService: jest.Mocked<LogsService>;
   let botStateService: { listKeys: jest.Mock; getKey: jest.Mock };
@@ -162,7 +175,7 @@ describe("McpService", () => {
   beforeEach(async () => {
     store = createBotStore([callerBot, otherUsersBot]);
 
-    natsService = { publish: jest.fn().mockResolvedValue(Ok(null)) };
+    relay = { publishPending: jest.fn() };
 
     const mockCustomBotService = {
       getAllGlobalCustomBots: jest.fn(),
@@ -202,7 +215,7 @@ describe("McpService", () => {
         BotService,
         BotValidator,
         { provide: BotRepository, useValue: store },
-        { provide: NatsService, useValue: natsService },
+        { provide: BotEventRelay, useValue: relay },
         { provide: CustomBotService, useValue: mockCustomBotService },
         { provide: LogsService, useValue: mockLogsService },
         { provide: BotStateService, useValue: mockBotStateService },
@@ -294,7 +307,7 @@ describe("McpService", () => {
         schedule: "0 9 * * *",
       });
 
-      it("stores the bot for the caller and publishes the created event", async () => {
+      it("stores the bot for the caller with its created event", async () => {
         const result = await service.handleToolCall(
           "bot_deploy",
           { config: deployConfig },
@@ -302,30 +315,34 @@ describe("McpService", () => {
         );
 
         expect(result.isError).toBeUndefined();
+        const { bot } = parse(result);
         expect(parse(result)).toEqual({
           message: "Bot deployed successfully",
           bot: {
-            id: "bot-new-1",
+            id: expect.any(String),
             name: "Momentum",
             type: "scheduled/test-bot",
             version: "1.1.0",
           },
         });
-        expect(store.bots.get("bot-new-1")).toMatchObject({
+        expect(store.bots.get(bot.id)).toMatchObject({
           name: "Momentum",
           userId,
           customBotId: "custom-bot-1.1.0",
         });
-        expect(natsService.publish).toHaveBeenCalledWith(
-          SCHEDULED_BOT_TOPICS.CREATED,
+        expect(store.events).toEqual([
           expect.objectContaining({
-            id: "bot-new-1",
-            config: expect.objectContaining({
-              ...deployConfig,
-              customBotId: "custom-bot-1.1.0",
+            subject: SCHEDULED_BOT_TOPICS.CREATED,
+            payload: expect.objectContaining({
+              id: bot.id,
+              config: expect.objectContaining({
+                ...deployConfig,
+                customBotId: "custom-bot-1.1.0",
+              }),
             }),
           }),
-        );
+        ]);
+        expect(relay.publishPending).toHaveBeenCalled();
       });
 
       it("requires a name in the config", async () => {
@@ -341,12 +358,12 @@ describe("McpService", () => {
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain("name");
         expect(store.bots.size).toBe(2);
-        expect(natsService.publish).not.toHaveBeenCalled();
+        expect(store.events).toEqual([]);
       });
     });
 
     describe("updating a bot stores it and tells the runtime", () => {
-      it("stores the new name and config and publishes the updated event", async () => {
+      it("stores the new name and config with the updated event", async () => {
         const newConfig = {
           ...callerBot.config,
           version: "1.1.0",
@@ -369,16 +386,18 @@ describe("McpService", () => {
           config: expect.objectContaining(newConfig),
           customBotId: "custom-bot-1.1.0",
         });
-        expect(natsService.publish).toHaveBeenCalledWith(
-          SCHEDULED_BOT_TOPICS.UPDATED,
+        expect(store.events).toEqual([
           expect.objectContaining({
-            id: "bot-123",
-            config: expect.objectContaining({
-              ...newConfig,
-              customBotId: "custom-bot-1.1.0",
+            subject: SCHEDULED_BOT_TOPICS.UPDATED,
+            payload: expect.objectContaining({
+              id: "bot-123",
+              config: expect.objectContaining({
+                ...newConfig,
+                customBotId: "custom-bot-1.1.0",
+              }),
             }),
           }),
-        );
+        ]);
       });
 
       it("keeps the name when none is given", async () => {
@@ -401,12 +420,12 @@ describe("McpService", () => {
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toMatch(/not found/i);
         expect(store.bots.get("bot-456")).toEqual(otherUsersBot);
-        expect(natsService.publish).not.toHaveBeenCalled();
+        expect(store.events).toEqual([]);
       });
     });
 
     describe("deleting a bot removes it and tells the runtime", () => {
-      it("removes the bot and publishes the deleted event", async () => {
+      it("removes the bot with its deleted event", async () => {
         const result = await service.handleToolCall(
           "bot_delete",
           { bot_id: "bot-123" },
@@ -419,10 +438,13 @@ describe("McpService", () => {
           bot_id: "bot-123",
         });
         expect(store.bots.has("bot-123")).toBe(false);
-        expect(natsService.publish).toHaveBeenCalledWith(
-          SCHEDULED_BOT_TOPICS.DELETED,
-          { id: "bot-123", config: callerBot.config },
-        );
+        expect(store.events).toEqual([
+          {
+            botId: "bot-123",
+            subject: SCHEDULED_BOT_TOPICS.DELETED,
+            payload: { id: "bot-123", config: callerBot.config },
+          },
+        ]);
       });
 
       it("cannot delete another user's bot", async () => {
@@ -435,7 +457,7 @@ describe("McpService", () => {
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toMatch(/not found/i);
         expect(store.bots.get("bot-456")).toEqual(otherUsersBot);
-        expect(natsService.publish).not.toHaveBeenCalled();
+        expect(store.events).toEqual([]);
       });
     });
 
@@ -489,7 +511,7 @@ describe("McpService", () => {
           expect(result.isError).toBe(true);
           expect(result.content[0].text).toContain(error);
           expect([...store.bots.values()]).toEqual([callerBot, otherUsersBot]);
-          expect(natsService.publish).not.toHaveBeenCalled();
+          expect(store.events).toEqual([]);
         },
       );
     });

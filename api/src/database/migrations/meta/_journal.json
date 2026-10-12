@@ -50,6 +50,13 @@
       "when": 1778889600000,
       "tag": "0006_add_user_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1791676800000,
+      "tag": "0007_add_bot_event_outbox",
+      "breakpoints": true
     }
   ]
 }
