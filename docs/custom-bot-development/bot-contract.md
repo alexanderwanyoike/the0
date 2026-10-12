@@ -27,7 +27,8 @@ The runtime starts an entrypoint in one of three ways:
 | Runtime | Bot entrypoint runs as | Query entrypoint runs as |
 |---|---|---|
 | `python3.11` | `python3 /app/wrappers/python_bot.py` | `python3 <query entrypoint>` |
-| `nodejs22`, `nodejs20` | `node /app/wrappers/node_bot.js` | `node <query entrypoint>` |
+| `nodejs22` | `node /app/wrappers/node_bot.js` | `node <query entrypoint>` |
+| `nodejs20` | `/opt/node20/bin/node /app/wrappers/node_bot.js` | `/opt/node20/bin/node <query entrypoint>` |
 | `rust-stable`, `gcc13`, `cpp-gcc13`, `ghc96` | `/bot/<entrypoint>` | `/bot/<query entrypoint>` |
 | `dotnet8` | `dotnet <entrypoint>` for a `.dll`, otherwise `dotnet run --project <entrypoint>` | the same, with the query entrypoint |
 | `scala3` | `java -jar <jar>`, or `java -cp <jar> <MainClass>` for an entrypoint written `<jar>:<MainClass>` | the same, with the query entrypoint |
@@ -36,20 +37,21 @@ The working directory is the code directory, `/bot`. A query entrypoint never ru
 
 ## Environment
 
-`runtime execute` builds the environment for every process it starts (`BuildBotEnv` in `runtime/internal/execute/helpers.go`). Its values replace any of the same name the container was created with.
+`runtime execute` builds the environment for every process it starts (`BuildBotEnv` in `runtime/internal/execute/helpers.go`). It starts from the container's own environment and sets the variables below. Its values replace any of the same name, except where the table says an inherited value is kept.
 
 | Variable | Set for | Value |
 |---|---|---|
 | `BOT_ID` | every process | The bot's ID. |
 | `BOT_CONFIG` | every process | The bot's configuration, as JSON object text. |
 | `CODE_MOUNT_DIR` | every process | The code directory without its leading `/`, which is `bot`. A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`. SDKs use `bot` when it is unset. |
-| `STATE_DIR` | every process | The state directory, `/state/.the0-state`. SDKs use that path when it is unset. |
+| `STATE_DIR` | every process | The state directory, `/state/.the0-state`. An inherited value is kept; every container the runtime creates sets it to that path. SDKs use that path when it is unset. |
 | `BOT_TYPE` | bot runs and query servers; ephemeral queries on Docker only | `realtime` or `scheduled`. Kubernetes query pods don't set it. SDKs only read it to decide whether to start the query server. |
 | `QUERY_PATH` | ephemeral queries only | The query's path, such as `/portfolio`. It is never empty. Its presence is what makes state read-only. |
 | `QUERY_PARAMS` | ephemeral queries with params; Docker always sets it, to `{}` when there are none | The params, as JSON object text. |
 | `THE0_QUERY_PORT` | never set by the runtime | The port the SDK's query server listens on, default `9476`. The runtime always connects to 9476; the variable exists for tests and local runs. |
 | `SCRIPT_PATH` | every process | The entrypoint file. Only the wrappers read it. |
 | `PYTHONPATH` | `python3.11` | `/bot/vendor:/bot`, followed by any inherited value. |
+| `PATH` | `nodejs20` | `/opt/node20/bin`, followed by the inherited value, so a bot that starts `node` itself gets Node.js 20 too. |
 
 The bot can also see variables that are not part of the contract, and it must not rely on them:
 - **`QUERY_PARAM_<key>`.** The runtime sets one per param using Go's `%v` formatting, which loses information: an object becomes `map[...]`. No SDK reads it. Read `QUERY_PARAMS` instead.
@@ -125,7 +127,9 @@ After `main` ends, the Python and Node.js wrappers settle the result and the exi
   - A failure writes `{"status": "error", "message": ...}`, with the error's message or `Bot exited with code N`. A failure is an uncaught error, a rejected promise, `error()`, or any non-zero exit.
 - **They keep the bot's exit code.** An uncaught error gives 1, and an error result turns an exit 0 into 1.
 - **They print an error result** on stderr as an error log line, so a failed run always leaves its message in the logs. An SDK whose `error()` already prints the message therefore shows it twice on these runtimes.
-- **They handle stop signals.** On SIGTERM or SIGINT, the Python wrapper stops waiting for `main`, writes `{"status": "terminated", ...}` unless the bot wrote a result, and exits 0.
+- **Stop signals differ.**
+  - On SIGTERM or SIGINT, the Python wrapper stops waiting for `main`, writes `{"status": "terminated", ...}` unless the bot wrote a result, and exits 0.
+  - The Node.js wrapper catches both signals, but the abort signal it raises never reaches `main`, so a Node.js bot carries on until it finishes or the runtime kills it.
 
 ## Log and metric lines
 
@@ -163,6 +167,8 @@ The frontend reads each line as follows:
 - A JSON object with `_metric` is a metric.
 - A JSON object with `level`, `message` or `msg` is a log line at its `level`.
 - Anything else is plain text, at INFO unless it starts with `INFO:`, `WARN:` or `ERROR:`.
+
+A known limitation: the api's log history reduces any JSON line that is not a metric to its `message` (`normalizeLine` in `api/src/logs/logs.service.ts`). Lines loaded from history therefore show at INFO whatever their level, `error()`'s line included.
 
 ## State
 
@@ -222,6 +228,7 @@ Both modes answer with the same JSON object:
 - `available` lists every path the bot answers, as `/info` does.
 - `error` for a failed handler contains the error's message. The rest of the text is up to the language; Node.js, for one, puts the error's name in front.
 - Every query mode can report a handler error.
+- In both modes, when the body has both `error` and `available`, the runtime appends `(available: a, b, ...)` to the error text it answers with.
 
 ### Ephemeral queries
 
@@ -233,8 +240,6 @@ The runtime restores the bot's saved state, then starts the query entrypoint in 
 The runtime then uploads `/query/result.json` (to `QUERY_RESULT_KEY` in the query results bucket) and answers the query from it:
 - **Exit 0:** the file's contents.
 - **Non-zero exit:** the file's contents when there are any, otherwise an error carrying the process's output.
-
-When the body has both `error` and `available`, the runtime appends `(available: a, b, ...)` to the error text.
 
 ### Query server
 
