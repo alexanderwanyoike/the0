@@ -253,7 +253,17 @@ public class QueryTests : IDisposable
         Assert.Equal("true", req.Get("live", "false"));
         Assert.Equal("""["AAPL","MSFT"]""", req.Get("symbols"));
         Assert.Equal("""{"side":"buy"}""", req.Params["filter"]);
-        Assert.Equal("null", req.Get("cursor"));
+    }
+
+    [Fact]
+    public void QueryRequest_StringAccessorsTreatANullParamAsAbsent()
+    {
+        var req = TypedRequest();
+
+        Assert.Null(req.Get("cursor"));
+        Assert.Equal("start", req.Get("cursor", "start"));
+        Assert.False(req.Params.ContainsKey("cursor"));
+        Assert.True(req.JsonParams.ContainsKey("cursor"));
     }
 
     #endregion
