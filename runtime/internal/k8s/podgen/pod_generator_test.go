@@ -243,7 +243,7 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 		},
 	}
 
-	pod, err := generator.GenerateQueryPod(bot, "/status", map[string]interface{}{"key": "value"})
+	pod, err := generator.GenerateQueryPod(bot, "/status", map[string]interface{}{"key": "value"}, "query-target/1/result.json")
 	require.NoError(t, err)
 
 	// Query pods should not restart
@@ -264,6 +264,7 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 
 	assert.Equal(t, "query.py", envMap["ENTRYPOINT"])
 	assert.Equal(t, "query.py", envMap["QUERY_ENTRYPOINT"])
+	assert.Equal(t, "query-target/1/result.json", envMap["QUERY_RESULT_KEY"])
 	assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "query", MountPath: "/query"})
 }
 
@@ -289,7 +290,7 @@ func TestPodGenerator_GenerateQueryPod_RefusesBotWithoutQueryEntrypoint(t *testi
 		},
 	}
 
-	pod, err := generator.GenerateQueryPod(bot, "/health", nil)
+	pod, err := generator.GenerateQueryPod(bot, "/health", nil, "no-query/1/result.json")
 
 	assert.ErrorIs(t, err, query.ErrNoQueryEntrypoint)
 	assert.Nil(t, pod)

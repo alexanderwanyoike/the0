@@ -148,7 +148,6 @@ func TestLogsSyncer_UploadTimeoutEnforced(t *testing.T) {
 		"error should wrap context.DeadlineExceeded, got %v", err)
 }
 
-
 func TestNewLogsSyncer_ValidUploader(t *testing.T) {
 	mockUploader := &MockMinIOLogger{}
 	syncer := NewLogsSyncer("bot-1", "/logs", mockUploader, nil, &util.DefaultLogger{})

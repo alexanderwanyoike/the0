@@ -86,7 +86,7 @@ func TestRunDaemonSync_MissingEnvironment(t *testing.T) {
 // TestDaemonInit_Defaults tests that default paths are applied
 func TestDaemonInit_Defaults(t *testing.T) {
 	daemonBotID = constants.TestBotID
-	daemonCodePath = "" // Should default to constants.TestBotDir
+	daemonCodePath = ""  // Should default to constants.TestBotDir
 	daemonStatePath = "" // Should default to constants.TestStateDir
 	daemonCodeFile = ""
 
@@ -97,8 +97,8 @@ func TestDaemonInit_Defaults(t *testing.T) {
 // TestDaemonSync_Defaults tests that default values are applied
 func TestDaemonSync_Defaults(t *testing.T) {
 	daemonBotID = constants.TestBotID
-	daemonStatePath = "" // Should default to constants.TestStateDir
-	daemonLogsPath = ""  // Should default to constants.TestLogsDir
+	daemonStatePath = ""   // Should default to constants.TestStateDir
+	daemonLogsPath = ""    // Should default to constants.TestLogsDir
 	daemonSyncInterval = 0 // Should default to constants.TestDefaultSyncInterval
 
 	// We can't run this without MinIO, but we can verify flags are set
@@ -205,9 +205,9 @@ func TestRunDaemonInit_Integration(t *testing.T) {
 
 	// Create test bot code
 	testCode := createTestBotZip(t, map[string]string{
-		"main.py":   "print('Hello from test bot')",
+		"main.py":     "print('Hello from test bot')",
 		"config.json": `{"version": "1.0.0"}`,
-		"README.md": "# Test Bot",
+		"README.md":   "# Test Bot",
 	})
 
 	// Upload to MinIO
@@ -263,10 +263,10 @@ func TestRunDaemonInit_MultipleFiles(t *testing.T) {
 
 	// Create test bot code with multiple files
 	testCode := createTestBotZip(t, map[string]string{
-		"bot.js":      "console.log('main');",
-		"utils.js":    "exports.helper = () => {};",
+		"bot.js":       "console.log('main');",
+		"utils.js":     "exports.helper = () => {};",
 		"package.json": `{"name": "test-bot", "version": "1.0.0"}`,
-		"README.md":   "# Test Bot\n\nA test bot.",
+		"README.md":    "# Test Bot\n\nA test bot.",
 	})
 
 	// Upload code to MinIO

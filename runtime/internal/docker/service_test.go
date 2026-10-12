@@ -947,7 +947,7 @@ func TestPerformReconciliation_StateCleanup(t *testing.T) {
 		Status:      "running",
 	})
 
-	desiredBots := []model.Bot{}       // Not desired
+	desiredBots := []model.Bot{}           // Not desired
 	actualContainers := []*ContainerInfo{} // Not running
 
 	// Call reconciliation
@@ -1031,12 +1031,12 @@ func BenchmarkHashMap(b *testing.B) {
 	defer service.Stop()
 
 	testMap := map[string]interface{}{
-		"symbol":        "BTC/USD",
-		"interval":      60,
-		"threshold":     0.05,
-		"max_position":  1000.0,
-		"stop_loss":     0.02,
-		"take_profit":   0.10,
+		"symbol":       "BTC/USD",
+		"interval":     60,
+		"threshold":    0.05,
+		"max_position": 1000.0,
+		"stop_loss":    0.02,
+		"take_profit":  0.10,
 		"nested": map[string]interface{}{
 			"enabled": true,
 			"value":   123,

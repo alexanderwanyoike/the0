@@ -416,7 +416,7 @@ func TestComposeAppend(t *testing.T) {
 	defer logger.Close()
 
 	botID := "compose-append-bot"
-	const numChunks = 600 // > 5 MiB total, so later appends exercise the ComposeObject path
+	const numChunks = 600       // > 5 MiB total, so later appends exercise the ComposeObject path
 	const chunkSize = 10 * 1024 // 10KB
 
 	// Generate reproducible 10KB payloads so we can verify ordering later.
@@ -555,11 +555,11 @@ type fakeMultipartClient struct {
 }
 
 type fakeCopyCall struct {
-	srcBucket, srcObject     string
-	destBucket, destObject   string
-	uploadID                 string
-	partID                   int
-	startOffset, length      int64
+	srcBucket, srcObject   string
+	destBucket, destObject string
+	uploadID               string
+	partID                 int
+	startOffset, length    int64
 }
 
 func (f *fakeMultipartClient) NewMultipartUpload(ctx context.Context, bucket, object string, opts minio.PutObjectOptions) (string, error) {

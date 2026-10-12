@@ -16,6 +16,7 @@ import (
 	"runtime/internal/constants"
 	"runtime/internal/daemon"
 	"runtime/internal/execute"
+	"runtime/internal/launch"
 	"runtime/internal/query"
 	"runtime/internal/util"
 )
@@ -51,57 +52,20 @@ Execution Modes:
 	},
 }
 
-var (
-	executeQueryPath       string
-	executeQueryServerOnly bool
-	executeSkipSync        bool
-	executeSkipQueryServer bool
-)
+var executeFlags *launch.Flags
 
 func init() {
-	executeCmd.Flags().StringVar(&executeQueryPath, "query", "", "Execute a query (ephemeral mode) with the given path")
-	executeCmd.Flags().BoolVar(&executeQueryServerOnly, "query-server-only", false, "Run only the query server (for K8s sidecar mode)")
-	executeCmd.Flags().BoolVar(&executeSkipSync, "skip-sync", false, "Skip starting sync subprocess (for K8s where sync is a sidecar)")
-	executeCmd.Flags().BoolVar(&executeSkipQueryServer, "skip-query-server", false, "Skip starting query server subprocess (for K8s where query is a sidecar)")
+	executeFlags = launch.BindFlags(executeCmd.Flags())
 	rootCmd.AddCommand(executeCmd)
 }
 
-// loadExecuteConfig loads configuration from environment variables.
-func loadExecuteConfig() (*execute.Config, error) {
-	cfg := &execute.Config{
-		BotID:           os.Getenv("BOT_ID"),
-		CodeFile:        os.Getenv("CODE_FILE"),
-		Runtime:         os.Getenv("RUNTIME"),
-		Entrypoint:      os.Getenv("ENTRYPOINT"),
-		BotConfig:       os.Getenv("BOT_CONFIG"),
-		BotType:         os.Getenv("BOT_TYPE"),
-		QueryEntrypoint: os.Getenv("QUERY_ENTRYPOINT"),
-		QueryPath:       os.Getenv("QUERY_PATH"),
-		QueryParams:     os.Getenv("QUERY_PARAMS"),
-		QueryResultKey:  os.Getenv("QUERY_RESULT_KEY"),
-		CodePath:        getEnv("CODE_PATH", constants.DefaultCodePath),
-		StatePath:       getEnv("STATE_PATH", constants.DefaultStatePath),
-		LogsPath:        getEnv("LOGS_PATH", constants.DefaultLogsPath),
-		IsScheduled:     os.Getenv("IS_SCHEDULED") == "true",
+// loadExecuteConfig reads the launch this container was started with.
+func loadExecuteConfig() (*launch.Settings, error) {
+	cfg, err := launch.Read(executeFlags, os.LookupEnv)
+	if err != nil {
+		return nil, err
 	}
-
-	// Override query path from CLI flag if provided
-	if executeQueryPath != "" {
-		cfg.QueryPath = executeQueryPath
-	}
-
-	// Validate required fields
-	if cfg.BotID == "" {
-		return nil, fmt.Errorf("BOT_ID environment variable is required")
-	}
-	if cfg.Runtime == "" {
-		return nil, fmt.Errorf("RUNTIME environment variable is required")
-	}
-	if cfg.Entrypoint == "" {
-		return nil, fmt.Errorf("ENTRYPOINT environment variable is required")
-	}
-
-	return cfg, nil
+	return &cfg, nil
 }
 
 // runExecute is the main entry point for bot execution.
@@ -117,22 +81,18 @@ func runExecute() int {
 
 	logger.Info("Bot ID: %s, Runtime: %s, Entrypoint: %s", cfg.BotID, cfg.Runtime, cfg.Entrypoint)
 
-	// Mode: Query server only (K8s sidecar)
-	if executeQueryServerOnly {
+	switch cfg.Mode {
+	case launch.Server:
 		return runQueryServerOnly(cfg, logger)
-	}
-
-	// Mode: Ephemeral query execution
-	if cfg.QueryPath != "" {
+	case launch.Query:
 		return runEphemeralQuery(cfg, logger)
+	default:
+		return runBot(cfg, logger)
 	}
-
-	// Mode: Normal bot execution
-	return runBot(cfg, logger)
 }
 
 // runBot executes a bot with optional sync and query server subprocesses.
-func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
+func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -202,7 +162,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	}
 
 	// Step 3: Start sync runner in-process (unless skipped for K8s)
-	if !executeSkipSync {
+	if !cfg.SkipSync {
 		syncRunner = daemon.NewSyncRunner(daemon.SyncOptions{
 			BotID:     cfg.BotID,
 			StatePath: cfg.StatePath,
@@ -226,7 +186,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 	}
 
 	// Step 4: Start query server subprocess (for realtime bots, unless skipped)
-	if cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !executeSkipQueryServer {
+	if cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" && !cfg.SkipQueryServer {
 		var err error
 		queryCmd, err = startQueryServerProcess(cfg, logger)
 		if err != nil {
@@ -239,7 +199,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 				queryCmd.Wait()
 			}
 		}()
-	} else if executeSkipQueryServer && cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" {
+	} else if cfg.SkipQueryServer && cfg.BotType == "realtime" && cfg.QueryEntrypoint != "" {
 		logger.Info("Skipping query server subprocess (--skip-query-server flag set)")
 	}
 
@@ -262,7 +222,7 @@ func runBot(cfg *execute.Config, logger *util.DefaultLogger) int {
 
 // ephemeralQueryEntrypoint returns the file a query runs, which is only ever
 // the query entrypoint (see query.ErrNoQueryEntrypoint).
-func ephemeralQueryEntrypoint(cfg *execute.Config) (string, error) {
+func ephemeralQueryEntrypoint(cfg *launch.Settings) (string, error) {
 	if cfg.QueryEntrypoint == "" {
 		return "", fmt.Errorf("QUERY_ENTRYPOINT is not set: %w", query.ErrNoQueryEntrypoint)
 	}
@@ -271,7 +231,7 @@ func ephemeralQueryEntrypoint(cfg *execute.Config) (string, error) {
 
 // runEphemeralQuery runs a single query and exits.
 // Queries run directly without wrappers - the SDK's query.run() handles everything.
-func runEphemeralQuery(cfg *execute.Config, logger *util.DefaultLogger) int {
+func runEphemeralQuery(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	ctx := context.Background()
 
 	logger.Info("Running ephemeral query: %s", cfg.QueryPath)
@@ -315,14 +275,14 @@ func runEphemeralQuery(cfg *execute.Config, logger *util.DefaultLogger) int {
 }
 
 // uploadQueryResult uploads the query result file to MinIO.
-func uploadQueryResult(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+func uploadQueryResult(ctx context.Context, cfg *launch.Settings, logger *util.DefaultLogger) error {
 	storage := execute.NewStorageOperations(logger)
 	return storage.UploadQueryResult(ctx, cfg.QueryResultKey, "/query/result.json")
 }
 
 // runQueryServerOnly runs only the query server (for K8s sidecar mode).
 // Query servers run directly without wrappers - the SDK handles everything.
-func runQueryServerOnly(cfg *execute.Config, logger *util.DefaultLogger) int {
+func runQueryServerOnly(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -364,7 +324,7 @@ const codeWaitTimeout = 60 * time.Second
 // ensureCode waits for code to appear on a shared volume (K8s sidecar mode) or downloads it.
 // In K8s, the bot container extracts code to a shared volume. The query-server waits for
 // the entrypoint file to appear rather than re-extracting (which causes "text file busy").
-func ensureCode(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+func ensureCode(ctx context.Context, cfg *launch.Settings, logger *util.DefaultLogger) error {
 	// If we have a query entrypoint, wait for it to appear on the shared volume
 	if cfg.QueryEntrypoint != "" {
 		entrypointPath := filepath.Join(cfg.CodePath, cfg.QueryEntrypoint)
@@ -388,20 +348,20 @@ func ensureCode(ctx context.Context, cfg *execute.Config, logger *util.DefaultLo
 }
 
 // downloadCode downloads and extracts bot code from MinIO.
-func downloadCode(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+func downloadCode(ctx context.Context, cfg *launch.Settings, logger *util.DefaultLogger) error {
 	storage := execute.NewStorageOperations(logger)
 	return storage.DownloadCode(ctx, cfg.CodeFile, cfg.CodePath)
 }
 
 // downloadState downloads bot state from MinIO.
-func downloadState(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) error {
+func downloadState(ctx context.Context, cfg *launch.Settings, logger *util.DefaultLogger) error {
 	storage := execute.NewStorageOperations(logger)
 	return storage.DownloadState(ctx, cfg.BotID, cfg.StatePath)
 }
 
 // startQueryServerProcess starts the query server as a subprocess.
 // Query servers run directly without wrappers - the SDK handles everything.
-func startQueryServerProcess(cfg *execute.Config, logger *util.DefaultLogger) (*exec.Cmd, error) {
+func startQueryServerProcess(cfg *launch.Settings, logger *util.DefaultLogger) (*exec.Cmd, error) {
 	cmd := execute.BuildQueryCommand(cfg.Runtime, cfg.QueryEntrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -417,7 +377,7 @@ func startQueryServerProcess(cfg *execute.Config, logger *util.DefaultLogger) (*
 }
 
 // executeBotProcess executes the main bot process.
-func executeBotProcess(ctx context.Context, cfg *execute.Config, logger *util.DefaultLogger) int {
+func executeBotProcess(ctx context.Context, cfg *launch.Settings, logger *util.DefaultLogger) int {
 	// Set up log file for persistence (in addition to stdout/stderr)
 	logFile := setupLogFile(cfg.LogsPath, logger)
 	if logFile != nil {
@@ -449,12 +409,12 @@ func setupLogFileWithDeps(logsPath string, logger *util.DefaultLogger, deps exec
 }
 
 // executeProcessWithLogFile executes a process, optionally writing output to a log file.
-func executeProcessWithLogFile(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
+func executeProcessWithLogFile(ctx context.Context, cfg *launch.Settings, entrypoint string, logger *util.DefaultLogger, logFile *os.File) int {
 	return executeProcessWithDeps(ctx, cfg, entrypoint, logger, logFile, execute.NewDefaultDependencies())
 }
 
 // executeProcessWithDeps executes a process with injectable dependencies for testing.
-func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps execute.Dependencies) int {
+func executeProcessWithDeps(ctx context.Context, cfg *launch.Settings, entrypoint string, logger *util.DefaultLogger, logFile *os.File, deps execute.Dependencies) int {
 	cmd := execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 
 	// Set up output: both stdout and optionally log file
@@ -521,12 +481,12 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 
 // executeQueryProcess executes a query process directly (no wrapper).
 // Queries use the SDK's query.run() which handles everything internally.
-func executeQueryProcess(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger) int {
+func executeQueryProcess(ctx context.Context, cfg *launch.Settings, entrypoint string, logger *util.DefaultLogger) int {
 	return executeQueryProcessWithDeps(ctx, cfg, entrypoint, logger, execute.NewDefaultDependencies())
 }
 
 // executeQueryProcessWithDeps executes a query process with injectable dependencies.
-func executeQueryProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint string, logger *util.DefaultLogger, deps execute.Dependencies) int {
+func executeQueryProcessWithDeps(ctx context.Context, cfg *launch.Settings, entrypoint string, logger *util.DefaultLogger, deps execute.Dependencies) int {
 	cmd := execute.BuildQueryCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

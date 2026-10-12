@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"runtime/internal/launch"
 )
 
 // Config holds MinIO and storage configuration.
@@ -30,10 +32,10 @@ type Config struct {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		CodeBucket:            "custom-bots",
-		StateBucket:           "bot-state",
-		LogsBucket:            "bot-logs",
-		QueryResultBucket:     "query-results",
+		CodeBucket:            launch.DefaultCodeBucket,
+		StateBucket:           launch.DefaultStateBucket,
+		LogsBucket:            launch.DefaultLogsBucket,
+		QueryResultBucket:     launch.DefaultQueryResultsBucket,
 		MaxStateSizeBytes:     8 * 1024 * 1024 * 1024, // 8GB
 		MaxStateFileSizeBytes: 10 * 1024 * 1024,       // 10MB
 	}
@@ -42,38 +44,30 @@ func DefaultConfig() *Config {
 // LoadConfigFromEnv loads storage configuration from environment variables.
 func LoadConfigFromEnv() (*Config, error) {
 	cfg := DefaultConfig()
+	launched := launch.ReadStorage(os.LookupEnv)
 
 	// Required
-	cfg.Endpoint = os.Getenv("MINIO_ENDPOINT")
+	cfg.Endpoint = launched.Endpoint
 	if cfg.Endpoint == "" {
 		return nil, fmt.Errorf("MINIO_ENDPOINT is required")
 	}
 
-	cfg.AccessKey = os.Getenv("MINIO_ACCESS_KEY")
+	cfg.AccessKey = launched.AccessKey
 	if cfg.AccessKey == "" {
 		return nil, fmt.Errorf("MINIO_ACCESS_KEY is required")
 	}
 
-	cfg.SecretKey = os.Getenv("MINIO_SECRET_KEY")
+	cfg.SecretKey = launched.SecretKey
 	if cfg.SecretKey == "" {
 		return nil, fmt.Errorf("MINIO_SECRET_KEY is required")
 	}
 
 	// Optional
-	cfg.UseSSL = os.Getenv("MINIO_USE_SSL") == "true"
-
-	if bucket := os.Getenv("MINIO_CODE_BUCKET"); bucket != "" {
-		cfg.CodeBucket = bucket
-	}
-	if bucket := os.Getenv("MINIO_STATE_BUCKET"); bucket != "" {
-		cfg.StateBucket = bucket
-	}
-	if bucket := os.Getenv("MINIO_LOGS_BUCKET"); bucket != "" {
-		cfg.LogsBucket = bucket
-	}
-	if bucket := os.Getenv("MINIO_QUERY_RESULTS_BUCKET"); bucket != "" {
-		cfg.QueryResultBucket = bucket
-	}
+	cfg.UseSSL = launched.UseSSL
+	cfg.CodeBucket = launched.CodeBucket
+	cfg.StateBucket = launched.StateBucket
+	cfg.LogsBucket = launched.LogsBucket
+	cfg.QueryResultBucket = launched.QueryResultsBucket
 
 	if sizeStr := os.Getenv("MAX_STATE_SIZE_MB"); sizeStr != "" {
 		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {

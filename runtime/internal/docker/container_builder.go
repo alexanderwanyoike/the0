@@ -9,6 +9,7 @@ package docker
 import (
 	"encoding/json"
 	"fmt"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 
 	"github.com/docker/docker/api/types/container"
@@ -114,86 +115,28 @@ func (b *ContainerBuilder) WithExecutable(executable model.Executable) *Containe
 		fmt.Sprintf("CONFIG=%s", string(configJSON)),
 		fmt.Sprintf("ENTRYPOINT_TYPE=%s", executable.Entrypoint),
 		fmt.Sprintf("CODE_MOUNT_DIR=%s", executable.Entrypoint),
-		// STATE_DIR points to the SDK-managed state directory inside /state
-		// Users can also write directly to /state for custom persistent data
-		"STATE_DIR=/state/.the0-state",
 	)
 
 	b.config.Labels["runtime.id"] = executable.ID
 	b.config.Labels["runtime.entrypoint"] = entrypointFile
 	b.config.Labels["runtime.managed"] = "true"
-
-	return b
-}
-
-// WithMinIOConfig adds MinIO credentials as environment variables.
-// Required for daemon init/sync to access MinIO from within the container.
-func (b *ContainerBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string, useSSL bool) *ContainerBuilder {
-	b.config.Env = append(b.config.Env,
-		fmt.Sprintf("MINIO_ENDPOINT=%s", endpoint),
-		fmt.Sprintf("MINIO_ACCESS_KEY=%s", accessKey),
-		fmt.Sprintf("MINIO_SECRET_KEY=%s", secretKey),
-		fmt.Sprintf("MINIO_USE_SSL=%t", useSSL),
-	)
-	return b
-}
-
-// WithQueryResultBucket sets the MinIO bucket used for ephemeral query results.
-func (b *ContainerBuilder) WithQueryResultBucket(bucket string) *ContainerBuilder {
-	if bucket != "" {
-		b.config.Env = append(b.config.Env, fmt.Sprintf("MINIO_QUERY_RESULTS_BUCKET=%s", bucket))
+	// Every terminating container, a query's included, is typed scheduled:
+	// the schedule service's orphan sweep removes the ones nobody collected.
+	containerType := "scheduled"
+	if executable.IsLongRunning {
+		containerType = "realtime"
 	}
+	b.config.Labels["runtime.type"] = containerType
+
 	return b
 }
 
-// DaemonConfig holds configuration for daemon init/sync.
-type DaemonConfig struct {
-	BotID           string
-	CodeFile        string
-	Runtime         string
-	Entrypoint      string
-	QueryEntrypoint string // Optional: query entrypoint for realtime bots
-	Config          string
-	IsScheduled     bool
-	BotType         string // "realtime" or "scheduled"
-}
-
-// WithDaemonConfig adds bot-specific config for daemon init/sync.
-// This enables the daemon subprocess approach where the container handles
-// its own code download, state sync, and log collection.
-func (b *ContainerBuilder) WithDaemonConfig(botID, codeFile, runtime, entrypoint, config string, isScheduled bool) *ContainerBuilder {
-	b.config.Env = append(b.config.Env,
-		fmt.Sprintf("BOT_ID=%s", botID),
-		fmt.Sprintf("CODE_FILE=%s", codeFile),
-		fmt.Sprintf("RUNTIME=%s", runtime),
-		fmt.Sprintf("ENTRYPOINT=%s", entrypoint),
-		fmt.Sprintf("BOT_CONFIG=%s", config),
-		fmt.Sprintf("IS_SCHEDULED=%t", isScheduled),
-	)
-	return b
-}
-
-// WithDaemonConfigFull adds bot-specific config for daemon init/sync with all options.
-func (b *ContainerBuilder) WithDaemonConfigFull(cfg DaemonConfig) *ContainerBuilder {
-	b.config.Env = append(b.config.Env,
-		fmt.Sprintf("BOT_ID=%s", cfg.BotID),
-		fmt.Sprintf("CODE_FILE=%s", cfg.CodeFile),
-		fmt.Sprintf("RUNTIME=%s", cfg.Runtime),
-		fmt.Sprintf("ENTRYPOINT=%s", cfg.Entrypoint),
-		fmt.Sprintf("BOT_CONFIG=%s", cfg.Config),
-		fmt.Sprintf("IS_SCHEDULED=%t", cfg.IsScheduled),
-	)
-	if cfg.QueryEntrypoint != "" {
-		b.config.Env = append(b.config.Env,
-			fmt.Sprintf("QUERY_ENTRYPOINT=%s", cfg.QueryEntrypoint),
-		)
-	}
-	if cfg.BotType != "" {
-		b.config.Env = append(b.config.Env,
-			fmt.Sprintf("BOT_TYPE=%s", cfg.BotType),
-		)
-		// Add label so services can filter containers by type
-		b.config.Labels["runtime.type"] = cfg.BotType
+// WithLaunch makes the container start the launch: runtime execute with the
+// launch's command and environment.
+func (b *ContainerBuilder) WithLaunch(settings launch.Settings) *ContainerBuilder {
+	b.config.Cmd = settings.Command()
+	for _, variable := range settings.Env() {
+		b.config.Env = append(b.config.Env, variable.Name+"="+variable.Value)
 	}
 	return b
 }
@@ -203,32 +146,7 @@ func (b *ContainerBuilder) WithDaemonConfigFull(cfg DaemonConfig) *ContainerBuil
 func (b *ContainerBuilder) WithDevRuntime(hostPath string) *ContainerBuilder {
 	if hostPath != "" {
 		b.hostConfig.Binds = append(b.hostConfig.Binds,
-			fmt.Sprintf("%s:/app/runtime:ro", hostPath))
-	}
-	return b
-}
-
-// WithQueryConfig configures the container for query execution mode.
-// Sets QUERY_PATH and QUERY_PARAMS environment variables that the SDK
-// uses to detect query mode and execute the appropriate handler.
-func (b *ContainerBuilder) WithQueryConfig(queryPath string, queryParams string) *ContainerBuilder {
-	if queryPath != "" {
-		b.config.Env = append(b.config.Env,
-			fmt.Sprintf("QUERY_PATH=%s", queryPath),
-		)
-		if queryParams != "" {
-			b.config.Env = append(b.config.Env,
-				fmt.Sprintf("QUERY_PARAMS=%s", queryParams),
-			)
-		}
-	}
-	return b
-}
-
-// WithQueryResultKey sets the MinIO object key where an ephemeral query writes its result.
-func (b *ContainerBuilder) WithQueryResultKey(resultKey string) *ContainerBuilder {
-	if resultKey != "" {
-		b.config.Env = append(b.config.Env, fmt.Sprintf("QUERY_RESULT_KEY=%s", resultKey))
+			fmt.Sprintf("%s:%s:ro", hostPath, launch.Binary))
 	}
 	return b
 }
@@ -238,14 +156,6 @@ func (b *ContainerBuilder) WithQueryResultKey(resultKey string) *ContainerBuilde
 // the Docker host on Linux systems.
 func (b *ContainerBuilder) WithExtraHosts(hosts ...string) *ContainerBuilder {
 	b.hostConfig.ExtraHosts = append(b.hostConfig.ExtraHosts, hosts...)
-	return b
-}
-
-// WithNATSURL sets the NATS_URL environment variable on the container.
-func (b *ContainerBuilder) WithNATSURL(url string) *ContainerBuilder {
-	if url != "" {
-		b.config.Env = append(b.config.Env, fmt.Sprintf("NATS_URL=%s", url))
-	}
 	return b
 }
 

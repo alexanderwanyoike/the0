@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"runtime/internal/constants"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 	"runtime/internal/query"
 	runtimepkg "runtime/internal/runtime"
@@ -110,6 +112,17 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		return nil, err
 	}
 
+	settings, err := g.launchOf(bot, botConfig)
+	if err != nil {
+		return nil, err
+	}
+	settings.Mode = launch.Run
+	settings.SkipSync = true
+	settings.SkipQueryServer = true
+	settings.BotType = "realtime"
+	settings.QueryEntrypoint = botConfig.queryEntrypoint
+	settings.NATSURL = g.config.NATSURL
+
 	// Build the pod using the fluent builder
 	builder := NewPodBuilder(fmt.Sprintf("bot-%s", bot.ID), g.config.Namespace).
 		WithImage(image).
@@ -124,17 +137,13 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		WithAnnotations(map[string]string{
 			AnnotationConfigHash: g.computeConfigHash(bot),
 		}).
-		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
-		WithBotType("realtime").
-		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
-		WithNATSConfig(g.config.NATSURL).
+		WithLaunch(settings).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
 		WithSyncSidecar(g.config.RuntimeImage, bot.ID, false)
 
 	// Add query entrypoint if configured
 	if botConfig.queryEntrypoint != "" {
-		builder.WithQueryEntrypoint(botConfig.queryEntrypoint).
-			WithQuerySidecar(image)
+		builder.WithQuerySidecar(image)
 	}
 
 	return builder.Build()
@@ -156,13 +165,22 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 		return nil, err
 	}
 
+	settings, err := g.launchOf(bot, botConfig)
+	if err != nil {
+		return nil, err
+	}
+	settings.Mode = launch.Run
+	settings.SkipQueryServer = true
+	settings.BotType = "scheduled"
+	settings.IsScheduled = true
+	settings.NATSURL = g.config.NATSURL
+
 	// Build the pod for scheduled execution - NO sidecars
 	// Scheduled bots run sync as part of the execute command, not as a sidecar
 	builder := NewPodBuilder(fmt.Sprintf("bot-%s", bot.ID), g.config.Namespace).
 		WithImage(image).
 		WithImagePullPolicy(g.config.RuntimeImagePullPolicy).
 		WithRestartPolicy(corev1.RestartPolicyNever). // Scheduled bots don't restart
-		WithInlineSync().                             // Run sync inline, not as sidecar
 		WithLabels(map[string]string{
 			LabelBotID:            bot.ID,
 			LabelCustomBotID:      botConfig.customBotID,
@@ -173,10 +191,7 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 		WithAnnotations(map[string]string{
 			AnnotationConfigHash: g.computeConfigHash(bot),
 		}).
-		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.entrypoint, bot.Config).
-		WithBotType("scheduled").
-		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
-		WithNATSConfig(g.config.NATSURL).
+		WithLaunch(settings).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 	// Note: No query sidecar - queries are ephemeral
 
@@ -184,8 +199,8 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 }
 
 // GenerateQueryPod creates a Pod spec for executing a query against a bot.
-// Query pods run once without sidecars.
-func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryParams map[string]interface{}) (*corev1.Pod, error) {
+// Query pods run once without sidecars, and upload their result to resultKey.
+func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryParams map[string]interface{}, resultKey string) (*corev1.Pod, error) {
 	// Extract and validate required configuration
 	botConfig, err := g.extractBotConfig(bot)
 	if err != nil {
@@ -202,10 +217,30 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 		return nil, query.NoQueryEntrypointError(bot.ID)
 	}
 
+	settings, err := g.launchOf(bot, botConfig)
+	if err != nil {
+		return nil, err
+	}
+	settings.Mode = launch.Query
+	settings.SkipSync = true
+	settings.SkipQueryServer = true
+	settings.Entrypoint = botConfig.queryEntrypoint
+	settings.QueryEntrypoint = botConfig.queryEntrypoint
+	settings.QueryPath = queryPath
+	if len(queryParams) > 0 {
+		paramsJSON, err := json.Marshal(queryParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal query params: %w", err)
+		}
+		settings.QueryParams = string(paramsJSON)
+	}
+	settings.QueryResultKey = resultKey
+
 	// Build the pod for query execution
 	builder := NewPodBuilder(fmt.Sprintf("query-%s", bot.ID), g.config.Namespace).
 		WithImage(image).
 		WithImagePullPolicy(g.config.RuntimeImagePullPolicy).
+		WithRestartPolicy(corev1.RestartPolicyNever).
 		WithLabels(map[string]string{
 			LabelBotID:            bot.ID,
 			LabelCustomBotID:      botConfig.customBotID,
@@ -213,13 +248,36 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 			LabelRuntime:          botConfig.runtime,
 			LabelManagedBy:        g.config.ControllerName,
 		}).
-		WithBotConfig(bot.ID, botConfig.filePath, botConfig.runtime, botConfig.queryEntrypoint, bot.Config).
-		WithQueryEntrypoint(botConfig.queryEntrypoint).
-		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
-		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
-		ForQuery(queryPath, queryParams)
+		WithLaunch(settings).
+		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 
 	return builder.Build()
+}
+
+// launchOf is the launch of bot that every container of its pods starts
+// from, before the pod gives it a mode.
+func (g *PodGenerator) launchOf(bot model.Bot, cfg *botConfig) (launch.Settings, error) {
+	configJSON, err := json.Marshal(bot.Config)
+	if err != nil {
+		return launch.Settings{}, fmt.Errorf("failed to marshal config: %w", err)
+	}
+	return launch.Settings{
+		BotID:      bot.ID,
+		CodeFile:   cfg.filePath,
+		Runtime:    cfg.runtime,
+		Entrypoint: cfg.entrypoint,
+		BotConfig:  string(configJSON),
+		CodePath:   constants.DefaultCodePath,
+		StatePath:  constants.DefaultStatePath,
+		LogsPath:   constants.DefaultLogsPath,
+		StateDir:   launch.DefaultStateDir,
+		Storage: launch.Storage{
+			Endpoint:  g.config.MinIOEndpoint,
+			AccessKey: g.config.MinIOAccessKey,
+			SecretKey: g.config.MinIOSecretKey,
+			UseSSL:    g.config.MinIOUseSSL,
+		},
+	}, nil
 }
 
 func (g *PodGenerator) runtimeImageFor(runtime string) (string, error) {

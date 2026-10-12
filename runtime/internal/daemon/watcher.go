@@ -33,8 +33,8 @@ type FileWatcher struct {
 // FileWatcherConfig configures the file watcher.
 type FileWatcherConfig struct {
 	Logger   util.Logger
-	OnChange func()           // Callback when files change
-	Debounce time.Duration    // Debounce period to avoid rapid syncs (default: 500ms)
+	OnChange func()        // Callback when files change
+	Debounce time.Duration // Debounce period to avoid rapid syncs (default: 500ms)
 }
 
 // NewFileWatcher creates a new file watcher.

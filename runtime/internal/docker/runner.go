@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 	runtimepkg "runtime/internal/runtime"
 	"runtime/internal/util"
@@ -197,73 +198,32 @@ func (r *dockerRunner) cleanupManagedContainers() {
 	r.logger.Info("Completed cleanup of managed containers")
 }
 
-// buildContainerConfig constructs Docker container configuration using the daemon approach.
-// The container's bootstrap script handles code download, state sync, and log collection.
-// MinIO credentials and daemon config are passed via environment variables.
 func (r *dockerRunner) buildContainerConfig(
 	executable model.Executable,
 	imageName string,
 ) (*container.Config, *container.HostConfig) {
-	// Serialize config to JSON for passing to container
-	configJSON := "{}"
-	if executable.Config != nil {
-		if data, err := json.Marshal(executable.Config); err == nil {
-			configJSON = string(data)
-		}
+	if executable.QueryPath != "" {
+		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", executable.QueryParams)
 	}
+	return ContainerConfig(r.config, executable, imageName)
+}
 
-	// Determine bot type and query entrypoint
-	botType := "scheduled"
-	if executable.IsLongRunning {
-		botType = "realtime"
-	}
-	queryEntrypoint := executable.EntrypointFiles["query"] // May be empty
-
+// ContainerConfig is the container a runner with config starts for executable.
+// The container's bootstrap script handles code download, state sync, and log collection.
+func ContainerConfig(
+	config *DockerRunnerConfig,
+	executable model.Executable,
+	imageName string,
+) (*container.Config, *container.HostConfig) {
 	builder := NewContainerBuilder(imageName).
 		WithExecutable(executable).
-		WithNetwork(r.config.DockerNetwork).
-		WithMinIOConfig(
-			r.config.GetContainerEndpoint(), // Use container-accessible endpoint
-			r.config.MinIOAccessKeyID,
-			r.config.MinIOSecretAccessKey,
-			r.config.MinIOUseSSL,
-		).
-		WithQueryResultBucket(r.config.MinIOQueryResultsBucket).
-		WithDaemonConfigFull(DaemonConfig{
-			BotID:           executable.ID,
-			CodeFile:        executable.FilePath, // Path to code.zip in MinIO
-			Runtime:         executable.Runtime,
-			Entrypoint:      executable.EntrypointFiles[executable.Entrypoint],
-			QueryEntrypoint: queryEntrypoint,
-			Config:          configJSON,
-			IsScheduled:     !executable.IsLongRunning,
-			BotType:         botType,
-		}).
-		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
-
-	// Add query config if this is a query execution
-	if executable.QueryPath != "" {
-		queryParamsJSON := "{}"
-		if executable.QueryParams != nil {
-			if data, err := json.Marshal(executable.QueryParams); err == nil {
-				queryParamsJSON = string(data)
-			}
-		}
-		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", queryParamsJSON)
-		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
-		if executable.QueryResultKey != "" {
-			builder = builder.WithQueryResultKey(executable.QueryResultKey)
-		}
-	}
-
-	// Pass NATS URL so the daemon can publish logs to NATS for real-time streaming
-	if r.config.NatsURL != "" {
-		builder = builder.WithNATSURL(r.config.NatsURL)
-	}
+		WithLaunch(launchSettings(config, executable)).
+		WithNetwork(config.DockerNetwork).
+		WithResources(config.MemoryLimitMB, config.CPUShares)
 
 	// Dev mode: mount runtime binary from host for faster iteration
-	if r.config.DevRuntimePath != "" {
-		builder = builder.WithDevRuntime(r.config.DevRuntimePath)
+	if config.DevRuntimePath != "" {
+		builder = builder.WithDevRuntime(config.DevRuntimePath)
 	}
 
 	// Auto-remove lets the daemon delete an exited container before its logs or
@@ -276,6 +236,56 @@ func (r *dockerRunner) buildContainerConfig(
 	builder = builder.WithExtraHosts("host.docker.internal:host-gateway")
 
 	return builder.Build()
+}
+
+// launchSettings is the launch a runner with config gives the container it
+// starts for executable.
+func launchSettings(config *DockerRunnerConfig, executable model.Executable) launch.Settings {
+	botConfig := "{}"
+	if executable.Config != nil {
+		if data, err := json.Marshal(executable.Config); err == nil {
+			botConfig = string(data)
+		}
+	}
+	botType := "scheduled"
+	if executable.IsLongRunning {
+		botType = "realtime"
+	}
+
+	settings := launch.Settings{
+		Mode:            launch.Run,
+		BotID:           executable.ID,
+		CodeFile:        executable.FilePath,
+		Runtime:         executable.Runtime,
+		Entrypoint:      executable.EntrypointFiles[executable.Entrypoint],
+		QueryEntrypoint: executable.EntrypointFiles["query"],
+		BotConfig:       botConfig,
+		BotType:         botType,
+		IsScheduled:     !executable.IsLongRunning,
+		StateDir:        launch.DefaultStateDir,
+		Storage: launch.Storage{
+			Endpoint:           config.GetContainerEndpoint(),
+			AccessKey:          config.MinIOAccessKeyID,
+			SecretKey:          config.MinIOSecretAccessKey,
+			UseSSL:             config.MinIOUseSSL,
+			QueryResultsBucket: config.MinIOQueryResultsBucket,
+		},
+		NATSURL: config.NatsURL,
+	}
+
+	if executable.QueryPath != "" {
+		queryParams := "{}"
+		if executable.QueryParams != nil {
+			if data, err := json.Marshal(executable.QueryParams); err == nil {
+				queryParams = string(data)
+			}
+		}
+		settings.Mode = launch.Query
+		settings.QueryPath = executable.QueryPath
+		settings.QueryParams = queryParams
+		settings.QueryResultKey = executable.QueryResultKey
+	}
+	return settings
 }
 
 // StartContainer starts a container based on the executable configuration.

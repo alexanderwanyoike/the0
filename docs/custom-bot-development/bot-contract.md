@@ -55,7 +55,7 @@ The working directory is the code directory, `/bot`. A query entrypoint never ru
 
 The bot can also see variables that are not part of the contract, and it must not rely on them:
 - **`QUERY_PARAM_<key>`.** The runtime sets one per param using Go's `%v` formatting, which loses information: an object becomes `map[...]`. No SDK reads it. Read `QUERY_PARAMS` instead.
-- **The runtime's own settings**, such as `CODE_FILE`, `RUNTIME`, `ENTRYPOINT`, `QUERY_ENTRYPOINT`, `QUERY_RESULT_KEY`, `IS_SCHEDULED`, `ENTRYPOINT_TYPE`, and the storage and NATS settings. The bot inherits them because `runtime execute` passes its own environment through.
+- **The runtime's own settings**, such as `CODE_FILE`, `RUNTIME`, `ENTRYPOINT`, `QUERY_ENTRYPOINT`, `QUERY_RESULT_KEY`, `IS_SCHEDULED`, `ENTRYPOINT_TYPE`, and the storage and NATS settings. The bot inherits them because `runtime execute` passes its own environment through. `runtime/internal/launch` defines the settings `runtime execute` reads.
 
 ## Entrypoints
 

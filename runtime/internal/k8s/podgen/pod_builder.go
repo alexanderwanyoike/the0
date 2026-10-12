@@ -2,13 +2,14 @@
 package podgen
 
 import (
-	"encoding/json"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"runtime/internal/launch"
 )
 
 // PodBuilder provides a fluent interface for building Kubernetes Pod specs.
@@ -22,9 +23,9 @@ type PodBuilder struct {
 	// Main bot container config
 	botImage           string
 	botImagePullPolicy corev1.PullPolicy
-	botCommand         []string
 	botEnv             []corev1.EnvVar
 	botResources       corev1.ResourceRequirements
+	launch             launch.Settings
 
 	// Sidecar containers (optional)
 	syncSidecar  *corev1.Container
@@ -47,7 +48,6 @@ func NewPodBuilder(name, namespace string) *PodBuilder {
 		labels:             make(map[string]string),
 		annotations:        make(map[string]string),
 		restartPolicy:      corev1.RestartPolicyAlways,
-		botCommand:         []string{"/app/runtime", "execute", "--skip-sync", "--skip-query-server"},
 		botImagePullPolicy: corev1.PullIfNotPresent,
 		volumes: []corev1.Volume{
 			{Name: "bot-code", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
@@ -153,14 +153,6 @@ func (b *PodBuilder) WithRestartPolicy(policy corev1.RestartPolicy) *PodBuilder 
 	return b
 }
 
-// WithInlineSync configures the bot to run sync inline (not as a sidecar).
-// Use this for scheduled bots where sync runs as a process after bot execution.
-func (b *PodBuilder) WithInlineSync() *PodBuilder {
-	// Remove --skip-sync from command so sync runs inline
-	b.botCommand = []string{"/app/runtime", "execute", "--skip-query-server"}
-	return b
-}
-
 // WithEnv adds environment variables to the bot container.
 func (b *PodBuilder) WithEnv(envVars ...corev1.EnvVar) *PodBuilder {
 	b.botEnv = append(b.botEnv, envVars...)
@@ -175,79 +167,21 @@ func (b *PodBuilder) WithEnvMap(envMap map[string]string) *PodBuilder {
 	return b
 }
 
-// WithBotConfig sets the bot configuration environment variables.
-func (b *PodBuilder) WithBotConfig(botID, codeFile, runtime, entrypoint string, config map[string]interface{}) *PodBuilder {
-	// Validate required fields
-	if botID == "" {
-		b.errors = append(b.errors, fmt.Errorf("botID is required"))
+// WithLaunch makes the bot container start the launch. The sync sidecar
+// gets the part of it that sync reads, and the query sidecar serves the
+// launch's queries.
+func (b *PodBuilder) WithLaunch(settings launch.Settings) *PodBuilder {
+	for _, required := range []struct{ name, value string }{
+		{"botID", settings.BotID},
+		{"runtime", settings.Runtime},
+		{"entrypoint", settings.Entrypoint},
+		{"codeFile", settings.CodeFile},
+	} {
+		if required.value == "" {
+			b.errors = append(b.errors, fmt.Errorf("%s is required", required.name))
+		}
 	}
-	if runtime == "" {
-		b.errors = append(b.errors, fmt.Errorf("runtime is required"))
-	}
-	if entrypoint == "" {
-		b.errors = append(b.errors, fmt.Errorf("entrypoint is required"))
-	}
-	if codeFile == "" {
-		b.errors = append(b.errors, fmt.Errorf("codeFile is required"))
-	}
-
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		b.errors = append(b.errors, fmt.Errorf("failed to marshal config: %w", err))
-		configJSON = []byte("{}")
-	}
-
-	b.botEnv = append(b.botEnv,
-		corev1.EnvVar{Name: "BOT_ID", Value: botID},
-		corev1.EnvVar{Name: "CODE_FILE", Value: codeFile},
-		corev1.EnvVar{Name: "RUNTIME", Value: runtime},
-		corev1.EnvVar{Name: "ENTRYPOINT", Value: entrypoint},
-		corev1.EnvVar{Name: "BOT_CONFIG", Value: string(configJSON)},
-		corev1.EnvVar{Name: "CODE_PATH", Value: "/bot"},
-		corev1.EnvVar{Name: "STATE_PATH", Value: "/state"},
-		corev1.EnvVar{Name: "LOGS_PATH", Value: "/var/the0/logs"},
-		// STATE_DIR points to the SDK-managed state directory inside /state
-		corev1.EnvVar{Name: "STATE_DIR", Value: "/state/.the0-state"},
-	)
-	return b
-}
-
-// WithBotType sets the bot type (realtime or scheduled).
-// For scheduled bots, also sets IS_SCHEDULED=true to enable done file mechanism.
-func (b *PodBuilder) WithBotType(botType string) *PodBuilder {
-	b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "BOT_TYPE", Value: botType})
-	if botType == "scheduled" {
-		b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "IS_SCHEDULED", Value: "true"})
-	}
-	return b
-}
-
-// WithQueryEntrypoint sets the query entrypoint for realtime bots.
-func (b *PodBuilder) WithQueryEntrypoint(queryEntrypoint string) *PodBuilder {
-	if queryEntrypoint != "" {
-		b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "QUERY_ENTRYPOINT", Value: queryEntrypoint})
-	}
-	return b
-}
-
-// WithMinIOConfig adds MinIO credentials as environment variables.
-func (b *PodBuilder) WithMinIOConfig(endpoint, accessKey, secretKey string, useSSL bool) *PodBuilder {
-	b.botEnv = append(b.botEnv,
-		corev1.EnvVar{Name: "MINIO_ENDPOINT", Value: endpoint},
-		corev1.EnvVar{Name: "MINIO_ACCESS_KEY", Value: accessKey},
-		corev1.EnvVar{Name: "MINIO_SECRET_KEY", Value: secretKey},
-		corev1.EnvVar{Name: "MINIO_USE_SSL", Value: fmt.Sprintf("%t", useSSL)},
-	)
-	return b
-}
-
-// WithNATSConfig adds the NATS URL for live log publishing. The sync process
-// (sidecar for realtime, inline for scheduled) reads NATS_URL to stream log
-// lines; without it, logs only reach MinIO and dashboards fall back to polling.
-func (b *PodBuilder) WithNATSConfig(natsURL string) *PodBuilder {
-	if natsURL != "" {
-		b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "NATS_URL", Value: natsURL})
-	}
+	b.launch = settings
 	return b
 }
 
@@ -292,9 +226,8 @@ func (b *PodBuilder) WithSyncSidecar(image string, botID string, watchDone bool)
 		Name:            "sync",
 		Image:           image,
 		ImagePullPolicy: b.botImagePullPolicy,
-		Command:         []string{"/app/runtime", "daemon", "sync"},
+		Command:         []string{launch.Binary, "daemon", "sync"},
 		Args:            args,
-		Env:             b.syncEnvVars(),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "bot-state", MountPath: "/state"},
 			{Name: "the0", MountPath: "/var/the0"},
@@ -334,8 +267,6 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 		Name:            "query-server",
 		Image:           image,
 		ImagePullPolicy: b.botImagePullPolicy,
-		Command:         []string{"/app/runtime", "execute", "--query-server-only"},
-		Env:             b.botEnv, // Share env with bot container
 		VolumeMounts:    b.volumeMounts,
 		Ports: []corev1.ContainerPort{
 			{Name: "query", ContainerPort: 9476, Protocol: corev1.ProtocolTCP},
@@ -355,38 +286,17 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 	return b
 }
 
-// ForQuery configures the builder for ephemeral query execution.
-// Sets query environment variables and removes sidecars.
-func (b *PodBuilder) ForQuery(queryPath string, queryParams map[string]interface{}) *PodBuilder {
-	b.restartPolicy = corev1.RestartPolicyNever
-	b.syncSidecar = nil
-	b.querySidecar = nil
-
-	b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "QUERY_PATH", Value: queryPath})
-
-	if queryParams != nil && len(queryParams) > 0 {
-		paramsJSON, err := json.Marshal(queryParams)
-		if err != nil {
-			b.errors = append(b.errors, fmt.Errorf("failed to marshal query params: %w", err))
-		} else {
-			b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "QUERY_PARAMS", Value: string(paramsJSON)})
-		}
-	}
-
-	return b
+// containerEnv is the bot container's own environment followed by env.
+func (b *PodBuilder) containerEnv(env []launch.Var) []corev1.EnvVar {
+	return append(append([]corev1.EnvVar{}, b.botEnv...), envVars(env)...)
 }
 
-// syncEnvVars extracts the env vars the sync sidecar needs from botEnv:
-// MinIO credentials for log/state upload and NATS_URL for live log publishing.
-func (b *PodBuilder) syncEnvVars() []corev1.EnvVar {
-	var syncEnv []corev1.EnvVar
-	for _, env := range b.botEnv {
-		switch env.Name {
-		case "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_USE_SSL", "NATS_URL":
-			syncEnv = append(syncEnv, env)
-		}
+func envVars(env []launch.Var) []corev1.EnvVar {
+	vars := make([]corev1.EnvVar, 0, len(env))
+	for _, variable := range env {
+		vars = append(vars, corev1.EnvVar{Name: variable.Name, Value: variable.Value})
 	}
-	return syncEnv
+	return vars
 }
 
 // Build creates the final Pod spec.
@@ -408,9 +318,9 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 			Name:            "bot",
 			Image:           b.botImage,
 			ImagePullPolicy: b.botImagePullPolicy,
-			Command:         b.botCommand,
+			Command:         b.launch.Command(),
 			WorkingDir:      "/bot",
-			Env:             b.botEnv,
+			Env:             b.containerEnv(b.launch.Env()),
 			VolumeMounts:    b.volumeMounts,
 			Resources:       b.botResources,
 			SecurityContext: hardenedContainerSecurityContext(),
@@ -421,12 +331,21 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 	// This ensures they start before the main container and keep running
 	var initContainers []corev1.Container
 	if b.syncSidecar != nil {
-		initContainers = append(initContainers, *b.syncSidecar)
+		syncSidecar := *b.syncSidecar
+		syncSidecar.Env = envVars(b.launch.SyncEnv())
+		initContainers = append(initContainers, syncSidecar)
 	}
 
 	// Query sidecar runs as a regular container (not native sidecar)
 	if b.querySidecar != nil {
-		containers = append(containers, *b.querySidecar)
+		server := b.launch
+		server.Mode = launch.Server
+		server.SkipSync = false
+		server.SkipQueryServer = false
+		querySidecar := *b.querySidecar
+		querySidecar.Command = server.Command()
+		querySidecar.Env = b.containerEnv(server.Env())
+		containers = append(containers, querySidecar)
 	}
 
 	return &corev1.Pod{
