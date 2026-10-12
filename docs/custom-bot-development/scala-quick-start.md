@@ -358,14 +358,14 @@ Input.resultRaw("""{"status":"success","trade_id":"abc123"}""")
 
 ### Query params
 
-A [query handler](./queries) reads each param in two ways. `req.get(key)` returns it as text: a string as itself, and any other JSON value as its JSON text, such as `5` or `{"side":"buy"}`. `req.getJson(key)` returns a `JsonValue` that keeps the JSON type:
+A [query handler](./queries) reads each param in three ways:
+- `req.get(key)` returns it as text: a string as itself, and any other JSON value as its JSON text, such as `5` or `{"side":"buy"}`. A `null` param counts as absent.
+- `req.getAs[T](key)` returns it as a `String`, `Int`, `Long`, `Double`, `BigDecimal` or `Boolean`, reading a string that parses as `T`, so `?limit=5` gives the `Int` 5.
+- `req.getJson(key)` returns a `JsonValue` exactly as it was sent.
 
 ```scala
 Query.handler("/signals") { req =>
-  val limit = req.getJson("limit") match {
-    case Some(JsonValue.Num(n)) => n.toInt
-    case _ => 10
-  }
+  val limit = req.getAs[Int]("limit").getOrElse(10)
   s"""{"limit": $limit}"""
 }
 ```
