@@ -213,3 +213,30 @@ TEST_SUITE("the0::log") {
         CHECK(output.back() == '\n');
     }
 }
+
+TEST_SUITE("the0::detail::iso_timestamp") {
+    std::string iso_at(long long millis_since_epoch) {
+        return the0::detail::iso_timestamp(
+            std::chrono::system_clock::time_point(std::chrono::milliseconds(millis_since_epoch)));
+    }
+
+    TEST_CASE("starts at the Unix epoch") {
+        CHECK(iso_at(0) == "1970-01-01T00:00:00.000Z");
+    }
+
+    TEST_CASE("keeps the milliseconds") {
+        CHECK(iso_at(1791804927111) == "2026-10-12T11:35:27.111Z");
+    }
+
+    TEST_CASE("handles a leap day") {
+        CHECK(iso_at(1709208000000) == "2024-02-29T12:00:00.000Z");
+    }
+
+    TEST_CASE("skips the leap day of a century year") {
+        CHECK(iso_at(4107542400000) == "2100-03-01T00:00:00.000Z");
+    }
+
+    TEST_CASE("handles the last millisecond of a year") {
+        CHECK(iso_at(1767225599999) == "2025-12-31T23:59:59.999Z");
+    }
+}
