@@ -23,6 +23,13 @@
 
   <ItemGroup>
     <ProjectReference Include="../The0.csproj" />
+    <!-- Built and copied next to the tests, which start it as a separate process. -->
+    <ProjectReference Include="ContractBot/The0.ContractBot.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ContractBot/**" />
+    <None Remove="ContractBot/**" />
   </ItemGroup>
 
   <ItemGroup>
