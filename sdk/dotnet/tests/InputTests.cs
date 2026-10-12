@@ -87,9 +87,7 @@ public class InputTests : IDisposable
         Input.Log("Test message");
         var output = GetCapturedStderr();
 
-        Assert.Contains("\"timestamp\":", output);
-        // Timestamp should be numeric (Unix ms)
-        Assert.Matches(@"""timestamp"":\d+", output);
+        Assert.Matches(@"""timestamp"":""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z""", output);
     }
 
     [Fact]
@@ -207,9 +205,7 @@ public class InputTests : IDisposable
         Input.Metric("heartbeat", new { });
         var output = GetCapturedStdout();
 
-        Assert.Contains("\"timestamp\":", output);
-        // Timestamp should be numeric (Unix ms)
-        Assert.Matches(@"""timestamp"":\d+", output);
+        Assert.Matches(@"""timestamp"":""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z""", output);
     }
 
     [Fact]
@@ -259,18 +255,56 @@ public class InputTests : IDisposable
     }
 
     [Fact]
-    public void Success_EscapesQuotes()
+    public void Success_KeepsQuotesInTheMessage()
     {
-        // Test that escaping doesn't throw
-        var exception = Record.Exception(() => Input.Success("Test with \"quotes\""));
-        // No assertion - just checking it doesn't throw
+        var result = JsonNode.Parse(WrittenResult(() => Input.Success("Test with \"quotes\"")));
+
+        Assert.Equal("Test with \"quotes\"", result!["message"]!.GetValue<string>());
     }
 
     [Fact]
-    public void Success_EscapesBackslashes()
+    public void Success_KeepsBackslashesInTheMessage()
     {
-        var exception = Record.Exception(() => Input.Success(@"Path: C:\Users\test"));
-        // No assertion - just checking it doesn't throw
+        var result = JsonNode.Parse(WrittenResult(() => Input.Success(@"Path: C:\Users\test")));
+
+        Assert.Equal(@"Path: C:\Users\test", result!["message"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Runs <paramref name="write"/> with CODE_MOUNT_DIR pointing at a fresh
+    /// directory and returns the text of the result file it wrote.
+    /// </summary>
+    private static string WrittenResult(Action write)
+    {
+        var codeDir = Directory.CreateTempSubdirectory("the0_input_test_");
+        try
+        {
+            Environment.SetEnvironmentVariable("CODE_MOUNT_DIR", codeDir.FullName.TrimStart('/'));
+            write();
+            return File.ReadAllText(Path.Combine(codeDir.FullName, "result.json"));
+        }
+        finally
+        {
+            codeDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Success_WithNullDataWritesNoDataKey()
+    {
+        var result = JsonNode.Parse(WrittenResult(() => Input.Success("done", null)))!.AsObject();
+
+        Assert.False(result.ContainsKey("data"));
+    }
+
+    [Fact]
+    public void Success_WritesValidJsonForControlCharacters()
+    {
+        var text = WrittenResult(() => Input.Success("line one\nline two\ttabbed"));
+
+        JsonNode? result = null;
+        Assert.Null(Record.Exception(() => result = JsonNode.Parse(text)));
+        Assert.Equal("line one\nline two\ttabbed", result!["message"]!.GetValue<string>());
     }
 
     #endregion

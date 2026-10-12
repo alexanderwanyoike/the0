@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
@@ -35,17 +36,104 @@ public static class Query
         /// <summary>The query path being requested (e.g., "/portfolio")</summary>
         public string Path { get; }
 
-        /// <summary>Dictionary of query parameters</summary>
+        /// <summary>
+        /// Every parameter as text: a string as itself, any other JSON value as
+        /// its JSON text. A null parameter is left out, so defaults apply.
+        /// </summary>
         public Dictionary<string, string> Params { get; }
 
+        /// <summary>Every parameter as its JSON value.</summary>
+        public JsonObject JsonParams { get; }
+
+        /// <summary>
+        /// Create a request whose parameters are all strings.
+        /// </summary>
+        /// <param name="path">The query path</param>
+        /// <param name="params">The parameters</param>
         public QueryRequest(string path, Dictionary<string, string> @params)
         {
             Path = path;
             Params = @params;
+            JsonParams = new JsonObject(@params.Select(param =>
+                KeyValuePair.Create(param.Key, (JsonNode?)JsonValue.Create(param.Value))));
         }
 
         /// <summary>
-        /// Get a parameter value.
+        /// Create a request whose parameters are JSON values.
+        /// </summary>
+        /// <param name="path">The query path</param>
+        /// <param name="params">The parameters as a JSON object</param>
+        public QueryRequest(string path, JsonObject @params)
+        {
+            Path = path;
+            JsonParams = @params;
+            Params = @params
+                .Where(param => param.Value is not null)
+                .ToDictionary(param => param.Key, param => AsText(param.Value!));
+        }
+
+        // The text is read by people and string handlers, not embedded in
+        // HTML, so the default encoder's é-style escapes only get in the way.
+        private static readonly JsonSerializerOptions TextOptions =
+            new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+        private static string AsText(JsonNode value) =>
+            value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value.ToJsonString(TextOptions);
+
+        /// <summary>
+        /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
+        /// Asked for a string, it reads a parameter as <see cref="Get(string, string)"/> does: a non-string
+        /// value as its JSON text, and a null value as absent.
+        /// A string value that is not a <typeparamref name="T"/> is parsed as JSON text, so the
+        /// query-string param <c>limit=50</c> reads as the int 50.
+        /// A null value reads as null, or as the default when <typeparamref name="T"/> cannot hold null.
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize to</typeparam>
+        /// <param name="key">The parameter key</param>
+        /// <param name="defaultValue">The value to return when the parameter is missing</param>
+        /// <returns>The parameter's value, or the default</returns>
+        /// <exception cref="JsonException">The parameter's value is not a <typeparamref name="T"/></exception>
+        public T? Get<T>(string key, T? defaultValue = default)
+        {
+            if (!JsonParams.TryGetPropertyValue(key, out var value))
+            {
+                return defaultValue;
+            }
+            if (typeof(T) == typeof(string))
+            {
+                return value == null ? defaultValue : (T)(object)AsText(value);
+            }
+            if (value == null && default(T) is not null)
+            {
+                return defaultValue;
+            }
+            try
+            {
+                return value.Deserialize<T>();
+            }
+            catch (JsonException) when (value?.GetValueKind() == JsonValueKind.String
+                && ParsesAsJson(value.GetValue<string>(), out var parsed))
+            {
+                return parsed.Deserialize<T>();
+            }
+        }
+
+        private static bool ParsesAsJson(string text, out JsonNode? node)
+        {
+            try
+            {
+                node = JsonNode.Parse(text);
+                return true;
+            }
+            catch (JsonException)
+            {
+                node = null;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Get a parameter as text: a string as itself, any other JSON value as its JSON text.
         /// </summary>
         /// <param name="key">The parameter key</param>
         /// <returns>The parameter value or null if not found</returns>
@@ -53,7 +141,7 @@ public static class Query
             Params.TryGetValue(key, out var value) ? value : null;
 
         /// <summary>
-        /// Get a parameter value with a default.
+        /// Get a parameter as text, with a default: a string as itself, any other JSON value as its JSON text.
         /// </summary>
         /// <param name="key">The parameter key</param>
         /// <param name="defaultValue">The default value if not found</param>
@@ -63,18 +151,13 @@ public static class Query
     }
 
     /// <summary>
-    /// Error thrown when attempting to modify state during query execution.
-    /// </summary>
-    public class ReadOnlyStateError : Exception
-    {
-        public ReadOnlyStateError(string message) : base(message) { }
-    }
-
-    /// <summary>
     /// Register a query handler (Express-like).
     /// </summary>
     /// <param name="path">The query path to handle (e.g., "/portfolio", "/signals")</param>
-    /// <param name="handler">Handler function that receives request and returns response object</param>
+    /// <param name="handler">
+    /// Handler function that receives request and returns response object. A handler that
+    /// throws answers {"status": "error", "error": message}.
+    /// </param>
     /// <example>
     /// <code>
     /// Query.Handler("/portfolio", req => {
@@ -158,16 +241,22 @@ public static class Query
     }
 
     /// <summary>
+    /// Where an ephemeral query writes its result. Settable so the contract
+    /// tests can point it into a sandbox; the runtime always reads
+    /// /query/result.json.
+    /// </summary>
+    internal static string ResultPath { get; set; } = "/query/result.json";
+
+    /// <summary>
     /// Write query result to /query/result.json file (matches Python SDK behavior).
     /// This avoids stdout pollution from runtime logs mixing with query results.
     /// </summary>
     private static void WriteResult(object result)
     {
-        const string resultPath = "/query/result.json";
         try
         {
-            Directory.CreateDirectory("/query");
-            File.WriteAllText(resultPath, JsonSerializer.Serialize(result));
+            Directory.CreateDirectory(Path.GetDirectoryName(ResultPath)!);
+            File.WriteAllText(ResultPath, JsonSerializer.Serialize(result));
         }
         catch (Exception e)
         {
@@ -176,20 +265,38 @@ public static class Query
     }
 
     /// <summary>
+    /// The params in a JSON text, or none when it is missing, is not JSON or is not an object.
+    /// </summary>
+    private static JsonObject ParamsObject(string? json) =>
+        ObjectOrNull(json ?? "{}") ?? new JsonObject();
+
+    /// <summary>
+    /// The JSON object in a text, or null when the text is not JSON, is not an
+    /// object, or repeats a key.
+    /// </summary>
+    private static JsonObject? ObjectOrNull(string json)
+    {
+        try
+        {
+            var obj = JsonNode.Parse(json) as JsonObject;
+            // JsonObject builds its key map on first use, which is where a
+            // repeated key throws, so use it here rather than in a handler.
+            _ = obj?.Count;
+            return obj;
+        }
+        catch (Exception e) when (e is JsonException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Execute single query and write result to /query/result.json.
     /// </summary>
     private static void RunEphemeral(string queryPath)
     {
-        // Parse parameters from environment
-        var paramsStr = Environment.GetEnvironmentVariable("QUERY_PARAMS") ?? "{}";
-        try
-        {
-            _currentParams = JsonSerializer.Deserialize<Dictionary<string, string>>(paramsStr) ?? new();
-        }
-        catch
-        {
-            _currentParams = new();
-        }
+        var request = new QueryRequest(queryPath, ParamsObject(Environment.GetEnvironmentVariable("QUERY_PARAMS")));
+        _currentParams = request.Params;
 
         // Find and execute handler
         if (!_handlers.TryGetValue(queryPath, out var handler))
@@ -207,7 +314,6 @@ public static class Query
 
         try
         {
-            var request = new QueryRequest(queryPath, _currentParams);
             var data = handler(request);
             WriteResult(new { status = "ok", data });
         }
@@ -230,43 +336,45 @@ public static class Query
         listener.Prefixes.Add(prefix);
         listener.Start();
 
-        Console.Error.WriteLine(JsonSerializer.Serialize(new
-        {
-            _log = "info",
-            message = $"Query server started on port {port}"
-        }));
+        Input.Log($"Query server started on port {port}");
 
         while (true)
         {
+            HttpListenerContext? context = null;
             try
             {
-                var context = listener.GetContext();
+                context = listener.GetContext();
                 HandleRequest(context);
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine(JsonSerializer.Serialize(new
-                {
-                    _log = "error",
-                    message = $"Error handling request: {e.Message}"
-                }));
+                Input.Log($"Error handling request: {e.Message}", level: Input.LogLevel.Error);
+                // A request that failed outside its handler may have no response
+                // yet; closing it stops the client waiting for one.
+                context?.Response.Abort();
             }
         }
     }
 
     /// <summary>
-    /// Handle an HTTP request.
+    /// The params in a request body that is a JSON object, or null when there is no such body.
     /// </summary>
-    private static void HandleRequest(HttpListenerContext context)
+    private static JsonObject? BodyParams(HttpListenerRequest request)
     {
-        var request = context.Request;
-        var response = context.Response;
+        if (!request.HasEntityBody)
+        {
+            return null;
+        }
+        using var reader = new StreamReader(request.InputStream, System.Text.Encoding.UTF8);
+        return ObjectOrNull(reader.ReadToEnd());
+    }
 
-        var path = request.Url?.AbsolutePath ?? "/";
-        var queryString = request.Url?.Query ?? "";
-
-        // Parse query parameters
-        _currentParams = new Dictionary<string, string>();
+    /// <summary>
+    /// The params in a URL query string, URL-decoded, every value a string.
+    /// </summary>
+    private static Dictionary<string, string> QueryStringParams(string queryString)
+    {
+        var queryParams = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(queryString) && queryString.StartsWith("?"))
         {
             var parsed = HttpUtility.ParseQueryString(queryString);
@@ -274,10 +382,26 @@ public static class Query
             {
                 if (key != null)
                 {
-                    _currentParams[key] = parsed[key] ?? "";
+                    queryParams[key] = parsed[key] ?? "";
                 }
             }
         }
+        return queryParams;
+    }
+
+    /// <summary>
+    /// Handle an HTTP request.
+    /// </summary>
+    private static void HandleRequest(HttpListenerContext context)
+    {
+        var httpRequest = context.Request;
+        var response = context.Response;
+
+        var path = httpRequest.Url?.AbsolutePath ?? "/";
+        var queryRequest = BodyParams(httpRequest) is JsonObject body
+            ? new QueryRequest(path, body)
+            : new QueryRequest(path, QueryStringParams(httpRequest.Url?.Query ?? ""));
+        _currentParams = queryRequest.Params;
 
         string responseBody;
         int statusCode;
@@ -288,15 +412,15 @@ public static class Query
             responseBody = JsonSerializer.Serialize(new
             {
                 status = "error",
-                error = $"No handler for path: {path}"
+                error = $"No handler for path: {path}",
+                available = _handlers.Keys.ToList()
             });
         }
         else
         {
             try
             {
-                var req = new QueryRequest(path, _currentParams);
-                var data = handler(req);
+                var data = handler(queryRequest);
                 statusCode = 200;
                 responseBody = JsonSerializer.Serialize(new { status = "ok", data });
             }

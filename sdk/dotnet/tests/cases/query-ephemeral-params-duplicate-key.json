@@ -1,0 +1,17 @@
+{
+  "description": "A QUERY_PARAMS object with a duplicate key gives no params, like any other invalid params, and the query still runs.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "{\"limit\":1,\"limit\":2}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "expect": {"exit_code": 0, "query_result": {"status": "ok", "data": {}}}
+}

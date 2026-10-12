@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -19,6 +20,12 @@ public static class Input
             return $"/{mountDir}/result.json";
         }
     }
+
+    /// <summary>
+    /// The current time as a UTC ISO 8601 string, the form metric and log lines carry.
+    /// </summary>
+    private static string Timestamp() =>
+        DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Write result to the result file.
@@ -73,22 +80,51 @@ public static class Input
     /// Writes a JSON object with status "success" and the provided message.
     /// </summary>
     /// <param name="message">The success message to include in the output</param>
-    public static void Success(string message)
+    public static void Success(string message) => Success(message, null);
+
+    /// <summary>
+    /// Output a success result with data to the result file.
+    /// Writes a JSON object with status "success", the message and, unless
+    /// <paramref name="data"/> is null, the data under "data".
+    /// </summary>
+    /// <param name="message">The success message to include in the output</param>
+    /// <param name="data">Any JSON-serializable value, or null for none</param>
+    public static void Success(string message, object? data)
     {
-        var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        WriteResult($"{{\"status\":\"success\",\"message\":\"{escaped}\"}}");
+        WriteResult(StatusResult("success", message, data));
+    }
+
+    private static string StatusResult(string status, string message, object? data)
+    {
+        var result = new JsonObject { ["status"] = status, ["message"] = message };
+        if (data != null)
+        {
+            result["data"] = JsonSerializer.SerializeToNode(data);
+        }
+        return result.ToJsonString();
     }
 
     /// <summary>
-    /// Output an error result to the result file and exit with code 1.
+    /// Output an error result to the result file, log the message and exit with code 1.
     /// Writes a JSON object with status "error" and the provided message,
+    /// prints the message to stderr as an error log line,
     /// then terminates the process with exit code 1.
     /// </summary>
     /// <param name="message">The error message to include in the output</param>
-    public static void Error(string message)
+    public static void Error(string message) => Error(message, null);
+
+    /// <summary>
+    /// Output an error result with data to the result file, log the message and exit with code 1.
+    /// Writes a JSON object with status "error", the message and, unless
+    /// <paramref name="data"/> is null, the data under "data". The error log
+    /// line on stderr carries the message only.
+    /// </summary>
+    /// <param name="message">The error message to include in the output</param>
+    /// <param name="data">Any JSON-serializable value, or null for none</param>
+    public static void Error(string message, object? data)
     {
-        var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        WriteResult($"{{\"status\":\"error\",\"message\":\"{escaped}\"}}");
+        WriteResult(StatusResult("error", message, data));
+        Log(message, level: LogLevel.Error);
         Environment.Exit(1);
     }
 
@@ -111,7 +147,7 @@ public static class Input
     {
         var jsonObj = JsonSerializer.SerializeToNode(data)?.AsObject() ?? new JsonObject();
         jsonObj["_metric"] = metricType;
-        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        jsonObj["timestamp"] = Timestamp();
         Console.WriteLine(jsonObj.ToJsonString());
     }
 
@@ -153,7 +189,7 @@ public static class Input
 
         jsonObj["level"] = level.ToString().ToLower();
         jsonObj["message"] = message;
-        jsonObj["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        jsonObj["timestamp"] = Timestamp();
 
         Console.Error.WriteLine(jsonObj.ToJsonString());
     }

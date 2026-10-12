@@ -214,7 +214,10 @@ Params are JSON values. A param keeps its type (string, number, boolean, array, 
 - **Typed server params break string handlers.** An SDK whose query server used to read only the query string now hands realtime handlers typed params. A handler that treated every param as a string, or decoded object params from their JSON text (the runtime has sent them that way in the query string), must change. The Python SDK (`the0-sdk`) and the Node.js SDK (`the0-node`) make this change in 0.4.0. Node.js's `QueryRequest` types still declare params as strings.
 - **Accessors.**
   - Python's request object and Node.js's `req.params` and `req.get()` hand over the JSON values as they are.
-  - The Rust, .NET, Scala, Haskell and C++ SDKs keep their string accessor, which returns a non-string value as its JSON text instead of dropping it. They also gain a typed accessor.
+  - The Rust, .NET, Scala, Haskell and C++ SDKs keep their string accessor, which returns a non-string value as its JSON text instead of dropping it. They also gain a typed accessor. Their accessors follow three rules:
+    - The string accessors treat a `null` param as absent, so the handler's default applies. The runtime leaves `null` params out of the query string for the same reason.
+    - A typed accessor reads a string value that parses as the requested type. Query-string params are all strings, so `limit=50` from a manual call still reads as a number.
+    - A typed accessor asked for a string returns a non-string value as its JSON text, as the string accessors do. A `null` param read as a string is absent, as in the first rule, never the text `"null"`.
 
 ### Responses
 
@@ -265,7 +268,8 @@ It reads the response body whatever the status code.
 | Python | `sdk/python/tests/test_contract.py` |
 | Node.js | `sdk/nodejs/src/contract.test.ts` |
 | Rust | `sdk/rust/tests/contract/main.rs` |
-| .NET, Scala, Haskell, C++ | not yet |
+| .NET | `sdk/dotnet/tests/ContractTests.cs` |
+| Scala, Haskell, C++ | not yet |
 
 ## Bringing the SDKs into line
 
@@ -273,11 +277,11 @@ These are the rules each SDK does not follow yet. The SDKs come into line one at
 
 | Rule | Not followed yet by |
 |---|---|
-| `success()` and `error()` accept optional `data` (these SDKs take a message only) | .NET, Scala, Haskell, C++ |
-| `error()` prints its message on stderr | .NET, Scala, Haskell, C++ |
-| Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | .NET, Scala, Haskell, C++ |
-| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | .NET, Scala, Haskell, C++ |
-| One read-only error type (these SDKs define a second, unused type in the query module) | .NET, Scala, Haskell, C++ |
-| Ephemeral query params keep their JSON types | .NET (drops every param when any is not a string), Scala (keeps only string pairs), Haskell and C++ (turn every value into a string) |
-| The query server reads the JSON body | .NET, Scala, Haskell, C++ |
-| The query server's 404 includes `available` | .NET, Scala, Haskell, C++ |
+| `success()` and `error()` accept optional `data` (these SDKs take a message only) | Scala, Haskell, C++ |
+| `error()` prints its message on stderr | Scala, Haskell, C++ |
+| Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Scala, Haskell, C++ |
+| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Scala, Haskell, C++ |
+| One read-only error type (these SDKs define a second, unused type in the query module) | Scala, Haskell, C++ |
+| Ephemeral query params keep their JSON types | Scala (keeps only string pairs), Haskell and C++ (turn every value into a string) |
+| The query server reads the JSON body | Scala, Haskell, C++ |
+| The query server's 404 includes `available` | Scala, Haskell, C++ |
