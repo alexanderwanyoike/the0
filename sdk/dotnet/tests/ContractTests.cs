@@ -21,7 +21,6 @@ public class ContractTests
     private static readonly Dictionary<string, string> KnownFailures = new()
     {
         ["bot-error-with-data"] = "Error() ignores its data and does not print its message on stderr",
-        ["bot-success-with-data"] = "Success() ignores its data",
         ["query-ephemeral-params"] = "a non-string value in QUERY_PARAMS drops every param, and the typed accessors are stubs",
         ["query-ephemeral-read-only-before-key-check"] = "State throws The0.ReadOnlyStateError, not the Query.ReadOnlyStateError the query module documents",
         ["query-ephemeral-state-read-only"] = "State throws The0.ReadOnlyStateError, not the Query.ReadOnlyStateError the query module documents",

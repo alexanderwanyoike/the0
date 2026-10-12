@@ -270,6 +270,24 @@ public class InputTests : IDisposable
     }
 
     [Fact]
+    public void Success_WithNullDataWritesNoDataKey()
+    {
+        var codeDir = Directory.CreateTempSubdirectory("the0_input_test_");
+        try
+        {
+            Environment.SetEnvironmentVariable("CODE_MOUNT_DIR", codeDir.FullName.TrimStart('/'));
+            Input.Success("done", null);
+
+            var result = JsonNode.Parse(File.ReadAllText(Path.Combine(codeDir.FullName, "result.json")))!.AsObject();
+            Assert.False(result.ContainsKey("data"));
+        }
+        finally
+        {
+            codeDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Success_WritesValidJsonForControlCharacters()
     {
         var codeDir = Directory.CreateTempSubdirectory("the0_input_test_");
