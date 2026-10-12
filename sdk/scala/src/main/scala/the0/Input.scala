@@ -136,7 +136,7 @@ object Input {
    */
   def metric(metricType: String, json: String): Unit = {
     val timestamp = now()
-    println(s"""{"_metric":"$metricType","timestamp":"$timestamp"${dataFields(json)}}""")
+    println(s"""{"_metric":${JsonValue.quote(metricType)},"timestamp":"$timestamp"${dataFields(json)}}""")
   }
 
   /**
