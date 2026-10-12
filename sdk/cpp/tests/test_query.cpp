@@ -227,6 +227,24 @@ TEST_CASE("query::Request from text params") {
     SUBCASE("values() holds every param as a JSON string") {
         CHECK(req.values() == json{{"symbol", "BTC/USD"}, {"limit", "5"}});
     }
+
+    SUBCASE("get_as<T>() parses a string param as T") {
+        query::Request text("/echo", {
+            {"limit", "5"},
+            {"live", "true"},
+            {"ratio", "0.25"},
+            {"symbols", R"(["AAPL","MSFT"])"},
+            {"symbol", "BTC/USD"},
+        });
+
+        CHECK(text.get_as<int>("limit") == 5);
+        CHECK(text.get_as<bool>("live") == true);
+        CHECK(text.get_as<double>("ratio") == 0.25);
+        CHECK(text.get_as<std::vector<std::string>>("symbols") == std::vector<std::string>{"AAPL", "MSFT"});
+        CHECK(text.get_as<std::string>("limit") == "5");
+        CHECK_FALSE(text.get_as<int>("symbol").has_value());
+        CHECK_FALSE(text.get_as<int>("ratio").has_value());
+    }
 }
 
 TEST_CASE("state read-only enforcement in query mode") {
