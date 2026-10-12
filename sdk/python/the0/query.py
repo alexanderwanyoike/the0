@@ -210,9 +210,10 @@ def _run_ephemeral(query_path: str):
     # Parse parameters from environment
     params_str = os.environ.get("QUERY_PARAMS", "{}")
     try:
-        _current_params = json.loads(params_str)
+        params = json.loads(params_str)
     except json.JSONDecodeError:
-        _current_params = {}
+        params = {}
+    _current_params = params if isinstance(params, dict) else {}
 
     # Find and execute handler
     handler_fn = _handlers.get(query_path)
@@ -274,12 +275,8 @@ def _run_server():
             except Exception as e:
                 self._send_json(500, {"status": "error", "error": str(e)})
 
-        def _json_body_params(self):
-            """Params from a JSON object body, which keeps their types.
-
-            None means use the query string instead: the runtime sends params
-            in both, and manual curl calls use only the query string.
-            """
+        def _json_body_params(self) -> Optional[Dict[str, Any]]:
+            """Params from a JSON object body, or None to use the query string."""
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:

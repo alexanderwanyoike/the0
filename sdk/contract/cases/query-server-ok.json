@@ -33,6 +33,7 @@
       "target": "/portfolio",
       "expect": {
         "status": 200,
+        "headers": {"Content-Type": "application/json"},
         "body": {
           "status": "ok",
           "data": {"positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}]}

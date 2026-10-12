@@ -16,6 +16,7 @@
       "target": "/fail",
       "expect": {
         "status": 500,
+        "headers": {"Content-Type": "application/json"},
         "body": {
           "status": "error",
           "error": {"$match": "contains", "value": "price feed unavailable"}

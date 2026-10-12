@@ -29,6 +29,11 @@ def resolve(value, bound):
     return value
 
 
+def given(args, *names):
+    """The optional args the step gives, in order, so an omitted one stays omitted."""
+    return [args[name] for name in names if name in args]
+
+
 def perform(step, request, bound):
     op = step["op"]
     args = {key: resolve(value, bound) for key, value in step.items() if key not in ("op", "as", "catch")}
@@ -38,28 +43,18 @@ def perform(step, request, bound):
         return {"bot_id": bot_id, "config": config}
     if op in ("success", "error"):
         call = the0.success if op == "success" else the0.error
-        if "data" in args:
-            return call(args["message"], args["data"])
-        return call(args["message"])
+        return call(args["message"], *given(args, "data"))
     if op == "result":
         return the0.result(args["value"])
     if op == "metric":
         return the0.metric(args["type"], args["data"])
     if op == "log":
-        if "data" in args and "level" in args:
-            return the0.log(args["message"], args["data"], args["level"])
-        if "data" in args:
-            return the0.log(args["message"], args["data"])
-        if "level" in args:
-            return the0.log(args["message"], args["level"])
-        return the0.log(args["message"])
+        return the0.log(args["message"], *given(args, "data", "level"))
     if op == "raise":
         raise RuntimeError(args["message"])
 
     if op == "state.get":
-        if "default" in args:
-            return state.get(args["key"], args["default"])
-        return state.get(args["key"])
+        return state.get(args["key"], *given(args, "default"))
     if op == "state.set":
         return state.set(args["key"], args["value"])
     if op == "state.delete":
@@ -76,9 +71,7 @@ def perform(step, request, bound):
     if op == "query.params":
         return dict(request.params)
     if op == "query.param":
-        if "default" in args:
-            return request.get(args["key"], args["default"])
-        return request.get(args["key"])
+        return request.get(args["key"], *given(args, "default"))
     if op == "query.config":
         return query.get_config()
 

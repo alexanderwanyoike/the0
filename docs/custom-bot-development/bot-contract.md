@@ -27,7 +27,8 @@ The runtime starts an entrypoint in one of three ways:
 | Runtime | Bot entrypoint runs as | Query entrypoint runs as |
 |---|---|---|
 | `python3.11` | `python3 /app/wrappers/python_bot.py` | `python3 <query entrypoint>` |
-| `nodejs22`, `nodejs20` | `node /app/wrappers/node_bot.js` | `node <query entrypoint>` |
+| `nodejs22` | `node /app/wrappers/node_bot.js` | `node <query entrypoint>` |
+| `nodejs20` | `/opt/node20/bin/node /app/wrappers/node_bot.js` | `/opt/node20/bin/node <query entrypoint>` |
 | `rust-stable`, `gcc13`, `cpp-gcc13`, `ghc96` | `/bot/<entrypoint>` | `/bot/<query entrypoint>` |
 | `dotnet8` | `dotnet <entrypoint>` for a `.dll`, otherwise `dotnet run --project <entrypoint>` | the same, with the query entrypoint |
 | `scala3` | `java -jar <jar>`, or `java -cp <jar> <MainClass>` for an entrypoint written `<jar>:<MainClass>` | the same, with the query entrypoint |
@@ -36,20 +37,21 @@ The working directory is the code directory, `/bot`. A query entrypoint never ru
 
 ## Environment
 
-`runtime execute` builds the environment for every process it starts (`BuildBotEnv` in `runtime/internal/execute/helpers.go`). Its values replace any of the same name the container was created with.
+`runtime execute` builds the environment for every process it starts (`BuildBotEnv` in `runtime/internal/execute/helpers.go`). It starts from the container's own environment and sets the variables below. Its values replace any of the same name, except where the table says an inherited value is kept.
 
 | Variable | Set for | Value |
 |---|---|---|
 | `BOT_ID` | every process | The bot's ID. |
 | `BOT_CONFIG` | every process | The bot's configuration, as JSON object text. |
 | `CODE_MOUNT_DIR` | every process | The code directory without its leading `/`, which is `bot`. A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`. SDKs use `bot` when it is unset. |
-| `STATE_DIR` | every process | The state directory, `/state/.the0-state`. SDKs use that path when it is unset. |
+| `STATE_DIR` | every process | The state directory, `/state/.the0-state`. An inherited value is kept; every container the runtime creates sets it to that path. SDKs use that path when it is unset. |
 | `BOT_TYPE` | bot runs and query servers; ephemeral queries on Docker only | `realtime` or `scheduled`. Kubernetes query pods don't set it. SDKs only read it to decide whether to start the query server. |
 | `QUERY_PATH` | ephemeral queries only | The query's path, such as `/portfolio`. It is never empty. Its presence is what makes state read-only. |
 | `QUERY_PARAMS` | ephemeral queries with params; Docker always sets it, to `{}` when there are none | The params, as JSON object text. |
 | `THE0_QUERY_PORT` | never set by the runtime | The port the SDK's query server listens on, default `9476`. The runtime always connects to 9476; the variable exists for tests and local runs. |
 | `SCRIPT_PATH` | every process | The entrypoint file. Only the wrappers read it. |
 | `PYTHONPATH` | `python3.11` | `/bot/vendor:/bot`, followed by any inherited value. |
+| `PATH` | `nodejs20` | `/opt/node20/bin`, followed by the inherited value, so a bot that starts `node` itself gets Node.js 20 too. |
 
 The bot can also see variables that are not part of the contract, and it must not rely on them:
 - **`QUERY_PARAM_<key>`.** The runtime sets one per param using Go's `%v` formatting, which loses information: an object becomes `map[...]`. No SDK reads it. Read `QUERY_PARAMS` instead.
@@ -98,7 +100,7 @@ A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`, which is `/bot/resul
 | `error(message[, data])` | `{"status": "error", "message": message, "data": data}`, with `data` only when it is given. See [`error()`](#error). |
 | `result(value)` | `value`, unchanged |
 
-Each call replaces the file, so the bot's last call wins. An SDK never writes a result on its own: a bot that makes none of these calls leaves no file. The Rust, .NET, Scala, Haskell and C++ SDKs take no `data` argument; their `result()` can write the same object.
+Each call replaces the file, so the bot's last call wins. An SDK never writes a result on its own: a bot that makes none of these calls leaves no file. Every SDK's `success()` and `error()` accept the optional `data`.
 
 ### `error()`
 
@@ -125,7 +127,9 @@ After `main` ends, the Python and Node.js wrappers settle the result and the exi
   - A failure writes `{"status": "error", "message": ...}`, with the error's message or `Bot exited with code N`. A failure is an uncaught error, a rejected promise, `error()`, or any non-zero exit.
 - **They keep the bot's exit code.** An uncaught error gives 1, and an error result turns an exit 0 into 1.
 - **They print an error result** on stderr as an error log line, so a failed run always leaves its message in the logs. An SDK whose `error()` already prints the message therefore shows it twice on these runtimes.
-- **They handle stop signals.** On SIGTERM or SIGINT, the Python wrapper stops waiting for `main`, writes `{"status": "terminated", ...}` unless the bot wrote a result, and exits 0.
+- **Stop signals differ.**
+  - On SIGTERM or SIGINT, the Python wrapper stops waiting for `main`, writes `{"status": "terminated", ...}` unless the bot wrote a result, and exits 0.
+  - The Node.js wrapper catches both signals, but the abort signal it raises never reaches `main`, so a Node.js bot carries on until it finishes or the runtime kills it.
 
 ## Log and metric lines
 
@@ -163,6 +167,8 @@ The frontend reads each line as follows:
 - A JSON object with `_metric` is a metric.
 - A JSON object with `level`, `message` or `msg` is a log line at its `level`.
 - Anything else is plain text, at INFO unless it starts with `INFO:`, `WARN:` or `ERROR:`.
+
+A known limitation: the api's log history reduces any JSON line that is not a metric to its `message` (`normalizeLine` in `api/src/logs/logs.service.ts`). Lines loaded from history therefore show at INFO whatever their level, `error()`'s line included.
 
 ## State
 
@@ -203,8 +209,9 @@ The runner picks its mode from the environment:
 ### Params
 
 Params are JSON values. A param keeps its type (string, number, boolean, array, object or `null`), and every SDK hands it to handlers without loss.
-- **Ephemeral queries** read params from `QUERY_PARAMS`, a JSON object. When it is missing or invalid, there are no params.
+- **Ephemeral queries** read params from `QUERY_PARAMS`, a JSON object. When it is missing, is not JSON, or is JSON but not an object, there are no params.
 - **The query server** reads params from the request body when the body is a JSON object. Otherwise (no body, or a body that isn't a JSON object), it reads them from the URL query string, URL-decoded, and every value is a string. The runtime sends both a body and a query string, so a manual `curl` call with a query string keeps working.
+- **Typed server params break string handlers.** An SDK whose query server used to read only the query string now hands realtime handlers typed params. A handler that treated every param as a string, or decoded object params from their JSON text (the runtime has sent them that way in the query string), must change. The Python SDK makes this change in 0.4.0.
 - **Accessors.**
   - Python's request object and Node.js's `req.params` and `req.get()` hand over the JSON values as they are.
   - The Rust, .NET, Scala, Haskell and C++ SDKs keep their string accessor, which returns a non-string value as its JSON text instead of dropping it. They also gain a typed accessor.
@@ -222,6 +229,7 @@ Both modes answer with the same JSON object:
 - `available` lists every path the bot answers, as `/info` does.
 - `error` for a failed handler contains the error's message. The rest of the text is up to the language; Node.js, for one, puts the error's name in front.
 - Every query mode can report a handler error.
+- In both modes, when the body has both `error` and `available`, the runtime appends `(available: a, b, ...)` to the error text it answers with.
 
 ### Ephemeral queries
 
@@ -233,8 +241,6 @@ The runtime restores the bot's saved state, then starts the query entrypoint in 
 The runtime then uploads `/query/result.json` (to `QUERY_RESULT_KEY` in the query results bucket) and answers the query from it:
 - **Exit 0:** the file's contents.
 - **Non-zero exit:** the file's contents when there are any, otherwise an error carrying the process's output.
-
-When the body has both `error` and `available`, the runtime appends `(available: a, b, ...)` to the error text.
 
 ### Query server
 
@@ -252,17 +258,7 @@ It reads the response body whatever the status code.
 
 ## Conformance cases
 
-[`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) holds the cases, and its README describes their format. Each case is an environment in and the expected outputs out:
-- the lines on stdout and stderr
-- `result.json`
-- the query result file
-- the state files
-- the exit code
-- in server mode, the HTTP responses
-
-Each SDK's harness starts a small program built on the SDK with the case's environment and compares what comes out.
-
-A case an SDK does not pass yet is listed in its harness as an expected failure, with the reason. A listed case that starts passing fails the suite, so the list stays current. Every SDK workflow runs on changes to `sdk/contract/**`.
+[`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) holds the cases. Each one is an environment in and the expected outputs out; [its README](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract#readme) lists what is compared, describes the format, and says how an SDK adopts the cases and lists the ones it does not pass yet. Every SDK workflow runs on changes to `sdk/contract/**`.
 
 | SDK | Harness |
 |---|---|
@@ -276,6 +272,7 @@ These are the rules each SDK does not follow yet. The SDKs come into line one at
 
 | Rule | Not followed yet by |
 |---|---|
+| `success()` and `error()` accept optional `data` (these SDKs take a message only) | Rust, .NET, Scala, Haskell, C++ |
 | `error()` prints its message on stderr | Rust, .NET, Scala, Haskell, C++ |
 | Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Rust, .NET, Scala, Haskell, C++ |
 | The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Rust, .NET, Scala, Haskell, C++ |
