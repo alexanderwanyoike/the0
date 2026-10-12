@@ -72,6 +72,8 @@ func (s Storage) WithDefaults() Storage {
 
 // Settings is one launch of `runtime execute`.
 type Settings struct {
+	// Mode is named in the command, so a launch never leaves the runner to
+	// guess it from the environment.
 	Mode Mode
 	// SkipSync leaves saving a run's state and logs to a sync sidecar.
 	SkipSync bool
@@ -99,7 +101,7 @@ type Settings struct {
 	// done file for the sync.
 	IsScheduled bool
 
-	// QueryPath is the query a query launch answers.
+	// QueryPath is the query a query launch answers. The command carries it.
 	QueryPath string
 	// QueryParams are its params, as JSON object text.
 	QueryParams string
@@ -132,8 +134,11 @@ func (s Settings) WithDefaults() Settings {
 // Command is the command a container runs for s.
 func (s Settings) Command() []string {
 	command := []string{Binary, "execute"}
-	if s.Mode == Server {
-		command = append(command, "--query-server-only")
+	switch s.Mode {
+	case Query:
+		return append(command, "--query="+s.QueryPath)
+	case Server:
+		return append(command, "--query-server-only")
 	}
 	if s.SkipSync {
 		command = append(command, "--skip-sync")
@@ -195,18 +200,16 @@ func BindFlags(flagSet *pflag.FlagSet) *Flags {
 // set and the environment lookup finds.
 func Read(flags *Flags, lookup func(string) (string, bool)) (Settings, error) {
 	s := readEnv(lookup)
-	s.SkipSync = flags.skipSync
-	s.SkipQueryServer = flags.skipQueryServer
-	if flags.query != "" {
-		s.QueryPath = flags.query
-	}
 	switch {
 	case flags.queryServerOnly:
 		s.Mode = Server
-	case s.QueryPath != "":
+	case flags.query != "":
 		s.Mode = Query
+		s.QueryPath = flags.query
 	default:
 		s.Mode = Run
+		s.SkipSync = flags.skipSync
+		s.SkipQueryServer = flags.skipQueryServer
 	}
 	s = s.WithDefaults()
 
@@ -260,7 +263,6 @@ var variables = []variable{
 	text("BOT_TYPE", func(s *Settings) *string { return &s.BotType }),
 	flag("IS_SCHEDULED", func(s *Settings) *bool { return &s.IsScheduled }),
 	text("QUERY_ENTRYPOINT", func(s *Settings) *string { return &s.QueryEntrypoint }),
-	text("QUERY_PATH", func(s *Settings) *string { return &s.QueryPath }),
 	text("QUERY_PARAMS", func(s *Settings) *string { return &s.QueryParams }),
 	text("QUERY_RESULT_KEY", func(s *Settings) *string { return &s.QueryResultKey }),
 	text("CODE_PATH", func(s *Settings) *string { return &s.CodePath }),

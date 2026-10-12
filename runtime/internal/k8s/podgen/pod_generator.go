@@ -222,8 +222,6 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 		return nil, err
 	}
 	settings.Mode = launch.Query
-	settings.SkipSync = true
-	settings.SkipQueryServer = true
 	settings.Entrypoint = botConfig.queryEntrypoint
 	settings.QueryEntrypoint = botConfig.queryEntrypoint
 	settings.QueryPath = queryPath
