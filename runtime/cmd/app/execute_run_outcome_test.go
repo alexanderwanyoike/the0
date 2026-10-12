@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +50,41 @@ func exits(code int) string {
 func runCompiledBot(t *testing.T, cfg *execute.Config) int {
 	t.Helper()
 	return executeBotProcess(context.Background(), cfg, &util.DefaultLogger{})
+}
+
+// botLogLines is every line of the run's bot.log, the file the sync runner
+// uploads and publishes as the bot's logs, each parsed as JSON when it is.
+func botLogLines(t *testing.T, cfg *execute.Config) []map[string]any {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(cfg.LogsPath, "bot.log"))
+	require.NoError(t, err)
+	var lines []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(content)), "\n") {
+		var entry map[string]any
+		if json.Unmarshal([]byte(line), &entry) != nil {
+			entry = map[string]any{"text": line}
+		}
+		lines = append(lines, entry)
+	}
+	return lines
+}
+
+func runSummaries(lines []map[string]any) []map[string]any {
+	var summaries []map[string]any
+	for _, line := range lines {
+		if message, ok := line["message"].(string); ok && strings.HasPrefix(message, "Run failed: ") {
+			summaries = append(summaries, line)
+		}
+	}
+	return summaries
+}
+
+var isoTimestamp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$`)
+
+// logsFirst makes a bot print a log line of its own before script runs, so a
+// test can tell the bot's output from what the runner adds after it.
+func logsFirst(script string) string {
+	return `echo '{"level":"info","message":"placing order"}' >&2` + "\n" + script
 }
 
 func TestBotRun_ExitCode(t *testing.T) {
@@ -122,4 +160,96 @@ func TestBotRun_ExitCode(t *testing.T) {
 
 		assert.Equal(t, 0, runCompiledBot(t, cfg))
 	})
+}
+
+func TestBotRun_FailedRunEndsWithOneSummaryLine(t *testing.T) {
+	cases := []struct {
+		name    string
+		script  string
+		message string
+	}{
+		{
+			name:    "an error result and exit 0",
+			script:  writesResult(`{"status":"error","message":"position limit breached"}`) + exits(0),
+			message: "Run failed: position limit breached",
+		},
+		{
+			name:    "an error result and the bot's own non-zero exit",
+			script:  writesResult(`{"status":"error","message":"position limit breached"}`) + exits(3),
+			message: "Run failed: position limit breached",
+		},
+		{
+			name:    "an error result without a message",
+			script:  writesResult(`{"status":"error"}`) + exits(0),
+			message: "Run failed: Bot reported an error",
+		},
+		{
+			name:    "an error result whose message is not a string",
+			script:  writesResult(`{"status":"error","message":{"code":"E42"}}`) + exits(0),
+			message: `Run failed: {"code":"E42"}`,
+		},
+		{
+			name:    "a non-zero exit and no result",
+			script:  exits(3),
+			message: "Run failed: Bot exited with code 3",
+		},
+		{
+			name:    "a non-zero exit and a success result",
+			script:  writesResult(`{"status":"success","message":"order filled"}`) + exits(2),
+			message: "Run failed: Bot exited with code 2",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := compiledBot(t, logsFirst(tc.script))
+
+			runCompiledBot(t, cfg)
+
+			lines := botLogLines(t, cfg)
+			summaries := runSummaries(lines)
+			require.Len(t, summaries, 1, "bot.log: %v", lines)
+			summary := summaries[0]
+			assert.Equal(t, "error", summary["level"])
+			assert.Equal(t, tc.message, summary["message"])
+			assert.Regexp(t, isoTimestamp, summary["timestamp"])
+			assert.Len(t, summary, 3, "a summary line has only level, message and timestamp")
+			assert.Equal(t, summary, lines[len(lines)-1], "the summary comes after the bot's own output")
+		})
+	}
+}
+
+func TestBotRun_SuccessfulRunHasNoSummaryLine(t *testing.T) {
+	cases := []struct {
+		name   string
+		script string
+		stale  string
+	}{
+		{
+			name:   "a success result",
+			script: writesResult(`{"status":"success","message":"order filled"}`) + exits(0),
+		},
+		{
+			name:   "no result",
+			script: exits(0),
+		},
+		{
+			name:   "an error result left from an earlier run",
+			script: exits(0),
+			stale:  `{"status":"error","message":"left from an earlier run"}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := compiledBot(t, logsFirst(tc.script))
+			if tc.stale != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(cfg.CodePath, "result.json"), []byte(tc.stale), 0644))
+			}
+
+			require.Equal(t, 0, runCompiledBot(t, cfg))
+
+			assert.Equal(t, []map[string]any{{"level": "info", "message": "placing order"}}, botLogLines(t, cfg))
+		})
+	}
 }
