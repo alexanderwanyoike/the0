@@ -14,6 +14,15 @@ export function extractAuthHeaderToken(
   return type === scheme && token ? token : null;
 }
 
+export function extractApiKey(request: Request): string | null {
+  const header = request.headers["x-api-key"];
+  if (typeof header === "string" && header) {
+    return header;
+  }
+
+  return extractAuthHeaderToken(request, "ApiKey");
+}
+
 export function toAuthenticatedJwtUser(user: AuthUser): AuthenticatedUser {
   return {
     uid: user.id,

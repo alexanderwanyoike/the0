@@ -19,6 +19,8 @@ import {
 } from "@nestjs/swagger";
 import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
 import { BotQueryService, BotQueryErrorCode } from "./bot-query.service";
+import { Actor } from "@/auth/actor";
+import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
@@ -79,6 +81,7 @@ export class BotQueryController {
   @ApiResponse({ status: 503, description: "Runtime unavailable" })
   @ApiResponse({ status: 504, description: "Query timeout" })
   async executeQuery(
+    @CurrentActor() actor: Actor,
     @Param("botId") botId: string,
     @Body() body: ExecuteQueryDto,
   ) {
@@ -91,7 +94,7 @@ export class BotQueryController {
       ? body.query_path
       : `/${body.query_path}`;
 
-    const result = await this.botQueryService.executeQuery(botId, {
+    const result = await this.botQueryService.executeQuery(actor, botId, {
       queryPath,
       params: body.params,
       timeoutSec: body.timeout_sec,

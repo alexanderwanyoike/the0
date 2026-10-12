@@ -209,7 +209,7 @@ describe("Swagger documentation", () => {
       ["get", "/auth/me", "auth", [JWT]],
       ["get", "/auth/validate-api-key", "auth", [API_KEY]],
       ["post", "/auth/login", "auth", undefined],
-      ["post", "/mcp", "mcp", undefined],
+      ["post", "/mcp", "mcp", [JWT, API_KEY]],
       ["get", "/health", "health", undefined],
       ["get", "/health/ready", "health", undefined],
     ])(

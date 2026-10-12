@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { ModuleRef } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { McpService } from "../mcp.service";
+import { mockActor } from "@/test/mock-actor";
 import { BotService } from "@/bot/bot.service";
 import { BotRepository } from "@/bot/bot.repository";
 import { BotValidator } from "@/bot/bot.validator";
@@ -10,7 +10,6 @@ import { Bot } from "@/bot/entities/bot.entity";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
 import { LogsService } from "@/logs/logs.service";
-import { ApiKeyService } from "@/api-key/api-key.service";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 import { NatsService } from "@/nats/nats.service";
@@ -98,10 +97,10 @@ describe("McpService", () => {
   let logsService: jest.Mocked<LogsService>;
   let botStateService: { listKeys: jest.Mock; getKey: jest.Mock };
   let botQueryService: { executeQuery: jest.Mock };
-  let moduleRef: ModuleRef;
 
   const userId = "user-123";
   const otherUserId = "user-456";
+  const actor = mockActor({ userId, via: "mcp", apiKeyId: "key-123" });
 
   const callerBot = mockBot({
     id: "bot-123",
@@ -206,7 +205,6 @@ describe("McpService", () => {
         { provide: NatsService, useValue: natsService },
         { provide: CustomBotService, useValue: mockCustomBotService },
         { provide: LogsService, useValue: mockLogsService },
-        { provide: ApiKeyService, useValue: { validateApiKey: jest.fn() } },
         { provide: BotStateService, useValue: mockBotStateService },
         { provide: BotQueryService, useValue: mockBotQueryService },
         { provide: PinoLogger, useValue: createMockLogger() },
@@ -218,31 +216,38 @@ describe("McpService", () => {
     logsService = module.get(LogsService);
     botStateService = mockBotStateService;
     botQueryService = mockBotQueryService;
-    moduleRef = module.get(ModuleRef);
   });
 
   describe("handleToolCall", () => {
     describe("auth_status", () => {
       it("should return valid status", async () => {
-        const result = await service.handleToolCall("auth_status", {}, userId);
+        const result = await service.handleToolCall("auth_status", {}, actor);
 
         expect(result.isError).toBeUndefined();
         expect(result.content[0].type).toBe("text");
         const data = JSON.parse(result.content[0].text);
         expect(data.valid).toBe(true);
       });
+
+      it("words the status for any credential, not only an API key", async () => {
+        const jwtCaller = mockActor({ userId, via: "mcp" });
+
+        const result = await service.handleToolCall(
+          "auth_status",
+          {},
+          jwtCaller,
+        );
+
+        expect(parse(result)).toEqual({
+          valid: true,
+          message: "Credentials are valid",
+        });
+      });
     });
 
     describe("reading bots shows only the caller's own", () => {
-      it("requires an authenticated caller", async () => {
-        const result = await service.handleToolCall("bot_list", {});
-
-        expect(result.isError).toBe(true);
-        expect(result.content[0].text).toContain("Authentication required");
-      });
-
       it("lists summaries of the caller's bots and none of another user's", async () => {
-        const result = await service.handleToolCall("bot_list", {}, userId);
+        const result = await service.handleToolCall("bot_list", {}, actor);
 
         expect(result.isError).toBeUndefined();
         expect(parse(result)).toEqual([
@@ -261,7 +266,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_get",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
@@ -272,7 +277,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_get",
           { bot_id: "bot-456" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -293,7 +298,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_deploy",
           { config: deployConfig },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
@@ -330,7 +335,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_deploy",
           { config: unnamed },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -351,7 +356,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_update",
           { bot_id: "bot-123", name: "Renamed", config: newConfig },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
@@ -380,7 +385,7 @@ describe("McpService", () => {
         await service.handleToolCall(
           "bot_update",
           { bot_id: "bot-123", config: callerBot.config },
-          userId,
+          actor,
         );
 
         expect(store.bots.get("bot-123")?.name).toBe("Test Bot");
@@ -390,7 +395,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_update",
           { bot_id: "bot-456", config: otherUsersBot.config },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -405,7 +410,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_delete",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
@@ -424,7 +429,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_delete",
           { bot_id: "bot-456" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -479,7 +484,7 @@ describe("McpService", () => {
       ])(
         "rejects $change without storing or publishing anything",
         async ({ tool, args, error }) => {
-          const result = await service.handleToolCall(tool, args, userId);
+          const result = await service.handleToolCall(tool, args, actor);
 
           expect(result.isError).toBe(true);
           expect(result.content[0].text).toContain(error);
@@ -498,7 +503,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "logs_get",
           { bot_id: "bot-123", date: "20251202" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
@@ -516,7 +521,7 @@ describe("McpService", () => {
         await service.handleToolCall(
           "logs_get",
           { bot_id: "bot-123", limit: 1000 },
-          userId,
+          actor,
         );
 
         expect(logsService.getLogs).toHaveBeenCalledWith(
@@ -541,7 +546,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "logs_summary",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
@@ -576,7 +581,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "logs_summary",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
 
         const data = JSON.parse(result.content[0].text);
@@ -586,20 +591,11 @@ describe("McpService", () => {
     });
 
     describe("bot_state_list", () => {
-      it("should require authentication", async () => {
-        const result = await service.handleToolCall("bot_state_list", {
-          bot_id: "bot-123",
-        });
-
-        expect(result.isError).toBe(true);
-        expect(result.content[0].text).toContain("Authentication required");
-      });
-
       it("should require a bot_id", async () => {
         const result = await service.handleToolCall(
           "bot_state_list",
           {},
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -615,33 +611,14 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_state_list",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
-        expect(botStateService.listKeys).toHaveBeenCalledWith("bot-123");
+        expect(botStateService.listKeys).toHaveBeenCalledWith(actor, "bot-123");
         const data = JSON.parse(result.content[0].text);
         expect(data.bot_id).toBe("bot-123");
         expect(data.keys).toEqual([{ key: "positions", size: 128 }]);
-      });
-
-      it("should resolve the state service in a request context carrying the calling user", async () => {
-        botStateService.listKeys.mockResolvedValue(Ok([]));
-        const registerRequest = jest.spyOn(
-          moduleRef,
-          "registerRequestByContextId",
-        );
-
-        await service.handleToolCall(
-          "bot_state_list",
-          { bot_id: "bot-123" },
-          userId,
-        );
-
-        expect(registerRequest).toHaveBeenCalledWith(
-          { user: { uid: userId } },
-          expect.anything(),
-        );
       });
 
       it("should surface access errors", async () => {
@@ -655,7 +632,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_state_list",
           { bot_id: "bot-999" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -664,26 +641,16 @@ describe("McpService", () => {
     });
 
     describe("bot_state_get", () => {
-      it("should require authentication", async () => {
-        const result = await service.handleToolCall("bot_state_get", {
-          bot_id: "bot-123",
-          key: "positions",
-        });
-
-        expect(result.isError).toBe(true);
-        expect(result.content[0].text).toContain("Authentication required");
-      });
-
       it("should require a bot_id and key", async () => {
         const missingKey = await service.handleToolCall(
           "bot_state_get",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
         const missingBotId = await service.handleToolCall(
           "bot_state_get",
           { key: "positions" },
-          userId,
+          actor,
         );
 
         expect(missingKey.isError).toBe(true);
@@ -699,11 +666,12 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_state_get",
           { bot_id: "bot-123", key: "positions" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
         expect(botStateService.getKey).toHaveBeenCalledWith(
+          actor,
           "bot-123",
           "positions",
         );
@@ -721,7 +689,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_state_get",
           { bot_id: "bot-123", key: "../etc/passwd" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -730,16 +698,6 @@ describe("McpService", () => {
     });
 
     describe("bot_query", () => {
-      it("should require authentication", async () => {
-        const result = await service.handleToolCall("bot_query", {
-          bot_id: "bot-123",
-          query_path: "/positions",
-        });
-
-        expect(result.isError).toBe(true);
-        expect(result.content[0].text).toContain("Authentication required");
-      });
-
       it("should execute a query against a running bot", async () => {
         botQueryService.executeQuery.mockResolvedValue(
           Ok({
@@ -758,15 +716,19 @@ describe("McpService", () => {
             params: { symbol: "AAPL" },
             timeout_sec: 10,
           },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBeUndefined();
-        expect(botQueryService.executeQuery).toHaveBeenCalledWith("bot-123", {
-          queryPath: "/positions",
-          params: { symbol: "AAPL" },
-          timeoutSec: 10,
-        });
+        expect(botQueryService.executeQuery).toHaveBeenCalledWith(
+          actor,
+          "bot-123",
+          {
+            queryPath: "/positions",
+            params: { symbol: "AAPL" },
+            timeoutSec: 10,
+          },
+        );
         const data = JSON.parse(result.content[0].text);
         expect(data.status).toBe("success");
         expect(data.data).toEqual({ price: 42 });
@@ -776,7 +738,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_query",
           { bot_id: "bot-123" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -787,7 +749,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_query",
           { query_path: "/positions" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -806,7 +768,7 @@ describe("McpService", () => {
         const result = await service.handleToolCall(
           "bot_query",
           { bot_id: "bot-123", query_path: "/positions" },
-          userId,
+          actor,
         );
 
         expect(result.isError).toBe(true);
@@ -842,7 +804,11 @@ describe("McpService", () => {
           Ok(mockBotsWithVersions),
         );
 
-        const result = await service.handleToolCall("custom_bot_list", {});
+        const result = await service.handleToolCall(
+          "custom_bot_list",
+          {},
+          actor,
+        );
 
         expect(result.isError).toBeUndefined();
         const data = JSON.parse(result.content[0].text);
@@ -857,9 +823,13 @@ describe("McpService", () => {
           Ok(mockCustomBot),
         );
 
-        const result = await service.handleToolCall("custom_bot_get", {
-          name: "test-custom-bot",
-        });
+        const result = await service.handleToolCall(
+          "custom_bot_get",
+          {
+            name: "test-custom-bot",
+          },
+          actor,
+        );
 
         expect(result.isError).toBeUndefined();
         const data = JSON.parse(result.content[0].text);
@@ -872,10 +842,14 @@ describe("McpService", () => {
           Ok(mockCustomBot),
         );
 
-        await service.handleToolCall("custom_bot_get", {
-          name: "test-custom-bot",
-          version: "1.0.0",
-        });
+        await service.handleToolCall(
+          "custom_bot_get",
+          {
+            name: "test-custom-bot",
+            version: "1.0.0",
+          },
+          actor,
+        );
 
         expect(customBotService.getGlobalSpecificVersion).toHaveBeenCalledWith(
           "test-custom-bot",
@@ -890,9 +864,13 @@ describe("McpService", () => {
           Ok(mockCustomBot),
         );
 
-        const result = await service.handleToolCall("custom_bot_schema", {
-          name: "test-custom-bot",
-        });
+        const result = await service.handleToolCall(
+          "custom_bot_schema",
+          {
+            name: "test-custom-bot",
+          },
+          actor,
+        );
 
         expect(result.isError).toBeUndefined();
         const data = JSON.parse(result.content[0].text);
@@ -903,7 +881,7 @@ describe("McpService", () => {
 
     describe("unknown tool", () => {
       it("should return error for unknown tool", async () => {
-        const result = await service.handleToolCall("unknown_tool", {}, userId);
+        const result = await service.handleToolCall("unknown_tool", {}, actor);
 
         expect(result.isError).toBe(true);
         expect(result.content[0].text).toContain("Unknown tool: unknown_tool");
