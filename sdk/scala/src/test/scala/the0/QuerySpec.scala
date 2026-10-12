@@ -236,6 +236,58 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(req.getJson("cursor") == Some(JsonValue.Null))
   }
 
+  test("Request.getAs reads a param as the requested type") {
+    val req = Query.Request.fromJson("/echo", Map(
+      "limit" -> JsonValue.Num(BigDecimal(5)),
+      "big" -> JsonValue.Num(BigDecimal("9000000000")),
+      "ratio" -> JsonValue.Num(BigDecimal("0.25")),
+      "live" -> JsonValue.Bool(true),
+      "symbol" -> JsonValue.Str("BTC/USD")
+    ))
+    assert(req.getAs[Int]("limit") == Some(5))
+    assert(req.getAs[Long]("big") == Some(9000000000L))
+    assert(req.getAs[Double]("ratio") == Some(0.25))
+    assert(req.getAs[BigDecimal]("ratio") == Some(BigDecimal("0.25")))
+    assert(req.getAs[Boolean]("live") == Some(true))
+    assert(req.getAs[String]("symbol") == Some("BTC/USD"))
+  }
+
+  test("Request.getAs reads a string param that parses as the requested type") {
+    val req = Query.Request("/echo", Map("limit" -> "5", "ratio" -> "0.25", "live" -> "true"))
+    assert(req.getAs[Int]("limit") == Some(5))
+    assert(req.getAs[Double]("ratio") == Some(0.25))
+    assert(req.getAs[Boolean]("live") == Some(true))
+  }
+
+  test("Request.getAs asked for a String returns a non-string param as its JSON text") {
+    val req = Query.Request.fromJson("/echo", Map(
+      "limit" -> JsonValue.Num(BigDecimal(5)),
+      "live" -> JsonValue.Bool(false),
+      "filter" -> JsonValue.Obj(Map("side" -> JsonValue.Str("buy")))
+    ))
+    assert(req.getAs[String]("limit") == Some("5"))
+    assert(req.getAs[String]("live") == Some("false"))
+    assert(req.getAs[String]("filter") == Some("""{"side":"buy"}"""))
+  }
+
+  test("Request.getAs treats a missing or null param as absent") {
+    val req = Query.Request.fromJson("/echo", Map("cursor" -> JsonValue.Null))
+    assert(req.getAs[Int]("missing").isEmpty)
+    assert(req.getAs[Int]("cursor").isEmpty)
+    assert(req.getAs[String]("cursor").isEmpty)
+  }
+
+  test("Request.getAs fails on a param that is not the requested type") {
+    val req = Query.Request.fromJson("/echo", Map(
+      "symbol" -> JsonValue.Str("BTC/USD"),
+      "ratio" -> JsonValue.Num(BigDecimal("0.25")),
+      "limit" -> JsonValue.Num(BigDecimal(5))
+    ))
+    assertThrows[IllegalArgumentException](req.getAs[Int]("symbol"))
+    assertThrows[IllegalArgumentException](req.getAs[Int]("ratio"))
+    assertThrows[IllegalArgumentException](req.getAs[Boolean]("limit"))
+  }
+
   test("Request.get escapes the strings inside a param's JSON text") {
     val req = Query.Request.fromJson("/echo", Map(
       "note" -> JsonValue.Arr(Vector(JsonValue.Str("say \"hi\"\\\n\t\u0001 café")))
