@@ -49,10 +49,14 @@ function readResult() {
     }
 }
 
+function isErrorResult(result) {
+    return !!result && result.status === 'error';
+}
+
 function reportError(result) {
     // The SDK's error() only writes result.json, which nothing reads for bot
     // runs, so without this line a failed run leaves no trace in the logs.
-    if (!result || result.status !== 'error') {
+    if (!isErrorResult(result)) {
         return;
     }
     console.error(JSON.stringify({
