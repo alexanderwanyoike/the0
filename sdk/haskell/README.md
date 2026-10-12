@@ -109,11 +109,11 @@ Emit a metric for the platform to collect.
 metric "price" (object ["symbol" .= ("BTC/USD" :: String), "value" .= (45000 :: Double)])
 ```
 
-Prints one JSON line to stdout with `_metric` and a UTC ISO 8601 `timestamp`, such as `"2026-10-12T09:30:00.123Z"`, added to the fields of the data.
+Prints one JSON line to stdout with `_metric` and a UTC ISO 8601 `timestamp`, such as `"2026-10-12T09:30:00.123Z"`, added to the fields of the data. It flushes stdout after each line, so a realtime bot's metrics reach its logs at once.
 
 ### `log :: String -> Maybe Value -> Maybe LogLevel -> IO ()`
 
-Log a structured message to stderr, as one JSON line with `level`, `message` and a UTC ISO 8601 `timestamp`.
+Log a structured message to stderr, as one JSON line with `level`, `message` and a UTC ISO 8601 `timestamp`, and flush stderr.
 
 ```haskell
 -- Simple log (defaults to info level)
@@ -176,7 +176,7 @@ main = do
     Query.run
 ```
 
-`Query.run` picks its mode from the environment: one ephemeral query when `QUERY_PATH` is set, the query server on port 9476 when `BOT_TYPE` is `realtime`, and `/info` otherwise. `/health` and `/info` are built in.
+`Query.run` picks its mode from the environment: one ephemeral query when `QUERY_PATH` is set, the query server on port 9476 when `BOT_TYPE` is `realtime`, and `/info` otherwise. `/health` and `/info` are built in. The query server answers one connection at a time, and gives up on a connection whose request has not arrived within 10 seconds.
 
 ### Params
 
