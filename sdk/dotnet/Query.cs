@@ -158,16 +158,22 @@ public static class Query
     }
 
     /// <summary>
+    /// Where an ephemeral query writes its result. Settable so the contract
+    /// tests can point it into a sandbox; the runtime always reads
+    /// /query/result.json.
+    /// </summary>
+    internal static string ResultPath { get; set; } = "/query/result.json";
+
+    /// <summary>
     /// Write query result to /query/result.json file (matches Python SDK behavior).
     /// This avoids stdout pollution from runtime logs mixing with query results.
     /// </summary>
     private static void WriteResult(object result)
     {
-        const string resultPath = "/query/result.json";
         try
         {
-            Directory.CreateDirectory("/query");
-            File.WriteAllText(resultPath, JsonSerializer.Serialize(result));
+            Directory.CreateDirectory(Path.GetDirectoryName(ResultPath)!);
+            File.WriteAllText(ResultPath, JsonSerializer.Serialize(result));
         }
         catch (Exception e)
         {
