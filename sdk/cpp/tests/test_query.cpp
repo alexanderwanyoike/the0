@@ -173,6 +173,54 @@ TEST_CASE("query::Request from JSON values") {
     }
 }
 
+TEST_CASE("query::Request::get_as") {
+    auto req = query::Request::from_values("/echo", {
+        {"symbol", "BTC/USD"},
+        {"limit", 5},
+        {"ratio", 0.25},
+        {"live", true},
+        {"symbols", {"AAPL", "MSFT"}},
+        {"filter", {{"side", "buy"}}},
+        {"cursor", nullptr},
+        {"big", 300},
+        {"negative", -1},
+    });
+
+    SUBCASE("reads a param as T") {
+        CHECK(req.get_as<int>("limit") == 5);
+        CHECK(req.get_as<double>("ratio") == 0.25);
+        CHECK(req.get_as<double>("limit") == 5.0);
+        CHECK(req.get_as<bool>("live") == true);
+        CHECK(req.get_as<std::vector<std::string>>("symbols") == std::vector<std::string>{"AAPL", "MSFT"});
+        CHECK(req.get_as<json>("filter") == json{{"side", "buy"}});
+        CHECK(req.get_as<std::string>("symbol") == "BTC/USD");
+    }
+
+    SUBCASE("reads a null param as JSON null") {
+        CHECK(req.get_as<json>("cursor") == json(nullptr));
+    }
+
+    SUBCASE("gives nothing for a missing param") {
+        CHECK_FALSE(req.get_as<int>("offset").has_value());
+    }
+
+    SUBCASE("gives nothing for a param that is not a T") {
+        CHECK_FALSE(req.get_as<int>("ratio").has_value());
+        CHECK_FALSE(req.get_as<int>("live").has_value());
+        CHECK_FALSE(req.get_as<bool>("limit").has_value());
+        CHECK_FALSE(req.get_as<std::int8_t>("big").has_value());
+        CHECK_FALSE(req.get_as<unsigned>("negative").has_value());
+        CHECK_FALSE(req.get_as<int>("filter").has_value());
+        CHECK_FALSE(req.get_as<int>("cursor").has_value());
+    }
+
+    SUBCASE("falls back to the default") {
+        CHECK(req.get_as("offset", 0) == 0);
+        CHECK(req.get_as("limit", 10) == 5);
+        CHECK(req.get_as<int>("ratio", 10) == 10);
+    }
+}
+
 TEST_CASE("query::Request from text params") {
     query::Request req("/echo", {{"symbol", "BTC/USD"}, {"limit", "5"}});
 
