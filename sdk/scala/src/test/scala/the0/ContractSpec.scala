@@ -62,8 +62,6 @@ object ContractSpec {
     "bot-error" -> "error() prints nothing on stderr",
     "bot-error-with-data" -> "error() drops data and prints nothing on stderr",
     "bot-success-with-data" -> "success() drops data",
-    "output-log" -> "log() writes the timestamp as epoch milliseconds",
-    "output-metric" -> "metric() writes the timestamp as epoch milliseconds",
     "query-ephemeral-params" -> "QUERY_PARAMS keeps only string pairs, nested ones included",
     "query-ephemeral-read-only-before-key-check" -> "State throws a second ReadOnlyStateError type, not Query's",
     "query-ephemeral-state-read-only" -> "State throws a second ReadOnlyStateError type, not Query's",
