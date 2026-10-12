@@ -4,7 +4,11 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterEach
 import java.io.File
 import java.nio.file.Files
-import scala.util.{Success, Try}
+import java.net.{InetAddress, ServerSocket, URI}
+import java.net.http.{HttpClient, HttpRequest, HttpResponse}
+import java.nio.charset.StandardCharsets
+import java.time.Duration
+import scala.util.{Success, Try, Using}
 
 /**
  * Tests for the0 Query module.
@@ -152,6 +156,26 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     Query.handler("/control-chars") { _ => throw new RuntimeException("feed\u0007down") }
     val (_, body) = Query.respond(Query.Request("/control-chars", Map.empty))
     assert(Try(ujson.read(body)("error").str).toOption == Some("feed\u0007down"), s"Should be JSON: $body")
+  }
+
+  // ============ query server tests ============
+
+  test("the query server sends a non-ASCII body whole, as UTF-8") {
+    Query.handler("/unicode") { _ => "\"café €\"" }
+    val body = Using.resource(new ServerSocket(0, 0, InetAddress.getLoopbackAddress)) { server =>
+      val serving = new Thread(() => Query.handleConnection(server.accept()))
+      serving.start()
+      val request = HttpRequest
+        .newBuilder(URI.create(s"http://127.0.0.1:${server.getLocalPort}/unicode"))
+        .timeout(Duration.ofSeconds(10))
+        .build()
+      val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
+      val body = Try(client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).body())
+      serving.join(10000)
+      body
+    }
+    val data = body.toOption.flatMap(text => Try(ujson.read(text)("data").str).toOption)
+    assert(data == Some("café €"), s"Should read the whole body: $body")
   }
 
   // ============ Request tests ============
