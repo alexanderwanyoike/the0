@@ -176,6 +176,9 @@ type failedRun struct {
 	bot      func(t *testing.T) botFixture
 	exitCode int
 	message  string
+	// sdkErrorLines are the messages of the error log lines the bot's own SDK
+	// prints during the run.
+	sdkErrorLines []string
 }
 
 func failedRuns() []failedRun {
@@ -189,8 +192,9 @@ def main(bot_id, config):
     the0.error("broker rejected the order")
 `)
 			},
-			exitCode: 1,
-			message:  "broker rejected the order",
+			exitCode:      1,
+			message:       "broker rejected the order",
+			sdkErrorLines: []string{"broker rejected the order"},
 		},
 		{
 			name: "python bot raises",
@@ -328,12 +332,14 @@ func TestBotWrapper_ExitCodeAndResultOfAFailedRun(t *testing.T) {
 	}
 }
 
+// The wrappers print no error line of their own: the runner prints the run's
+// summary line, so a wrapper's line would repeat the SDK's error() line.
 func TestBotWrapper_ErrorLogLinesOfAFailedRun(t *testing.T) {
 	for _, tc := range failedRuns() {
 		t.Run(tc.name, func(t *testing.T) {
 			run := runWrapper(t, tc.bot(t), "")
 
-			assert.Contains(t, run.errorLogMessages(), tc.message, "output:\n%s", run.output)
+			assert.Equal(t, tc.sdkErrorLines, run.errorLogMessages(), "output:\n%s", run.output)
 		})
 	}
 }
