@@ -27,8 +27,6 @@ SERVER_START_TIMEOUT_SECONDS = 30
 # Cases this SDK does not pass yet, each with the reason. A listed case that
 # starts passing fails the suite, so the list cannot go stale.
 KNOWN_FAILURES = {
-    "bot-error": "error() does not print its message",
-    "bot-error-with-data": "error() does not print its message",
     "query-server-start-line": "the query server's start line uses _log and has no timestamp",
 }
 
