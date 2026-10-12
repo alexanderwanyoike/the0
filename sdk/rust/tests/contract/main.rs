@@ -49,7 +49,6 @@ const KNOWN_FAILURES: &[(&str, &str)] = &[
     ("query-server-ok", "/info does not list /info"),
     ("query-server-params-json-body", "the server reads params from the query string only"),
     ("query-server-params-query-string", "the server does not URL-decode the query string"),
-    ("query-server-start-line", "the start line is {\"_log\": ...} with no level or timestamp"),
     ("query-server-unknown-path", "the 404 does not list the available paths"),
     ("query-without-mode", "/info does not list /info"),
 ];
