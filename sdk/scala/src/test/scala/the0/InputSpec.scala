@@ -157,6 +157,14 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""order_id":"12345""""), s"Should have order_id: $output")
   }
 
+  test("log escapes every control character, so the line stays JSON") {
+    val message = "bell\u0007 form\f back\b nul\u0000"
+    val output = captureStderr {
+      Input.log(message)
+    }
+    assert(Try(ujson.read(output)("message").str).toOption == Some(message), s"Should be JSON: $output")
+  }
+
   test("log handles empty message") {
     val output = captureStderr {
       Input.log("")

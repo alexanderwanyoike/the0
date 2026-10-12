@@ -148,6 +148,12 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(response.toOption.exists(_._2.contains("position went negative")), s"Should carry the message: $response")
   }
 
+  test("a handler error's message keeps its control characters escaped") {
+    Query.handler("/control-chars") { _ => throw new RuntimeException("feed\u0007down") }
+    val (_, body) = Query.respond(Query.Request("/control-chars", Map.empty))
+    assert(Try(ujson.read(body)("error").str).toOption == Some("feed\u0007down"), s"Should be JSON: $body")
+  }
+
   // ============ Request tests ============
 
   test("Request.get returns value for existing key") {
