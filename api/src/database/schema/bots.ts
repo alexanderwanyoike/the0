@@ -20,9 +20,12 @@ export const botsTable = pgTable("bots", {
   userId: varchar("user_id", { length: 255 })
     .notNull()
     .references(() => usersTable.id, { onDelete: "cascade" }),
+  // Restrict, not cascade: a version delete that races a deploy must fail
+  // rather than remove the new bot, whose created event is already in the
+  // outbox and will start it on the runtime.
   customBotId: varchar("custom_bot_id", { length: 255 })
     .notNull()
-    .references(() => customBotsTable.id, { onDelete: "cascade" }),
+    .references(() => customBotsTable.id, { onDelete: "restrict" }),
   name: varchar("name", { length: 255 }).notNull(),
   config: jsonb("config").$type<BotConfig>().notNull(),
   topic: varchar("topic", { length: 255 }), // message queue topic
@@ -47,7 +50,7 @@ export const botsTableSqlite = sqliteTable("bots", {
     .references(() => usersTableSqlite.id, { onDelete: "cascade" }),
   customBotId: text("custom_bot_id")
     .notNull()
-    .references(() => customBotsTableSqlite.id, { onDelete: "cascade" }),
+    .references(() => customBotsTableSqlite.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   config: text("config", { mode: "json" }).$type<BotConfig>().notNull(),
   topic: text("topic"),
