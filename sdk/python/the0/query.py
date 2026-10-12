@@ -192,12 +192,16 @@ def run():
         _run_ephemeral("/info")
 
 
+# A module attribute rather than a literal so the contract tests can point it
+# into a sandbox; the runtime always reads /query/result.json.
+_QUERY_RESULT_PATH = "/query/result.json"
+
+
 def _write_result(result: dict):
     """Write query result to /query/result.json file."""
-    result_path = "/query/result.json"
     try:
-        os.makedirs("/query", exist_ok=True)
-        with open(result_path, "w") as f:
+        os.makedirs(os.path.dirname(_QUERY_RESULT_PATH), exist_ok=True)
+        with open(_QUERY_RESULT_PATH, "w") as f:
             json.dump(result, f)
     except Exception as e:
         print(f"RESULT_ERROR: Failed to write result file: {e}", file=sys.stderr)
