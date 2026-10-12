@@ -61,7 +61,6 @@ object ContractSpec {
   private val KnownFailures: Map[String, String] = Map(
     "query-ephemeral-params" -> "QUERY_PARAMS keeps only string pairs, nested ones included",
     "query-server-params-json-body" -> "the query server ignores the request body",
-    "query-server-unknown-path" -> "the query server's 404 has no available"
   )
 
   private val Timestamp = """^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$""".r
