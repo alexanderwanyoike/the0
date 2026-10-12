@@ -87,7 +87,7 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 		config.Namespace = "the0"
 	}
 	if config.MinIOStateBucket == "" {
-		config.MinIOStateBucket = "bot-state"
+		config.MinIOStateBucket = launch.DefaultStateBucket
 	}
 	if config.RuntimeImage == "" {
 		config.RuntimeImage = "runtime:latest"
