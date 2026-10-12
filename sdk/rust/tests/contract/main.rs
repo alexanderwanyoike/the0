@@ -31,10 +31,7 @@ const PORT_ATTEMPTS: usize = 3;
 
 // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 // says how the list is kept.
-const KNOWN_FAILURES: &[(&str, &str)] = &[(
-    "query-server-params-json-body",
-    "the server reads params from the query string only",
-)];
+const KNOWN_FAILURES: &[(&str, &str)] = &[];
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
