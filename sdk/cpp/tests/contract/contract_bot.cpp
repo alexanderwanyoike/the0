@@ -124,6 +124,13 @@ json perform(const json& step, const Request* request, const Bound& bound) {
     if (op == "raise") {
         throw std::runtime_error(text("message"));
     }
+    if (op == "raise_text") {
+        // C++-only: fail by throwing the message as a C string, which is not
+        // a std::exception. It must outlive the throw.
+        static std::string thrown;
+        thrown = text("message");
+        throw thrown.c_str();
+    }
 
     if (op == "state.get") {
         if (args.contains("default")) {

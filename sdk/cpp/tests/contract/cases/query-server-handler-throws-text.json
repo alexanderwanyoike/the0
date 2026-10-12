@@ -1,0 +1,31 @@
+{
+  "description": "A handler that throws something other than a std::exception, here a C string, answers 500 with the text, and the server keeps serving.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/fail": [{"op": "raise_text", "message": "price feed unavailable"}]},
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/fail",
+      "expect": {
+        "status": 500,
+        "body": {
+          "status": "error",
+          "error": {"$match": "contains", "value": "price feed unavailable"}
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ]
+}
