@@ -127,10 +127,12 @@ pub mod input {
     /// Output an error result to the result file and exit with code 1.
     ///
     /// Writes a JSON object with status "error" and the provided message,
-    /// then terminates the process with exit code 1.
+    /// prints the message on stderr as an `error` log line, then terminates
+    /// the process with exit code 1.
     pub fn error(message: &str) -> ! {
         let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
         write_result(&format!(r#"{{"status":"error","message":"{}"}}"#, escaped));
+        log(message, None, Some(LogLevel::Error));
         std::process::exit(1);
     }
 
