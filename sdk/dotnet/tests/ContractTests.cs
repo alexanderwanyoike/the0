@@ -331,7 +331,6 @@ public class ContractTests
                 MediaTypeHeaderValue.Parse((string?)request["content_type"] ?? "text/plain");
         }
 
-        // A fresh client per request, so each request goes on a new connection.
         using var client = new HttpClient { Timeout = RunTimeout };
         using var response = await client.SendAsync(message);
         var headers = response.Headers.Concat(response.Content.Headers)
