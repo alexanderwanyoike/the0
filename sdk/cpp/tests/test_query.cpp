@@ -219,6 +219,14 @@ TEST_CASE("query::Request::get_as") {
         CHECK(req.get_as("limit", 10) == 5);
         CHECK(req.get_as<int>("ratio", 10) == 10);
     }
+
+    SUBCASE("asked for a string, gives any other param as its JSON text and a null as absent") {
+        CHECK(req.get_as<std::string>("limit") == "5");
+        CHECK(req.get_as<std::string>("live") == "true");
+        CHECK(req.get_as<std::string>("filter") == R"({"side":"buy"})");
+        CHECK_FALSE(req.get_as<std::string>("cursor").has_value());
+        CHECK(req.get_as<std::string>("cursor", "start") == "start");
+    }
 }
 
 TEST_CASE("query::Request from text params") {
