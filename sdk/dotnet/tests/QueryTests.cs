@@ -189,7 +189,7 @@ public class QueryTests : IDisposable
     [Fact]
     public void ReadOnlyStateError_HasCorrectMessage()
     {
-        var error = new Query.ReadOnlyStateError("Test message");
+        var error = new ReadOnlyStateError("Test message");
 
         Assert.Equal("Test message", error.Message);
     }
@@ -197,7 +197,7 @@ public class QueryTests : IDisposable
     [Fact]
     public void ReadOnlyStateError_IsException()
     {
-        var error = new Query.ReadOnlyStateError("Test");
+        var error = new ReadOnlyStateError("Test");
 
         Assert.IsAssignableFrom<Exception>(error);
     }

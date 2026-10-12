@@ -29,7 +29,7 @@ static class ContractBot
 {
     private static readonly Dictionary<string, Type> Catchable = new()
     {
-        ["read_only_state"] = typeof(Query.ReadOnlyStateError),
+        ["read_only_state"] = typeof(ReadOnlyStateError),
         ["any"] = typeof(Exception),
     };
 

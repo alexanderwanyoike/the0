@@ -20,6 +20,9 @@ namespace The0;
 ///
 /// Query.Run();
 /// </code>
+///
+/// During an ephemeral query, state is read-only: State.Set, State.Delete and
+/// State.Clear throw <see cref="ReadOnlyStateError"/>.
 /// </summary>
 public static class Query
 {
@@ -84,14 +87,6 @@ public static class Query
         /// <returns>The parameter value or the default</returns>
         public string Get(string key, string defaultValue) =>
             Params.TryGetValue(key, out var value) ? value : defaultValue;
-    }
-
-    /// <summary>
-    /// Error thrown when attempting to modify state during query execution.
-    /// </summary>
-    public class ReadOnlyStateError : Exception
-    {
-        public ReadOnlyStateError(string message) : base(message) { }
     }
 
     /// <summary>
