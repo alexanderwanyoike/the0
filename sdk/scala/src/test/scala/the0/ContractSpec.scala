@@ -1,6 +1,5 @@
 package the0
 
-import java.io.File
 import java.net.{InetAddress, InetSocketAddress, ServerSocket, Socket, URI}
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.nio.file.{Files, Path, Paths}
