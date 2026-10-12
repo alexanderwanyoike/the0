@@ -4,6 +4,62 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: fixed
+          description: "Deleting a custom bot version can no longer remove a bot deployed on it at the same moment: the database refuses the delete (migration 0008) and the api answers that the version is in use"
+        - kind: fixed
+          description: "Bucket name overrides reach bots: Docker passes its code, state, logs and query results buckets to bot containers, pods get the controller's code and state buckets, and logs are saved to the configured logs bucket instead of always bot-logs"
+        - kind: fixed
+          description: "Compiled bots' query binaries are made executable before a query or the query server runs them"
+        - kind: changed
+          description: "A query starts as runtime execute --query=<path> on Docker and Kubernetes alike, without a bot run's settings, and always gets QUERY_PARAMS, an empty object when there are none"
+        - kind: removed
+          description: "The unused QUERY_PARAM_<key> variables are no longer set; bots read QUERY_PARAMS"
+        - kind: changed
+          description: "One launch module in the runtime defines every setting a launcher passes to runtime execute, checked by a round-trip test for every mode on both backends; the controller's --minio-bucket default is now custom-bots, the bucket pods have always read"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.19.0
+    created: "2026-10-12T17:47:09.174496328Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 1e77d789fcd7d83d094e42a4766728294e5774008625bfe50cb72aff48e710f2
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.14.0/the0-0.14.0.tgz
+    version: 0.14.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: changed
           description: "A bot run whose result is an error now fails even when the bot process exits 0, for bots in every language, and every failed run ends with one log line: Run failed, then the error message or the exit code"
         - kind: added
@@ -2549,4 +2605,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-12T14:28:52.519106869Z"
+generated: "2026-10-12T17:47:09.174710969Z"
