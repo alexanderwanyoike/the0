@@ -58,9 +58,7 @@ object ContractSpec {
 
   // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
   // says how the list is kept.
-  private val KnownFailures: Map[String, String] = Map(
-    "query-server-params-json-body" -> "the query server ignores the request body",
-  )
+  private val KnownFailures: Map[String, String] = Map.empty
 
   private val Timestamp = """^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$""".r
 
