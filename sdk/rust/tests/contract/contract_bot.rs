@@ -157,10 +157,9 @@ fn perform(step: &Value, request: Option<&QueryRequest>, bound: &Bound) -> Resul
             Value::Null
         }
 
-        "query.params" => json!(handler_request(request, op).params),
+        "query.params" => json!(handler_request(request, op).values()),
         "query.param" => handler_request(request, op)
-            .get(&text("key"))
-            .map(Value::String)
+            .get_as::<Value>(&text("key"))
             .or_else(|| args.get("default").cloned())
             .unwrap_or(Value::Null),
         "query.config" => query::get_config(),
