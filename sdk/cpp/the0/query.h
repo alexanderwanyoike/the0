@@ -497,6 +497,7 @@ inline Answer answer(const Request& request) {
 inline const char* reason_phrase(int status) {
     switch (status) {
         case 200: return "OK";
+        case 400: return "Bad Request";
         case 404: return "Not Found";
         default: return "Internal Server Error";
     }
@@ -523,11 +524,19 @@ inline void run_ephemeral(const std::string& query_path) {
 
 namespace detail {
 
-/** The parts of one HTTP request the query server uses. */
+/**
+ * The parts of one HTTP request the query server uses. A request the server
+ * cannot read carries the reason in `error`.
+ */
 struct HttpRequest {
     std::string target;
     std::string body;
+    std::string error;
 };
+
+// Params are small; these bound what one client can make the server hold.
+constexpr std::size_t MAX_REQUEST_HEAD_BYTES = 64 * 1024;
+constexpr std::size_t MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 
 inline std::string trim(const std::string& text) {
     const auto first = text.find_first_not_of(" \t\r\n");
@@ -544,16 +553,26 @@ inline bool same_header_name(const std::string& name, const char* wanted) {
 
 /**
  * Reads one HTTP request: its head, then a body of Content-Length bytes.
- * Gives nothing when the client sends no complete head.
+ * Gives nothing when the client closes without sending anything, and a
+ * request with an error when the server cannot read what it sent.
  */
 inline std::optional<HttpRequest> read_request(int client_fd) {
+    HttpRequest request;
     std::string received;
     char buffer[4096];
     std::size_t head_end;
     while ((head_end = received.find("\r\n\r\n")) == std::string::npos) {
+        if (received.size() > MAX_REQUEST_HEAD_BYTES) {
+            request.error = "The request head is too large";
+            return request;
+        }
         auto n = recv(client_fd, buffer, sizeof(buffer), 0);
         if (n <= 0) {
-            return std::nullopt;
+            if (received.empty()) {
+                return std::nullopt;
+            }
+            request.error = "The request ended before its head did";
+            return request;
         }
         received.append(buffer, static_cast<std::size_t>(n));
     }
@@ -563,18 +582,32 @@ inline std::optional<HttpRequest> read_request(int client_fd) {
     std::getline(head, request_line);
     std::istringstream request_words(request_line);
     std::string method;
-    HttpRequest request;
     request_words >> method >> request.target;
 
     std::size_t content_length = 0;
     std::string header;
     while (std::getline(head, header)) {
         const auto colon = header.find(':');
-        if (colon != std::string::npos && same_header_name(trim(header.substr(0, colon)), "content-length")) {
-            try {
-                content_length = std::stoul(trim(header.substr(colon + 1)));
-            } catch (const std::exception&) {
-                content_length = 0;
+        if (colon == std::string::npos) {
+            continue;
+        }
+        const std::string name = trim(header.substr(0, colon));
+        const std::string value = trim(header.substr(colon + 1));
+        if (same_header_name(name, "transfer-encoding")) {
+            request.error = "Transfer-Encoding is not supported; send the body with a Content-Length";
+            return request;
+        }
+        if (same_header_name(name, "content-length")) {
+            const bool digits = !value.empty() && value.size() <= 19 &&
+                std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isdigit(c); });
+            if (!digits) {
+                request.error = "Content-Length is not a number of bytes: " + value;
+                return request;
+            }
+            content_length = static_cast<std::size_t>(std::stoull(value));
+            if (content_length > MAX_REQUEST_BODY_BYTES) {
+                request.error = "The request body is too large";
+                return request;
             }
         }
     }
@@ -583,13 +616,12 @@ inline std::optional<HttpRequest> read_request(int client_fd) {
     while (request.body.size() < content_length) {
         auto n = recv(client_fd, buffer, sizeof(buffer), 0);
         if (n <= 0) {
-            break;
+            request.error = "The request ended before its body did";
+            return request;
         }
         request.body.append(buffer, static_cast<std::size_t>(n));
     }
-    if (request.body.size() > content_length) {
-        request.body.resize(content_length);
-    }
+    request.body.resize(content_length);
     return request;
 }
 
@@ -623,14 +655,14 @@ inline void run_server() {
 #ifdef _WIN32
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-        std::cerr << json{{"_log", "error"}, {"message", "Failed to initialize Winsock"}}.dump() << std::endl;
+        the0::log("Failed to initialize Winsock", json::object(), the0::LogLevel::Error);
         std::exit(1);
     }
 #endif
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
-        std::cerr << json{{"_log", "error"}, {"message", "Failed to create socket"}}.dump() << std::endl;
+        the0::log("Failed to create socket", json::object(), the0::LogLevel::Error);
         std::exit(1);
     }
 
@@ -643,12 +675,12 @@ inline void run_server() {
     address.sin_port = htons(port);
 
     if (bind(server_fd, reinterpret_cast<struct sockaddr*>(&address), sizeof(address)) < 0) {
-        std::cerr << json{{"_log", "error"}, {"message", "Failed to bind to port " + std::to_string(port)}}.dump() << std::endl;
+        the0::log("Failed to bind to port " + std::to_string(port), json::object(), the0::LogLevel::Error);
         std::exit(1);
     }
 
     if (listen(server_fd, 10) < 0) {
-        std::cerr << json{{"_log", "error"}, {"message", "Failed to listen"}}.dump() << std::endl;
+        the0::log("Failed to listen", json::object(), the0::LogLevel::Error);
         std::exit(1);
     }
 
@@ -670,7 +702,14 @@ inline void run_server() {
             continue;
         }
 
-        auto answer = detail::answer(detail::query_request(*http_request));
+        detail::Answer answer;
+        if (http_request->error.empty()) {
+            answer = detail::answer(detail::query_request(*http_request));
+        } else {
+            the0::log("Query server could not read a request: " + http_request->error,
+                      json::object(), the0::LogLevel::Error);
+            answer = {400, {{"status", "error"}, {"error", http_request->error}}};
+        }
         std::string response_body = the0::detail::to_json_text(answer.body);
 
         // Send response
