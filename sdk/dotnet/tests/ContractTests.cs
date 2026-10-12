@@ -21,8 +21,6 @@ public class ContractTests
     private static readonly Dictionary<string, string> KnownFailures = new()
     {
         ["query-ephemeral-params"] = "a non-string value in QUERY_PARAMS drops every param, and the typed accessors are stubs",
-        ["query-ephemeral-read-only-before-key-check"] = "State throws The0.ReadOnlyStateError, not the Query.ReadOnlyStateError the query module documents",
-        ["query-ephemeral-state-read-only"] = "State throws The0.ReadOnlyStateError, not the Query.ReadOnlyStateError the query module documents",
         ["query-server-params-json-body"] = "the query server reads only the query string, and the typed accessors are stubs",
         ["query-server-params-query-string"] = "the typed accessors are stubs",
         ["query-server-start-line"] = "the start line is {\"_log\": \"info\"} with no timestamp",
