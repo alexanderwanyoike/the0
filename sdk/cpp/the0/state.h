@@ -37,6 +37,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -172,17 +173,37 @@ inline json get_or(const std::string& key, const json& default_value) {
 inline void set(const std::string& key, const json& value) {
     check_write_allowed();
     validate_key(key);
-    // Serialized before the key's file is opened, which truncates it, so a
-    // value that cannot be serialized leaves the stored one as it was.
+    // Serialized before any file is written, so a value that cannot be
+    // serialized leaves the stored one as it was.
     const std::string text = value.dump();
-    std::string state_dir = get_state_dir();
+    const fs::path state_dir = get_state_dir();
     fs::create_directories(state_dir);
-    std::string filepath = get_key_path(key);
-    std::ofstream f(filepath);
-    if (!f.is_open()) {
-        throw std::runtime_error("Failed to open state file for writing: " + filepath);
+    const fs::path filepath = get_key_path(key);
+
+    // Written to a temporary file and renamed over the key's file, so a failed
+    // write never leaves an empty or partial value, and a reader of the old
+    // file sees all of it. The name does not end in .json, so list() and
+    // clear() never take it for a key.
+    const fs::path temp = state_dir / ("." + key + ".json.tmp-" + std::to_string(std::random_device{}()));
+    std::error_code ignored;
+    {
+        std::ofstream f(temp, std::ios::binary);
+        if (!f.is_open()) {
+            throw std::runtime_error("Failed to open state file for writing: " + temp.string());
+        }
+        f << text;
+        f.close();
+        if (!f) {
+            fs::remove(temp, ignored);
+            throw std::runtime_error("Failed to write state file: " + temp.string());
+        }
     }
-    f << text;
+    std::error_code renamed;
+    fs::rename(temp, filepath, renamed);
+    if (renamed) {
+        fs::remove(temp, ignored);
+        throw std::runtime_error("Failed to replace state file " + filepath.string() + ": " + renamed.message());
+    }
 }
 
 /**
