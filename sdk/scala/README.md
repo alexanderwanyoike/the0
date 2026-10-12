@@ -151,17 +151,23 @@ Input.metric("price", """{"symbol":"BTC/USD","value":45000.5}""")
 
 ### Query params
 
-A query handler reads its params in two ways:
-- `req.get(key)` and `req.getOrElse(key, default)` return the param as text. A string comes back as itself, and any other JSON value as its JSON text, such as `5`, `true`, `null` or `{"side":"buy"}`.
-- `req.getJson(key)` returns the param as a `JsonValue` (`Null`, `Bool`, `Num`, `Str`, `Arr` or `Obj`), keeping its JSON type.
+A query handler reads its params in three ways:
+- `req.get(key)` and `req.getOrElse(key, default)` return the param as text. A string comes back as itself, and any other JSON value as its JSON text, such as `5`, `true` or `{"side":"buy"}`. A `null` param counts as absent, so the default applies.
+- `req.getAs[T](key)` returns the param as a `String`, `Int`, `Long`, `Double`, `BigDecimal` or `Boolean`:
+  - A string that parses as `T` is read as `T`, so `?limit=5` from a `curl` call gives the `Int` 5.
+  - Asked for a `String`, any other JSON value comes back as its JSON text.
+  - A missing or `null` param gives `None`.
+  - Any other value that is not a `T` throws `IllegalArgumentException`, so the query answers with an error.
+- `req.getJson(key)` returns the param as a `JsonValue` (`Null`, `Bool`, `Num`, `Str`, `Arr` or `Obj`), exactly as it was sent.
 
 ```scala
 Query.handler("/signals") { req =>
-  val limit = req.getJson("limit") match {
-    case Some(JsonValue.Num(n)) => n.toInt
-    case _ => 10
+  val limit = req.getAs[Int]("limit").getOrElse(10)
+  val filter = req.getJson("filter") match {
+    case Some(JsonValue.Obj(fields)) => fields.keys.mkString(",")
+    case _ => "none"
   }
-  s"""{"limit": $limit}"""
+  s"""{"limit": $limit, "filter": "$filter"}"""
 }
 ```
 
