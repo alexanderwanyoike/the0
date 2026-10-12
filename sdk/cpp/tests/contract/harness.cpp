@@ -53,7 +53,6 @@ namespace {
 // says how the list is kept.
 const std::map<std::string, std::string> KNOWN_FAILURES = {
     {"query-ephemeral-params", "every param is turned into a string"},
-    {"query-ephemeral-params-not-object", "a JSON array gives params named after its indexes"},
     {"query-server-params-json-body", "the server reads params from the query string only"},
 };
 
