@@ -720,8 +720,19 @@ inline void run_server() {
         response << "\r\n";
         response << response_body;
 
+        // A client can reset the connection before its answer, and a plain
+        // send() to it raises SIGPIPE, which would end the server.
+#if defined(MSG_NOSIGNAL)
+        const int send_flags = MSG_NOSIGNAL;
+#else
+        const int send_flags = 0;
+#if defined(SO_NOSIGPIPE)
+        int no_sigpipe = 1;
+        setsockopt(client_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe));
+#endif
+#endif
         std::string response_str = response.str();
-        send(client_fd, response_str.c_str(), response_str.size(), 0);
+        send(client_fd, response_str.c_str(), response_str.size(), send_flags);
 
 #ifdef _WIN32
         closesocket(client_fd);
