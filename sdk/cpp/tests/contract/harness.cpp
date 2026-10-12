@@ -452,6 +452,19 @@ std::optional<Response> send_request(int port, const json& request, std::string&
         sent += static_cast<size_t>(n);
     }
 
+    // C++-only: a client that gives up, resetting the connection after
+    // `abort_after_ms` without reading any response.
+    if (request.contains("abort_after_ms")) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(request["abort_after_ms"].get<int>()));
+        linger reset{};
+        reset.l_onoff = 1;
+        reset.l_linger = 0;
+        setsockopt(fd, SOL_SOCKET, SO_LINGER, &reset, sizeof(reset));
+        close(fd);
+        error = "the client reset the connection";
+        return std::nullopt;
+    }
+
     std::string raw;
     char buffer[4096];
     while (true) {
@@ -633,6 +646,9 @@ std::vector<std::string> request_mismatches(int port, size_t index, const json& 
                            request.at("target").get<std::string>();
     std::string error;
     auto response = send_request(port, request, error);
+    // C++-only: a request without `expect` checks nothing about its answer;
+    // the requests after it show whether the server kept serving.
+    if (!request.contains("expect")) return {};
     if (!response) return {at + ": " + error};
 
     const json& expect = request.at("expect");

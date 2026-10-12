@@ -1,0 +1,26 @@
+{
+  "description": "A client that resets the connection in the middle of its request leaves the server serving, though the server has nobody to answer.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "return", "value": "echo"}]},
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/echo",
+      "raw": "GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\n",
+      "abort_after_ms": 200
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ]
+}
