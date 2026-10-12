@@ -296,14 +296,16 @@ struct Answer {
     body: Value,
 }
 
-/// Run the handler registered for `path`, or report that there is none.
-fn answer(path: &str, params: HashMap<String, String>) -> Answer {
-    *CURRENT_PARAMS.lock().unwrap() = Some(params.clone());
+/// Run the handler registered for the request's path, or report that there
+/// is none.
+fn answer(request: QueryRequest) -> Answer {
+    *CURRENT_PARAMS.lock().unwrap() = Some(request.params.clone());
 
+    let path = request.path.as_str();
     let handlers = HANDLERS.lock().unwrap();
     let h = handlers.as_ref().expect("run() registers the built-ins");
     match h.get(path) {
-        Some(handler_fn) => match handler_fn(&QueryRequest::new(path, params)) {
+        Some(handler_fn) => match handler_fn(&request) {
             Ok(data) => Answer {
                 status: 200,
                 body: json!({"status": "ok", "data": data}),
@@ -329,7 +331,7 @@ fn run_ephemeral(query_path: &str) {
     let params_str = env::var("QUERY_PARAMS").unwrap_or_else(|_| "{}".to_string());
     let params: HashMap<String, String> = serde_json::from_str(&params_str).unwrap_or_default();
 
-    let answer = answer(query_path, params);
+    let answer = answer(QueryRequest::new(query_path, params));
     write_result(answer.body);
     if answer.status != 200 {
         std::process::exit(1);
@@ -365,10 +367,12 @@ fn handle_connection(mut stream: TcpStream) {
 
     let answer = match request_line {
         Some(Ok(line)) => match line.split_whitespace().nth(1) {
-            Some(target) => match target.split_once('?') {
-                Some((path, query_string)) => answer(path, query_string_params(query_string)),
-                None => answer(target, HashMap::new()),
-            },
+            Some(target) => answer(match target.split_once('?') {
+                Some((path, query_string)) => {
+                    QueryRequest::new(path, query_string_params(query_string))
+                }
+                None => QueryRequest::new(target, HashMap::new()),
+            }),
             None => bad_request("Invalid request"),
         },
         _ => bad_request("Failed to read request"),
