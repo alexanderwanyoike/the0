@@ -27,7 +27,7 @@
 pub mod query;
 pub mod state;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::fmt;
@@ -117,11 +117,7 @@ pub mod input {
     ///
     /// Writes a JSON object with status "success" and the provided message.
     pub fn success(message: &str) {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        write_result(&format!(
-            r#"{{"status":"success","message":"{}"}}"#,
-            escaped
-        ));
+        write_result(&json!({ "status": "success", "message": message }).to_string());
     }
 
     /// Output an error result to the result file and exit with code 1.
@@ -130,8 +126,7 @@ pub mod input {
     /// prints the message on stderr as an `error` log line, then terminates
     /// the process with exit code 1.
     pub fn error(message: &str) -> ! {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        write_result(&format!(r#"{{"status":"error","message":"{}"}}"#, escaped));
+        write_result(&json!({ "status": "error", "message": message }).to_string());
         log(message, None, Some(LogLevel::Error));
         std::process::exit(1);
     }
