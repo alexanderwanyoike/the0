@@ -55,8 +55,6 @@ const std::map<std::string, std::string> KNOWN_FAILURES = {
     {"bot-error", "error() does not print its message"},
     {"bot-error-with-data", "error() takes no data"},
     {"bot-success-with-data", "success() takes no data"},
-    {"output-log", "log timestamps are epoch milliseconds"},
-    {"output-metric", "metric timestamps are epoch milliseconds"},
     {"query-ephemeral-params", "every param is turned into a string"},
     {"query-ephemeral-params-not-object", "a JSON array gives params named after its indexes"},
     {"query-ephemeral-read-only-before-key-check",

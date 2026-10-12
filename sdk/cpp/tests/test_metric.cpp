@@ -7,8 +7,18 @@
 #include <doctest/doctest.h>
 #include <the0/the0.h>
 #include "helpers/test_helpers.hpp"
+#include <regex>
 
 using namespace the0_test;
+
+namespace {
+
+bool is_iso_timestamp(const std::string& text) {
+    static const std::regex pattern(R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$)");
+    return std::regex_match(text, pattern);
+}
+
+} // namespace
 
 TEST_SUITE("the0::metric") {
     TEST_CASE("outputs JSON with _metric field to stdout") {
@@ -24,18 +34,15 @@ TEST_SUITE("the0::metric") {
         CHECK(json["value"] == 45000.0);
     }
 
-    TEST_CASE("includes timestamp field") {
+    TEST_CASE("includes a UTC ISO 8601 timestamp") {
         CaptureStdout capture;
         the0::metric("signal", {{"type", "BUY"}});
 
         std::string output = capture.get();
         auto json = the0::json::parse(output);
 
-        CHECK(json.contains("timestamp"));
-        CHECK(json["timestamp"].is_number());
-        // Timestamp should be a reasonable Unix milliseconds value
-        long long ts = json["timestamp"].get<long long>();
-        CHECK(ts > 1700000000000);  // After Nov 2023
+        REQUIRE(json["timestamp"].is_string());
+        CHECK(is_iso_timestamp(json["timestamp"].get<std::string>()));
     }
 
     TEST_CASE("handles empty data") {
@@ -111,18 +118,15 @@ TEST_SUITE("the0::log") {
         CHECK(json["level"] == "info");
     }
 
-    TEST_CASE("includes timestamp") {
+    TEST_CASE("includes a UTC ISO 8601 timestamp") {
         CaptureStderr capture;
         the0::log("Test message");
 
         std::string output = capture.get();
         auto json = the0::json::parse(output);
 
-        CHECK(json.contains("timestamp"));
-        CHECK(json["timestamp"].is_number());
-        // Timestamp should be a reasonable Unix milliseconds value
-        long long ts = json["timestamp"].get<long long>();
-        CHECK(ts > 1700000000000);  // After Nov 2023
+        REQUIRE(json["timestamp"].is_string());
+        CHECK(is_iso_timestamp(json["timestamp"].get<std::string>()));
     }
 
     TEST_CASE("supports warn level") {
