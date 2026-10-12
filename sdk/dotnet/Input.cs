@@ -82,8 +82,7 @@ public static class Input
     /// <param name="message">The success message to include in the output</param>
     public static void Success(string message)
     {
-        var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        WriteResult($"{{\"status\":\"success\",\"message\":\"{escaped}\"}}");
+        WriteResult(JsonSerializer.Serialize(new { status = "success", message }));
     }
 
     /// <summary>
@@ -104,8 +103,7 @@ public static class Input
     /// <param name="message">The error message to include in the output</param>
     public static void Error(string message)
     {
-        var escaped = message.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        WriteResult($"{{\"status\":\"error\",\"message\":\"{escaped}\"}}");
+        WriteResult(JsonSerializer.Serialize(new { status = "error", message }));
         Log(message, level: LogLevel.Error);
         Environment.Exit(1);
     }
