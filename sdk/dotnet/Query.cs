@@ -301,6 +301,46 @@ public static class Query
     }
 
     /// <summary>
+    /// The params in a request body that is a JSON object, or null when there is no such body.
+    /// </summary>
+    private static JsonObject? BodyParams(HttpListenerRequest request)
+    {
+        if (!request.HasEntityBody)
+        {
+            return null;
+        }
+        using var reader = new StreamReader(request.InputStream, System.Text.Encoding.UTF8);
+        try
+        {
+            return JsonNode.Parse(reader.ReadToEnd()) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The params in a URL query string, URL-decoded, every value a string.
+    /// </summary>
+    private static Dictionary<string, string> QueryStringParams(string queryString)
+    {
+        var queryParams = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(queryString) && queryString.StartsWith("?"))
+        {
+            var parsed = HttpUtility.ParseQueryString(queryString);
+            foreach (string? key in parsed.AllKeys)
+            {
+                if (key != null)
+                {
+                    queryParams[key] = parsed[key] ?? "";
+                }
+            }
+        }
+        return queryParams;
+    }
+
+    /// <summary>
     /// Handle an HTTP request.
     /// </summary>
     private static void HandleRequest(HttpListenerContext context)
@@ -309,21 +349,10 @@ public static class Query
         var response = context.Response;
 
         var path = request.Url?.AbsolutePath ?? "/";
-        var queryString = request.Url?.Query ?? "";
-
-        // Parse query parameters
-        _currentParams = new Dictionary<string, string>();
-        if (!string.IsNullOrEmpty(queryString) && queryString.StartsWith("?"))
-        {
-            var parsed = HttpUtility.ParseQueryString(queryString);
-            foreach (string? key in parsed.AllKeys)
-            {
-                if (key != null)
-                {
-                    _currentParams[key] = parsed[key] ?? "";
-                }
-            }
-        }
+        var req = BodyParams(request) is JsonObject body
+            ? new QueryRequest(path, body)
+            : new QueryRequest(path, QueryStringParams(request.Url?.Query ?? ""));
+        _currentParams = req.Params;
 
         string responseBody;
         int statusCode;
@@ -341,7 +370,6 @@ public static class Query
         {
             try
             {
-                var req = new QueryRequest(path, _currentParams);
                 var data = handler(req);
                 statusCode = 200;
                 responseBody = JsonSerializer.Serialize(new { status = "ok", data });
