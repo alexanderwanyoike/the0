@@ -120,6 +120,11 @@ pub mod input {
         write_result(&json!({ "status": "success", "message": message }).to_string());
     }
 
+    /// Output a success result with data to the result file.
+    pub fn success_with_data(message: &str, _data: &Value) {
+        success(message);
+    }
+
     /// Output an error result to the result file and exit with code 1.
     ///
     /// Writes a JSON object with status "error" and the provided message,
@@ -129,6 +134,11 @@ pub mod input {
         write_result(&json!({ "status": "error", "message": message }).to_string());
         log(message, None, Some(LogLevel::Error));
         std::process::exit(1);
+    }
+
+    /// Output an error result with data to the result file and exit with code 1.
+    pub fn error_with_data(message: &str, _data: &Value) -> ! {
+        error(message);
     }
 
     /// Output a custom JSON result to the result file.
