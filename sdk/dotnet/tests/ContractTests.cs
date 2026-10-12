@@ -21,7 +21,6 @@ public class ContractTests
     private static readonly Dictionary<string, string> KnownFailures = new()
     {
         ["query-server-start-line"] = "the start line is {\"_log\": \"info\"} with no timestamp",
-        ["query-server-unknown-path"] = "the 404 does not list the available paths",
     };
 
     private static readonly TimeSpan RunTimeout = TimeSpan.FromSeconds(60);
