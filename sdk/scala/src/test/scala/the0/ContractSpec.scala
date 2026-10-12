@@ -61,7 +61,6 @@ object ContractSpec {
   private val KnownFailures: Map[String, String] = Map(
     "query-ephemeral-params" -> "QUERY_PARAMS keeps only string pairs, nested ones included",
     "query-server-params-json-body" -> "the query server ignores the request body",
-    "query-server-start-line" -> "the start line is {\"_log\": ...} with no level or timestamp",
     "query-server-unknown-path" -> "the query server's 404 has no available"
   )
 
