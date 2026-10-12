@@ -58,8 +58,6 @@ portAttempts = 3
 knownFailures :: [(String, String)]
 knownFailures =
     [ ("query-ephemeral-params", "ephemeral params turn every value into a string")
-    , ("query-ephemeral-read-only-before-key-check", "state throws its own ReadOnlyStateError, not the query module's")
-    , ("query-ephemeral-state-read-only", "state throws its own ReadOnlyStateError, not the query module's")
     , ("query-server-handler-error", "the query server ends its response lines with LF, not CRLF")
     , ("query-server-ok", "the query server ends its response lines with LF, not CRLF")
     , ("query-server-params-query-string", "the query server ends its response lines with LF, not CRLF")
