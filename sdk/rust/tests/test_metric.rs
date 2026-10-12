@@ -37,13 +37,16 @@ fn metric_does_not_panic_with_nested_data() {
     env.set("BOT_CONFIG", "{}");
 
     // Should not panic
-    input::metric("trade", &json!({
-        "order": {
-            "id": "12345",
-            "side": "buy",
-            "quantity": 1.5
-        }
-    }));
+    input::metric(
+        "trade",
+        &json!({
+            "order": {
+                "id": "12345",
+                "side": "buy",
+                "quantity": 1.5
+            }
+        }),
+    );
 }
 
 #[test]
@@ -84,7 +87,11 @@ fn log_does_not_panic_with_data() {
     env.set("BOT_CONFIG", "{}");
 
     // Should not panic - log with structured data
-    input::log("Order placed", Some(&json!({"order_id": "123", "symbol": "BTC"})), None);
+    input::log(
+        "Order placed",
+        Some(&json!({"order_id": "123", "symbol": "BTC"})),
+        None,
+    );
 }
 
 #[test]
@@ -94,7 +101,11 @@ fn log_does_not_panic_with_data_and_level() {
     env.set("BOT_CONFIG", "{}");
 
     // Should not panic - log with data and level
-    input::log("Order failed", Some(&json!({"order_id": "123"})), Some(input::LogLevel::Error));
+    input::log(
+        "Order failed",
+        Some(&json!({"order_id": "123"})),
+        Some(input::LogLevel::Error),
+    );
 }
 
 #[test]
@@ -158,13 +169,16 @@ fn metric_handles_various_numeric_types() {
     env.set("BOT_CONFIG", "{}");
 
     // Should not panic with various numeric types
-    input::metric("numbers", &json!({
-        "integer": 42,
-        "negative": -100,
-        "float": 3.14159,
-        "large": 9999999999_i64,
-        "small": 0.0000001
-    }));
+    input::metric(
+        "numbers",
+        &json!({
+            "integer": 42,
+            "negative": -100,
+            "float": 3.14159,
+            "large": 9999999999_i64,
+            "small": 0.0000001
+        }),
+    );
 }
 
 #[test]
@@ -174,9 +188,12 @@ fn metric_handles_boolean_and_null() {
     env.set("BOT_CONFIG", "{}");
 
     // Should not panic
-    input::metric("types", &json!({
-        "active": true,
-        "disabled": false,
-        "value": null
-    }));
+    input::metric(
+        "types",
+        &json!({
+            "active": true,
+            "disabled": false,
+            "value": null
+        }),
+    );
 }

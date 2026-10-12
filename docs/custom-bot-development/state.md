@@ -102,7 +102,7 @@ if state::exists("portfolio") {
 }
 
 // Delete a key
-state::delete("portfolio");
+state::delete("portfolio")?;
 
 // List all keys
 let keys = state::list();

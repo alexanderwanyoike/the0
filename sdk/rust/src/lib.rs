@@ -27,11 +27,11 @@
 pub mod query;
 pub mod state;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::fmt;
+use std::fs;
 
 /// Errors that can occur when parsing bot configuration
 #[derive(Debug)]
@@ -117,17 +117,39 @@ pub mod input {
     ///
     /// Writes a JSON object with status "success" and the provided message.
     pub fn success(message: &str) {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        write_result(&format!(r#"{{"status":"success","message":"{}"}}"#, escaped));
+        write_result(&json!({ "status": "success", "message": message }).to_string());
+    }
+
+    /// Output a success result with data to the result file.
+    ///
+    /// Like [`success`], with `data` under the result's `data` key.
+    pub fn success_with_data(message: &str, data: &Value) {
+        write_result(&json!({ "status": "success", "message": message, "data": data }).to_string());
     }
 
     /// Output an error result to the result file and exit with code 1.
     ///
     /// Writes a JSON object with status "error" and the provided message,
-    /// then terminates the process with exit code 1.
+    /// prints the message on stderr as an `error` log line, then terminates
+    /// the process with exit code 1.
     pub fn error(message: &str) -> ! {
-        let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        write_result(&format!(r#"{{"status":"error","message":"{}"}}"#, escaped));
+        fail(json!({ "status": "error", "message": message }), message)
+    }
+
+    /// Output an error result with data to the result file and exit with code 1.
+    ///
+    /// Like [`error`], with `data` under the result's `data` key. The log line
+    /// carries only the message.
+    pub fn error_with_data(message: &str, data: &Value) -> ! {
+        fail(
+            json!({ "status": "error", "message": message, "data": data }),
+            message,
+        )
+    }
+
+    fn fail(result: Value, message: &str) -> ! {
+        write_result(&result.to_string());
+        log(message, None, Some(LogLevel::Error));
         std::process::exit(1);
     }
 
@@ -144,9 +166,15 @@ pub mod input {
     pub fn metric(metric_type: &str, data: &Value) {
         let timestamp = current_timestamp();
         let mut output = data.as_object().cloned().unwrap_or_default();
-        output.insert("_metric".to_string(), Value::String(metric_type.to_string()));
-        output.insert("timestamp".to_string(), Value::Number(serde_json::Number::from(timestamp)));
-        println!("{}", serde_json::to_string(&output).expect("Failed to serialize metric"));
+        output.insert(
+            "_metric".to_string(),
+            Value::String(metric_type.to_string()),
+        );
+        output.insert("timestamp".to_string(), Value::String(timestamp));
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("Failed to serialize metric")
+        );
     }
 
     /// Log levels supported by the platform
@@ -198,11 +226,17 @@ pub mod input {
             None => serde_json::Map::new(),
         };
 
-        output.insert("level".to_string(), Value::String(log_level.as_str().to_string()));
+        output.insert(
+            "level".to_string(),
+            Value::String(log_level.as_str().to_string()),
+        );
         output.insert("message".to_string(), Value::String(message.to_string()));
-        output.insert("timestamp".to_string(), Value::Number(serde_json::Number::from(timestamp)));
+        output.insert("timestamp".to_string(), Value::String(timestamp));
 
-        eprintln!("{}", serde_json::to_string(&output).expect("Failed to serialize log"));
+        eprintln!(
+            "{}",
+            serde_json::to_string(&output).expect("Failed to serialize log")
+        );
     }
 
     /// Convenience function: log an info message
@@ -220,12 +254,85 @@ pub mod input {
         log(message, data, Some(LogLevel::Error));
     }
 
-    /// Get current timestamp as milliseconds since Unix epoch.
-    fn current_timestamp() -> u64 {
+    /// The current time as a UTC ISO 8601 string with milliseconds, such as
+    /// `2026-10-12T09:30:00.123Z`.
+    fn current_timestamp() -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let duration = SystemTime::now()
+        let since_epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap();
-        duration.as_secs() * 1000 + duration.subsec_millis() as u64
+            .unwrap_or_default();
+        iso_timestamp(since_epoch)
+    }
+
+    fn iso_timestamp(since_epoch: std::time::Duration) -> String {
+        let seconds = since_epoch.as_secs();
+        let (year, month, day) = civil_from_days((seconds / 86_400) as i64);
+        let second_of_day = seconds % 86_400;
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+            year,
+            month,
+            day,
+            second_of_day / 3600,
+            second_of_day % 3600 / 60,
+            second_of_day % 60,
+            since_epoch.subsec_millis()
+        )
+    }
+
+    /// The proleptic Gregorian date of a day counted from 1970-01-01, by
+    /// Howard Hinnant's `civil_from_days`; it saves the SDK a date crate.
+    fn civil_from_days(days: i64) -> (i64, u32, u32) {
+        let z = days + 719_468;
+        let era = z.div_euclid(146_097);
+        let day_of_era = z.rem_euclid(146_097);
+        let year_of_era =
+            (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+        let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+        let month_index = (5 * day_of_year + 2) / 153;
+        let day = (day_of_year - (153 * month_index + 2) / 5 + 1) as u32;
+        let month = if month_index < 10 {
+            month_index + 3
+        } else {
+            month_index - 9
+        } as u32;
+        let year = year_of_era + era * 400 + i64::from(month <= 2);
+        (year, month, day)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::iso_timestamp;
+        use std::time::Duration;
+
+        fn at(seconds: u64, millis: u64) -> String {
+            iso_timestamp(Duration::from_secs(seconds) + Duration::from_millis(millis))
+        }
+
+        #[test]
+        fn iso_timestamp_starts_at_the_unix_epoch() {
+            assert_eq!(at(0, 0), "1970-01-01T00:00:00.000Z");
+        }
+
+        #[test]
+        fn iso_timestamp_keeps_the_milliseconds() {
+            assert_eq!(at(1_791_792_250, 684), "2026-10-12T08:04:10.684Z");
+        }
+
+        #[test]
+        fn iso_timestamp_handles_leap_days() {
+            assert_eq!(at(951_782_400, 0), "2000-02-29T00:00:00.000Z");
+            assert_eq!(at(1_709_210_096, 7), "2024-02-29T12:34:56.007Z");
+        }
+
+        #[test]
+        fn iso_timestamp_skips_the_leap_day_of_a_century_year() {
+            assert_eq!(at(4_107_542_400, 0), "2100-03-01T00:00:00.000Z");
+        }
+
+        #[test]
+        fn iso_timestamp_handles_the_last_second_of_a_year() {
+            assert_eq!(at(1_735_689_599, 999), "2024-12-31T23:59:59.999Z");
+        }
     }
 }
