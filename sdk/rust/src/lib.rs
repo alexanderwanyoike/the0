@@ -280,4 +280,35 @@ pub mod input {
         let year = year_of_era + era * 400 + i64::from(month <= 2);
         (year, month, day)
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::iso_timestamp;
+        use std::time::Duration;
+
+        fn at(seconds: u64, millis: u64) -> String {
+            iso_timestamp(Duration::from_secs(seconds) + Duration::from_millis(millis))
+        }
+
+        #[test]
+        fn iso_timestamp_starts_at_the_unix_epoch() {
+            assert_eq!(at(0, 0), "1970-01-01T00:00:00.000Z");
+        }
+
+        #[test]
+        fn iso_timestamp_keeps_the_milliseconds() {
+            assert_eq!(at(1_791_792_250, 684), "2026-10-12T08:04:10.684Z");
+        }
+
+        #[test]
+        fn iso_timestamp_handles_leap_days() {
+            assert_eq!(at(951_782_400, 0), "2000-02-29T00:00:00.000Z");
+            assert_eq!(at(1_709_210_096, 7), "2024-02-29T12:34:56.007Z");
+        }
+
+        #[test]
+        fn iso_timestamp_handles_the_last_second_of_a_year() {
+            assert_eq!(at(1_735_689_599, 999), "2024-12-31T23:59:59.999Z");
+        }
+    }
 }
