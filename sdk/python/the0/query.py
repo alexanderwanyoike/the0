@@ -257,7 +257,14 @@ def _run_server():
 
             handler_fn = _handlers.get(path)
             if not handler_fn:
-                self._send_json(404, {"status": "error", "error": f"No handler for path: {path}"})
+                self._send_json(
+                    404,
+                    {
+                        "status": "error",
+                        "error": f"No handler for path: {path}",
+                        "available": list(_handlers.keys()),
+                    },
+                )
                 return
 
             try:
