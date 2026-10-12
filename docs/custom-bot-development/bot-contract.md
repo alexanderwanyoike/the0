@@ -269,7 +269,8 @@ It reads the response body whatever the status code.
 | Node.js | `sdk/nodejs/src/contract.test.ts` |
 | Rust | `sdk/rust/tests/contract/main.rs` |
 | .NET | `sdk/dotnet/tests/ContractTests.cs` |
-| Scala, Haskell, C++ | not yet |
+| Scala | `sdk/scala/src/test/scala/the0/ContractSpec.scala` |
+| Haskell, C++ | not yet |
 
 ## Bringing the SDKs into line
 
@@ -277,11 +278,11 @@ These are the rules each SDK does not follow yet. The SDKs come into line one at
 
 | Rule | Not followed yet by |
 |---|---|
-| `success()` and `error()` accept optional `data` (these SDKs take a message only) | Scala, Haskell, C++ |
-| `error()` prints its message on stderr | Scala, Haskell, C++ |
-| Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Scala, Haskell, C++ |
-| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Scala, Haskell, C++ |
-| One read-only error type (these SDKs define a second, unused type in the query module) | Scala, Haskell, C++ |
-| Ephemeral query params keep their JSON types | Scala (keeps only string pairs), Haskell and C++ (turn every value into a string) |
-| The query server reads the JSON body | Scala, Haskell, C++ |
-| The query server's 404 includes `available` | Scala, Haskell, C++ |
+| `success()` and `error()` accept optional `data` (these SDKs take a message only) | Haskell, C++ |
+| `error()` prints its message on stderr | Haskell, C++ |
+| Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Haskell, C++ |
+| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Haskell, C++ |
+| One read-only error type (these SDKs define a second, unused type in the query module) | Haskell, C++ |
+| Ephemeral query params keep their JSON types | Haskell and C++ (turn every value into a string) |
+| The query server reads the JSON body | Haskell, C++ |
+| The query server's 404 includes `available` | Haskell, C++ |
