@@ -3,6 +3,7 @@
 mod common;
 
 use common::EnvGuard;
+use serde_json::{json, Value};
 use the0_sdk::query;
 use the0_sdk::state;
 
@@ -65,6 +66,34 @@ fn query_request_get_or_returns_default() {
 
     assert_eq!(req.get_or("symbol", "default"), "BTC/USD");
     assert_eq!(req.get_or("missing", "default"), "default");
+}
+
+fn typed_request() -> query::QueryRequest {
+    let values = [
+        ("symbol", json!("BTC/USD")),
+        ("limit", json!(5)),
+        ("live", json!(true)),
+        ("symbols", json!(["AAPL", "MSFT"])),
+        ("filter", json!({"side": "buy"})),
+        ("cursor", Value::Null),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value))
+    .collect();
+    query::QueryRequest::from_values("/test", values)
+}
+
+#[test]
+fn query_request_get_returns_a_non_string_param_as_its_json_text() {
+    let req = typed_request();
+
+    assert_eq!(req.get("symbol"), Some("BTC/USD".to_string()));
+    assert_eq!(req.get("limit"), Some("5".to_string()));
+    assert_eq!(req.get("live"), Some("true".to_string()));
+    assert_eq!(req.get("symbols"), Some(r#"["AAPL","MSFT"]"#.to_string()));
+    assert_eq!(req.get("filter"), Some(r#"{"side":"buy"}"#.to_string()));
+    assert_eq!(req.get("cursor"), Some("null".to_string()));
+    assert_eq!(req.get_or("limit", "10"), "5");
 }
 
 #[test]
