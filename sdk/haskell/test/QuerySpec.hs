@@ -135,6 +135,12 @@ spec = do
         it "getParamAs gives Nothing for a param that is not the type asked for" $
             (Query.getParamAs typedRequest "symbol" :: Maybe Int) `shouldBe` Nothing
 
+        it "getParamAs parses a string param as the type asked for, as a query string sends it" $ do
+            let fromQueryString = Request "/echo" (Map.fromList [("limit", "5"), ("live", "true")])
+            Query.getParamAs fromQueryString "limit" `shouldBe` Just (5 :: Int)
+            Query.getParamAs fromQueryString "live" `shouldBe` Just True
+            Query.getParamAs typedRequest "count" `shouldBe` Just (7 :: Int)
+
         it "reqValues keeps every param's JSON type" $
             Query.reqValues typedRequest `shouldBe` typedParams
 
