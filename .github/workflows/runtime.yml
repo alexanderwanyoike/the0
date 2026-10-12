@@ -6,10 +6,12 @@ on:
     tags: [ 'v*' ]
     paths:
       - 'runtime/**'
+      - 'sdk/contract/**'
       - '.github/workflows/runtime.yml'
   pull_request:
     paths:
       - 'runtime/**'
+      - 'sdk/contract/**'
       - '.github/workflows/runtime.yml'
   workflow_dispatch:
 
