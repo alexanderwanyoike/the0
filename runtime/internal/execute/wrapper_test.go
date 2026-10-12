@@ -263,6 +263,30 @@ exports.main = async function (botId, config) {
 			message:  "exchange unreachable",
 		},
 		{
+			name: "node bot writes an error result and returns",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { result } = require('the0-node');
+
+exports.main = async function (botId, config) {
+    result({ status: 'error', message: 'position limit breached' });
+};
+`)
+			},
+			exitCode: 1,
+			message:  "position limit breached",
+		},
+		{
+			name: "node bot returns an error result",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {
+    return { status: 'error', message: 'position limit breached' };
+};
+`)
+			},
+			exitCode: 1,
+			message:  "position limit breached",
+		},
+		{
 			name: "node bot exits with its own code",
 			bot: func(t *testing.T) botFixture {
 				return nodeBot(t, `exports.main = async function (botId, config) {
