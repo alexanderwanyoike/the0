@@ -8,6 +8,9 @@
 --   keep working.
 -- * @/lazy-error@ returns a result that fails only once it is evaluated, as
 --   pure code calling @error@, @head []@ or @fromJust Nothing@ does.
+-- * @/metric@ prints a metric line while the query server keeps running, as
+--   a realtime bot does. GHC block-buffers stdout on a pipe, and the server
+--   stops on SIGTERM, which flushes nothing.
 module HaskellBot
     ( haskellBotArg
     , main
@@ -23,6 +26,7 @@ import qualified Data.Text.Encoding as TE
 import Harness (runCase, sandboxQueryResult)
 import System.Environment (getExecutablePath)
 import Test.Hspec
+import qualified The0.Input as Input
 import qualified The0.Query as Query
 
 haskellBotArg :: String
@@ -40,6 +44,9 @@ main queryResultPath = do
         ]
     Query.handler "/lazy-error" $ \_ -> return $ object
         ["price" .= (Prelude.error "price feed unavailable" :: Double)]
+    Query.handler "/metric" $ \_ -> do
+        Input.metric "price" (object ["value" .= (45000.5 :: Double)])
+        return (object [])
     Query.run
 
 spec :: Spec
@@ -51,6 +58,9 @@ spec = do
     describe "a handler whose result fails when evaluated" $ do
         it "answers its message in an ephemeral query" $ check lazyErrorEphemeralCase
         it "answers 500 with its message in the query server, which keeps serving" $ check lazyErrorServerCase
+
+    describe "a query server that prints lines" $
+        it "flushes a metric line as soon as it prints it" $ check metricCase
 
 check :: Value -> Expectation
 check case_ = do
@@ -168,6 +178,30 @@ lazyErrorServerCase = object
                     [ "status" .= ("ok" :: String)
                     , "data" .= object ["status" .= ("ok" :: String)]
                     ]
+                ]
+            ]
+        ]
+    ]
+
+metricCase :: Value
+metricCase = object
+    [ "env" .= env [("BOT_TYPE", "realtime"), ("THE0_QUERY_PORT", "{{port}}")]
+    , "requests" .=
+        [ object
+            [ "method" .= ("POST" :: String)
+            , "target" .= ("/metric" :: String)
+            , "expect" .= object
+                [ "status" .= (200 :: Int)
+                , "body" .= object ["status" .= ("ok" :: String), "data" .= object []]
+                ]
+            ]
+        ]
+    , "expect" .= object
+        [ "stdout" .=
+            [ object
+                [ "_metric" .= ("price" :: String)
+                , "value" .= (45000.5 :: Double)
+                , "timestamp" .= object ["$match" .= ("timestamp" :: String)]
                 ]
             ]
         ]
