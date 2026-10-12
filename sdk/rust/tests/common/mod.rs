@@ -90,7 +90,10 @@ impl ResultContext {
         let path = path.strip_prefix('/').unwrap_or(path);
         env_guard.set("CODE_MOUNT_DIR", path);
 
-        Self { temp_dir, env_guard }
+        Self {
+            temp_dir,
+            env_guard,
+        }
     }
 
     /// Get the path to the result file

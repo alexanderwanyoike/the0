@@ -96,7 +96,10 @@ impl QueryRequest {
 
     /// Get a parameter value with a default.
     pub fn get_or(&self, key: &str, default: &str) -> String {
-        self.params.get(key).cloned().unwrap_or_else(|| default.to_string())
+        self.params
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| default.to_string())
     }
 }
 
@@ -180,11 +183,10 @@ pub fn run() {
 
             // Store paths for /info handler
             let paths: Vec<String> = h.keys().cloned().collect();
-            h.entry("/info".to_string())
-                .or_insert_with(move || {
-                    let paths = paths.clone();
-                    Box::new(move |_| json!({"available_queries": paths}))
-                });
+            h.entry("/info".to_string()).or_insert_with(move || {
+                let paths = paths.clone();
+                Box::new(move |_| json!({"available_queries": paths}))
+            });
         }
     }
 
@@ -217,8 +219,7 @@ fn write_result(result: Value) {
 fn run_ephemeral(query_path: &str) {
     // Parse parameters from environment
     let params_str = env::var("QUERY_PARAMS").unwrap_or_else(|_| "{}".to_string());
-    let params: HashMap<String, String> =
-        serde_json::from_str(&params_str).unwrap_or_default();
+    let params: HashMap<String, String> = serde_json::from_str(&params_str).unwrap_or_default();
 
     {
         let mut current = CURRENT_PARAMS.lock().unwrap();
@@ -267,8 +268,7 @@ fn run_server() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9476);
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
-        .expect("Failed to bind to port");
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).expect("Failed to bind to port");
 
     eprintln!(
         "{}",
@@ -334,12 +334,11 @@ fn handle_connection(mut stream: TcpStream) {
                 };
 
                 match result {
-                    Some(Ok(data)) => {
-                        ("200 OK", json!({"status": "ok", "data": data}).to_string())
-                    }
-                    Some(Err(err)) => {
-                        ("404 Not Found", json!({"status": "error", "error": err}).to_string())
-                    }
+                    Some(Ok(data)) => ("200 OK", json!({"status": "ok", "data": data}).to_string()),
+                    Some(Err(err)) => (
+                        "404 Not Found",
+                        json!({"status": "error", "error": err}).to_string(),
+                    ),
                     None => (
                         "500 Internal Server Error",
                         json!({"status": "error", "error": "Internal error"}).to_string(),

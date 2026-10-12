@@ -30,8 +30,8 @@ pub mod state;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::fmt;
+use std::fs;
 
 /// Errors that can occur when parsing bot configuration
 #[derive(Debug)]
@@ -118,7 +118,10 @@ pub mod input {
     /// Writes a JSON object with status "success" and the provided message.
     pub fn success(message: &str) {
         let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
-        write_result(&format!(r#"{{"status":"success","message":"{}"}}"#, escaped));
+        write_result(&format!(
+            r#"{{"status":"success","message":"{}"}}"#,
+            escaped
+        ));
     }
 
     /// Output an error result to the result file and exit with code 1.
@@ -144,9 +147,18 @@ pub mod input {
     pub fn metric(metric_type: &str, data: &Value) {
         let timestamp = current_timestamp();
         let mut output = data.as_object().cloned().unwrap_or_default();
-        output.insert("_metric".to_string(), Value::String(metric_type.to_string()));
-        output.insert("timestamp".to_string(), Value::Number(serde_json::Number::from(timestamp)));
-        println!("{}", serde_json::to_string(&output).expect("Failed to serialize metric"));
+        output.insert(
+            "_metric".to_string(),
+            Value::String(metric_type.to_string()),
+        );
+        output.insert(
+            "timestamp".to_string(),
+            Value::Number(serde_json::Number::from(timestamp)),
+        );
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("Failed to serialize metric")
+        );
     }
 
     /// Log levels supported by the platform
@@ -198,11 +210,20 @@ pub mod input {
             None => serde_json::Map::new(),
         };
 
-        output.insert("level".to_string(), Value::String(log_level.as_str().to_string()));
+        output.insert(
+            "level".to_string(),
+            Value::String(log_level.as_str().to_string()),
+        );
         output.insert("message".to_string(), Value::String(message.to_string()));
-        output.insert("timestamp".to_string(), Value::Number(serde_json::Number::from(timestamp)));
+        output.insert(
+            "timestamp".to_string(),
+            Value::Number(serde_json::Number::from(timestamp)),
+        );
 
-        eprintln!("{}", serde_json::to_string(&output).expect("Failed to serialize log"));
+        eprintln!(
+            "{}",
+            serde_json::to_string(&output).expect("Failed to serialize log")
+        );
     }
 
     /// Convenience function: log an info message
@@ -223,9 +244,7 @@ pub mod input {
     /// Get current timestamp as milliseconds since Unix epoch.
     fn current_timestamp() -> u64 {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap();
+        let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         duration.as_secs() * 1000 + duration.subsec_millis() as u64
     }
 }

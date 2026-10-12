@@ -42,9 +42,7 @@ fn handler_registers_without_calling() {
 
     // Just verify that handler registration works without panicking
     // We can't easily test the actual execution without starting the server
-    query::handler("/test", |_req| {
-        serde_json::json!({"test": true})
-    });
+    query::handler("/test", |_req| serde_json::json!({"test": true}));
 }
 
 #[test]

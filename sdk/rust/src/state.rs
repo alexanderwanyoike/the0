@@ -101,7 +101,9 @@ fn get_key_path(key: &str) -> PathBuf {
 /// Validate that a key is safe to use as a filename.
 fn validate_key(key: &str) -> Result<(), StateError> {
     if key.is_empty() {
-        return Err(StateError::InvalidKey("State key cannot be empty".to_string()));
+        return Err(StateError::InvalidKey(
+            "State key cannot be empty".to_string(),
+        ));
     }
     if key.contains('/') || key.contains('\\') || key.contains("..") {
         return Err(StateError::InvalidKey(

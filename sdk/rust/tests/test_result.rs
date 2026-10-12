@@ -153,8 +153,7 @@ fn success_creates_valid_json() {
     let content = ctx.read_result().expect("Result file should exist");
 
     // Should not panic
-    let _: serde_json::Value = serde_json::from_str(&content)
-        .expect("Result should be valid JSON");
+    let _: serde_json::Value = serde_json::from_str(&content).expect("Result should be valid JSON");
 }
 
 #[test]
