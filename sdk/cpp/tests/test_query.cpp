@@ -157,6 +157,28 @@ TEST_CASE("query::Request from JSON values") {
         CHECK(with_null.get("cursor", "start") == "start");
         CHECK_FALSE(with_null.has("cursor"));
     }
+
+    SUBCASE("values() keeps every param's JSON type, null included") {
+        CHECK(req.values() == values);
+
+        auto with_null = query::Request::from_values("/echo", {{"cursor", nullptr}});
+        CHECK(with_null.values() == json{{"cursor", nullptr}});
+    }
+
+    SUBCASE("anything but a JSON object gives no params") {
+        auto from_array = query::Request::from_values("/echo", json::array({"limit", 5}));
+
+        CHECK(from_array.values() == json::object());
+        CHECK(from_array.params.empty());
+    }
+}
+
+TEST_CASE("query::Request from text params") {
+    query::Request req("/echo", {{"symbol", "BTC/USD"}, {"limit", "5"}});
+
+    SUBCASE("values() holds every param as a JSON string") {
+        CHECK(req.values() == json{{"symbol", "BTC/USD"}, {"limit", "5"}});
+    }
 }
 
 TEST_CASE("state read-only enforcement in query mode") {
