@@ -103,70 +103,6 @@ inline std::pair<std::string, std::string> parse_raw() {
 }
 
 /**
- * Output a success result to the result file.
- *
- * Writes a JSON object with status "success" and the provided message.
- * The message is properly escaped for JSON.
- *
- * @param message The success message to include in the output
- */
-inline void success(const std::string& message) {
-    json r = {
-        {"status", "success"},
-        {"message", message}
-    };
-    write_result(r.dump());
-}
-
-/**
- * Output an error result to the result file and exit with code 1.
- *
- * Writes a JSON object with status "error" and the provided message,
- * then terminates the process with exit code 1.
- * The message is properly escaped for JSON.
- *
- * @param message The error message to include in the output
- */
-[[noreturn]] inline void error(const std::string& message) {
-    json r = {
-        {"status", "error"},
-        {"message", message}
-    };
-    write_result(r.dump());
-    std::exit(1);
-}
-
-/**
- * Output a custom JSON result to the result file.
- *
- * @param data The JSON object to output
- */
-inline void result(const json& data) {
-    write_result(data.dump());
-}
-
-/**
- * Output a custom result with additional data fields.
- *
- * Creates a JSON object with status, message, and any additional fields.
- *
- * @param status The status string (e.g., "success", "error")
- * @param message The message string
- * @param data Additional data to merge into the result
- */
-inline void result(const std::string& status, const std::string& message, const json& data = json::object()) {
-    json output = {
-        {"status", status},
-        {"message", message}
-    };
-    // Merge additional data
-    for (auto& [key, value] : data.items()) {
-        output[key] = value;
-    }
-    write_result(output.dump());
-}
-
-/**
  * Get current timestamp as milliseconds since epoch.
  */
 inline int64_t current_timestamp() {
@@ -261,6 +197,70 @@ inline void log(const std::string& message, const json& data = json::object(), L
     output["message"] = message;
     output["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
     std::cerr << output.dump() << std::endl;
+}
+
+/**
+ * Output a success result to the result file.
+ *
+ * Writes a JSON object with status "success" and the provided message.
+ * The message is properly escaped for JSON.
+ *
+ * @param message The success message to include in the output
+ */
+inline void success(const std::string& message) {
+    json r = {
+        {"status", "success"},
+        {"message", message}
+    };
+    write_result(r.dump());
+}
+
+/**
+ * Output an error result to the result file and exit with code 1.
+ *
+ * Writes a JSON object with status "error" and the provided message,
+ * then terminates the process with exit code 1.
+ * The message is properly escaped for JSON.
+ *
+ * @param message The error message to include in the output
+ */
+[[noreturn]] inline void error(const std::string& message) {
+    json r = {
+        {"status", "error"},
+        {"message", message}
+    };
+    write_result(r.dump());
+    std::exit(1);
+}
+
+/**
+ * Output a custom JSON result to the result file.
+ *
+ * @param data The JSON object to output
+ */
+inline void result(const json& data) {
+    write_result(data.dump());
+}
+
+/**
+ * Output a custom result with additional data fields.
+ *
+ * Creates a JSON object with status, message, and any additional fields.
+ *
+ * @param status The status string (e.g., "success", "error")
+ * @param message The message string
+ * @param data Additional data to merge into the result
+ */
+inline void result(const std::string& status, const std::string& message, const json& data = json::object()) {
+    json output = {
+        {"status", status},
+        {"message", message}
+    };
+    // Merge additional data
+    for (auto& [key, value] : data.items()) {
+        output[key] = value;
+    }
+    write_result(output.dump());
 }
 
 } // namespace the0
