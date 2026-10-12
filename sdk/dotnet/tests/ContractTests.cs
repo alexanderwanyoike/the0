@@ -20,7 +20,6 @@ public class ContractTests
     // says how the list is kept.
     private static readonly Dictionary<string, string> KnownFailures = new()
     {
-        ["bot-error"] = "Error() does not print its message on stderr",
         ["bot-error-with-data"] = "Error() ignores its data and does not print its message on stderr",
         ["bot-success-with-data"] = "Success() ignores its data",
         ["query-ephemeral-params"] = "a non-string value in QUERY_PARAMS drops every param, and the typed accessors are stubs",
