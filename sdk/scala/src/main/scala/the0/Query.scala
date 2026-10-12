@@ -1,6 +1,6 @@
 package the0
 
-import java.io.{BufferedInputStream, ByteArrayOutputStream, File, InputStream, PrintWriter}
+import java.io.{BufferedInputStream, ByteArrayOutputStream, File, InputStream, OutputStream}
 import java.net.{ServerSocket, Socket, URLDecoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
@@ -270,13 +270,13 @@ object Query {
   private[the0] def handleConnection(socket: Socket): Unit = {
     Using.resource(socket) { s =>
       val in = new BufferedInputStream(s.getInputStream)
-      val writer = new PrintWriter(s.getOutputStream, true)
+      val out = s.getOutputStream
 
       // Read request line
       readLine(in).foreach { requestLine =>
         val parts = requestLine.split(" ")
         if (parts.length < 2) {
-          sendResponse(writer, 400, """{"status": "error", "error": "Invalid request"}""")
+          sendResponse(out, 400, """{"status": "error", "error": "Invalid request"}""")
         } else {
           val body = readBody(in, readHeaders(in))
           val (path, queryParams) = parsePathAndQuery(parts(1))
@@ -285,7 +285,7 @@ object Query {
             case None => Request(path, queryParams)
           }
           val (status, responseBody) = respond(request)
-          sendResponse(writer, status, responseBody)
+          sendResponse(out, status, responseBody)
         }
       }
     }
@@ -337,7 +337,7 @@ object Query {
   /**
    * Send HTTP response.
    */
-  private def sendResponse(writer: PrintWriter, status: Int, body: String): Unit = {
+  private def sendResponse(out: OutputStream, status: Int, body: String): Unit = {
     val statusText = status match {
       case 200 => "OK"
       case 400 => "Bad Request"
@@ -346,12 +346,14 @@ object Query {
       case _ => "Unknown"
     }
 
-    writer.print(s"HTTP/1.1 $status $statusText\r\n")
-    writer.print("Content-Type: application/json\r\n")
-    writer.print(s"Content-Length: ${body.length}\r\n")
-    writer.print("\r\n")
-    writer.print(body)
-    writer.flush()
+    val bytes = body.getBytes(StandardCharsets.UTF_8)
+    val head = s"HTTP/1.1 $status $statusText\r\n" +
+      "Content-Type: application/json\r\n" +
+      s"Content-Length: ${bytes.length}\r\n" +
+      "\r\n"
+    out.write(head.getBytes(StandardCharsets.ISO_8859_1))
+    out.write(bytes)
+    out.flush()
   }
 
   /**
