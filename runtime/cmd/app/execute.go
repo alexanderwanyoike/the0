@@ -37,7 +37,6 @@ Environment Variables (required):
 Environment Variables (optional):
   QUERY_ENTRYPOINT - Query entrypoint for realtime bots
   BOT_TYPE         - "realtime" or "scheduled"
-  QUERY_PATH       - If set, run in ephemeral query mode
   QUERY_PARAMS     - JSON params for query mode
   IS_SCHEDULED     - "true" for scheduled bots
 

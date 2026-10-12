@@ -10,6 +10,7 @@
 package launch
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -72,6 +73,8 @@ func (s Storage) WithDefaults() Storage {
 
 // Settings is one launch of `runtime execute`.
 type Settings struct {
+	// Mode is named in the command, so a launch never leaves the runner to
+	// guess it from the environment.
 	Mode Mode
 	// SkipSync leaves saving a run's state and logs to a sync sidecar.
 	SkipSync bool
@@ -99,7 +102,7 @@ type Settings struct {
 	// done file for the sync.
 	IsScheduled bool
 
-	// QueryPath is the query a query launch answers.
+	// QueryPath is the query a query launch answers. The command carries it.
 	QueryPath string
 	// QueryParams are its params, as JSON object text.
 	QueryParams string
@@ -132,8 +135,11 @@ func (s Settings) WithDefaults() Settings {
 // Command is the command a container runs for s.
 func (s Settings) Command() []string {
 	command := []string{Binary, "execute"}
-	if s.Mode == Server {
-		command = append(command, "--query-server-only")
+	switch s.Mode {
+	case Query:
+		return append(command, "--query="+s.QueryPath)
+	case Server:
+		return append(command, "--query-server-only")
 	}
 	if s.SkipSync {
 		command = append(command, "--skip-sync")
@@ -142,6 +148,19 @@ func (s Settings) Command() []string {
 		command = append(command, "--skip-query-server")
 	}
 	return command
+}
+
+// QueryParams is how a query launch sends params: as JSON object text, which
+// is {} when there are none.
+func QueryParams(params map[string]interface{}) (string, error) {
+	if len(params) == 0 {
+		return "{}", nil
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal query params: %w", err)
+	}
+	return string(data), nil
 }
 
 // Var is one environment variable.
@@ -163,7 +182,7 @@ func (s Settings) SyncEnv() []Var {
 func (s Settings) env(include func(variable) bool) []Var {
 	var env []Var
 	for _, v := range variables {
-		if !include(v) {
+		if !include(v) || !v.in(s.Mode) {
 			continue
 		}
 		if value, ok := v.write(&s); ok {
@@ -194,19 +213,17 @@ func BindFlags(flagSet *pflag.FlagSet) *Flags {
 // Read is the launch a container was started with: the flags its command
 // set and the environment lookup finds.
 func Read(flags *Flags, lookup func(string) (string, bool)) (Settings, error) {
-	s := readEnv(lookup)
-	s.SkipSync = flags.skipSync
-	s.SkipQueryServer = flags.skipQueryServer
-	if flags.query != "" {
-		s.QueryPath = flags.query
-	}
+	var s Settings
 	switch {
 	case flags.queryServerOnly:
-		s.Mode = Server
-	case s.QueryPath != "":
-		s.Mode = Query
+		s = readEnv(lookup, Server)
+	case flags.query != "":
+		s = readEnv(lookup, Query)
+		s.QueryPath = flags.query
 	default:
-		s.Mode = Run
+		s = readEnv(lookup, Run)
+		s.SkipSync = flags.skipSync
+		s.SkipQueryServer = flags.skipQueryServer
 	}
 	s = s.WithDefaults()
 
@@ -224,17 +241,20 @@ func Read(flags *Flags, lookup func(string) (string, bool)) (Settings, error) {
 
 // ReadStorage is the storage in the environment lookup finds.
 func ReadStorage(lookup func(string) (string, bool)) Storage {
-	return readEnv(lookup).Storage.WithDefaults()
+	return readEnv(lookup, Run).Storage.WithDefaults()
 }
 
 // ReadNATSURL is the NATS URL in the environment lookup finds.
 func ReadNATSURL(lookup func(string) (string, bool)) string {
-	return readEnv(lookup).NATSURL
+	return readEnv(lookup, Run).NATSURL
 }
 
-func readEnv(lookup func(string) (string, bool)) Settings {
-	var s Settings
+func readEnv(lookup func(string) (string, bool), mode Mode) Settings {
+	s := Settings{Mode: mode}
 	for _, v := range variables {
+		if !v.in(mode) {
+			continue
+		}
 		if value, ok := lookup(v.name); ok {
 			v.read(&s, value)
 		}
@@ -246,9 +266,23 @@ func readEnv(lookup func(string) (string, bool)) Settings {
 type variable struct {
 	name string
 	// sync marks the settings the sync process reads too.
-	sync  bool
+	sync bool
+	// modes are the modes the setting is sent in; nil is every mode.
+	modes []Mode
 	write func(*Settings) (string, bool)
 	read  func(*Settings, string)
+}
+
+func (v variable) in(mode Mode) bool {
+	if v.modes == nil {
+		return true
+	}
+	for _, m := range v.modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
 }
 
 var variables = []variable{
@@ -257,10 +291,9 @@ var variables = []variable{
 	text("RUNTIME", func(s *Settings) *string { return &s.Runtime }),
 	text("ENTRYPOINT", func(s *Settings) *string { return &s.Entrypoint }),
 	text("BOT_CONFIG", func(s *Settings) *string { return &s.BotConfig }),
-	text("BOT_TYPE", func(s *Settings) *string { return &s.BotType }),
-	flag("IS_SCHEDULED", func(s *Settings) *bool { return &s.IsScheduled }),
+	ofRuns(text("BOT_TYPE", func(s *Settings) *string { return &s.BotType })),
+	ofRuns(flag("IS_SCHEDULED", func(s *Settings) *bool { return &s.IsScheduled })),
 	text("QUERY_ENTRYPOINT", func(s *Settings) *string { return &s.QueryEntrypoint }),
-	text("QUERY_PATH", func(s *Settings) *string { return &s.QueryPath }),
 	text("QUERY_PARAMS", func(s *Settings) *string { return &s.QueryParams }),
 	text("QUERY_RESULT_KEY", func(s *Settings) *string { return &s.QueryResultKey }),
 	text("CODE_PATH", func(s *Settings) *string { return &s.CodePath }),
@@ -275,7 +308,7 @@ var variables = []variable{
 	synced(text("MINIO_STATE_BUCKET", func(s *Settings) *string { return &s.Storage.StateBucket })),
 	synced(text("MINIO_LOGS_BUCKET", func(s *Settings) *string { return &s.Storage.LogsBucket })),
 	synced(text("MINIO_QUERY_RESULTS_BUCKET", func(s *Settings) *string { return &s.Storage.QueryResultsBucket })),
-	synced(text("NATS_URL", func(s *Settings) *string { return &s.NATSURL })),
+	ofRuns(synced(text("NATS_URL", func(s *Settings) *string { return &s.NATSURL }))),
 }
 
 // text is sent when it is set.
@@ -312,6 +345,13 @@ func boolean(name string, field func(*Settings) *bool) variable {
 
 func synced(v variable) variable {
 	v.sync = true
+	return v
+}
+
+// ofRuns is a bot run's setting. The query server, which serves beside a
+// realtime run, shares the run's settings; a query is no run and gets none.
+func ofRuns(v variable) variable {
+	v.modes = []Mode{Run, Server}
 	return v
 }
 

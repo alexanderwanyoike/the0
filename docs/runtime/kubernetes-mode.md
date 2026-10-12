@@ -128,7 +128,7 @@ For running pods with a query entrypoint, queries are proxied to the query sidec
 For scheduled bots, queries create ephemeral K8s Jobs:
 
 1. K8sQueryHandler receives request
-2. PodGenerator creates query pod spec with `QUERY_PATH` env var
+2. PodGenerator creates a query pod spec running `runtime execute --query=<path>`
 3. Job is created with TTL cleanup (5 minutes)
 4. Job pod runs, writes result to MinIO
 5. Handler downloads result from MinIO

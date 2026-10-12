@@ -247,21 +247,13 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 			botConfig = string(data)
 		}
 	}
-	botType := "scheduled"
-	if executable.IsLongRunning {
-		botType = "realtime"
-	}
-
 	settings := launch.Settings{
-		Mode:            launch.Run,
 		BotID:           executable.ID,
 		CodeFile:        executable.FilePath,
 		Runtime:         executable.Runtime,
 		Entrypoint:      executable.EntrypointFiles[executable.Entrypoint],
 		QueryEntrypoint: executable.EntrypointFiles["query"],
 		BotConfig:       botConfig,
-		BotType:         botType,
-		IsScheduled:     !executable.IsLongRunning,
 		StateDir:        launch.DefaultStateDir,
 		Storage: launch.Storage{
 			Endpoint:           config.GetContainerEndpoint(),
@@ -270,21 +262,27 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 			UseSSL:             config.MinIOUseSSL,
 			QueryResultsBucket: config.MinIOQueryResultsBucket,
 		},
-		NATSURL: config.NatsURL,
 	}
 
 	if executable.QueryPath != "" {
-		queryParams := "{}"
-		if executable.QueryParams != nil {
-			if data, err := json.Marshal(executable.QueryParams); err == nil {
-				queryParams = string(data)
-			}
+		queryParams, err := launch.QueryParams(executable.QueryParams)
+		if err != nil {
+			queryParams = "{}"
 		}
 		settings.Mode = launch.Query
 		settings.QueryPath = executable.QueryPath
 		settings.QueryParams = queryParams
 		settings.QueryResultKey = executable.QueryResultKey
+		return settings
 	}
+
+	settings.Mode = launch.Run
+	settings.BotType = "scheduled"
+	if executable.IsLongRunning {
+		settings.BotType = "realtime"
+	}
+	settings.IsScheduled = !executable.IsLongRunning
+	settings.NATSURL = config.NatsURL
 	return settings
 }
 

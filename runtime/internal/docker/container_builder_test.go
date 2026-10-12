@@ -335,7 +335,6 @@ func TestContainerBuilder_ChainedCalls(t *testing.T) {
 	assert.Contains(t, cfg.Env, "MINIO_ENDPOINT=minio:9000")
 	assert.Contains(t, cfg.Env, "MINIO_QUERY_RESULTS_BUCKET=query-results")
 	assert.Contains(t, cfg.Env, "BOT_ID=bot-1")
-	assert.Contains(t, cfg.Env, "QUERY_PATH=/query")
 	assert.Contains(t, cfg.Env, "QUERY_RESULT_KEY=bot-1/123/result.json")
 
 	// Verify host config
