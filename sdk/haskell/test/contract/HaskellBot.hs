@@ -1,9 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | A bot written the way Haskell bots were before params had JSON types:
--- its handler reads params with 'Query.getParam' and 'Query.reqParams'. It
--- runs through 'Query.run' in both query modes, to show such bots keep
--- working.
+-- | A bot with handlers only Haskell can write, run through 'Query.run' in
+-- both query modes:
+--
+-- * @/echo@ reads params the way Haskell bots did before params had JSON
+--   types, with 'Query.getParam' and 'Query.reqParams', to show such bots
+--   keep working.
+-- * @/lazy-error@ returns a result that fails only once it is evaluated, as
+--   pure code calling @error@, @head []@ or @fromJust Nothing@ does.
 module HaskellBot
     ( haskellBotArg
     , main
@@ -34,12 +38,19 @@ main queryResultPath = do
         , "cursor" .= Map.lookup "cursor" (Query.reqParams req)
         , "offset" .= Query.getParam req "offset" "0"
         ]
+    Query.handler "/lazy-error" $ \_ -> return $ object
+        ["price" .= (Prelude.error "price feed unavailable" :: Double)]
     Query.run
 
 spec :: Spec
-spec = describe "a bot reading text params" $ do
-    it "reads every param as text in an ephemeral query" $ check ephemeralCase
-    it "reads every param as text in the query server" $ check serverCase
+spec = do
+    describe "a bot reading text params" $ do
+        it "reads every param as text in an ephemeral query" $ check ephemeralCase
+        it "reads every param as text in the query server" $ check serverCase
+
+    describe "a handler whose result fails when evaluated" $ do
+        it "answers an error in an ephemeral query" $ check lazyErrorEphemeralCase
+        it "answers 500 in the query server, which keeps serving" $ check lazyErrorServerCase
 
 check :: Value -> Expectation
 check case_ = do
@@ -124,3 +135,38 @@ serverCase = object
 
 jsonText :: Value -> T.Text
 jsonText = TE.decodeUtf8 . BL.toStrict . Aeson.encode
+
+lazyError :: Value
+lazyError = object
+    [ "status" .= ("error" :: String)
+    , "error" .= object ["$match" .= ("contains" :: String), "value" .= ("price feed unavailable" :: String)]
+    ]
+
+lazyErrorEphemeralCase :: Value
+lazyErrorEphemeralCase = object
+    [ "env" .= env [("QUERY_PATH", "/lazy-error")]
+    , "expect" .= object ["exit_code" .= (1 :: Int), "query_result" .= lazyError]
+    ]
+
+lazyErrorServerCase :: Value
+lazyErrorServerCase = object
+    [ "env" .= env [("BOT_TYPE", "realtime"), ("THE0_QUERY_PORT", "{{port}}")]
+    , "requests" .=
+        [ object
+            [ "method" .= ("POST" :: String)
+            , "target" .= ("/lazy-error" :: String)
+            , "expect" .= object ["status" .= (500 :: Int), "body" .= lazyError]
+            ]
+        , object
+            [ "method" .= ("GET" :: String)
+            , "target" .= ("/health" :: String)
+            , "expect" .= object
+                [ "status" .= (200 :: Int)
+                , "body" .= object
+                    [ "status" .= ("ok" :: String)
+                    , "data" .= object ["status" .= ("ok" :: String)]
+                    ]
+                ]
+            ]
+        ]
+    ]
