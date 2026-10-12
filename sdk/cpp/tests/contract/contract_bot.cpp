@@ -10,6 +10,7 @@
 #include <the0/query.h>
 #include <the0/state.h>
 
+#include <csignal>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -123,6 +124,11 @@ json perform(const json& step, const Request* request, const Bound& bound) {
     }
     if (op == "raise") {
         throw std::runtime_error(text("message"));
+    }
+    if (op == "kill_self") {
+        // C++-only: end the way a killed container does, with no chance to
+        // flush anything still buffered.
+        std::raise(SIGKILL);
     }
     if (op == "raise_text") {
         // C++-only: fail by throwing the message as a C string, which is not
