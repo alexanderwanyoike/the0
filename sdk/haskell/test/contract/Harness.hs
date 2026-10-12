@@ -60,8 +60,6 @@ knownFailures =
     [ ("bot-error", "error() prints nothing on stderr")
     , ("bot-error-with-data", "error() takes a message only")
     , ("bot-success-with-data", "success() takes a message only")
-    , ("output-log", "log timestamps are epoch milliseconds")
-    , ("output-metric", "metric timestamps are epoch milliseconds")
     , ("query-ephemeral-params", "ephemeral params turn every value into a string")
     , ("query-ephemeral-read-only-before-key-check", "state throws its own ReadOnlyStateError, not the query module's")
     , ("query-ephemeral-state-read-only", "state throws its own ReadOnlyStateError, not the query module's")

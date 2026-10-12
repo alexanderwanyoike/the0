@@ -5,6 +5,12 @@ module InputSpec (spec) where
 import Test.Hspec
 import The0.Input
 import Data.Aeson (Value(..), object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
+import qualified Data.ByteString.Lazy as BL
+import Data.Char (isDigit)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import System.IO.Silently (capture_, hCapture)
 import System.IO (stderr)
 import Control.Exception (try, SomeException)
@@ -14,6 +20,25 @@ captureStderr :: IO () -> IO String
 captureStderr action = do
     (output, _) <- hCapture [stderr] action
     return output
+
+-- | The timestamp of a printed JSON line, when it is a string.
+timestampOf :: String -> Maybe String
+timestampOf line = case Aeson.decode (BL.fromStrict (TE.encodeUtf8 (T.pack line))) of
+    Just (Object o) | Just (String t) <- KM.lookup "timestamp" o -> Just (T.unpack t)
+    _ -> Nothing
+
+-- | @YYYY-MM-DDTHH:MM:SS@, optional fractional seconds, then @Z@.
+isIsoTimestamp :: String -> Bool
+isIsoTimestamp text =
+    and (zipWith fits "dddd-dd-ddTdd:dd:dd" text)
+        && fraction (drop 19 text)
+  where
+    fits 'd' c = isDigit c
+    fits want c = want == c
+    fraction "Z" = True
+    fraction ('.' : rest) = not (null digits) && all isDigit digits && rest == digits ++ "Z"
+      where digits = takeWhile isDigit rest
+    fraction _ = False
 
 spec :: Spec
 spec = do
@@ -26,11 +51,9 @@ spec = do
             output <- captureStderr $ The0.Input.log "Test message" Nothing Nothing
             output `shouldContain` "\"level\":\"info\""
 
-        it "includes timestamp" $ do
+        it "includes a UTC ISO 8601 timestamp" $ do
             output <- captureStderr $ The0.Input.log "Test message" Nothing Nothing
-            output `shouldContain` "\"timestamp\":"
-            -- Timestamp should be numeric (not a quoted string)
-            output `shouldNotContain` "\"timestamp\":\""
+            timestampOf output `shouldSatisfy` maybe False isIsoTimestamp
 
         it "supports warn level" $ do
             output <- captureStderr $ The0.Input.log "Warning message" Nothing (Just Warn)
@@ -101,11 +124,9 @@ spec = do
             output <- capture_ $ metric "price" (object ["symbol" .= ("BTC/USD" :: String)])
             output `shouldContain` "\"_metric\":\"price\""
 
-        it "includes timestamp" $ do
+        it "includes a UTC ISO 8601 timestamp" $ do
             output <- capture_ $ metric "heartbeat" (object [])
-            output `shouldContain` "\"timestamp\":"
-            -- Timestamp should be numeric (not a quoted string)
-            output `shouldNotContain` "\"timestamp\":\""
+            timestampOf output `shouldSatisfy` maybe False isIsoTimestamp
 
         it "merges data correctly" $ do
             output <- capture_ $ metric "trade" (object ["symbol" .= ("ETH" :: String), "amount" .= (1.5 :: Double)])
