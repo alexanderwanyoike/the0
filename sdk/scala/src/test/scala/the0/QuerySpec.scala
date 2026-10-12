@@ -216,7 +216,6 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
       "limit" -> JsonValue.Num(BigDecimal(5)),
       "ratio" -> JsonValue.Num(BigDecimal("0.25")),
       "live" -> JsonValue.Bool(true),
-      "cursor" -> JsonValue.Null,
       "symbols" -> JsonValue.Arr(Vector(JsonValue.Str("AAPL"), JsonValue.Str("MSFT"))),
       "filter" -> JsonValue.Obj(Map("side" -> JsonValue.Str("buy"), "min_qty" -> JsonValue.Num(BigDecimal(10))))
     ))
@@ -224,9 +223,17 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(req.get("limit") == Some("5"))
     assert(req.get("ratio") == Some("0.25"))
     assert(req.get("live") == Some("true"))
-    assert(req.get("cursor") == Some("null"))
     assert(req.get("symbols") == Some("""["AAPL","MSFT"]"""))
     assert(req.get("filter") == Some("""{"side":"buy","min_qty":10}"""))
+  }
+
+  test("the string accessors treat a null param as absent") {
+    val req = Query.Request.fromJson("/echo", Map("cursor" -> JsonValue.Null, "limit" -> JsonValue.Num(BigDecimal(5))))
+    assert(req.get("cursor").isEmpty)
+    assert(req.getOrElse("cursor", "start") == "start")
+    assert(!req.has("cursor"))
+    assert(req.params == Map("limit" -> "5"))
+    assert(req.getJson("cursor") == Some(JsonValue.Null))
   }
 
   test("Request.get escapes the strings inside a param's JSON text") {
