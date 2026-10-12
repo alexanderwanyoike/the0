@@ -140,8 +140,17 @@ lazy val root = (project in file("."))
     assembly / mainClass := Some("Main"),
     assembly / assemblyJarName := "sma-bot-assembly-1.0.0.jar",
 
+    // the0's SDK is published to GitHub Packages, which needs a GitHub token to read
+    resolvers += "GitHub Package Registry" at "https://maven.pkg.github.com/alexanderwanyoike/the0",
+    credentials += Credentials(
+      "GitHub Package Registry",
+      "maven.pkg.github.com",
+      "alexanderwanyoike",
+      sys.env.getOrElse("GITHUB_TOKEN", "")
+    ),
+
     libraryDependencies ++= Seq(
-      "the0" %% "the0-sdk" % "0.1.0",
+      "dev.the0" %% "the0-sdk" % "0.4.0",
       "io.circe" %% "circe-core" % "0.14.6",
       "io.circe" %% "circe-parser" % "0.14.6",
       "com.softwaremill.sttp.client3" %% "core" % "3.9.3"
