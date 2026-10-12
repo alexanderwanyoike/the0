@@ -129,6 +129,16 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     }
   }
 
+  test("params the parser cannot hold give no params instead of failing") {
+    val deep = "{\"a\":" + "[" * 100000 + "]" * 100000 + "}"
+    for (text <- Seq(deep, """{"limit":1e99999999999}""")) {
+      val params =
+        try Right(Query.paramsFromJson(text))
+        catch { case e: Throwable => Left(e) }
+      assert(params == Right(Map.empty), s"Should give no params for: ${text.take(40)}")
+    }
+  }
+
   // ============ handler error tests ============
 
   test("a handler that fails with an Error, not an Exception, answers 500 with its message") {
