@@ -190,18 +190,25 @@ public:
         if (it == values_.end()) {
             return std::nullopt;
         }
-        if (auto typed = detail::json_as<T>(*it)) {
-            return typed;
-        }
-        // Query string params are all strings, so ?limit=5 must still read
-        // as a number.
-        if (it->is_string()) {
-            json parsed = json::parse(it->get<std::string>(), nullptr, false);
-            if (!parsed.is_discarded()) {
-                return detail::json_as<T>(parsed);
+        if constexpr (std::is_same_v<T, std::string>) {
+            if (it->is_null()) {
+                return std::nullopt;
             }
+            return it->is_string() ? it->get<std::string>() : the0::detail::to_json_text(*it);
+        } else {
+            if (auto typed = detail::json_as<T>(*it)) {
+                return typed;
+            }
+            // Query string params are all strings, so ?limit=5 must still
+            // read as a number.
+            if (it->is_string()) {
+                json parsed = json::parse(it->get<std::string>(), nullptr, false);
+                if (!parsed.is_discarded()) {
+                    return detail::json_as<T>(parsed);
+                }
+            }
+            return std::nullopt;
         }
-        return std::nullopt;
     }
 
     /**
