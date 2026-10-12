@@ -1,0 +1,21 @@
+{
+  "description": "A client that connects and sends nothing does not hold up later queries: the query server gives up reading from it after a timeout.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/portfolio": [{"op": "return", "value": {}}]},
+  "requests": [
+    {"idle": true},
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ]
+}

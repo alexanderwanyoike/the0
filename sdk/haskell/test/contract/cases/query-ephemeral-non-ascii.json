@@ -1,0 +1,28 @@
+{
+  "description": "An ephemeral query keeps non-ASCII text in QUERY_PARAMS and BOT_CONFIG under a UTF-8 locale.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"name\":\"café ✓\"}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "{\"symbol\":\"café ✓\"}",
+    "LANG": "C.UTF-8"
+  },
+  "handlers": {
+    "/echo": [
+      {"op": "query.params", "as": "params"},
+      {"op": "query.config", "as": "config"},
+      {"op": "return", "value": {"params": {"$ref": "params"}, "config": {"$ref": "config"}}}
+    ]
+  },
+  "expect": {
+    "exit_code": 0,
+    "query_result": {
+      "status": "ok",
+      "data": {"params": {"symbol": "café ✓"}, "config": {"name": "café ✓"}}
+    }
+  }
+}

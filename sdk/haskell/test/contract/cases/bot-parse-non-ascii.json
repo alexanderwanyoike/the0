@@ -1,0 +1,17 @@
+{
+  "description": "parse() keeps non-ASCII text in BOT_CONFIG under a UTF-8 locale.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"name\":\"café ✓\"}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "LANG": "C.UTF-8"
+  },
+  "script": [{"op": "parse", "as": "input"}, {"op": "result", "value": {"$ref": "input"}}],
+  "expect": {
+    "exit_code": 0,
+    "result": {"bot_id": "contract-bot", "config": {"name": "café ✓"}}
+  }
+}

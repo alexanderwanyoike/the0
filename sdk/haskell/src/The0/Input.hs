@@ -24,7 +24,9 @@ module The0.Input
     ( parse
     , parseAsMap
     , success
+    , successWithData
     , The0.Input.error
+    , errorWithData
     , result
     , metric
     , The0.Input.log
@@ -34,7 +36,8 @@ module The0.Input
     , LogLevel(..)
     ) where
 
-import Data.Aeson (Value(..), decode, encode, object, (.=), Object, toJSON)
+import Data.Aeson (Value(..), decodeStrict, encode, object, (.=), ToJSON, toJSON)
+import Data.Aeson.Types (Pair)
 import Data.Aeson.Key (fromString)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -42,10 +45,12 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import System.Environment (lookupEnv)
+import The0.Internal.Env (lookupEnvBytes)
 import System.Exit (exitWith, ExitCode(ExitFailure))
-import System.IO (hPutStrLn, stderr)
-import Control.Exception (catch, SomeException)
-import Data.Time.Clock.POSIX (getPOSIXTime)
+import System.IO (hFlush, hPutStrLn, stderr, stdout)
+import Control.Exception (catch, evaluate, SomeException)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format (defaultTimeLocale, formatTime)
 
 -- | Parse bot configuration from environment variables.
 --
@@ -58,11 +63,11 @@ parse = do
     botId <- lookupEnv "BOT_ID" >>= \case
         Just bid -> pure bid
         Nothing -> Prelude.error "BOT_ID environment variable not set"
-    configStr <- lookupEnv "BOT_CONFIG" >>= \case
+    configBytes <- lookupEnvBytes "BOT_CONFIG" >>= \case
         Just cfg -> pure cfg
         Nothing -> Prelude.error "BOT_CONFIG environment variable not set"
     let config = fromMaybe (Prelude.error "Failed to parse BOT_CONFIG as JSON")
-                           (decode (BL.pack configStr))
+                           (decodeStrict configBytes)
     pure (botId, config)
 
 -- | Parse bot configuration with config as a Map.
@@ -76,11 +81,11 @@ parseAsMap = do
     botId <- lookupEnv "BOT_ID" >>= \case
         Just bid -> pure bid
         Nothing -> Prelude.error "BOT_ID environment variable not set"
-    configStr <- lookupEnv "BOT_CONFIG" >>= \case
+    configBytes <- lookupEnvBytes "BOT_CONFIG" >>= \case
         Just cfg -> pure cfg
         Nothing -> Prelude.error "BOT_CONFIG environment variable not set"
     let config = fromMaybe (Prelude.error "Failed to parse BOT_CONFIG as JSON")
-                           (decode (BL.pack configStr))
+                           (decodeStrict configBytes)
     pure (botId, config)
 
 -- | Get the path to the result file.
@@ -90,10 +95,13 @@ resultFilePath = do
     pure $ "/" ++ mountDir ++ "/result.json"
 
 -- | Write result to the result file.
-writeResult :: String -> IO ()
+writeResult :: BL.ByteString -> IO ()
 writeResult content = do
+    -- Encoded before the file is opened, so a value that fails to evaluate
+    -- fails the bot instead of leaving an empty result behind.
+    _ <- evaluate (BL.length content)
     path <- resultFilePath
-    writeFile path content `catch` handleError
+    BL.writeFile path content `catch` handleError
   where
     handleError :: SomeException -> IO ()
     handleError e = hPutStrLn stderr $ "RESULT_ERROR: Failed to write result file: " ++ show e
@@ -102,36 +110,39 @@ writeResult content = do
 --
 -- Writes a JSON object with status "success" and the provided message.
 success :: String -> IO ()
-success msg = do
-    let escaped = escapeJson msg
-    writeResult $ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
+success msg = result $ statusResult "success" msg []
 
 -- | Output an error result to the result file and exit with code 1.
 --
 -- Writes a JSON object with status "error" and the provided message,
--- then terminates the process with exit code 1.
+-- prints the message on stderr as an @error@ log line, then terminates the
+-- process with exit code 1.
 error :: String -> IO a
-error msg = do
-    let escaped = escapeJson msg
-    writeResult $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
+error msg = failWith msg []
+
+-- | Output a success result carrying @data@ to the result file.
+successWithData :: ToJSON a => String -> a -> IO ()
+successWithData msg payload = result $ statusResult "success" msg ["data" .= payload]
+
+-- | Output an error result carrying @data@ to the result file and exit with
+-- code 1, as 'The0.Input.error' does.
+errorWithData :: ToJSON a => String -> a -> IO b
+errorWithData msg payload = failWith msg ["data" .= payload]
+
+statusResult :: String -> String -> [Pair] -> Value
+statusResult status msg extra = object $ ["status" .= status, "message" .= msg] ++ extra
+
+failWith :: String -> [Pair] -> IO a
+failWith msg extra = do
+    result $ statusResult "error" msg extra
+    logError msg Nothing
     exitWith (ExitFailure 1)
 
 -- | Output a custom JSON result to the result file.
 --
 -- Serializes the provided 'Value' as JSON and writes it.
 result :: Value -> IO ()
-result val = writeResult $ BL.unpack (encode val)
-
--- | Escape special characters for JSON string output.
-escapeJson :: String -> String
-escapeJson = concatMap escapeChar
-  where
-    escapeChar '\\' = "\\\\"
-    escapeChar '"'  = "\\\""
-    escapeChar '\n' = "\\n"
-    escapeChar '\r' = "\\r"
-    escapeChar '\t' = "\\t"
-    escapeChar c    = [c]
+result val = writeResult (encode val)
 
 -- | Emit a metric to stdout with timestamp.
 --
@@ -146,6 +157,9 @@ metric metricType val = do
         withMeta = insert (fromString "_metric") (String $ T.pack metricType) $
                    insert (fromString "timestamp") (toJSON ts) baseObj
     BL.putStrLn $ encode (Object withMeta)
+    -- stdout is a pipe in a container, which GHC block-buffers, so a
+    -- realtime bot's metrics would otherwise reach its logs late.
+    hFlush stdout
 
 -- | Log levels supported by the platform.
 data LogLevel = Info | Warn | Error
@@ -186,6 +200,7 @@ log msg mData mLevel = do
                      insert (fromString "message") (String $ T.pack msg) $
                      insert (fromString "timestamp") (toJSON ts) baseObj
     BL.hPutStrLn stderr $ encode (Object withFields)
+    hFlush stderr
 
 -- | Convenience function: log an info message
 logInfo :: String -> Maybe Value -> IO ()
@@ -199,8 +214,7 @@ logWarn msg mData = The0.Input.log msg mData (Just Warn)
 logError :: String -> Maybe Value -> IO ()
 logError msg mData = The0.Input.log msg mData (Just Error)
 
--- | Get current timestamp as milliseconds since Unix epoch.
-getTimestamp :: IO Integer
-getTimestamp = do
-    t <- getPOSIXTime
-    return $ floor (t * 1000)
+-- | The current time as a UTC ISO 8601 string with milliseconds, such as
+-- @2026-10-12T09:30:00.123Z@.
+getTimestamp :: IO String
+getTimestamp = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%3QZ" <$> getCurrentTime

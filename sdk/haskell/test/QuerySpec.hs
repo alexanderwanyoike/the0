@@ -5,13 +5,13 @@ module QuerySpec (spec) where
 import Test.Hspec
 import The0.Query as Query
 import The0.State as State
-import Data.Aeson (Value(..), object, (.=), toJSON)
-import qualified Data.Aeson as Aeson
+import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.IO.Temp (withSystemTempDirectory)
-import Control.Exception (try, SomeException, catch)
+import Control.Exception (try, SomeException)
 
 -- | Helper to run tests with a temporary state directory and no query mode
 withTempEnv :: (FilePath -> IO a) -> IO a
@@ -53,6 +53,19 @@ withQueryMode tempDir action = do
     unsetEnv "QUERY_PATH"
     return result
 
+typedParams :: Map.Map String Value
+typedParams = Map.fromList
+    [ ("symbol", String "BTC/USD")
+    , ("limit", Number 5)
+    , ("live", Bool True)
+    , ("filter", object ["side" .= ("buy" :: String)])
+    , ("cursor", Null)
+    , ("count", String "7")
+    ]
+
+typedRequest :: Request
+typedRequest = RequestValues "/echo" typedParams
+
 spec :: Spec
 spec = do
     describe "The0.Query.isQueryMode" $ do
@@ -60,7 +73,7 @@ spec = do
             result <- Query.isQueryMode
             result `shouldBe` False
 
-        it "returns True when QUERY_PATH is set" $ withTempEnv $ \tempDir -> do
+        it "returns True when QUERY_PATH is set" $ withTempEnv $ \_ -> do
             setEnv "QUERY_PATH" "/portfolio"
             result <- Query.isQueryMode
             unsetEnv "QUERY_PATH"
@@ -109,6 +122,46 @@ spec = do
             let params = Map.fromList [("symbol", "BTC/USD")]
             let req = Request "/test" params
             reqParams req `shouldBe` params
+
+    describe "The0.Query typed params" $ do
+        it "getParamAs reads a param with its JSON type" $ do
+            Query.getParamAs typedRequest "limit" `shouldBe` Just (5 :: Int)
+            Query.getParamAs typedRequest "live" `shouldBe` Just True
+            Query.getParamAs typedRequest "filter" `shouldBe` Just (object ["side" .= ("buy" :: String)])
+
+        it "getParamAs gives Nothing for a missing param" $
+            (Query.getParamAs typedRequest "missing" :: Maybe Int) `shouldBe` Nothing
+
+        it "getParamAs gives Nothing for a param that is not the type asked for" $
+            (Query.getParamAs typedRequest "symbol" :: Maybe Int) `shouldBe` Nothing
+
+        it "getParamAs parses a string param as the type asked for, as a query string sends it" $ do
+            let fromQueryString = Request "/echo" (Map.fromList [("limit", "5"), ("live", "true")])
+            Query.getParamAs fromQueryString "limit" `shouldBe` Just (5 :: Int)
+            Query.getParamAs fromQueryString "live" `shouldBe` Just True
+            Query.getParamAs typedRequest "count" `shouldBe` Just (7 :: Int)
+
+        it "getParamAs asked for text gives a non-string param as its JSON text and a null as Nothing" $ do
+            Query.getParamAs typedRequest "limit" `shouldBe` Just ("5" :: String)
+            Query.getParamAs typedRequest "filter" `shouldBe` Just ("{\"side\":\"buy\"}" :: T.Text)
+            (Query.getParamAs typedRequest "cursor" :: Maybe String) `shouldBe` Nothing
+
+        it "reqValues keeps every param's JSON type" $
+            Query.reqValues typedRequest `shouldBe` typedParams
+
+        it "the string accessors give a non-string param as its JSON text" $ do
+            Query.getParam typedRequest "limit" "10" `shouldBe` "5"
+            Query.getParam typedRequest "filter" "" `shouldBe` "{\"side\":\"buy\"}"
+            Map.lookup "live" (reqParams typedRequest) `shouldBe` Just "true"
+
+        it "the string accessors keep non-ASCII text in a non-string param's JSON text" $ do
+            let req = RequestValues "/echo" (Map.fromList [("filter", object ["name" .= ("café ✓" :: String)])])
+            Query.getParam req "filter" "" `shouldBe` "{\"name\":\"café ✓\"}"
+            Query.getParamAs req "filter" `shouldBe` Just ("{\"name\":\"café ✓\"}" :: String)
+
+        it "the string accessors treat a null param as absent" $ do
+            Query.getParam typedRequest "cursor" "none" `shouldBe` "none"
+            Map.member "cursor" (reqParams typedRequest) `shouldBe` False
 
     describe "The0.Query.ReadOnlyStateError" $ do
         it "can be created with a message" $ withTempEnv $ \_ -> do

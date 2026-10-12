@@ -148,7 +148,7 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
-    tag: v1.1.0
+    tag: v1.18.0
     subdir: sdk/haskell
 ```
 
@@ -320,7 +320,7 @@ Reads `BOT_ID` and `BOT_CONFIG` from environment variables. Returns a tuple of t
 
 ### metric
 
-Emits a metric to the platform dashboard:
+Emits a metric to the platform dashboard. The SDK adds a UTC ISO 8601 `timestamp` to each one:
 
 ```haskell
 metric "price" $ object
@@ -331,20 +331,23 @@ metric "price" $ object
 
 ### success
 
-Reports successful execution:
+Reports successful execution. `successWithData` adds a `data` field to the result:
 
 ```haskell
 success "Analysis complete"
+successWithData "Analysis complete" (object ["processed" .= (100 :: Int)])
 ```
 
 ### The0.Input.error
 
-Reports failure and terminates with exit code 1:
+Reports failure: writes an error result, prints the message to the bot's logs as an error line, and terminates with exit code 1. `errorWithData` adds a `data` field to the result; the log line carries only the message:
 
 ```haskell
 if null prices
     then The0.Input.error "No price data available"
     else processData prices
+
+errorWithData "Order rejected" (object ["code" .= ("INSUFFICIENT_FUNDS" :: String)])
 ```
 
 ### result
@@ -357,6 +360,32 @@ result $ object
     , "trade_id" .= ("abc123" :: String)
     ]
 ```
+
+### Query handlers
+
+`Query.handler` registers a [query](./queries) handler, and `Query.run` answers queries. A handler reports an error by throwing any exception, for example with `fail`: the query answers `{"status": "error", "error": <message>}`.
+
+Params are JSON values. `Query.getParam req key default` returns a param as text, with a number, boolean, array or object as its JSON text and a `null` treated as missing. `Query.getParamAs req key` decodes it into the type you ask for, and `Query.reqValues req` returns every param with its JSON type. The typed accessor parses a string value too, so `Query.getParamAs req "limit" :: Maybe Int` reads `?limit=5` from a manual `curl` call as 5:
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+
+import qualified The0.Query as Query
+import qualified The0.State as State
+import Data.Aeson (Value, object, (.=))
+import Data.Maybe (fromMaybe)
+
+main :: IO ()
+main = do
+    Query.handler "/signals" $ \req -> do
+        let limit = fromMaybe 10 (Query.getParamAs req "limit") :: Int
+        signals <- fromMaybe [] <$> State.get "signals" :: IO [Value]
+        return $ object ["signals" .= take limit signals]
+
+    Query.run
+```
+
+During a query, `State.set`, `State.delete` and `State.clear` throw `ReadOnlyStateError`, which `The0.State` and `The0.Query` both export.
 
 ## Building
 
