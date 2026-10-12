@@ -166,6 +166,16 @@ json perform(const json& step, const Request* request, const Bound& bound) {
         }
         return args.contains("default") ? args["default"] : json(nullptr);
     }
+    if (op == "query.text_param") {
+        // C++-only: the string accessor that handlers written before params
+        // had JSON types use.
+        const Request& req = handler_request(request, op);
+        const std::string key = text("key");
+        if (args.contains("default")) {
+            return req.get(key, text("default"));
+        }
+        return req.has(key) ? json(req.get(key)) : json(nullptr);
+    }
     if (op == "query.config") {
         return the0::query::get_config();
     }

@@ -1,0 +1,45 @@
+{
+  "description": "A handler that reads params as text with req.get() keeps working: a string param as it is, any other as its JSON text, and a null as absent.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "{\"symbol\":\"BTC/USD\",\"limit\":5,\"filter\":{\"side\":\"buy\"},\"cursor\":null}"
+  },
+  "handlers": {
+    "/echo": [
+      {"op": "query.text_param", "key": "symbol", "as": "symbol"},
+      {"op": "query.text_param", "key": "limit", "default": "10", "as": "limit"},
+      {"op": "query.text_param", "key": "filter", "as": "filter"},
+      {"op": "query.text_param", "key": "cursor", "as": "cursor"},
+      {"op": "query.text_param", "key": "offset", "default": "0", "as": "offset"},
+      {
+        "op": "return",
+        "value": {
+          "symbol": {"$ref": "symbol"},
+          "limit": {"$ref": "limit"},
+          "filter": {"$ref": "filter"},
+          "cursor": {"$ref": "cursor"},
+          "offset": {"$ref": "offset"}
+        }
+      }
+    ]
+  },
+  "expect": {
+    "exit_code": 0,
+    "query_result": {
+      "status": "ok",
+      "data": {
+        "symbol": "BTC/USD",
+        "limit": "5",
+        "filter": "{\"side\":\"buy\"}",
+        "cursor": null,
+        "offset": "0"
+      }
+    }
+  }
+}
