@@ -238,7 +238,7 @@ object Query {
     val port = sys.env.get("THE0_QUERY_PORT").flatMap(p => Try(p.toInt).toOption).getOrElse(9476)
 
     val serverSocket = new ServerSocket(port)
-    System.err.println(s"""{"_log": "info", "message": "Query server started on port $port"}""")
+    Input.log(s"Query server started on port $port")
 
     while (true) {
       try {
