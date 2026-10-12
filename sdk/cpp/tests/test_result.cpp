@@ -69,6 +69,32 @@ TEST_SUITE("the0::success") {
         CHECK(json["message"] == "");
     }
 
+    TEST_CASE("writes no data key without data") {
+        ResultFileContext ctx;
+        the0::success("Bought 0.5 BTC");
+
+        auto json = the0::json::parse(ctx.read_result());
+        CHECK_FALSE(json.contains("data"));
+    }
+
+    TEST_CASE("puts data under the data key") {
+        ResultFileContext ctx;
+        the0::success("Bought 0.5 BTC", {{"order_id", "o-1"}, {"filled", 0.5}});
+
+        auto json = the0::json::parse(ctx.read_result());
+        CHECK(json["status"] == "success");
+        CHECK(json["message"] == "Bought 0.5 BTC");
+        CHECK(json["data"] == the0::json{{"order_id", "o-1"}, {"filled", 0.5}});
+    }
+
+    TEST_CASE("replaces bytes that are not UTF-8") {
+        ResultFileContext ctx;
+        REQUIRE_NOTHROW(the0::success("Bought at caf\xE9"));
+
+        auto json = the0::json::parse(ctx.read_result());
+        CHECK(json["message"] == "Bought at caf\xEF\xBF\xBD");
+    }
+
     TEST_CASE("handles very long messages") {
         ResultFileContext ctx;
         std::string long_message(10000, 'x');
@@ -79,6 +105,21 @@ TEST_SUITE("the0::success") {
 
         auto json = the0::json::parse(output);
         CHECK(json["message"].get<std::string>().size() == 10000);
+    }
+}
+
+TEST_SUITE("the0::write_result") {
+    TEST_CASE("reports a result it cannot write as an error log line") {
+        SetEnv mount("CODE_MOUNT_DIR", "the0-test-no-such-dir/bot");
+        CaptureStderr capture;
+        the0::success("done");
+
+        std::string output = capture.get();
+        REQUIRE(the0::json::accept(output));
+        auto json = the0::json::parse(output);
+        CHECK(json["level"] == "error");
+        CHECK(json["message"].is_string());
+        CHECK(json["timestamp"].is_string());
     }
 }
 

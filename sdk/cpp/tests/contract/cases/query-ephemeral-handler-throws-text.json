@@ -1,0 +1,20 @@
+{
+  "description": "A handler that throws something other than a std::exception, here a C string, still fails as a handler: the error carries the text and the query exits 1.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/fail"
+  },
+  "handlers": {"/fail": [{"op": "raise_text", "message": "price feed unavailable"}]},
+  "expect": {
+    "exit_code": 1,
+    "query_result": {
+      "status": "error",
+      "error": {"$match": "contains", "value": "price feed unavailable"}
+    }
+  }
+}

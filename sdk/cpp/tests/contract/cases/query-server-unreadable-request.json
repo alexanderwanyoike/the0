@@ -1,0 +1,48 @@
+{
+  "description": "A request whose body the server cannot read (a Content-Length that is not a number, a chunked body) is answered 400 with an error, the server prints an error log line for each, and it keeps serving.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "return", "value": "echo"}]},
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo",
+      "raw": "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: ten\r\n\r\n{}",
+      "expect": {
+        "status": 400,
+        "headers": {"Content-Type": "application/json"},
+        "body": {"status": "error", "error": {"$match": "string"}}
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/echo",
+      "raw": "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n",
+      "expect": {
+        "status": 400,
+        "headers": {"Content-Type": "application/json"},
+        "body": {"status": "error", "error": {"$match": "string"}}
+      }
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ],
+  "expect": {
+    "stdout": [],
+    "stderr": [
+      {"level": "info", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}},
+      {"level": "error", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}},
+      {"level": "error", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}}
+    ]
+  }
+}

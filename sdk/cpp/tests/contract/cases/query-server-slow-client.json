@@ -1,0 +1,25 @@
+{
+  "description": "The server waits up to 10 seconds for a request, as the Scala and Haskell query servers do, so a client that pauses for 7 seconds inside its request still gets its answer.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]},
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo",
+      "raw": [
+        "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n",
+        "Content-Length: 11\r\n\r\n{\"limit\":5}"
+      ],
+      "pause_ms": 7000,
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": 5}}}
+    }
+  ]
+}

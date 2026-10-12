@@ -7,7 +7,7 @@ order: 13
 
 # C++ Quick Start
 
-C++ delivers deterministic performance with direct memory control, making it the language of choice for latency-sensitive trading systems. There's no garbage collection, no runtime overhead—just compiled machine code executing your strategy. This guide walks through building an SMA crossover bot that monitors stock prices and emits trading signals.
+C++ delivers deterministic performance with direct memory control, making it the language of choice for latency-sensitive trading systems. There's no garbage collection and no runtime overhead, just compiled machine code executing your strategy. This guide walks through building an SMA crossover bot that monitors stock prices and emits trading signals.
 
 By the end of this guide, you'll have a working realtime bot that calculates Simple Moving Averages and detects crossover signals using live market data.
 
@@ -133,14 +133,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-# Fetch the0 SDK header
-FetchContent_Declare(the0_sdk
-    GIT_REPOSITORY https://github.com/alexanderwanyoike/the0.git
-    GIT_TAG main
-    SOURCE_SUBDIR sdk/cpp
-)
-FetchContent_MakeAvailable(the0_sdk)
-
 # Fetch nlohmann/json (required by the0 SDK)
 FetchContent_Declare(json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -148,23 +140,30 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(json)
 
+# Fetch the0 SDK headers
+FetchContent_Declare(the0
+    GIT_REPOSITORY https://github.com/alexanderwanyoike/the0.git
+    GIT_TAG v1.18.0
+    SOURCE_SUBDIR sdk/cpp
+)
+FetchContent_MakeAvailable(the0)
+
 # Find libcurl for HTTP requests
 find_package(CURL REQUIRED)
 
 # Create executable
 add_executable(sma_bot main.cpp)
-target_include_directories(sma_bot PRIVATE ${the0_sdk_SOURCE_DIR})
-target_link_libraries(sma_bot PRIVATE nlohmann_json::nlohmann_json CURL::libcurl)
+target_link_libraries(sma_bot PRIVATE the0 nlohmann_json::nlohmann_json CURL::libcurl)
 ```
 
-The SDK is header-only. CMake FetchContent downloads it automatically along with nlohmann/json for JSON parsing.
+The SDK is header-only and not on a package registry. CMake FetchContent downloads it from the the0 repository at a release tag, along with nlohmann/json for JSON parsing. The `v1.18.0` tag ships SDK 0.4, the version that follows the [bot contract](./bot-contract). Linking the `the0` target puts its headers on the include path as `<the0/...>`.
 
 ## Writing the Bot Logic
 
 Create `main.cpp`:
 
 ```cpp
-#include <the0.h>
+#include <the0/the0.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -347,7 +346,7 @@ int main() {
             state.prevLongSma = longSma;
 
         } catch (const std::exception& e) {
-            the0::log(std::string("Error: ") + e.what());
+            the0::log(e.what(), {}, the0::LogLevel::Error);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(updateIntervalMs));
@@ -379,7 +378,7 @@ int retries = config.value("retries", 3);
 
 ### the0::metric(type, data)
 
-Emits a metric to the platform dashboard:
+Emits a metric to the platform dashboard. The SDK adds a UTC ISO 8601 `timestamp` to each one:
 
 ```cpp
 the0::metric("price", {
@@ -394,31 +393,37 @@ the0::metric("signal", {
 });
 ```
 
-### the0::log(message)
+### the0::log(message, data, level)
 
-Writes a log message:
+Writes a log line with a UTC ISO 8601 `timestamp`. `data` adds fields to the line, and `level` is `the0::LogLevel::Info` (the default), `Warn` or `Error`:
 
 ```cpp
 the0::log("Processing " + symbol);
-the0::log("Price updated: " + std::to_string(price));
+the0::log("Order placed", {{"order_id", "o-1"}, {"qty", 2}});
+the0::log("Connection slow", {}, the0::LogLevel::Warn);
 ```
+
+Each metric and log line is flushed as it is printed, so a realtime bot's lines reach its logs straight away.
 
 ### the0::success(message)
 
-Reports successful execution for scheduled bots:
+Reports successful execution for scheduled bots. A second argument adds a `data` field to the result:
 
 ```cpp
 the0::success("Analysis complete");
+the0::success("Analysis complete", {{"processed", 100}});
 ```
 
 ### the0::error(message)
 
-Reports failure and terminates with exit code 1. This function does not return:
+Reports failure: writes an error result, prints the message to the bot's logs as an error line, and terminates with exit code 1. This function does not return. A second argument adds a `data` field to the result; the log line carries only the message:
 
 ```cpp
 if (prices.empty()) {
     the0::error("No price data available");
 }
+
+the0::error("Order rejected", {{"code", "INSUFFICIENT_FUNDS"}});
 ```
 
 ### the0::result(data)
@@ -432,6 +437,34 @@ the0::result({
     {"filled_amount", 0.5}
 });
 ```
+
+### Query handlers
+
+`the0::query::handler` registers a [query](./queries) handler, and `the0::query::run` answers queries. A handler reports an error by throwing: the query answers `{"status": "error", "error": <message>}`.
+
+Params are JSON values. `req.get(key, default)` returns a param as text, with a number, boolean, array or object as its JSON text and a `null` treated as missing. `req.get_as<T>(key)` reads it as `T` and returns a `std::optional`, and `req.values()` returns every param with its JSON type. The typed accessor parses a string value too, so `req.get_as("limit", 10)` reads `?limit=5` from a manual `curl` call as 5:
+
+```cpp
+#include <the0/query.h>
+
+using json = nlohmann::json;
+
+int main() {
+    the0::query::handler("/signals", [](const the0::query::Request& req) {
+        int limit = req.get_as("limit", 10);
+        auto signals = the0::state::get_or("signals", json::array());
+        if (signals.size() > static_cast<size_t>(limit)) {
+            signals.erase(signals.begin() + limit, signals.end());
+        }
+        return json{{"signals", signals}};
+    });
+
+    the0::query::run();
+    return 0;
+}
+```
+
+During a query, `the0::state::set`, `remove` and `clear` throw `the0::state::ReadOnlyStateError`. `the0::query::ReadOnlyStateError` names the same type.
 
 ## Building
 

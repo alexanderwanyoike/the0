@@ -1,0 +1,24 @@
+{
+  "description": "Metric and log lines leave the process as they are printed, so a bot that is killed right after printing them still shows them.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {"op": "log", "message": "Order placed"},
+    {"op": "metric", "type": "price", "data": {"symbol": "BTC/USD", "value": 45000.5}},
+    {"op": "kill_self"}
+  ],
+  "expect": {
+    "exit_code": {"$match": "nonzero"},
+    "stdout": [
+      {"_metric": "price", "symbol": "BTC/USD", "value": 45000.5, "timestamp": {"$match": "timestamp"}}
+    ],
+    "stderr": [{"level": "info", "message": "Order placed", "timestamp": {"$match": "timestamp"}}],
+    "result": null
+  }
+}

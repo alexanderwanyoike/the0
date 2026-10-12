@@ -1,0 +1,41 @@
+{
+  "description": "Non-ASCII text reaches the handler unchanged from a percent-encoded query string and from a JSON body, and a param read as text keeps it unescaped.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [
+      {"op": "query.params", "as": "params"},
+      {"op": "query.text_param", "key": "tags", "as": "tags_text"},
+      {"op": "return", "value": {"params": {"$ref": "params"}, "tags_text": {"$ref": "tags_text"}}}
+    ]
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/echo?venue=caf%C3%A9&market=%E6%97%A5%E6%9C%AC",
+      "expect": {
+        "status": 200,
+        "body": {"status": "ok", "data": {"params": {"venue": "café", "market": "日本"}, "tags_text": null}}
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/echo",
+      "body": {"venue": "café", "tags": ["₿", "日本"]},
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": {"params": {"venue": "café", "tags": ["₿", "日本"]}, "tags_text": "[\"₿\",\"日本\"]"}
+        }
+      }
+    }
+  ]
+}

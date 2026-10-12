@@ -1,0 +1,30 @@
+{
+  "description": "Metric and log lines stay one JSON line each when the metric type, the message or a data field holds control characters, quotes or backslashes.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {"op": "metric", "type": "price \"spot\"\n\\", "data": {"note": "tab\there"}},
+    {"op": "log", "message": "quote \" backslash \\ newline \n bell \u0007", "data": {"raw": "\r\n"}}
+  ],
+  "expect": {
+    "exit_code": 0,
+    "stdout": [
+      {"_metric": "price \"spot\"\n\\", "note": "tab\there", "timestamp": {"$match": "timestamp"}}
+    ],
+    "stderr": [
+      {
+        "level": "info",
+        "message": "quote \" backslash \\ newline \n bell \u0007",
+        "raw": "\r\n",
+        "timestamp": {"$match": "timestamp"}
+      }
+    ],
+    "result": null
+  }
+}

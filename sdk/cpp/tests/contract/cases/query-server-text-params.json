@@ -1,0 +1,68 @@
+{
+  "description": "A handler that reads params as text with req.get() reads the same text from a runtime query (the params as the body, and copied into the query string with the null left out) as from a manual one with only a query string.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [
+      {"op": "query.text_param", "key": "symbol", "as": "symbol"},
+      {"op": "query.text_param", "key": "limit", "default": "10", "as": "limit"},
+      {"op": "query.text_param", "key": "filter", "as": "filter"},
+      {"op": "query.text_param", "key": "cursor", "as": "cursor"},
+      {"op": "query.text_param", "key": "offset", "default": "0", "as": "offset"},
+      {
+        "op": "return",
+        "value": {
+          "symbol": {"$ref": "symbol"},
+          "limit": {"$ref": "limit"},
+          "filter": {"$ref": "filter"},
+          "cursor": {"$ref": "cursor"},
+          "offset": {"$ref": "offset"}
+        }
+      }
+    ]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo?filter=%7B%22side%22%3A%22buy%22%7D&limit=5&symbol=BTC%2FUSD",
+      "body": {"symbol": "BTC/USD", "limit": 5, "filter": {"side": "buy"}, "cursor": null},
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": {
+            "symbol": "BTC/USD",
+            "limit": "5",
+            "filter": "{\"side\":\"buy\"}",
+            "cursor": null,
+            "offset": "0"
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "target": "/echo?filter=%7B%22side%22%3A%22buy%22%7D&limit=5&symbol=BTC%2FUSD",
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": {
+            "symbol": "BTC/USD",
+            "limit": "5",
+            "filter": "{\"side\":\"buy\"}",
+            "cursor": null,
+            "offset": "0"
+          }
+        }
+      }
+    }
+  ]
+}

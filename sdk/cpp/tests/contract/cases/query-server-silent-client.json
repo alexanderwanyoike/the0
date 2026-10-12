@@ -1,0 +1,25 @@
+{
+  "description": "A client that connects and sends nothing, keeping the connection open, holds the server up only until its read timeout: the server closes that connection without an error line and answers the next request.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "return", "value": "echo"}]},
+  "requests": [
+    {"method": "GET", "target": "/echo", "raw": "", "hold": true},
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ],
+  "expect": {
+    "stdout": [],
+    "stderr": [{"level": "info", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}}]
+  }
+}

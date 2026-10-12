@@ -112,7 +112,7 @@ fn main() {
 **C++:**
 
 ```cpp
-#include <the0.h>
+#include <the0/the0.h>
 
 int main() {
     auto [botId, config] = the0::parse();

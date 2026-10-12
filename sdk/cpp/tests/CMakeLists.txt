@@ -43,3 +43,37 @@ target_link_libraries(the0_test PRIVATE nlohmann_json::nlohmann_json doctest::do
 # Enable CTest integration
 enable_testing()
 add_test(NAME the0_sdk_tests COMMAND the0_test)
+
+# The bot contract cases (sdk/contract/README.md). The harness runs the
+# contract bot once per case; ctest gets one test per case file.
+find_package(Threads REQUIRED)
+
+get_filename_component(THE0_CONTRACT_CASES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../contract/cases" REALPATH)
+set(THE0_CPP_CASES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/contract/cases")
+
+add_executable(the0_contract_bot contract/contract_bot.cpp)
+target_link_libraries(the0_contract_bot PRIVATE nlohmann_json::nlohmann_json)
+
+add_executable(the0_contract_test contract/harness.cpp)
+target_link_libraries(the0_contract_test PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
+target_compile_definitions(the0_contract_test PRIVATE
+    THE0_CONTRACT_BOT="$<TARGET_FILE:the0_contract_bot>"
+    THE0_CONTRACT_CASES_DIR="${THE0_CONTRACT_CASES_DIR}"
+    THE0_CPP_CASES_DIR="${THE0_CPP_CASES_DIR}"
+)
+add_dependencies(the0_contract_test the0_contract_bot)
+
+add_test(NAME contract/known-failures COMMAND the0_contract_test --check-known-failures)
+
+file(GLOB THE0_CONTRACT_CASES CONFIGURE_DEPENDS "${THE0_CONTRACT_CASES_DIR}/*.json")
+foreach(CASE_FILE ${THE0_CONTRACT_CASES})
+    get_filename_component(CASE_NAME ${CASE_FILE} NAME_WE)
+    add_test(NAME contract/${CASE_NAME} COMMAND the0_contract_test ${CASE_FILE})
+endforeach()
+
+# Cases in the contract's format that only this SDK runs.
+file(GLOB THE0_CPP_CASES CONFIGURE_DEPENDS "${THE0_CPP_CASES_DIR}/*.json")
+foreach(CASE_FILE ${THE0_CPP_CASES})
+    get_filename_component(CASE_NAME ${CASE_FILE} NAME_WE)
+    add_test(NAME contract-cpp/${CASE_NAME} COMMAND the0_contract_test ${CASE_FILE})
+endforeach()

@@ -28,7 +28,9 @@
 #include "state.h"  // Persistent state management
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -38,26 +40,18 @@ namespace the0 {
 
 using json = nlohmann::json;
 
-/**
- * Get the path to the result file.
- */
-inline std::string result_file_path() {
-    const char* mount = std::getenv("CODE_MOUNT_DIR");
-    return std::string("/") + (mount ? mount : "bot") + "/result.json";
-}
+namespace detail {
 
 /**
- * Write result to the result file.
+ * `value` as one line of JSON text. A std::string holds bytes, and dump()
+ * throws on bytes that are not UTF-8, so those become U+FFFD instead: what
+ * the SDK prints or writes is always JSON, and printing it never throws.
  */
-inline void write_result(const std::string& content) {
-    std::ofstream f(result_file_path());
-    if (f.is_open()) {
-        f << content;
-        f.close();
-    } else {
-        std::cerr << "RESULT_ERROR: Failed to write result file" << std::endl;
-    }
+inline std::string to_json_text(const json& value) {
+    return value.dump(-1, ' ', false, json::error_handler_t::replace);
 }
+
+} // namespace detail
 
 /**
  * Parse bot configuration from environment variables.
@@ -101,76 +95,37 @@ inline std::pair<std::string, std::string> parse_raw() {
 }
 
 /**
- * Output a success result to the result file.
- *
- * Writes a JSON object with status "success" and the provided message.
- * The message is properly escaped for JSON.
- *
- * @param message The success message to include in the output
- */
-inline void success(const std::string& message) {
-    json r = {
-        {"status", "success"},
-        {"message", message}
-    };
-    write_result(r.dump());
-}
-
-/**
- * Output an error result to the result file and exit with code 1.
- *
- * Writes a JSON object with status "error" and the provided message,
- * then terminates the process with exit code 1.
- * The message is properly escaped for JSON.
- *
- * @param message The error message to include in the output
- */
-[[noreturn]] inline void error(const std::string& message) {
-    json r = {
-        {"status", "error"},
-        {"message", message}
-    };
-    write_result(r.dump());
-    std::exit(1);
-}
-
-/**
- * Output a custom JSON result to the result file.
- *
- * @param data The JSON object to output
- */
-inline void result(const json& data) {
-    write_result(data.dump());
-}
-
-/**
- * Output a custom result with additional data fields.
- *
- * Creates a JSON object with status, message, and any additional fields.
- *
- * @param status The status string (e.g., "success", "error")
- * @param message The message string
- * @param data Additional data to merge into the result
- */
-inline void result(const std::string& status, const std::string& message, const json& data = json::object()) {
-    json output = {
-        {"status", status},
-        {"message", message}
-    };
-    // Merge additional data
-    for (auto& [key, value] : data.items()) {
-        output[key] = value;
-    }
-    write_result(output.dump());
-}
-
-/**
  * Get current timestamp as milliseconds since epoch.
  */
 inline int64_t current_timestamp() {
     auto now = std::chrono::system_clock::now();
     return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 }
+
+namespace detail {
+
+/**
+ * `time` in UTC as ISO 8601 with milliseconds, such as
+ * "2026-10-12T09:30:00.123Z": the timestamp of metric and log lines.
+ */
+inline std::string iso_timestamp(std::chrono::system_clock::time_point time) {
+    const auto seconds = std::chrono::floor<std::chrono::seconds>(time);
+    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(time - seconds).count();
+    const std::time_t since_epoch = std::chrono::system_clock::to_time_t(seconds);
+    std::tm utc{};
+#ifdef _WIN32
+    gmtime_s(&utc, &since_epoch);
+#else
+    gmtime_r(&since_epoch, &utc);
+#endif
+    char date_time[32];
+    std::strftime(date_time, sizeof(date_time), "%Y-%m-%dT%H:%M:%S", &utc);
+    char text[40];
+    std::snprintf(text, sizeof(text), "%s.%03dZ", date_time, static_cast<int>(millis));
+    return text;
+}
+
+} // namespace detail
 
 /**
  * Emit a metric to stdout.
@@ -182,8 +137,8 @@ inline int64_t current_timestamp() {
  */
 inline void metric(const std::string& metric_type, json data) {
     data["_metric"] = metric_type;
-    data["timestamp"] = current_timestamp();
-    std::cout << data.dump() << std::endl;
+    data["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
+    std::cout << detail::to_json_text(data) << std::endl;
 }
 
 /**
@@ -232,8 +187,137 @@ inline void log(const std::string& message, const json& data = json::object(), L
     json output = data;
     output["level"] = log_level_str(level);
     output["message"] = message;
-    output["timestamp"] = current_timestamp();
-    std::cerr << output.dump() << std::endl;
+    output["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
+    std::cerr << detail::to_json_text(output) << std::endl;
+}
+
+/**
+ * Get the path to the result file.
+ */
+inline std::string result_file_path() {
+    const char* mount = std::getenv("CODE_MOUNT_DIR");
+    return std::string("/") + (mount ? mount : "bot") + "/result.json";
+}
+
+/**
+ * Write result to the result file.
+ */
+inline void write_result(const std::string& content) {
+    const std::string path = result_file_path();
+    std::ofstream f(path);
+    if (f.is_open()) {
+        f << content;
+        f.close();
+    } else {
+        log("Failed to write the result file " + path, json::object(), LogLevel::Error);
+    }
+}
+
+namespace detail {
+
+[[noreturn]] inline void exit_with_error(const json& error_result) {
+    write_result(to_json_text(error_result));
+    log(error_result["message"].get<std::string>(), json::object(), LogLevel::Error);
+    std::exit(1);
+}
+
+} // namespace detail
+
+/**
+ * Output a success result to the result file.
+ *
+ * Writes a JSON object with status "success" and the provided message.
+ * The message is properly escaped for JSON.
+ *
+ * @param message The success message to include in the output
+ */
+inline void success(const std::string& message) {
+    json r = {
+        {"status", "success"},
+        {"message", message}
+    };
+    write_result(detail::to_json_text(r));
+}
+
+/**
+ * Output a success result with data to the result file.
+ *
+ * @param message The success message to include in the output
+ * @param data Any JSON value, written under the result's "data" key
+ */
+inline void success(const std::string& message, const json& data) {
+    json r = {
+        {"status", "success"},
+        {"message", message},
+        {"data", data}
+    };
+    write_result(detail::to_json_text(r));
+}
+
+/**
+ * Output an error result to the result file and exit with code 1.
+ *
+ * Writes a JSON object with status "error" and the provided message,
+ * prints the message on stderr as an error log line, as
+ * log(message, {}, LogLevel::Error) would, then terminates the process
+ * with exit code 1.
+ *
+ * @param message The error message to include in the output
+ */
+[[noreturn]] inline void error(const std::string& message) {
+    json r = {
+        {"status", "error"},
+        {"message", message}
+    };
+    detail::exit_with_error(r);
+}
+
+/**
+ * Output an error result with data to the result file and exit with code 1.
+ *
+ * As error(message), with `data` written under the result's "data" key.
+ * The log line carries the message only.
+ *
+ * @param message The error message to include in the output
+ * @param data Any JSON value, written under the result's "data" key
+ */
+[[noreturn]] inline void error(const std::string& message, const json& data) {
+    json r = {
+        {"status", "error"},
+        {"message", message},
+        {"data", data}
+    };
+    detail::exit_with_error(r);
+}
+
+/**
+ * Output a custom JSON result to the result file.
+ *
+ * @param data The JSON object to output
+ */
+inline void result(const json& data) {
+    write_result(detail::to_json_text(data));
+}
+
+/**
+ * Output a custom result with additional data fields.
+ *
+ * Creates a JSON object with status, message, and any additional fields.
+ *
+ * @param status The status string (e.g., "success", "error")
+ * @param message The message string
+ * @param data Additional data to merge into the result
+ */
+inline void result(const std::string& status, const std::string& message, const json& data = json::object()) {
+    json output = {
+        {"status", status},
+        {"message", message}
+    };
+    // Merge additional data
+    for (auto& [key, value] : data.items()) {
+        output[key] = value;
+    }
+    write_result(detail::to_json_text(output));
 }
 
 } // namespace the0

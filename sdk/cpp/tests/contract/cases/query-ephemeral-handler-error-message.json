@@ -1,0 +1,19 @@
+{
+  "description": "A failed handler's error is exactly its message, with no type name, stack or other text around it.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/fail"
+  },
+  "handlers": {"/fail": [{"op": "raise", "message": "price feed unavailable"}]},
+  "expect": {
+    "exit_code": 1,
+    "stdout": [],
+    "stderr": [],
+    "query_result": {"status": "error", "error": "price feed unavailable"}
+  }
+}

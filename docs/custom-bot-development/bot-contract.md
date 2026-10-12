@@ -15,7 +15,7 @@ Three parties take part:
 
 The cases in [`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) test these rules, and every SDK's test suite runs them. A change to the contract changes this page and the cases together.
 
-Some SDKs don't follow every rule yet. [Bringing the SDKs into line](#bringing-the-sdks-into-line) lists which ones.
+Every SDK follows every rule from its 0.4 release. [Bringing the SDKs into line](#bringing-the-sdks-into-line) lists the rules that older SDK versions may break.
 
 ## Processes
 
@@ -296,7 +296,7 @@ It reads the response body whatever the status code.
 | .NET | `sdk/dotnet/tests/ContractTests.cs` |
 | Scala | `sdk/scala/src/test/scala/the0/ContractSpec.scala` |
 | Haskell | `sdk/haskell/test/contract/Main.hs` |
-| C++ | not yet |
+| C++ | `sdk/cpp/tests/contract/harness.cpp` |
 
 The runtime runs the cases too, end to end, in `runtime/cmd/app/contract_e2e_test.go`. Python and Node.js bots built on the repo's own SDKs play each bot case and each ephemeral query case through `runtime execute` in the runtime image, with the wrappers and `BuildBotEnv`. The check adds what the runtime puts on top of a case's expectations:
 - the wrappers' result when the bot wrote none;
@@ -308,15 +308,12 @@ The runtime runs the cases too, end to end, in `runtime/cmd/app/contract_e2e_tes
 
 ## Bringing the SDKs into line
 
-These are the rules each SDK does not follow yet. The SDKs come into line one at a time, each running the cases first.
-
-| Rule | Not followed yet by |
-|---|---|
-| `success()` and `error()` accept optional `data` (these SDKs take a message only) | C++ |
-| `error()` prints its message on stderr | C++ |
-| Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | C++ |
-| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | C++ |
-| One read-only error type (these SDKs define a second, unused type in the query module) | C++ |
-| Ephemeral query params keep their JSON types | C++ (turns every value into a string) |
-| The query server reads the JSON body | C++ |
-| The query server's 404 includes `available` | C++ |
+Every SDK follows every rule on this page from its 0.4 release, and its test suite runs the cases. The SDKs came into line one at a time, each running the cases first. Before 0.4, some SDKs broke the rules below, so a bot built on an older SDK version may still break them:
+- `success()` and `error()` accept optional `data`. Some SDKs took a message only.
+- `error()` prints its message on stderr.
+- Metric and log timestamps are ISO 8601 strings. Some SDKs wrote epoch milliseconds as a number.
+- The query server's start-up line is a log line. Some SDKs printed `{"_log": "info", ...}` with no timestamp.
+- One read-only error type. Some SDKs defined a second, unused type in the query module.
+- Ephemeral query params keep their JSON types. Some SDKs turned every value into a string, or dropped params that were not strings.
+- The query server reads the JSON body.
+- The query server's 404 includes `available`.
