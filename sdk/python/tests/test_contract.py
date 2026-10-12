@@ -24,8 +24,8 @@ CONTRACT_BOT = os.path.join(TESTS_DIR, "contract_bot.py")
 RUN_TIMEOUT_SECONDS = 60
 SERVER_START_TIMEOUT_SECONDS = 30
 
-# Cases this SDK does not pass yet, each with the reason. A listed case that
-# starts passing fails the suite, so the list cannot go stale.
+# Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
+# says how the list is kept.
 KNOWN_FAILURES = {}
 
 TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
@@ -212,7 +212,6 @@ class Sandbox:
 
 
 def run_case(path):
-    """Runs one case and returns its mismatches plus the process output."""
     with open(path) as f:
         case = json.load(f)
     sandbox = Sandbox(case)
@@ -281,8 +280,6 @@ def run_server(case, sandbox, command):
 
 
 class TestContractCases(unittest.TestCase):
-    """One test per case file; the methods are added below."""
-
     def test_cases_are_found(self):
         self.assertTrue(case_paths(), f"no contract cases in {CASES_DIR}")
 
