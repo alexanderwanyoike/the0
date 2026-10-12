@@ -1,0 +1,28 @@
+{
+  "description": "A failed handler's error is exactly its message, with no type name, stack or other text around it, whether the handler threw a std::exception or a C string.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/fail": [{"op": "raise", "message": "price feed unavailable"}],
+    "/fail-text": [{"op": "raise_text", "message": "broker offline"}]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/fail",
+      "expect": {"status": 500, "body": {"status": "error", "error": "price feed unavailable"}}
+    },
+    {
+      "method": "POST",
+      "target": "/fail-text",
+      "expect": {"status": 500, "body": {"status": "error", "error": "broker offline"}}
+    }
+  ]
+}
