@@ -127,6 +127,19 @@ fn query_request_get_as_deserializes_a_param() {
 }
 
 #[test]
+fn query_request_get_as_string_gives_a_non_string_param_as_its_json_text() {
+    let req = typed_request();
+
+    assert_eq!(req.get_as::<String>("limit"), Some("5".to_string()));
+    assert_eq!(req.get_as::<String>("live"), Some("true".to_string()));
+    assert_eq!(
+        req.get_as::<String>("filter"),
+        Some(r#"{"side":"buy"}"#.to_string())
+    );
+    assert_eq!(req.get_as::<String>("cursor"), None);
+}
+
+#[test]
 fn query_request_get_as_is_none_for_a_missing_or_mistyped_param() {
     let req = typed_request();
 
