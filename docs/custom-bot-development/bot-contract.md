@@ -232,6 +232,18 @@ Params are JSON values. A param keeps its type (string, number, boolean, array, 
     - A typed accessor reads a string value that parses as the requested type. Query-string params are all strings, so `limit=50` from a manual call still reads as a number.
     - A typed accessor asked for a string returns a non-string value as its JSON text, as the string accessors do. A `null` param read as a string is absent, as in the first rule, never the text `"null"`.
 
+A typed accessor given a param of another type is a known language difference, not a rule of the contract. Such a param is present and not `null`, but is neither the requested type nor a string that parses as it, for example `"abc"` read as a number. Queries are read-only, so the stakes are low.
+
+| SDK | Typed accessor | A param of another type |
+|---|---|---|
+| Rust | `req.get_as::<T>(key)` | `None`, as for a missing param |
+| Haskell | `getParamAs req key` | `Nothing`, as for a missing param |
+| C++ | `req.get_as<T>(key)` | `std::nullopt`, as for a missing param; `get_as<T>(key, default)` gives the default |
+| .NET | `req.Get<T>(key, default)` | throws `JsonException` |
+| Scala | `req.getAs[T](key)` | throws `IllegalArgumentException` |
+
+A handler that needs to tell a mistyped param from a missing one checks the params themselves in Rust, Haskell and C++. In .NET and Scala it catches the exception, which otherwise fails the handler with the error response below.
+
 ### Responses
 
 Both modes answer with the same JSON object:
