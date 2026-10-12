@@ -52,7 +52,6 @@ namespace {
 // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 // says how the list is kept.
 const std::map<std::string, std::string> KNOWN_FAILURES = {
-    {"query-server-params-json-body", "the server reads params from the query string only"},
 };
 
 constexpr auto RUN_TIMEOUT = std::chrono::seconds(60);

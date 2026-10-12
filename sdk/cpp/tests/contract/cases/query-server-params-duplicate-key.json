@@ -1,0 +1,29 @@
+{
+  "description": "A JSON body with a duplicate key is not a usable JSON object, so the params come from the query string, and the server keeps serving.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo?limit=5",
+      "raw_body": "{\"limit\":1,\"limit\":2}",
+      "content_type": "application/json",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": "5"}}}
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ]
+}
