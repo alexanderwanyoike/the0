@@ -458,13 +458,14 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 	cmd := execute.BuildBotCommand(cfg.Runtime, entrypoint, cfg.CodePath)
 
 	// Set up output: both stdout and optionally log file
+	var stderr io.Writer = os.Stderr
 	if logFile != nil {
 		cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-		cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+		stderr = io.MultiWriter(os.Stderr, logFile)
 	} else {
 		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
 	}
+	cmd.Stderr = stderr
 	cmd.Env = execute.BuildBotEnv(cfg)
 
 	// A result.json shipped in the code, or left by an earlier container in the
@@ -508,7 +509,13 @@ func executeProcessWithDeps(ctx context.Context, cfg *execute.Config, entrypoint
 				exitCode = 1
 			}
 		}
-		return execute.RunExitCode(exitCode, resultPath)
+		outcome := execute.SettleRun(exitCode, resultPath)
+		if outcome.Failure != "" {
+			if _, err := stderr.Write(execute.RunFailedLine(outcome.Failure, time.Now())); err != nil {
+				logger.Info("Failed to write the run summary: %v", err)
+			}
+		}
+		return outcome.ExitCode
 	}
 }
 
