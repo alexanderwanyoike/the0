@@ -793,7 +793,8 @@ int check_known_failures() {
         return 1;
     }
     int unknown = 0;
-    for (const auto& [name, reason] : KNOWN_FAILURES) {
+    for (const auto& known_failure : KNOWN_FAILURES) {
+        const std::string& name = known_failure.first;
         bool real = std::any_of(cases.begin(), cases.end(),
                                 [&](const fs::path& path) { return path.stem() == name; });
         if (!real) {
