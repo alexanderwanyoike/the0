@@ -28,6 +28,8 @@ import * as http from "http";
 import * as path from "path";
 import { URL } from "url";
 
+export { ReadOnlyStateError } from "./state";
+
 /**
  * Request object passed to query handlers (Express-like).
  */
@@ -51,16 +53,6 @@ export interface QueryRequest {
 export type QueryHandler = (
   req: QueryRequest
 ) => unknown | Promise<unknown>;
-
-/**
- * Error thrown when attempting to modify state during query execution.
- */
-export class ReadOnlyStateError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ReadOnlyStateError";
-  }
-}
 
 // Handler registry - maps paths to handler functions
 const handlers = new Map<string, QueryHandler>();
