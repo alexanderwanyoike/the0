@@ -40,12 +40,15 @@ object JsonValue {
   private[the0] def parse(text: String): Option[JsonValue] =
     try {
       val parser = new Parser(text)
-      val value = parser.value()
+      val value = parser.value(0)
       parser.end()
       Some(value)
     } catch {
-      case _: NotJson => None
+      case _: NotJson | _: NumberFormatException => None
     }
+
+  // Deeper nesting fails to parse rather than overflowing the stack.
+  private val MaxDepth = 512
 
   private final class NotJson extends Exception(null, null, false, false)
 
@@ -57,11 +60,12 @@ object JsonValue {
       if (pos != text.length) fail()
     }
 
-    def value(): JsonValue = {
+    def value(depth: Int): JsonValue = {
+      if (depth > MaxDepth) fail()
       skipWhitespace()
       peek match {
-        case '{' => obj()
-        case '[' => arr()
+        case '{' => obj(depth)
+        case '[' => arr(depth)
         case '"' => Str(string())
         case 't' => literal("true", Bool(true))
         case 'f' => literal("false", Bool(false))
@@ -70,7 +74,7 @@ object JsonValue {
       }
     }
 
-    private def obj(): JsonValue = {
+    private def obj(depth: Int): JsonValue = {
       pos += 1
       val fields = scala.collection.immutable.VectorMap.newBuilder[String, JsonValue]
       skipWhitespace()
@@ -82,14 +86,14 @@ object JsonValue {
           val key = string()
           skipWhitespace()
           expect(':')
-          fields += key -> value()
+          fields += key -> value(depth + 1)
           more = separator('}')
         }
       }
       Obj(fields.result())
     }
 
-    private def arr(): JsonValue = {
+    private def arr(depth: Int): JsonValue = {
       pos += 1
       val items = Vector.newBuilder[JsonValue]
       skipWhitespace()
@@ -97,7 +101,7 @@ object JsonValue {
       else {
         var more = true
         while (more) {
-          items += value()
+          items += value(depth + 1)
           more = separator(']')
         }
       }
