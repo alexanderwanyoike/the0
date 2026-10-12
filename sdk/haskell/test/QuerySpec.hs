@@ -53,6 +53,19 @@ withQueryMode tempDir action = do
     unsetEnv "QUERY_PATH"
     return result
 
+typedParams :: Map.Map String Value
+typedParams = Map.fromList
+    [ ("symbol", String "BTC/USD")
+    , ("limit", Number 5)
+    , ("live", Bool True)
+    , ("filter", object ["side" .= ("buy" :: String)])
+    , ("cursor", Null)
+    , ("count", String "7")
+    ]
+
+typedRequest :: Request
+typedRequest = RequestValues "/echo" typedParams
+
 spec :: Spec
 spec = do
     describe "The0.Query.isQueryMode" $ do
@@ -109,6 +122,26 @@ spec = do
             let params = Map.fromList [("symbol", "BTC/USD")]
             let req = Request "/test" params
             reqParams req `shouldBe` params
+
+    describe "The0.Query typed params" $ do
+        it "getParamAs reads a param with its JSON type" $ do
+            Query.getParamAs typedRequest "limit" `shouldBe` Just (5 :: Int)
+            Query.getParamAs typedRequest "live" `shouldBe` Just True
+            Query.getParamAs typedRequest "filter" `shouldBe` Just (object ["side" .= ("buy" :: String)])
+
+        it "getParamAs gives Nothing for a missing param" $
+            (Query.getParamAs typedRequest "missing" :: Maybe Int) `shouldBe` Nothing
+
+        it "getParamAs gives Nothing for a param that is not the type asked for" $
+            (Query.getParamAs typedRequest "symbol" :: Maybe Int) `shouldBe` Nothing
+
+        it "reqValues keeps every param's JSON type" $
+            Query.reqValues typedRequest `shouldBe` typedParams
+
+        it "the string accessors give a non-string param as its JSON text" $ do
+            Query.getParam typedRequest "limit" "10" `shouldBe` "5"
+            Query.getParam typedRequest "filter" "" `shouldBe` "{\"side\":\"buy\"}"
+            Map.lookup "live" (reqParams typedRequest) `shouldBe` Just "true"
 
     describe "The0.Query.ReadOnlyStateError" $ do
         it "can be created with a message" $ withTempEnv $ \_ -> do
