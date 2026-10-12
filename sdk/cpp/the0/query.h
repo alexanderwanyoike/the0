@@ -128,6 +128,24 @@ inline json& get_config_internal() {
     return config;
 }
 
+namespace detail {
+
+inline std::string& query_result_path() {
+    static std::string path = "/query/result.json";
+    return path;
+}
+
+} // namespace detail
+
+/**
+ * Test-only: point ephemeral query results at `path` instead of
+ * /query/result.json, which tests cannot write. The runtime always reads
+ * /query/result.json, so bots must not call this.
+ */
+inline void set_result_path(const std::string& path) {
+    detail::query_result_path() = path;
+}
+
 /**
  * Register a query handler (Express-like).
  *
@@ -271,9 +289,11 @@ inline void run() {
  * This avoids stdout pollution from runtime logs mixing with query results.
  */
 inline void write_result(const json& result) {
-    const std::string result_path = "/query/result.json";
+    const std::filesystem::path result_path = detail::query_result_path();
     try {
-        std::filesystem::create_directories("/query");
+        if (result_path.has_parent_path()) {
+            std::filesystem::create_directories(result_path.parent_path());
+        }
         std::ofstream file(result_path);
         if (file.is_open()) {
             file << result.dump();
