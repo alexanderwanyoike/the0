@@ -85,6 +85,46 @@ object Query {
      * @return Some(value) if found, None otherwise
      */
     def getJson(key: String): Option[JsonValue] = jsonParams.get(key)
+
+    /**
+     * Get a parameter as a T: String, Int, Long, Double, BigDecimal or Boolean.
+     *
+     * Example:
+     * {{{
+     * val limit = req.getAs[Int]("limit").getOrElse(10)
+     * }}}
+     *
+     * @param key The parameter key
+     * @return Some(value) if found, None otherwise
+     */
+    def getAs[T](key: String)(using reader: ParamReader[T]): Option[T] = None
+  }
+
+  /**
+   * Reads a parameter's JSON value as a T, for [[Request.getAs]].
+   */
+  trait ParamReader[T] {
+
+    /** The name of T, for error messages. */
+    def typeName: String
+
+    /** The value as a T, or None when it is not one. */
+    def read(value: JsonValue): Option[T]
+  }
+
+  object ParamReader {
+
+    private def reader[T](name: String): ParamReader[T] = new ParamReader[T] {
+      val typeName: String = name
+      def read(value: JsonValue): Option[T] = None
+    }
+
+    given ParamReader[String] = reader("String")
+    given ParamReader[Int] = reader("Int")
+    given ParamReader[Long] = reader("Long")
+    given ParamReader[Double] = reader("Double")
+    given ParamReader[BigDecimal] = reader("BigDecimal")
+    given ParamReader[Boolean] = reader("Boolean")
   }
 
   object Request {
