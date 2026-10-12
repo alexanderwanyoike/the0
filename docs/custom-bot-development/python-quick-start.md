@@ -277,13 +277,13 @@ if not api_key:
 Create `requirements.txt` with any packages your bot needs:
 
 ```txt
-the0-sdk>=0.1.0
+the0-sdk>=0.4.0
 ```
 
 For a real trading bot, you might include exchange libraries:
 
 ```txt
-the0-sdk>=0.1.0
+the0-sdk>=0.4.0
 ccxt>=4.0.0
 pandas>=2.0.0
 numpy>=1.24.0

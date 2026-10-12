@@ -130,7 +130,7 @@ Create `package.json`:
     "start": "node main.js"
   },
   "dependencies": {
-    "the0-node": "^0.1.0",
+    "the0-node": "^0.4.0",
     "pino": "^9.0.0"
   },
   "devDependencies": {
