@@ -269,6 +269,26 @@ public class InputTests : IDisposable
         // No assertion - just checking it doesn't throw
     }
 
+    [Fact]
+    public void Success_WritesValidJsonForControlCharacters()
+    {
+        var codeDir = Directory.CreateTempSubdirectory("the0_input_test_");
+        try
+        {
+            Environment.SetEnvironmentVariable("CODE_MOUNT_DIR", codeDir.FullName.TrimStart('/'));
+            Input.Success("line one\nline two\ttabbed");
+
+            var text = File.ReadAllText(Path.Combine(codeDir.FullName, "result.json"));
+            JsonNode? result = null;
+            Assert.Null(Record.Exception(() => result = JsonNode.Parse(text)));
+            Assert.Equal("line one\nline two\ttabbed", result!["message"]!.GetValue<string>());
+        }
+        finally
+        {
+            codeDir.Delete(recursive: true);
+        }
+    }
+
     #endregion
 
     #region Result Tests
