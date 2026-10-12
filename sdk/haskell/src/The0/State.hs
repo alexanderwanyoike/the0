@@ -51,6 +51,7 @@ import System.FilePath ((</>), takeExtension, dropExtension)
 import System.IO.Error (isDoesNotExistError)
 
 -- | Error thrown when attempting to modify state during query execution.
+-- "The0.Query" exports this same type for handler authors.
 newtype ReadOnlyStateError = ReadOnlyStateError String
     deriving (Show, Eq)
 

@@ -24,20 +24,44 @@
 -- @
 -- import The0.Query as Query
 -- import The0.State as State
--- import Data.Aeson (object, (.=))
+-- import Data.Aeson (Value, object, (.=))
+-- import Data.Maybe (fromMaybe)
 --
 -- main :: IO ()
 -- main = do
---     Query.handler "/portfolio" $ \req -> do
---         positions <- State.get "positions"
---         return $ object ["positions" .= positions, "count" .= (5 :: Int)]
+--     Query.handler "/portfolio" $ \_ -> do
+--         positions <- State.get "positions" :: IO (Maybe Value)
+--         return $ object ["positions" .= positions]
 --
 --     Query.handler "/status" $ \req -> do
 --         let symbol = Query.getParam req "symbol" "BTC/USD"
---         return $ object ["symbol" .= symbol, "active" .= True]
+--             limit = fromMaybe 10 (Query.getParamAs req "limit") :: Int
+--         return $ object ["symbol" .= symbol, "limit" .= limit]
+--
+--     Query.handler "/trade" $ \req ->
+--         case Query.getParamAs req "id" :: Maybe Int of
+--             Nothing -> fail "id is required"
+--             Just tradeId -> return $ object ["id" .= tradeId]
 --
 --     Query.run
 -- @
+--
+-- = Params
+--
+-- Params are JSON values. An ephemeral query reads them from @QUERY_PARAMS@;
+-- the query server reads them from a JSON object body, or else from the URL
+-- query string, where every value is a string.
+--
+-- * 'getParam' and 'reqParams' give a param as text: a string as it is, any
+--   other value as its JSON text, and a @null@ as absent.
+-- * 'getParamAs' and 'reqValues' keep the JSON types.
+--
+-- = Errors
+--
+-- A handler reports an error by throwing any exception, with 'fail' or
+-- 'Control.Exception.throwIO', or from pure code that calls 'error'. The
+-- query answers @{"status": "error", "error": <message>}@: the query server
+-- responds 500 and keeps serving, and an ephemeral query exits 1.
 module The0.Query
     ( handler
     , run
@@ -100,6 +124,12 @@ reqValues (RequestValues _ values) = values
 
 -- | A param decoded into @a@, or 'Nothing' when it is missing or does not
 -- decode.
+--
+-- * A string param that does not decode as @a@ is parsed as JSON first, so
+--   @getParamAs req "limit" :: Maybe Int@ reads @"5"@ from a URL query string
+--   as 5.
+-- * Asked for text, it gives any other value as its JSON text, as
+--   'getParam' does, and a @null@ as 'Nothing'.
 getParamAs :: FromJSON a => Request -> String -> Maybe a
 getParamAs req key = Map.lookup key (reqValues req) >>= \value ->
     case (fromJSON value, value) of
@@ -118,7 +148,9 @@ textView (RequestValues path values) = (path, Map.mapMaybe text values)
     text Null = Nothing
     text value = Just (valueToString value)
 
--- | Get a parameter value from the request.
+-- | Get a parameter as text, or the default when it is missing: a string as
+-- it is, any other JSON value as its JSON text. A @null@ param counts as
+-- missing.
 getParam :: Request -> String -> String -> String
 getParam req key def = fromMaybe def $ Map.lookup key (reqParams req)
 
@@ -160,7 +192,8 @@ setResultPath = writeIORef resultPathRef
 handler :: String -> Handler -> IO ()
 handler path fn = modifyIORef' handlerRegistry (Map.insert path fn)
 
--- | Get current query parameters (alternative to request object).
+-- | Get current query parameters as text, as 'reqParams' gives them
+-- (alternative to request object).
 getParams :: IO (Map.Map String String)
 getParams = readIORef currentParamsRef
 
