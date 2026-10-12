@@ -25,7 +25,6 @@ const SERVER_START_TIMEOUT_MS = 30_000;
 const KNOWN_FAILURES: Record<string, string> = {
   "bot-error": "error() does not print its message",
   "bot-error-with-data": "error() does not print its message",
-  "query-server-unknown-path": "the query server's 404 has no available list",
   "query-server-start-line": "the query server's start line uses _log and has no timestamp",
 };
 
