@@ -32,7 +32,6 @@ const PORT_ATTEMPTS: usize = 3;
 // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 // says how the list is kept.
 const KNOWN_FAILURES: &[(&str, &str)] = &[
-    ("bot-error", "error() does not print its message"),
     ("bot-error-with-data", "error() takes no data"),
     ("bot-success-with-data", "success() takes no data"),
     ("query-ephemeral-handler-error", "a handler can only fail by panicking"),
