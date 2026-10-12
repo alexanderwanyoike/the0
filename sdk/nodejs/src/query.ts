@@ -182,13 +182,21 @@ export async function run(): Promise<void> {
 }
 
 /**
+ * Where an ephemeral query writes its result. A mutable property rather than
+ * a literal so the contract tests can point it into a sandbox; the runtime
+ * always reads /query/result.json.
+ * @internal
+ */
+export const _queryResultFile = { path: "/query/result.json" };
+
+/**
  * Write query result to /query/result.json file (matches Python SDK behavior).
  * This avoids stdout pollution from runtime logs mixing with query results.
  */
 function writeResult(result: unknown): void {
-  const resultPath = "/query/result.json";
+  const resultPath = _queryResultFile.path;
   try {
-    fs.mkdirSync("/query", { recursive: true });
+    fs.mkdirSync(path.dirname(resultPath), { recursive: true });
     fs.writeFileSync(resultPath, JSON.stringify(result));
   } catch (e) {
     console.error(`RESULT_ERROR: Failed to write result file: ${e}`);
