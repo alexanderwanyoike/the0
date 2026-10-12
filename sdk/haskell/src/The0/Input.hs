@@ -200,6 +200,7 @@ log msg mData mLevel = do
                      insert (fromString "message") (String $ T.pack msg) $
                      insert (fromString "timestamp") (toJSON ts) baseObj
     BL.hPutStrLn stderr $ encode (Object withFields)
+    hFlush stderr
 
 -- | Convenience function: log an info message
 logInfo :: String -> Maybe Value -> IO ()
