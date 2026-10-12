@@ -488,11 +488,19 @@ inline Answer answer(const Request& request) {
             {"available", available_paths()}
         }};
     }
+    // C++ lets a handler throw anything; whatever it throws must fail the
+    // query rather than reach std::terminate and end the process.
     try {
         json data = it->second(request);
         return {200, {{"status", "ok"}, {"data", data}}};
     } catch (const std::exception& e) {
         return {500, {{"status", "error"}, {"error", e.what()}}};
+    } catch (const char* text) {
+        return {500, {{"status", "error"}, {"error", text ? text : ""}}};
+    } catch (const std::string& text) {
+        return {500, {{"status", "error"}, {"error", text}}};
+    } catch (...) {
+        return {500, {{"status", "error"}, {"error", "The handler threw something that is not a std::exception"}}};
     }
 }
 
