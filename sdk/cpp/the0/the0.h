@@ -216,6 +216,17 @@ inline void success(const std::string& message) {
 }
 
 /**
+ * Output a success result with data to the result file.
+ *
+ * @param message The success message to include in the output
+ * @param data Any JSON value, written under the result's "data" key
+ */
+inline void success(const std::string& message, const json& data) {
+    (void)data;
+    success(message);
+}
+
+/**
  * Output an error result to the result file and exit with code 1.
  *
  * Writes a JSON object with status "error" and the provided message,
@@ -233,6 +244,20 @@ inline void success(const std::string& message) {
     write_result(r.dump());
     log(message, json::object(), LogLevel::Error);
     std::exit(1);
+}
+
+/**
+ * Output an error result with data to the result file and exit with code 1.
+ *
+ * As error(message), with `data` written under the result's "data" key.
+ * The log line carries the message only.
+ *
+ * @param message The error message to include in the output
+ * @param data Any JSON value, written under the result's "data" key
+ */
+[[noreturn]] inline void error(const std::string& message, const json& data) {
+    (void)data;
+    error(message);
 }
 
 /**
