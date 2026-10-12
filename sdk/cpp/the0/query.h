@@ -116,7 +116,11 @@ public:
     static Request from_values(const std::string& path, const json& values) {
         std::map<std::string, std::string> text;
         for (const auto& [key, value] : values.items()) {
-            text[key] = value.is_string() ? value.get<std::string>() : the0::detail::to_json_text(value);
+            // The runtime leaves a null param out of the query string, so
+            // string handlers have always seen it as absent.
+            if (!value.is_null()) {
+                text[key] = value.is_string() ? value.get<std::string>() : the0::detail::to_json_text(value);
+            }
         }
         return Request(path, text);
     }
