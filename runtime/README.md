@@ -31,6 +31,12 @@ The runtime binary is embedded in each base image. When a container starts, `run
 
 In Kubernetes mode, realtime bots use sidecars instead of subprocesses for better observability. Scheduled bots run as single containers with inline sync (same as Docker mode).
 
+### Launch settings
+
+Everything a launcher tells `runtime execute` (its command's flags and its environment) is a launch setting, and [`internal/launch`](internal/launch) owns them all: each setting's name, its default and what it means in each mode (a bot run, a query, or a query server). The Docker runner and the Kubernetes pod generator build a `launch.Settings` and send its `Command()` and `Env()`; `runtime execute` reads them back with `launch.Read`. `TestLaunch_RunnerReadsExactlyWhatEachBackendSends` checks that, for every mode on both backends, the runner reads exactly what was sent.
+
+To add a setting, add its field to `launch.Settings` and its variable to the table in `internal/launch/launch.go`; then set it wherever a backend builds its settings.
+
 ## Docker Mode
 
 In Docker mode, each container runs `runtime execute` which handles everything:
