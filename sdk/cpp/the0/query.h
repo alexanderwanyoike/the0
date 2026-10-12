@@ -306,48 +306,80 @@ inline void write_result(const json& result) {
     }
 }
 
+namespace detail {
+
+inline std::vector<std::string> available_paths() {
+    std::vector<std::string> paths;
+    for (const auto& kv : get_handlers()) {
+        paths.push_back(kv.first);
+    }
+    return paths;
+}
+
+/**
+ * What a query comes to in either mode: the status the query server answers
+ * with, and the body both modes send. An ephemeral query exits 0 only on 200.
+ */
+struct Answer {
+    int status;
+    json body;
+};
+
+/**
+ * Run the handler registered for the request's path, or report that there
+ * is none.
+ */
+inline Answer answer(const Request& request) {
+    get_current_params() = request.params;
+
+    auto& handlers = get_handlers();
+    auto it = handlers.find(request.path);
+    if (it == handlers.end()) {
+        return {404, {
+            {"status", "error"},
+            {"error", "No handler for path: " + request.path},
+            {"available", available_paths()}
+        }};
+    }
+    try {
+        json data = it->second(request);
+        return {200, {{"status", "ok"}, {"data", data}}};
+    } catch (const std::exception& e) {
+        return {500, {{"status", "error"}, {"error", e.what()}}};
+    }
+}
+
+inline const char* reason_phrase(int status) {
+    switch (status) {
+        case 200: return "OK";
+        case 404: return "Not Found";
+        default: return "Internal Server Error";
+    }
+}
+
+} // namespace detail
+
 /**
  * Execute single query and write result to /query/result.json.
  */
 inline void run_ephemeral(const std::string& query_path) {
     // Parse parameters from environment
+    std::map<std::string, std::string> params;
     const char* params_str = std::getenv("QUERY_PARAMS");
     if (params_str) {
         try {
             auto params_json = json::parse(params_str);
             for (auto& [key, value] : params_json.items()) {
-                get_current_params()[key] = value.is_string() ? value.get<std::string>() : value.dump();
+                params[key] = value.is_string() ? value.get<std::string>() : value.dump();
             }
         } catch (...) {
             // Invalid JSON, ignore
         }
     }
 
-    // Find and execute handler
-    auto& handlers = get_handlers();
-    auto it = handlers.find(query_path);
-    if (it == handlers.end()) {
-        std::vector<std::string> available;
-        for (const auto& kv : handlers) {
-            available.push_back(kv.first);
-        }
-        json result = {
-            {"status", "error"},
-            {"error", "No handler for path: " + query_path},
-            {"available", available}
-        };
-        write_result(result);
-        std::exit(1);
-    }
-
-    try {
-        Request req(query_path, get_current_params());
-        json data = it->second(req);
-        json result = {{"status", "ok"}, {"data", data}};
-        write_result(result);
-    } catch (const std::exception& e) {
-        json result = {{"status", "error"}, {"error", e.what()}};
-        write_result(result);
+    auto answer = detail::answer(Request(query_path, params));
+    write_result(answer.body);
+    if (answer.status != 200) {
         std::exit(1);
     }
 }
@@ -427,39 +459,12 @@ inline void run_server() {
             params = parse_query_string(path_with_query.substr(query_pos + 1));
         }
 
-        get_current_params() = params;
-
-        // Find and execute handler
-        std::string response_body;
-        std::string status;
-        auto& handlers = get_handlers();
-        auto it = handlers.find(path);
-        if (it == handlers.end()) {
-            std::vector<std::string> available;
-            for (const auto& kv : handlers) {
-                available.push_back(kv.first);
-            }
-            status = "404 Not Found";
-            response_body = the0::detail::to_json_text(json{
-                {"status", "error"},
-                {"error", "No handler for path: " + path},
-                {"available", available}
-            });
-        } else {
-            try {
-                Request req(path, params);
-                json data = it->second(req);
-                status = "200 OK";
-                response_body = the0::detail::to_json_text(json{{"status", "ok"}, {"data", data}});
-            } catch (const std::exception& e) {
-                status = "500 Internal Server Error";
-                response_body = the0::detail::to_json_text(json{{"status", "error"}, {"error", e.what()}});
-            }
-        }
+        auto answer = detail::answer(Request(path, params));
+        std::string response_body = the0::detail::to_json_text(answer.body);
 
         // Send response
         std::ostringstream response;
-        response << "HTTP/1.1 " << status << "\r\n";
+        response << "HTTP/1.1 " << answer.status << " " << detail::reason_phrase(answer.status) << "\r\n";
         response << "Content-Type: application/json\r\n";
         response << "Content-Length: " << response_body.size() << "\r\n";
         response << "\r\n";
