@@ -152,6 +152,15 @@ TEST_CASE("state read-only enforcement in query mode") {
         );
     }
 
+    SUBCASE("query::ReadOnlyStateError catches what state throws") {
+        SetEnv queryEnv("QUERY_PATH", "/test");
+
+        CHECK_THROWS_AS(
+            state::set("key", json{{"test", true}}),
+            query::ReadOnlyStateError
+        );
+    }
+
     SUBCASE("state::get allowed in query mode") {
         SetEnv queryEnv("QUERY_PATH", "/test");
 
