@@ -340,21 +340,13 @@ object Query {
   }
 
   /**
-   * Parse params sent as JSON object text (basic implementation).
-   * Handles {"key1": "value1", "key2": "value2"} format.
+   * Parse params sent as JSON object text. Any other text gives no params.
    */
-  private[the0] def paramsFromJson(json: String): Map[String, JsonValue] = {
-    if (!json.startsWith("{") || !json.endsWith("}")) return Map.empty
-
-    val content = json.substring(1, json.length - 1).trim
-    if (content.isEmpty) return Map.empty
-
-    // Simple regex-based parsing for basic cases
-    val pattern = """"([^"]+)"\s*:\s*"([^"]*)"""".r
-    pattern.findAllMatchIn(content).map { m =>
-      m.group(1) -> JsonValue.Str(m.group(2))
-    }.toMap
-  }
+  private[the0] def paramsFromJson(json: String): Map[String, JsonValue] =
+    JsonValue.parse(json) match {
+      case Some(JsonValue.Obj(fields)) => fields
+      case _ => Map.empty
+    }
 
   /**
    * Escape a string for JSON.
