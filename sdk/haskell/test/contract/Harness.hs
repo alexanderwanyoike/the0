@@ -57,8 +57,7 @@ portAttempts = 3
 -- says how the list is kept.
 knownFailures :: [(String, String)]
 knownFailures =
-    [ ("bot-error", "error() prints nothing on stderr")
-    , ("bot-error-with-data", "error() takes a message only")
+    [ ("bot-error-with-data", "error() takes a message only")
     , ("bot-success-with-data", "success() takes a message only")
     , ("query-ephemeral-params", "ephemeral params turn every value into a string")
     , ("query-ephemeral-read-only-before-key-check", "state throws its own ReadOnlyStateError, not the query module's")
