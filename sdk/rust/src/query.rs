@@ -346,27 +346,23 @@ fn handle_connection(mut stream: TcpStream) {
                 // Find and execute handler
                 let result = {
                     let handlers = HANDLERS.lock().unwrap();
-                    if let Some(ref h) = *handlers {
-                        if let Some(handler_fn) = h.get(path) {
-                            let req = QueryRequest::new(path, params);
-                            Some(Ok(handler_fn(&req)))
-                        } else {
-                            Some(Err(format!("No handler for path: {}", path)))
-                        }
-                    } else {
-                        Some(Err("No handlers registered".to_string()))
+                    let h = handlers.as_ref().expect("run() registers the built-ins");
+                    match h.get(path) {
+                        Some(handler_fn) => Ok(handler_fn(&QueryRequest::new(path, params))),
+                        None => Err(h.keys().cloned().collect::<Vec<String>>()),
                     }
                 };
 
                 match result {
-                    Some(Ok(data)) => ("200 OK", json!({"status": "ok", "data": data}).to_string()),
-                    Some(Err(err)) => (
+                    Ok(data) => ("200 OK", json!({"status": "ok", "data": data}).to_string()),
+                    Err(available) => (
                         "404 Not Found",
-                        json!({"status": "error", "error": err}).to_string(),
-                    ),
-                    None => (
-                        "500 Internal Server Error",
-                        json!({"status": "error", "error": "Internal error"}).to_string(),
+                        json!({
+                            "status": "error",
+                            "error": format!("No handler for path: {}", path),
+                            "available": available
+                        })
+                        .to_string(),
                     ),
                 }
             } else {
