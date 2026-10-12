@@ -2,6 +2,8 @@ package the0
 
 import scala.util.{Try, Success, Failure}
 import java.io.{File, PrintWriter}
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 /**
  * the0 SDK for Scala trading bots.
@@ -127,12 +129,12 @@ object Input {
    * @param json The metric data as a JSON string (will be merged with _metric and timestamp)
    */
   def metric(metricType: String, json: String): Unit = {
-    val timestamp = System.currentTimeMillis()
+    val timestamp = now()
     // Simple JSON merge - assumes json starts with {
     val merged = if (json.startsWith("{") && json.length > 1) {
-      s"""{"_metric":"$metricType","timestamp":$timestamp,${json.substring(1)}"""
+      s"""{"_metric":"$metricType","timestamp":"$timestamp",${json.substring(1)}"""
     } else {
-      s"""{"_metric":"$metricType","timestamp":$timestamp}"""
+      s"""{"_metric":"$metricType","timestamp":"$timestamp"}"""
     }
     println(merged)
   }
@@ -175,18 +177,23 @@ object Input {
    */
   def log(message: String, data: String = "{}", level: LogLevel = LogLevel.Info): Unit = {
     val escaped = escapeJson(message)
-    val timestamp = System.currentTimeMillis()
+    val timestamp = now()
 
     // Build output JSON, merging data fields
     val output = if (data.startsWith("{") && data.length > 2) {
       // Merge data fields with our fields
-      s"""{"level":"${level.value}","message":"$escaped","timestamp":$timestamp,${data.substring(1)}"""
+      s"""{"level":"${level.value}","message":"$escaped","timestamp":"$timestamp",${data.substring(1)}"""
     } else {
-      s"""{"level":"${level.value}","message":"$escaped","timestamp":$timestamp}"""
+      s"""{"level":"${level.value}","message":"$escaped","timestamp":"$timestamp"}"""
     }
 
     System.err.println(output)
   }
+
+  /**
+   * The current time as a UTC ISO 8601 string, such as 2026-10-12T09:30:00.123Z.
+   */
+  private def now(): String = Instant.now().truncatedTo(ChronoUnit.MILLIS).toString
 
   /**
    * Escape a string for use in JSON.
