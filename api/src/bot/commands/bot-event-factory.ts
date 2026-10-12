@@ -11,7 +11,11 @@ import { customBotNameOf } from "./custom-bot-name";
 
 type BotTopics = { CREATED: string; UPDATED: string; DELETED: string };
 
-/** Builds the events the runtime receives for each Bot command. */
+/**
+ * Builds the events the runtime receives for each Bot command. Custom bots
+ * are looked up in the Catalogue, not among the Actor's uploads, so a Bot
+ * running another user's Custom bot is announced like any other.
+ */
 @Injectable()
 export class BotEventFactory {
   constructor(
@@ -27,40 +31,27 @@ export class BotEventFactory {
     );
   }
 
-  /**
-   * The event carries the user's copy of the custom bot version, while
-   * customBotId stays the globally validated one.
-   */
-  async updated(
-    userId: string,
-    botId: string,
-    config: BotConfig,
-    newCustomBot: CustomBot,
-  ): Promise<BotEvent[]> {
-    const customBotResult = await this.customBotService.getUserSpecificVersion(
-      userId,
-      newCustomBot.name,
-      newCustomBot.version,
-    );
-    if (!customBotResult.success) return [];
-
-    const customBot = customBotResult.data;
+  updated(botId: string, config: BotConfig, customBot: CustomBot): BotEvent[] {
     return botEvents(
       botId,
       this.topicsFor(customBot)?.UPDATED,
-      customBotEventPayload(botId, config, newCustomBot.id, customBot),
+      customBotEventPayload(botId, config, customBot.id, customBot),
     );
   }
 
   /**
-   * Only a malformed type blocks deletion. A bot with no type/version, or
-   * whose custom bot version is gone, is still deleted, just without an
-   * event.
+   * Only a malformed type blocks deletion. When the Bot's Custom bot
+   * version cannot be found, the delete goes out on both the realtime and
+   * the scheduled subject: the runtime ignores a delete for a bot it does
+   * not hold, and must not keep running one it does.
    */
-  async deleted(userId: string, bot: Bot): Promise<Result<BotEvent[], string>> {
+  async deleted(bot: Bot): Promise<Result<BotEvent[], string>> {
+    const payload = { id: bot.id, config: bot.config };
     const configType = bot.config?.type;
     const configVersion = bot.config?.version;
-    if (!configType || !configVersion) return Ok([]);
+    if (!configType || !configVersion) {
+      return Ok(deletedOnEverySubject(bot.id, payload));
+    }
 
     const name = customBotNameOf(configType);
     if (!name.success) {
@@ -68,18 +59,17 @@ export class BotEventFactory {
       return Failure(name.error);
     }
 
-    const customBotResult = await this.customBotService.getUserSpecificVersion(
-      userId,
-      name.data,
-      configVersion,
-    );
-    if (!customBotResult.success) return Ok([]);
+    const customBotResult =
+      await this.customBotService.getGlobalSpecificVersion(
+        name.data,
+        configVersion,
+      );
+    if (!customBotResult.success) {
+      return Ok(deletedOnEverySubject(bot.id, payload));
+    }
 
     return Ok(
-      botEvents(bot.id, this.topicsFor(customBotResult.data)?.DELETED, {
-        id: bot.id,
-        config: bot.config,
-      }),
+      botEvents(bot.id, this.topicsFor(customBotResult.data)?.DELETED, payload),
     );
   }
 
@@ -103,6 +93,14 @@ const botEvents = (
   subject: string | undefined,
   payload: Record<string, unknown>,
 ): BotEvent[] => (subject ? [{ botId, subject, payload }] : []);
+
+const deletedOnEverySubject = (
+  botId: string,
+  payload: Record<string, unknown>,
+): BotEvent[] =>
+  [BOT_TOPICS.DELETED, SCHEDULED_BOT_TOPICS.DELETED].flatMap((subject) =>
+    botEvents(botId, subject, payload),
+  );
 
 // The runtime's bot-scheduler subscriber expects this flat structure.
 const customBotEventPayload = (

@@ -55,12 +55,7 @@ export class UpdateBotHandler
       currentVersion && newVersion
         ? !semver.eq(currentVersion, newVersion)
         : true;
-    const events = await this.events.updated(
-      actor.userId,
-      botId,
-      changes.config,
-      newCustomBot,
-    );
+    const events = this.events.updated(botId, changes.config, newCustomBot);
     const result = await this.bots.updateWithEvents(
       actor.userId,
       botId,

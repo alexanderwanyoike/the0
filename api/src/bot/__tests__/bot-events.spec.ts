@@ -5,6 +5,10 @@ import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 import { DeleteBot, DeployBot, UpdateBot } from "../commands/bot-commands";
 import { CommandBus } from "@/command-bus/command-bus";
 import { appendBotEvents } from "../bot-event-outbox";
+import { BotEventRelay } from "../bot-event-relay";
+import { usersTable } from "@/database/schema/users";
+import { botsTable } from "@/database/schema/bots";
+import { eq } from "drizzle-orm";
 import { NatsService } from "@/nats/nats.service";
 import { Failure, Ok, Result } from "@/common/result";
 import {
@@ -116,13 +120,14 @@ describe("bot events", () => {
     name: string,
     version: string,
     type: "scheduled" | "realtime",
+    uploader = TEST_OWNER_ID,
   ) {
     const config = customBotConfig(name, version, type);
     await db()
       .insert(customBotsTable)
       .values({
         id: `${name}-${version}`,
-        userId: TEST_OWNER_ID,
+        userId: uploader,
         name,
         version,
         config,
@@ -263,6 +268,82 @@ describe("bot events", () => {
         subject: "the0.bot-schedule.deleted",
         payload: { id, config: { ...config, hasFrontend: false } },
       });
+    });
+  });
+
+  describe("announce a Bot's changes whoever uploaded its Custom bot", () => {
+    it("publishes the deploy, update and delete of a Bot running another user's Custom bot", async () => {
+      await db().insert(usersTable).values({
+        id: "uploader",
+        username: "uploader",
+        email: "uploader@example.com",
+        passwordHash: "hash",
+      });
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled", "uploader");
+      const next = await uploadCustomBot(
+        "sma-bot",
+        "1.1.0",
+        "scheduled",
+        "uploader",
+      );
+      const relay = moduleRef.get(BotEventRelay);
+      const config = scheduledConfig("1.1.0", "MSFT");
+
+      const id = await deploy(scheduledConfig("1.0.0"));
+      await relay.settled();
+      const updated = await commands.execute(
+        new UpdateBot(actor, id, { config }),
+      );
+      await relay.settled();
+      const removed = await commands.execute(new DeleteBot(actor, id));
+      await relay.settled();
+
+      expect(updated.success).toBe(true);
+      expect(removed.success).toBe(true);
+      expect(
+        nats.published.map(({ subject, payload }) => [subject, payload.id]),
+      ).toEqual([
+        ["the0.bot-schedule.created", id],
+        ["the0.bot-schedule.updated", id],
+        ["the0.bot-schedule.deleted", id],
+      ]);
+      expect(nats.published[1].payload).toEqual({
+        id,
+        config: { ...config, customBotId: next.id },
+        custom: next.custom,
+      });
+    });
+  });
+
+  describe("announce a delete even when the Bot's Custom bot version is gone", () => {
+    it("publishes the delete on both subjects, so the runtime stops the bot whichever kind it is", async () => {
+      await uploadCustomBot("sma-bot", "1.0.0", "scheduled");
+      const relay = moduleRef.get(BotEventRelay);
+      const id = await deploy(scheduledConfig("1.0.0"));
+      await relay.settled();
+      const missingVersion = {
+        ...scheduledConfig("9.9.9"),
+        hasFrontend: false,
+      };
+      await db()
+        .update(botsTable)
+        .set({ config: missingVersion })
+        .where(eq(botsTable.id, id));
+
+      const removed = await commands.execute(new DeleteBot(actor, id));
+      await relay.settled();
+
+      expect(removed.success).toBe(true);
+      expect(nats.published.slice(1)).toEqual([
+        {
+          subject: "the0.bot.deleted",
+          payload: { id, config: missingVersion },
+        },
+        {
+          subject: "the0.bot-schedule.deleted",
+          payload: { id, config: missingVersion },
+        },
+      ]);
     });
   });
 
