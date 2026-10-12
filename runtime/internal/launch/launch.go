@@ -168,7 +168,7 @@ func (s Settings) SyncEnv() []Var {
 func (s Settings) env(include func(variable) bool) []Var {
 	var env []Var
 	for _, v := range variables {
-		if !include(v) {
+		if !include(v) || !v.in(s.Mode) {
 			continue
 		}
 		if value, ok := v.write(&s); ok {
@@ -199,15 +199,15 @@ func BindFlags(flagSet *pflag.FlagSet) *Flags {
 // Read is the launch a container was started with: the flags its command
 // set and the environment lookup finds.
 func Read(flags *Flags, lookup func(string) (string, bool)) (Settings, error) {
-	s := readEnv(lookup)
+	var s Settings
 	switch {
 	case flags.queryServerOnly:
-		s.Mode = Server
+		s = readEnv(lookup, Server)
 	case flags.query != "":
-		s.Mode = Query
+		s = readEnv(lookup, Query)
 		s.QueryPath = flags.query
 	default:
-		s.Mode = Run
+		s = readEnv(lookup, Run)
 		s.SkipSync = flags.skipSync
 		s.SkipQueryServer = flags.skipQueryServer
 	}
@@ -227,17 +227,20 @@ func Read(flags *Flags, lookup func(string) (string, bool)) (Settings, error) {
 
 // ReadStorage is the storage in the environment lookup finds.
 func ReadStorage(lookup func(string) (string, bool)) Storage {
-	return readEnv(lookup).Storage.WithDefaults()
+	return readEnv(lookup, Run).Storage.WithDefaults()
 }
 
 // ReadNATSURL is the NATS URL in the environment lookup finds.
 func ReadNATSURL(lookup func(string) (string, bool)) string {
-	return readEnv(lookup).NATSURL
+	return readEnv(lookup, Run).NATSURL
 }
 
-func readEnv(lookup func(string) (string, bool)) Settings {
-	var s Settings
+func readEnv(lookup func(string) (string, bool), mode Mode) Settings {
+	s := Settings{Mode: mode}
 	for _, v := range variables {
+		if !v.in(mode) {
+			continue
+		}
 		if value, ok := lookup(v.name); ok {
 			v.read(&s, value)
 		}
@@ -249,9 +252,23 @@ func readEnv(lookup func(string) (string, bool)) Settings {
 type variable struct {
 	name string
 	// sync marks the settings the sync process reads too.
-	sync  bool
+	sync bool
+	// modes are the modes the setting is sent in; nil is every mode.
+	modes []Mode
 	write func(*Settings) (string, bool)
 	read  func(*Settings, string)
+}
+
+func (v variable) in(mode Mode) bool {
+	if v.modes == nil {
+		return true
+	}
+	for _, m := range v.modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
 }
 
 var variables = []variable{
@@ -260,8 +277,8 @@ var variables = []variable{
 	text("RUNTIME", func(s *Settings) *string { return &s.Runtime }),
 	text("ENTRYPOINT", func(s *Settings) *string { return &s.Entrypoint }),
 	text("BOT_CONFIG", func(s *Settings) *string { return &s.BotConfig }),
-	text("BOT_TYPE", func(s *Settings) *string { return &s.BotType }),
-	flag("IS_SCHEDULED", func(s *Settings) *bool { return &s.IsScheduled }),
+	ofRuns(text("BOT_TYPE", func(s *Settings) *string { return &s.BotType })),
+	ofRuns(flag("IS_SCHEDULED", func(s *Settings) *bool { return &s.IsScheduled })),
 	text("QUERY_ENTRYPOINT", func(s *Settings) *string { return &s.QueryEntrypoint }),
 	text("QUERY_PARAMS", func(s *Settings) *string { return &s.QueryParams }),
 	text("QUERY_RESULT_KEY", func(s *Settings) *string { return &s.QueryResultKey }),
@@ -277,7 +294,7 @@ var variables = []variable{
 	synced(text("MINIO_STATE_BUCKET", func(s *Settings) *string { return &s.Storage.StateBucket })),
 	synced(text("MINIO_LOGS_BUCKET", func(s *Settings) *string { return &s.Storage.LogsBucket })),
 	synced(text("MINIO_QUERY_RESULTS_BUCKET", func(s *Settings) *string { return &s.Storage.QueryResultsBucket })),
-	synced(text("NATS_URL", func(s *Settings) *string { return &s.NATSURL })),
+	ofRuns(synced(text("NATS_URL", func(s *Settings) *string { return &s.NATSURL }))),
 }
 
 // text is sent when it is set.
@@ -314,6 +331,13 @@ func boolean(name string, field func(*Settings) *bool) variable {
 
 func synced(v variable) variable {
 	v.sync = true
+	return v
+}
+
+// ofRuns is a bot run's setting. The query server, which serves beside a
+// realtime run, shares the run's settings; a query is no run and gets none.
+func ofRuns(v variable) variable {
+	v.modes = []Mode{Run, Server}
 	return v
 }
 
