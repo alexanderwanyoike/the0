@@ -139,7 +139,7 @@ path = "src/main.rs"
 
 [dependencies]
 # the0 SDK for configuration and metrics
-the0-sdk = "0.1"
+the0-sdk = "0.4"
 
 # JSON handling
 serde = { version = "1.0", features = ["derive"] }

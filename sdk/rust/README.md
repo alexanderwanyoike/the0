@@ -35,7 +35,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-the0-sdk = "0.1"
+the0-sdk = "0.4"
 serde_json = "1.0"  # Required for config access
 ```
 
