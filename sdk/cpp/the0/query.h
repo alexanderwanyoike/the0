@@ -78,7 +78,7 @@ public:
     std::map<std::string, std::string> params;
 
     Request(const std::string& p, const std::map<std::string, std::string>& prms)
-        : path(p), params(prms) {}
+        : path(p), params(prms), values_(prms) {}
 
     /**
      * Get a parameter value.
@@ -114,15 +114,20 @@ public:
      * @param values A JSON object of params
      */
     static Request from_values(const std::string& path, const json& values) {
-        std::map<std::string, std::string> text;
+        Request request(path, {});
+        if (!values.is_object()) {
+            return request;
+        }
         for (const auto& [key, value] : values.items()) {
             // The runtime leaves a null param out of the query string, so
             // string handlers have always seen it as absent.
             if (!value.is_null()) {
-                text[key] = value.is_string() ? value.get<std::string>() : the0::detail::to_json_text(value);
+                request.params[key] =
+                    value.is_string() ? value.get<std::string>() : the0::detail::to_json_text(value);
             }
         }
-        return Request(path, text);
+        request.values_ = values;
+        return request;
     }
 
     /**
