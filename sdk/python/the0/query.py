@@ -31,6 +31,8 @@ from typing import Any, Callable, Dict, Optional, List
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
+from .state import ReadOnlyStateError
+
 __version__ = "1.0.0"
 __all__ = ["handler", "run", "get_params", "get_config", "QueryRequest", "ReadOnlyStateError"]
 
@@ -42,12 +44,6 @@ _current_params: Dict[str, Any] = {}
 
 # Bot config loaded from environment
 _config: Dict[str, Any] = {}
-
-
-class ReadOnlyStateError(Exception):
-    """Raised when attempting to modify state during query execution."""
-
-    pass
 
 
 class QueryRequest:
