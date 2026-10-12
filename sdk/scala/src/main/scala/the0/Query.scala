@@ -1,7 +1,7 @@
 package the0
 
 import java.io.{BufferedInputStream, ByteArrayOutputStream, File, InputStream, OutputStream}
-import java.net.{ServerSocket, Socket, URLDecoder}
+import java.net.{ServerSocket, Socket, SocketTimeoutException, URLDecoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import scala.collection.mutable
@@ -184,7 +184,7 @@ object Query {
   private[the0] var queryResultPath: String = "/query/result.json"
 
   // How long the query server waits on a read from a connection, in milliseconds; 0 waits forever.
-  private[the0] var readTimeoutMillis: Int = 0
+  private[the0] var readTimeoutMillis: Int = 10000
 
   /**
    * Register a query handler (Express-like).
@@ -401,7 +401,11 @@ object Query {
    */
   private def readBody(in: InputStream, headers: Map[String, String]): String = {
     val length = headers.get("content-length").flatMap(_.toIntOption).getOrElse(0)
-    new String(in.readNBytes(math.max(length, 0)), StandardCharsets.UTF_8)
+    try new String(in.readNBytes(math.max(length, 0)), StandardCharsets.UTF_8)
+    catch {
+      // A body that stops short is not JSON, so the query string answers instead.
+      case _: SocketTimeoutException => ""
+    }
   }
 
   /**
