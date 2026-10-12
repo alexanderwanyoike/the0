@@ -82,7 +82,8 @@ public static class Query
 
         /// <summary>
         /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
-        /// Asked for a string, it returns a non-string value as its JSON text, as <see cref="Get(string)"/> does.
+        /// Asked for a string, it reads a parameter as <see cref="Get(string, string)"/> does: a non-string
+        /// value as its JSON text, and a null value as absent.
         /// A string value that is not a <typeparamref name="T"/> is parsed as JSON text, so the
         /// query-string param <c>limit=50</c> reads as the int 50.
         /// </summary>
@@ -97,9 +98,9 @@ public static class Query
             {
                 return defaultValue;
             }
-            if (typeof(T) == typeof(string) && value != null)
+            if (typeof(T) == typeof(string))
             {
-                return (T)(object)AsText(value);
+                return value == null ? defaultValue : (T)(object)AsText(value);
             }
             try
             {
