@@ -83,6 +83,8 @@ public static class Query
         /// <summary>
         /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
         /// Asked for a string, it returns a non-string value as its JSON text, as <see cref="Get(string)"/> does.
+        /// A string value that is not a <typeparamref name="T"/> is parsed as JSON text, so the
+        /// query-string param <c>limit=50</c> reads as the int 50.
         /// </summary>
         /// <typeparam name="T">The type to deserialize to</typeparam>
         /// <param name="key">The parameter key</param>
@@ -99,7 +101,29 @@ public static class Query
             {
                 return (T)(object)AsText(value);
             }
-            return value.Deserialize<T>();
+            try
+            {
+                return value.Deserialize<T>();
+            }
+            catch (JsonException) when (value?.GetValueKind() == JsonValueKind.String
+                && ParsesAsJson(value.GetValue<string>(), out var parsed))
+            {
+                return parsed.Deserialize<T>();
+            }
+        }
+
+        private static bool ParsesAsJson(string text, out JsonNode? node)
+        {
+            try
+            {
+                node = JsonNode.Parse(text);
+                return true;
+            }
+            catch (JsonException)
+            {
+                node = null;
+                return false;
+            }
         }
 
         /// <summary>
