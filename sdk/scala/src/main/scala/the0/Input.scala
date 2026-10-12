@@ -83,13 +83,15 @@ object Input {
   def success(message: String, data: String): Unit = success(message)
 
   /**
-   * Output an error result to the result file and exit with code 1.
+   * Output an error result to the result file, print the message to stderr as an
+   * error log line, and exit with code 1.
    *
    * @param message The error message to include in the output
    */
   def error(message: String): Nothing = {
     val escaped = escapeJson(message)
     writeResult(s"""{"status":"error","message":"$escaped"}""")
+    log(message, level = LogLevel.Error)
     sys.exit(1)
   }
 
