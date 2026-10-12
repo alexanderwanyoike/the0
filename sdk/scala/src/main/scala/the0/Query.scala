@@ -183,6 +183,9 @@ object Query {
   // The contract tests point this into a sandbox, because /query is not writable outside a container.
   private[the0] var queryResultPath: String = "/query/result.json"
 
+  // How long the query server waits on a read from a connection, in milliseconds; 0 waits forever.
+  private[the0] var readTimeoutMillis: Int = 0
+
   /**
    * Register a query handler (Express-like).
    *
@@ -335,6 +338,7 @@ object Query {
    */
   private[the0] def handleConnection(socket: Socket): Unit = {
     Using.resource(socket) { s =>
+      s.setSoTimeout(readTimeoutMillis)
       val in = new BufferedInputStream(s.getInputStream)
       val out = s.getOutputStream
 
