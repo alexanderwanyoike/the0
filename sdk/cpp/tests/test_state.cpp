@@ -282,3 +282,16 @@ TEST_SUITE("the0::state complex data") {
         CHECK(the0::state::get("key").value() == "updated");
     }
 }
+
+TEST_SUITE("the0::state::set keeps the stored value") {
+    TEST_CASE("a value it cannot serialize throws and leaves the previous value") {
+        StateContext ctx;
+        the0::state::set("portfolio", {{"AAPL", 100}});
+
+        CHECK_THROWS_AS(the0::state::set("portfolio", nlohmann::json("caf\xE9")), nlohmann::json::type_error);
+
+        auto stored = the0::state::get("portfolio");
+        REQUIRE(stored.has_value());
+        CHECK(*stored == nlohmann::json{{"AAPL", 100}});
+    }
+}
