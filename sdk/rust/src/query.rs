@@ -90,7 +90,8 @@ pub struct QueryRequest {
     /// The query path being requested (e.g., "/portfolio")
     pub path: String,
     /// The params as text: a string as it is, any other JSON value as its
-    /// JSON text. [`QueryRequest::values`] keeps their JSON types.
+    /// JSON text, and a `null` left out. [`QueryRequest::values`] keeps
+    /// their JSON types.
     pub params: HashMap<String, String>,
     values: HashMap<String, Value>,
 }
@@ -111,14 +112,17 @@ impl QueryRequest {
 
     /// Create a QueryRequest from params with their JSON types.
     pub fn from_values(path: &str, values: HashMap<String, Value>) -> Self {
+        // The runtime leaves a null param out of the query string, so text
+        // handlers have always seen it as absent.
         let params = values
             .iter()
-            .map(|(key, value)| {
+            .filter_map(|(key, value)| {
                 let text = match value {
+                    Value::Null => return None,
                     Value::String(text) => text.clone(),
                     other => other.to_string(),
                 };
-                (key.clone(), text)
+                Some((key.clone(), text))
             })
             .collect();
         Self {
@@ -143,7 +147,7 @@ impl QueryRequest {
     }
 
     /// Get a parameter as text: a string as it is, any other JSON value as
-    /// its JSON text.
+    /// its JSON text. A `null` param is `None`, as a missing one is.
     pub fn get(&self, key: &str) -> Option<String> {
         self.params.get(key).cloned()
     }
