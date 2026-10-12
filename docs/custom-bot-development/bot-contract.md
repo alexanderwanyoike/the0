@@ -258,17 +258,7 @@ It reads the response body whatever the status code.
 
 ## Conformance cases
 
-[`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) holds the cases, and its README describes their format. Each case is an environment in and the expected outputs out:
-- the lines on stdout and stderr
-- `result.json`
-- the query result file
-- the state files
-- the exit code
-- in server mode, the HTTP responses
-
-Each SDK's harness starts a small program built on the SDK with the case's environment and compares what comes out.
-
-A case an SDK does not pass yet is listed in its harness as an expected failure, with the reason. A listed case that starts passing fails the suite, so the list stays current. Every SDK workflow runs on changes to `sdk/contract/**`.
+[`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) holds the cases. Each one is an environment in and the expected outputs out; [its README](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract#readme) lists what is compared, describes the format, and says how an SDK adopts the cases and lists the ones it does not pass yet. Every SDK workflow runs on changes to `sdk/contract/**`.
 
 | SDK | Harness |
 |---|---|
