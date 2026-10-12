@@ -151,6 +151,8 @@ the0::state::clear();
 
 A key must not be empty or contain `/`, `\` or `..`; such a key throws `the0::state::InvalidKeyError`.
 
+`set` never loses the stored value. A value holding text that is not valid UTF-8 throws `nlohmann::json::type_error` and leaves the stored value as it was, and a new value replaces the key's file whole, through a temporary file renamed over it.
+
 During an ephemeral query (`QUERY_PATH` set), state is read-only: `set`, `remove` and `clear` throw `the0::state::ReadOnlyStateError` before checking the key. `the0::query::ReadOnlyStateError` is the same type, so a handler can catch either name.
 
 ### Queries (`<the0/query.h>`)
