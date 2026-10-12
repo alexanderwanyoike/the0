@@ -138,9 +138,10 @@ export function success(message: string, data?: Record<string, unknown>): void {
 }
 
 /**
- * Output an error result and exit with code 1.
+ * Output an error result, log the message and exit with code 1.
  *
- * Writes a JSON result with status "error" and terminates the process.
+ * Writes a JSON result with status "error", prints the message to stderr as
+ * an error log line and terminates the process.
  *
  * @param message - Error message to include in the result
  * @param data - Optional additional error context
@@ -164,6 +165,7 @@ export function error(message: string, data?: Record<string, unknown>): never {
     message,
     ...(data && { data }),
   });
+  log(message, 'error');
   process.exit(1);
 }
 
