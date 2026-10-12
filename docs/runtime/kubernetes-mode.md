@@ -155,7 +155,6 @@ MONGO_URI=mongodb://localhost:27017    # MongoDB connection
 MINIO_ENDPOINT=minio:9000              # MinIO endpoint (in-cluster)
 MINIO_ACCESS_KEY=the0admin
 MINIO_SECRET_KEY=the0password
-MINIO_BUCKET=the0-custom-bots
 ```
 
 ### Optional
@@ -163,6 +162,7 @@ MINIO_BUCKET=the0-custom-bots
 ```bash
 NATS_URL=nats://localhost:4222         # NATS for real-time events
 RECONCILE_INTERVAL=30s                 # Controller reconciliation interval
+MINIO_BUCKET=custom-bots               # Bucket bot pods download code from; must match the API's CUSTOM_BOTS_BUCKET
 ```
 
 ## CLI Commands
