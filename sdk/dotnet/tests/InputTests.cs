@@ -255,18 +255,19 @@ public class InputTests : IDisposable
     }
 
     [Fact]
-    public void Success_EscapesQuotes()
+    public void Success_KeepsQuotesInTheMessage()
     {
-        // Test that escaping doesn't throw
-        var exception = Record.Exception(() => Input.Success("Test with \"quotes\""));
-        // No assertion - just checking it doesn't throw
+        var result = JsonNode.Parse(WrittenResult(() => Input.Success("Test with \"quotes\"")));
+
+        Assert.Equal("Test with \"quotes\"", result!["message"]!.GetValue<string>());
     }
 
     [Fact]
-    public void Success_EscapesBackslashes()
+    public void Success_KeepsBackslashesInTheMessage()
     {
-        var exception = Record.Exception(() => Input.Success(@"Path: C:\Users\test"));
-        // No assertion - just checking it doesn't throw
+        var result = JsonNode.Parse(WrittenResult(() => Input.Success(@"Path: C:\Users\test")));
+
+        Assert.Equal(@"Path: C:\Users\test", result!["message"]!.GetValue<string>());
     }
 
     /// <summary>
