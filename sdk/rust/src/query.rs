@@ -27,9 +27,24 @@
 //!         json!({ "symbol": symbol, "active": true })
 //!     });
 //!
+//!     // A handler that can fail, reading a param with its JSON type.
+//!     query::try_handler("/trades", |req| {
+//!         let limit = req.get_as::<usize>("limit").unwrap_or(10);
+//!         let trades: Vec<String> = state::get("trades")?;
+//!         Ok(json!({ "trades": trades.into_iter().take(limit).collect::<Vec<_>>() }))
+//!     });
+//!
 //!     query::run();
 //! }
 //! ```
+//!
+//! # Params
+//!
+//! Params are JSON values. An ephemeral query reads them from `QUERY_PARAMS`;
+//! the query server reads them from a JSON object body, or else from the URL
+//! query string, where every value is a string. [`QueryRequest::get`] returns
+//! a param as text (a non-string value as its JSON text), and
+//! [`QueryRequest::get_as`] and [`QueryRequest::values`] keep the JSON types.
 
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
@@ -74,13 +89,14 @@ pub use crate::state::ReadOnlyStateError;
 pub struct QueryRequest {
     /// The query path being requested (e.g., "/portfolio")
     pub path: String,
-    /// Dictionary of query parameters
+    /// The params as text: a string as it is, any other JSON value as its
+    /// JSON text. [`QueryRequest::values`] keeps their JSON types.
     pub params: HashMap<String, String>,
     values: HashMap<String, Value>,
 }
 
 impl QueryRequest {
-    /// Create a new QueryRequest
+    /// Create a new QueryRequest whose params are all strings.
     pub fn new(path: &str, params: HashMap<String, String>) -> Self {
         let values = params
             .iter()
@@ -118,19 +134,21 @@ impl QueryRequest {
     }
 
     /// A param deserialized into `T`, or `None` when it is missing or does
-    /// not deserialize into `T`.
+    /// not deserialize into `T`. Params from a URL query string are strings,
+    /// so `get_as::<u32>` finds no number in them.
     pub fn get_as<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
         self.values
             .get(key)
             .and_then(|value| T::deserialize(value).ok())
     }
 
-    /// Get a parameter value with optional default.
+    /// Get a parameter as text: a string as it is, any other JSON value as
+    /// its JSON text.
     pub fn get(&self, key: &str) -> Option<String> {
         self.params.get(key).cloned()
     }
 
-    /// Get a parameter value with a default.
+    /// Get a parameter as text, like [`QueryRequest::get`], with a default.
     pub fn get_or(&self, key: &str, default: &str) -> String {
         self.params
             .get(key)
