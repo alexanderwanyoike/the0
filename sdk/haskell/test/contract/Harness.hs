@@ -13,7 +13,7 @@ module Harness
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (IOException, SomeException, bracket, evaluate, try)
-import Control.Monad (forM, forM_, unless, when)
+import Control.Monad (forM, forM_, when)
 import Data.Aeson (Value(..), eitherDecodeStrict, encode)
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
@@ -58,30 +58,41 @@ portAttempts = 3
 knownFailures :: [(String, String)]
 knownFailures = []
 
-casesDir :: IO FilePath
-casesDir = (</> ".." </> "contract" </> "cases") <$> getCurrentDirectory
+sharedCasesDir, ownCasesDir :: IO FilePath
+sharedCasesDir = (</> ".." </> "contract" </> "cases") <$> getCurrentDirectory
+-- Cases in the same format for what only this SDK can get wrong, such as
+-- text decoding that depends on the locale.
+ownCasesDir = (</> "test" </> "contract" </> "cases") <$> getCurrentDirectory
 
-casePaths :: IO [FilePath]
-casePaths = do
-    dir <- casesDir
+casePaths :: FilePath -> IO [FilePath]
+casePaths dir = do
     names <- either (\(_ :: IOException) -> []) id <$> try (listDirectory dir)
     pure $ sort [dir </> name | name <- names, takeExtension name == ".json"]
 
 spec :: Spec
-spec = describe "bot contract" $ do
-    paths <- runIO casePaths
-    let names = map takeBaseName paths
+spec = do
+    describe "bot contract" $ do
+        dir <- runIO sharedCasesDir
+        paths <- runIO (casePaths dir)
+        let names = map takeBaseName paths
 
-    it "finds the cases" $
-        unless (not (null paths)) $ do
-            dir <- casesDir
-            expectationFailure ("no contract cases in " ++ dir)
+        it "finds the cases" $
+            when (null paths) $ expectationFailure ("no contract cases in " ++ dir)
 
-    it "lists only real cases in KNOWN_FAILURES" $
-        [name | (name, _) <- knownFailures, name `notElem` names] `shouldBe` []
+        it "lists only real cases in KNOWN_FAILURES" $
+            [name | (name, _) <- knownFailures, name `notElem` names] `shouldBe` []
 
-    forM_ paths $ \path ->
-        it (takeBaseName path) $ checkCase path (lookup (takeBaseName path) knownFailures)
+        forM_ paths $ \path ->
+            it (takeBaseName path) $ checkCase path (lookup (takeBaseName path) knownFailures)
+
+    describe "this SDK's own cases" $ do
+        dir <- runIO ownCasesDir
+        paths <- runIO (casePaths dir)
+
+        it "finds the cases" $
+            when (null paths) $ expectationFailure ("no cases in " ++ dir)
+
+        forM_ paths $ \path -> it (takeBaseName path) $ checkCase path Nothing
 
 checkCase :: FilePath -> Maybe String -> Expectation
 checkCase path knownFailure = do
