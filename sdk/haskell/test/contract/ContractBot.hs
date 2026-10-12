@@ -80,11 +80,11 @@ perform step request bound = case op of
     "parse" -> do
         (botId, config) <- Input.parse
         pure (object ["bot_id" .= botId, "config" .= config])
-    "success" -> case arg "data" of
-        Just _ -> ioError (userError "this SDK's success() takes no data")
-        Nothing -> Null <$ Input.success (text "message")
+    "success" -> Null <$ case arg "data" of
+        Just payload -> Input.successWithData (text "message") payload
+        Nothing -> Input.success (text "message")
     "error" -> case arg "data" of
-        Just _ -> ioError (userError "this SDK's error() takes no data")
+        Just payload -> Input.errorWithData (text "message") payload
         Nothing -> Input.error (text "message")
     "result" -> Null <$ Input.result (value "value")
     "metric" -> Null <$ Input.metric (text "type") (value "data")
