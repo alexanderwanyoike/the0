@@ -332,12 +332,23 @@ public class ContractTests
         }
 
         using var client = new HttpClient { Timeout = RunTimeout };
-        using var response = await client.SendAsync(message);
-        var headers = response.Headers.Concat(response.Content.Headers)
-            .ToDictionary(header => header.Key, header => string.Join(", ", header.Value), StringComparer.OrdinalIgnoreCase);
-        var body = await response.Content.ReadAsStringAsync();
+        int status;
+        Dictionary<string, string> headers;
+        string body;
+        try
+        {
+            using var response = await client.SendAsync(message);
+            status = (int)response.StatusCode;
+            headers = response.Headers.Concat(response.Content.Headers)
+                .ToDictionary(header => header.Key, header => string.Join(", ", header.Value), StringComparer.OrdinalIgnoreCase);
+            body = await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            return new List<string> { $"{where}: no response: {e.Message}" };
+        }
 
-        var problems = Mismatches(expect["status"], (int)response.StatusCode, $"{where} status");
+        var problems = Mismatches(expect["status"], status, $"{where} status");
         if (expect["headers"] is JsonObject expectedHeaders)
         {
             foreach (var (name, value) in expectedHeaders)
