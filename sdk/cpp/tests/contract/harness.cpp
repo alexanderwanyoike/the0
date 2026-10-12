@@ -398,8 +398,14 @@ std::optional<Response> parse_response(const std::string& raw, std::string& erro
     return response;
 }
 
-/** One request on a new connection, then the whole response. */
-std::optional<Response> send_request(int port, const json& request, std::string& error) {
+/**
+ * The bytes of a request. A C++-only `raw` field is sent as it is, for
+ * requests a well-behaved client would never send.
+ */
+std::string request_message(int port, const json& request) {
+    if (request.contains("raw")) {
+        return request["raw"].get<std::string>();
+    }
     const std::string method = request.at("method").get<std::string>();
     const std::string target = request.at("target").get<std::string>();
     std::string body;
@@ -418,7 +424,12 @@ std::optional<Response> send_request(int port, const json& request, std::string&
     if (!body.empty() || method == "POST") {
         message += "Content-Length: " + std::to_string(body.size()) + "\r\n";
     }
-    message += "\r\n" + body;
+    return message + "\r\n" + body;
+}
+
+/** One request on a new connection, then the whole response. */
+std::optional<Response> send_request(int port, const json& request, std::string& error) {
+    const std::string message = request_message(port, request);
 
     int fd = connect_to(port);
     if (fd < 0) {
