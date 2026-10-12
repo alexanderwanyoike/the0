@@ -251,7 +251,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # The sbt launcher can log its own download first; the four values are the last lines.
-          mapfile -t COORDS < <(sbt -batch -error 'print organization' 'print moduleName' 'print scalaBinaryVersion' 'print version' | tail -n 4)
+          # Without sbt.color=false, sbt ends even piped output with an ANSI clear code, which tail would take as the last value.
+          mapfile -t COORDS < <(sbt -batch -error -Dsbt.color=false 'print organization' 'print moduleName' 'print scalaBinaryVersion' 'print version' | tail -n 4)
           ORG=${COORDS[0]}; ARTIFACT="${COORDS[1]}_${COORDS[2]}"; VERSION=${COORDS[3]}
           for value in "$ORG" "$ARTIFACT" "$VERSION"; do
             [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::could not read the module coordinates from sbt (got '$value')"; exit 1; }
