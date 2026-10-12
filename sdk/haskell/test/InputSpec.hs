@@ -160,6 +160,11 @@ spec = do
             output `shouldContain` "\"timestamp\":"
 
     describe "The0.Input.result" $ do
+        it "writes non-ASCII text as UTF-8" $ do
+            let val = object ["message" .= ("café ✓ 日本" :: String)]
+            written <- resultFileOf (result val)
+            written `shouldBe` Right val
+
         it "does not throw on valid input" $ do
             -- result writes to a file, so we test that it doesn't throw
             let val = object ["status" .= ("success" :: String), "data" .= (42 :: Int)]
