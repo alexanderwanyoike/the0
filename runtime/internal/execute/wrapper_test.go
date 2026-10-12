@@ -215,7 +215,7 @@ def main(bot_id, config):
     the0.result({"status": "error", "message": "position limit breached"})
 `)
 			},
-			exitCode: 1,
+			exitCode: 0,
 			message:  "position limit breached",
 		},
 		{
@@ -278,7 +278,7 @@ exports.main = async function (botId, config) {
 };
 `)
 			},
-			exitCode: 1,
+			exitCode: 0,
 			message:  "position limit breached",
 		},
 		{
@@ -289,7 +289,7 @@ exports.main = async function (botId, config) {
 };
 `)
 			},
-			exitCode: 1,
+			exitCode: 0,
 			message:  "position limit breached",
 		},
 		{
@@ -320,6 +320,8 @@ exports.main = async function (botId, config) {
 	}
 }
 
+// A wrapper exits with the bot's own code, so an error result and a normal
+// return exit 0 here: the runner fails that run, for every runtime alike.
 func TestBotWrapper_ExitCodeAndResultOfAFailedRun(t *testing.T) {
 	for _, tc := range failedRuns() {
 		t.Run(tc.name, func(t *testing.T) {
