@@ -6,10 +6,13 @@ import {
   CustomBotVersion,
 } from "./custom-bot.types";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
+import { isForeignKeyViolation } from "@/common/database-errors";
 import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
 import * as semver from "semver";
 
-export type RemoveVersionsFailure = { reason: "error"; message: string };
+export type RemoveVersionsFailure =
+  | { reason: "in-use" }
+  | { reason: "error"; message: string };
 
 @Injectable()
 export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
@@ -248,6 +251,9 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       await this.db.delete(this.table).where(condition);
       return Ok(null);
     } catch (error: unknown) {
+      if (isForeignKeyViolation(error)) {
+        return Failure({ reason: "in-use" });
+      }
       return Failure({ reason: "error", message: errorMessage(error) });
     }
   }

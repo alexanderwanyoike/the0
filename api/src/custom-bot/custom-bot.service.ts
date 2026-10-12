@@ -355,7 +355,11 @@ export class CustomBotService {
       customBot.id,
     );
     if (!removeResult.success) {
-      return Failure(removeResult.error.message);
+      return Failure(
+        removeResult.error.reason === "in-use"
+          ? `Cannot delete version ${version}: active instance(s) reference it`
+          : removeResult.error.message,
+      );
     }
 
     // Best-effort MinIO cleanup (code bundle + frontend)
@@ -425,7 +429,11 @@ export class CustomBotService {
       name,
     );
     if (!removeResult.success) {
-      return Failure(removeResult.error.message);
+      return Failure(
+        removeResult.error.reason === "in-use"
+          ? "Cannot delete: versions with active instance(s)"
+          : removeResult.error.message,
+      );
     }
 
     // Best-effort MinIO cleanup for all versions
