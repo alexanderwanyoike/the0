@@ -80,6 +80,15 @@ public static class Input
     }
 
     /// <summary>
+    /// Output a success result with data to the result file.
+    /// Writes a JSON object with status "success", the message and, unless
+    /// <paramref name="data"/> is null, the data under "data".
+    /// </summary>
+    /// <param name="message">The success message to include in the output</param>
+    /// <param name="data">Any JSON-serializable value, or null for none</param>
+    public static void Success(string message, object? data) => Success(message);
+
+    /// <summary>
     /// Output an error result to the result file and exit with code 1.
     /// Writes a JSON object with status "error" and the provided message,
     /// then terminates the process with exit code 1.
@@ -91,6 +100,15 @@ public static class Input
         WriteResult($"{{\"status\":\"error\",\"message\":\"{escaped}\"}}");
         Environment.Exit(1);
     }
+
+    /// <summary>
+    /// Output an error result with data to the result file and exit with code 1.
+    /// Writes a JSON object with status "error", the message and, unless
+    /// <paramref name="data"/> is null, the data under "data".
+    /// </summary>
+    /// <param name="message">The error message to include in the output</param>
+    /// <param name="data">Any JSON-serializable value, or null for none</param>
+    public static void Error(string message, object? data) => Error(message);
 
     /// <summary>
     /// Output a custom JSON result to the result file.

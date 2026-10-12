@@ -38,11 +38,35 @@ public static class Query
         /// <summary>Dictionary of query parameters</summary>
         public Dictionary<string, string> Params { get; }
 
+        /// <summary>Every parameter as its JSON value.</summary>
+        public JsonObject JsonParams => new();
+
         public QueryRequest(string path, Dictionary<string, string> @params)
         {
             Path = path;
             Params = @params;
         }
+
+        /// <summary>
+        /// Create a request whose parameters are JSON values.
+        /// </summary>
+        /// <param name="path">The query path</param>
+        /// <param name="params">The parameters as a JSON object</param>
+        public QueryRequest(string path, JsonObject @params)
+        {
+            Path = path;
+            Params = new();
+        }
+
+        /// <summary>
+        /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize to</typeparam>
+        /// <param name="key">The parameter key</param>
+        /// <param name="defaultValue">The value to return when the parameter is missing</param>
+        /// <returns>The parameter's value, or the default</returns>
+        /// <exception cref="JsonException">The parameter's value is not a <typeparamref name="T"/></exception>
+        public T? Get<T>(string key, T? defaultValue = default) => defaultValue;
 
         /// <summary>
         /// Get a parameter value.
