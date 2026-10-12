@@ -1,7 +1,6 @@
 package execute
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -150,16 +149,8 @@ func BuildBotEnv(cfg *launch.Settings) []string {
 	// Add query-specific env vars if applicable
 	if cfg.QueryPath != "" {
 		env = append(env, "QUERY_PATH="+cfg.QueryPath)
-		// Parse and add query params as individual env vars or as JSON
 		if cfg.QueryParams != "" {
 			env = append(env, "QUERY_PARAMS="+cfg.QueryParams)
-			// Also try to parse and flatten query params
-			params, err := ParseQueryParams(cfg.QueryParams)
-			if err == nil {
-				for k, v := range params {
-					env = append(env, fmt.Sprintf("QUERY_PARAM_%s=%v", k, v))
-				}
-			}
 		}
 	}
 
@@ -168,21 +159,6 @@ func BuildBotEnv(cfg *launch.Settings) []string {
 	}
 
 	return env
-}
-
-// ParseQueryParams parses a JSON string into a map.
-// Returns an error if the JSON is invalid.
-func ParseQueryParams(queryParams string) (map[string]interface{}, error) {
-	if queryParams == "" {
-		return make(map[string]interface{}), nil
-	}
-
-	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(queryParams), &params); err != nil {
-		return nil, fmt.Errorf("failed to parse query params: %w", err)
-	}
-
-	return params, nil
 }
 
 // EnsureExecutable sets execute permissions on binary files for compiled runtimes.

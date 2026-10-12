@@ -239,19 +239,19 @@ func TestBuildBotEnv_QueryPath(t *testing.T) {
 	assert.Contains(t, env, "QUERY_PATH=/status")
 }
 
-func TestBuildBotEnv_QueryParams(t *testing.T) {
+func TestBuildBotEnv_GivesAQueryItsParamsAsJSONOnly(t *testing.T) {
 	cfg := &launch.Settings{
 		BotID:       "test-bot",
 		QueryPath:   "/data",
-		QueryParams: `{"limit":10,"offset":20}`,
+		QueryParams: `{"limit":10,"filter":{"side":"buy"}}`,
 	}
 
 	env := BuildBotEnv(cfg)
 
-	assert.Contains(t, env, "QUERY_PARAMS={\"limit\":10,\"offset\":20}")
-	// Check that individual query params are flattened
-	assert.Contains(t, env, "QUERY_PARAM_limit=10")
-	assert.Contains(t, env, "QUERY_PARAM_offset=20")
+	assert.Contains(t, env, `QUERY_PARAMS={"limit":10,"filter":{"side":"buy"}}`)
+	for _, variable := range env {
+		assert.False(t, strings.HasPrefix(variable, "QUERY_PARAM_"), "unexpected %s", variable)
+	}
 }
 
 func TestBuildBotEnv_PythonPathIncludesVendor(t *testing.T) {
@@ -309,44 +309,6 @@ func TestBuildBotEnv_BotType(t *testing.T) {
 	env := BuildBotEnv(cfg)
 
 	assert.Contains(t, env, "BOT_TYPE=realtime")
-}
-
-func TestParseQueryParams_ValidJSON(t *testing.T) {
-	jsonStr := `{"limit":10,"offset":20,"filter":"active"}`
-
-	params, err := ParseQueryParams(jsonStr)
-
-	require.NoError(t, err)
-	assert.Equal(t, float64(10), params["limit"]) // JSON numbers are float64
-	assert.Equal(t, float64(20), params["offset"])
-	assert.Equal(t, "active", params["filter"])
-}
-
-func TestParseQueryParams_EmptyString(t *testing.T) {
-	params, err := ParseQueryParams("")
-
-	require.NoError(t, err)
-	assert.Empty(t, params)
-}
-
-func TestParseQueryParams_InvalidJSON(t *testing.T) {
-	jsonStr := `{invalid json}`
-
-	params, err := ParseQueryParams(jsonStr)
-
-	assert.Error(t, err)
-	assert.Nil(t, params)
-	assert.Contains(t, err.Error(), "failed to parse query params")
-}
-
-func TestParseQueryParams_ComplexTypes(t *testing.T) {
-	jsonStr := `{"nested":{"key":"value"},"array":[1,2,3]}`
-
-	params, err := ParseQueryParams(jsonStr)
-
-	require.NoError(t, err)
-	assert.NotNil(t, params["nested"])
-	assert.NotNil(t, params["array"])
 }
 
 func TestEnsureExecutable_CompiledRuntimes(t *testing.T) {
