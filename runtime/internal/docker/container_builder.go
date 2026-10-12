@@ -181,8 +181,10 @@ func (b *ContainerBuilder) WithDaemonConfigFull(cfg DaemonConfig) *ContainerBuil
 		fmt.Sprintf("RUNTIME=%s", cfg.Runtime),
 		fmt.Sprintf("ENTRYPOINT=%s", cfg.Entrypoint),
 		fmt.Sprintf("BOT_CONFIG=%s", cfg.Config),
-		fmt.Sprintf("IS_SCHEDULED=%t", cfg.IsScheduled),
 	)
+	if cfg.IsScheduled {
+		b.config.Env = append(b.config.Env, "IS_SCHEDULED=true")
+	}
 	if cfg.QueryEntrypoint != "" {
 		b.config.Env = append(b.config.Env,
 			fmt.Sprintf("QUERY_ENTRYPOINT=%s", cfg.QueryEntrypoint),

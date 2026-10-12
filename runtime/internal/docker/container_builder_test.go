@@ -292,11 +292,11 @@ func TestContainerBuilder_WithDaemonConfigFull(t *testing.T) {
 				"RUNTIME=python3.11",
 				"ENTRYPOINT=main.py",
 				"BOT_CONFIG={}",
-				"IS_SCHEDULED=false",
 			},
 			unexpectedEnvs: []string{
 				"QUERY_ENTRYPOINT=",
 				"BOT_TYPE=",
+				"IS_SCHEDULED=",
 			},
 		},
 	}
