@@ -119,6 +119,23 @@ TEST_CASE("query::Request") {
     }
 }
 
+TEST_CASE("query::url_decode") {
+    SUBCASE("turns a plus into a space and percent escapes into bytes") {
+        CHECK(query::url_decode("two+words") == "two words");
+        CHECK(query::url_decode("BTC%2FUSD") == "BTC/USD");
+        CHECK(query::url_decode("caf%C3%A9") == "caf\xC3\xA9");
+    }
+
+    SUBCASE("keeps a percent sign that starts no escape") {
+        CHECK(query::url_decode("100%") == "100%");
+        CHECK(query::url_decode("%2") == "%2");
+        CHECK(query::url_decode("%zz") == "%zz");
+        CHECK(query::url_decode("%1z") == "%1z");
+        CHECK(query::url_decode("%+1") == "% 1");
+        CHECK(query::url_decode("% 1") == "% 1");
+    }
+}
+
 TEST_CASE("query::Request from JSON values") {
     const json values = {
         {"symbol", "BTC/USD"},
