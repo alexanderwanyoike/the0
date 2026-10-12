@@ -341,14 +341,14 @@ public static class Query
     /// </summary>
     private static void HandleRequest(HttpListenerContext context)
     {
-        var request = context.Request;
+        var httpRequest = context.Request;
         var response = context.Response;
 
-        var path = request.Url?.AbsolutePath ?? "/";
-        var req = BodyParams(request) is JsonObject body
+        var path = httpRequest.Url?.AbsolutePath ?? "/";
+        var queryRequest = BodyParams(httpRequest) is JsonObject body
             ? new QueryRequest(path, body)
-            : new QueryRequest(path, QueryStringParams(request.Url?.Query ?? ""));
-        _currentParams = req.Params;
+            : new QueryRequest(path, QueryStringParams(httpRequest.Url?.Query ?? ""));
+        _currentParams = queryRequest.Params;
 
         string responseBody;
         int statusCode;
@@ -367,7 +367,7 @@ public static class Query
         {
             try
             {
-                var data = handler(req);
+                var data = handler(queryRequest);
                 statusCode = 200;
                 responseBody = JsonSerializer.Serialize(new { status = "ok", data });
             }
