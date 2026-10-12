@@ -202,11 +202,7 @@ function writeResult(result: unknown): void {
 async function runEphemeral(queryPath: string): Promise<void> {
   // Parse parameters from environment
   const paramsStr = process.env.QUERY_PARAMS || "{}";
-  try {
-    currentParams = JSON.parse(paramsStr);
-  } catch {
-    currentParams = {};
-  }
+  currentParams = (jsonBodyParams(paramsStr) ?? {}) as Record<string, string>;
 
   // Find handler
   const fn = handlers.get(queryPath);
