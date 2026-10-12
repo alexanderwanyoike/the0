@@ -404,11 +404,37 @@ fn query_string_params(query_string: &str) -> HashMap<String, String> {
         .filter_map(|pair| {
             let mut parts = pair.splitn(2, '=');
             Some((
-                parts.next()?.to_string(),
-                parts.next().unwrap_or("").to_string(),
+                url_decode(parts.next()?),
+                url_decode(parts.next().unwrap_or("")),
             ))
         })
         .collect()
+}
+
+/// Decodes `application/x-www-form-urlencoded` text: `+` is a space and
+/// `%XX` is a byte. Bytes that do not form UTF-8 become U+FFFD.
+fn url_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let hex_digit = |at: usize| {
+        bytes
+            .get(at)
+            .and_then(|&byte| (byte as char).to_digit(16))
+            .map(|digit| digit as u8)
+    };
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            if let (Some(high), Some(low)) = (hex_digit(i + 1), hex_digit(i + 2)) {
+                decoded.push(high * 16 + low);
+                i += 3;
+                continue;
+            }
+        }
+        decoded.push(if bytes[i] == b'+' { b' ' } else { bytes[i] });
+        i += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 fn bad_request(error: &str) -> Answer {
