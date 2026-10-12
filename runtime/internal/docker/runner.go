@@ -197,10 +197,21 @@ func (r *dockerRunner) cleanupManagedContainers() {
 	r.logger.Info("Completed cleanup of managed containers")
 }
 
-// buildContainerConfig constructs Docker container configuration using the daemon approach.
+func (r *dockerRunner) buildContainerConfig(
+	executable model.Executable,
+	imageName string,
+) (*container.Config, *container.HostConfig) {
+	if executable.QueryPath != "" {
+		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", executable.QueryParams)
+	}
+	return ContainerConfig(r.config, executable, imageName)
+}
+
+// ContainerConfig is the container a runner with config starts for executable.
 // The container's bootstrap script handles code download, state sync, and log collection.
 // MinIO credentials and daemon config are passed via environment variables.
-func (r *dockerRunner) buildContainerConfig(
+func ContainerConfig(
+	config *DockerRunnerConfig,
 	executable model.Executable,
 	imageName string,
 ) (*container.Config, *container.HostConfig) {
@@ -221,14 +232,14 @@ func (r *dockerRunner) buildContainerConfig(
 
 	builder := NewContainerBuilder(imageName).
 		WithExecutable(executable).
-		WithNetwork(r.config.DockerNetwork).
+		WithNetwork(config.DockerNetwork).
 		WithMinIOConfig(
-			r.config.GetContainerEndpoint(), // Use container-accessible endpoint
-			r.config.MinIOAccessKeyID,
-			r.config.MinIOSecretAccessKey,
-			r.config.MinIOUseSSL,
+			config.GetContainerEndpoint(), // Use container-accessible endpoint
+			config.MinIOAccessKeyID,
+			config.MinIOSecretAccessKey,
+			config.MinIOUseSSL,
 		).
-		WithQueryResultBucket(r.config.MinIOQueryResultsBucket).
+		WithQueryResultBucket(config.MinIOQueryResultsBucket).
 		WithDaemonConfigFull(DaemonConfig{
 			BotID:           executable.ID,
 			CodeFile:        executable.FilePath, // Path to code.zip in MinIO
@@ -239,7 +250,7 @@ func (r *dockerRunner) buildContainerConfig(
 			IsScheduled:     !executable.IsLongRunning,
 			BotType:         botType,
 		}).
-		WithResources(r.config.MemoryLimitMB, r.config.CPUShares)
+		WithResources(config.MemoryLimitMB, config.CPUShares)
 
 	// Add query config if this is a query execution
 	if executable.QueryPath != "" {
@@ -249,7 +260,6 @@ func (r *dockerRunner) buildContainerConfig(
 				queryParamsJSON = string(data)
 			}
 		}
-		r.logger.Info("Adding query config to container", "query_path", executable.QueryPath, "params", queryParamsJSON)
 		builder = builder.WithQueryConfig(executable.QueryPath, queryParamsJSON)
 		if executable.QueryResultKey != "" {
 			builder = builder.WithQueryResultKey(executable.QueryResultKey)
@@ -257,13 +267,13 @@ func (r *dockerRunner) buildContainerConfig(
 	}
 
 	// Pass NATS URL so the daemon can publish logs to NATS for real-time streaming
-	if r.config.NatsURL != "" {
-		builder = builder.WithNATSURL(r.config.NatsURL)
+	if config.NatsURL != "" {
+		builder = builder.WithNATSURL(config.NatsURL)
 	}
 
 	// Dev mode: mount runtime binary from host for faster iteration
-	if r.config.DevRuntimePath != "" {
-		builder = builder.WithDevRuntime(r.config.DevRuntimePath)
+	if config.DevRuntimePath != "" {
+		builder = builder.WithDevRuntime(config.DevRuntimePath)
 	}
 
 	// Auto-remove lets the daemon delete an exited container before its logs or
