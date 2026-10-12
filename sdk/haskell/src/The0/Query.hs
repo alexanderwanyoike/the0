@@ -224,9 +224,9 @@ runEphemeral :: String -> IO ()
 runEphemeral queryPath = do
     mParamsStr <- lookupEnv "QUERY_PARAMS"
     let params = case mParamsStr >>= decode . BL.pack of
-            Just (Object o) -> Map.fromList [(T.unpack (toText k), valueToString v) | (k, v) <- KM.toList o]
+            Just (Object o) -> Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o]
             _ -> Map.empty
-    outcome <- answer (Request queryPath params)
+    outcome <- answer (RequestValues queryPath params)
     writeResult (answerBody outcome)
     when (answerStatus outcome /= 200) $ exitWith (ExitFailure 1)
 
