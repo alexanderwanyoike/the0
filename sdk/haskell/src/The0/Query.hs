@@ -302,12 +302,12 @@ handleConnection sock = do
                                     )
 
                     let bodyStr = BL.toStrict body
-                        response = BS.pack $ unlines
+                        response = BS.pack (concatMap (++ "\r\n")
                             [ "HTTP/1.1 " ++ status
                             , "Content-Type: application/json"
                             , "Content-Length: " ++ show (BS.length bodyStr)
                             , ""
-                            ] ++ BS.unpack bodyStr
+                            ]) <> bodyStr
                     sendAll sock response
                 _ -> return ()
         _ -> return ()
