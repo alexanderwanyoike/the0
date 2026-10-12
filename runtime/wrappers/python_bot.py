@@ -224,7 +224,12 @@ def main():
         fallback = DEFAULT_SUCCESS
     else:
         fallback = {"status": "error", "message": outcome["message"] or f"Bot exited with code {exit_code}"}
-    report_error(settle_result(fallback))
+    result = settle_result(fallback)
+    report_error(result)
+    # The bot's result is its own verdict on the run, so an error result fails
+    # the run even when the bot returned normally.
+    if exit_code == 0 and is_error_result(result):
+        exit_code = 1
     sys.exit(exit_code)
 
 if __name__ == "__main__":
