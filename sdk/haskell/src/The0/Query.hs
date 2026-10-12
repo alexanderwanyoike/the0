@@ -78,7 +78,7 @@ module The0.Query
 
 import Control.DeepSeq (force)
 import Control.Exception (ErrorCall(..), catch, displayException, evaluate, finally, fromException, SomeException)
-import Control.Monad (when)
+import Control.Monad (join, when)
 import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Decoding.ByteString (bsToTokens)
@@ -103,6 +103,7 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Timeout (timeout)
 import The0.Input (logError, logInfo)
 import The0.Internal.Env (lookupEnvBytes)
 import The0.State (ReadOnlyStateError(..))
@@ -338,9 +339,15 @@ serverLoop sock = do
     logFailure :: SomeException -> IO ()
     logFailure e = logError ("Error handling request: " ++ show e) Nothing
 
+-- | How long the server waits for a request. It answers one connection at a
+-- time, so a client that connects and sends nothing would otherwise hold up
+-- every later query.
+requestReadTimeout :: Int
+requestReadTimeout = 10 * 1000000
+
 handleConnection :: Socket -> IO ()
 handleConnection sock = flip finally (close sock) $ do
-    request <- readRequest sock
+    request <- join <$> timeout requestReadTimeout (readRequest sock)
     case request of
         Just (target, body) -> do
             outcome <- answer (queryRequest target body)
