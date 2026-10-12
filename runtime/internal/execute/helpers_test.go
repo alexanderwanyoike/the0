@@ -239,19 +239,19 @@ func TestBuildBotEnv_QueryPath(t *testing.T) {
 	assert.Contains(t, env, "QUERY_PATH=/status")
 }
 
-func TestBuildBotEnv_QueryParams(t *testing.T) {
+func TestBuildBotEnv_GivesAQueryItsParamsAsJSONOnly(t *testing.T) {
 	cfg := &launch.Settings{
 		BotID:       "test-bot",
 		QueryPath:   "/data",
-		QueryParams: `{"limit":10,"offset":20}`,
+		QueryParams: `{"limit":10,"filter":{"side":"buy"}}`,
 	}
 
 	env := BuildBotEnv(cfg)
 
-	assert.Contains(t, env, "QUERY_PARAMS={\"limit\":10,\"offset\":20}")
-	// Check that individual query params are flattened
-	assert.Contains(t, env, "QUERY_PARAM_limit=10")
-	assert.Contains(t, env, "QUERY_PARAM_offset=20")
+	assert.Contains(t, env, `QUERY_PARAMS={"limit":10,"filter":{"side":"buy"}}`)
+	for _, variable := range env {
+		assert.False(t, strings.HasPrefix(variable, "QUERY_PARAM_"), "unexpected %s", variable)
+	}
 }
 
 func TestBuildBotEnv_PythonPathIncludesVendor(t *testing.T) {
