@@ -1,0 +1,40 @@
+{
+  "description": "State written by an earlier run is read from <STATE_DIR>/<key>.json; list() and exists() see it.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "state_before": {"portfolio": {"AAPL": 100}, "trade_count": 7},
+  "script": [
+    {"op": "state.get", "key": "portfolio", "default": {}, "as": "portfolio"},
+    {"op": "state.get", "key": "trade_count", "default": 0, "as": "trade_count"},
+    {"op": "state.list", "as": "keys"},
+    {"op": "state.exists", "key": "portfolio", "as": "has_portfolio"},
+    {"op": "state.exists", "key": "orders", "as": "has_orders"},
+    {
+      "op": "result",
+      "value": {
+        "portfolio": {"$ref": "portfolio"},
+        "trade_count": {"$ref": "trade_count"},
+        "keys": {"$ref": "keys"},
+        "has_portfolio": {"$ref": "has_portfolio"},
+        "has_orders": {"$ref": "has_orders"}
+      }
+    }
+  ],
+  "expect": {
+    "exit_code": 0,
+    "result": {
+      "portfolio": {"AAPL": 100},
+      "trade_count": 7,
+      "keys": {"$match": "unordered", "items": ["portfolio", "trade_count"]},
+      "has_portfolio": true,
+      "has_orders": false
+    },
+    "state_after": {"portfolio": {"AAPL": 100}, "trade_count": 7}
+  }
+}

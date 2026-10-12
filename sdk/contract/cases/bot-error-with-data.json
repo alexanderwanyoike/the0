@@ -1,0 +1,28 @@
+{
+  "description": "error(message, data) keeps data in the result; the log line carries only the message.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {
+      "op": "error",
+      "message": "Trade failed",
+      "data": {"code": "INSUFFICIENT_FUNDS", "available": 100, "required": 150}
+    }
+  ],
+  "expect": {
+    "exit_code": 1,
+    "stdout": [],
+    "stderr": [{"level": "error", "message": "Trade failed", "timestamp": {"$match": "timestamp"}}],
+    "result": {
+      "status": "error",
+      "message": "Trade failed",
+      "data": {"code": "INSUFFICIENT_FUNDS", "available": 100, "required": 150}
+    }
+  }
+}

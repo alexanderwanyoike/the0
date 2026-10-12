@@ -1,0 +1,27 @@
+{
+  "description": "A path with no handler answers 404 with an error naming the path plus every path the bot answers.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/portfolio": [{"op": "return", "value": {}}]},
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/status",
+      "expect": {
+        "status": 404,
+        "body": {
+          "status": "error",
+          "error": "No handler for path: /status",
+          "available": {"$match": "unordered", "items": ["/portfolio", "/health", "/info"]}
+        }
+      }
+    }
+  ]
+}

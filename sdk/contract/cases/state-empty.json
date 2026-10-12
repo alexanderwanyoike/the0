@@ -1,0 +1,29 @@
+{
+  "description": "With no state yet (the directory does not exist), get() returns the default, list() is empty and exists() is false.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {"op": "state.get", "key": "portfolio", "default": {"cash": 1000}, "as": "portfolio"},
+    {"op": "state.list", "as": "keys"},
+    {"op": "state.exists", "key": "portfolio", "as": "exists"},
+    {
+      "op": "result",
+      "value": {
+        "portfolio": {"$ref": "portfolio"},
+        "keys": {"$ref": "keys"},
+        "exists": {"$ref": "exists"}
+      }
+    }
+  ],
+  "expect": {
+    "exit_code": 0,
+    "result": {"portfolio": {"cash": 1000}, "keys": [], "exists": false},
+    "state_after": {}
+  }
+}

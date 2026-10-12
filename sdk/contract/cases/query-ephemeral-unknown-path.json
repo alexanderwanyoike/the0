@@ -1,0 +1,21 @@
+{
+  "description": "A path with no handler writes an error naming the path plus every path the bot answers, and exits 1.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/status"
+  },
+  "handlers": {"/portfolio": [{"op": "return", "value": {}}]},
+  "expect": {
+    "exit_code": 1,
+    "query_result": {
+      "status": "error",
+      "error": "No handler for path: /status",
+      "available": {"$match": "unordered", "items": ["/portfolio", "/health", "/info"]}
+    }
+  }
+}

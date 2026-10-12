@@ -1,0 +1,27 @@
+{
+  "description": "parse() returns BOT_ID and BOT_CONFIG decoded as JSON, with every value keeping its type.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5,\"paper\":true,\"levels\":[1,2,3],\"broker\":{\"name\":\"alpaca\",\"region\":null}}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [{"op": "parse", "as": "input"}, {"op": "result", "value": {"$ref": "input"}}],
+  "expect": {
+    "exit_code": 0,
+    "stdout": [],
+    "stderr": [],
+    "result": {
+      "bot_id": "contract-bot",
+      "config": {
+        "symbol": "BTC/USD",
+        "amount": 100.5,
+        "paper": true,
+        "levels": [1, 2, 3],
+        "broker": {"name": "alpaca", "region": null}
+      }
+    }
+  }
+}
