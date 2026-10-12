@@ -294,4 +294,25 @@ TEST_SUITE("the0::state::set keeps the stored value") {
         REQUIRE(stored.has_value());
         CHECK(*stored == nlohmann::json{{"AAPL", 100}});
     }
+
+    TEST_CASE("replaces the key's file whole, leaving no temporary file") {
+        StateContext ctx;
+        const fs::path dir = std::getenv("STATE_DIR");
+        the0::state::set("portfolio", {{"AAPL", 100}});
+        // A reader holding the old file, as a hard link does, must see the
+        // whole old value, never a truncated or half-written one.
+        fs::create_hard_link(dir / "portfolio.json", dir / "reader-snapshot");
+
+        the0::state::set("portfolio", {{"AAPL", 200}});
+
+        std::ifstream snapshot(dir / "reader-snapshot");
+        CHECK(nlohmann::json::parse(snapshot) == nlohmann::json{{"AAPL", 100}});
+        CHECK(the0::state::get("portfolio").value() == nlohmann::json{{"AAPL", 200}});
+        std::vector<std::string> files;
+        for (const auto& entry : fs::directory_iterator(dir)) {
+            files.push_back(entry.path().filename().string());
+        }
+        std::sort(files.begin(), files.end());
+        CHECK(files == std::vector<std::string>{"portfolio.json", "reader-snapshot"});
+    }
 }
