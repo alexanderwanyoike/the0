@@ -363,7 +363,8 @@ public static class Query
             responseBody = JsonSerializer.Serialize(new
             {
                 status = "error",
-                error = $"No handler for path: {path}"
+                error = $"No handler for path: {path}",
+                available = _handlers.Keys.ToList()
             });
         }
         else
