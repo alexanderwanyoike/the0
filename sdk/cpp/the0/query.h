@@ -506,18 +506,13 @@ inline const char* reason_phrase(int status) {
  * Execute single query and write result to /query/result.json.
  */
 inline void run_ephemeral(const std::string& query_path) {
-    // Parse parameters from environment
-    std::map<std::string, std::string> params;
+    json params = json::object();
     const char* params_str = std::getenv("QUERY_PARAMS");
     if (params_str) {
-        if (auto params_json = detail::json_object(params_str)) {
-            for (auto& [key, value] : params_json->items()) {
-                params[key] = value.is_string() ? value.get<std::string>() : value.dump();
-            }
-        }
+        params = detail::json_object(params_str).value_or(json::object());
     }
 
-    auto answer = detail::answer(Request(query_path, params));
+    auto answer = detail::answer(Request::from_values(query_path, params));
     write_result(answer.body);
     if (answer.status != 200) {
         std::exit(1);
