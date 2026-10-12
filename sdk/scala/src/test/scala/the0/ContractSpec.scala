@@ -59,7 +59,6 @@ object ContractSpec {
   // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
   // says how the list is kept.
   private val KnownFailures: Map[String, String] = Map(
-    "query-ephemeral-params" -> "QUERY_PARAMS keeps only string pairs, nested ones included",
     "query-server-params-json-body" -> "the query server ignores the request body",
   )
 

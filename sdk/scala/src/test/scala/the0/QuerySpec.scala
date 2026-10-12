@@ -85,6 +85,50 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     Query.handler("/two") { req => """{"id": 2}""" }
   }
 
+  // ============ params parsing tests ============
+
+  test("params keep every JSON type") {
+    val params = Query.paramsFromJson(
+      """{"symbol":"BTC/USD","limit":5,"ratio":-0.25e1,"live":true,"paper":false,"cursor":null,""" +
+        """"symbols":["AAPL",["MSFT"]],"filter":{"side":"buy","min_qty":10}}"""
+    )
+    assert(params == Map(
+      "symbol" -> JsonValue.Str("BTC/USD"),
+      "limit" -> JsonValue.Num(BigDecimal(5)),
+      "ratio" -> JsonValue.Num(BigDecimal("-2.5")),
+      "live" -> JsonValue.Bool(true),
+      "paper" -> JsonValue.Bool(false),
+      "cursor" -> JsonValue.Null,
+      "symbols" -> JsonValue.Arr(Vector(JsonValue.Str("AAPL"), JsonValue.Arr(Vector(JsonValue.Str("MSFT"))))),
+      "filter" -> JsonValue.Obj(Map("side" -> JsonValue.Str("buy"), "min_qty" -> JsonValue.Num(BigDecimal(10))))
+    ))
+  }
+
+  test("params decode string escapes") {
+    val params = Query.paramsFromJson("""{"note":"a\"b\\c\/d\né😀"}""")
+    assert(params == Map("note" -> JsonValue.Str("a\"b\\c/d\né😀")))
+  }
+
+  test("params allow whitespace around every token") {
+    val params = Query.paramsFromJson(" \n{ \"levels\" : [ 1 , 2 ] ,\t\"on\" : true }\r\n")
+    assert(params == Map(
+      "levels" -> JsonValue.Arr(Vector(JsonValue.Num(BigDecimal(1)), JsonValue.Num(BigDecimal(2)))),
+      "on" -> JsonValue.Bool(true)
+    ))
+  }
+
+  test("params text that is not JSON gives no params") {
+    for (text <- Seq("limit=5", "", "{\"a\":\"b\",}", "{\"a\":\"b\" \"c\":\"d\"}", "{\"a\":01}", "{\"a\":1} extra", "{'a':'b'}")) {
+      assert(Query.paramsFromJson(text) == Map.empty, s"Should give no params for: $text")
+    }
+  }
+
+  test("params text that is JSON but not an object gives no params") {
+    for (text <- Seq("""["limit", 5]""", "\"limit\"", "5", "null")) {
+      assert(Query.paramsFromJson(text) == Map.empty, s"Should give no params for: $text")
+    }
+  }
+
   // ============ handler error tests ============
 
   test("a handler that fails with an Error, not an Exception, answers 500 with its message") {
