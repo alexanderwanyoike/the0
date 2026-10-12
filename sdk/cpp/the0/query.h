@@ -318,17 +318,14 @@ inline void run_server();
  * URL decode a string.
  */
 inline std::string url_decode(const std::string& str) {
+    auto hex_digit = [&](size_t at) {
+        return at < str.size() && std::isxdigit(static_cast<unsigned char>(str[at]));
+    };
     std::string result;
     for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '%' && i + 2 < str.size()) {
-            int val;
-            std::istringstream iss(str.substr(i + 1, 2));
-            if (iss >> std::hex >> val) {
-                result += static_cast<char>(val);
-                i += 2;
-            } else {
-                result += str[i];
-            }
+        if (str[i] == '%' && hex_digit(i + 1) && hex_digit(i + 2)) {
+            result += static_cast<char>(std::stoi(str.substr(i + 1, 2), nullptr, 16));
+            i += 2;
         } else if (str[i] == '+') {
             result += ' ';
         } else {
