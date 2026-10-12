@@ -173,7 +173,8 @@ def send(port, request):
     try:
         connection.request(request["method"], request["target"], body=body, headers=headers)
         response = connection.getresponse()
-        return response.status, response.read().decode()
+        headers = {name.lower(): value for name, value in response.getheaders()}
+        return response.status, headers, response.read().decode()
     finally:
         connection.close()
 
@@ -291,8 +292,13 @@ def run_server(case, sandbox, command):
         else:
             for index, request in enumerate(case["requests"]):
                 where = f"requests[{index}] {request['method']} {request['target']}"
-                status, body = send(sandbox.port, request)
+                status, headers, body = send(sandbox.port, request)
                 problems += mismatches(request["expect"]["status"], status, f"{where} status")
+                for name, value in request["expect"].get("headers", {}).items():
+                    if name.lower() not in headers:
+                        problems.append(f"{where} header {name}: missing")
+                    else:
+                        problems += mismatches(value, headers[name.lower()], f"{where} header {name}")
                 try:
                     problems += mismatches(request["expect"]["body"], json.loads(body), f"{where} body")
                 except ValueError:
