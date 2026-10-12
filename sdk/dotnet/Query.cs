@@ -38,16 +38,26 @@ public static class Query
         /// <summary>The query path being requested (e.g., "/portfolio")</summary>
         public string Path { get; }
 
-        /// <summary>Dictionary of query parameters</summary>
+        /// <summary>
+        /// Every parameter as text: a string as itself, any other JSON value
+        /// (including null) as its JSON text.
+        /// </summary>
         public Dictionary<string, string> Params { get; }
 
         /// <summary>Every parameter as its JSON value.</summary>
-        public JsonObject JsonParams => new();
+        public JsonObject JsonParams { get; }
 
+        /// <summary>
+        /// Create a request whose parameters are all strings.
+        /// </summary>
+        /// <param name="path">The query path</param>
+        /// <param name="params">The parameters</param>
         public QueryRequest(string path, Dictionary<string, string> @params)
         {
             Path = path;
             Params = @params;
+            JsonParams = new JsonObject(@params.Select(param =>
+                KeyValuePair.Create(param.Key, (JsonNode?)JsonValue.Create(param.Value))));
         }
 
         /// <summary>
@@ -58,8 +68,12 @@ public static class Query
         public QueryRequest(string path, JsonObject @params)
         {
             Path = path;
-            Params = new();
+            JsonParams = @params;
+            Params = @params.ToDictionary(param => param.Key, param => AsText(param.Value));
         }
+
+        private static string AsText(JsonNode? value) =>
+            value?.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value?.ToJsonString() ?? "null";
 
         /// <summary>
         /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
@@ -69,7 +83,8 @@ public static class Query
         /// <param name="defaultValue">The value to return when the parameter is missing</param>
         /// <returns>The parameter's value, or the default</returns>
         /// <exception cref="JsonException">The parameter's value is not a <typeparamref name="T"/></exception>
-        public T? Get<T>(string key, T? defaultValue = default) => defaultValue;
+        public T? Get<T>(string key, T? defaultValue = default) =>
+            JsonParams.TryGetPropertyValue(key, out var value) ? value.Deserialize<T>() : defaultValue;
 
         /// <summary>
         /// Get a parameter value.
