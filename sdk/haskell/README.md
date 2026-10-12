@@ -14,7 +14,7 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/alexanderwanyoike/the0.git
-    tag: v0.1.2
+    tag: v1.18.0
     subdir: sdk/haskell
 ```
 
@@ -24,11 +24,11 @@ Then add to your `.cabal` file:
 build-depends: the0-sdk
 ```
 
-> **Note:** Check [releases](https://github.com/alexanderwanyoike/the0/releases) for the latest version tag.
+> **Note:** `v1.18.0` is the first release with SDK 0.4, which follows the [bot contract](https://github.com/alexanderwanyoike/the0/blob/dev/docs/custom-bot-development/bot-contract.md). Check [releases](https://github.com/alexanderwanyoike/the0/releases) for later tags.
 
 ### Option 2: Copy the Package
 
-Copy `src/The0/Input.hs` to your project's source directory.
+Copy the `src/The0/` directory to your project's source directory, and add the packages listed under `build-depends` in `the0-sdk.cabal` to your own.
 
 ## Usage
 
@@ -73,35 +73,47 @@ Returns a tuple of `(botId, config)` where:
 
 ### `success :: String -> IO ()`
 
-Output a success result to stdout.
+Write a success result to the result file, `/bot/result.json`:
+`{"status":"success","message":"<your message>"}`
 
-Prints a JSON object: `{"status":"success","message":"<your message>"}`
+### `successWithData :: ToJSON a => String -> a -> IO ()`
+
+Write a success result that carries data:
+`{"status":"success","message":"<your message>","data":<data>}`
+
+```haskell
+successWithData "Bought 0.5 BTC" (object ["order_id" .= ("o-1" :: String), "filled" .= (0.5 :: Double)])
+```
 
 ### `error :: String -> IO a`
 
-Output an error result to stdout and exit with code 1.
+Report a failure, in three steps:
+1. Writes an error result: `{"status":"error","message":"<your message>"}`
+2. Prints the message on stderr as an `error` log line, so the failure shows in the bot's logs.
+3. Exits with code 1. Nothing after it runs.
 
-Prints a JSON object: `{"status":"error","message":"<your message>"}`
+### `errorWithData :: ToJSON a => String -> a -> IO b`
+
+Like `error`, with a result that carries data:
+`{"status":"error","message":"<your message>","data":<data>}`. The log line carries only the message.
 
 ### `result :: Value -> IO ()`
 
-Output a custom JSON result to stdout.
-
-Serializes the provided `Value` as JSON and prints it.
+Write a custom JSON result to the result file. Each result call replaces the file, so the last call wins.
 
 ### `metric :: String -> Value -> IO ()`
 
 Emit a metric for the platform to collect.
 
 ```haskell
-metric "price" (object ["symbol" .= "BTC/USD", "value" .= (45000 :: Double)])
+metric "price" (object ["symbol" .= ("BTC/USD" :: String), "value" .= (45000 :: Double)])
 ```
 
-Outputs JSON to stdout with `_metric` and `timestamp` fields added.
+Prints one JSON line to stdout with `_metric` and a UTC ISO 8601 `timestamp`, such as `"2026-10-12T09:30:00.123Z"`, added to the fields of the data.
 
 ### `log :: String -> Maybe Value -> Maybe LogLevel -> IO ()`
 
-Log a structured message to stderr.
+Log a structured message to stderr, as one JSON line with `level`, `message` and a UTC ISO 8601 `timestamp`.
 
 ```haskell
 -- Simple log (defaults to info level)
@@ -126,6 +138,64 @@ logInfo "Bot started" Nothing
 logWarn "Rate limit approaching" (Just $ object ["remaining" .= (10 :: Int)])
 logError "Connection failed" (Just $ object ["error" .= "timeout"])
 ```
+
+## State (`The0.State`)
+
+State persists between runs, one JSON file per key.
+
+- `get :: FromJSON a => String -> IO (Maybe a)` returns `Nothing` when the key does not exist.
+- `set :: ToJSON a => String -> a -> IO ()` stores any JSON value.
+- `delete :: String -> IO Bool` returns whether the key existed, and throws when its file cannot be removed.
+- `list :: IO [String]`, `exists :: String -> IO Bool` and `clear :: IO ()`.
+
+A key must not be empty or contain `/`, `\` or `..`. During a query, `set`, `delete` and `clear` throw `ReadOnlyStateError` before they check the key.
+
+## Queries (`The0.Query`)
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+
+import qualified The0.Query as Query
+import qualified The0.State as State
+import Data.Aeson (Value, object, (.=))
+import Data.Maybe (fromMaybe)
+
+main :: IO ()
+main = do
+    Query.handler "/signals" $ \req -> do
+        let limit = fromMaybe 10 (Query.getParamAs req "limit") :: Int
+            symbol = Query.getParam req "symbol" "BTC/USD"
+        signals <- fromMaybe [] <$> State.get "signals" :: IO [Value]
+        return $ object ["symbol" .= symbol, "signals" .= take limit signals]
+
+    Query.handler "/trade" $ \req ->
+        case Query.getParamAs req "id" :: Maybe Int of
+            Nothing -> fail "id is required"
+            Just tradeId -> return $ object ["id" .= tradeId]
+
+    Query.run
+```
+
+`Query.run` picks its mode from the environment: one ephemeral query when `QUERY_PATH` is set, the query server on port 9476 when `BOT_TYPE` is `realtime`, and `/info` otherwise. `/health` and `/info` are built in.
+
+### Params
+
+Params are JSON values. An ephemeral query reads them from `QUERY_PARAMS`. The query server reads them from a JSON object body, or else from the URL query string, where every value is a string. Params that are not a JSON object, or that repeat a key, are unreadable: an ephemeral query gets no params, and the server uses the query string.
+
+| Accessor | Gives |
+|---|---|
+| `getParam req key default` | the param as text: a string as it is, any other value as its JSON text, and a `null` as missing |
+| `reqParams req` | every param as text, the same way, without the `null`s |
+| `getParamAs req key :: Maybe a` | the param decoded into `a`. A string that parses as `a` counts, so `"5"` from a query string reads as `5 :: Int`. Asked for text, it gives a non-string as its JSON text and a `null` as `Nothing`. |
+| `reqValues req` | every param with its JSON type |
+
+To unit test a handler, build its request with `Request path textParams` or `RequestValues path jsonParams`.
+
+### Errors
+
+A handler reports an error by throwing any exception: with `fail`, with `throwIO`, or from pure code that calls `error`. The query answers `{"status":"error","error":"<message>"}`. The query server responds 500 and keeps serving, and an ephemeral query exits 1. A path with no handler answers 404, with the paths the bot answers under `available`.
+
+`ReadOnlyStateError` is the one error type state throws during a query. `The0.Query` and `The0.State` both export it.
 
 ## Example Bot
 
