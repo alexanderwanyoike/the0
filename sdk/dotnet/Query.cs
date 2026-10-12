@@ -216,20 +216,27 @@ public static class Query
     }
 
     /// <summary>
+    /// The params in a JSON text, or none when it is missing, is not JSON or is not an object.
+    /// </summary>
+    private static JsonObject ParamsObject(string? json)
+    {
+        try
+        {
+            return JsonNode.Parse(json ?? "{}") as JsonObject ?? new JsonObject();
+        }
+        catch (JsonException)
+        {
+            return new JsonObject();
+        }
+    }
+
+    /// <summary>
     /// Execute single query and write result to /query/result.json.
     /// </summary>
     private static void RunEphemeral(string queryPath)
     {
-        // Parse parameters from environment
-        var paramsStr = Environment.GetEnvironmentVariable("QUERY_PARAMS") ?? "{}";
-        try
-        {
-            _currentParams = JsonSerializer.Deserialize<Dictionary<string, string>>(paramsStr) ?? new();
-        }
-        catch
-        {
-            _currentParams = new();
-        }
+        var request = new QueryRequest(queryPath, ParamsObject(Environment.GetEnvironmentVariable("QUERY_PARAMS")));
+        _currentParams = request.Params;
 
         // Find and execute handler
         if (!_handlers.TryGetValue(queryPath, out var handler))
@@ -247,7 +254,6 @@ public static class Query
 
         try
         {
-            var request = new QueryRequest(queryPath, _currentParams);
             var data = handler(request);
             WriteResult(new { status = "ok", data });
         }
