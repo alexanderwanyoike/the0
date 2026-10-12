@@ -14,6 +14,7 @@ import (
 
 	"runtime/internal/constants"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/util"
 )
@@ -177,7 +178,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 		AccessKey:         config.MinIOAccessKey,
 		SecretKey:         config.MinIOSecretKey,
 		UseSSL:            config.MinIOUseSSL,
-		QueryResultBucket: "query-results",
+		QueryResultBucket: launch.DefaultQueryResultsBucket,
 	}
 	minioClient, err := storage.NewMinioClient(storageCfg)
 	if err != nil {

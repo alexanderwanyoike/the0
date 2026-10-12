@@ -151,7 +151,7 @@ func (r *SyncRunner) run() {
 			AccessKey:  cfg.AccessKey,
 			SecretKey:  cfg.SecretKey,
 			UseSSL:     cfg.UseSSL,
-			LogsBucket: "bot-logs",
+			LogsBucket: cfg.LogsBucket,
 		})
 		if err != nil {
 			r.logger.Info("Failed to create log uploader", "error", err.Error())
@@ -305,7 +305,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 			AccessKey:  cfg.AccessKey,
 			SecretKey:  cfg.SecretKey,
 			UseSSL:     cfg.UseSSL,
-			LogsBucket: "bot-logs",
+			LogsBucket: cfg.LogsBucket,
 		})
 		if err != nil {
 			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())

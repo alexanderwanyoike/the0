@@ -260,6 +260,9 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 			AccessKey:          config.MinIOAccessKeyID,
 			SecretKey:          config.MinIOSecretAccessKey,
 			UseSSL:             config.MinIOUseSSL,
+			CodeBucket:         config.MinIOCodeBucket,
+			StateBucket:        config.MinioStateBucket,
+			LogsBucket:         config.MinioLogsBucket,
 			QueryResultsBucket: config.MinIOQueryResultsBucket,
 		},
 	}

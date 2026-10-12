@@ -87,7 +87,7 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 		config.Namespace = "the0"
 	}
 	if config.MinIOStateBucket == "" {
-		config.MinIOStateBucket = "bot-state"
+		config.MinIOStateBucket = launch.DefaultStateBucket
 	}
 	if config.RuntimeImage == "" {
 		config.RuntimeImage = "runtime:latest"
@@ -267,10 +267,12 @@ func (g *PodGenerator) launchOf(bot model.Bot, cfg *botConfig) (launch.Settings,
 		LogsPath:   constants.DefaultLogsPath,
 		StateDir:   launch.DefaultStateDir,
 		Storage: launch.Storage{
-			Endpoint:  g.config.MinIOEndpoint,
-			AccessKey: g.config.MinIOAccessKey,
-			SecretKey: g.config.MinIOSecretKey,
-			UseSSL:    g.config.MinIOUseSSL,
+			Endpoint:    g.config.MinIOEndpoint,
+			AccessKey:   g.config.MinIOAccessKey,
+			SecretKey:   g.config.MinIOSecretKey,
+			UseSSL:      g.config.MinIOUseSSL,
+			CodeBucket:  g.config.MinIOBucket,
+			StateBucket: g.config.MinIOStateBucket,
 		},
 	}, nil
 }
