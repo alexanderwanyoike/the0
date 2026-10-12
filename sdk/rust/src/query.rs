@@ -40,9 +40,10 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+type Handler = Box<dyn Fn(&QueryRequest) -> Result<Value, HandlerError> + Send + Sync>;
+
 /// Global handler registry
-static HANDLERS: Mutex<Option<HashMap<String, Box<dyn Fn(&QueryRequest) -> Value + Send + Sync>>>> =
-    Mutex::new(None);
+static HANDLERS: Mutex<Option<HashMap<String, Handler>>> = Mutex::new(None);
 
 /// Global current params
 static CURRENT_PARAMS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
@@ -121,26 +122,40 @@ pub fn handler<F>(path: &str, handler_fn: F)
 where
     F: Fn(&QueryRequest) -> Value + Send + Sync + 'static,
 {
-    let mut handlers = HANDLERS.lock().unwrap();
-    if handlers.is_none() {
-        *handlers = Some(HashMap::new());
-    }
-    if let Some(ref mut h) = *handlers {
-        h.insert(path.to_string(), Box::new(handler_fn));
-    }
+    try_handler(path, move |req| Ok(handler_fn(req)));
 }
 
-/// The error a handler registered with [`try_handler`] fails with.
+/// The error a handler registered with [`try_handler`] fails with. Any error
+/// type converts into it with `?`.
 pub type HandlerError = Box<dyn std::error::Error + Send + Sync>;
 
 /// Register a query handler that can fail.
+///
+/// A handler that returns `Err` answers `{"status": "error", "error": <message>}`:
+/// the query server responds 500 and keeps serving, and an ephemeral query
+/// exits 1.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use the0_sdk::query;
+/// use the0_sdk::state;
+/// use serde_json::json;
+///
+/// query::try_handler("/portfolio", |_req| {
+///     let positions: Vec<String> = state::get("positions")?;
+///     Ok(json!({ "positions": positions }))
+/// });
+/// ```
 pub fn try_handler<F>(path: &str, handler_fn: F)
 where
     F: Fn(&QueryRequest) -> Result<Value, HandlerError> + Send + Sync + 'static,
 {
-    handler(path, move |req| {
-        handler_fn(req).unwrap_or_else(|e| panic!("{}", e))
-    });
+    HANDLERS
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashMap::new)
+        .insert(path.to_string(), Box::new(handler_fn));
 }
 
 /// Get current query parameters (alternative to request object).
@@ -188,14 +203,14 @@ pub fn run() {
         }
         if let Some(ref mut h) = *handlers {
             h.entry("/health".to_string())
-                .or_insert_with(|| Box::new(|_| json!({"status": "ok"})));
+                .or_insert_with(|| Box::new(|_| Ok(json!({"status": "ok"}))));
 
             if !h.contains_key("/info") {
                 let mut paths: Vec<String> = h.keys().cloned().collect();
                 paths.push("/info".to_string());
                 h.insert(
                     "/info".to_string(),
-                    Box::new(move |_| json!({"available_queries": paths})),
+                    Box::new(move |_| Ok(json!({"available_queries": paths}))),
                 );
             }
         }
@@ -249,9 +264,15 @@ fn answer(path: &str, params: HashMap<String, String>) -> Answer {
     let handlers = HANDLERS.lock().unwrap();
     let h = handlers.as_ref().expect("run() registers the built-ins");
     match h.get(path) {
-        Some(handler_fn) => Answer {
-            status: 200,
-            body: json!({"status": "ok", "data": handler_fn(&QueryRequest::new(path, params))}),
+        Some(handler_fn) => match handler_fn(&QueryRequest::new(path, params)) {
+            Ok(data) => Answer {
+                status: 200,
+                body: json!({"status": "ok", "data": data}),
+            },
+            Err(e) => Answer {
+                status: 500,
+                body: json!({"status": "error", "error": e.to_string()}),
+            },
         },
         None => Answer {
             status: 404,
