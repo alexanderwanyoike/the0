@@ -52,7 +52,8 @@ module The0.Query
     , setResultPath
     ) where
 
-import Control.Exception (catch, finally, SomeException)
+import Control.DeepSeq (force)
+import Control.Exception (catch, evaluate, finally, SomeException)
 import Control.Monad (forM_, when)
 import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=), ToJSON)
 import qualified Data.Aeson.KeyMap as KM
@@ -254,7 +255,10 @@ answer req = do
             , "available" .= Map.keys handlers
             ]
         Just fn -> do
-            result <- (Right <$> fn req) `catch` \(e :: SomeException) -> return (Left (show e))
+            -- Forced here, so pure code that fails inside the result is a
+            -- handler error rather than a failure while writing the answer.
+            result <- (Right <$> (fn req >>= evaluate . force))
+                `catch` \(e :: SomeException) -> return (Left (show e))
             return $ case result of
                 Left err -> Answer 500 $ object
                     [ "status" .= ("error" :: String)

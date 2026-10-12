@@ -29,6 +29,7 @@ library
                         bytestring ^>=0.11,
                         text ^>=2.0,
                         containers ^>=0.6,
+                        deepseq ^>=1.4,
                         time ^>=1.12,
                         directory ^>=1.3,
                         filepath ^>=1.4,
