@@ -219,6 +219,24 @@ public class QueryTests : IDisposable
         Assert.Null(req.Get<int?>("cursor"));
     }
 
+    /// <summary>The value <paramref name="read"/> returns, asserting that it does not throw.</summary>
+    private static T? Read<T>(Func<T?> read)
+    {
+        T? value = default;
+        Assert.Null(Record.Exception(() => value = read()));
+        return value;
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetOfStringReturnsAnyOtherValueAsItsJsonText()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("BTC/USD", Read(() => req.Get<string>("symbol")));
+        Assert.Equal("5", Read(() => req.Get<string>("limit")));
+        Assert.Equal("""{"side":"buy"}""", Read(() => req.Get<string>("filter")));
+    }
+
     [Fact]
     public void QueryRequest_TypedGetReturnsDefaultForMissing()
     {
