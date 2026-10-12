@@ -267,7 +267,7 @@ object Query {
   /**
    * Handle an HTTP connection.
    */
-  private def handleConnection(socket: Socket): Unit = {
+  private[the0] def handleConnection(socket: Socket): Unit = {
     Using.resource(socket) { s =>
       val in = new BufferedInputStream(s.getInputStream)
       val writer = new PrintWriter(s.getOutputStream, true)
