@@ -247,6 +247,7 @@ async function runServer(): Promise<void> {
       sendJson(res, 404, {
         status: "error",
         error: `No handler for path: ${path}`,
+        available: Array.from(handlers.keys()),
       });
       return;
     }
