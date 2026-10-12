@@ -1,0 +1,30 @@
+{
+  "description": "A body that is JSON but not an object, or not JSON at all, gives no params of its own, so the params come from the query string.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo?limit=5",
+      "body": ["limit", 7],
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": "5"}}}
+    },
+    {
+      "method": "POST",
+      "target": "/echo?limit=5",
+      "raw_body": "{\"limit\":",
+      "content_type": "application/json",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": "5"}}}
+    }
+  ]
+}

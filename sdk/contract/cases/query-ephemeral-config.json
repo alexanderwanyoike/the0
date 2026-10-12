@@ -1,0 +1,22 @@
+{
+  "description": "A query handler can read the bot's BOT_CONFIG.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/config"
+  },
+  "handlers": {
+    "/config": [
+      {"op": "query.config", "as": "config"},
+      {"op": "return", "value": {"$ref": "config"}}
+    ]
+  },
+  "expect": {
+    "exit_code": 0,
+    "query_result": {"status": "ok", "data": {"symbol": "BTC/USD", "amount": 100.5}}
+  }
+}

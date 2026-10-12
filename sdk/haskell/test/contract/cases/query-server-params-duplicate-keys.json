@@ -1,0 +1,29 @@
+{
+  "description": "A JSON body that repeats a key is unreadable: the query server falls back to the query string, and keeps serving.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo?limit=5",
+      "raw_body": "{\"limit\":7,\"limit\":8}",
+      "content_type": "application/json",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": "5"}}}
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ]
+}

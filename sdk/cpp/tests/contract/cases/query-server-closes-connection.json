@@ -1,0 +1,37 @@
+{
+  "description": "The server closes the connection after each answer and says so with Connection: close, so a client does not reuse it.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/echo": [{"op": "return", "value": "echo"}]},
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo",
+      "expect": {
+        "status": 200,
+        "headers": {"Connection": "close"},
+        "body": {"status": "ok", "data": "echo"}
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/status",
+      "expect": {
+        "status": 404,
+        "headers": {"Connection": "close"},
+        "body": {
+          "status": "error",
+          "error": "No handler for path: /status",
+          "available": {"$match": "unordered", "items": ["/echo", "/health", "/info"]}
+        }
+      }
+    }
+  ]
+}

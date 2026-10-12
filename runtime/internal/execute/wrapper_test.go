@@ -94,9 +94,9 @@ func pythonBot(t *testing.T, mainPy string) botFixture {
 	return botFixture{interpreter: interpreter, wrapper: wrapperPath(t, "python_bot.py"), script: "main.py", dir: dir}
 }
 
-// nodeSDKStandIn has the result.json contract of the0-node's success() and
-// error() (sdk/nodejs/src/index.ts), which cannot be loaded here without a
-// TypeScript build.
+// nodeSDKStandIn has the result.json contract of the0-node's success(),
+// error() and result() (sdk/nodejs/src/index.ts), which cannot be loaded here
+// without a TypeScript build.
 const nodeSDKStandIn = `const fs = require('fs');
 
 function writeResult(result) {
@@ -110,6 +110,10 @@ exports.success = function (message, data) {
 exports.error = function (message, data) {
     writeResult({ status: 'error', message, ...(data && { data }) });
     process.exit(1);
+};
+
+exports.result = function (result) {
+    writeResult(result);
 };
 `
 
@@ -167,13 +171,18 @@ func runWrapper(t *testing.T, bot botFixture, earlierResult string) wrapperRun {
 	return run
 }
 
-func TestBotWrapper_FailedRunExitsNonZeroAndLogsItsError(t *testing.T) {
-	cases := []struct {
-		name     string
-		bot      func(t *testing.T) botFixture
-		exitCode int
-		message  string
-	}{
+type failedRun struct {
+	name     string
+	bot      func(t *testing.T) botFixture
+	exitCode int
+	message  string
+	// sdkErrorLines are the messages of the error log lines the bot's own SDK
+	// prints during the run.
+	sdkErrorLines []string
+}
+
+func failedRuns() []failedRun {
+	return []failedRun{
 		{
 			name: "python bot calls the0.error",
 			bot: func(t *testing.T) botFixture {
@@ -183,8 +192,9 @@ def main(bot_id, config):
     the0.error("broker rejected the order")
 `)
 			},
-			exitCode: 1,
-			message:  "broker rejected the order",
+			exitCode:      1,
+			message:       "broker rejected the order",
+			sdkErrorLines: []string{"broker rejected the order"},
 		},
 		{
 			name: "python bot raises",
@@ -197,6 +207,18 @@ def main(bot_id, config):
 			message:  "exchange unreachable",
 		},
 		{
+			name: "python bot writes an error result and returns",
+			bot: func(t *testing.T) botFixture {
+				return pythonBot(t, `import the0
+
+def main(bot_id, config):
+    the0.result({"status": "error", "message": "position limit breached"})
+`)
+			},
+			exitCode: 0,
+			message:  "position limit breached",
+		},
+		{
 			name: "python bot exits with its own code",
 			bot: func(t *testing.T) botFixture {
 				return pythonBot(t, `import sys
@@ -207,6 +229,20 @@ def main(bot_id, config):
 			},
 			exitCode: 3,
 			message:  "Bot exited with code 3",
+		},
+		{
+			name: "python bot writes an error result and exits with its own code",
+			bot: func(t *testing.T) botFixture {
+				return pythonBot(t, `import sys
+import the0
+
+def main(bot_id, config):
+    the0.result({"status": "error", "message": "position limit breached"})
+    sys.exit(3)
+`)
+			},
+			exitCode: 3,
+			message:  "position limit breached",
 		},
 		{
 			name: "node bot calls error",
@@ -233,6 +269,30 @@ exports.main = async function (botId, config) {
 			message:  "exchange unreachable",
 		},
 		{
+			name: "node bot writes an error result and returns",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { result } = require('the0-node');
+
+exports.main = async function (botId, config) {
+    result({ status: 'error', message: 'position limit breached' });
+};
+`)
+			},
+			exitCode: 0,
+			message:  "position limit breached",
+		},
+		{
+			name: "node bot returns an error result",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `exports.main = async function (botId, config) {
+    return { status: 'error', message: 'position limit breached' };
+};
+`)
+			},
+			exitCode: 0,
+			message:  "position limit breached",
+		},
+		{
 			name: "node bot exits with its own code",
 			bot: func(t *testing.T) botFixture {
 				return nodeBot(t, `exports.main = async function (botId, config) {
@@ -243,16 +303,45 @@ exports.main = async function (botId, config) {
 			exitCode: 3,
 			message:  "Bot exited with code 3",
 		},
-	}
+		{
+			name: "node bot writes an error result and exits with its own code",
+			bot: func(t *testing.T) botFixture {
+				return nodeBot(t, `const { result } = require('the0-node');
 
-	for _, tc := range cases {
+exports.main = async function (botId, config) {
+    result({ status: 'error', message: 'position limit breached' });
+    process.exit(3);
+};
+`)
+			},
+			exitCode: 3,
+			message:  "position limit breached",
+		},
+	}
+}
+
+// A wrapper exits with the bot's own code, so an error result and a normal
+// return exit 0 here: the runner fails that run, for every runtime alike.
+func TestBotWrapper_ExitCodeAndResultOfAFailedRun(t *testing.T) {
+	for _, tc := range failedRuns() {
 		t.Run(tc.name, func(t *testing.T) {
 			run := runWrapper(t, tc.bot(t), "")
 
 			assert.Equal(t, tc.exitCode, run.exitCode, "output:\n%s", run.output)
 			assert.Equal(t, "error", run.result["status"])
 			assert.Equal(t, tc.message, run.result["message"])
-			assert.Contains(t, run.errorLogMessages(), tc.message, "output:\n%s", run.output)
+		})
+	}
+}
+
+// The wrappers print no error line of their own: the runner prints the run's
+// summary line, so a wrapper's line would repeat the SDK's error() line.
+func TestBotWrapper_ErrorLogLinesOfAFailedRun(t *testing.T) {
+	for _, tc := range failedRuns() {
+		t.Run(tc.name, func(t *testing.T) {
+			run := runWrapper(t, tc.bot(t), "")
+
+			assert.Equal(t, tc.sdkErrorLines, run.errorLogMessages(), "output:\n%s", run.output)
 		})
 	}
 }

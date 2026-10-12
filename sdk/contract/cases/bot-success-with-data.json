@@ -1,0 +1,28 @@
+{
+  "description": "success(message, data) puts data under the data key of the result.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {
+      "op": "success",
+      "message": "Bought 0.5 BTC",
+      "data": {"order_id": "o-1", "filled": 0.5, "fees": [0.1, 0.2]}
+    }
+  ],
+  "expect": {
+    "exit_code": 0,
+    "stdout": [],
+    "stderr": [],
+    "result": {
+      "status": "success",
+      "message": "Bought 0.5 BTC",
+      "data": {"order_id": "o-1", "filled": 0.5, "fees": [0.1, 0.2]}
+    }
+  }
+}

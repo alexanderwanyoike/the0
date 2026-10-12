@@ -1,0 +1,25 @@
+{
+  "description": "delete() removes the key's file and returns true, or returns false when the key does not exist.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "state_before": {"stale": [1, 2], "keep": "yes"},
+  "script": [
+    {"op": "state.delete", "key": "stale", "as": "deleted"},
+    {"op": "state.delete", "key": "never-set", "as": "deleted_missing"},
+    {
+      "op": "result",
+      "value": {"deleted": {"$ref": "deleted"}, "deleted_missing": {"$ref": "deleted_missing"}}
+    }
+  ],
+  "expect": {
+    "exit_code": 0,
+    "result": {"deleted": true, "deleted_missing": false},
+    "state_after": {"keep": "yes"}
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Non-ASCII text in BOT_CONFIG, written as UTF-8 or as a \\u escape, comes back from parse() and goes out in the result unchanged.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot-é",
+    "BOT_CONFIG": "{\"venue\":\"café\",\"coin\":\"₿\",\"market\":\"日本\",\"escaped\":\"\\u00e9\"}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {"op": "parse", "as": "input"},
+    {"op": "log", "message": "Trading on 日本", "data": {"venue": "café"}},
+    {"op": "result", "value": {"$ref": "input"}}
+  ],
+  "expect": {
+    "exit_code": 0,
+    "stdout": [],
+    "stderr": [
+      {"level": "info", "message": "Trading on 日本", "venue": "café", "timestamp": {"$match": "timestamp"}}
+    ],
+    "result": {
+      "bot_id": "contract-bot-é",
+      "config": {"venue": "café", "coin": "₿", "market": "日本", "escaped": "é"}
+    }
+  }
+}

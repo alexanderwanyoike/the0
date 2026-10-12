@@ -4,11 +4,14 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterEach
 import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.file.Files
+import scala.util.Try
 
 /**
  * Tests for the0 Input module.
  */
 class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
+
+  private val IsoTimestamp = """"timestamp":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z"""".r
 
   private var tempDir: File = _
 
@@ -114,13 +117,11 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""level":"info""""), s"Should have info level: $output")
   }
 
-  test("log includes timestamp") {
+  test("log writes the timestamp as a UTC ISO 8601 string") {
     val output = captureStderr {
       Input.log("Test message")
     }
-    assert(output.contains(""""timestamp":"""), s"Should have timestamp: $output")
-    // Timestamp should be numeric (Unix ms), not a quoted string
-    assert(!output.contains(""""timestamp":""""), s"Timestamp should be numeric, not quoted: $output")
+    assert(IsoTimestamp.findFirstIn(output).isDefined, s"Should have an ISO 8601 timestamp: $output")
   }
 
   test("log supports warn level") {
@@ -156,6 +157,14 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""order_id":"12345""""), s"Should have order_id: $output")
   }
 
+  test("log escapes every control character, so the line stays JSON") {
+    val message = "bell\u0007 form\f back\b nul\u0000"
+    val output = captureStderr {
+      Input.log(message)
+    }
+    assert(Try(ujson.read(output)("message").str).toOption == Some(message), s"Should be JSON: $output")
+  }
+
   test("log handles empty message") {
     val output = captureStderr {
       Input.log("")
@@ -187,13 +196,11 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""_metric":"price""""), s"Should contain _metric: $output")
   }
 
-  test("metric includes timestamp") {
+  test("metric writes the timestamp as a UTC ISO 8601 string") {
     val output = captureStdout {
       Input.metric("heartbeat", "{}")
     }
-    assert(output.contains(""""timestamp":"""), s"Should contain timestamp: $output")
-    // Timestamp should be numeric (Unix ms), not a quoted string
-    assert(!output.contains(""""timestamp":""""), s"Timestamp should be numeric, not quoted: $output")
+    assert(IsoTimestamp.findFirstIn(output).isDefined, s"Should have an ISO 8601 timestamp: $output")
   }
 
   test("metric merges data correctly") {
@@ -220,6 +227,39 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""_metric":"test""""), s"Should have metric: $output")
     assert(output.contains(""""timestamp":"""), s"Should have timestamp: $output")
   }
+
+  test("metric escapes a type holding a quote and a backslash") {
+    val metricType = """odd"type\name"""
+    val output = captureStdout {
+      Input.metric(metricType, "{}")
+    }
+    assert(Try(ujson.read(output)("_metric").str).toOption == Some(metricType), s"Should be JSON: $output")
+  }
+
+  test("metric with empty data prints one JSON object") {
+    val output = captureStdout {
+      Input.metric("ping", "{}")
+    }
+    assert(keys(output) == Some(Set("_metric", "timestamp")), s"Should be one JSON object: $output")
+  }
+
+  test("metric merges data written with whitespace") {
+    val output = captureStdout {
+      Input.metric("price", """ { "value" : 1.5 } """)
+    }
+    assert(keys(output) == Some(Set("_metric", "timestamp", "value")), s"Should merge value: $output")
+  }
+
+  test("log with empty data written with whitespace prints one JSON object") {
+    val output = captureStderr {
+      Input.log("Starting", "{ }")
+    }
+    assert(keys(output) == Some(Set("level", "message", "timestamp")), s"Should be one JSON object: $output")
+  }
+
+  // The keys of the one JSON object the output holds, or None when it is not one.
+  private def keys(output: String): Option[Set[String]] =
+    Try(ujson.read(output)).toOption.flatMap(_.objOpt).map(_.keySet.toSet)
 
   // ============ parse() tests ============
 

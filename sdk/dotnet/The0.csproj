@@ -7,7 +7,7 @@
 
     <!-- Package metadata -->
     <PackageId>The0.Sdk</PackageId>
-    <Version>0.3.2</Version>
+    <Version>0.4.0</Version>
     <Authors>alexanderwanyoike</Authors>
     <Company>the0</Company>
     <Description>the0 SDK for C#/.NET trading bots - configuration parsing, metric emission, and structured logging</Description>
@@ -33,6 +33,10 @@
   <!-- Exclude test files from main project -->
   <ItemGroup>
     <Compile Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="The0.ContractBot" />
   </ItemGroup>
 
   <ItemGroup>

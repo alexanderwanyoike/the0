@@ -138,7 +138,7 @@ fn main() {
     });
 
     query::handler("/signals", |req| {
-        let limit: i32 = req.get("limit", "10").parse().unwrap_or(10);
+        let limit: i32 = req.get_or("limit", "10").parse().unwrap_or(10);
         let persisted: PersistedState = state::get("bot_state").unwrap_or_default();
 
         json!({
@@ -159,7 +159,7 @@ fn main() {
 using json = nlohmann::json;
 
 int main() {
-    the0::query::handler("/status", [](const the0::QueryRequest& req) {
+    the0::query::handler("/status", [](const the0::query::Request& req) {
         auto persisted = the0::state::get("bot_state");
         auto config = the0::query::get_config();
 
@@ -178,8 +178,8 @@ int main() {
         return response;
     });
 
-    the0::query::handler("/signals", [](const the0::QueryRequest& req) {
-        int limit = std::stoi(req.get("limit", "10"));
+    the0::query::handler("/signals", [](const the0::query::Request& req) {
+        int limit = req.get_as("limit", 10);
         auto persisted = the0::state::get("bot_state");
 
         json response;
@@ -221,13 +221,13 @@ class Program
                 prev_short_sma = persisted.PrevShortSma,
                 prev_long_sma = persisted.PrevLongSma,
                 signal_count = persisted.SignalCount,
-                symbol = config.GetProperty("symbol", "AAPL")
+                symbol = config?["symbol"]?.GetValue<string>() ?? "AAPL"
             };
         });
 
         Query.Handler("/signals", req =>
         {
-            var limit = int.Parse(req.Get("limit", "10"));
+            var limit = req.Get("limit", 10);
             var persisted = State.Get<PersistedState>("bot_state") ?? new PersistedState();
 
             return new
@@ -286,7 +286,6 @@ import Data.Aeson (FromJSON, ToJSON, object, (.=))
 import Data.Aeson.Key (fromText)
 import Data.Maybe (fromMaybe)
 import GHC.Generics
-import Text.Read (readMaybe)
 
 data PersistedState = PersistedState
   { psPrevShortSma :: Maybe Double
@@ -302,7 +301,7 @@ defaultState = PersistedState Nothing Nothing 0
 
 main :: IO ()
 main = do
-    Query.handler "/status" $ \req -> do
+    Query.handler "/status" $ \_ -> do
         persisted <- fromMaybe defaultState <$> State.get "bot_state"
         return $ object
             [ fromText "prev_short_sma" .= psPrevShortSma persisted
@@ -311,8 +310,7 @@ main = do
             ]
 
     Query.handler "/signals" $ \req -> do
-        let limitStr = Query.getParam req "limit" "10"
-            limit = fromMaybe 10 (readMaybe limitStr :: Maybe Int)
+        let limit = fromMaybe 10 (Query.getParamAs req "limit") :: Int
         persisted <- fromMaybe defaultState <$> State.get "bot_state"
         return $ object
             [ fromText "signal_count" .= psSignalCount persisted

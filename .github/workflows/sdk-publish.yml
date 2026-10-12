@@ -1,0 +1,280 @@
+name: Publish SDKs
+
+# Publishes the Python, Rust, .NET and Scala SDKs on every release tag. npm
+# publishing lives in sdk-npm-publish.yml, and the Haskell and C++ SDKs ship
+# as the tag itself.
+#
+# The PyPI, crates.io and nuget.org trusted publishers trust this exact
+# workflow filename; renaming this file breaks publishing until each
+# registry's config is updated to match.
+#
+# Idempotent: each job publishes only when its registry has no copy of the
+# version in the source. Only HTTP 200 counts as "already published" and only
+# 404 as "not yet", so a registry outage fails the job instead of being read
+# as either.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run everything except the publish steps
+        type: boolean
+        default: false
+
+permissions: {}
+
+# Two tags pushed close together would otherwise both see a version as
+# unpublished and race to upload it.
+concurrency:
+  group: sdk-publish
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pypi:
+    name: PyPI (the0-sdk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: sdk/python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Check whether this version is already on PyPI
+        id: version
+        run: |
+          NAME=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["name"])')
+          VERSION=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          URL="https://pypi.org/pypi/$NAME/$VERSION/json"
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' "$URL")
+          case "$STATUS" in
+            200) echo "$NAME $VERSION is already on PyPI, skipping"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            404) echo "$NAME $VERSION is not on PyPI yet"; echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::PyPI answered HTTP $STATUS for $URL"; exit 1 ;;
+          esac
+
+      - name: Test
+        if: steps.version.outputs.publish == 'true'
+        run: python -m unittest discover -s tests -v
+
+      - name: Build
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          python -m pip install build==1.6.1
+          python -m build
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true' && !inputs.dry_run
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: sdk/python/dist/
+
+  crates-io:
+    name: crates.io (the0-sdk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: sdk/rust
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Check whether this version is already on crates.io
+        id: version
+        run: |
+          METADATA=$(cargo metadata --no-deps --format-version 1)
+          NAME=$(jq -r '.packages[0].name' <<< "$METADATA")
+          VERSION=$(jq -r '.packages[0].version' <<< "$METADATA")
+          URL="https://crates.io/api/v1/crates/$NAME/$VERSION"
+          # crates.io rejects API requests that carry no identifying User-Agent.
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' -A "the0-sdk-publish (https://github.com/${GITHUB_REPOSITORY})" "$URL")
+          case "$STATUS" in
+            200) echo "$NAME $VERSION is already on crates.io, skipping"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            404) echo "$NAME $VERSION is not on crates.io yet"; echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::crates.io answered HTTP $STATUS for $URL"; exit 1 ;;
+          esac
+
+      - name: Test
+        if: steps.version.outputs.publish == 'true'
+        run: cargo test -- --test-threads=1
+
+      - name: Build
+        if: steps.version.outputs.publish == 'true'
+        run: cargo package
+
+      - name: Get a short-lived crates.io token
+        id: auth
+        if: steps.version.outputs.publish == 'true'
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true' && !inputs.dry_run
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish
+
+  nuget:
+    name: nuget.org (The0.Sdk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    defaults:
+      run:
+        working-directory: sdk/dotnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Check whether this version is already on nuget.org
+        id: version
+        run: |
+          ID=$(dotnet msbuild The0.csproj -getProperty:PackageId)
+          VERSION=$(dotnet msbuild The0.csproj -getProperty:Version)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          URL="https://api.nuget.org/v3-flatcontainer/${ID,,}/${VERSION,,}/${ID,,}.nuspec"
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' "$URL")
+          case "$STATUS" in
+            200) echo "$ID $VERSION is already on nuget.org, skipping"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            404) echo "$ID $VERSION is not on nuget.org yet"; echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::nuget.org answered HTTP $STATUS for $URL"; exit 1 ;;
+          esac
+
+      - name: Restore dependencies
+        if: steps.version.outputs.publish == 'true'
+        run: dotnet restore
+
+      - name: Test
+        if: steps.version.outputs.publish == 'true'
+        run: dotnet test --no-restore --verbosity normal
+
+      - name: Build
+        if: steps.version.outputs.publish == 'true'
+        run: dotnet pack The0.csproj -c Release -o out
+
+      - name: Require the NUGET_USER repository variable
+        if: steps.version.outputs.publish == 'true'
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "::error::Set the NUGET_USER repository variable to the nuget.org username that owns the trusted publishing policy"
+            exit 1
+          fi
+
+      - name: Get a short-lived nuget.org API key
+        id: login
+        if: steps.version.outputs.publish == 'true'
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true' && !inputs.dry_run
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+          PACKAGE: out/${{ steps.version.outputs.id }}.${{ steps.version.outputs.version }}.nupkg
+        run: dotnet nuget push "$PACKAGE" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+
+  github-packages:
+    name: GitHub Packages (dev.the0 the0-sdk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: sdk/scala
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@6158cb0903b8ceeae04f830055f3155e1b6a5ad7 # v1.5.11
+
+      - name: Check whether this version is already on GitHub Packages
+        id: version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The sbt launcher can log its own download first; the four values are the last lines.
+          # Without sbt.color=false, sbt ends even piped output with an ANSI clear code, which tail would take as the last value.
+          mapfile -t COORDS < <(sbt -batch -error -Dsbt.color=false 'print organization' 'print moduleName' 'print scalaBinaryVersion' 'print version' | tail -n 4)
+          ORG=${COORDS[0]}; ARTIFACT="${COORDS[1]}_${COORDS[2]}"; VERSION=${COORDS[3]}
+          for value in "$ORG" "$ARTIFACT" "$VERSION"; do
+            [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::could not read the module coordinates from sbt (got '$value')"; exit 1; }
+          done
+          URL="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/${ORG//.//}/$ARTIFACT/$VERSION/$ARTIFACT-$VERSION.pom"
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
+          case "$STATUS" in
+            200) echo "$ORG:$ARTIFACT:$VERSION is already on GitHub Packages, skipping"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            404) echo "$ORG:$ARTIFACT:$VERSION is not on GitHub Packages yet"; echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::GitHub Packages answered HTTP $STATUS for $URL"; exit 1 ;;
+          esac
+
+      - name: Test
+        if: steps.version.outputs.publish == 'true'
+        run: sbt test
+
+      - name: Build
+        if: steps.version.outputs.publish == 'true'
+        run: sbt publishLocal
+
+      - name: Publish
+        if: steps.version.outputs.publish == 'true' && !inputs.dry_run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sbt publish

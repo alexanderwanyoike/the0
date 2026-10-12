@@ -1,0 +1,36 @@
+{
+  "description": "A key that is empty or contains /, \\ or .. is rejected with an error, and nothing is written.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {"op": "state.set", "key": "", "value": 1, "catch": "any", "as": "empty"},
+    {"op": "state.set", "key": "a/b", "value": 1, "catch": "any", "as": "slash"},
+    {"op": "state.set", "key": "a\\b", "value": 1, "catch": "any", "as": "backslash"},
+    {"op": "state.set", "key": "../escape", "value": 1, "catch": "any", "as": "parent"},
+    {
+      "op": "result",
+      "value": {
+        "empty": {"$ref": "empty"},
+        "slash": {"$ref": "slash"},
+        "backslash": {"$ref": "backslash"},
+        "parent": {"$ref": "parent"}
+      }
+    }
+  ],
+  "expect": {
+    "exit_code": 0,
+    "result": {
+      "empty": {"caught": "any"},
+      "slash": {"caught": "any"},
+      "backslash": {"caught": "any"},
+      "parent": {"caught": "any"}
+    },
+    "state_after": {}
+  }
+}

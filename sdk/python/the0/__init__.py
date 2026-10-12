@@ -114,9 +114,10 @@ def success(message: str, data: Optional[Dict[str, Any]] = None) -> None:
 
 def error(message: str, data: Optional[Dict[str, Any]] = None) -> None:
     """
-    Output an error result and exit with code 1.
+    Output an error result, log the message and exit with code 1.
 
-    Writes a JSON result with status "error" and terminates the process.
+    Writes a JSON result with status "error", prints the message to stderr as
+    an error log line and terminates the process.
 
     Args:
         message: Error message to include in the result
@@ -137,6 +138,7 @@ def error(message: str, data: Optional[Dict[str, Any]] = None) -> None:
     if data:
         result_data["data"] = data
     _write_result(result_data)
+    log(message, "error")
     sys.exit(1)
 
 

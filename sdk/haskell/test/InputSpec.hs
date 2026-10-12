@@ -1,19 +1,70 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module InputSpec (spec) where
 
 import Test.Hspec
 import The0.Input
 import Data.Aeson (Value(..), object, (.=))
-import System.IO.Silently (capture_, hCapture)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
+import qualified Data.ByteString.Lazy as BL
+import Data.Char (isDigit)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.Exit (ExitCode)
+import System.FilePath ((</>))
+import System.IO.Silently (capture_, hCapture, hSilence)
 import System.IO (stderr)
-import Control.Exception (try, SomeException)
+import System.IO.Temp (withSystemTempDirectory)
+import Control.Exception (ErrorCall(..), catch, finally, try, SomeException)
+import System.Directory (doesFileExist)
 
 -- Helper to capture stderr output
 captureStderr :: IO () -> IO String
 captureStderr action = do
     (output, _) <- hCapture [stderr] action
     return output
+
+-- | Runs @action@ with CODE_MOUNT_DIR pointing at a temporary directory and
+-- returns the result file it wrote, decoded. An exit is caught, so actions
+-- may call 'The0.Input.error'.
+resultFileOf :: IO () -> IO (Either String Value)
+resultFileOf action = inCodeDir $ \dir -> do
+    hSilence [stderr] (action `catch` \(_ :: ExitCode) -> pure ())
+    Aeson.eitherDecodeFileStrict (dir </> "result.json")
+
+-- | Runs @action@ with CODE_MOUNT_DIR pointing at a temporary directory,
+-- which it is given.
+inCodeDir :: (FilePath -> IO a) -> IO a
+inCodeDir action = withSystemTempDirectory "the0-input-test" $ \dir -> do
+    original <- lookupEnv "CODE_MOUNT_DIR"
+    setEnv "CODE_MOUNT_DIR" (dropWhile (== '/') dir)
+    action dir `finally` maybe (unsetEnv "CODE_MOUNT_DIR") (setEnv "CODE_MOUNT_DIR") original
+
+-- | Every control character JSON must escape, plus quotes and backslashes.
+awkwardMessage :: String
+awkwardMessage = "line one\nline two\r\ttab \"quoted\" back\\slash \b\f\x01\x1f"
+
+-- | The timestamp of a printed JSON line, when it is a string.
+timestampOf :: String -> Maybe String
+timestampOf line = case Aeson.decode (BL.fromStrict (TE.encodeUtf8 (T.pack line))) of
+    Just (Object o) | Just (String t) <- KM.lookup "timestamp" o -> Just (T.unpack t)
+    _ -> Nothing
+
+-- | @YYYY-MM-DDTHH:MM:SS@, optional fractional seconds, then @Z@.
+isIsoTimestamp :: String -> Bool
+isIsoTimestamp text =
+    and (zipWith fits "dddd-dd-ddTdd:dd:dd" text)
+        && fraction (drop 19 text)
+  where
+    fits 'd' c = isDigit c
+    fits want c = want == c
+    fraction "Z" = True
+    fraction ('.' : rest) = not (null digits) && all isDigit digits && rest == digits ++ "Z"
+      where digits = takeWhile isDigit rest
+    fraction _ = False
 
 spec :: Spec
 spec = do
@@ -26,11 +77,9 @@ spec = do
             output <- captureStderr $ The0.Input.log "Test message" Nothing Nothing
             output `shouldContain` "\"level\":\"info\""
 
-        it "includes timestamp" $ do
+        it "includes a UTC ISO 8601 timestamp" $ do
             output <- captureStderr $ The0.Input.log "Test message" Nothing Nothing
-            output `shouldContain` "\"timestamp\":"
-            -- Timestamp should be numeric (not a quoted string)
-            output `shouldNotContain` "\"timestamp\":\""
+            timestampOf output `shouldSatisfy` maybe False isIsoTimestamp
 
         it "supports warn level" $ do
             output <- captureStderr $ The0.Input.log "Warning message" Nothing (Just Warn)
@@ -101,11 +150,9 @@ spec = do
             output <- capture_ $ metric "price" (object ["symbol" .= ("BTC/USD" :: String)])
             output `shouldContain` "\"_metric\":\"price\""
 
-        it "includes timestamp" $ do
+        it "includes a UTC ISO 8601 timestamp" $ do
             output <- capture_ $ metric "heartbeat" (object [])
-            output `shouldContain` "\"timestamp\":"
-            -- Timestamp should be numeric (not a quoted string)
-            output `shouldNotContain` "\"timestamp\":\""
+            timestampOf output `shouldSatisfy` maybe False isIsoTimestamp
 
         it "merges data correctly" $ do
             output <- capture_ $ metric "trade" (object ["symbol" .= ("ETH" :: String), "amount" .= (1.5 :: Double)])
@@ -119,6 +166,21 @@ spec = do
             output `shouldContain` "\"timestamp\":"
 
     describe "The0.Input.result" $ do
+        it "fails the bot and writes no file when the value fails to evaluate" $ do
+            (outcome, written) <- inCodeDir $ \dir -> do
+                outcome <- try $ hSilence [stderr] $
+                    result (object ["price" .= (Prelude.error "price feed unavailable" :: Double)])
+                written <- doesFileExist (dir </> "result.json")
+                pure (outcome, written)
+            either (\(ErrorCall message) -> message) (const "no error") outcome
+                `shouldBe` "price feed unavailable"
+            written `shouldBe` False
+
+        it "writes non-ASCII text as UTF-8" $ do
+            let val = object ["message" .= ("café ✓ 日本" :: String)]
+            written <- resultFileOf (result val)
+            written `shouldBe` Right val
+
         it "does not throw on valid input" $ do
             -- result writes to a file, so we test that it doesn't throw
             let val = object ["status" .= ("success" :: String), "data" .= (42 :: Int)]
@@ -129,6 +191,10 @@ spec = do
             True `shouldBe` True
 
     describe "The0.Input.success" $ do
+        it "writes valid JSON for a message with control characters" $ do
+            written <- resultFileOf (success awkwardMessage)
+            written `shouldBe` Right (object ["status" .= ("success" :: String), "message" .= awkwardMessage])
+
         it "does not throw on valid input" $ do
             -- success writes to a file, test it doesn't throw
             result' <- try (success "Test message") :: IO (Either SomeException ())
@@ -136,3 +202,8 @@ spec = do
                 Left _ -> return ()
                 Right _ -> return ()
             True `shouldBe` True
+
+    describe "The0.Input.error" $ do
+        it "writes valid JSON for a message with control characters" $ do
+            written <- resultFileOf (The0.Input.error awkwardMessage)
+            written `shouldBe` Right (object ["status" .= ("error" :: String), "message" .= awkwardMessage])

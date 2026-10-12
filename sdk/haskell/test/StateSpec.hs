@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module StateSpec (spec) where
 
 import Test.Hspec
 import The0.State as State
-import Data.Aeson (Value(..), object, (.=), toJSON)
-import qualified Data.Aeson as Aeson
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
+import Data.Aeson (Value(..), object, (.=))
+import System.Directory (createDirectoryIfMissing, getPermissions, setPermissions, setOwnerWritable)
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.IO.Temp (withSystemTempDirectory)
-import Control.Exception (try, SomeException, bracket)
+import Control.Exception (try, SomeException, bracket_, IOException)
 
 -- | Helper to run tests with a temporary state directory
 withTempStateDir :: (FilePath -> IO a) -> IO a
@@ -82,6 +82,17 @@ spec = do
         it "returns False for non-existent key" $ withTempStateDir $ \_ -> do
             result <- State.delete "nonexistent"
             result `shouldBe` False
+
+        it "fails when the key exists but cannot be removed" $ withTempStateDir $ \dir -> do
+            State.set "locked" ("value" :: String)
+            permissions <- getPermissions dir
+            result <- bracket_
+                (setPermissions dir (setOwnerWritable False permissions))
+                (setPermissions dir permissions)
+                (try (State.delete "locked"))
+            case result of
+                Left (_ :: IOException) -> return ()
+                Right deleted -> expectationFailure ("expected an IOException, got " ++ show deleted)
 
     describe "The0.State.list" $ do
         it "returns all keys" $ withTempStateDir $ \_ -> do

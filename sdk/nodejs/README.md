@@ -71,7 +71,7 @@ success('Trade completed', { tradeId: '12345' });
 
 ### `error(message: string, data?: object): never`
 
-Output an error result and exit with code 1.
+Output an error result, print the message to stderr as an error log line, and exit with code 1.
 
 ```typescript
 error('Failed to connect');

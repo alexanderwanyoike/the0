@@ -1,0 +1,47 @@
+{
+  "description": "A JSON object body supplies the params with their JSON types. The runtime also copies them into the query string as text; the body wins.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "target": "/echo?filter=%7B%22side%22%3A%22buy%22%7D&limit=5&live=true&symbol=BTC%2FUSD&symbols=%5B%22AAPL%22%2C%22MSFT%22%5D",
+      "body": {
+        "symbol": "BTC/USD",
+        "limit": 5,
+        "live": true,
+        "symbols": ["AAPL", "MSFT"],
+        "filter": {"side": "buy"}
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": {
+            "symbol": "BTC/USD",
+            "limit": 5,
+            "live": true,
+            "symbols": ["AAPL", "MSFT"],
+            "filter": {"side": "buy"}
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/echo",
+      "body": {"limit": 5, "cursor": null},
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": 5, "cursor": null}}}
+    }
+  ]
+}

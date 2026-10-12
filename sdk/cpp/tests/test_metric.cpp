@@ -7,8 +7,18 @@
 #include <doctest/doctest.h>
 #include <the0/the0.h>
 #include "helpers/test_helpers.hpp"
+#include <regex>
 
 using namespace the0_test;
+
+namespace {
+
+bool is_iso_timestamp(const std::string& text) {
+    static const std::regex pattern(R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$)");
+    return std::regex_match(text, pattern);
+}
+
+} // namespace
 
 TEST_SUITE("the0::metric") {
     TEST_CASE("outputs JSON with _metric field to stdout") {
@@ -24,18 +34,15 @@ TEST_SUITE("the0::metric") {
         CHECK(json["value"] == 45000.0);
     }
 
-    TEST_CASE("includes timestamp field") {
+    TEST_CASE("includes a UTC ISO 8601 timestamp") {
         CaptureStdout capture;
         the0::metric("signal", {{"type", "BUY"}});
 
         std::string output = capture.get();
         auto json = the0::json::parse(output);
 
-        CHECK(json.contains("timestamp"));
-        CHECK(json["timestamp"].is_number());
-        // Timestamp should be a reasonable Unix milliseconds value
-        long long ts = json["timestamp"].get<long long>();
-        CHECK(ts > 1700000000000);  // After Nov 2023
+        REQUIRE(json["timestamp"].is_string());
+        CHECK(is_iso_timestamp(json["timestamp"].get<std::string>()));
     }
 
     TEST_CASE("handles empty data") {
@@ -87,6 +94,15 @@ TEST_SUITE("the0::metric") {
         std::string output = capture.get();
         CHECK(output.back() == '\n');
     }
+
+    TEST_CASE("replaces bytes that are not UTF-8") {
+        CaptureStdout capture;
+        REQUIRE_NOTHROW(the0::metric("caf\xE9", {{"venue", "caf\xE9"}}));
+
+        auto json = the0::json::parse(capture.get());
+        CHECK(json["_metric"] == "caf\xEF\xBF\xBD");
+        CHECK(json["venue"] == "caf\xEF\xBF\xBD");
+    }
 }
 
 TEST_SUITE("the0::log") {
@@ -111,18 +127,15 @@ TEST_SUITE("the0::log") {
         CHECK(json["level"] == "info");
     }
 
-    TEST_CASE("includes timestamp") {
+    TEST_CASE("includes a UTC ISO 8601 timestamp") {
         CaptureStderr capture;
         the0::log("Test message");
 
         std::string output = capture.get();
         auto json = the0::json::parse(output);
 
-        CHECK(json.contains("timestamp"));
-        CHECK(json["timestamp"].is_number());
-        // Timestamp should be a reasonable Unix milliseconds value
-        long long ts = json["timestamp"].get<long long>();
-        CHECK(ts > 1700000000000);  // After Nov 2023
+        REQUIRE(json["timestamp"].is_string());
+        CHECK(is_iso_timestamp(json["timestamp"].get<std::string>()));
     }
 
     TEST_CASE("supports warn level") {
@@ -207,5 +220,40 @@ TEST_SUITE("the0::log") {
 
         std::string output = capture.get();
         CHECK(output.back() == '\n');
+    }
+
+    TEST_CASE("replaces bytes that are not UTF-8") {
+        CaptureStderr capture;
+        REQUIRE_NOTHROW(the0::log("caf\xE9 closed"));
+
+        auto json = the0::json::parse(capture.get());
+        CHECK(json["message"] == "caf\xEF\xBF\xBD closed");
+    }
+}
+
+TEST_SUITE("the0::detail::iso_timestamp") {
+    std::string iso_at(long long millis_since_epoch) {
+        return the0::detail::iso_timestamp(
+            std::chrono::system_clock::time_point(std::chrono::milliseconds(millis_since_epoch)));
+    }
+
+    TEST_CASE("starts at the Unix epoch") {
+        CHECK(iso_at(0) == "1970-01-01T00:00:00.000Z");
+    }
+
+    TEST_CASE("keeps the milliseconds") {
+        CHECK(iso_at(1791804927111) == "2026-10-12T11:35:27.111Z");
+    }
+
+    TEST_CASE("handles a leap day") {
+        CHECK(iso_at(1709208000000) == "2024-02-29T12:00:00.000Z");
+    }
+
+    TEST_CASE("skips the leap day of a century year") {
+        CHECK(iso_at(4107542400000) == "2100-03-01T00:00:00.000Z");
+    }
+
+    TEST_CASE("handles the last millisecond of a year") {
+        CHECK(iso_at(1767225599999) == "2025-12-31T23:59:59.999Z");
     }
 }

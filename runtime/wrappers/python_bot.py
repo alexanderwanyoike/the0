@@ -11,7 +11,6 @@ import signal
 import traceback
 import threading
 import logging
-from datetime import datetime, timezone
 
 DEFAULT_SUCCESS = {"status": "success", "message": "Bot executed successfully"}
 
@@ -48,31 +47,10 @@ def clear_stale_result():
     except OSError as e:
         print(f"RESULT_ERROR: Failed to remove stale result file: {e}", file=sys.stderr)
 
-def read_result():
-    try:
-        with open(get_result_file_path()) as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
-
 def settle_result(fallback):
-    """Keep the result the bot wrote this run, or record the fallback; return the run's result."""
-    if os.path.exists(get_result_file_path()):
-        return read_result()
-    write_result(fallback)
-    return fallback
-
-def report_error(result):
-    # The SDK's error() only writes result.json, which nothing reads for bot
-    # runs, so without this line a failed run leaves no trace in the logs.
-    if not isinstance(result, dict) or result.get("status") != "error":
-        return
-    entry = {
-        "level": "error",
-        "message": result.get("message", "Bot reported an error"),
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    print(json.dumps(entry), file=sys.stderr)
+    """Keep the result the bot wrote this run, or record the fallback."""
+    if not os.path.exists(get_result_file_path()):
+        write_result(fallback)
 
 def exit_code_of(exc):
     # Same mapping the interpreter applies when SystemExit reaches the top level.
@@ -221,7 +199,7 @@ def main():
         fallback = DEFAULT_SUCCESS
     else:
         fallback = {"status": "error", "message": outcome["message"] or f"Bot exited with code {exit_code}"}
-    report_error(settle_result(fallback))
+    settle_result(fallback)
     sys.exit(exit_code)
 
 if __name__ == "__main__":

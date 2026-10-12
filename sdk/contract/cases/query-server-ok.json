@@ -1,0 +1,65 @@
+{
+  "description": "With BOT_TYPE=realtime and no QUERY_PATH, run() serves HTTP on THE0_QUERY_PORT. Any method reaches the handler for the URL path; a result is 200 {status: ok, data}.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "state_before": {"positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}]},
+  "handlers": {
+    "/portfolio": [
+      {"op": "state.get", "key": "positions", "default": [], "as": "positions"},
+      {"op": "return", "value": {"positions": {"$ref": "positions"}}}
+    ]
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/portfolio",
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": {"positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}]}
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/portfolio",
+      "expect": {
+        "status": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": {
+          "status": "ok",
+          "data": {"positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}]}
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    },
+    {
+      "method": "GET",
+      "target": "/info",
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "data": {
+            "available_queries": {
+              "$match": "unordered",
+              "items": ["/portfolio", "/health", "/info"]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

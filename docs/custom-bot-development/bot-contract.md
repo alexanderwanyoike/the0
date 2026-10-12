@@ -1,0 +1,319 @@
+---
+title: "Bot Contract"
+description: "What the runtime, the wrappers and every SDK agree on: environment, entrypoints, results, output lines, state and queries"
+order: 17
+---
+
+# Bot Contract
+
+This page is for SDK authors and for anyone changing how the runtime starts bots. It states what a bot, its SDK and the runtime agree on. Bot authors don't need it: the SDK pages cover the same ground through each SDK's API.
+
+Three parties take part:
+- **The runtime.** `runtime execute` runs inside the bot's container. It downloads the code and the state, sets the environment, starts the entrypoint, settles the run's exit code from its result, and saves state and logs.
+- **The wrappers.** `runtime/wrappers/python_bot.py` and `runtime/wrappers/node_bot.js` start Python and Node.js bot entrypoints and call their `main`. Compiled languages have no wrapper.
+- **The SDK.** It reads the environment and writes the outputs described here.
+
+The cases in [`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) test these rules, and every SDK's test suite runs them. A change to the contract changes this page and the cases together.
+
+Every SDK follows every rule from its 0.4 release. [Bringing the SDKs into line](#bringing-the-sdks-into-line) lists the rules that older SDK versions may break.
+
+## Processes
+
+The runtime starts an entrypoint in one of three ways:
+- **Bot run.** The bot entrypoint runs once per scheduled run, or for as long as a realtime bot runs.
+- **Ephemeral query.** The query entrypoint answers one query in a fresh container, with `QUERY_PATH` set. Scheduled bots answer every query this way.
+- **Query server.** The query entrypoint runs alongside a realtime bot and serves HTTP for as long as the bot runs. In Docker it is a subprocess in the bot's container; in Kubernetes it is a sidecar container. Only realtime bots with a query entrypoint have one.
+
+| Runtime | Bot entrypoint runs as | Query entrypoint runs as |
+|---|---|---|
+| `python3.11` | `python3 /app/wrappers/python_bot.py` | `python3 <query entrypoint>` |
+| `nodejs22` | `node /app/wrappers/node_bot.js` | `node <query entrypoint>` |
+| `nodejs20` | `/opt/node20/bin/node /app/wrappers/node_bot.js` | `/opt/node20/bin/node <query entrypoint>` |
+| `rust-stable`, `gcc13`, `cpp-gcc13`, `ghc96` | `/bot/<entrypoint>` | `/bot/<query entrypoint>` |
+| `dotnet8` | `dotnet <entrypoint>` for a `.dll`, otherwise `dotnet run --project <entrypoint>` | the same, with the query entrypoint |
+| `scala3` | `java -jar <jar>`, or `java -cp <jar> <MainClass>` for an entrypoint written `<jar>:<MainClass>` | the same, with the query entrypoint |
+
+The working directory is the code directory, `/bot`. A query entrypoint never runs through a wrapper; the SDK's query runner owns the whole process.
+
+## Environment
+
+`runtime execute` builds the environment for every process it starts (`BuildBotEnv` in `runtime/internal/execute/helpers.go`). It starts from the container's own environment and sets the variables below. Its values replace any of the same name, except where the table says an inherited value is kept.
+
+| Variable | Set for | Value |
+|---|---|---|
+| `BOT_ID` | every process | The bot's ID. |
+| `BOT_CONFIG` | every process | The bot's configuration, as JSON object text. |
+| `CODE_MOUNT_DIR` | every process | The code directory without its leading `/`, which is `bot`. A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`. SDKs use `bot` when it is unset. |
+| `STATE_DIR` | every process | The state directory, `/state/.the0-state`. An inherited value is kept; every container the runtime creates sets it to that path. SDKs use that path when it is unset. |
+| `BOT_TYPE` | bot runs and query servers; ephemeral queries on Docker only | `realtime` or `scheduled`. Kubernetes query pods don't set it. SDKs only read it to decide whether to start the query server. |
+| `QUERY_PATH` | ephemeral queries only | The query's path, such as `/portfolio`. It is never empty. Its presence is what makes state read-only. |
+| `QUERY_PARAMS` | ephemeral queries with params; Docker always sets it, to `{}` when there are none | The params, as JSON object text. |
+| `THE0_QUERY_PORT` | never set by the runtime | The port the SDK's query server listens on, default `9476`. The runtime always connects to 9476; the variable exists for tests and local runs. |
+| `SCRIPT_PATH` | every process | The entrypoint file. Only the wrappers read it. |
+| `PYTHONPATH` | `python3.11` | `/bot/vendor:/bot`, followed by any inherited value. |
+| `PATH` | `nodejs20` | `/opt/node20/bin`, followed by the inherited value, so a bot that starts `node` itself gets Node.js 20 too. |
+
+The bot can also see variables that are not part of the contract, and it must not rely on them:
+- **`QUERY_PARAM_<key>`.** The runtime sets one per param using Go's `%v` formatting, which loses information: an object becomes `map[...]`. No SDK reads it. Read `QUERY_PARAMS` instead.
+- **The runtime's own settings**, such as `CODE_FILE`, `RUNTIME`, `ENTRYPOINT`, `QUERY_ENTRYPOINT`, `QUERY_RESULT_KEY`, `IS_SCHEDULED`, `ENTRYPOINT_TYPE`, and the storage and NATS settings. The bot inherits them because `runtime execute` passes its own environment through.
+
+## Entrypoints
+
+`bot-config.yaml` names the entrypoints:
+- `entrypoints.bot`, which is required.
+- `entrypoints.query`, which is optional. A bot without one answers no queries at all, built-in ones included.
+
+### Python and Node.js bot entrypoints
+
+The file exports `main(bot_id, config)`. The wrapper does the following, in order:
+1. Changes to `/{CODE_MOUNT_DIR}`. The Python wrapper also puts that directory and its `vendor/` on `sys.path`.
+2. Deletes any `result.json` an earlier run left in that directory, so it cannot pass for this run's.
+3. Loads `SCRIPT_PATH`:
+   - Python takes the module's `main`.
+   - Node.js takes `module.main`, then `module.default`, then the module itself. Whichever it takes must be a function.
+4. Calls `main(BOT_ID, <BOT_CONFIG parsed as JSON>)`. A Node.js `main` may return a promise.
+5. Settles the result, as described in [What the wrappers add](#what-the-wrappers-add), and exits with the bot's exit code.
+
+If the file cannot be loaded, the wrapper exits 1. The Node.js wrapper also writes an error result.
+
+### Compiled bot entrypoints
+
+The entrypoint is the program itself. It reads `BOT_ID` and `BOT_CONFIG` through the SDK's `parse()`.
+
+### `parse()`
+
+`parse()` returns `BOT_ID` and `BOT_CONFIG` decoded as JSON, with every value keeping its JSON type. The runtime always sets both variables, so what `parse()` does without them is up to each SDK.
+
+### Query entrypoints
+
+A query entrypoint registers its handlers and then starts the SDK's query runner (`query.run()` or its equivalent). See [Queries](#queries).
+
+## Results and exit codes
+
+### The result file
+
+A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`, which is `/bot/result.json`. It holds one JSON object.
+
+| SDK call | Writes |
+|---|---|
+| `success(message[, data])` | `{"status": "success", "message": message, "data": data}`, with `data` only when it is given |
+| `error(message[, data])` | `{"status": "error", "message": message, "data": data}`, with `data` only when it is given. See [`error()`](#error). |
+| `result(value)` | `value`, unchanged |
+
+Each call replaces the file, so the bot's last call wins. An SDK never writes a result on its own: a bot that makes none of these calls leaves no file. Every SDK's `success()` and `error()` accept the optional `data`.
+
+### `error()`
+
+`error(message[, data])` does three things, in this order:
+1. Writes the error result above.
+2. Prints the message on stderr as a log line at level `error`, exactly as `log(message, "error")` would: `{"level": "error", "message": "...", "timestamp": "..."}`. The `data` goes in the result only.
+3. Exits with code 1. Nothing after it runs.
+
+The result file is not kept once the run is over: the runtime only reads it to settle the run (see [Exit codes](#exit-codes)). The logs and the exit code are the only trace a failed run leaves.
+
+### Exit codes
+
+`runtime execute` settles the run's exit code once the bot process has exited, the same way for every runtime:
+- **0 means the run succeeded; anything else means it failed.** The runtime exits with the run's code, so a non-zero code marks the Kubernetes Job or the Docker run as failed. Failed scheduled runs are not retried.
+- **The process's own non-zero exit code always stands.** An uncaught error exits non-zero. The SDK writes no result for it; the wrappers do, as described in [What the wrappers add](#what-the-wrappers-add).
+- **An error result fails the run, even when the process exits 0.** The run then exits 1. An error result is a result file holding a JSON object whose `status` is exactly `"error"`, for example after `result({"status": "error", ...})` and a normal return. The result file is the bot's own verdict, so the run must show as failed everywhere.
+- **Only this run's result counts.** The runtime deletes any result file in the code directory before it starts the bot, so a file shipped in the code, or left by an earlier container in the same pod, never decides a run.
+
+### The run summary line
+
+When a run fails, the runtime prints one log line after the bot's own output, on stderr and in the bot's logs:
+
+```json
+{"level": "error", "message": "Run failed: Broker rejected the order", "timestamp": "2026-10-12T09:30:00.123456789Z"}
+```
+
+The text after `Run failed: ` is the error result's `message`. Without an error result, it is `Bot exited with code N`. An error result with no `message` gives `Bot reported an error`, and one whose `message` is not a string gives its JSON text.
+
+The SDK's `error()` line is the bot's own log; the summary is the runtime's. A bot that calls `error()` therefore shows its message in its own line and again in the summary, and nothing else repeats it. A bot on an older SDK whose `error()` prints nothing still gets the summary, so no failed run is silent.
+
+There is no summary when the runtime stops the bot itself, on a stop signal, or when the process cannot start, which has its own `Failed to start process` line.
+
+### What the wrappers add
+
+After `main` ends, the Python and Node.js wrappers settle the result:
+- **They never overwrite.** A result the bot wrote during the run stays as it is. A wrapper writes a result only when the bot wrote none:
+  - A plain return writes `{"status": "success", "message": "Bot executed successfully"}`. When a Node.js `main` returns a value, that value is written instead.
+  - A failure writes `{"status": "error", "message": ...}`, with the error's message or `Bot exited with code N`. A failure is an uncaught error, a rejected promise, `error()`, or any non-zero exit. The runtime's summary line takes its message from this result.
+- **They exit with the bot's exit code.** An uncaught error gives 1. They leave the error-result rule to the runtime, and print no log line of their own for a failure.
+- **Stop signals differ.**
+  - On SIGTERM or SIGINT, the Python wrapper stops waiting for `main`, writes `{"status": "terminated", ...}` unless the bot wrote a result, and exits 0.
+  - The Node.js wrapper catches both signals, but the abort signal it raises never reaches `main`, so a Node.js bot carries on until it finishes or the runtime kills it.
+
+## Log and metric lines
+
+Everything a bot prints on stdout and stderr goes to its logs. For a bot run, the runtime also writes a copy to `/var/the0/logs/bot.log` and saves it. Any line is shown, but lines in the two shapes below get special treatment.
+
+Each one is a single JSON object on one line, UTF-8, ending in a newline.
+
+**Metric lines** come from `metric(type, data)` and are printed on stdout:
+
+```json
+{"_metric": "price", "symbol": "BTC/USD", "value": 45000.5, "timestamp": "2026-10-12T09:30:00.123Z"}
+```
+
+`_metric` holds the type, followed by the fields of `data`, which must be an object, and then `timestamp`.
+
+**Log lines** come from `log(message[, data][, level])` and are printed on stderr:
+
+```json
+{"level": "info", "message": "Order placed", "order_id": "o-1", "timestamp": "2026-10-12T09:30:00.123Z"}
+```
+
+`level` is `info` (the default), `warn` or `error`. The fields of `data` sit alongside `message`.
+
+The rules for both:
+- **Key order doesn't matter.**
+- **`data` must not use the SDK's keys** (`_metric`, `level`, `message`, `timestamp`). What happens when it does differs between SDKs and is not part of the contract.
+- **`error()`'s message and the query server's start-up line are log lines too**, though the SDK prints them for itself. So is the runtime's [run summary line](#the-run-summary-line).
+- **Timestamps are UTC ISO 8601 strings ending in `Z`**, such as `2026-10-12T09:30:00Z` or `2026-10-12T09:30:00.123Z`. Fractional seconds are optional and may have any precision: Python writes microseconds, Node.js milliseconds.
+- **Consumers keep accepting the older forms**, because bots built on older SDK versions keep running. The frontend (`frontend/src/lib/events/event-parser.ts`) reads `timestamp`, `time` or `ts` in any of these forms:
+  - an ISO string
+  - a number of epoch seconds or milliseconds (values below 10^10 are taken as seconds)
+  - a string of digits with an optional trailing `Z`
+
+The frontend reads each line as follows:
+- A JSON object with `_metric` is a metric.
+- A JSON object with `level`, `message` or `msg` is a log line at its `level`.
+- Anything else is plain text, at INFO unless it starts with `INFO:`, `WARN:` or `ERROR:`.
+
+A known limitation: the api's log history reduces any JSON line that is not a metric to its `message` (`normalizeLine` in `api/src/logs/logs.service.ts`). Lines loaded from history therefore show at INFO whatever their level, `error()`'s line included.
+
+## State
+
+- **Layout.** Each key is a file, `<STATE_DIR>/<key>.json`, holding the value as JSON. The SDK creates the directory on the first write.
+- **Keys.** A key must not be empty and must not contain `/`, `\` or `..`. Any other key is rejected with an error, and nothing is written.
+- **Operations:**
+  - `get(key[, default])` returns the stored value, or the default when the key doesn't exist.
+  - `set(key, value)` stores any JSON value, `null` included.
+  - `delete(key)` removes the key and returns whether it existed.
+  - `list()` returns the keys, in no particular order.
+  - `exists(key)` returns whether the key exists.
+  - `clear()` removes every key.
+- **Persistence.** Before a bot run starts, the runtime restores the bot's saved state into `/state`. It saves `/state` back while the bot runs and when it ends. Everything under `/state` persists, not only the SDK's directory.
+- **Read-only in query mode.** When `QUERY_PATH` is set, `set`, `delete` and `clear` fail with the SDK's read-only error, before the key is checked. Reads still work. An ephemeral query sees the state as it was saved, and nothing it does is saved back.
+- **One read-only error type.** Each SDK has exactly one read-only error type. State operations throw it, and the query module offers that same type to handler authors, so a handler that catches it catches what state throws.
+- **The query server can write.** `QUERY_PATH` is not set for the query server, so no SDK blocks state writes there. Handlers must still not write state, because the query server shares the realtime bot's state directory.
+
+## Queries
+
+### Handlers
+
+A query entrypoint registers a handler for each path, then starts the SDK's query runner. A handler receives the request (its path and its params) and either returns any JSON value or fails with an error.
+
+When the runner starts, every SDK registers two built-in paths, unless the bot registered the same path first:
+
+| Path | Answers |
+|---|---|
+| `/health` | `{"status": "ok"}` |
+| `/info` | `{"available_queries": [...]}`, every path the bot answers, built-ins included, in no particular order |
+
+### Choosing the mode
+
+The runner picks its mode from the environment:
+1. If `QUERY_PATH` is set, it runs an [ephemeral query](#ephemeral-queries) for that path.
+2. Otherwise, if `BOT_TYPE` is `realtime`, it starts the [query server](#query-server).
+3. Otherwise, it runs an ephemeral query for `/info`.
+
+### Params
+
+Params are JSON values. A param keeps its type (string, number, boolean, array, object or `null`), and every SDK hands it to handlers without loss.
+- **Ephemeral queries** read params from `QUERY_PARAMS`, a JSON object. When it is missing, is not JSON, or is JSON but not an object, there are no params.
+- **The query server** reads params from the request body when the body is a JSON object. Otherwise (no body, or a body that isn't a JSON object), it reads them from the URL query string, URL-decoded, and every value is a string. The runtime sends both a body and a query string, so a manual `curl` call with a query string keeps working.
+- **Typed server params break string handlers.** An SDK whose query server used to read only the query string now hands realtime handlers typed params. A handler that treated every param as a string, or decoded object params from their JSON text (the runtime has sent them that way in the query string), must change. The Python SDK (`the0-sdk`) and the Node.js SDK (`the0-node`) make this change in 0.4.0. Node.js's `QueryRequest` types still declare params as strings.
+- **Accessors.**
+  - Python's request object and Node.js's `req.params` and `req.get()` hand over the JSON values as they are.
+  - The Rust, .NET, Scala, Haskell and C++ SDKs keep their string accessor, which returns a non-string value as its JSON text instead of dropping it. They also gain a typed accessor. Their accessors follow three rules:
+    - The string accessors treat a `null` param as absent, so the handler's default applies. The runtime leaves `null` params out of the query string for the same reason.
+    - A typed accessor reads a string value that parses as the requested type. Query-string params are all strings, so `limit=50` from a manual call still reads as a number.
+    - A typed accessor asked for a string returns a non-string value as its JSON text, as the string accessors do. A `null` param read as a string is absent, as in the first rule, never the text `"null"`.
+
+A typed accessor given a param of another type is a known language difference, not a rule of the contract. Such a param is present and not `null`, but is neither the requested type nor a string that parses as it, for example `"abc"` read as a number. Queries are read-only, so the stakes are low.
+
+| SDK | Typed accessor | A param of another type |
+|---|---|---|
+| Rust | `req.get_as::<T>(key)` | `None`, as for a missing param |
+| Haskell | `getParamAs req key` | `Nothing`, as for a missing param |
+| C++ | `req.get_as<T>(key)` | `std::nullopt`, as for a missing param; `get_as<T>(key, default)` gives the default |
+| .NET | `req.Get<T>(key, default)` | throws `JsonException` |
+| Scala | `req.getAs[T](key)` | throws `IllegalArgumentException` |
+
+A handler that needs to tell a mistyped param from a missing one checks the params themselves in Rust, Haskell and C++. In .NET and Scala it catches the exception, which otherwise fails the handler with the error response below.
+
+### Responses
+
+Both modes answer with the same JSON object:
+
+| Outcome | Body | Ephemeral exit code | Server status |
+|---|---|---|---|
+| The handler returned `value` | `{"status": "ok", "data": value}` | 0 | 200 |
+| No handler for the path | `{"status": "error", "error": "No handler for path: <path>", "available": [...]}` | 1 | 404 |
+| The handler failed | `{"status": "error", "error": "<message>"}` | 1 | 500 |
+
+- `available` lists every path the bot answers, as `/info` does.
+- `error` for a failed handler contains the error's message. The rest of the text is up to the language; Node.js, for one, puts the error's name in front.
+- Every query mode can report a handler error.
+- In both modes, when the body has both `error` and `available`, the runtime appends `(available: a, b, ...)` to the error text it answers with.
+
+### Ephemeral queries
+
+The runtime restores the bot's saved state, then starts the query entrypoint in a fresh container with `QUERY_PATH` and `QUERY_PARAMS` set. The SDK does three things:
+1. Runs the one handler.
+2. Writes the response to `/query/result.json`, creating `/query` if needed.
+3. Exits with the code in the table above.
+
+The runtime then uploads `/query/result.json` (to `QUERY_RESULT_KEY` in the query results bucket) and answers the query from it:
+- **Exit 0:** the file's contents.
+- **Non-zero exit:** the file's contents when there are any, otherwise an error carrying the process's output.
+
+### Query server
+
+- **Listening.** The server listens on `0.0.0.0` at `THE0_QUERY_PORT` (default 9476) for as long as the bot runs. The runtime reaches it at the container's or the pod's address, on port 9476.
+- **Routing.** It answers at least `GET` and `POST`; the runtime sends `POST`. The URL path selects the handler.
+- **Responses.** It responds with `Content-Type: application/json` and the status codes in the table above.
+- **Start-up line.** When it starts, it prints a log line on stderr.
+
+The runtime sends each query as a `POST` with `Content-Type: application/json` and the params as the JSON body, when there are any. It also copies each param into the query string:
+- strings as they are
+- any other value as its JSON text
+- `null` params left out
+
+It reads the response body whatever the status code.
+
+## Conformance cases
+
+[`sdk/contract/`](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract) holds the cases. Each one is an environment in and the expected outputs out; [its README](https://github.com/alexanderwanyoike/the0/tree/dev/sdk/contract#readme) lists what is compared, describes the format, and says how an SDK adopts the cases and lists the ones it does not pass yet. Every SDK workflow runs on changes to `sdk/contract/**`.
+
+| SDK | Harness |
+|---|---|
+| Python | `sdk/python/tests/test_contract.py` |
+| Node.js | `sdk/nodejs/src/contract.test.ts` |
+| Rust | `sdk/rust/tests/contract/main.rs` |
+| .NET | `sdk/dotnet/tests/ContractTests.cs` |
+| Scala | `sdk/scala/src/test/scala/the0/ContractSpec.scala` |
+| Haskell | `sdk/haskell/test/contract/Main.hs` |
+| C++ | `sdk/cpp/tests/contract/harness.cpp` |
+
+The runtime runs the cases too, end to end, in `runtime/cmd/app/contract_e2e_test.go`. Python and Node.js bots built on the repo's own SDKs play each bot case and each ephemeral query case through `runtime execute` in the runtime image, with the wrappers and `BuildBotEnv`. The check adds what the runtime puts on top of a case's expectations:
+- the wrappers' result when the bot wrote none;
+- exit 1 for an error result;
+- the [run summary line](#the-run-summary-line) of a failed run;
+- the same lines in `bot.log` as on stdout and stderr.
+
+`runtime/cmd/app/testdata/contract-cases` adds cases in the same format for rules only the runtime enforces. The query server cases are left to the SDK harnesses. So is the query case without `QUERY_PATH`, which no runtime launch path produces. The runtime workflow runs the check on changes to `runtime/**` and `sdk/contract/**`.
+
+## Bringing the SDKs into line
+
+Every SDK follows every rule on this page from its 0.4 release, and its test suite runs the cases. The SDKs came into line one at a time, each running the cases first. Before 0.4, some SDKs broke the rules below, so a bot built on an older SDK version may still break them:
+- `success()` and `error()` accept optional `data`. Some SDKs took a message only.
+- `error()` prints its message on stderr.
+- Metric and log timestamps are ISO 8601 strings. Some SDKs wrote epoch milliseconds as a number.
+- The query server's start-up line is a log line. Some SDKs printed `{"_log": "info", ...}` with no timestamp.
+- One read-only error type. Some SDKs defined a second, unused type in the query module.
+- Ephemeral query params keep their JSON types. Some SDKs turned every value into a string, or dropped params that were not strings.
+- The query server reads the JSON body.
+- The query server's 404 includes `available`.

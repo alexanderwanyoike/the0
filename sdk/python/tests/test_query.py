@@ -235,6 +235,12 @@ class TestReadOnlyStateError(unittest.TestCase):
         error = ReadOnlyStateError("Test")
         self.assertIsInstance(error, Exception)
 
+    def test_query_and_state_share_one_type(self):
+        """A handler catching query.ReadOnlyStateError catches what state raises."""
+        from the0 import state
+
+        self.assertIs(ReadOnlyStateError, state.ReadOnlyStateError)
+
 
 class TestStateReadOnlyEnforcement(unittest.TestCase):
     """Test that state modifications are blocked in query mode."""

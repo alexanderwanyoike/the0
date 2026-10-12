@@ -1,0 +1,27 @@
+{
+  "description": "A query string param that URL-decodes to bytes that are not UTF-8 still gets an answer, which is JSON with each such byte replaced by U+FFFD.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/echo?venue=caf%E9",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"venue": "caf�"}}}
+    },
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ]
+}

@@ -86,6 +86,10 @@ describe("query module", () => {
       const error = new query.ReadOnlyStateError("Test");
       expect(error).toBeInstanceOf(Error);
     });
+
+    it("should be the class state throws, so a handler catching it catches state's", () => {
+      expect(query.ReadOnlyStateError).toBe(state.ReadOnlyStateError);
+    });
   });
 
   describe("isQueryMode", () => {

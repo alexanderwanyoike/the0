@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace The0.Tests;
@@ -182,6 +184,147 @@ public class QueryTests : IDisposable
         Assert.Equal("default", req.Get("missing", "default"));
     }
 
+    private static Query.QueryRequest TypedRequest() =>
+        new("/test", JsonNode.Parse(
+            """{"symbol":"BTC/USD","limit":5,"live":true,"symbols":["AAPL","MSFT"],"filter":{"side":"buy"},"cursor":null}"""
+        )!.AsObject());
+
+    [Fact]
+    public void QueryRequest_JsonParamsHoldsEveryParamAsItsJsonValue()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(
+            """{"symbol":"BTC/USD","limit":5,"live":true,"symbols":["AAPL","MSFT"],"filter":{"side":"buy"},"cursor":null}""",
+            req.JsonParams.ToJsonString());
+    }
+
+    [Fact]
+    public void QueryRequest_JsonParamsHoldsStringParamsAsJsonStrings()
+    {
+        var req = new Query.QueryRequest("/test", new Dictionary<string, string> { ["limit"] = "5" });
+
+        Assert.Equal("""{"limit":"5"}""", req.JsonParams.ToJsonString());
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetDeserializesTheValue()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(5, req.Get<int>("limit"));
+        Assert.True(req.Get<bool>("live"));
+        Assert.Equal(new List<string> { "AAPL", "MSFT" }, req.Get<List<string>>("symbols"));
+        Assert.Equal("buy", req.Get<Dictionary<string, string>>("filter")!["side"]);
+        Assert.Null(req.Get<int?>("cursor"));
+    }
+
+    /// <summary>The value <paramref name="read"/> returns, asserting that it does not throw.</summary>
+    private static T? Read<T>(Func<T?> read)
+    {
+        T? value = default;
+        Assert.Null(Record.Exception(() => value = read()));
+        return value;
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetOfStringReturnsAnyOtherValueAsItsJsonText()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("BTC/USD", Read(() => req.Get<string>("symbol")));
+        Assert.Equal("5", Read(() => req.Get<string>("limit")));
+        Assert.Equal("""{"side":"buy"}""", Read(() => req.Get<string>("filter")));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetOfStringTreatsANullParamAsAbsent()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("start", Read(() => req.Get<string>("cursor", "start")));
+        Assert.Null(Read(() => req.Get<string>("cursor")));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetOfANullParamReturnsTheDefaultWhenTheTypeCannotHoldNull()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(10, Read(() => req.Get("cursor", 10)));
+        Assert.Null(Read(() => req.Get<int?>("cursor", 10)));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetParsesAStringValueAsThatType()
+    {
+        var req = new Query.QueryRequest("/test", new Dictionary<string, string>
+        {
+            ["limit"] = "50",
+            ["live"] = "true",
+            ["symbols"] = """["AAPL","MSFT"]""",
+        });
+
+        Assert.Equal(50, Read(() => req.Get("limit", 10)));
+        Assert.True(Read(() => req.Get<bool>("live")));
+        Assert.Equal(new List<string> { "AAPL", "MSFT" }, Read(() => req.Get<List<string>>("symbols")));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetReturnsDefaultForMissing()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(10, req.Get("offset", 10));
+    }
+
+    [Fact]
+    public void QueryRequest_TypedGetThrowsWhenTheValueIsNotThatType()
+    {
+        var req = TypedRequest();
+
+        Assert.Throws<JsonException>(() => req.Get<int>("symbol"));
+    }
+
+    [Fact]
+    public void QueryRequest_StringGetReturnsAStringParamAsIs()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("BTC/USD", req.Get("symbol"));
+        Assert.Equal("BTC/USD", req.Params["symbol"]);
+    }
+
+    [Fact]
+    public void QueryRequest_StringGetReturnsAnyOtherParamAsItsJsonText()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("5", req.Get("limit"));
+        Assert.Equal("true", req.Get("live", "false"));
+        Assert.Equal("""["AAPL","MSFT"]""", req.Get("symbols"));
+        Assert.Equal("""{"side":"buy"}""", req.Params["filter"]);
+    }
+
+    [Fact]
+    public void QueryRequest_StringGetLeavesNonAsciiAndHtmlCharactersUnescaped()
+    {
+        var req = new Query.QueryRequest("/test", JsonNode.Parse("""{"filter":{"name":"é<&'"}}""")!.AsObject());
+
+        Assert.Equal("""{"name":"é<&'"}""", req.Get("filter"));
+    }
+
+    [Fact]
+    public void QueryRequest_StringAccessorsTreatANullParamAsAbsent()
+    {
+        var req = TypedRequest();
+
+        Assert.Null(req.Get("cursor"));
+        Assert.Equal("start", req.Get("cursor", "start"));
+        Assert.False(req.Params.ContainsKey("cursor"));
+        Assert.True(req.JsonParams.ContainsKey("cursor"));
+    }
+
     #endregion
 
     #region ReadOnlyStateError Tests
@@ -189,7 +332,7 @@ public class QueryTests : IDisposable
     [Fact]
     public void ReadOnlyStateError_HasCorrectMessage()
     {
-        var error = new Query.ReadOnlyStateError("Test message");
+        var error = new ReadOnlyStateError("Test message");
 
         Assert.Equal("Test message", error.Message);
     }
@@ -197,7 +340,7 @@ public class QueryTests : IDisposable
     [Fact]
     public void ReadOnlyStateError_IsException()
     {
-        var error = new Query.ReadOnlyStateError("Test");
+        var error = new ReadOnlyStateError("Test");
 
         Assert.IsAssignableFrom<Exception>(error);
     }

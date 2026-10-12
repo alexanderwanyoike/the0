@@ -1,0 +1,16 @@
+{
+  "description": "A QUERY_PARAMS object that repeats a key, at any depth, is unreadable: the query runs with no params instead of picking one of the values.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "{\"symbol\":\"BTC/USD\",\"filter\":{\"side\":\"buy\",\"side\":\"sell\"}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "expect": {"exit_code": 0, "query_result": {"status": "ok", "data": {}}}
+}

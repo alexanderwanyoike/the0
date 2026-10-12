@@ -2,6 +2,8 @@ package the0
 
 import scala.util.{Try, Success, Failure}
 import java.io.{File, PrintWriter}
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 /**
  * the0 SDK for Scala trading bots.
@@ -67,20 +69,42 @@ object Input {
    *
    * @param message The success message to include in the output
    */
-  def success(message: String): Unit = {
-    val escaped = escapeJson(message)
-    writeResult(s"""{"status":"success","message":"$escaped"}""")
-  }
+  def success(message: String): Unit = writeOutcome("success", message, None)
 
   /**
-   * Output an error result to the result file and exit with code 1.
+   * Output a success result with data to the result file.
+   *
+   * @param message The success message to include in the output
+   * @param data JSON text placed under the result's "data" key
+   */
+  def success(message: String, data: String): Unit = writeOutcome("success", message, Some(data))
+
+  /**
+   * Output an error result to the result file, print the message to stderr as an
+   * error log line, and exit with code 1.
    *
    * @param message The error message to include in the output
    */
-  def error(message: String): Nothing = {
-    val escaped = escapeJson(message)
-    writeResult(s"""{"status":"error","message":"$escaped"}""")
+  def error(message: String): Nothing = fail(message, None)
+
+  /**
+   * Output an error result with data to the result file, print the message to stderr
+   * as an error log line, and exit with code 1. The data goes in the result only.
+   *
+   * @param message The error message to include in the output
+   * @param data JSON text placed under the result's "data" key
+   */
+  def error(message: String, data: String): Nothing = fail(message, Some(data))
+
+  private def fail(message: String, data: Option[String]): Nothing = {
+    writeOutcome("error", message, data)
+    log(message, level = LogLevel.Error)
     sys.exit(1)
+  }
+
+  private def writeOutcome(status: String, message: String, data: Option[String]): Unit = {
+    val dataField = data.fold("")(json => s""","data":$json""")
+    writeResult(s"""{"status":"$status","message":"${escapeJson(message)}"$dataField}""")
   }
 
   /**
@@ -111,14 +135,8 @@ object Input {
    * @param json The metric data as a JSON string (will be merged with _metric and timestamp)
    */
   def metric(metricType: String, json: String): Unit = {
-    val timestamp = System.currentTimeMillis()
-    // Simple JSON merge - assumes json starts with {
-    val merged = if (json.startsWith("{") && json.length > 1) {
-      s"""{"_metric":"$metricType","timestamp":$timestamp,${json.substring(1)}"""
-    } else {
-      s"""{"_metric":"$metricType","timestamp":$timestamp}"""
-    }
-    println(merged)
+    val timestamp = now()
+    println(s"""{"_metric":${JsonValue.quote(metricType)},"timestamp":"$timestamp"${dataFields(json)}}""")
   }
 
   /**
@@ -154,32 +172,32 @@ object Input {
    * }}}
    *
    * @param message The message to log
-   * @param data Optional JSON string with additional fields (must start with '{')
+   * @param data Optional JSON object text whose fields are added to the line
    * @param level Log level (defaults to Info)
    */
   def log(message: String, data: String = "{}", level: LogLevel = LogLevel.Info): Unit = {
     val escaped = escapeJson(message)
-    val timestamp = System.currentTimeMillis()
+    val timestamp = now()
+    System.err.println(s"""{"level":"${level.value}","message":"$escaped","timestamp":"$timestamp"${dataFields(data)}}""")
+  }
 
-    // Build output JSON, merging data fields
-    val output = if (data.startsWith("{") && data.length > 2) {
-      // Merge data fields with our fields
-      s"""{"level":"${level.value}","message":"$escaped","timestamp":$timestamp,${data.substring(1)}"""
-    } else {
-      s"""{"level":"${level.value}","message":"$escaped","timestamp":$timestamp}"""
+  /**
+   * The fields of a JSON object, each written as ,"key":value; any other text gives none.
+   */
+  private def dataFields(json: String): String =
+    JsonValue.parse(json) match {
+      case Some(JsonValue.Obj(fields)) =>
+        fields.map((key, value) => s",${JsonValue.quote(key)}:${value.render}").mkString
+      case _ => ""
     }
 
-    System.err.println(output)
-  }
+  /**
+   * The current time as a UTC ISO 8601 string, such as 2026-10-12T09:30:00.123Z.
+   */
+  private def now(): String = Instant.now().truncatedTo(ChronoUnit.MILLIS).toString
 
   /**
    * Escape a string for use in JSON.
    */
-  private def escapeJson(s: String): String = {
-    s.replace("\\", "\\\\")
-     .replace("\"", "\\\"")
-     .replace("\n", "\\n")
-     .replace("\r", "\\r")
-     .replace("\t", "\\t")
-  }
+  private def escapeJson(s: String): String = JsonValue.escape(s)
 }

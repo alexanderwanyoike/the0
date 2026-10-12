@@ -1,0 +1,18 @@
+{
+  "description": "clear() removes every key.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "state_before": {"a": 1, "b": {"c": 2}},
+  "script": [
+    {"op": "state.clear"},
+    {"op": "state.list", "as": "keys"},
+    {"op": "result", "value": {"keys": {"$ref": "keys"}}}
+  ],
+  "expect": {"exit_code": 0, "result": {"keys": []}, "state_after": {}}
+}

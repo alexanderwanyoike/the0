@@ -102,7 +102,7 @@ if state::exists("portfolio") {
 }
 
 // Delete a key
-state::delete("portfolio");
+state::delete("portfolio")?;
 
 // List all keys
 let keys = state::list();
@@ -180,7 +180,7 @@ portfolio match {
 }
 
 // Retrieve with default
-val portfolio = State.getOrElse("portfolio", "{}")
+val portfolioOrEmpty = State.getOrElse("portfolio", "{}")
 
 // Check if key exists
 if (State.exists("portfolio")) {

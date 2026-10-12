@@ -27,6 +27,9 @@ import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
 import { URL } from "url";
+import { log } from "./log";
+
+export { ReadOnlyStateError } from "./state";
 
 /**
  * Request object passed to query handlers (Express-like).
@@ -51,16 +54,6 @@ export interface QueryRequest {
 export type QueryHandler = (
   req: QueryRequest
 ) => unknown | Promise<unknown>;
-
-/**
- * Error thrown when attempting to modify state during query execution.
- */
-export class ReadOnlyStateError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ReadOnlyStateError";
-  }
-}
 
 // Handler registry - maps paths to handler functions
 const handlers = new Map<string, QueryHandler>();
@@ -182,13 +175,21 @@ export async function run(): Promise<void> {
 }
 
 /**
+ * Where an ephemeral query writes its result. A mutable property rather than
+ * a literal so the contract tests can point it into a sandbox; the runtime
+ * always reads /query/result.json.
+ * @internal
+ */
+export const _queryResultFile = { path: "/query/result.json" };
+
+/**
  * Write query result to /query/result.json file (matches Python SDK behavior).
  * This avoids stdout pollution from runtime logs mixing with query results.
  */
 function writeResult(result: unknown): void {
-  const resultPath = "/query/result.json";
+  const resultPath = _queryResultFile.path;
   try {
-    fs.mkdirSync("/query", { recursive: true });
+    fs.mkdirSync(path.dirname(resultPath), { recursive: true });
     fs.writeFileSync(resultPath, JSON.stringify(result));
   } catch (e) {
     console.error(`RESULT_ERROR: Failed to write result file: ${e}`);
@@ -201,11 +202,7 @@ function writeResult(result: unknown): void {
 async function runEphemeral(queryPath: string): Promise<void> {
   // Parse parameters from environment
   const paramsStr = process.env.QUERY_PARAMS || "{}";
-  try {
-    currentParams = JSON.parse(paramsStr);
-  } catch {
-    currentParams = {};
-  }
+  currentParams = (jsonObjectParams(paramsStr) ?? {}) as Record<string, string>;
 
   // Find handler
   const fn = handlers.get(queryPath);
@@ -237,13 +234,17 @@ async function runServer(): Promise<void> {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://localhost:${port}`);
     const path = url.pathname;
-    currentParams = Object.fromEntries(url.searchParams);
+    // The declared string type predates JSON params; values reach handlers
+    // with their JSON types, as they already do in ephemeral mode.
+    const bodyParams = jsonObjectParams(await readBody(req)) as Record<string, string> | undefined;
+    currentParams = bodyParams ?? Object.fromEntries(url.searchParams);
 
     const fn = handlers.get(path);
     if (!fn) {
       sendJson(res, 404, {
         status: "error",
         error: `No handler for path: ${path}`,
+        available: Array.from(handlers.keys()),
       });
       return;
     }
@@ -258,13 +259,40 @@ async function runServer(): Promise<void> {
   });
 
   server.listen(port, "0.0.0.0", () => {
-    console.error(
-      JSON.stringify({
-        _log: "info",
-        message: `Query server started on port ${port}`,
-      })
-    );
+    log(`Query server started on port ${port}`);
   });
+}
+
+/**
+ * Read a request's whole body as text; a failed read counts as no body.
+ */
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => (body += chunk));
+    req.on("end", () => resolve(body));
+    req.on("error", () => resolve(""));
+  });
+}
+
+/**
+ * Params from JSON text holding an object, with their JSON types; undefined
+ * for anything else.
+ */
+function jsonObjectParams(text: string): Record<string, unknown> | undefined {
+  if (text === "") {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Not JSON, so not a params body.
+  }
+  return undefined;
 }
 
 /**
