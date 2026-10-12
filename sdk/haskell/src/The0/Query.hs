@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- |
 -- Module      : The0.Query
@@ -43,7 +45,7 @@ module The0.Query
     , getConfig
     , isQueryMode
     , getParam
-    , Request(..)
+    , Request(Request, reqPath, reqParams)
     , ReadOnlyStateError(..)
     , setResultPath
     ) where
@@ -71,11 +73,22 @@ import System.IO.Unsafe (unsafePerformIO)
 import The0.Input (logInfo)
 import The0.State (ReadOnlyStateError(..))
 
--- | Request object passed to handlers (Express-like).
-data Request = Request
-    { reqPath   :: String
-    , reqParams :: Map.Map String String
-    } deriving (Show, Eq)
+-- | Request object passed to handlers (Express-like): the query path and
+-- its params, which are JSON values.
+data Request = RequestValues String (Map.Map String Value)
+    deriving (Show, Eq)
+
+-- | A request with its params as text, the way requests have always been
+-- built and read: 'reqPath' is the query path, and 'reqParams' holds each
+-- param as text.
+pattern Request :: String -> Map.Map String String -> Request
+pattern Request { reqPath, reqParams } <- (textView -> (reqPath, reqParams))
+  where
+    Request path params = RequestValues path (Map.map (String . T.pack) params)
+{-# COMPLETE Request #-}
+
+textView :: Request -> (String, Map.Map String String)
+textView (RequestValues path values) = (path, Map.map valueToString values)
 
 -- | Get a parameter value from the request.
 getParam :: Request -> String -> String -> String
