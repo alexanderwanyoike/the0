@@ -2,6 +2,7 @@ package execute
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -207,35 +208,24 @@ func TestBuildBotEnv_NodeJS20PutsNode20FirstOnPath(t *testing.T) {
 	}
 }
 
-func TestBuildBotEnv_StateDirFromEnv(t *testing.T) {
-	// Set STATE_DIR environment variable
-	os.Setenv("STATE_DIR", "/custom/state")
-	defer os.Unsetenv("STATE_DIR")
+func TestBuildBotEnv_GivesTheBotTheLaunchsStateDir(t *testing.T) {
+	t.Setenv("STATE_DIR", "/inherited/state")
 
-	cfg := &launch.Settings{
-		BotID:     "test-bot",
-		StatePath: "/state",
-	}
+	env := BuildBotEnv(&launch.Settings{BotID: "test-bot", StatePath: "/state", StateDir: "/custom/state"})
 
-	env := BuildBotEnv(cfg)
-
-	// Should use the environment variable value
-	assert.Contains(t, env, "STATE_DIR=/custom/state")
+	assert.Equal(t, "STATE_DIR=/custom/state", lastEntry(env, "STATE_DIR"))
 }
 
-func TestBuildBotEnv_StateDirDefault(t *testing.T) {
-	// Clear STATE_DIR if set
-	os.Unsetenv("STATE_DIR")
-
-	cfg := &launch.Settings{
-		BotID:     "test-bot",
-		StatePath: "/state",
+// lastEntry is the entry for name in env that a process started with env
+// sees, which is the last one.
+func lastEntry(env []string, name string) string {
+	entry := ""
+	for _, variable := range env {
+		if strings.HasPrefix(variable, name+"=") {
+			entry = variable
+		}
 	}
-
-	env := BuildBotEnv(cfg)
-
-	// Should default to StatePath/.the0-state
-	assert.Contains(t, env, "STATE_DIR=/state/.the0-state")
+	return entry
 }
 
 func TestBuildBotEnv_QueryPath(t *testing.T) {

@@ -124,18 +124,11 @@ func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 func BuildBotEnv(cfg *launch.Settings) []string {
 	env := os.Environ()
 
-	// Determine STATE_DIR: use existing env var if set, otherwise derive from StatePath
-	stateDir := os.Getenv("STATE_DIR")
-	if stateDir == "" {
-		// Default to .the0-state subdirectory within StatePath
-		stateDir = filepath.Join(cfg.StatePath, ".the0-state")
-	}
-
 	codeMountDir := strings.TrimPrefix(cfg.CodePath, "/")
 	env = append(env,
 		"BOT_ID="+cfg.BotID,
 		"BOT_CONFIG="+cfg.BotConfig,
-		"STATE_DIR="+stateDir,
+		"STATE_DIR="+cfg.StateDir,
 		"CODE_MOUNT_DIR="+codeMountDir,
 		"SCRIPT_PATH="+cfg.Entrypoint, // Used by Python/Node.js wrappers
 		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
