@@ -215,7 +215,7 @@ object Query {
   private def runEphemeral(queryPath: String): Unit = {
     // Parse parameters from environment
     val paramsStr = sys.env.getOrElse("QUERY_PARAMS", "{}")
-    val (status, body) = respond(Request(queryPath, parseJsonToMap(paramsStr)))
+    val (status, body) = respond(Request.fromJson(queryPath, paramsFromJson(paramsStr)))
     writeResult(body)
     if (status != 200) {
       sys.exit(1)
@@ -340,10 +340,10 @@ object Query {
   }
 
   /**
-   * Parse simple JSON object to map (basic implementation).
+   * Parse params sent as JSON object text (basic implementation).
    * Handles {"key1": "value1", "key2": "value2"} format.
    */
-  private def parseJsonToMap(json: String): Map[String, String] = {
+  private[the0] def paramsFromJson(json: String): Map[String, JsonValue] = {
     if (!json.startsWith("{") || !json.endsWith("}")) return Map.empty
 
     val content = json.substring(1, json.length - 1).trim
@@ -352,7 +352,7 @@ object Query {
     // Simple regex-based parsing for basic cases
     val pattern = """"([^"]+)"\s*:\s*"([^"]*)"""".r
     pattern.findAllMatchIn(content).map { m =>
-      m.group(1) -> m.group(2)
+      m.group(1) -> JsonValue.Str(m.group(2))
     }.toMap
   }
 
