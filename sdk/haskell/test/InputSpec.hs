@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module InputSpec (spec) where
 
@@ -11,15 +12,34 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (isDigit)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import System.IO.Silently (capture_, hCapture)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.Exit (ExitCode)
+import System.FilePath ((</>))
+import System.IO.Silently (capture_, hCapture, hSilence)
 import System.IO (stderr)
-import Control.Exception (try, SomeException)
+import System.IO.Temp (withSystemTempDirectory)
+import Control.Exception (catch, finally, try, SomeException)
 
 -- Helper to capture stderr output
 captureStderr :: IO () -> IO String
 captureStderr action = do
     (output, _) <- hCapture [stderr] action
     return output
+
+-- | Runs @action@ with CODE_MOUNT_DIR pointing at a temporary directory and
+-- returns the result file it wrote, decoded. An exit is caught, so actions
+-- may call 'The0.Input.error'.
+resultFileOf :: IO () -> IO (Either String Value)
+resultFileOf action = withSystemTempDirectory "the0-input-test" $ \dir -> do
+    original <- lookupEnv "CODE_MOUNT_DIR"
+    setEnv "CODE_MOUNT_DIR" (dropWhile (== '/') dir)
+    hSilence [stderr] (action `catch` \(_ :: ExitCode) -> pure ())
+        `finally` maybe (unsetEnv "CODE_MOUNT_DIR") (setEnv "CODE_MOUNT_DIR") original
+    Aeson.eitherDecodeFileStrict (dir </> "result.json")
+
+-- | Every control character JSON must escape, plus quotes and backslashes.
+awkwardMessage :: String
+awkwardMessage = "line one\nline two\r\ttab \"quoted\" back\\slash \b\f\x01\x1f"
 
 -- | The timestamp of a printed JSON line, when it is a string.
 timestampOf :: String -> Maybe String
@@ -150,6 +170,10 @@ spec = do
             True `shouldBe` True
 
     describe "The0.Input.success" $ do
+        it "writes valid JSON for a message with control characters" $ do
+            written <- resultFileOf (success awkwardMessage)
+            written `shouldBe` Right (object ["status" .= ("success" :: String), "message" .= awkwardMessage])
+
         it "does not throw on valid input" $ do
             -- success writes to a file, test it doesn't throw
             result' <- try (success "Test message") :: IO (Either SomeException ())
@@ -157,3 +181,8 @@ spec = do
                 Left _ -> return ()
                 Right _ -> return ()
             True `shouldBe` True
+
+    describe "The0.Input.error" $ do
+        it "writes valid JSON for a message with control characters" $ do
+            written <- resultFileOf (The0.Input.error awkwardMessage)
+            written `shouldBe` Right (object ["status" .= ("error" :: String), "message" .= awkwardMessage])
