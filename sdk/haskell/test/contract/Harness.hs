@@ -56,9 +56,7 @@ portAttempts = 3
 -- Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 -- says how the list is kept.
 knownFailures :: [(String, String)]
-knownFailures =
-    [ ("query-server-params-json-body", "the query server reads params from the query string only")
-    ]
+knownFailures = []
 
 casesDir :: IO FilePath
 casesDir = (</> ".." </> "contract" </> "cases") <$> getCurrentDirectory
