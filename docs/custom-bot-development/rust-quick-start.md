@@ -445,7 +445,7 @@ input::result(&json!({
 
 Registers a [query](./queries) handler that can fail. An `Err` answers the query with `{"status": "error", "error": <message>}`, and `?` converts any error. `query::handler` registers a handler that cannot fail.
 
-Params are JSON values. `req.get(key)` returns a param as text, with a number, boolean, array or object as its JSON text. `req.get_as::<T>(key)` deserializes it into `T`, and `req.values()` returns every param with its JSON type:
+Params are JSON values. `req.get(key)` returns a param as text, with a number, boolean, array or object as its JSON text and a `null` as `None`. `req.get_as::<T>(key)` deserializes it into `T`, and `req.values()` returns every param with its JSON type. The typed accessor parses a string value too, so `get_as::<usize>("limit")` reads `?limit=5` from a manual `curl` call as 5:
 
 ```rust
 use the0_sdk::{query, state};
