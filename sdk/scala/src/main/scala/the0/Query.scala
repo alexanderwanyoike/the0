@@ -1,7 +1,8 @@
 package the0
 
-import java.io.{BufferedReader, File, InputStreamReader, PrintWriter}
+import java.io.{BufferedInputStream, ByteArrayOutputStream, File, InputStream, PrintWriter}
 import java.net.{ServerSocket, Socket, URLDecoder}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 import scala.util.{Try, Using}
@@ -268,22 +269,69 @@ object Query {
    */
   private def handleConnection(socket: Socket): Unit = {
     Using.resource(socket) { s =>
-      val reader = new BufferedReader(new InputStreamReader(s.getInputStream))
+      val in = new BufferedInputStream(s.getInputStream)
       val writer = new PrintWriter(s.getOutputStream, true)
 
       // Read request line
-      Option(reader.readLine()).foreach { requestLine =>
+      readLine(in).foreach { requestLine =>
         val parts = requestLine.split(" ")
         if (parts.length < 2) {
           sendResponse(writer, 400, """{"status": "error", "error": "Invalid request"}""")
         } else {
-          val pathWithQuery = parts(1)
-          val (path, params) = parsePathAndQuery(pathWithQuery)
-          val (status, body) = respond(Request(path, params))
-          sendResponse(writer, status, body)
+          val body = readBody(in, readHeaders(in))
+          val (path, queryParams) = parsePathAndQuery(parts(1))
+          val request = paramsFromBody(body) match {
+            case Some(params) => Request.fromJson(path, params)
+            case None => Request(path, queryParams)
+          }
+          val (status, responseBody) = respond(request)
+          sendResponse(writer, status, responseBody)
         }
       }
     }
+  }
+
+  /**
+   * The params in a request body, when the body is a JSON object.
+   */
+  private def paramsFromBody(body: String): Option[Map[String, JsonValue]] =
+    JsonValue.parse(body).collect { case JsonValue.Obj(fields) => fields }
+
+  /**
+   * Read one CRLF-terminated line of a request head, or None at the end of the stream.
+   */
+  private def readLine(in: InputStream): Option[String] = {
+    val line = new ByteArrayOutputStream()
+    var next = in.read()
+    while (next != -1 && next != '\n') {
+      if (next != '\r') line.write(next)
+      next = in.read()
+    }
+    if (next == -1 && line.size() == 0) None else Some(line.toString(StandardCharsets.ISO_8859_1))
+  }
+
+  /**
+   * Read the request headers, with lower-case names.
+   */
+  private def readHeaders(in: InputStream): Map[String, String] =
+    Iterator
+      .continually(readLine(in))
+      .takeWhile(_.exists(_.nonEmpty))
+      .flatten
+      .flatMap { line =>
+        line.indexOf(':') match {
+          case -1 => None
+          case idx => Some(line.substring(0, idx).trim.toLowerCase -> line.substring(idx + 1).trim)
+        }
+      }
+      .toMap
+
+  /**
+   * Read the request body that Content-Length announces.
+   */
+  private def readBody(in: InputStream, headers: Map[String, String]): String = {
+    val length = headers.get("content-length").flatMap(_.toIntOption).getOrElse(0)
+    new String(in.readNBytes(math.max(length, 0)), StandardCharsets.UTF_8)
   }
 
   /**
