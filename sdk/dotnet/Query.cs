@@ -267,15 +267,26 @@ public static class Query
     /// <summary>
     /// The params in a JSON text, or none when it is missing, is not JSON or is not an object.
     /// </summary>
-    private static JsonObject ParamsObject(string? json)
+    private static JsonObject ParamsObject(string? json) =>
+        ObjectOrNull(json ?? "{}") ?? new JsonObject();
+
+    /// <summary>
+    /// The JSON object in a text, or null when the text is not JSON, is not an
+    /// object, or repeats a key.
+    /// </summary>
+    private static JsonObject? ObjectOrNull(string json)
     {
         try
         {
-            return JsonNode.Parse(json ?? "{}") as JsonObject ?? new JsonObject();
+            var obj = JsonNode.Parse(json) as JsonObject;
+            // JsonObject builds its key map on first use, which is where a
+            // repeated key throws, so use it here rather than in a handler.
+            _ = obj?.Count;
+            return obj;
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or ArgumentException)
         {
-            return new JsonObject();
+            return null;
         }
     }
 
