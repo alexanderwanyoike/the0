@@ -350,12 +350,12 @@ export class CustomBotService {
     // Delete DB row first, then best-effort storage cleanup.
     // Orphaned MinIO files are harmless; dangling DB rows pointing to
     // missing files would be a real problem.
-    const removeResult = await this.customBotRepository.remove(
+    const removeResult = await this.customBotRepository.removeVersion(
       userId,
       customBot.id,
     );
     if (!removeResult.success) {
-      return Failure(removeResult.error);
+      return Failure(removeResult.error.message);
     }
 
     // Best-effort MinIO cleanup (code bundle + frontend)
@@ -425,7 +425,7 @@ export class CustomBotService {
       name,
     );
     if (!removeResult.success) {
-      return Failure(removeResult.error);
+      return Failure(removeResult.error.message);
     }
 
     // Best-effort MinIO cleanup for all versions
