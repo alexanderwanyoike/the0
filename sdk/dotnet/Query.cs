@@ -86,6 +86,7 @@ public static class Query
         /// value as its JSON text, and a null value as absent.
         /// A string value that is not a <typeparamref name="T"/> is parsed as JSON text, so the
         /// query-string param <c>limit=50</c> reads as the int 50.
+        /// A null value reads as null, or as the default when <typeparamref name="T"/> cannot hold null.
         /// </summary>
         /// <typeparam name="T">The type to deserialize to</typeparam>
         /// <param name="key">The parameter key</param>
@@ -101,6 +102,10 @@ public static class Query
             if (typeof(T) == typeof(string))
             {
                 return value == null ? defaultValue : (T)(object)AsText(value);
+            }
+            if (value == null && default(T) is not null)
+            {
+                return defaultValue;
             }
             try
             {
