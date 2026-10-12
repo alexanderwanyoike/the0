@@ -59,8 +59,6 @@ object ContractSpec {
   // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
   // says how the list is kept.
   private val KnownFailures: Map[String, String] = Map(
-    "bot-error-with-data" -> "error() drops data and prints nothing on stderr",
-    "bot-success-with-data" -> "success() drops data",
     "query-ephemeral-params" -> "QUERY_PARAMS keeps only string pairs, nested ones included",
     "query-ephemeral-read-only-before-key-check" -> "State throws a second ReadOnlyStateError type, not Query's",
     "query-ephemeral-state-read-only" -> "State throws a second ReadOnlyStateError type, not Query's",
