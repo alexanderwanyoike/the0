@@ -245,12 +245,13 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 ///
 /// # Returns
 ///
-/// `Ok(true)` if the key existed and was deleted, `Ok(false)` otherwise.
+/// `Ok(true)` if the key existed and was deleted, `Ok(false)` if it did not exist.
 ///
 /// # Errors
 ///
 /// Returns `StateError::ReadOnly` if called during query execution (queries are read-only),
-/// and `StateError::InvalidKey` for an invalid key.
+/// `StateError::InvalidKey` for an invalid key, and `StateError::Io` when the
+/// key's file exists but cannot be removed.
 ///
 /// # Example
 ///
@@ -265,7 +266,11 @@ pub fn delete(key: &str) -> Result<bool, StateError> {
     check_write_allowed()?;
     validate_key(key)?;
     let filepath = get_key_path(key);
-    Ok(fs::remove_file(&filepath).is_ok())
+    match fs::remove_file(&filepath) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// List all keys in persistent state.
