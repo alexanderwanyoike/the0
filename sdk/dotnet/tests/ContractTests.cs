@@ -33,7 +33,7 @@ public class ContractTests
         new(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$");
 
     private static readonly string CasesDir = FindCasesDir();
-    private static readonly string ContractBot = Path.Combine(AppContext.BaseDirectory, "The0.ContractBot.dll");
+    private static readonly string ContractBotDll = Path.Combine(AppContext.BaseDirectory, "The0.ContractBot.dll");
 
     public static IEnumerable<object[]> Cases() =>
         CasePaths().Select(path => new object[] { Path.GetFileNameWithoutExtension(path) });
@@ -183,7 +183,7 @@ public class ContractTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        startInfo.ArgumentList.Add(ContractBot);
+        startInfo.ArgumentList.Add(ContractBotDll);
         startInfo.ArgumentList.Add(casePath);
         startInfo.ArgumentList.Add(sandbox.QueryResult);
         return startInfo;
