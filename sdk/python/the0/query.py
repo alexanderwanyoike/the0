@@ -210,9 +210,10 @@ def _run_ephemeral(query_path: str):
     # Parse parameters from environment
     params_str = os.environ.get("QUERY_PARAMS", "{}")
     try:
-        _current_params = json.loads(params_str)
+        params = json.loads(params_str)
     except json.JSONDecodeError:
-        _current_params = {}
+        params = {}
+    _current_params = params if isinstance(params, dict) else {}
 
     # Find and execute handler
     handler_fn = _handlers.get(query_path)
