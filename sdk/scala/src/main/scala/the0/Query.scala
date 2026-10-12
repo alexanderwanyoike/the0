@@ -5,6 +5,7 @@ import java.net.{ServerSocket, Socket, URLDecoder}
 import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 import scala.util.{Try, Using}
+import scala.util.control.NonFatal
 
 /**
  * the0 Query Module - Express-like handler interface for bot queries.
@@ -231,7 +232,7 @@ object Query {
           val data = fn(request)
           (200, s"""{"status": "ok", "data": $data}""")
         } catch {
-          case e: Exception =>
+          case NonFatal(e) =>
             (500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
         }
     }
