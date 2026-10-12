@@ -247,6 +247,15 @@ public class QueryTests : IDisposable
     }
 
     [Fact]
+    public void QueryRequest_TypedGetOfANullParamReturnsTheDefaultWhenTheTypeCannotHoldNull()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal(10, Read(() => req.Get("cursor", 10)));
+        Assert.Null(Read(() => req.Get<int?>("cursor", 10)));
+    }
+
+    [Fact]
     public void QueryRequest_TypedGetParsesAStringValueAsThatType()
     {
         var req = new Query.QueryRequest("/test", new Dictionary<string, string>
