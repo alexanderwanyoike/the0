@@ -1,7 +1,6 @@
 package execute
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -160,21 +159,6 @@ func BuildBotEnv(cfg *launch.Settings) []string {
 	}
 
 	return env
-}
-
-// ParseQueryParams parses a JSON string into a map.
-// Returns an error if the JSON is invalid.
-func ParseQueryParams(queryParams string) (map[string]interface{}, error) {
-	if queryParams == "" {
-		return make(map[string]interface{}), nil
-	}
-
-	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(queryParams), &params); err != nil {
-		return nil, fmt.Errorf("failed to parse query params: %w", err)
-	}
-
-	return params, nil
 }
 
 // EnsureExecutable sets execute permissions on binary files for compiled runtimes.

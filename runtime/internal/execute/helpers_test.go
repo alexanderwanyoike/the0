@@ -311,44 +311,6 @@ func TestBuildBotEnv_BotType(t *testing.T) {
 	assert.Contains(t, env, "BOT_TYPE=realtime")
 }
 
-func TestParseQueryParams_ValidJSON(t *testing.T) {
-	jsonStr := `{"limit":10,"offset":20,"filter":"active"}`
-
-	params, err := ParseQueryParams(jsonStr)
-
-	require.NoError(t, err)
-	assert.Equal(t, float64(10), params["limit"]) // JSON numbers are float64
-	assert.Equal(t, float64(20), params["offset"])
-	assert.Equal(t, "active", params["filter"])
-}
-
-func TestParseQueryParams_EmptyString(t *testing.T) {
-	params, err := ParseQueryParams("")
-
-	require.NoError(t, err)
-	assert.Empty(t, params)
-}
-
-func TestParseQueryParams_InvalidJSON(t *testing.T) {
-	jsonStr := `{invalid json}`
-
-	params, err := ParseQueryParams(jsonStr)
-
-	assert.Error(t, err)
-	assert.Nil(t, params)
-	assert.Contains(t, err.Error(), "failed to parse query params")
-}
-
-func TestParseQueryParams_ComplexTypes(t *testing.T) {
-	jsonStr := `{"nested":{"key":"value"},"array":[1,2,3]}`
-
-	params, err := ParseQueryParams(jsonStr)
-
-	require.NoError(t, err)
-	assert.NotNil(t, params["nested"])
-	assert.NotNil(t, params["array"])
-}
-
 func TestEnsureExecutable_CompiledRuntimes(t *testing.T) {
 	compiledRuntimes := []string{"gcc13", "cpp-gcc13", "rust-stable", "ghc96"}
 
