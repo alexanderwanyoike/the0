@@ -78,10 +78,10 @@ module The0.Query
 
 import Control.DeepSeq (force)
 import Control.Exception (catch, evaluate, finally, SomeException)
-import Control.Monad (forM_, when)
-import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=), ToJSON)
+import Control.Monad (when)
+import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=))
 import qualified Data.Aeson.KeyMap as KM
-import Data.Aeson.Key (fromString, toText)
+import Data.Aeson.Key (toText)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.IORef
 import Data.Char (isSpace, toLower)
@@ -308,7 +308,7 @@ runServer = do
     mPortStr <- lookupEnv "THE0_QUERY_PORT"
     let port = case mPortStr of
             Just ps -> case reads ps of
-                [(p, "")] -> p
+                [(p, "")] -> p :: Int
                 _ -> 9476
             Nothing -> 9476
 

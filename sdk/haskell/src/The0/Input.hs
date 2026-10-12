@@ -36,7 +36,7 @@ module The0.Input
     , LogLevel(..)
     ) where
 
-import Data.Aeson (Value(..), decodeStrict, encode, object, (.=), Object, ToJSON, toJSON)
+import Data.Aeson (Value(..), decodeStrict, encode, object, (.=), ToJSON, toJSON)
 import Data.Aeson.Types (Pair)
 import Data.Aeson.Key (fromString)
 import Data.Aeson.KeyMap (insert)

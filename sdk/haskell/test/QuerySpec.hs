@@ -5,14 +5,13 @@ module QuerySpec (spec) where
 import Test.Hspec
 import The0.Query as Query
 import The0.State as State
-import Data.Aeson (Value(..), object, (.=), toJSON)
-import qualified Data.Aeson as Aeson
+import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.IO.Temp (withSystemTempDirectory)
-import Control.Exception (try, SomeException, catch)
+import Control.Exception (try, SomeException)
 
 -- | Helper to run tests with a temporary state directory and no query mode
 withTempEnv :: (FilePath -> IO a) -> IO a
@@ -74,7 +73,7 @@ spec = do
             result <- Query.isQueryMode
             result `shouldBe` False
 
-        it "returns True when QUERY_PATH is set" $ withTempEnv $ \tempDir -> do
+        it "returns True when QUERY_PATH is set" $ withTempEnv $ \_ -> do
             setEnv "QUERY_PATH" "/portfolio"
             result <- Query.isQueryMode
             unsetEnv "QUERY_PATH"

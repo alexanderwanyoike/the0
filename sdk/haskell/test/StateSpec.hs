@@ -5,12 +5,11 @@ module StateSpec (spec) where
 
 import Test.Hspec
 import The0.State as State
-import Data.Aeson (Value(..), object, (.=), toJSON)
-import qualified Data.Aeson as Aeson
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive, getPermissions, setPermissions, setOwnerWritable)
+import Data.Aeson (Value(..), object, (.=))
+import System.Directory (createDirectoryIfMissing, getPermissions, setPermissions, setOwnerWritable)
 import System.Environment (setEnv, unsetEnv, lookupEnv)
 import System.IO.Temp (withSystemTempDirectory)
-import Control.Exception (try, SomeException, bracket, bracket_, IOException)
+import Control.Exception (try, SomeException, bracket_, IOException)
 
 -- | Helper to run tests with a temporary state directory
 withTempStateDir :: (FilePath -> IO a) -> IO a
