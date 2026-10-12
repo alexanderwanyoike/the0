@@ -4,6 +4,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterEach
 import java.io.File
 import java.nio.file.Files
+import scala.util.{Success, Try}
 
 /**
  * Tests for the0 Query module.
@@ -82,6 +83,15 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     // Should not throw
     Query.handler("/one") { req => """{"id": 1}""" }
     Query.handler("/two") { req => """{"id": 2}""" }
+  }
+
+  // ============ handler error tests ============
+
+  test("a handler that fails with an Error, not an Exception, answers 500 with its message") {
+    Query.handler("/broken-invariant") { _ => throw new AssertionError("position went negative") }
+    val response = Try(Query.respond(Query.Request("/broken-invariant", Map.empty)))
+    assert(response.map(_._1) == Success(500), s"Should answer 500: $response")
+    assert(response.toOption.exists(_._2.contains("position went negative")), s"Should carry the message: $response")
   }
 
   // ============ Request tests ============
