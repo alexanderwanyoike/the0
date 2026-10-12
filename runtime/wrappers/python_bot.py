@@ -62,10 +62,13 @@ def settle_result(fallback):
     write_result(fallback)
     return fallback
 
+def is_error_result(result):
+    return isinstance(result, dict) and result.get("status") == "error"
+
 def report_error(result):
     # The SDK's error() only writes result.json, which nothing reads for bot
     # runs, so without this line a failed run leaves no trace in the logs.
-    if not isinstance(result, dict) or result.get("status") != "error":
+    if not is_error_result(result):
         return
     entry = {
         "level": "error",
