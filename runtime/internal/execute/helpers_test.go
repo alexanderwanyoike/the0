@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"runtime/internal/constants"
+	"runtime/internal/launch"
 )
 
 func TestBuildBotCommand_Python311(t *testing.T) {
@@ -176,7 +177,7 @@ func TestBuildQueryCommand_ScalaWithMainClass(t *testing.T) {
 }
 
 func TestBuildBotEnv_BasicFields(t *testing.T) {
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:      "test-bot",
 		BotConfig:  `{"key":"value"}`,
 		CodePath:   constants.TestBotDir,
@@ -197,11 +198,11 @@ func TestBuildBotEnv_BasicFields(t *testing.T) {
 func TestBuildBotEnv_NodeJS20PutsNode20FirstOnPath(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin")
 
-	env := BuildBotEnv(&Config{Runtime: "nodejs20"})
+	env := BuildBotEnv(&launch.Settings{Runtime: "nodejs20"})
 	assert.Equal(t, "PATH=/opt/node20/bin:/usr/bin", env[len(env)-1])
 
 	for _, runtime := range []string{"nodejs22", "python3.11"} {
-		env = BuildBotEnv(&Config{Runtime: runtime})
+		env = BuildBotEnv(&launch.Settings{Runtime: runtime})
 		assert.NotContains(t, env, "PATH=/opt/node20/bin:/usr/bin", runtime)
 	}
 }
@@ -211,7 +212,7 @@ func TestBuildBotEnv_StateDirFromEnv(t *testing.T) {
 	os.Setenv("STATE_DIR", "/custom/state")
 	defer os.Unsetenv("STATE_DIR")
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:     "test-bot",
 		StatePath: "/state",
 	}
@@ -226,7 +227,7 @@ func TestBuildBotEnv_StateDirDefault(t *testing.T) {
 	// Clear STATE_DIR if set
 	os.Unsetenv("STATE_DIR")
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:     "test-bot",
 		StatePath: "/state",
 	}
@@ -238,7 +239,7 @@ func TestBuildBotEnv_StateDirDefault(t *testing.T) {
 }
 
 func TestBuildBotEnv_QueryPath(t *testing.T) {
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:     "test-bot",
 		QueryPath: "/status",
 	}
@@ -249,7 +250,7 @@ func TestBuildBotEnv_QueryPath(t *testing.T) {
 }
 
 func TestBuildBotEnv_QueryParams(t *testing.T) {
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:       "test-bot",
 		QueryPath:   "/data",
 		QueryParams: `{"limit":10,"offset":20}`,
@@ -274,7 +275,7 @@ func TestBuildBotEnv_PythonPathIncludesVendor(t *testing.T) {
 		}
 	}()
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:    "test-bot",
 		Runtime:  "python3.11",
 		CodePath: "/bot",
@@ -297,7 +298,7 @@ func TestBuildBotEnv_PythonPathPreservesExisting(t *testing.T) {
 		}
 	}()
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:    "test-bot",
 		Runtime:  "python3.11",
 		CodePath: "/bot",
@@ -310,7 +311,7 @@ func TestBuildBotEnv_PythonPathPreservesExisting(t *testing.T) {
 }
 
 func TestBuildBotEnv_BotType(t *testing.T) {
-	cfg := &Config{
+	cfg := &launch.Settings{
 		BotID:   "test-bot",
 		BotType: "realtime",
 	}
@@ -372,7 +373,7 @@ func TestEnsureExecutable_CompiledRuntimes(t *testing.T) {
 			err := os.WriteFile(filePath, []byte("#!/bin/bash\necho hello"), 0644)
 			require.NoError(t, err)
 
-			cfg := &Config{
+			cfg := &launch.Settings{
 				Runtime:    runtime,
 				CodePath:   tmpDir,
 				Entrypoint: entrypoint,
@@ -404,7 +405,7 @@ func TestEnsureExecutable_NonCompiledRuntimes(t *testing.T) {
 			err := os.WriteFile(filePath, []byte("print('hello')"), 0644)
 			require.NoError(t, err)
 
-			cfg := &Config{
+			cfg := &launch.Settings{
 				Runtime:    runtime,
 				CodePath:   tmpDir,
 				Entrypoint: entrypoint,
@@ -433,7 +434,7 @@ func TestEnsureExecutable_WithQueryEntrypoint(t *testing.T) {
 	err = os.WriteFile(tmpDir+"/"+queryEntrypoint, []byte("#!/bin/bash"), 0644)
 	require.NoError(t, err)
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		Runtime:         "gcc13",
 		CodePath:        tmpDir,
 		Entrypoint:      entrypoint,
@@ -456,7 +457,7 @@ func TestEnsureExecutable_WithQueryEntrypoint(t *testing.T) {
 func TestEnsureExecutable_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		Runtime:    "gcc13",
 		CodePath:   tmpDir,
 		Entrypoint: "nonexistent",
@@ -475,7 +476,7 @@ func TestEnsureExecutable_MissingQueryEntrypoint(t *testing.T) {
 	err := os.WriteFile(tmpDir+"/"+entrypoint, []byte("#!/bin/bash"), 0644)
 	require.NoError(t, err)
 
-	cfg := &Config{
+	cfg := &launch.Settings{
 		Runtime:         "gcc13",
 		CodePath:        tmpDir,
 		Entrypoint:      entrypoint,

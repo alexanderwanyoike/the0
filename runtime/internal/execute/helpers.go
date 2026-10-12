@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"runtime/internal/launch"
 )
 
 // node20BinDir holds Node 20 in the runtime image. The default `node` on PATH
@@ -119,7 +121,7 @@ func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 }
 
 // BuildBotEnv creates the environment for bot execution.
-func BuildBotEnv(cfg *Config) []string {
+func BuildBotEnv(cfg *launch.Settings) []string {
 	env := os.Environ()
 
 	// Determine STATE_DIR: use existing env var if set, otherwise derive from StatePath
@@ -192,7 +194,7 @@ func ParseQueryParams(queryParams string) (map[string]interface{}, error) {
 
 // EnsureExecutable sets execute permissions on binary files for compiled runtimes.
 // ZIP files often don't preserve Unix execute permissions, so we need to set them manually.
-func EnsureExecutable(cfg *Config) error {
+func EnsureExecutable(cfg *launch.Settings) error {
 	// Only needed for compiled runtimes
 	compiledRuntimes := map[string]bool{
 		"gcc13":       true,
