@@ -105,7 +105,7 @@ Print a metric line on stdout or a log line on stderr, each with a UTC ISO 8601 
 
 ### `query::handler(path, handler)` and `query::try_handler(path, handler)`
 
-Register a query handler. A `try_handler` handler returns `Result<Value, HandlerError>`, and an `Err` answers the query as an error. Params are JSON values: `req.get(key)` returns one as text (a non-string as its JSON text), `req.get_as::<T>(key)` deserializes it, and `req.values()` returns them all.
+Register a query handler. A `try_handler` handler returns `Result<Value, HandlerError>`, and an `Err` answers the query as an error. Params are JSON values: `req.get(key)` returns one as text (a non-string as its JSON text, a `null` as `None`), `req.get_as::<T>(key)` deserializes it (parsing a string value, such as `"5"` from a query string, when it has to), and `req.values()` returns them all.
 
 ### `state::delete(key: &str) -> Result<bool, StateError>`
 
