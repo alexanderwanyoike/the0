@@ -452,3 +452,27 @@ fn reason_phrase(status: u16) -> &'static str {
         _ => "Internal Server Error",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::url_decode;
+
+    #[test]
+    fn url_decode_turns_plus_into_a_space_and_percent_escapes_into_bytes() {
+        assert_eq!(url_decode("two+words"), "two words");
+        assert_eq!(url_decode("BTC%2FUSD"), "BTC/USD");
+        assert_eq!(url_decode("caf%C3%A9"), "caf\u{e9}");
+    }
+
+    #[test]
+    fn url_decode_keeps_a_percent_sign_that_starts_no_escape() {
+        assert_eq!(url_decode("100%"), "100%");
+        assert_eq!(url_decode("%zz"), "%zz");
+        assert_eq!(url_decode("%2"), "%2");
+    }
+
+    #[test]
+    fn url_decode_replaces_bytes_that_are_not_utf8() {
+        assert_eq!(url_decode("%FF"), "\u{fffd}");
+    }
+}
