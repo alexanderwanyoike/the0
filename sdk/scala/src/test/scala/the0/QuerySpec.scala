@@ -4,7 +4,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterEach
 import java.io.File
 import java.nio.file.Files
-import java.net.{InetAddress, ServerSocket, URI}
+import java.net.{InetAddress, ServerSocket, Socket, URI}
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -178,6 +178,30 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     val body = serveOne("/echo-params?limit=5", Some("""{"limit":7,"limit":8}"""))
     val data = body.toOption.flatMap(text => Try(ujson.read(text)("data")).toOption)
     assert(data == Some(ujson.Obj("limit" -> "5")), s"Should answer from the query string: $body")
+  }
+
+  test("the query server waits a bounded time on a connection") {
+    assert(Query.readTimeoutMillis > 0 && Query.readTimeoutMillis <= 30000, s"Should be bounded: ${Query.readTimeoutMillis}")
+  }
+
+  test("the query server answers from the query string when the body stops short of its Content-Length") {
+    Query.handler("/echo-params") { req => JsonValue.Obj(req.jsonParams).render }
+    val defaultTimeout = Query.readTimeoutMillis
+    Query.readTimeoutMillis = 200
+    try {
+      Using.resource(new ServerSocket(0, 0, InetAddress.getLoopbackAddress)) { server =>
+        val serving = new Thread(() => Query.handleConnection(server.accept()))
+        serving.start()
+        val response = Using.resource(new Socket(InetAddress.getLoopbackAddress, server.getLocalPort)) { client =>
+          client.setSoTimeout(5000)
+          val head = "POST /echo-params?limit=5 HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n"
+          client.getOutputStream.write((head + """{"limit":""").getBytes(StandardCharsets.UTF_8))
+          Try(new String(client.getInputStream.readAllBytes(), StandardCharsets.UTF_8))
+        }
+        serving.join(10000)
+        assert(response.toOption.exists(_.contains(""""data": {"limit":"5"}""")), s"Should answer from the query string: $response")
+      }
+    } finally Query.readTimeoutMillis = defaultTimeout
   }
 
   // Serves one request on an in-process query server and returns the response body.
