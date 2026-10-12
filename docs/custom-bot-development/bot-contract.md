@@ -298,6 +298,14 @@ It reads the response body whatever the status code.
 | Haskell | `sdk/haskell/test/contract/Main.hs` |
 | C++ | not yet |
 
+The runtime runs the cases too, end to end, in `runtime/cmd/app/contract_e2e_test.go`. Python and Node.js bots built on the repo's own SDKs play each bot case and each ephemeral query case through `runtime execute` in the runtime image, with the wrappers and `BuildBotEnv`. The check adds what the runtime puts on top of a case's expectations:
+- the wrappers' result when the bot wrote none;
+- exit 1 for an error result;
+- the [run summary line](#the-run-summary-line) of a failed run;
+- the same lines in `bot.log` as on stdout and stderr.
+
+`runtime/cmd/app/testdata/contract-cases` adds cases in the same format for rules only the runtime enforces. The query server cases are left to the SDK harnesses. So is the query case without `QUERY_PATH`, which no runtime launch path produces. The runtime workflow runs the check on changes to `runtime/**` and `sdk/contract/**`.
+
 ## Bringing the SDKs into line
 
 These are the rules each SDK does not follow yet. The SDKs come into line one at a time, each running the cases first.
