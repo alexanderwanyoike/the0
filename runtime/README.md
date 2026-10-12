@@ -31,6 +31,12 @@ The runtime binary is embedded in each base image. When a container starts, `run
 
 In Kubernetes mode, realtime bots use sidecars instead of subprocesses for better observability. Scheduled bots run as single containers with inline sync (same as Docker mode).
 
+### Launch settings
+
+Everything a launcher tells `runtime execute` (its command's flags and its environment) is a launch setting, and [`internal/launch`](internal/launch) owns them all: each setting's name, its default and what it means in each mode (a bot run, a query, or a query server). The Docker runner and the Kubernetes pod generator build a `launch.Settings` and send its `Command()` and `Env()`; `runtime execute` reads them back with `launch.Read`. `TestLaunch_RunnerReadsExactlyWhatEachBackendSends` checks that, for every mode on both backends, the runner reads exactly what was sent.
+
+To add a setting, add its field to `launch.Settings` and its variable to the table in `internal/launch/launch.go`; then set it wherever a backend builds its settings.
+
 ## Docker Mode
 
 In Docker mode, each container runs `runtime execute` which handles everything:
@@ -68,7 +74,7 @@ flowchart LR
 
 The services query MongoDB for desired state and reconcile with Docker. When a bot should be running, the service starts a container. The `runtime execute` command handles the rest - downloading code/state from MinIO, starting subprocesses, and running the bot.
 
-For realtime bots with a query entrypoint, `runtime execute` spawns a query server subprocess on port 9476. The standalone `query-server` (port 9477) proxies queries to this port. For scheduled bots, it spawns ephemeral containers with `QUERY_PATH` set.
+For realtime bots with a query entrypoint, `runtime execute` spawns a query server subprocess on port 9476. The standalone `query-server` (port 9477) proxies queries to this port. For scheduled bots, it starts an ephemeral container running `runtime execute --query=<path>`.
 
 See [internal/docker/README.md](internal/docker/README.md) for details.
 
@@ -129,7 +135,7 @@ The runtime provides a query API for reading computed data from bots without mod
 
 **Realtime bots** run a query HTTP server on port 9476. Queries are proxied directly to the running container, providing low-latency (~10-50ms) responses.
 
-**Scheduled bots** handle queries by spawning ephemeral containers. When a query arrives, the runtime starts a container with the `QUERY_PATH` environment variable set. The bot SDK detects this and runs in query mode instead of normal execution. This has higher latency (~1-3s) due to container startup.
+**Scheduled bots** handle queries by spawning ephemeral containers. When a query arrives, the runtime starts a container running `runtime execute --query=<path>`, which runs the query entrypoint with `QUERY_PATH` set. The bot SDK detects this and runs in query mode instead of normal execution. This has higher latency (~1-3s) due to container startup.
 
 ```mermaid
 flowchart LR

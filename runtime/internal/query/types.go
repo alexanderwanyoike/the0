@@ -39,11 +39,11 @@ type Request struct {
 
 // Response represents the result of a query execution.
 type Response struct {
-	Status    string          `json:"status"`              // "ok" or "error"
-	Data      json.RawMessage `json:"data,omitempty"`      // Query result data
-	Error     string          `json:"error,omitempty"`     // Error message if status is "error"
-	Duration  time.Duration   `json:"duration"`            // Execution time
-	Timestamp time.Time       `json:"timestamp"`           // When the query was executed
+	Status    string          `json:"status"`          // "ok" or "error"
+	Data      json.RawMessage `json:"data,omitempty"`  // Query result data
+	Error     string          `json:"error,omitempty"` // Error message if status is "error"
+	Duration  time.Duration   `json:"duration"`        // Execution time
+	Timestamp time.Time       `json:"timestamp"`       // When the query was executed
 
 	httpStatus int
 }

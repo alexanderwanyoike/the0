@@ -813,6 +813,29 @@ describe("CustomBotRepository", () => {
     });
   });
 
+  describe("removeVersion", () => {
+    it("should delete one version of a bot by id", async () => {
+      mockDb.where.mockResolvedValue(undefined);
+
+      const result = await repository.removeVersion("user123", "cb-1");
+
+      expect(result.success).toBe(true);
+      expect(mockDb.delete).toHaveBeenCalled();
+    });
+
+    it("should handle database errors", async () => {
+      mockDb.where.mockRejectedValue(new Error("Connection lost"));
+
+      const result = await repository.removeVersion("user123", "cb-1");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toEqual({
+        reason: "error",
+        message: "Connection lost",
+      });
+    });
+  });
+
   describe("removeAllByName", () => {
     it("should delete all versions of a bot by name", async () => {
       mockDb.where.mockResolvedValue(undefined);
@@ -829,7 +852,10 @@ describe("CustomBotRepository", () => {
       const result = await repository.removeAllByName("user123", "test-bot");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Constraint violation");
+      expect(result.error).toEqual({
+        reason: "error",
+        message: "Constraint violation",
+      });
     });
   });
 

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"runtime/internal/launch"
 )
 
 // The runtime's side of the bot contract (docs/custom-bot-development/bot-contract.md),
@@ -273,7 +275,7 @@ func runContractCase(t *testing.T, image, runtimeBinary string, lang contractLan
 	for _, variable := range launchEnv(t, lang, c) {
 		args = append(args, "-e", variable)
 	}
-	args = append(args, image, "/app/runtime", "execute", "--skip-sync", "--skip-query-server")
+	args = append(append(args, image), launchCommand(c)...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), contractRunTimeout)
 	defer cancel()
@@ -334,7 +336,9 @@ func launchEnv(t *testing.T, lang contractLanguage, c contractCase) []string {
 	for _, key := range sortedKeys(c.Env) {
 		value := c.Env[key]
 		switch key {
-		case "BOT_ID", "BOT_CONFIG", "BOT_TYPE", "QUERY_PATH", "QUERY_PARAMS":
+		case "QUERY_PATH":
+			// launchCommand carries it.
+		case "BOT_ID", "BOT_CONFIG", "BOT_TYPE", "QUERY_PARAMS":
 			env = append(env, key+"="+value)
 		case "CODE_MOUNT_DIR", "STATE_DIR":
 			require.Equal(t, placeholders[key], value, "BuildBotEnv sets %s, so the case can only mark where", key)
@@ -346,6 +350,16 @@ func launchEnv(t *testing.T, lang contractLanguage, c contractCase) []string {
 		env = append(env, "IS_SCHEDULED=true")
 	}
 	return env
+}
+
+// launchCommand is the command the launchers give runtime execute for the
+// case: a query for a case with QUERY_PATH, otherwise a bot run with its sync
+// and query server left to sidecars, as in a realtime pod.
+func launchCommand(c contractCase) []string {
+	if queryPath := c.Env["QUERY_PATH"]; queryPath != "" {
+		return launch.Settings{Mode: launch.Query, QueryPath: queryPath}.Command()
+	}
+	return launch.Settings{Mode: launch.Run, SkipSync: true, SkipQueryServer: true}.Command()
 }
 
 func (r *contractRun) readJSON(path, name string) (any, bool) {

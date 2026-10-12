@@ -5,6 +5,7 @@ package docker
 import (
 	"fmt"
 	"os"
+	"runtime/internal/launch"
 	"strconv"
 )
 
@@ -80,22 +81,22 @@ func LoadConfigFromEnv() (*DockerRunnerConfig, error) {
 
 	logsBucket := os.Getenv("MINIO_LOGS_BUCKET")
 	if logsBucket == "" {
-		logsBucket = "bot-logs"
+		logsBucket = launch.DefaultLogsBucket
 	}
 
 	codeBucket := os.Getenv("MINIO_CODE_BUCKET")
 	if codeBucket == "" {
-		codeBucket = "custom-bots"
+		codeBucket = launch.DefaultCodeBucket
 	}
 
 	stateBucket := os.Getenv("MINIO_STATE_BUCKET")
 	if stateBucket == "" {
-		stateBucket = "bot-state"
+		stateBucket = launch.DefaultStateBucket
 	}
 
 	queryResultsBucket := os.Getenv("MINIO_QUERY_RESULTS_BUCKET")
 	if queryResultsBucket == "" {
-		queryResultsBucket = "query-results"
+		queryResultsBucket = launch.DefaultQueryResultsBucket
 	}
 
 	tempDir := os.Getenv("TEMP_DIR")

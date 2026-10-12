@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -337,6 +338,48 @@ func TestLogsSyncer_Integration(t *testing.T) {
 		// No new data
 		assert.False(t, syncer.Sync(ctx))
 	})
+}
+
+func TestSyncRunner_SavesIntoTheConfiguredBuckets(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	server := s3test.StartT(t)
+	t.Setenv("MINIO_ENDPOINT", server.Endpoint)
+	t.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
+	t.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
+	t.Setenv("MINIO_USE_SSL", "false")
+	t.Setenv("MINIO_STATE_BUCKET", "acme-state")
+	t.Setenv("MINIO_LOGS_BUCKET", "acme-logs")
+	t.Setenv("NATS_URL", "")
+
+	statePath := filepath.Join(t.TempDir(), "state")
+	logsPath := filepath.Join(t.TempDir(), "logs")
+	require.NoError(t, os.MkdirAll(statePath, 0755))
+	require.NoError(t, os.MkdirAll(logsPath, 0755))
+
+	runner := NewSyncRunner(SyncOptions{
+		BotID:     "acme-bot",
+		StatePath: statePath,
+		LogsPath:  logsPath,
+		Interval:  time.Hour,
+	}, &testDaemonLogger{t: t})
+	runner.Start()
+	require.NoError(t, runner.WaitReady(30*time.Second))
+	require.NoError(t, os.WriteFile(filepath.Join(statePath, "positions.json"), []byte(`{"BTC":1}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(logsPath, "bot.log"), []byte("bought BTC\n"), 0644))
+	runner.Stop()
+
+	for _, bucket := range []string{"acme-state", "acme-logs"} {
+		var keys []string
+		for object := range server.Client.ListObjects(context.Background(), bucket, minio.ListObjectsOptions{Recursive: true}) {
+			if object.Err == nil && strings.Contains(object.Key, "acme-bot") {
+				keys = append(keys, object.Key)
+			}
+		}
+		assert.NotEmpty(t, keys, "nothing saved in %s", bucket)
+	}
 }
 
 // TestStateSyncer_Integration tests StateSyncer with real MinIO

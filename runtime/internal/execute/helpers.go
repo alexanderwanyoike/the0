@@ -1,12 +1,13 @@
 package execute
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"runtime/internal/launch"
 )
 
 // node20BinDir holds Node 20 in the runtime image. The default `node` on PATH
@@ -119,21 +120,14 @@ func BuildQueryCommand(runtime, entrypoint, workDir string) *exec.Cmd {
 }
 
 // BuildBotEnv creates the environment for bot execution.
-func BuildBotEnv(cfg *Config) []string {
+func BuildBotEnv(cfg *launch.Settings) []string {
 	env := os.Environ()
-
-	// Determine STATE_DIR: use existing env var if set, otherwise derive from StatePath
-	stateDir := os.Getenv("STATE_DIR")
-	if stateDir == "" {
-		// Default to .the0-state subdirectory within StatePath
-		stateDir = filepath.Join(cfg.StatePath, ".the0-state")
-	}
 
 	codeMountDir := strings.TrimPrefix(cfg.CodePath, "/")
 	env = append(env,
 		"BOT_ID="+cfg.BotID,
 		"BOT_CONFIG="+cfg.BotConfig,
-		"STATE_DIR="+stateDir,
+		"STATE_DIR="+cfg.StateDir,
 		"CODE_MOUNT_DIR="+codeMountDir,
 		"SCRIPT_PATH="+cfg.Entrypoint, // Used by Python/Node.js wrappers
 		"ENTRYPOINT_TYPE=bot",         // Used by Node.js wrapper
@@ -155,16 +149,8 @@ func BuildBotEnv(cfg *Config) []string {
 	// Add query-specific env vars if applicable
 	if cfg.QueryPath != "" {
 		env = append(env, "QUERY_PATH="+cfg.QueryPath)
-		// Parse and add query params as individual env vars or as JSON
 		if cfg.QueryParams != "" {
 			env = append(env, "QUERY_PARAMS="+cfg.QueryParams)
-			// Also try to parse and flatten query params
-			params, err := ParseQueryParams(cfg.QueryParams)
-			if err == nil {
-				for k, v := range params {
-					env = append(env, fmt.Sprintf("QUERY_PARAM_%s=%v", k, v))
-				}
-			}
 		}
 	}
 
@@ -175,24 +161,9 @@ func BuildBotEnv(cfg *Config) []string {
 	return env
 }
 
-// ParseQueryParams parses a JSON string into a map.
-// Returns an error if the JSON is invalid.
-func ParseQueryParams(queryParams string) (map[string]interface{}, error) {
-	if queryParams == "" {
-		return make(map[string]interface{}), nil
-	}
-
-	var params map[string]interface{}
-	if err := json.Unmarshal([]byte(queryParams), &params); err != nil {
-		return nil, fmt.Errorf("failed to parse query params: %w", err)
-	}
-
-	return params, nil
-}
-
 // EnsureExecutable sets execute permissions on binary files for compiled runtimes.
 // ZIP files often don't preserve Unix execute permissions, so we need to set them manually.
-func EnsureExecutable(cfg *Config) error {
+func EnsureExecutable(cfg *launch.Settings) error {
 	// Only needed for compiled runtimes
 	compiledRuntimes := map[string]bool{
 		"gcc13":       true,

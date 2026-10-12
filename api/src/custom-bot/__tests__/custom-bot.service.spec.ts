@@ -77,7 +77,7 @@ describe("CustomBotService", () => {
       countInstancesByCustomBotId: jest.fn(),
       countInstancesByCustomBotIds: jest.fn(),
       removeAllByName: jest.fn(),
-      remove: jest.fn(),
+      removeVersion: jest.fn(),
       findOneById: jest.fn(),
     } as unknown as jest.Mocked<CustomBotRepository>;
 
@@ -1353,7 +1353,7 @@ describe("CustomBotService", () => {
         Ok(["user123/test-bot/1.0.0", "user123/test-bot/1.0.0/frontend.js"]),
       );
       mockStorageService.deleteFile.mockResolvedValue(Ok(undefined));
-      mockRepository.remove.mockResolvedValue(Ok(null));
+      mockRepository.removeVersion.mockResolvedValue(Ok(null));
 
       const result = await service.deleteVersion(userId, botName, version);
 
@@ -1362,7 +1362,10 @@ describe("CustomBotService", () => {
         "user123/test-bot/1.0.0",
       );
       expect(mockStorageService.deleteFile).toHaveBeenCalledTimes(2);
-      expect(mockRepository.remove).toHaveBeenCalledWith(userId, "cb-id-1");
+      expect(mockRepository.removeVersion).toHaveBeenCalledWith(
+        userId,
+        "cb-id-1",
+      );
     });
 
     it("should refuse to delete a version with active instances", async () => {
@@ -1375,7 +1378,7 @@ describe("CustomBotService", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("3 active instance(s)");
       expect(mockStorageService.deleteFile).not.toHaveBeenCalled();
-      expect(mockRepository.remove).not.toHaveBeenCalled();
+      expect(mockRepository.removeVersion).not.toHaveBeenCalled();
     });
 
     it("should fail if user does not own the bot", async () => {

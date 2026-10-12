@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/model"
 	"runtime/internal/util"
 )
 
@@ -37,7 +37,6 @@ type K8sClient interface {
 	// GetPod gets a pod by name and namespace.
 	GetPod(ctx context.Context, namespace, name string) (*corev1.Pod, error)
 }
-
 
 // BotControllerConfig holds configuration for the bot controller.
 type BotControllerConfig struct {

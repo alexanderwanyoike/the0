@@ -128,7 +128,7 @@ For running pods with a query entrypoint, queries are proxied to the query sidec
 For scheduled bots, queries create ephemeral K8s Jobs:
 
 1. K8sQueryHandler receives request
-2. PodGenerator creates query pod spec with `QUERY_PATH` env var
+2. PodGenerator creates a query pod spec running `runtime execute --query=<path>`
 3. Job is created with TTL cleanup (5 minutes)
 4. Job pod runs, writes result to MinIO
 5. Handler downloads result from MinIO
@@ -155,7 +155,6 @@ MONGO_URI=mongodb://localhost:27017    # MongoDB connection
 MINIO_ENDPOINT=minio:9000              # MinIO endpoint (in-cluster)
 MINIO_ACCESS_KEY=the0admin
 MINIO_SECRET_KEY=the0password
-MINIO_BUCKET=the0-custom-bots
 ```
 
 ### Optional
@@ -163,6 +162,7 @@ MINIO_BUCKET=the0-custom-bots
 ```bash
 NATS_URL=nats://localhost:4222         # NATS for real-time events
 RECONCILE_INTERVAL=30s                 # Controller reconciliation interval
+MINIO_BUCKET=custom-bots               # Bucket bot pods download code from; must match the API's CUSTOM_BOTS_BUCKET
 ```
 
 ## CLI Commands

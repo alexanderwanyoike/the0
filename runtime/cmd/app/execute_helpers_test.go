@@ -16,6 +16,7 @@ import (
 
 	"runtime/internal/constants"
 	"runtime/internal/execute"
+	"runtime/internal/launch"
 	"runtime/internal/s3test"
 	"runtime/internal/util"
 )
@@ -87,7 +88,7 @@ func TestExecuteProcessWithDeps_Success(t *testing.T) {
 		FileWriter:      mockFile,
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:      "test-bot",
 		Runtime:    "python3.11",
 		Entrypoint: "main.py",
@@ -114,7 +115,7 @@ func TestExecuteProcessWithDeps_StartFails(t *testing.T) {
 		FileWriter:      mockFile,
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:      "test-bot",
 		Runtime:    "python3.11",
 		Entrypoint: "main.py",
@@ -147,7 +148,7 @@ func TestExecuteProcessWithDeps_StartFails_WritesToLogFile(t *testing.T) {
 		FileWriter:      mockFile,
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:      "test-bot",
 		Runtime:    "haskell9.8",
 		Entrypoint: "bot",
@@ -185,7 +186,7 @@ func TestExecuteProcessWithDeps_WaitFails(t *testing.T) {
 		FileWriter:      mockFile,
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:      "test-bot",
 		Runtime:    "python3.11",
 		Entrypoint: "main.py",
@@ -214,7 +215,7 @@ func TestExecuteProcessWithDeps_ContextCancelled(t *testing.T) {
 		FileWriter:      mockFile,
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:      "test-bot",
 		Runtime:    "python3.11",
 		Entrypoint: "main.py",
@@ -240,7 +241,7 @@ func TestExecuteQueryProcessWithDeps_Success(t *testing.T) {
 		FileWriter:      &mockFileWriter{},
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:           "test-bot",
 		Runtime:         "python3.11",
 		Entrypoint:      "main.py",
@@ -266,7 +267,7 @@ func TestExecuteQueryProcessWithDeps_StartFails(t *testing.T) {
 		FileWriter:      &mockFileWriter{},
 	}
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:           "test-bot",
 		Runtime:         "nodejs20",
 		QueryEntrypoint: "query.js",
@@ -401,7 +402,6 @@ func TestLoadExecuteConfig_WithOptionalFields(t *testing.T) {
 	os.Setenv("ENTRYPOINT", "main.py")
 	os.Setenv("BOT_TYPE", "scheduled")
 	os.Setenv("QUERY_ENTRYPOINT", "query.py")
-	os.Setenv("QUERY_PATH", "/status")
 	os.Setenv("QUERY_PARAMS", `{"limit": 10}`)
 	os.Setenv("QUERY_RESULT_KEY", "test-bot/123/result.json")
 	os.Setenv("IS_SCHEDULED", "true")
@@ -411,7 +411,6 @@ func TestLoadExecuteConfig_WithOptionalFields(t *testing.T) {
 		os.Unsetenv("ENTRYPOINT")
 		os.Unsetenv("BOT_TYPE")
 		os.Unsetenv("QUERY_ENTRYPOINT")
-		os.Unsetenv("QUERY_PATH")
 		os.Unsetenv("QUERY_PARAMS")
 		os.Unsetenv("QUERY_RESULT_KEY")
 		os.Unsetenv("IS_SCHEDULED")
@@ -422,7 +421,6 @@ func TestLoadExecuteConfig_WithOptionalFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "scheduled", cfg.BotType)
 	assert.Equal(t, "query.py", cfg.QueryEntrypoint)
-	assert.Equal(t, "/status", cfg.QueryPath)
 	assert.Equal(t, `{"limit": 10}`, cfg.QueryParams)
 	assert.Equal(t, "test-bot/123/result.json", cfg.QueryResultKey)
 	assert.True(t, cfg.IsScheduled)
@@ -452,8 +450,7 @@ func TestLoadExecuteConfig_CustomPaths(t *testing.T) {
 	assert.Equal(t, "/custom/logs", cfg.LogsPath)
 }
 
-func TestLoadExecuteConfig_QueryPathFlagOverride(t *testing.T) {
-	// Set environment with query path
+func TestLoadExecuteConfig_TheQueryFlagMakesAQueryLaunch(t *testing.T) {
 	os.Setenv("BOT_ID", "test-bot")
 	os.Setenv("RUNTIME", "python3.11")
 	os.Setenv("ENTRYPOINT", "main.py")
@@ -465,14 +462,13 @@ func TestLoadExecuteConfig_QueryPathFlagOverride(t *testing.T) {
 		os.Unsetenv("QUERY_PATH")
 	}()
 
-	// Set flag override
-	executeQueryPath = "/flag-query-path"
-	defer func() { executeQueryPath = "" }()
+	require.NoError(t, executeCmd.Flags().Set("query", "/flag-query-path"))
+	defer func() { require.NoError(t, executeCmd.Flags().Set("query", "")) }()
 
 	cfg, err := loadExecuteConfig()
 
 	require.NoError(t, err)
-	// Flag should override environment variable
+	assert.Equal(t, launch.Query, cfg.Mode)
 	assert.Equal(t, "/flag-query-path", cfg.QueryPath)
 }
 
@@ -514,7 +510,7 @@ func TestDownloadCode_Success(t *testing.T) {
 		os.Unsetenv("MINIO_SECRET_KEY")
 	}()
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:    "test-download",
 		CodeFile: codeObjectPath,
 		CodePath: codeDir,
@@ -533,7 +529,7 @@ func TestDownloadCode_Success(t *testing.T) {
 }
 
 func TestDownloadCode_NoCodeFile(t *testing.T) {
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:    "test-no-code",
 		CodeFile: "", // Empty code file
 		CodePath: t.TempDir(),
@@ -552,7 +548,7 @@ func TestDownloadCode_MissingMinIOConfig(t *testing.T) {
 	os.Unsetenv("MINIO_ACCESS_KEY")
 	os.Unsetenv("MINIO_SECRET_KEY")
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:    "test-missing-config",
 		CodeFile: "some/file.zip",
 		CodePath: t.TempDir(),
@@ -584,7 +580,7 @@ func TestDownloadState_NoExistingState(t *testing.T) {
 		os.Unsetenv("MINIO_SECRET_KEY")
 	}()
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:     "no-state-bot",
 		StatePath: stateDir,
 	}
@@ -604,7 +600,7 @@ func TestDownloadState_MissingMinIOConfig(t *testing.T) {
 	os.Unsetenv("MINIO_ACCESS_KEY")
 	os.Unsetenv("MINIO_SECRET_KEY")
 
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:     "test-missing-config",
 		StatePath: t.TempDir(),
 	}
@@ -621,14 +617,14 @@ func TestDownloadState_MissingMinIOConfig(t *testing.T) {
 
 func TestEphemeralQueryEntrypoint(t *testing.T) {
 	t.Run("runs the query entrypoint", func(t *testing.T) {
-		entrypoint, err := ephemeralQueryEntrypoint(&execute.Config{Entrypoint: "query.py", QueryEntrypoint: "query.py"})
+		entrypoint, err := ephemeralQueryEntrypoint(&launch.Settings{Entrypoint: "query.py", QueryEntrypoint: "query.py"})
 
 		require.NoError(t, err)
 		assert.Equal(t, "query.py", entrypoint)
 	})
 
 	t.Run("never falls back to the bot entrypoint", func(t *testing.T) {
-		entrypoint, err := ephemeralQueryEntrypoint(&execute.Config{Entrypoint: "main.py"})
+		entrypoint, err := ephemeralQueryEntrypoint(&launch.Settings{Entrypoint: "main.py"})
 
 		assert.Error(t, err)
 		assert.Empty(t, entrypoint)

@@ -13,17 +13,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"runtime/internal/execute"
+	"runtime/internal/launch"
 	"runtime/internal/util"
 )
 
 // compiledBot lays out a bot the way a compiled runtime (Rust, C++, Haskell)
 // runs one: an executable entrypoint in the code directory with no wrapper
 // around it. script is the shell the entrypoint runs.
-func compiledBot(t *testing.T, script string) *execute.Config {
+func compiledBot(t *testing.T, script string) *launch.Settings {
 	t.Helper()
 	root := t.TempDir()
-	cfg := &execute.Config{
+	cfg := &launch.Settings{
 		BotID:      "compiled-test-bot",
 		Runtime:    "rust-stable",
 		Entrypoint: "bot",
@@ -47,14 +47,14 @@ func exits(code int) string {
 	return fmt.Sprintf("exit %d\n", code)
 }
 
-func runCompiledBot(t *testing.T, cfg *execute.Config) int {
+func runCompiledBot(t *testing.T, cfg *launch.Settings) int {
 	t.Helper()
 	return executeBotProcess(context.Background(), cfg, &util.DefaultLogger{})
 }
 
 // botLogLines is every line of the run's bot.log, the file the sync runner
 // uploads and publishes as the bot's logs, each parsed as JSON when it is.
-func botLogLines(t *testing.T, cfg *execute.Config) []map[string]any {
+func botLogLines(t *testing.T, cfg *launch.Settings) []map[string]any {
 	t.Helper()
 	content, err := os.ReadFile(filepath.Join(cfg.LogsPath, "bot.log"))
 	require.NoError(t, err)

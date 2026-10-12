@@ -3,10 +3,12 @@ package docker
 import (
 	"encoding/json"
 	"fmt"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/strslice"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -158,7 +160,6 @@ func TestContainerBuilder_WithExecutable(t *testing.T) {
 	assert.Contains(t, cfg.Env, "ID=bot-123")
 	assert.Contains(t, cfg.Env, "ENTRYPOINT_TYPE=bot")
 	assert.Contains(t, cfg.Env, "CODE_MOUNT_DIR=bot")
-	assert.Contains(t, cfg.Env, "STATE_DIR=/state/.the0-state")
 
 	// Verify CONFIG env var contains marshaled JSON
 	var configEnv string
@@ -181,6 +182,43 @@ func TestContainerBuilder_WithExecutable(t *testing.T) {
 	assert.Equal(t, "bot-123", cfg.Labels["runtime.id"])
 	assert.Equal(t, "main.py", cfg.Labels["runtime.entrypoint"])
 	assert.Equal(t, "true", cfg.Labels["runtime.managed"])
+}
+
+func TestContainerBuilder_WithExecutable_TypesTheContainerByHowLongItRuns(t *testing.T) {
+	cases := []struct {
+		name       string
+		executable model.Executable
+		want       string
+	}{
+		{"realtime bot", model.Executable{ID: "rt", Entrypoint: "bot", IsLongRunning: true}, "realtime"},
+		{"scheduled bot", model.Executable{ID: "sched", Entrypoint: "bot"}, "scheduled"},
+		{"query", model.Executable{ID: "query", Entrypoint: "query", QueryPath: "/status"}, "scheduled"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg, _ := NewContainerBuilder("python:3.11").WithExecutable(c.executable).Build()
+
+			assert.Equal(t, c.want, cfg.Labels["runtime.type"])
+		})
+	}
+}
+
+func TestContainerBuilder_WithLaunch(t *testing.T) {
+	settings := launch.Settings{
+		Mode:       launch.Run,
+		BotID:      "bot-1",
+		Runtime:    "python3.11",
+		Entrypoint: "main.py",
+		BotType:    "realtime",
+		Storage:    launch.Storage{Endpoint: "minio:9000", AccessKey: "admin", SecretKey: "secret"},
+	}
+
+	cfg, _ := NewContainerBuilder("python:3.11").WithLaunch(settings).Build()
+
+	assert.Equal(t, strslice.StrSlice(settings.Command()), cfg.Cmd)
+	for _, variable := range settings.Env() {
+		assert.Contains(t, cfg.Env, variable.Name+"="+variable.Value)
+	}
 }
 
 func TestContainerBuilder_WithExecutable_MarshalError(t *testing.T) {
@@ -219,110 +257,6 @@ func TestContainerBuilder_WithExecutable_MarshalError(t *testing.T) {
 	assert.Equal(t, "{}", configEnv)
 }
 
-func TestContainerBuilder_WithMinIOConfig(t *testing.T) {
-	builder := NewContainerBuilder("python:3.11").
-		WithMinIOConfig("minio:9000", "admin", "password", true)
-
-	cfg, _ := builder.Build()
-
-	assert.Contains(t, cfg.Env, "MINIO_ENDPOINT=minio:9000")
-	assert.Contains(t, cfg.Env, "MINIO_ACCESS_KEY=admin")
-	assert.Contains(t, cfg.Env, "MINIO_SECRET_KEY=password")
-	assert.Contains(t, cfg.Env, "MINIO_USE_SSL=true")
-}
-
-func TestContainerBuilder_WithDaemonConfig(t *testing.T) {
-	builder := NewContainerBuilder("python:3.11").
-		WithDaemonConfig("bot-456", "code.zip", "python3.11", "main.py", `{"key":"value"}`, false)
-
-	cfg, _ := builder.Build()
-
-	assert.Contains(t, cfg.Env, "BOT_ID=bot-456")
-	assert.Contains(t, cfg.Env, "CODE_FILE=code.zip")
-	assert.Contains(t, cfg.Env, "RUNTIME=python3.11")
-	assert.Contains(t, cfg.Env, "ENTRYPOINT=main.py")
-	assert.Contains(t, cfg.Env, `BOT_CONFIG={"key":"value"}`)
-	assert.Contains(t, cfg.Env, "IS_SCHEDULED=false")
-}
-
-func TestContainerBuilder_WithDaemonConfigFull(t *testing.T) {
-	tests := []struct {
-		name           string
-		config         DaemonConfig
-		expectedEnvs   []string
-		unexpectedEnvs []string
-	}{
-		{
-			name: "full config with query entrypoint",
-			config: DaemonConfig{
-				BotID:           "bot-789",
-				CodeFile:        "code.zip",
-				Runtime:         "nodejs20",
-				Entrypoint:      "index.js",
-				QueryEntrypoint: "query.js",
-				Config:          `{"timeout":30}`,
-				IsScheduled:     true,
-				BotType:         "realtime",
-			},
-			expectedEnvs: []string{
-				"BOT_ID=bot-789",
-				"CODE_FILE=code.zip",
-				"RUNTIME=nodejs20",
-				"ENTRYPOINT=index.js",
-				"QUERY_ENTRYPOINT=query.js",
-				`BOT_CONFIG={"timeout":30}`,
-				"IS_SCHEDULED=true",
-				"BOT_TYPE=realtime",
-			},
-			unexpectedEnvs: []string{},
-		},
-		{
-			name: "minimal config without optional fields",
-			config: DaemonConfig{
-				BotID:       "bot-123",
-				CodeFile:    "code.zip",
-				Runtime:     "python3.11",
-				Entrypoint:  "main.py",
-				Config:      "{}",
-				IsScheduled: false,
-			},
-			expectedEnvs: []string{
-				"BOT_ID=bot-123",
-				"CODE_FILE=code.zip",
-				"RUNTIME=python3.11",
-				"ENTRYPOINT=main.py",
-				"BOT_CONFIG={}",
-				"IS_SCHEDULED=false",
-			},
-			unexpectedEnvs: []string{
-				"QUERY_ENTRYPOINT=",
-				"BOT_TYPE=",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			builder := NewContainerBuilder("python:3.11").
-				WithDaemonConfigFull(tt.config)
-
-			cfg, _ := builder.Build()
-
-			for _, expected := range tt.expectedEnvs {
-				assert.Contains(t, cfg.Env, expected, "Expected env var: %s", expected)
-			}
-
-			for _, unexpected := range tt.unexpectedEnvs {
-				// Check that no env var starts with this prefix
-				for _, env := range cfg.Env {
-					assert.False(t, len(env) >= len(unexpected) && env[:len(unexpected)] == unexpected,
-						"Unexpected env var prefix: %s in %s", unexpected, env)
-				}
-			}
-		})
-	}
-}
-
 func TestContainerBuilder_WithDevRuntime(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -359,77 +293,6 @@ func TestContainerBuilder_WithDevRuntime(t *testing.T) {
 	}
 }
 
-func TestContainerBuilder_WithQueryConfig(t *testing.T) {
-	tests := []struct {
-		name         string
-		queryPath    string
-		queryParams  string
-		expectedEnvs []string
-	}{
-		{
-			name:        "with query path and params",
-			queryPath:   "/api/price",
-			queryParams: `{"symbol":"BTC"}`,
-			expectedEnvs: []string{
-				"QUERY_PATH=/api/price",
-				`QUERY_PARAMS={"symbol":"BTC"}`,
-			},
-		},
-		{
-			name:        "with query path only",
-			queryPath:   "/api/status",
-			queryParams: "",
-			expectedEnvs: []string{
-				"QUERY_PATH=/api/status",
-			},
-		},
-		{
-			name:         "empty query path",
-			queryPath:    "",
-			queryParams:  `{"key":"value"}`,
-			expectedEnvs: []string{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			builder := NewContainerBuilder("python:3.11").
-				WithQueryConfig(tt.queryPath, tt.queryParams)
-
-			cfg, _ := builder.Build()
-
-			if len(tt.expectedEnvs) > 0 {
-				for _, expected := range tt.expectedEnvs {
-					assert.Contains(t, cfg.Env, expected)
-				}
-			} else {
-				// If no query path, QUERY_PATH should not be set
-				for _, env := range cfg.Env {
-					assert.False(t, len(env) >= 11 && env[:11] == "QUERY_PATH=")
-				}
-			}
-		})
-	}
-}
-
-func TestContainerBuilder_WithQueryResultKey(t *testing.T) {
-	builder := NewContainerBuilder("python:3.11").
-		WithQueryResultKey("bot-1/123/result.json")
-
-	cfg, _ := builder.Build()
-
-	assert.Contains(t, cfg.Env, "QUERY_RESULT_KEY=bot-1/123/result.json")
-}
-
-func TestContainerBuilder_WithQueryResultBucket(t *testing.T) {
-	builder := NewContainerBuilder("python:3.11").
-		WithQueryResultBucket("custom-query-results")
-
-	cfg, _ := builder.Build()
-
-	assert.Contains(t, cfg.Env, "MINIO_QUERY_RESULTS_BUCKET=custom-query-results")
-}
-
 func TestContainerBuilder_WithExtraHosts(t *testing.T) {
 	builder := NewContainerBuilder("python:3.11").
 		WithExtraHosts("host.docker.internal:host-gateway").
@@ -446,17 +309,19 @@ func TestContainerBuilder_WithExtraHosts(t *testing.T) {
 func TestContainerBuilder_ChainedCalls(t *testing.T) {
 	// Test that all methods can be chained together
 	builder := NewContainerBuilder("python:3.11").
+		WithLaunch(launch.Settings{
+			Mode:           launch.Query,
+			BotID:          "bot-1",
+			QueryPath:      "/query",
+			QueryResultKey: "bot-1/123/result.json",
+			Storage:        launch.Storage{Endpoint: "minio:9000", QueryResultsBucket: "query-results"},
+		}).
 		WithNetwork("the0-network").
 		WithCommand("/bin/bash", "/app/start.sh").
 		WithBinds("/host:/container:ro").
 		WithEnv("KEY1=value1", "KEY2=value2").
 		WithResources(1024*1024*1024, 2048).
 		WithAutoRemove(true).
-		WithMinIOConfig("minio:9000", "admin", "secret", false).
-		WithQueryResultBucket("query-results").
-		WithDaemonConfig("bot-1", "code.zip", "python3.11", "main.py", "{}", false).
-		WithQueryConfig("/query", `{"param":"value"}`).
-		WithQueryResultKey("bot-1/123/result.json").
 		WithExtraHosts("host.docker.internal:host-gateway")
 
 	cfg, hostCfg := builder.Build()
@@ -470,7 +335,6 @@ func TestContainerBuilder_ChainedCalls(t *testing.T) {
 	assert.Contains(t, cfg.Env, "MINIO_ENDPOINT=minio:9000")
 	assert.Contains(t, cfg.Env, "MINIO_QUERY_RESULTS_BUCKET=query-results")
 	assert.Contains(t, cfg.Env, "BOT_ID=bot-1")
-	assert.Contains(t, cfg.Env, "QUERY_PATH=/query")
 	assert.Contains(t, cfg.Env, "QUERY_RESULT_KEY=bot-1/123/result.json")
 
 	// Verify host config
@@ -538,8 +402,15 @@ func BenchmarkContainerBuilder_FullChain(b *testing.B) {
 			WithEnv("KEY=value").
 			WithResources(1024*1024*512, 1024).
 			WithAutoRemove(true).
-			WithMinIOConfig("minio:9000", "admin", "secret", false).
-			WithDaemonConfig("bot-1", "code.zip", "python3.11", "main.py", "{}", false).
+			WithLaunch(launch.Settings{
+				Mode:       launch.Run,
+				BotID:      "bot-1",
+				CodeFile:   "code.zip",
+				Runtime:    "python3.11",
+				Entrypoint: "main.py",
+				BotConfig:  "{}",
+				Storage:    launch.Storage{Endpoint: "minio:9000", AccessKey: "admin", SecretKey: "secret"},
+			}).
 			Build()
 	}
 }

@@ -243,7 +243,7 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 		},
 	}
 
-	pod, err := generator.GenerateQueryPod(bot, "/status", map[string]interface{}{"key": "value"})
+	pod, err := generator.GenerateQueryPod(bot, "/status", map[string]interface{}{"key": "value"}, "query-target/1/result.json")
 	require.NoError(t, err)
 
 	// Query pods should not restart
@@ -254,16 +254,17 @@ func TestPodGenerator_GenerateQueryPod(t *testing.T) {
 	assert.Equal(t, "bot", pod.Spec.Containers[0].Name)
 	assert.Equal(t, "the0/runtime:latest", pod.Spec.Containers[0].Image)
 
-	// Should have QUERY_PATH and QUERY_PARAMS env vars
+	assert.Equal(t, []string{"/app/runtime", "execute", "--query=/status"}, pod.Spec.Containers[0].Command)
+
 	envMap := make(map[string]string)
 	for _, env := range pod.Spec.Containers[0].Env {
 		envMap[env.Name] = env.Value
 	}
-	assert.Equal(t, "/status", envMap["QUERY_PATH"])
 	assert.Contains(t, envMap["QUERY_PARAMS"], "key")
 
 	assert.Equal(t, "query.py", envMap["ENTRYPOINT"])
 	assert.Equal(t, "query.py", envMap["QUERY_ENTRYPOINT"])
+	assert.Equal(t, "query-target/1/result.json", envMap["QUERY_RESULT_KEY"])
 	assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "query", MountPath: "/query"})
 }
 
@@ -289,7 +290,7 @@ func TestPodGenerator_GenerateQueryPod_RefusesBotWithoutQueryEntrypoint(t *testi
 		},
 	}
 
-	pod, err := generator.GenerateQueryPod(bot, "/health", nil)
+	pod, err := generator.GenerateQueryPod(bot, "/health", nil, "no-query/1/result.json")
 
 	assert.ErrorIs(t, err, query.ErrNoQueryEntrypoint)
 	assert.Nil(t, pod)
