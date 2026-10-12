@@ -77,7 +77,7 @@ module The0.Query
     ) where
 
 import Control.DeepSeq (force)
-import Control.Exception (catch, evaluate, finally, SomeException)
+import Control.Exception (ErrorCall(..), catch, displayException, evaluate, finally, fromException, SomeException)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=))
 import qualified Data.Aeson.KeyMap as KM
@@ -292,7 +292,7 @@ answer req = do
             -- Forced here, so pure code that fails inside the result is a
             -- handler error rather than a failure while writing the answer.
             result <- (Right <$> (fn req >>= evaluate . force))
-                `catch` \(e :: SomeException) -> return (Left (show e))
+                `catch` \(e :: SomeException) -> return (Left (errorText e))
             return $ case result of
                 Left err -> Answer 500 $ object
                     [ "status" .= ("error" :: String)
@@ -302,6 +302,13 @@ answer req = do
                     [ "status" .= ("ok" :: String)
                     , "data" .= val
                     ]
+
+-- | A handler error's message. GHC's text for an 'ErrorCall' ends with
+-- CallStack lines naming the bot's source files, which the answer leaves out.
+errorText :: SomeException -> String
+errorText e = case fromException e of
+    Just (ErrorCall message) -> message
+    Nothing -> displayException e
 
 -- | Start HTTP server on port 9476 for realtime bots.
 runServer :: IO ()
