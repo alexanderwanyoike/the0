@@ -32,11 +32,16 @@ public class ContractTests
     private static readonly Regex Timestamp =
         new(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$");
 
-    private static readonly string CasesDir = FindCasesDir();
+    private static readonly string CasesDir = FindDirectory(Path.Combine("contract", "cases"));
+    // Cases in the contract's format that only this SDK runs.
+    private static readonly string DotnetCasesDir = FindDirectory(Path.Combine("dotnet", "tests", "cases"));
     private static readonly string ContractBotDll = Path.Combine(AppContext.BaseDirectory, "The0.ContractBot.dll");
 
     public static IEnumerable<object[]> Cases() =>
         CasePaths().Select(path => new object[] { Path.GetFileNameWithoutExtension(path) });
+
+    public static IEnumerable<object[]> DotnetCases() =>
+        JsonFiles(DotnetCasesDir).Select(path => new object[] { Path.GetFileNameWithoutExtension(path) });
 
     [Fact]
     public void CasesAreFound()
@@ -64,21 +69,31 @@ public class ContractTests
         Assert.True(problems.Count == 0, string.Join("\n", problems) + "\n" + output);
     }
 
-    private static string FindCasesDir()
+    [Theory]
+    [MemberData(nameof(DotnetCases))]
+    public async Task DotnetCase(string name)
+    {
+        var (problems, output) = await RunCase(Path.Combine(DotnetCasesDir, name + ".json"));
+        Assert.True(problems.Count == 0, string.Join("\n", problems) + "\n" + output);
+    }
+
+    private static string FindDirectory(string relativePath)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            var cases = Path.Combine(dir.FullName, "contract", "cases");
-            if (Directory.Exists(cases))
+            var path = Path.Combine(dir.FullName, relativePath);
+            if (Directory.Exists(path))
             {
-                return cases;
+                return path;
             }
         }
-        throw new DirectoryNotFoundException($"no sdk/contract/cases above {AppContext.BaseDirectory}");
+        throw new DirectoryNotFoundException($"no {relativePath} above {AppContext.BaseDirectory}");
     }
 
-    private static string[] CasePaths() =>
-        Directory.GetFiles(CasesDir, "*.json").OrderBy(path => path, StringComparer.Ordinal).ToArray();
+    private static string[] CasePaths() => JsonFiles(CasesDir);
+
+    private static string[] JsonFiles(string dir) =>
+        Directory.GetFiles(dir, "*.json").OrderBy(path => path, StringComparer.Ordinal).ToArray();
 
     private sealed record Run(int? ExitCode, string Stdout, string Stderr, List<string> Problems, bool ExitedBeforeServing = false)
     {
