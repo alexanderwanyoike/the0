@@ -28,7 +28,9 @@
 #include "state.h"  // Persistent state management
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -172,6 +174,31 @@ inline int64_t current_timestamp() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 }
 
+namespace detail {
+
+/**
+ * `time` in UTC as ISO 8601 with milliseconds, such as
+ * "2026-10-12T09:30:00.123Z": the timestamp of metric and log lines.
+ */
+inline std::string iso_timestamp(std::chrono::system_clock::time_point time) {
+    const auto seconds = std::chrono::floor<std::chrono::seconds>(time);
+    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(time - seconds).count();
+    const std::time_t since_epoch = std::chrono::system_clock::to_time_t(seconds);
+    std::tm utc{};
+#ifdef _WIN32
+    gmtime_s(&utc, &since_epoch);
+#else
+    gmtime_r(&since_epoch, &utc);
+#endif
+    char date_time[32];
+    std::strftime(date_time, sizeof(date_time), "%Y-%m-%dT%H:%M:%S", &utc);
+    char text[40];
+    std::snprintf(text, sizeof(text), "%s.%03dZ", date_time, static_cast<int>(millis));
+    return text;
+}
+
+} // namespace detail
+
 /**
  * Emit a metric to stdout.
  *
@@ -182,7 +209,7 @@ inline int64_t current_timestamp() {
  */
 inline void metric(const std::string& metric_type, json data) {
     data["_metric"] = metric_type;
-    data["timestamp"] = current_timestamp();
+    data["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
     std::cout << data.dump() << std::endl;
 }
 
@@ -232,7 +259,7 @@ inline void log(const std::string& message, const json& data = json::object(), L
     json output = data;
     output["level"] = log_level_str(level);
     output["message"] = message;
-    output["timestamp"] = current_timestamp();
+    output["timestamp"] = detail::iso_timestamp(std::chrono::system_clock::now());
     std::cerr << output.dump() << std::endl;
 }
 
