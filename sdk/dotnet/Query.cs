@@ -276,11 +276,7 @@ public static class Query
         listener.Prefixes.Add(prefix);
         listener.Start();
 
-        Console.Error.WriteLine(JsonSerializer.Serialize(new
-        {
-            _log = "info",
-            message = $"Query server started on port {port}"
-        }));
+        Input.Log($"Query server started on port {port}");
 
         while (true)
         {
