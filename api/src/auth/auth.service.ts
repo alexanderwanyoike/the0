@@ -10,7 +10,7 @@ import { hashPassword } from "@/common/password";
 import { isConnectionError } from "@/common/database-errors";
 import { Failure, Result } from "../common/result";
 import { UserRole } from "@/user/user.constants";
-import { UserRepository } from "@/user/user.repository";
+import { UserService } from "@/user/user.service";
 import { UserRecord } from "@/user/user.types";
 import { toAuthUser } from "./auth-user.mapper";
 import { AuthUser } from "./auth.types";
@@ -40,7 +40,7 @@ export class AuthService implements OnModuleInit {
 
   constructor(
     private jwtService: JwtService,
-    private readonly users: UserRepository,
+    private readonly users: UserService,
   ) {}
 
   async onModuleInit(): Promise<void> {

@@ -7,7 +7,7 @@ import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { version } from "../../../package.json";
 import { AppModule } from "@/app.module";
-import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
+import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 import { AdminJwtGuard } from "@/auth/admin-jwt.guard";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { BotEventRelay } from "@/bot/bot-event-relay";

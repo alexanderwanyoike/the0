@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
 import { AppModule } from "@/app.module";
-import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
+import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 import { DeleteBot, DeployBot, UpdateBot } from "../commands/bot-commands";
 import { CommandBus } from "@/command-bus/command-bus";
 import { appendBotEvents } from "../bot-event-outbox";

@@ -7,7 +7,7 @@ import { ApiKey } from "./models/api-key.model";
 import { CreateApiKeyDto } from "./dto/create-api-key.dto";
 import { ApiKeyCreatedResponseDto } from "./dto/api-key-created-response.dto";
 import { ApiKeyResponseDto } from "./dto/api-key-response.dto";
-import { UserRepository } from "@/user/user.repository";
+import { UserService } from "@/user/user.service";
 
 function toResponseDto(apiKey: ApiKey): ApiKeyCreatedResponseDto {
   return {
@@ -26,7 +26,7 @@ function toResponseDto(apiKey: ApiKey): ApiKeyCreatedResponseDto {
 export class ApiKeyService {
   constructor(
     private readonly apiKeyRepository: ApiKeyRepository,
-    private readonly users: UserRepository,
+    private readonly users: UserService,
   ) {}
 
   /**

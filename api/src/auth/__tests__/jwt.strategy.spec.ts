@@ -13,7 +13,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { Test } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
 import request from "supertest";
-import { AdminBootstrapService } from "../admin-bootstrap.service";
+import { AdminBootstrapService } from "@/user/admin-bootstrap.service";
 import { AuthModule } from "../auth.module";
 import { AuthService } from "../auth.service";
 import { createMockLogger } from "@/test/mock-logger";

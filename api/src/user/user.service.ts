@@ -80,6 +80,18 @@ export class UserService {
     }
   }
 
+  findById(id: string): Promise<UserRecord | null> {
+    return this.users.findById(id);
+  }
+
+  findByEmail(email: string): Promise<UserRecord | null> {
+    return this.users.findByEmail(email);
+  }
+
+  updateLastLogin(id: string): Promise<void> {
+    return this.users.updateLastLogin(id);
+  }
+
   async listUsers() {
     const users = await this.users.list();
     return users.map((user) => this.serializeUser(user));
