@@ -60,8 +60,6 @@ object ContractSpec {
   // says how the list is kept.
   private val KnownFailures: Map[String, String] = Map(
     "query-ephemeral-params" -> "QUERY_PARAMS keeps only string pairs, nested ones included",
-    "query-ephemeral-read-only-before-key-check" -> "State throws a second ReadOnlyStateError type, not Query's",
-    "query-ephemeral-state-read-only" -> "State throws a second ReadOnlyStateError type, not Query's",
     "query-server-params-json-body" -> "the query server ignores the request body",
     "query-server-start-line" -> "the start line is {\"_log\": ...} with no level or timestamp",
     "query-server-unknown-path" -> "the query server's 404 has no available"

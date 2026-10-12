@@ -133,6 +133,11 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(error.isInstanceOf[RuntimeException])
   }
 
+  test("Query.ReadOnlyStateError catches the error State throws") {
+    val thrown: Throwable = new ReadOnlyStateError("Test")
+    assert(thrown.isInstanceOf[Query.ReadOnlyStateError])
+  }
+
   // ============ State read-only enforcement tests ============
   // Note: These tests require QUERY_PATH to be set, which is difficult
   // in JVM tests without native access. The tests verify the exception type.
