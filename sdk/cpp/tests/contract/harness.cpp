@@ -52,7 +52,6 @@ namespace {
 // Cases this SDK does not pass yet, each with the reason; sdk/contract/README.md
 // says how the list is kept.
 const std::map<std::string, std::string> KNOWN_FAILURES = {
-    {"bot-error", "error() does not print its message"},
     {"bot-error-with-data", "error() takes no data"},
     {"bot-success-with-data", "success() takes no data"},
     {"query-ephemeral-params", "every param is turned into a string"},
