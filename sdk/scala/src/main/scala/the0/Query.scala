@@ -39,8 +39,9 @@ object Query {
 
   /**
    * Error thrown when attempting to modify state during query execution.
+   * It is the type State throws, so a handler can catch it under either name.
    */
-  class ReadOnlyStateError(message: String) extends RuntimeException(message)
+  type ReadOnlyStateError = the0.ReadOnlyStateError
 
   /**
    * Request object passed to handlers (Express-like).
