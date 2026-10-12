@@ -45,9 +45,9 @@ The working directory is the code directory, `/bot`. A query entrypoint never ru
 | `BOT_CONFIG` | every process | The bot's configuration, as JSON object text. |
 | `CODE_MOUNT_DIR` | every process | The code directory without its leading `/`, which is `bot`. A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`. SDKs use `bot` when it is unset. |
 | `STATE_DIR` | every process | The state directory, `/state/.the0-state`. An inherited value is kept; every container the runtime creates sets it to that path. SDKs use that path when it is unset. |
-| `BOT_TYPE` | bot runs and query servers; ephemeral queries on Docker only | `realtime` or `scheduled`. Kubernetes query pods don't set it. SDKs only read it to decide whether to start the query server. |
+| `BOT_TYPE` | bot runs and query servers | `realtime` or `scheduled`. SDKs only read it to decide whether to start the query server. |
 | `QUERY_PATH` | ephemeral queries only | The query's path, such as `/portfolio`. It is never empty. Its presence is what makes state read-only. |
-| `QUERY_PARAMS` | ephemeral queries with params; Docker always sets it, to `{}` when there are none | The params, as JSON object text. |
+| `QUERY_PARAMS` | ephemeral queries only | The params, as JSON object text: `{}` when there are none. |
 | `THE0_QUERY_PORT` | never set by the runtime | The port the SDK's query server listens on, default `9476`. The runtime always connects to 9476; the variable exists for tests and local runs. |
 | `SCRIPT_PATH` | every process | The entrypoint file. Only the wrappers read it. |
 | `PYTHONPATH` | `python3.11` | `/bot/vendor:/bot`, followed by any inherited value. |

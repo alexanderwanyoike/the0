@@ -55,7 +55,7 @@ The runtime provides a query API for reading computed data from bots without mod
 
 **Realtime bots** run a query HTTP server on port 9476. Queries are proxied directly to the running container, providing low-latency (~10-50ms) responses.
 
-**Scheduled bots** handle queries by spawning ephemeral containers. When a query arrives, the runtime starts a container with the `QUERY_PATH` environment variable set. The bot SDK detects this and runs in query mode instead of normal execution. This has higher latency (~1-3s) due to container startup.
+**Scheduled bots** handle queries by spawning ephemeral containers. When a query arrives, the runtime starts a container running `runtime execute --query=<path>`, which runs the query entrypoint with `QUERY_PATH` set. The bot SDK detects this and runs in query mode instead of normal execution. This has higher latency (~1-3s) due to container startup.
 
 ```mermaid
 flowchart LR

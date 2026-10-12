@@ -104,7 +104,7 @@ For scheduled bots (not currently running), queries spawn ephemeral containers:
 
 1. QueryServer receives request
 2. QueryResolver finds the bot configuration
-3. QueryHandler builds executable with `QUERY_PATH` and `QUERY_PARAMS` env vars
+3. QueryHandler starts a container running `runtime execute --query=<path>`, with the params in `QUERY_PARAMS`
 4. DockerRunner starts ephemeral container
 5. Container runs query mode, returns JSON result
 6. Container terminates (~1-3s latency)
