@@ -81,12 +81,15 @@ import Control.Exception (catch, evaluate, finally, SomeException)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=))
 import qualified Data.Aeson.KeyMap as KM
-import Data.Aeson.Key (toText)
+import Data.Aeson.Decoding.ByteString (bsToTokens)
+import Data.Aeson.Decoding.Tokens (TkArray(..), TkRecord(..), Tokens(..))
+import Data.Aeson.Key (Key, toText)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.IORef
 import Data.Char (isSpace, toLower)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Encoding.Error as TE
@@ -384,10 +387,37 @@ queryRequest target body =
 
 -- | Params from JSON text holding an object, with their JSON types;
 -- 'Nothing' for anything else.
+--
+-- An object that repeats a key, at any depth, counts as unreadable, as in
+-- every SDK, rather than whichever value the decoder happens to keep.
 jsonObjectParams :: BS.ByteString -> Maybe (Map.Map String Value)
 jsonObjectParams bytes = case decodeStrict bytes of
-    Just (Object o) -> Just (Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o])
+    Just (Object o) | isJust (skipValue (bsToTokens bytes)) ->
+        Just (Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o])
     _ -> Nothing
+  where
+    -- Walks one value's tokens and gives what follows it, or 'Nothing' at a
+    -- repeated key or an error.
+    skipValue :: Tokens k e -> Maybe k
+    skipValue tokens = case tokens of
+        TkLit _ rest -> Just rest
+        TkText _ rest -> Just rest
+        TkNumber _ rest -> Just rest
+        TkArrayOpen items -> skipItems items
+        TkRecordOpen pairs -> skipPairs Set.empty pairs
+        TkErr _ -> Nothing
+
+    skipItems :: TkArray k e -> Maybe k
+    skipItems (TkItem tokens) = skipValue tokens >>= skipItems
+    skipItems (TkArrayEnd rest) = Just rest
+    skipItems (TkArrayErr _) = Nothing
+
+    skipPairs :: Set.Set Key -> TkRecord k e -> Maybe k
+    skipPairs seen (TkPair key tokens)
+        | key `Set.member` seen = Nothing
+        | otherwise = skipValue tokens >>= skipPairs (Set.insert key seen)
+    skipPairs _ (TkRecordEnd rest) = Just rest
+    skipPairs _ (TkRecordErr _) = Nothing
 
 reasonPhrase :: Int -> String
 reasonPhrase 200 = "OK"
