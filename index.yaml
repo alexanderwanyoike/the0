@@ -4,6 +4,56 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: changed
+          description: "A bot run whose result is an error now fails even when the bot process exits 0, for bots in every language, and every failed run ends with one log line: Run failed, then the error message or the exit code"
+        - kind: added
+          description: "The bot contract: one written spec in the docs for results, metrics, logs, state and queries, with 36 shared cases that every SDK runs and that the runtime runs end to end"
+        - kind: changed
+          description: "Every SDK is at 0.4 and follows the bot contract; the docs page lists what older SDK versions did differently, including typed query params in the Python and Node.js SDKs, and the quick starts pin 0.4"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.18.0
+    created: "2026-10-12T14:28:52.51859928Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: bae90c821f0a0ec21ba633c7f7ed428740759851a01d489fe6257a713b79ef63
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.13.0/the0-0.13.0.tgz
+    version: 0.13.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: fixed
           description: "A bot change reaches the runtime even when NATS is down at that moment: the change and its event are saved together in a new outbox table (migration 0007), and a relay keeps sending the event until JetStream confirms it. Requests no longer wait on NATS"
         - kind: fixed
@@ -2499,4 +2549,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-12T06:46:37.959792613Z"
+generated: "2026-10-12T14:28:52.519106869Z"
