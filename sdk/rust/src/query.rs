@@ -130,6 +130,19 @@ where
     }
 }
 
+/// The error a handler registered with [`try_handler`] fails with.
+pub type HandlerError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Register a query handler that can fail.
+pub fn try_handler<F>(path: &str, handler_fn: F)
+where
+    F: Fn(&QueryRequest) -> Result<Value, HandlerError> + Send + Sync + 'static,
+{
+    handler(path, move |req| {
+        handler_fn(req).unwrap_or_else(|e| panic!("{}", e))
+    });
+}
+
 /// Get current query parameters (alternative to request object).
 ///
 /// Returns a copy of the current query parameters.
