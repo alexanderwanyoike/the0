@@ -119,6 +119,37 @@ TEST_CASE("query::Request") {
     }
 }
 
+TEST_CASE("query::Request from JSON values") {
+    const json values = {
+        {"symbol", "BTC/USD"},
+        {"limit", 5},
+        {"ratio", 0.25},
+        {"live", true},
+        {"symbols", {"AAPL", "MSFT"}},
+        {"filter", {{"side", "buy"}}},
+    };
+    auto req = query::Request::from_values("/echo", values);
+
+    SUBCASE("keeps the path") {
+        CHECK(req.path == "/echo");
+    }
+
+    SUBCASE("string accessors give a string param as it is and any other as its JSON text") {
+        const std::map<std::string, std::string> text = {
+            {"symbol", "BTC/USD"},
+            {"limit", "5"},
+            {"ratio", "0.25"},
+            {"live", "true"},
+            {"symbols", R"(["AAPL","MSFT"])"},
+            {"filter", R"({"side":"buy"})"},
+        };
+        CHECK(req.params == text);
+        CHECK(req.get("limit") == "5");
+        CHECK(req.get("filter", "{}") == R"({"side":"buy"})");
+        CHECK(req.has("live"));
+    }
+}
+
 TEST_CASE("state read-only enforcement in query mode") {
     // Set up temp directory for state
     auto temp_dir = std::filesystem::temp_directory_path() / ("the0_query_test_" + std::to_string(rand()));
