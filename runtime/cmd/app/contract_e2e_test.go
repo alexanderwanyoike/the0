@@ -97,7 +97,10 @@ func TestRuntimeExecute_FollowsTheBotContract(t *testing.T) {
 	}
 	image := contractImage(t)
 	runtimeBinary := buildRuntimeBinary(t)
-	cases := loadContractCases(t, repoPath(t, "sdk", "contract", "cases"))
+	// testdata/contract-cases holds cases in the same format for rules only
+	// the runtime enforces, which the shared cases cannot show.
+	cases := append(loadContractCases(t, repoPath(t, "sdk", "contract", "cases")),
+		loadContractCases(t, filepath.Join("testdata", "contract-cases"))...)
 
 	for _, lang := range contractLanguages() {
 		t.Run(lang.name, func(t *testing.T) {
