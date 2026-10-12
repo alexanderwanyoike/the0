@@ -1,0 +1,26 @@
+{
+  "description": "The line the query server prints when it starts is a log line: level, message and a UTC ISO 8601 timestamp, on stderr.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/portfolio": [{"op": "return", "value": {}}]},
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ],
+  "expect": {
+    "stdout": [],
+    "stderr": [
+      {"level": "info", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}}
+    ]
+  }
+}

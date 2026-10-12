@@ -1,0 +1,64 @@
+{
+  "description": "set() stores each JSON value as <STATE_DIR>/<key>.json, creating the directory on first write, and get() returns it unchanged.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [
+    {"op": "state.set", "key": "count", "value": 42},
+    {"op": "state.set", "key": "price", "value": 45000.5},
+    {"op": "state.set", "key": "symbol", "value": "BTC/USD"},
+    {"op": "state.set", "key": "active", "value": true},
+    {"op": "state.set", "key": "history", "value": [1, 2, 3]},
+    {
+      "op": "state.set",
+      "key": "portfolio",
+      "value": {"AAPL": 100, "GOOGL": {"qty": 50, "avg": 120.5}}
+    },
+    {"op": "state.set", "key": "nothing", "value": null},
+    {"op": "state.get", "key": "count", "default": "missing", "as": "count"},
+    {"op": "state.get", "key": "price", "default": "missing", "as": "price"},
+    {"op": "state.get", "key": "symbol", "default": "missing", "as": "symbol"},
+    {"op": "state.get", "key": "active", "default": "missing", "as": "active"},
+    {"op": "state.get", "key": "history", "default": "missing", "as": "history"},
+    {"op": "state.get", "key": "portfolio", "default": "missing", "as": "portfolio"},
+    {"op": "state.get", "key": "nothing", "default": "missing", "as": "nothing"},
+    {
+      "op": "result",
+      "value": {
+        "count": {"$ref": "count"},
+        "price": {"$ref": "price"},
+        "symbol": {"$ref": "symbol"},
+        "active": {"$ref": "active"},
+        "history": {"$ref": "history"},
+        "portfolio": {"$ref": "portfolio"},
+        "nothing": {"$ref": "nothing"}
+      }
+    }
+  ],
+  "expect": {
+    "exit_code": 0,
+    "result": {
+      "count": 42,
+      "price": 45000.5,
+      "symbol": "BTC/USD",
+      "active": true,
+      "history": [1, 2, 3],
+      "portfolio": {"AAPL": 100, "GOOGL": {"qty": 50, "avg": 120.5}},
+      "nothing": null
+    },
+    "state_after": {
+      "count": 42,
+      "price": 45000.5,
+      "symbol": "BTC/USD",
+      "active": true,
+      "history": [1, 2, 3],
+      "portfolio": {"AAPL": 100, "GOOGL": {"qty": 50, "avg": 120.5}},
+      "nothing": null
+    }
+  }
+}

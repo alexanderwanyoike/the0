@@ -1,0 +1,21 @@
+{
+  "description": "With neither QUERY_PATH nor BOT_TYPE=realtime, run() answers /info as an ephemeral query.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "handlers": {"/portfolio": [{"op": "return", "value": {}}]},
+  "expect": {
+    "exit_code": 0,
+    "query_result": {
+      "status": "ok",
+      "data": {
+        "available_queries": {"$match": "unordered", "items": ["/portfolio", "/health", "/info"]}
+      }
+    }
+  }
+}

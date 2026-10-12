@@ -1,0 +1,32 @@
+{
+  "description": "Without a JSON object body, params come from the URL query string, URL-decoded, every value a string.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/echo?symbol=BTC%2FUSD&limit=5&note=two+words",
+      "expect": {
+        "status": 200,
+        "body": {"status": "ok", "data": {"symbol": "BTC/USD", "limit": "5", "note": "two words"}}
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/echo?limit=5",
+      "raw_body": "limit=7",
+      "content_type": "application/x-www-form-urlencoded",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": "5"}}}
+    }
+  ]
+}

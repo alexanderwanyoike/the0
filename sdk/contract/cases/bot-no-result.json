@@ -1,0 +1,13 @@
+{
+  "description": "An SDK writes no result file unless the bot asks for one; the default success belongs to the wrappers.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [],
+  "expect": {"exit_code": 0, "stdout": [], "stderr": [], "result": null}
+}

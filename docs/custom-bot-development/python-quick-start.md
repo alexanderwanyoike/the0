@@ -262,7 +262,7 @@ success("Portfolio updated", {"total_value": 10500, "positions": 3})
 
 ### error(message)
 
-Reports failure and terminates execution with exit code 1:
+Reports failure: writes an error result, prints the message to the bot's logs as an error line, and terminates execution with exit code 1:
 
 ```python
 from the0 import error

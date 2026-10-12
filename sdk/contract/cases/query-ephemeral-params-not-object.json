@@ -1,0 +1,17 @@
+{
+  "description": "A QUERY_PARAMS that is JSON but not an object gives no params, and the query still runs.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "[\"limit\", 5]"
+  },
+  "handlers": {
+    "/echo": [{"op": "query.params", "as": "params"}, {"op": "return", "value": {"$ref": "params"}}]
+  },
+  "expect": {"exit_code": 0, "query_result": {"status": "ok", "data": {}}}
+}

@@ -1,0 +1,13 @@
+{
+  "description": "A bot that fails with an uncaught error exits non-zero, and the SDK writes no result for it.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [{"op": "raise", "message": "exchange unreachable"}],
+  "expect": {"exit_code": {"$match": "nonzero"}, "result": null}
+}

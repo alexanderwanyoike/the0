@@ -31,6 +31,8 @@ from typing import Any, Callable, Dict, Optional, List
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
+from .state import ReadOnlyStateError
+
 __version__ = "1.0.0"
 __all__ = ["handler", "run", "get_params", "get_config", "QueryRequest", "ReadOnlyStateError"]
 
@@ -42,12 +44,6 @@ _current_params: Dict[str, Any] = {}
 
 # Bot config loaded from environment
 _config: Dict[str, Any] = {}
-
-
-class ReadOnlyStateError(Exception):
-    """Raised when attempting to modify state during query execution."""
-
-    pass
 
 
 class QueryRequest:
@@ -192,12 +188,16 @@ def run():
         _run_ephemeral("/info")
 
 
+# A module attribute rather than a literal so the contract tests can point it
+# into a sandbox; the runtime always reads /query/result.json.
+_QUERY_RESULT_PATH = "/query/result.json"
+
+
 def _write_result(result: dict):
     """Write query result to /query/result.json file."""
-    result_path = "/query/result.json"
     try:
-        os.makedirs("/query", exist_ok=True)
-        with open(result_path, "w") as f:
+        os.makedirs(os.path.dirname(_QUERY_RESULT_PATH), exist_ok=True)
+        with open(_QUERY_RESULT_PATH, "w") as f:
             json.dump(result, f)
     except Exception as e:
         print(f"RESULT_ERROR: Failed to write result file: {e}", file=sys.stderr)
@@ -210,9 +210,10 @@ def _run_ephemeral(query_path: str):
     # Parse parameters from environment
     params_str = os.environ.get("QUERY_PARAMS", "{}")
     try:
-        _current_params = json.loads(params_str)
+        params = json.loads(params_str)
     except json.JSONDecodeError:
-        _current_params = {}
+        params = {}
+    _current_params = params if isinstance(params, dict) else {}
 
     # Find and execute handler
     handler_fn = _handlers.get(query_path)
@@ -250,11 +251,21 @@ def _run_server():
 
             parsed = urlparse(self.path)
             path = parsed.path
-            _current_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+            params = self._json_body_params()
+            if params is None:
+                params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+            _current_params = params
 
             handler_fn = _handlers.get(path)
             if not handler_fn:
-                self._send_json(404, {"status": "error", "error": f"No handler for path: {path}"})
+                self._send_json(
+                    404,
+                    {
+                        "status": "error",
+                        "error": f"No handler for path: {path}",
+                        "available": list(_handlers.keys()),
+                    },
+                )
                 return
 
             try:
@@ -263,6 +274,20 @@ def _run_server():
                 self._send_json(200, {"status": "ok", "data": result})
             except Exception as e:
                 self._send_json(500, {"status": "error", "error": str(e)})
+
+        def _json_body_params(self) -> Optional[Dict[str, Any]]:
+            """Params from a JSON object body, or None to use the query string."""
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return None
+            if length <= 0:
+                return None
+            try:
+                body = json.loads(self.rfile.read(length))
+            except ValueError:
+                return None
+            return body if isinstance(body, dict) else None
 
         def _send_json(self, status: int, data: dict):
             self.send_response(status)
@@ -273,11 +298,12 @@ def _run_server():
         def log_message(self, format, *args):
             pass  # Suppress default logging
 
+    # Imported here because the0/__init__.py imports this module before it
+    # defines log().
+    from . import log
+
     server = HTTPServer(("0.0.0.0", port), QueryHTTPHandler)
-    print(
-        json.dumps({"_log": "info", "message": f"Query server started on port {port}"}),
-        file=sys.stderr,
-    )
+    log(f"Query server started on port {port}")
     server.serve_forever()
 
 

@@ -1,0 +1,52 @@
+{
+  "description": "With QUERY_PATH set, state reads work and every write fails with the SDK's one read-only error type, the type its query module documents; nothing changes on disk.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/try-writes"
+  },
+  "state_before": {"positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}]},
+  "handlers": {
+    "/try-writes": [
+      {"op": "state.set", "key": "positions", "value": [], "catch": "read_only_state", "as": "set"},
+      {"op": "state.set", "key": "new_key", "value": 1, "catch": "read_only_state", "as": "set_new"},
+      {"op": "state.delete", "key": "positions", "catch": "read_only_state", "as": "delete"},
+      {"op": "state.clear", "catch": "read_only_state", "as": "clear"},
+      {"op": "state.get", "key": "positions", "default": [], "as": "positions"},
+      {"op": "state.list", "as": "keys"},
+      {"op": "state.exists", "key": "positions", "as": "exists"},
+      {
+        "op": "return",
+        "value": {
+          "set": {"$ref": "set"},
+          "set_new": {"$ref": "set_new"},
+          "delete": {"$ref": "delete"},
+          "clear": {"$ref": "clear"},
+          "positions": {"$ref": "positions"},
+          "keys": {"$ref": "keys"},
+          "exists": {"$ref": "exists"}
+        }
+      }
+    ]
+  },
+  "expect": {
+    "exit_code": 0,
+    "query_result": {
+      "status": "ok",
+      "data": {
+        "set": {"caught": "read_only_state"},
+        "set_new": {"caught": "read_only_state"},
+        "delete": {"caught": "read_only_state"},
+        "clear": {"caught": "read_only_state"},
+        "positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}],
+        "keys": ["positions"],
+        "exists": true
+      }
+    },
+    "state_after": {"positions": [{"symbol": "AAPL", "qty": 100}, {"symbol": "GOOGL", "qty": 50}]}
+  }
+}

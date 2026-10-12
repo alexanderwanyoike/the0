@@ -95,6 +95,7 @@ export default withMermaid(defineConfig({
           { text: 'Metrics', link: '/custom-bot-development/metrics' },
           { text: 'Testing', link: '/custom-bot-development/testing' },
           { text: 'Deployment', link: '/custom-bot-development/deployment' },
+          { text: 'Bot Contract', link: '/custom-bot-development/bot-contract' },
         ]
       },
       {

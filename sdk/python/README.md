@@ -68,7 +68,7 @@ success("Trade completed", {"trade_id": "12345"})
 
 ### `error(message: str, data: dict = None)`
 
-Output an error result and exit with code 1.
+Output an error result, print the message to stderr as an error log line, and exit with code 1.
 
 ```python
 if amount <= 0:

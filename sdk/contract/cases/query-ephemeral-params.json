@@ -1,0 +1,47 @@
+{
+  "description": "QUERY_PARAMS is a JSON object and every param keeps its JSON type: numbers, booleans, arrays, objects and null as well as strings.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "{\"symbol\":\"BTC/USD\",\"limit\":5,\"ratio\":0.25,\"live\":true,\"symbols\":[\"AAPL\",\"MSFT\"],\"filter\":{\"side\":\"buy\",\"min_qty\":10},\"cursor\":null}"
+  },
+  "handlers": {
+    "/echo": [
+      {"op": "query.params", "as": "params"},
+      {"op": "query.param", "key": "limit", "default": 10, "as": "limit"},
+      {"op": "query.param", "key": "offset", "default": 0, "as": "offset"},
+      {
+        "op": "return",
+        "value": {
+          "params": {"$ref": "params"},
+          "limit": {"$ref": "limit"},
+          "offset": {"$ref": "offset"}
+        }
+      }
+    ]
+  },
+  "expect": {
+    "exit_code": 0,
+    "query_result": {
+      "status": "ok",
+      "data": {
+        "params": {
+          "symbol": "BTC/USD",
+          "limit": 5,
+          "ratio": 0.25,
+          "live": true,
+          "symbols": ["AAPL", "MSFT"],
+          "filter": {"side": "buy", "min_qty": 10},
+          "cursor": null
+        },
+        "limit": 5,
+        "offset": 0
+      }
+    }
+  }
+}
