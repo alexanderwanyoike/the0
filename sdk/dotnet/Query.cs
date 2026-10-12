@@ -20,9 +20,6 @@ namespace The0;
 ///
 /// Query.Run();
 /// </code>
-///
-/// During an ephemeral query, state is read-only: State.Set, State.Delete and
-/// State.Clear throw <see cref="ReadOnlyStateError"/>.
 /// </summary>
 public static class Query
 {
