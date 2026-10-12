@@ -150,13 +150,12 @@ json perform(const json& step, const Request* request, const Bound& bound) {
     }
 
     if (op == "query.params") {
-        return handler_request(request, op).params;
+        return handler_request(request, op).values();
     }
     if (op == "query.param") {
-        const Request& req = handler_request(request, op);
-        const std::string key = text("key");
-        if (req.has(key)) {
-            return req.get(key);
+        auto value = handler_request(request, op).get_as<json>(text("key"));
+        if (value) {
+            return *value;
         }
         return args.contains("default") ? args["default"] : json(nullptr);
     }
