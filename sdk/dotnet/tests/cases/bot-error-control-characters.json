@@ -1,0 +1,20 @@
+{
+  "description": "Error() writes a result that is JSON, and a log line, for a message with control characters.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [{"op": "error", "message": "line one\nline two\ttabbed"}],
+  "expect": {
+    "exit_code": 1,
+    "stdout": [],
+    "stderr": [
+      {"level": "error", "message": "line one\nline two\ttabbed", "timestamp": {"$match": "timestamp"}}
+    ],
+    "result": {"status": "error", "message": "line one\nline two\ttabbed"}
+  }
+}
