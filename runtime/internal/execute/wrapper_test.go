@@ -171,13 +171,15 @@ func runWrapper(t *testing.T, bot botFixture, earlierResult string) wrapperRun {
 	return run
 }
 
-func TestBotWrapper_FailedRunExitsNonZeroAndLogsItsError(t *testing.T) {
-	cases := []struct {
-		name     string
-		bot      func(t *testing.T) botFixture
-		exitCode int
-		message  string
-	}{
+type failedRun struct {
+	name     string
+	bot      func(t *testing.T) botFixture
+	exitCode int
+	message  string
+}
+
+func failedRuns() []failedRun {
+	return []failedRun{
 		{
 			name: "python bot calls the0.error",
 			bot: func(t *testing.T) botFixture {
@@ -312,14 +314,25 @@ exports.main = async function (botId, config) {
 			message:  "position limit breached",
 		},
 	}
+}
 
-	for _, tc := range cases {
+func TestBotWrapper_ExitCodeAndResultOfAFailedRun(t *testing.T) {
+	for _, tc := range failedRuns() {
 		t.Run(tc.name, func(t *testing.T) {
 			run := runWrapper(t, tc.bot(t), "")
 
 			assert.Equal(t, tc.exitCode, run.exitCode, "output:\n%s", run.output)
 			assert.Equal(t, "error", run.result["status"])
 			assert.Equal(t, tc.message, run.result["message"])
+		})
+	}
+}
+
+func TestBotWrapper_ErrorLogLinesOfAFailedRun(t *testing.T) {
+	for _, tc := range failedRuns() {
+		t.Run(tc.name, func(t *testing.T) {
+			run := runWrapper(t, tc.bot(t), "")
+
 			assert.Contains(t, run.errorLogMessages(), tc.message, "output:\n%s", run.output)
 		})
 	}
