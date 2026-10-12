@@ -136,7 +136,7 @@ Update `SmaBot.csproj`:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="The0.Sdk" Version="0.1.2" />
+    <PackageReference Include="The0.Sdk" Version="0.4.0" />
   </ItemGroup>
 
 </Project>

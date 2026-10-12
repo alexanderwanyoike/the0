@@ -36,7 +36,7 @@ dotnet add package The0.Sdk
 Or add to your `.csproj`:
 
 ```xml
-<PackageReference Include="The0.Sdk" Version="0.1.2" />
+<PackageReference Include="The0.Sdk" Version="0.4.0" />
 ```
 
 ### Usage
