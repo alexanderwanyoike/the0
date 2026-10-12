@@ -18,6 +18,8 @@ const CASES_DIR = path.join(SRC_DIR, "..", "..", "contract", "cases");
 
 const RUN_TIMEOUT_MS = 60_000;
 const SERVER_START_TIMEOUT_MS = 30_000;
+// sdk/contract/README.md, step 5, says why a server case may need a fresh port.
+const PORT_ATTEMPTS = 3;
 
 // Cases this SDK does not pass yet, each with the reason. A listed case that
 // starts passing fails the suite, so the list cannot go stale.
@@ -56,6 +58,13 @@ interface Output {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+}
+
+interface Run {
+  out: Output;
+  // Mismatches found while the process ran, such as HTTP responses.
+  problems: string[];
+  exitedBeforeServing: boolean;
 }
 
 function casePaths(): string[] {
@@ -253,9 +262,8 @@ class Sandbox {
   readonly codeDir = path.join(this.root, "bot");
   readonly stateDir = path.join(this.root, "state", ".the0-state");
   readonly queryResult = path.join(this.root, "query", "result.json");
-  port: number | null = null;
 
-  constructor(contractCase: ContractCase) {
+  constructor(contractCase: ContractCase, readonly port: number | null) {
     fs.mkdirSync(this.codeDir);
     fs.mkdirSync(path.dirname(this.queryResult));
     if (contractCase.state_before !== undefined) {
@@ -311,56 +319,76 @@ function buildContractBot(): string {
 
 async function runCase(file: string): Promise<{ problems: string[]; output: string }> {
   const contractCase = JSON.parse(fs.readFileSync(file, "utf8")) as ContractCase;
-  const sandbox = new Sandbox(contractCase);
-  try {
-    const command = [path.join(buildDir, "contract-bot.js"), file, sandbox.queryResult];
-    let problems: string[] = [];
-    let out: Output;
-    if (contractCase.requests !== undefined) {
-      sandbox.port = await freePort();
-      ({ problems, out } = await runServer(contractCase, sandbox, command));
-    } else {
-      const run = spawnSync(process.execPath, command, {
-        env: sandbox.env(contractCase),
-        encoding: "utf8",
-        timeout: RUN_TIMEOUT_MS,
-      });
-      out = { exitCode: run.status, stdout: run.stdout, stderr: run.stderr };
+  const servesHttp = contractCase.requests !== undefined;
+  for (let attempt = 1; ; attempt++) {
+    const sandbox = new Sandbox(contractCase, servesHttp ? await freePort() : null);
+    try {
+      const run = await runContractBot(contractCase, file, sandbox, servesHttp);
+      if (run.exitedBeforeServing && attempt < PORT_ATTEMPTS) {
+        continue;
+      }
+      const { out } = run;
+      return {
+        problems: [...run.problems, ...compare(contractCase, sandbox, out)],
+        output: `exit code: ${out.exitCode}\n--- stdout\n${out.stdout}--- stderr\n${out.stderr}`,
+      };
+    } finally {
+      sandbox.remove();
     }
-
-    const expected = contractCase.expect ?? {};
-    if ("exit_code" in expected) {
-      problems.push(...mismatches(expected.exit_code, out.exitCode, "exit_code"));
-    }
-    if (expected.stdout !== undefined) {
-      problems.push(...lineMismatches(expected.stdout, out.stdout, "stdout"));
-    }
-    if (expected.stderr !== undefined) {
-      problems.push(...lineMismatches(expected.stderr, out.stderr, "stderr"));
-    }
-    if ("result" in expected) {
-      problems.push(...fileMismatches(expected.result, path.join(sandbox.codeDir, "result.json"), "result"));
-    }
-    if ("query_result" in expected) {
-      problems.push(...fileMismatches(expected.query_result, sandbox.queryResult, "query_result"));
-    }
-    if (expected.state_after !== undefined) {
-      problems.push(...mismatches(expected.state_after, readState(sandbox.stateDir), "state_after"));
-    }
-    return {
-      problems,
-      output: `exit code: ${out.exitCode}\n--- stdout\n${out.stdout}--- stderr\n${out.stderr}`,
-    };
-  } finally {
-    sandbox.remove();
   }
+}
+
+async function runContractBot(
+  contractCase: ContractCase,
+  file: string,
+  sandbox: Sandbox,
+  servesHttp: boolean
+): Promise<Run> {
+  const command = [path.join(buildDir, "contract-bot.js"), file, sandbox.queryResult];
+  if (servesHttp) {
+    return runServer(contractCase, sandbox, command);
+  }
+  const run = spawnSync(process.execPath, command, {
+    env: sandbox.env(contractCase),
+    encoding: "utf8",
+    timeout: RUN_TIMEOUT_MS,
+  });
+  return {
+    out: { exitCode: run.status, stdout: run.stdout, stderr: run.stderr },
+    problems: [],
+    exitedBeforeServing: false,
+  };
+}
+
+function compare(contractCase: ContractCase, sandbox: Sandbox, out: Output): string[] {
+  const problems: string[] = [];
+  const expected = contractCase.expect ?? {};
+  if ("exit_code" in expected) {
+    problems.push(...mismatches(expected.exit_code, out.exitCode, "exit_code"));
+  }
+  if (expected.stdout !== undefined) {
+    problems.push(...lineMismatches(expected.stdout, out.stdout, "stdout"));
+  }
+  if (expected.stderr !== undefined) {
+    problems.push(...lineMismatches(expected.stderr, out.stderr, "stderr"));
+  }
+  if ("result" in expected) {
+    problems.push(...fileMismatches(expected.result, path.join(sandbox.codeDir, "result.json"), "result"));
+  }
+  if ("query_result" in expected) {
+    problems.push(...fileMismatches(expected.query_result, sandbox.queryResult, "query_result"));
+  }
+  if (expected.state_after !== undefined) {
+    problems.push(...mismatches(expected.state_after, readState(sandbox.stateDir), "state_after"));
+  }
+  return problems;
 }
 
 async function runServer(
   contractCase: ContractCase,
   sandbox: Sandbox,
   command: string[]
-): Promise<{ problems: string[]; out: Output }> {
+): Promise<Run> {
   const child = spawn(process.execPath, command, { env: sandbox.env(contractCase) });
   const out: Output = { exitCode: null, stdout: "", stderr: "" };
   child.stdout.setEncoding("utf8").on("data", (chunk) => (out.stdout += chunk));
@@ -374,6 +402,7 @@ async function runServer(
   const port = sandbox.port as number;
 
   const problems: string[] = [];
+  let exitedBeforeServing = false;
   try {
     const deadline = Date.now() + SERVER_START_TIMEOUT_MS;
     let ready = false;
@@ -384,7 +413,12 @@ async function runServer(
       }
     }
     if (!ready) {
-      problems.push(`query server did not accept connections within ${SERVER_START_TIMEOUT_MS}ms`);
+      exitedBeforeServing = out.exitCode !== null;
+      problems.push(
+        exitedBeforeServing
+          ? `query server exited with code ${out.exitCode} before accepting connections`
+          : `query server did not accept connections within ${SERVER_START_TIMEOUT_MS}ms`
+      );
     } else {
       for (const [index, request] of (contractCase.requests ?? []).entries()) {
         const where = `requests[${index}] ${request.method} ${request.target}`;
@@ -409,7 +443,7 @@ async function runServer(
     child.kill("SIGTERM");
     await exited;
   }
-  return { problems, out };
+  return { out, problems, exitedBeforeServing };
 }
 
 describe("bot contract cases", () => {
