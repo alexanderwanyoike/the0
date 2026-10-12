@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
@@ -71,8 +72,13 @@ public static class Query
                 .ToDictionary(param => param.Key, param => AsText(param.Value!));
         }
 
+        // The text is read by people and string handlers, not embedded in
+        // HTML, so the default encoder's é-style escapes only get in the way.
+        private static readonly JsonSerializerOptions TextOptions =
+            new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
         private static string AsText(JsonNode value) =>
-            value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value.ToJsonString();
+            value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : value.ToJsonString(TextOptions);
 
         /// <summary>
         /// Get a parameter as a <typeparamref name="T"/>, deserialized from its JSON value.
