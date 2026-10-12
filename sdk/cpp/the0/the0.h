@@ -199,6 +199,16 @@ inline void log(const std::string& message, const json& data = json::object(), L
     std::cerr << output.dump() << std::endl;
 }
 
+namespace detail {
+
+[[noreturn]] inline void exit_with_error(const json& error_result) {
+    write_result(error_result.dump());
+    log(error_result["message"].get<std::string>(), json::object(), LogLevel::Error);
+    std::exit(1);
+}
+
+} // namespace detail
+
 /**
  * Output a success result to the result file.
  *
@@ -222,8 +232,12 @@ inline void success(const std::string& message) {
  * @param data Any JSON value, written under the result's "data" key
  */
 inline void success(const std::string& message, const json& data) {
-    (void)data;
-    success(message);
+    json r = {
+        {"status", "success"},
+        {"message", message},
+        {"data", data}
+    };
+    write_result(r.dump());
 }
 
 /**
@@ -241,9 +255,7 @@ inline void success(const std::string& message, const json& data) {
         {"status", "error"},
         {"message", message}
     };
-    write_result(r.dump());
-    log(message, json::object(), LogLevel::Error);
-    std::exit(1);
+    detail::exit_with_error(r);
 }
 
 /**
@@ -256,8 +268,12 @@ inline void success(const std::string& message, const json& data) {
  * @param data Any JSON value, written under the result's "data" key
  */
 [[noreturn]] inline void error(const std::string& message, const json& data) {
-    (void)data;
-    error(message);
+    json r = {
+        {"status", "error"},
+        {"message", message},
+        {"data", data}
+    };
+    detail::exit_with_error(r);
 }
 
 /**
