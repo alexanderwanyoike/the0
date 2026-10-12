@@ -357,7 +357,7 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 
 // ForQuery configures the builder for ephemeral query execution.
 // Sets query environment variables and removes sidecars.
-func (b *PodBuilder) ForQuery(queryPath string, queryParams map[string]interface{}) *PodBuilder {
+func (b *PodBuilder) ForQuery(queryPath string, queryParams map[string]interface{}, resultKey string) *PodBuilder {
 	b.restartPolicy = corev1.RestartPolicyNever
 	b.syncSidecar = nil
 	b.querySidecar = nil
@@ -371,6 +371,10 @@ func (b *PodBuilder) ForQuery(queryPath string, queryParams map[string]interface
 		} else {
 			b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "QUERY_PARAMS", Value: string(paramsJSON)})
 		}
+	}
+
+	if resultKey != "" {
+		b.botEnv = append(b.botEnv, corev1.EnvVar{Name: "QUERY_RESULT_KEY", Value: resultKey})
 	}
 
 	return b

@@ -96,21 +96,12 @@ func (h *K8sQueryHandler) executeScheduledQuery(ctx context.Context, req query.R
 	resultKey := fmt.Sprintf("%s/%d/result.json", bot.ID, time.Now().UnixNano())
 
 	// Generate pod spec for the query
-	pod, err := h.podGenerator.GenerateQueryPod(bot, req.QueryPath, req.Params)
+	pod, err := h.podGenerator.GenerateQueryPod(bot, req.QueryPath, req.Params, resultKey)
 	if errors.Is(err, query.ErrNoQueryEntrypoint) {
 		return query.NoQueryEntrypointResponse(bot.ID, start), nil
 	}
 	if err != nil {
 		return query.ErrorResponse(fmt.Sprintf("failed to generate query pod spec: %v", err), start), nil
-	}
-
-	// Add QUERY_RESULT_KEY env var to the bot container
-	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "bot" {
-			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
-				corev1.EnvVar{Name: "QUERY_RESULT_KEY", Value: resultKey})
-			break
-		}
 	}
 
 	// Create a Job from the pod spec

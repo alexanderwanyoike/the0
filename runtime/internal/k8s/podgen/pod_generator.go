@@ -184,8 +184,8 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 }
 
 // GenerateQueryPod creates a Pod spec for executing a query against a bot.
-// Query pods run once without sidecars.
-func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryParams map[string]interface{}) (*corev1.Pod, error) {
+// Query pods run once without sidecars, and upload their result to resultKey.
+func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryParams map[string]interface{}, resultKey string) (*corev1.Pod, error) {
 	// Extract and validate required configuration
 	botConfig, err := g.extractBotConfig(bot)
 	if err != nil {
@@ -217,7 +217,7 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 		WithQueryEntrypoint(botConfig.queryEntrypoint).
 		WithMinIOConfig(g.config.MinIOEndpoint, g.config.MinIOAccessKey, g.config.MinIOSecretKey, g.config.MinIOUseSSL).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
-		ForQuery(queryPath, queryParams)
+		ForQuery(queryPath, queryParams, resultKey)
 
 	return builder.Build()
 }
