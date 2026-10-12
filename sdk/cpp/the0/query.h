@@ -39,6 +39,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -308,6 +309,15 @@ inline void write_result(const json& result) {
 
 namespace detail {
 
+/** The JSON object `text` holds, or nothing when it holds anything else. */
+inline std::optional<json> json_object(const std::string& text) {
+    json value = json::parse(text, nullptr, false);
+    if (value.is_discarded() || !value.is_object()) {
+        return std::nullopt;
+    }
+    return value;
+}
+
 inline std::vector<std::string> available_paths() {
     std::vector<std::string> paths;
     for (const auto& kv : get_handlers()) {
@@ -367,13 +377,10 @@ inline void run_ephemeral(const std::string& query_path) {
     std::map<std::string, std::string> params;
     const char* params_str = std::getenv("QUERY_PARAMS");
     if (params_str) {
-        try {
-            auto params_json = json::parse(params_str);
-            for (auto& [key, value] : params_json.items()) {
+        if (auto params_json = detail::json_object(params_str)) {
+            for (auto& [key, value] : params_json->items()) {
                 params[key] = value.is_string() ? value.get<std::string>() : value.dump();
             }
-        } catch (...) {
-            // Invalid JSON, ignore
         }
     }
 
