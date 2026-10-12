@@ -25,8 +25,11 @@ const PORT_ATTEMPTS: usize = 3;
 // says how the list is kept.
 const KNOWN_FAILURES: &[(&str, &str)] = &[];
 
-pub fn run() {
-    libtest_mimic::run(&Arguments::from_args(), trials()).exit();
+/// Runs every case, then `more` trials of the binary's own.
+pub fn run(more: Vec<Trial>) {
+    let mut all = trials();
+    all.extend(more);
+    libtest_mimic::run(&Arguments::from_args(), all).exit();
 }
 
 fn cases_dir() -> PathBuf {
