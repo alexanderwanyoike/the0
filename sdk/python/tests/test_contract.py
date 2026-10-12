@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 import unittest
+from typing import List, NamedTuple, Optional
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 SDK_ROOT = os.path.dirname(TESTS_DIR)
@@ -175,6 +176,17 @@ def send(port, request):
         connection.close()
 
 
+class Run(NamedTuple):
+    exit_code: Optional[int]
+    stdout: str
+    stderr: str
+    # Mismatches found while the process ran, such as HTTP responses.
+    problems: List[str]
+
+    def output(self):
+        return f"exit code: {self.exit_code}\n--- stdout\n{self.stdout}--- stderr\n{self.stderr}"
+
+
 class Sandbox:
     """The directories the runtime gives a bot, rooted in a temporary directory."""
 
@@ -218,7 +230,7 @@ def run_case(path):
     try:
         command = [sys.executable, CONTRACT_BOT, path, sandbox.query_result]
         if "requests" in case:
-            problems, exit_code, stdout, stderr = run_server(case, sandbox, command)
+            run = run_server(case, sandbox, command)
         else:
             process = subprocess.run(
                 command,
@@ -227,12 +239,13 @@ def run_case(path):
                 text=True,
                 timeout=RUN_TIMEOUT_SECONDS,
             )
-            problems, exit_code, stdout, stderr = [], process.returncode, process.stdout, process.stderr
+            run = Run(process.returncode, process.stdout, process.stderr, [])
 
+        problems = list(run.problems)
         expect = case.get("expect", {})
         if "exit_code" in expect:
-            problems += mismatches(expect["exit_code"], exit_code, "exit_code")
-        for stream, text in (("stdout", stdout), ("stderr", stderr)):
+            problems += mismatches(expect["exit_code"], run.exit_code, "exit_code")
+        for stream, text in (("stdout", run.stdout), ("stderr", run.stderr)):
             if stream in expect:
                 problems += line_mismatches(expect[stream], text, stream)
         if "result" in expect:
@@ -242,7 +255,7 @@ def run_case(path):
             problems += file_mismatches(expect["query_result"], sandbox.query_result, "query_result")
         if "state_after" in expect:
             problems += mismatches(expect["state_after"], read_state(sandbox.state_dir), "state_after")
-        return problems, f"exit code: {exit_code}\n--- stdout\n{stdout}--- stderr\n{stderr}"
+        return problems, run.output()
     finally:
         sandbox.remove()
 
@@ -276,7 +289,7 @@ def run_server(case, sandbox, command):
         except subprocess.TimeoutExpired:
             process.kill()
             stdout, stderr = process.communicate()
-    return problems, process.returncode, stdout, stderr
+    return Run(process.returncode, stdout, stderr, problems)
 
 
 class TestContractCases(unittest.TestCase):
