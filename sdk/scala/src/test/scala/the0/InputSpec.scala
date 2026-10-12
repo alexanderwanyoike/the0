@@ -228,6 +228,14 @@ class InputSpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(output.contains(""""timestamp":"""), s"Should have timestamp: $output")
   }
 
+  test("metric escapes a type holding a quote and a backslash") {
+    val metricType = """odd"type\name"""
+    val output = captureStdout {
+      Input.metric(metricType, "{}")
+    }
+    assert(Try(ujson.read(output)("_metric").str).toOption == Some(metricType), s"Should be JSON: $output")
+  }
+
   test("metric with empty data prints one JSON object") {
     val output = captureStdout {
       Input.metric("ping", "{}")
