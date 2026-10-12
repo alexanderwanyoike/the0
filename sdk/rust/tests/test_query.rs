@@ -81,6 +81,22 @@ fn state_set_throws_in_query_mode() {
 }
 
 #[test]
+fn state_write_fails_with_the_query_modules_read_only_error() {
+    let mut env = EnvGuard::new();
+    env.set("QUERY_PATH", "/portfolio");
+    env.set("STATE_DIR", "/tmp/the0-test-state");
+
+    let err: Box<dyn std::error::Error> = Box::new(state::set("test_key", &1).unwrap_err());
+
+    let read_only = std::iter::successors(Some(&*err), |&e| e.source())
+        .find_map(|e| e.downcast_ref::<query::ReadOnlyStateError>());
+    assert!(
+        read_only.is_some(),
+        "{err:?} carries no query::ReadOnlyStateError"
+    );
+}
+
+#[test]
 fn state_delete_returns_false_in_query_mode() {
     let mut env = EnvGuard::new();
     env.set("QUERY_PATH", "/portfolio");
