@@ -45,7 +45,8 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import Control.Exception (catch, SomeException)
-import Data.Time.Clock.POSIX (getPOSIXTime)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format (defaultTimeLocale, formatTime)
 
 -- | Parse bot configuration from environment variables.
 --
@@ -199,8 +200,7 @@ logWarn msg mData = The0.Input.log msg mData (Just Warn)
 logError :: String -> Maybe Value -> IO ()
 logError msg mData = The0.Input.log msg mData (Just Error)
 
--- | Get current timestamp as milliseconds since Unix epoch.
-getTimestamp :: IO Integer
-getTimestamp = do
-    t <- getPOSIXTime
-    return $ floor (t * 1000)
+-- | The current time as a UTC ISO 8601 string with milliseconds, such as
+-- @2026-10-12T09:30:00.123Z@.
+getTimestamp :: IO String
+getTimestamp = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%3QZ" <$> getCurrentTime
