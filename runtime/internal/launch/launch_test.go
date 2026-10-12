@@ -195,8 +195,8 @@ func TestRead_TakesTheModeFromTheLaunch(t *testing.T) {
 	}{
 		{name: "nothing runs the bot", env: required, mode: launch.Run},
 		{name: "--query-server-only serves queries", flags: []string{"--query-server-only"}, env: required, mode: launch.Server},
-		{name: "QUERY_PATH answers that query", env: withQueryPath, mode: launch.Query, queryPath: "/from-env"},
-		{name: "--query answers its query over QUERY_PATH", flags: []string{"--query=/from-flag"}, env: withQueryPath, mode: launch.Query, queryPath: "/from-flag"},
+		{name: "--query answers its query", flags: []string{"--query=/from-flag"}, env: required, mode: launch.Query, queryPath: "/from-flag"},
+		{name: "QUERY_PATH alone does not make a query", env: withQueryPath, mode: launch.Run},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -207,6 +207,15 @@ func TestRead_TakesTheModeFromTheLaunch(t *testing.T) {
 			assert.Equal(t, c.queryPath, got.QueryPath)
 		})
 	}
+}
+
+func TestCommand_AQueryLaunchNamesItsQueryInTheCommandOnly(t *testing.T) {
+	sent := query()
+	sent.SkipSync = true
+	sent.SkipQueryServer = true
+
+	assert.Equal(t, []string{launch.Binary, "execute", "--query=/portfolio"}, sent.Command())
+	assert.NotContains(t, names(sent.Env()), "QUERY_PATH")
 }
 
 func TestCommand_SkipsWhatRunsInASidecar(t *testing.T) {

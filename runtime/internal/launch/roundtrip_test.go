@@ -201,7 +201,7 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 	// A scheduled bot's pod has no query entrypoint.
 	podScheduled.QueryEntrypoint = ""
 
-	podQuery := inPod(launchOf(launch.Query, ""), true, true)
+	podQuery := inPod(launchOf(launch.Query, ""), false, false)
 	// A query pod has no NATS URL.
 	podQuery.NATSURL = ""
 
@@ -264,6 +264,16 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 			assert.Equal(t, c.want.WithDefaults(), got)
 		})
 	}
+
+	t.Run("a query names its query in the command on both backends", func(t *testing.T) {
+		for _, s := range []sent{
+			dockerSent(t, dockerQueryExecutable()),
+			podSent(container(t, queryPod.Spec.Containers, "bot")),
+		} {
+			assert.Equal(t, []string{launch.Binary, "execute", "--query=" + roundTripQueryPath}, s.command)
+			assert.NotContains(t, envMap(t, s.env), "QUERY_PATH")
+		}
+	})
 
 	t.Run("kubernetes sync sidecar", func(t *testing.T) {
 		want := inPod(launchOf(launch.Run, "realtime"), true, true)
