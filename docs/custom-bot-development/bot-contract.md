@@ -217,7 +217,7 @@ Params are JSON values. A param keeps its type (string, number, boolean, array, 
   - The Rust, .NET, Scala, Haskell and C++ SDKs keep their string accessor, which returns a non-string value as its JSON text instead of dropping it. They also gain a typed accessor. Their accessors follow three rules:
     - The string accessors treat a `null` param as absent, so the handler's default applies. The runtime leaves `null` params out of the query string for the same reason.
     - A typed accessor reads a string value that parses as the requested type. Query-string params are all strings, so `limit=50` from a manual call still reads as a number.
-    - A typed accessor asked for a string returns a non-string value as its JSON text, as the string accessors do.
+    - A typed accessor asked for a string returns a non-string value as its JSON text, as the string accessors do. A `null` param read as a string is absent, as in the first rule, never the text `"null"`.
 
 ### Responses
 
