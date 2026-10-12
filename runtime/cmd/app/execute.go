@@ -243,6 +243,7 @@ func runEphemeralQuery(cfg *launch.Settings, logger *util.DefaultLogger) int {
 		logger.Info("Failed to download code: %v", err)
 		return 1
 	}
+	ensureExecutable(cfg, logger)
 
 	// Download state (read-only for queries)
 	if err := downloadState(ctx, cfg, logger); err != nil {
@@ -299,6 +300,9 @@ func runQueryServerOnly(cfg *launch.Settings, logger *util.DefaultLogger) int {
 		logger.Info("Failed to get code: %v", err)
 		return 1
 	}
+	// The bot container may not have set the bits yet when the code appears
+	// on the shared volume, and a fallback download never had them.
+	ensureExecutable(cfg, logger)
 
 	// Download state
 	if err := downloadState(ctx, cfg, logger); err != nil {
