@@ -126,6 +126,32 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
     assert(!req.has("missing"))
   }
 
+  test("Request.get returns a non-string param as its JSON text") {
+    val req = Query.Request.fromJson("/echo", Map(
+      "symbol" -> JsonValue.Str("BTC/USD"),
+      "limit" -> JsonValue.Num(BigDecimal(5)),
+      "ratio" -> JsonValue.Num(BigDecimal("0.25")),
+      "live" -> JsonValue.Bool(true),
+      "cursor" -> JsonValue.Null,
+      "symbols" -> JsonValue.Arr(Vector(JsonValue.Str("AAPL"), JsonValue.Str("MSFT"))),
+      "filter" -> JsonValue.Obj(Map("side" -> JsonValue.Str("buy"), "min_qty" -> JsonValue.Num(BigDecimal(10))))
+    ))
+    assert(req.get("symbol") == Some("BTC/USD"))
+    assert(req.get("limit") == Some("5"))
+    assert(req.get("ratio") == Some("0.25"))
+    assert(req.get("live") == Some("true"))
+    assert(req.get("cursor") == Some("null"))
+    assert(req.get("symbols") == Some("""["AAPL","MSFT"]"""))
+    assert(req.get("filter") == Some("""{"side":"buy","min_qty":10}"""))
+  }
+
+  test("Request.get escapes the strings inside a param's JSON text") {
+    val req = Query.Request.fromJson("/echo", Map(
+      "note" -> JsonValue.Arr(Vector(JsonValue.Str("say \"hi\"\\\n\t\u0001 café")))
+    ))
+    assert(req.get("note") == Some("""["say \"hi\"\\\n\t\u0001 caf""" + "é\"]"))
+  }
+
   test("Request.path is accessible") {
     val req = Query.Request("/portfolio", Map.empty)
     assert(req.path == "/portfolio")
