@@ -138,12 +138,18 @@ impl QueryRequest {
     }
 
     /// A param deserialized into `T`, or `None` when it is missing or does
-    /// not deserialize into `T`. Params from a URL query string are strings,
-    /// so `get_as::<u32>` finds no number in them.
+    /// not deserialize into `T`. A string param that does not deserialize
+    /// into `T` is parsed as JSON first, so `get_as::<u32>` reads `"5"` from
+    /// a URL query string as 5.
     pub fn get_as<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
-        self.values
-            .get(key)
-            .and_then(|value| T::deserialize(value).ok())
+        let value = self.values.get(key)?;
+        if let Ok(typed) = T::deserialize(value) {
+            return Some(typed);
+        }
+        match value {
+            Value::String(text) => serde_json::from_str(text).ok(),
+            _ => None,
+        }
     }
 
     /// Get a parameter as text: a string as it is, any other JSON value as
