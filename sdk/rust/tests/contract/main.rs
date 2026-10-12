@@ -35,8 +35,6 @@ const KNOWN_FAILURES: &[(&str, &str)] = &[
     ("bot-error", "error() does not print its message"),
     ("bot-error-with-data", "error() takes no data"),
     ("bot-success-with-data", "success() takes no data"),
-    ("output-log", "log timestamps are epoch milliseconds"),
-    ("output-metric", "metric timestamps are epoch milliseconds"),
     ("query-ephemeral-handler-error", "a handler can only fail by panicking"),
     ("query-ephemeral-info", "/info does not list /info"),
     ("query-ephemeral-params", "every param is dropped when any is not a string"),
