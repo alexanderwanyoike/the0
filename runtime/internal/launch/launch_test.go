@@ -57,6 +57,7 @@ func query() launch.Settings {
 	s.SkipQueryServer = false
 	s.Entrypoint = "query.py"
 	s.BotType = ""
+	s.NATSURL = ""
 	s.QueryPath = "/portfolio"
 	s.QueryParams = `{"limit":10}`
 	s.QueryResultKey = "bot-1/1/result.json"
@@ -223,6 +224,32 @@ func TestCommand_SkipsWhatRunsInASidecar(t *testing.T) {
 	assert.Equal(t, []string{launch.Binary, "execute", "--skip-query-server"}, scheduledRun().Command())
 	assert.Equal(t, []string{launch.Binary, "execute", "--query-server-only"}, queryServer().Command())
 	assert.Equal(t, []string{launch.Binary, "execute"}, launch.Settings{Mode: launch.Run}.Command())
+}
+
+func TestEnv_AQueryLaunchSendsNoneOfARunsSettings(t *testing.T) {
+	sent := query()
+	sent.BotType = "scheduled"
+	sent.IsScheduled = true
+	sent.NATSURL = "nats://nats:4222"
+
+	env := names(sent.Env())
+
+	for _, runOnly := range []string{"BOT_TYPE", "IS_SCHEDULED", "NATS_URL"} {
+		assert.NotContains(t, env, runOnly)
+	}
+}
+
+func TestRead_ReadsOnlyTheSettingsOfTheLaunchsMode(t *testing.T) {
+	env := append(query().Env(),
+		launch.Var{Name: "BOT_TYPE", Value: "scheduled"},
+		launch.Var{Name: "IS_SCHEDULED", Value: "true"},
+		launch.Var{Name: "NATS_URL", Value: "nats://nats:4222"},
+	)
+
+	got, err := read(t, query().Command(), env)
+
+	require.NoError(t, err)
+	assert.Equal(t, query(), got)
 }
 
 func TestEnv_SendsIsScheduledOnlyForAScheduledRun(t *testing.T) {

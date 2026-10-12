@@ -94,6 +94,10 @@ func launchOf(mode launch.Mode, botType string) launch.Settings {
 		s.QueryPath = roundTripQueryPath
 		s.QueryParams = `{"limit":10}`
 		s.QueryResultKey = roundTripResultKey
+		// A query is neither a realtime nor a scheduled run, and saves nothing.
+		s.BotType = ""
+		s.IsScheduled = false
+		s.NATSURL = ""
 	}
 	return s
 }
@@ -192,18 +196,9 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 	queryPod, err := generator.GenerateQueryPod(roundTripBot, roundTripQueryPath, roundTripQueryParams, roundTripResultKey)
 	require.NoError(t, err)
 
-	dockerQuery := inDocker(launchOf(launch.Query, ""))
-	// Docker starts a query the way it starts a scheduled run.
-	dockerQuery.BotType = "scheduled"
-	dockerQuery.IsScheduled = true
-
 	podScheduled := inPod(launchOf(launch.Run, "scheduled"), false, true)
 	// A scheduled bot's pod has no query entrypoint.
 	podScheduled.QueryEntrypoint = ""
-
-	podQuery := inPod(launchOf(launch.Query, ""), false, false)
-	// A query pod has no NATS URL.
-	podQuery.NATSURL = ""
 
 	cases := []struct {
 		name       string
@@ -227,7 +222,7 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 			name:       "docker query",
 			sent:       dockerSent(t, dockerQueryExecutable()),
 			processEnv: dockerProcessEnv,
-			want:       dockerQuery,
+			want:       inDocker(launchOf(launch.Query, "")),
 		},
 		{
 			name:       "kubernetes realtime run",
@@ -251,7 +246,7 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 			name:       "kubernetes query",
 			sent:       podSent(container(t, queryPod.Spec.Containers, "bot")),
 			processEnv: podProcessEnv,
-			want:       podQuery,
+			want:       inPod(launchOf(launch.Query, ""), false, false),
 		},
 	}
 	for _, c := range cases {
