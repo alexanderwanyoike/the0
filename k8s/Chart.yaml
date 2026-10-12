@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.12.0
-appVersion: "1.17.0"
+version: 0.13.0
+appVersion: "1.18.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,20 +30,12 @@ annotations:
     - name: Discord
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "A bot change reaches the runtime even when NATS is down at that moment: the change and its event are saved together in a new outbox table (migration 0007), and a relay keeps sending the event until JetStream confirms it. Requests no longer wait on NATS"
-    - kind: fixed
-      description: "The runtime reads bot events through durable JetStream consumers, so events published while it is restarting are no longer lost, a failed event is retried instead of dropped, and handlers are safe to repeat"
-    - kind: fixed
-      description: "Updates and deletes of a bot running another user's custom bot now reach the runtime, and a delete whose custom bot version is no longer in the catalogue is sent to both the realtime and the scheduled subject"
-    - kind: fixed
-      description: "A schedule update that changes nothing no longer fails and holds up later schedule events"
     - kind: changed
-      description: "Bot deploy, update and delete are commands through one command bus shared by REST and MCP, each carrying who made the change; repositories are private to their modules, enforced by a test in the api's test suite"
+      description: "A bot run whose result is an error now fails even when the bot process exits 0, for bots in every language, and every failed run ends with one log line: Run failed, then the error message or the exit code"
+    - kind: added
+      description: "The bot contract: one written spec in the docs for results, metrics, logs, state and queries, with 36 shared cases that every SDK runs and that the runtime runs end to end"
     - kind: changed
-      description: "One auth guard serves REST and MCP: API keys are accepted in x-api-key on every route, and x-api-key wins when a request also sends Authorization"
-    - kind: changed
-      description: "THE0_EVENTS keeps message ids for one hour to drop repeated publishes; the setting is updated in place on the existing stream"
+      description: "Every SDK is at 0.4 and follows the bot contract; the docs page lists what older SDK versions did differently, including typed query params in the Python and Node.js SDKs, and the quick starts pin 0.4"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
