@@ -1,10 +1,12 @@
 package the0
 
-import java.io.{BufferedReader, File, InputStreamReader, PrintWriter}
-import java.net.{ServerSocket, Socket, URLDecoder}
+import java.io.{BufferedInputStream, ByteArrayOutputStream, File, InputStream, OutputStream}
+import java.net.{ServerSocket, Socket, SocketTimeoutException, URLDecoder}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 import scala.util.{Try, Using}
+import scala.util.control.NonFatal
 
 /**
  * the0 Query Module - Express-like handler interface for bot queries.
@@ -39,15 +41,25 @@ object Query {
 
   /**
    * Error thrown when attempting to modify state during query execution.
+   * It is the type State throws, so a handler can catch it under either name.
    */
-  class ReadOnlyStateError(message: String) extends RuntimeException(message)
+  type ReadOnlyStateError = the0.ReadOnlyStateError
 
   /**
    * Request object passed to handlers (Express-like).
+   *
+   * Build one with `Request(path, params)` or `Request.fromJson(path, jsonParams)`, which
+   * keep `params` and `jsonParams` in step.
+   *
+   * @param path The query path
+   * @param params Each parameter as text: a string as itself, any other JSON value as its
+   *               JSON text, leaving out null parameters
+   * @param jsonParams Each parameter as the JSON value it was sent as
    */
-  case class Request(path: String, params: Map[String, String]) {
+  case class Request(path: String, params: Map[String, String], jsonParams: Map[String, JsonValue]) {
     /**
-     * Get a parameter value.
+     * Get a parameter value as text: a string as itself, any other JSON value as its
+     * JSON text, such as `5`, `true` or `{"side":"buy"}`. A null parameter counts as absent.
      * @param key The parameter key
      * @return Some(value) if found, None otherwise
      */
@@ -66,6 +78,94 @@ object Query {
      * Check if a parameter exists.
      */
     def has(key: String): Boolean = params.contains(key)
+
+    /**
+     * Get a parameter as the JSON value it was sent as.
+     * @param key The parameter key
+     * @return Some(value) if found, None otherwise
+     */
+    def getJson(key: String): Option[JsonValue] = jsonParams.get(key)
+
+    /**
+     * Get a parameter as a T: String, Int, Long, Double, BigDecimal or Boolean.
+     *
+     * Example:
+     * {{{
+     * val limit = req.getAs[Int]("limit").getOrElse(10)
+     * }}}
+     *
+     * A string value that parses as T is read as T, so `?limit=5` gives 5 as an Int.
+     * Asked for a String, any other JSON value comes back as its JSON text.
+     *
+     * @param key The parameter key
+     * @return Some(value) if found, None when the parameter is missing or null
+     * @throws IllegalArgumentException when the parameter is not a T
+     */
+    def getAs[T](key: String)(using reader: ParamReader[T]): Option[T] =
+      jsonParams.get(key).filter(_ != JsonValue.Null).map { value =>
+        reader.read(value).getOrElse(
+          throw new IllegalArgumentException(s"Query param $key is not a ${reader.typeName}: ${value.render}")
+        )
+      }
+  }
+
+  /**
+   * Reads a parameter's JSON value as a T, for [[Request.getAs]].
+   */
+  trait ParamReader[T] {
+
+    /** The name of T, for error messages. */
+    def typeName: String
+
+    /** The value as a T, or None when it is not one. */
+    def read(value: JsonValue): Option[T]
+  }
+
+  object ParamReader {
+
+    // A string is also read through what it parses as: a query string carries every param as text.
+    private def reader[T](name: String)(direct: PartialFunction[JsonValue, T]): ParamReader[T] = new ParamReader[T] {
+      val typeName: String = name
+      def read(value: JsonValue): Option[T] = value match {
+        case JsonValue.Str(text) => JsonValue.parse(text).collect(direct)
+        case other => direct.lift(other)
+      }
+    }
+
+    given ParamReader[String] = new ParamReader[String] {
+      val typeName: String = "String"
+      def read(value: JsonValue): Option[String] = value match {
+        case JsonValue.Str(text) => Some(text)
+        case other => Some(other.render)
+      }
+    }
+
+    given ParamReader[Int] = reader("Int") { case JsonValue.Num(n) if n.isValidInt => n.toInt }
+    given ParamReader[Long] = reader("Long") { case JsonValue.Num(n) if n.isValidLong => n.toLong }
+    given ParamReader[Double] = reader("Double") { case JsonValue.Num(n) => n.toDouble }
+    given ParamReader[BigDecimal] = reader("BigDecimal") { case JsonValue.Num(n) => n }
+    given ParamReader[Boolean] = reader("Boolean") { case JsonValue.Bool(b) => b }
+  }
+
+  object Request {
+
+    /**
+     * Build a request whose parameters are all strings, as a URL query string gives them.
+     */
+    def apply(path: String, params: Map[String, String]): Request =
+      Request(path, params, params.map((key, value) => key -> JsonValue.Str(value)))
+
+    /**
+     * Build a request whose parameters keep their JSON types.
+     */
+    def fromJson(path: String, jsonParams: Map[String, JsonValue]): Request = {
+      // The runtime leaves null params out of the query string, so a default still applies.
+      val text = jsonParams.collect {
+        case (key, JsonValue.Str(value)) => key -> value
+        case (key, value) if value != JsonValue.Null => key -> value.render
+      }
+      Request(path, text, jsonParams)
+    }
   }
 
   // Handler function type
@@ -74,11 +174,17 @@ object Query {
   // Handler registry
   private val handlers: mutable.Map[String, Handler] = mutable.Map.empty
 
-  // Current params
-  private var currentParams: Map[String, String] = Map.empty
+  // Current request
+  private var currentRequest: Request = Request("", Map.empty)
 
   // Bot config
   private var config: String = "{}"
+
+  // The contract tests point this into a sandbox, because /query is not writable outside a container.
+  private[the0] var queryResultPath: String = "/query/result.json"
+
+  // How long the query server waits on a read from a connection, in milliseconds; 0 waits forever.
+  private[the0] var readTimeoutMillis: Int = 10000
 
   /**
    * Register a query handler (Express-like).
@@ -102,7 +208,13 @@ object Query {
    * Get current query parameters (alternative to request object).
    * @return A copy of the current query parameters
    */
-  def getParams: Map[String, String] = currentParams
+  def getParams: Map[String, String] = currentRequest.params
+
+  /**
+   * Get current query parameters as the JSON values they were sent as.
+   * @return A copy of the current query parameters
+   */
+  def getJsonParams: Map[String, JsonValue] = currentRequest.jsonParams
 
   /**
    * Get the bot configuration as JSON string.
@@ -157,7 +269,7 @@ object Query {
    * This avoids stdout pollution from runtime logs mixing with query results.
    */
   private def writeResult(json: String): Unit = {
-    val resultPath = Paths.get("/query/result.json")
+    val resultPath = Paths.get(queryResultPath)
     try {
       Files.createDirectories(resultPath.getParent)
       Files.writeString(resultPath, json)
@@ -173,25 +285,30 @@ object Query {
   private def runEphemeral(queryPath: String): Unit = {
     // Parse parameters from environment
     val paramsStr = sys.env.getOrElse("QUERY_PARAMS", "{}")
-    currentParams = parseJsonToMap(paramsStr)
+    val (status, body) = respond(Request.fromJson(queryPath, paramsFromJson(paramsStr)))
+    writeResult(body)
+    if (status != 200) {
+      sys.exit(1)
+    }
+  }
 
-    // Find and execute handler
-    handlers.get(queryPath) match {
+  /**
+   * Answer one query with the status code and JSON body that both modes send.
+   */
+  private[the0] def respond(request: Request): (Int, String) = {
+    currentRequest = request
+    handlers.get(request.path) match {
       case None =>
         val available = handlers.keys.toSeq.map(p => s""""$p"""").mkString(",")
-        writeResult(s"""{"status": "error", "error": "No handler for path: $queryPath", "available": [$available]}""")
-        sys.exit(1)
+        (404, s"""{"status": "error", "error": "No handler for path: ${request.path}", "available": [$available]}""")
 
       case Some(fn) =>
         try {
-          val req = Request(queryPath, currentParams)
-          val data = fn(req)
-          writeResult(s"""{"status": "ok", "data": $data}""")
+          val data = fn(request)
+          (200, s"""{"status": "ok", "data": $data}""")
         } catch {
-          case e: Exception =>
-            val escaped = escapeJson(e.getMessage)
-            writeResult(s"""{"status": "error", "error": "$escaped"}""")
-            sys.exit(1)
+          case NonFatal(e) =>
+            (500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
         }
     }
   }
@@ -203,61 +320,105 @@ object Query {
     val port = sys.env.get("THE0_QUERY_PORT").flatMap(p => Try(p.toInt).toOption).getOrElse(9476)
 
     val serverSocket = new ServerSocket(port)
-    System.err.println(s"""{"_log": "info", "message": "Query server started on port $port"}""")
+    Input.log(s"Query server started on port $port")
 
     while (true) {
-      try {
-        val clientSocket = serverSocket.accept()
-        handleConnection(clientSocket)
-      } catch {
-        case e: Exception =>
-          System.err.println(s"""{"_log": "error", "message": "Error handling request: ${escapeJson(e.getMessage)}"}""")
-      }
+      serveConnection(serverSocket)
+    }
+  }
+
+  /**
+   * Accept one connection and answer it, printing any error instead of throwing it.
+   */
+  private[the0] def serveConnection(serverSocket: ServerSocket): Unit = {
+    try {
+      val clientSocket = serverSocket.accept()
+      handleConnection(clientSocket)
+    } catch {
+      case e: Exception =>
+        Input.log(s"Error handling request: ${e.getMessage}", level = Input.LogLevel.Error)
     }
   }
 
   /**
    * Handle an HTTP connection.
    */
-  private def handleConnection(socket: Socket): Unit = {
+  private[the0] def handleConnection(socket: Socket): Unit = {
     Using.resource(socket) { s =>
-      val reader = new BufferedReader(new InputStreamReader(s.getInputStream))
-      val writer = new PrintWriter(s.getOutputStream, true)
+      s.setSoTimeout(readTimeoutMillis)
+      val in = new BufferedInputStream(s.getInputStream)
+      val out = s.getOutputStream
 
       // Read request line
-      Option(reader.readLine()).foreach { requestLine =>
+      readLine(in).foreach { requestLine =>
         val parts = requestLine.split(" ")
         if (parts.length < 2) {
-          sendResponse(writer, 400, """{"status": "error", "error": "Invalid request"}""")
+          sendResponse(out, 400, """{"status": "error", "error": "Invalid request"}""")
         } else {
-          val pathWithQuery = parts(1)
-          val (path, params) = parsePathAndQuery(pathWithQuery)
-          currentParams = params
-
-          // Find and execute handler
-          handlers.get(path) match {
-            case None =>
-              sendResponse(writer, 404, s"""{"status": "error", "error": "No handler for path: $path"}""")
-
-            case Some(fn) =>
-              try {
-                val req = Request(path, params)
-                val data = fn(req)
-                sendResponse(writer, 200, s"""{"status": "ok", "data": $data}""")
-              } catch {
-                case e: Exception =>
-                  sendResponse(writer, 500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
-              }
+          val body = readBody(in, readHeaders(in))
+          val (path, queryParams) = parsePathAndQuery(parts(1))
+          val request = paramsFromBody(body) match {
+            case Some(params) => Request.fromJson(path, params)
+            case None => Request(path, queryParams)
           }
+          val (status, responseBody) = respond(request)
+          sendResponse(out, status, responseBody)
         }
       }
     }
   }
 
   /**
+   * The params in a request body, when the body is a JSON object.
+   */
+  private def paramsFromBody(body: String): Option[Map[String, JsonValue]] =
+    JsonValue.parse(body).collect { case JsonValue.Obj(fields) => fields }
+
+  /**
+   * Read one CRLF-terminated line of a request head, or None at the end of the stream.
+   */
+  private def readLine(in: InputStream): Option[String] = {
+    val line = new ByteArrayOutputStream()
+    var next = in.read()
+    while (next != -1 && next != '\n') {
+      if (next != '\r') line.write(next)
+      next = in.read()
+    }
+    if (next == -1 && line.size() == 0) None else Some(line.toString(StandardCharsets.ISO_8859_1))
+  }
+
+  /**
+   * Read the request headers, with lower-case names.
+   */
+  private def readHeaders(in: InputStream): Map[String, String] =
+    Iterator
+      .continually(readLine(in))
+      .takeWhile(_.exists(_.nonEmpty))
+      .flatten
+      .flatMap { line =>
+        line.indexOf(':') match {
+          case -1 => None
+          case idx => Some(line.substring(0, idx).trim.toLowerCase -> line.substring(idx + 1).trim)
+        }
+      }
+      .toMap
+
+  /**
+   * Read the request body that Content-Length announces.
+   */
+  private def readBody(in: InputStream, headers: Map[String, String]): String = {
+    val length = headers.get("content-length").flatMap(_.toIntOption).getOrElse(0)
+    try new String(in.readNBytes(math.max(length, 0)), StandardCharsets.UTF_8)
+    catch {
+      // A body that stops short is not JSON, so the query string answers instead.
+      case _: SocketTimeoutException => ""
+    }
+  }
+
+  /**
    * Send HTTP response.
    */
-  private def sendResponse(writer: PrintWriter, status: Int, body: String): Unit = {
+  private def sendResponse(out: OutputStream, status: Int, body: String): Unit = {
     val statusText = status match {
       case 200 => "OK"
       case 400 => "Bad Request"
@@ -266,12 +427,14 @@ object Query {
       case _ => "Unknown"
     }
 
-    writer.print(s"HTTP/1.1 $status $statusText\r\n")
-    writer.print("Content-Type: application/json\r\n")
-    writer.print(s"Content-Length: ${body.length}\r\n")
-    writer.print("\r\n")
-    writer.print(body)
-    writer.flush()
+    val bytes = body.getBytes(StandardCharsets.UTF_8)
+    val head = s"HTTP/1.1 $status $statusText\r\n" +
+      "Content-Type: application/json\r\n" +
+      s"Content-Length: ${bytes.length}\r\n" +
+      "\r\n"
+    out.write(head.getBytes(StandardCharsets.ISO_8859_1))
+    out.write(bytes)
+    out.flush()
   }
 
   /**
@@ -308,31 +471,17 @@ object Query {
   }
 
   /**
-   * Parse simple JSON object to map (basic implementation).
-   * Handles {"key1": "value1", "key2": "value2"} format.
+   * Parse params sent as JSON object text. Any other text gives no params.
    */
-  private def parseJsonToMap(json: String): Map[String, String] = {
-    if (!json.startsWith("{") || !json.endsWith("}")) return Map.empty
-
-    val content = json.substring(1, json.length - 1).trim
-    if (content.isEmpty) return Map.empty
-
-    // Simple regex-based parsing for basic cases
-    val pattern = """"([^"]+)"\s*:\s*"([^"]*)"""".r
-    pattern.findAllMatchIn(content).map { m =>
-      m.group(1) -> m.group(2)
-    }.toMap
-  }
+  private[the0] def paramsFromJson(json: String): Map[String, JsonValue] =
+    JsonValue.parse(json) match {
+      case Some(JsonValue.Obj(fields)) => fields
+      case _ => Map.empty
+    }
 
   /**
    * Escape a string for JSON.
    */
-  private def escapeJson(s: String): String = {
-    if (s == null) return ""
-    s.replace("\\", "\\\\")
-      .replace("\"", "\\\"")
-      .replace("\n", "\\n")
-      .replace("\r", "\\r")
-      .replace("\t", "\\t")
-  }
+  private def escapeJson(s: String): String =
+    if (s == null) "" else JsonValue.escape(s)
 }

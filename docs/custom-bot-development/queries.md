@@ -221,13 +221,13 @@ class Program
                 prev_short_sma = persisted.PrevShortSma,
                 prev_long_sma = persisted.PrevLongSma,
                 signal_count = persisted.SignalCount,
-                symbol = config.GetProperty("symbol", "AAPL")
+                symbol = config?["symbol"]?.GetValue<string>() ?? "AAPL"
             };
         });
 
         Query.Handler("/signals", req =>
         {
-            var limit = int.Parse(req.Get("limit", "10"));
+            var limit = req.Get("limit", 10);
             var persisted = State.Get<PersistedState>("bot_state") ?? new PersistedState();
 
             return new

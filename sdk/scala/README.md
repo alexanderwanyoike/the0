@@ -20,7 +20,7 @@ lazy val root = (project in file("."))
 
 ### Option 2: Copy the Package
 
-Copy `src/main/scala/the0/Input.scala` to your project's source directory.
+Copy every file in `src/main/scala/the0/` to your project's source directory.
 
 ## Requirements
 
@@ -91,41 +91,87 @@ Parse bot configuration from environment variables.
 val (botId, config) = Input.parse()
 ```
 
-### `Input.success(message: String): Unit`
+### `Input.success(message: String[, data: String]): Unit`
 
-Output a success result to stdout.
+Write a success result to the result file, `/bot/result.json`. The optional `data` is JSON text, placed under the result's `data` key.
 
 ```scala
 Input.success("Trade completed")
-// Outputs: {"status":"success","message":"Trade completed"}
+// Writes: {"status":"success","message":"Trade completed"}
+
+Input.success("Trade completed", """{"order_id":"o-1","filled":0.5}""")
+// Writes: {"status":"success","message":"Trade completed","data":{"order_id":"o-1","filled":0.5}}
 ```
 
-### `Input.error(message: String): Nothing`
+### `Input.error(message: String[, data: String]): Nothing`
 
-Output an error result to stdout and exit with code 1.
+Write an error result to the result file, print the message to stderr as an error log line, and exit with code 1. The optional `data` is JSON text and goes in the result only.
 
 ```scala
 Input.error("Failed to connect")
-// Outputs: {"status":"error","message":"Failed to connect"}
+// Writes: {"status":"error","message":"Failed to connect"}
+// Prints: {"level":"error","message":"Failed to connect","timestamp":"2026-10-12T09:30:00.123Z"}
 // Then exits with code 1
 ```
 
 ### `Input.result(status: String, message: String): Unit`
 
-Output a custom result with status and message.
+Write a custom result with status and message to the result file.
 
 ```scala
 Input.result("warning", "Rate limit approaching")
-// Outputs: {"status":"warning","message":"Rate limit approaching"}
+// Writes: {"status":"warning","message":"Rate limit approaching"}
 ```
 
 ### `Input.resultRaw(json: String): Unit`
 
-Output a raw JSON string to stdout.
+Write a raw JSON string to the result file.
 
 ```scala
 Input.resultRaw("""{"status":"success","trade_id":"abc123","price":45000.50}""")
 ```
+
+### `Input.log(message: String, data: String = "{}", level: LogLevel = LogLevel.Info): Unit`
+
+Print a log line on stderr. The fields of `data`, a JSON object as text, go alongside `message`. The timestamp is a UTC ISO 8601 string.
+
+```scala
+Input.log("Order placed", """{"order_id":"o-1"}""")
+// Prints: {"level":"info","message":"Order placed","timestamp":"2026-10-12T09:30:00.123Z","order_id":"o-1"}
+```
+
+### `Input.metric(metricType: String, json: String): Unit`
+
+Print a metric line on stdout. The fields of `json`, a JSON object as text, go alongside `_metric`. The timestamp is a UTC ISO 8601 string.
+
+```scala
+Input.metric("price", """{"symbol":"BTC/USD","value":45000.5}""")
+// Prints: {"_metric":"price","timestamp":"2026-10-12T09:30:00.123Z","symbol":"BTC/USD","value":45000.5}
+```
+
+### Query params
+
+A query handler reads its params in three ways:
+- `req.get(key)` and `req.getOrElse(key, default)` return the param as text. A string comes back as itself, and any other JSON value as its JSON text, such as `5`, `true` or `{"side":"buy"}`. A `null` param counts as absent, so the default applies.
+- `req.getAs[T](key)` returns the param as a `String`, `Int`, `Long`, `Double`, `BigDecimal` or `Boolean`:
+  - A string that parses as `T` is read as `T`, so `?limit=5` from a `curl` call gives the `Int` 5.
+  - Asked for a `String`, any other JSON value comes back as its JSON text.
+  - A missing or `null` param gives `None`.
+  - Any other value that is not a `T` throws `IllegalArgumentException`, so the query answers with an error.
+- `req.getJson(key)` returns the param as a `JsonValue` (`Null`, `Bool`, `Num`, `Str`, `Arr` or `Obj`), exactly as it was sent.
+
+```scala
+Query.handler("/signals") { req =>
+  val limit = req.getAs[Int]("limit").getOrElse(10)
+  val filter = req.getJson("filter") match {
+    case Some(JsonValue.Obj(fields)) => fields.keys.mkString(",")
+    case _ => "none"
+  }
+  s"""{"limit": $limit, "filter": "$filter"}"""
+}
+```
+
+In query mode, `State.set`, `State.delete` and `State.clear` throw `Query.ReadOnlyStateError`, which is the same type as `the0.ReadOnlyStateError`.
 
 ## Project Setup
 
