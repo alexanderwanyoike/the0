@@ -159,7 +159,7 @@ fn main() {
 using json = nlohmann::json;
 
 int main() {
-    the0::query::handler("/status", [](const the0::QueryRequest& req) {
+    the0::query::handler("/status", [](const the0::query::Request& req) {
         auto persisted = the0::state::get("bot_state");
         auto config = the0::query::get_config();
 
@@ -178,8 +178,8 @@ int main() {
         return response;
     });
 
-    the0::query::handler("/signals", [](const the0::QueryRequest& req) {
-        int limit = std::stoi(req.get("limit", "10"));
+    the0::query::handler("/signals", [](const the0::query::Request& req) {
+        int limit = req.get_as("limit", 10);
         auto persisted = the0::state::get("bot_state");
 
         json response;
