@@ -62,27 +62,10 @@ pub fn set_result_path(path: impl Into<PathBuf>) {
     *QUERY_RESULT_PATH_OVERRIDE.lock().unwrap() = Some(path.into());
 }
 
-/// Error thrown when attempting to modify state during query execution.
-#[derive(Debug)]
-pub struct ReadOnlyStateError {
-    pub message: String,
-}
-
-impl std::fmt::Display for ReadOnlyStateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for ReadOnlyStateError {}
-
-impl ReadOnlyStateError {
-    pub fn new(message: &str) -> Self {
-        Self {
-            message: message.to_string(),
-        }
-    }
-}
+/// The error state writes fail with during a query: `state::set`,
+/// `state::delete` and `state::clear` return it as
+/// `StateError::ReadOnly(ReadOnlyStateError)`.
+pub use crate::state::ReadOnlyStateError;
 
 /// Request object passed to handlers (Express-like).
 #[derive(Debug, Clone)]

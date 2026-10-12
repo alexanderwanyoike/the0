@@ -50,7 +50,7 @@ pub enum StateError {
     /// JSON serialization/deserialization error
     Json(serde_json::Error),
     /// Attempted to modify state in query mode
-    ReadOnly(String),
+    ReadOnly(ReadOnlyStateError),
 }
 
 impl std::fmt::Display for StateError {
@@ -59,7 +59,7 @@ impl std::fmt::Display for StateError {
             StateError::InvalidKey(msg) => write!(f, "Invalid state key: {}", msg),
             StateError::Io(e) => write!(f, "IO error: {}", e),
             StateError::Json(e) => write!(f, "JSON error: {}", e),
-            StateError::ReadOnly(msg) => write!(f, "Read-only state: {}", msg),
+            StateError::ReadOnly(e) => write!(f, "Read-only state: {}", e),
         }
     }
 }
@@ -69,7 +69,32 @@ impl std::error::Error for StateError {
         match self {
             StateError::Io(e) => Some(e),
             StateError::Json(e) => Some(e),
+            StateError::ReadOnly(e) => Some(e),
             _ => None,
+        }
+    }
+}
+
+/// The error a state write fails with in query mode, where state is
+/// read-only. The query module offers this same type as
+/// `query::ReadOnlyStateError`.
+#[derive(Debug)]
+pub struct ReadOnlyStateError {
+    pub message: String,
+}
+
+impl std::fmt::Display for ReadOnlyStateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ReadOnlyStateError {}
+
+impl ReadOnlyStateError {
+    pub fn new(message: &str) -> Self {
+        Self {
+            message: message.to_string(),
         }
     }
 }
@@ -122,11 +147,10 @@ fn is_query_mode() -> bool {
 /// Returns an error if in query mode.
 fn check_write_allowed() -> Result<(), StateError> {
     if is_query_mode() {
-        return Err(StateError::ReadOnly(
+        return Err(StateError::ReadOnly(ReadOnlyStateError::new(
             "State modifications are not allowed during query execution. \
-             Queries are read-only. Use state::get() to read state values."
-                .to_string(),
-        ));
+             Queries are read-only. Use state::get() to read state values.",
+        )));
     }
     Ok(())
 }
