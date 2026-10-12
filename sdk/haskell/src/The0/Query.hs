@@ -45,6 +45,7 @@ module The0.Query
     , getParam
     , Request(..)
     , ReadOnlyStateError(..)
+    , setResultPath
     ) where
 
 import Control.Exception (Exception, catch, SomeException)
@@ -62,6 +63,7 @@ import Network.Socket
 import Network.Socket.ByteString (recv, sendAll)
 import qualified Data.ByteString.Char8 as BS
 import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
@@ -100,6 +102,16 @@ currentParamsRef = unsafePerformIO $ newIORef Map.empty
 {-# NOINLINE configRef #-}
 configRef :: IORef Value
 configRef = unsafePerformIO $ newIORef (Object mempty)
+
+{-# NOINLINE resultPathRef #-}
+resultPathRef :: IORef FilePath
+resultPathRef = unsafePerformIO $ newIORef "/query/result.json"
+
+-- | Test-only: write ephemeral query results to @path@ instead of
+-- @/query/result.json@, which tests cannot write. The runtime always reads
+-- @/query/result.json@, so bots must not call this.
+setResultPath :: FilePath -> IO ()
+setResultPath = writeIORef resultPathRef
 
 -- | Register a query handler (Express-like).
 --
@@ -168,8 +180,8 @@ run = do
 -- This avoids stdout pollution from runtime logs mixing with query results.
 writeResult :: Value -> IO ()
 writeResult result = do
-    let resultPath = "/query/result.json"
-    createDirectoryIfMissing True "/query"
+    resultPath <- readIORef resultPathRef
+    createDirectoryIfMissing True (takeDirectory resultPath)
     BL.writeFile resultPath (encode result)
         `catch` \(e :: SomeException) ->
             hPutStrLn stderr $ "RESULT_ERROR: Failed to write result file: " ++ show e
