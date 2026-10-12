@@ -15,7 +15,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const SRC_DIR = __dirname;
 const CASES_DIR = path.join(SRC_DIR, "..", "..", "contract", "cases");
-const CONTRACT_BOT_SOURCES = ["index.ts", "state.ts", "query.ts", "contract-bot.ts"];
 
 const RUN_TIMEOUT_MS = 60_000;
 const SERVER_START_TIMEOUT_MS = 30_000;
@@ -289,7 +288,10 @@ let buildDir: string;
 /** Compiles the SDK sources and the contract bot to plain JavaScript, so tests always run the current source. */
 function buildContractBot(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "the0-contract-bot-"));
-  for (const source of CONTRACT_BOT_SOURCES) {
+  const sources = fs
+    .readdirSync(SRC_DIR)
+    .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
+  for (const source of sources) {
     const output = ts.transpileModule(fs.readFileSync(path.join(SRC_DIR, source), "utf8"), {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
