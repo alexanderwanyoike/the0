@@ -43,6 +43,18 @@ fn success_escapes_backslashes() {
 }
 
 #[test]
+fn success_escapes_control_characters() {
+    let ctx = ResultContext::new();
+    input::success("Line 1\nLine 2\tTabbed");
+
+    let content = ctx.read_result().expect("Result file should exist");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&content).expect("Result should be valid JSON");
+
+    assert_eq!(parsed["message"], "Line 1\nLine 2\tTabbed");
+}
+
+#[test]
 fn success_handles_empty_message() {
     let ctx = ResultContext::new();
     input::success("");
