@@ -92,8 +92,13 @@ object Query {
     /**
      * Build a request whose parameters keep their JSON types.
      */
-    def fromJson(path: String, jsonParams: Map[String, JsonValue]): Request =
-      Request(path, jsonParams.collect { case (key, JsonValue.Str(value)) => key -> value }, jsonParams)
+    def fromJson(path: String, jsonParams: Map[String, JsonValue]): Request = {
+      val text = jsonParams.map {
+        case (key, JsonValue.Str(value)) => key -> value
+        case (key, value) => key -> value.render
+      }
+      Request(path, text, jsonParams)
+    }
   }
 
   // Handler function type
