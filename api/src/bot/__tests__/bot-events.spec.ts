@@ -2,7 +2,8 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
 import { AppModule } from "@/app.module";
 import { AdminBootstrapService } from "@/auth/admin-bootstrap.service";
-import { BotService } from "../bot.service";
+import { DeleteBot, DeployBot, UpdateBot } from "../commands/bot-commands";
+import { CommandBus } from "@/command-bus/command-bus";
 import { appendBotEvents } from "../bot-event-outbox";
 import { NatsService } from "@/nats/nats.service";
 import { Failure, Ok, Result } from "@/common/result";
@@ -109,7 +110,7 @@ describe("bot events", () => {
   const db = useTestDatabase();
   let moduleRef: TestingModule;
   let nats: FakeNats;
-  let bots: BotService;
+  let commands: CommandBus;
 
   async function uploadCustomBot(
     name: string,
@@ -152,7 +153,9 @@ describe("bot events", () => {
   }
 
   async function deploy(config: BotConfig): Promise<string> {
-    const result = await bots.create(actor, { name: "SMA", config });
+    const result = await commands.execute(
+      new DeployBot(actor, { name: "SMA", config }),
+    );
     expect(result.success).toBe(true);
     return result.data!.id;
   }
@@ -167,7 +170,7 @@ describe("bot events", () => {
       .useValue(createMockLogger())
       .compile();
     await moduleRef.init();
-    bots = moduleRef.get(BotService);
+    commands = moduleRef.get(CommandBus);
   }
 
   beforeEach(async () => {
@@ -230,7 +233,9 @@ describe("bot events", () => {
       await waitFor(() => nats.published.length === 1);
       const config = scheduledConfig("1.1.0", "MSFT");
 
-      const result = await bots.update(actor, id, { config });
+      const result = await commands.execute(
+        new UpdateBot(actor, id, { config }),
+      );
 
       expect(result.success).toBe(true);
       await waitFor(() => nats.published.length === 2);
@@ -250,7 +255,7 @@ describe("bot events", () => {
       const id = await deploy(config);
       await waitFor(() => nats.published.length === 1);
 
-      const result = await bots.remove(actor, id);
+      const result = await commands.execute(new DeleteBot(actor, id));
 
       expect(result.success).toBe(true);
       await waitFor(() => nats.published.length === 2);
@@ -304,9 +309,11 @@ describe("bot events", () => {
       await waitFor(() => nats.published.length === 1);
       nats.failNextPublish();
 
-      const result = await bots.update(actor, id, {
-        config: scheduledConfig("1.1.0"),
-      });
+      const result = await commands.execute(
+        new UpdateBot(actor, id, {
+          config: scheduledConfig("1.1.0"),
+        }),
+      );
 
       expect(result.success).toBe(true);
       await waitFor(() => nats.published.length === 2);
@@ -318,7 +325,7 @@ describe("bot events", () => {
       await waitFor(() => nats.published.length === 1);
       nats.failNextPublish();
 
-      const result = await bots.remove(actor, id);
+      const result = await commands.execute(new DeleteBot(actor, id));
 
       expect(result.success).toBe(true);
       await waitFor(() => nats.published.length === 2);
@@ -329,10 +336,12 @@ describe("bot events", () => {
       nats.goDown();
 
       const first = await deploy(scheduledConfig("1.0.0"));
-      const updated = await bots.update(actor, first, {
-        config: scheduledConfig("1.1.0"),
-      });
-      const removed = await bots.remove(actor, first);
+      const updated = await commands.execute(
+        new UpdateBot(actor, first, {
+          config: scheduledConfig("1.1.0"),
+        }),
+      );
+      const removed = await commands.execute(new DeleteBot(actor, first));
       const second = await deploy(scheduledConfig("1.0.0", "MSFT"));
       nats.comeBack();
 

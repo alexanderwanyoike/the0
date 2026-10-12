@@ -17,6 +17,7 @@ import { BotQueryService } from "@/bot-query/bot-query.service";
 import { Ok, Failure } from "@/common/result";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot, mockBotConfig } from "@/test/mock-bot";
+import { BOT_COMMAND_PROVIDERS } from "@/test/bot-command-providers";
 
 const CATALOGUE_VERSIONS = ["1.0.0", "1.1.0", "2.0.0"];
 
@@ -105,7 +106,7 @@ function createBotStore(seed: Bot[]) {
 describe("McpService", () => {
   let service: McpService;
   let store: ReturnType<typeof createBotStore>;
-  let relay: { publishPending: jest.Mock };
+  let relay: { publishCommitted: jest.Mock };
   let customBotService: jest.Mocked<CustomBotService>;
   let logsService: jest.Mocked<LogsService>;
   let botStateService: { listKeys: jest.Mock; getKey: jest.Mock };
@@ -175,14 +176,14 @@ describe("McpService", () => {
   beforeEach(async () => {
     store = createBotStore([callerBot, otherUsersBot]);
 
-    relay = { publishPending: jest.fn() };
+    relay = { publishCommitted: jest.fn() };
 
     const mockCustomBotService = {
       getAllGlobalCustomBots: jest.fn(),
       getAllGlobalVersions: jest.fn(),
       getGlobalLatestVersion: jest.fn(),
       getGlobalSpecificVersion: jest.fn(findInCatalogue),
-      // BotService builds update and delete events from the caller's own
+      // The update and delete events are built from the caller's own
       // copy of the custom bot; answering from the shared catalogue keeps
       // these tests about MCP rather than about that lookup.
       getUserSpecificVersion: jest.fn(
@@ -211,6 +212,7 @@ describe("McpService", () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        ...BOT_COMMAND_PROVIDERS,
         McpService,
         BotService,
         BotValidator,
@@ -223,6 +225,7 @@ describe("McpService", () => {
         { provide: PinoLogger, useValue: createMockLogger() },
       ],
     }).compile();
+    await module.init();
 
     service = module.get<McpService>(McpService);
     customBotService = module.get(CustomBotService);
@@ -342,7 +345,7 @@ describe("McpService", () => {
             }),
           }),
         ]);
-        expect(relay.publishPending).toHaveBeenCalled();
+        expect(relay.publishCommitted).toHaveBeenCalledWith(store.events);
       });
 
       it("requires a name in the config", async () => {

@@ -2,15 +2,13 @@ import { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PinoLogger } from "nestjs-pino";
 import request from "supertest";
-import { BotEventRelay } from "../bot-event-relay";
 import { BotController } from "../bot.controller";
 import { BotRepository } from "../bot.repository";
 import { BotService } from "../bot.service";
-import { BotValidator } from "../bot.validator";
 import { ApiKeyService } from "@/api-key/api-key.service";
 import { AuthService } from "@/auth/auth.service";
 import { Failure, Ok } from "@/common/result";
-import { CustomBotService } from "@/custom-bot/custom-bot.service";
+import { CommandBus } from "@/command-bus/command-bus";
 import { mockBot } from "@/test/mock-bot";
 import { createMockLogger } from "@/test/mock-logger";
 
@@ -38,9 +36,7 @@ describe("/bot routes", () => {
       providers: [
         BotService,
         { provide: BotRepository, useValue: botRepository },
-        { provide: BotValidator, useValue: {} },
-        { provide: CustomBotService, useValue: {} },
-        { provide: BotEventRelay, useValue: {} },
+        { provide: CommandBus, useValue: {} },
         { provide: ApiKeyService, useValue: apiKeyService },
         { provide: AuthService, useValue: authService },
         { provide: PinoLogger, useValue: createMockLogger() },

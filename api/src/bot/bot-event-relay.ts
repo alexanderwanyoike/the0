@@ -6,6 +6,7 @@ import {
 import { PinoLogger } from "nestjs-pino";
 import { NatsService } from "@/nats/nats.service";
 import {
+  BotEvent,
   BotEventOutbox,
   PendingBotEvent,
   PublishOutcome,
@@ -29,7 +30,7 @@ const PRUNE_EVERY_MS = 60 * 60 * 1000;
  * on startup and whenever asked after a commit, and polls only while
  * events are left unpublished: an idle api issues no queries, so a
  * serverless Postgres can suspend. Whoever commits events must therefore
- * call publishPending, without waiting for it.
+ * call publishCommitted, without waiting for it.
  */
 @Injectable()
 export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {
@@ -54,6 +55,10 @@ export class BotEventRelay implements OnApplicationBootstrap, OnModuleDestroy {
     this.stopped = true;
     this.cancelRetry();
     await this.settled();
+  }
+
+  publishCommitted(events: readonly BotEvent[]): void {
+    if (events.length > 0) void this.publishPending();
   }
 
   /**
