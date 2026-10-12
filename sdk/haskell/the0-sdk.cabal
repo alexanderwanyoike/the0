@@ -23,6 +23,7 @@ library
     exposed-modules:    The0.Input
                         The0.State
                         The0.Query
+    other-modules:      The0.Internal.Env
     build-depends:      base ^>=4.18,
                         aeson ^>=2.2,
                         bytestring ^>=0.11,

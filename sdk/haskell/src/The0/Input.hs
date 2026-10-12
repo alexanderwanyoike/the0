@@ -36,7 +36,7 @@ module The0.Input
     , LogLevel(..)
     ) where
 
-import Data.Aeson (Value(..), decode, encode, object, (.=), Object, ToJSON, toJSON)
+import Data.Aeson (Value(..), decodeStrict, encode, object, (.=), Object, ToJSON, toJSON)
 import Data.Aeson.Types (Pair)
 import Data.Aeson.Key (fromString)
 import Data.Aeson.KeyMap (insert)
@@ -45,6 +45,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import System.Environment (lookupEnv)
+import The0.Internal.Env (lookupEnvBytes)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import Control.Exception (catch, SomeException)
@@ -62,11 +63,11 @@ parse = do
     botId <- lookupEnv "BOT_ID" >>= \case
         Just bid -> pure bid
         Nothing -> Prelude.error "BOT_ID environment variable not set"
-    configStr <- lookupEnv "BOT_CONFIG" >>= \case
+    configBytes <- lookupEnvBytes "BOT_CONFIG" >>= \case
         Just cfg -> pure cfg
         Nothing -> Prelude.error "BOT_CONFIG environment variable not set"
     let config = fromMaybe (Prelude.error "Failed to parse BOT_CONFIG as JSON")
-                           (decode (BL.pack configStr))
+                           (decodeStrict configBytes)
     pure (botId, config)
 
 -- | Parse bot configuration with config as a Map.
@@ -80,11 +81,11 @@ parseAsMap = do
     botId <- lookupEnv "BOT_ID" >>= \case
         Just bid -> pure bid
         Nothing -> Prelude.error "BOT_ID environment variable not set"
-    configStr <- lookupEnv "BOT_CONFIG" >>= \case
+    configBytes <- lookupEnvBytes "BOT_CONFIG" >>= \case
         Just cfg -> pure cfg
         Nothing -> Prelude.error "BOT_CONFIG environment variable not set"
     let config = fromMaybe (Prelude.error "Failed to parse BOT_CONFIG as JSON")
-                           (decode (BL.pack configStr))
+                           (decodeStrict configBytes)
     pure (botId, config)
 
 -- | Get the path to the result file.

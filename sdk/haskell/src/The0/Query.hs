@@ -54,7 +54,7 @@ module The0.Query
 
 import Control.Exception (catch, finally, SomeException)
 import Control.Monad (forM_, when)
-import Data.Aeson (FromJSON, Result(..), Value(..), decode, decodeStrict, encode, fromJSON, object, (.=), ToJSON)
+import Data.Aeson (FromJSON, Result(..), Value(..), decodeStrict, encode, fromJSON, object, (.=), ToJSON)
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Key (fromString, toText)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -75,6 +75,7 @@ import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import The0.Input (logInfo)
+import The0.Internal.Env (lookupEnvBytes)
 import The0.State (ReadOnlyStateError(..))
 
 -- | Request object passed to handlers (Express-like): the query path and
@@ -183,9 +184,9 @@ isQueryMode = do
 run :: IO ()
 run = do
     -- Load bot config from environment
-    mConfigStr <- lookupEnv "BOT_CONFIG"
-    case mConfigStr of
-        Just configStr -> case decode (BL.pack configStr) of
+    mConfigBytes <- lookupEnvBytes "BOT_CONFIG"
+    case mConfigBytes of
+        Just configBytes -> case decodeStrict configBytes of
             Just val -> writeIORef configRef val
             Nothing -> writeIORef configRef (Object mempty)
         Nothing -> writeIORef configRef (Object mempty)
@@ -223,8 +224,8 @@ writeResult result = do
 -- | Execute single query and write result to /query/result.json.
 runEphemeral :: String -> IO ()
 runEphemeral queryPath = do
-    mParamsStr <- lookupEnv "QUERY_PARAMS"
-    let params = case mParamsStr >>= decode . BL.pack of
+    mParamsBytes <- lookupEnvBytes "QUERY_PARAMS"
+    let params = case mParamsBytes >>= decodeStrict of
             Just (Object o) -> Map.fromList [(T.unpack (toText k), v) | (k, v) <- KM.toList o]
             _ -> Map.empty
     outcome <- answer (RequestValues queryPath params)
