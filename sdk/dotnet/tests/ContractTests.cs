@@ -20,7 +20,6 @@ public class ContractTests
     // says how the list is kept.
     private static readonly Dictionary<string, string> KnownFailures = new()
     {
-        ["query-server-start-line"] = "the start line is {\"_log\": \"info\"} with no timestamp",
     };
 
     private static readonly TimeSpan RunTimeout = TimeSpan.FromSeconds(60);
