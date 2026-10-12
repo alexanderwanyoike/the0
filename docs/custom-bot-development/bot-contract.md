@@ -100,7 +100,7 @@ A bot run's result file is `/{CODE_MOUNT_DIR}/result.json`, which is `/bot/resul
 | `error(message[, data])` | `{"status": "error", "message": message, "data": data}`, with `data` only when it is given. See [`error()`](#error). |
 | `result(value)` | `value`, unchanged |
 
-Each call replaces the file, so the bot's last call wins. An SDK never writes a result on its own: a bot that makes none of these calls leaves no file. The Rust, .NET, Scala, Haskell and C++ SDKs take no `data` argument; their `result()` can write the same object.
+Each call replaces the file, so the bot's last call wins. An SDK never writes a result on its own: a bot that makes none of these calls leaves no file. Every SDK's `success()` and `error()` accept the optional `data`.
 
 ### `error()`
 
@@ -280,6 +280,7 @@ These are the rules each SDK does not follow yet. The SDKs come into line one at
 
 | Rule | Not followed yet by |
 |---|---|
+| `success()` and `error()` accept optional `data` (these SDKs take a message only) | Rust, .NET, Scala, Haskell, C++ |
 | `error()` prints its message on stderr | Node.js, Rust, .NET, Scala, Haskell, C++ |
 | Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Rust, .NET, Scala, Haskell, C++ |
 | The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Node.js, Rust, .NET, Scala, Haskell, C++ |
