@@ -1,0 +1,28 @@
+{
+  "description": "A request the query server fails to read leaves an error log line on stderr, and the server keeps serving.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "realtime",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "THE0_QUERY_PORT": "{{port}}"
+  },
+  "handlers": {"/portfolio": [{"op": "return", "value": {}}]},
+  "requests": [
+    {"method": "GET", "target": "/portfolio", "reset": true},
+    {
+      "method": "GET",
+      "target": "/health",
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"status": "ok"}}}
+    }
+  ],
+  "expect": {
+    "stdout": [],
+    "stderr": [
+      {"level": "info", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}},
+      {"level": "error", "message": {"$match": "string"}, "timestamp": {"$match": "timestamp"}}
+    ]
+  }
+}

@@ -303,27 +303,41 @@ data Response = Response
     }
 
 requestMismatches :: Int -> Int -> Value -> IO [String]
-requestMismatches port index request = do
-    let method = textField "method" request
-        target = textField "target" request
-        at = "requests[" ++ show index ++ "] " ++ method ++ " " ++ target
-        expected = fromMaybe Null (field "expect" request)
-    response <- send port method target request
-    pure $ case response of
-        Left problem -> [at ++ ": " ++ problem]
-        Right r ->
-            mismatches (fromMaybe Null (field "status" expected))
-                (Number (fromIntegral (responseStatus r))) (at ++ " status")
-                ++ concat
-                    [ case lookup (map toLower (K.toString name)) (responseHeaders r) of
-                        Nothing -> [at ++ " header " ++ K.toString name ++ ": missing"]
-                        Just got -> mismatches want (String (T.pack got))
-                            (at ++ " header " ++ K.toString name)
-                    | (name, want) <- maybe [] KM.toList (objectField "headers" expected)
-                    ]
-                ++ case eitherDecodeStrict (responseBody r) of
-                    Right body -> mismatches (fromMaybe Null (field "body" expected)) body (at ++ " body")
-                    Left _ -> [at ++ " body: not JSON: " ++ utf8 (responseBody r)]
+requestMismatches port index request
+    | field "reset" request == Just (Bool True) = [] <$ reset port method target
+    | otherwise = responseMismatches at expected <$> send port method target request
+  where
+    method = textField "method" request
+    target = textField "target" request
+    at = "requests[" ++ show index ++ "] " ++ method ++ " " ++ target
+    expected = fromMaybe Null (field "expect" request)
+
+responseMismatches :: String -> Value -> Either String Response -> [String]
+responseMismatches at expected response = case response of
+    Left problem -> [at ++ ": " ++ problem]
+    Right r ->
+        mismatches (fromMaybe Null (field "status" expected))
+            (Number (fromIntegral (responseStatus r))) (at ++ " status")
+            ++ concat
+                [ case lookup (map toLower (K.toString name)) (responseHeaders r) of
+                    Nothing -> [at ++ " header " ++ K.toString name ++ ": missing"]
+                    Just got -> mismatches want (String (T.pack got))
+                        (at ++ " header " ++ K.toString name)
+                | (name, want) <- maybe [] KM.toList (objectField "headers" expected)
+                ]
+            ++ case eitherDecodeStrict (responseBody r) of
+                Right body -> mismatches (fromMaybe Null (field "body" expected)) body (at ++ " body")
+                Left _ -> [at ++ " body: not JSON: " ++ utf8 (responseBody r)]
+
+-- | This SDK's own cases only: a request marked @"reset": true@ sends the
+-- request line alone, then resets the connection, so the server fails while
+-- it reads the request. Nothing is compared.
+reset :: Int -> String -> String -> IO ()
+reset port method target =
+    bracket (socket AF_INET Stream defaultProtocol) close $ \sock -> do
+        connect sock (loopback (fromIntegral port))
+        sendAll sock (BC.pack (method ++ " " ++ target ++ " HTTP/1.1\r\n"))
+        setSockOpt sock Linger (StructLinger 1 0)
 
 -- | One request on a new connection, then the whole response.
 send :: Int -> String -> String -> Value -> IO (Either String Response)
