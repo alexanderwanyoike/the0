@@ -399,12 +399,6 @@ object Query {
   /**
    * Escape a string for JSON.
    */
-  private def escapeJson(s: String): String = {
-    if (s == null) return ""
-    s.replace("\\", "\\\\")
-      .replace("\"", "\\\"")
-      .replace("\n", "\\n")
-      .replace("\r", "\\r")
-      .replace("\t", "\\t")
-  }
+  private def escapeJson(s: String): String =
+    if (s == null) "" else JsonValue.escape(s)
 }

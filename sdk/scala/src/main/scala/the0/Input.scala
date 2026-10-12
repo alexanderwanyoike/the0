@@ -199,11 +199,5 @@ object Input {
   /**
    * Escape a string for use in JSON.
    */
-  private def escapeJson(s: String): String = {
-    s.replace("\\", "\\\\")
-     .replace("\"", "\\\"")
-     .replace("\n", "\\n")
-     .replace("\r", "\\r")
-     .replace("\t", "\\t")
-  }
+  private def escapeJson(s: String): String = JsonValue.escape(s)
 }

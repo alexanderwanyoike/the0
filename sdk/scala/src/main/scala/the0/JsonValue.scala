@@ -198,8 +198,13 @@ object JsonValue {
     private def fail(): Nothing = throw new NotJson
   }
 
-  private[the0] def quote(text: String): String = {
-    val out = new StringBuilder("\"")
+  private[the0] def quote(text: String): String = s"\"${escape(text)}\""
+
+  /**
+   * Text escaped to sit between the quotes of a JSON string.
+   */
+  private[the0] def escape(text: String): String = {
+    val out = new StringBuilder
     text.foreach {
       case '"' => out.append("\\\"")
       case '\\' => out.append("\\\\")
@@ -211,6 +216,6 @@ object JsonValue {
       case c if c < ' ' => out.append(f"\\u${c.toInt}%04x")
       case c => out.append(c)
     }
-    out.append('"').toString
+    out.toString
   }
 }
