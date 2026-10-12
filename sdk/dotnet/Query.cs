@@ -366,14 +366,7 @@ public static class Query
             return null;
         }
         using var reader = new StreamReader(request.InputStream, System.Text.Encoding.UTF8);
-        try
-        {
-            return JsonNode.Parse(reader.ReadToEnd()) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        return ObjectOrNull(reader.ReadToEnd());
     }
 
     /// <summary>
