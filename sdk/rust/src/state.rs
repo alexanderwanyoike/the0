@@ -566,6 +566,17 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_invalid_key_on_delete() {
+        let _temp = setup_test_env();
+        let result = delete("../escape");
+        assert!(
+            matches!(result, Err(StateError::InvalidKey(_))),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    #[serial]
     fn test_complex_nested_data() {
         let _temp = setup_test_env();
 
