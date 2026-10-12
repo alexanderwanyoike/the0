@@ -162,21 +162,27 @@ class QuerySpec extends AnyFunSuite with BeforeAndAfterEach {
 
   test("the query server sends a non-ASCII body whole, as UTF-8") {
     Query.handler("/unicode") { _ => "\"café €\"" }
-    val body = Using.resource(new ServerSocket(0, 0, InetAddress.getLoopbackAddress)) { server =>
-      val serving = new Thread(() => Query.handleConnection(server.accept()))
-      serving.start()
-      val request = HttpRequest
-        .newBuilder(URI.create(s"http://127.0.0.1:${server.getLocalPort}/unicode"))
-        .timeout(Duration.ofSeconds(10))
-        .build()
-      val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
-      val body = Try(client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).body())
-      serving.join(10000)
-      body
-    }
+    val body = serveOne("/unicode")
     val data = body.toOption.flatMap(text => Try(ujson.read(text)("data").str).toOption)
     assert(data == Some("café €"), s"Should read the whole body: $body")
   }
+
+  // Serves one request on an in-process query server and returns the response body.
+  private def serveOne(target: String, jsonBody: Option[String] = None): Try[String] =
+    Using.resource(new ServerSocket(0, 0, InetAddress.getLoopbackAddress)) { server =>
+      val serving = new Thread(() => Query.handleConnection(server.accept()))
+      serving.start()
+      val builder = HttpRequest
+        .newBuilder(URI.create(s"http://127.0.0.1:${server.getLocalPort}$target"))
+        .timeout(Duration.ofSeconds(10))
+      jsonBody.foreach { json =>
+        builder.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(json))
+      }
+      val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
+      val body = Try(client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).body())
+      serving.join(10000)
+      body
+    }
 
   // ============ Request tests ============
 
