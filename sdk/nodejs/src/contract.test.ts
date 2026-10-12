@@ -34,7 +34,7 @@ interface ContractRequest {
   body?: Json;
   raw_body?: string;
   content_type?: string;
-  expect: { status: number; body: Json };
+  expect: { status: number; headers?: JsonObject; body: Json };
 }
 
 interface ContractCase {
@@ -212,7 +212,13 @@ function canConnect(port: number): Promise<boolean> {
   });
 }
 
-function send(port: number, request: ContractRequest): Promise<{ status: number; body: string }> {
+interface Response {
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  body: string;
+}
+
+function send(port: number, request: ContractRequest): Promise<Response> {
   let body: string | undefined;
   const headers: Record<string, string> = {};
   if (request.body !== undefined) {
@@ -232,7 +238,7 @@ function send(port: number, request: ContractRequest): Promise<{ status: number;
         let text = "";
         res.setEncoding("utf8");
         res.on("data", (chunk) => (text += chunk));
-        res.on("end", () => resolve({ status: res.statusCode ?? 0, body: text }));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: text }));
       }
     );
     req.setTimeout(RUN_TIMEOUT_MS, () => req.destroy(new Error("request timed out")));
@@ -384,6 +390,14 @@ async function runServer(
         const where = `requests[${index}] ${request.method} ${request.target}`;
         const response = await send(port, request);
         problems.push(...mismatches(request.expect.status, response.status, `${where} status`));
+        for (const [name, value] of Object.entries(request.expect.headers ?? {})) {
+          const actual = response.headers[name.toLowerCase()];
+          if (actual === undefined) {
+            problems.push(`${where} header ${name}: missing`);
+          } else {
+            problems.push(...mismatches(value, actual, `${where} header ${name}`));
+          }
+        }
         try {
           problems.push(...mismatches(request.expect.body, JSON.parse(response.body), `${where} body`));
         } catch {
