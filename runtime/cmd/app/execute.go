@@ -143,10 +143,7 @@ func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	}
 
 	// Step 1.5: Ensure binaries are executable for compiled runtimes
-	if err := execute.EnsureExecutable(cfg); err != nil {
-		logger.Info("Warning: failed to set execute permissions: %v", err)
-		// Continue anyway - may work if permissions are already set
-	}
+	ensureExecutable(cfg, logger)
 
 	// Step 2: Download state
 	if err := downloadState(ctx, cfg, logger); err != nil {
@@ -344,6 +341,15 @@ func ensureCode(ctx context.Context, cfg *launch.Settings, logger *util.DefaultL
 	}
 
 	return downloadCode(ctx, cfg, logger)
+}
+
+// ensureExecutable sets the execute bits of a compiled bot's binaries, which
+// a code zip does not always keep.
+func ensureExecutable(cfg *launch.Settings, logger *util.DefaultLogger) {
+	if err := execute.EnsureExecutable(cfg); err != nil {
+		logger.Info("Warning: failed to set execute permissions: %v", err)
+		// Continue anyway - may work if permissions are already set
+	}
 }
 
 // downloadCode downloads and extracts bot code from MinIO.
