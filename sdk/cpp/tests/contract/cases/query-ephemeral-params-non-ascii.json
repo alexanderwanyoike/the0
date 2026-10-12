@@ -1,0 +1,30 @@
+{
+  "description": "Non-ASCII text in QUERY_PARAMS reaches the handler unchanged, and a param read as text keeps it unescaped.",
+  "entrypoint": "query",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}",
+    "QUERY_PATH": "/echo",
+    "QUERY_PARAMS": "{\"venue\":\"café\",\"tags\":[\"₿\",\"日本\"],\"escaped\":\"\\u00e9\"}"
+  },
+  "handlers": {
+    "/echo": [
+      {"op": "query.params", "as": "params"},
+      {"op": "query.text_param", "key": "tags", "as": "tags_text"},
+      {"op": "return", "value": {"params": {"$ref": "params"}, "tags_text": {"$ref": "tags_text"}}}
+    ]
+  },
+  "expect": {
+    "exit_code": 0,
+    "query_result": {
+      "status": "ok",
+      "data": {
+        "params": {"venue": "café", "tags": ["₿", "日本"], "escaped": "é"},
+        "tags_text": "[\"₿\",\"日本\"]"
+      }
+    }
+  }
+}
