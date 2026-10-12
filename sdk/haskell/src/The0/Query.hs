@@ -54,7 +54,7 @@ module The0.Query
 
 import Control.Exception (catch, SomeException)
 import Control.Monad (forM_, when)
-import Data.Aeson (FromJSON, Result(..), Value(..), decode, encode, fromJSON, object, (.=), ToJSON)
+import Data.Aeson (FromJSON, Result(..), Value(..), decode, decodeStrict, encode, fromJSON, object, (.=), ToJSON)
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Key (fromString, toText)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -62,6 +62,7 @@ import Data.IORef
 import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Network.HTTP.Types (urlDecode)
 import Network.Socket
 import Network.Socket.ByteString (recv, sendAll)
@@ -97,9 +98,10 @@ reqValues (RequestValues _ values) = values
 -- decode.
 getParamAs :: FromJSON a => Request -> String -> Maybe a
 getParamAs req key = Map.lookup key (reqValues req) >>= \value ->
-    case fromJSON value of
-        Success typed -> Just typed
-        Error _ -> Nothing
+    case (fromJSON value, value) of
+        (Success typed, _) -> Just typed
+        (Error _, String text) -> decodeStrict (TE.encodeUtf8 text)
+        (Error _, _) -> Nothing
 
 textView :: Request -> (String, Map.Map String String)
 textView (RequestValues path values) = (path, Map.mapMaybe text values)
