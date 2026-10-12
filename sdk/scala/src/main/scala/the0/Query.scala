@@ -209,24 +209,30 @@ object Query {
   private def runEphemeral(queryPath: String): Unit = {
     // Parse parameters from environment
     val paramsStr = sys.env.getOrElse("QUERY_PARAMS", "{}")
-    currentRequest = Request(queryPath, parseJsonToMap(paramsStr))
+    val (status, body) = respond(Request(queryPath, parseJsonToMap(paramsStr)))
+    writeResult(body)
+    if (status != 200) {
+      sys.exit(1)
+    }
+  }
 
-    // Find and execute handler
-    handlers.get(queryPath) match {
+  /**
+   * Answer one query with the status code and JSON body that both modes send.
+   */
+  private[the0] def respond(request: Request): (Int, String) = {
+    currentRequest = request
+    handlers.get(request.path) match {
       case None =>
         val available = handlers.keys.toSeq.map(p => s""""$p"""").mkString(",")
-        writeResult(s"""{"status": "error", "error": "No handler for path: $queryPath", "available": [$available]}""")
-        sys.exit(1)
+        (404, s"""{"status": "error", "error": "No handler for path: ${request.path}", "available": [$available]}""")
 
       case Some(fn) =>
         try {
-          val data = fn(currentRequest)
-          writeResult(s"""{"status": "ok", "data": $data}""")
+          val data = fn(request)
+          (200, s"""{"status": "ok", "data": $data}""")
         } catch {
           case e: Exception =>
-            val escaped = escapeJson(e.getMessage)
-            writeResult(s"""{"status": "error", "error": "$escaped"}""")
-            sys.exit(1)
+            (500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
         }
     }
   }
@@ -267,23 +273,8 @@ object Query {
         } else {
           val pathWithQuery = parts(1)
           val (path, params) = parsePathAndQuery(pathWithQuery)
-          currentRequest = Request(path, params)
-
-          // Find and execute handler
-          handlers.get(path) match {
-            case None =>
-              val available = handlers.keys.toSeq.map(p => s""""$p"""").mkString(",")
-              sendResponse(writer, 404, s"""{"status": "error", "error": "No handler for path: $path", "available": [$available]}""")
-
-            case Some(fn) =>
-              try {
-                val data = fn(currentRequest)
-                sendResponse(writer, 200, s"""{"status": "ok", "data": $data}""")
-              } catch {
-                case e: Exception =>
-                  sendResponse(writer, 500, s"""{"status": "error", "error": "${escapeJson(e.getMessage)}"}""")
-              }
-          }
+          val (status, body) = respond(Request(path, params))
+          sendResponse(writer, status, body)
         }
       }
     }
