@@ -103,9 +103,7 @@ writeResult content = do
 --
 -- Writes a JSON object with status "success" and the provided message.
 success :: String -> IO ()
-success msg = do
-    let escaped = escapeJson msg
-    writeResult $ "{\"status\":\"success\",\"message\":\"" ++ escaped ++ "\"}"
+success msg = result $ object ["status" .= ("success" :: String), "message" .= msg]
 
 -- | Output an error result to the result file and exit with code 1.
 --
@@ -114,8 +112,7 @@ success msg = do
 -- process with exit code 1.
 error :: String -> IO a
 error msg = do
-    let escaped = escapeJson msg
-    writeResult $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
+    result $ object ["status" .= ("error" :: String), "message" .= msg]
     logError msg Nothing
     exitWith (ExitFailure 1)
 
@@ -124,17 +121,6 @@ error msg = do
 -- Serializes the provided 'Value' as JSON and writes it.
 result :: Value -> IO ()
 result val = writeResult $ BL.unpack (encode val)
-
--- | Escape special characters for JSON string output.
-escapeJson :: String -> String
-escapeJson = concatMap escapeChar
-  where
-    escapeChar '\\' = "\\\\"
-    escapeChar '"'  = "\\\""
-    escapeChar '\n' = "\\n"
-    escapeChar '\r' = "\\r"
-    escapeChar '\t' = "\\t"
-    escapeChar c    = [c]
 
 -- | Emit a metric to stdout with timestamp.
 --
