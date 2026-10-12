@@ -49,8 +49,8 @@ spec = do
         it "reads every param as text in the query server" $ check serverCase
 
     describe "a handler whose result fails when evaluated" $ do
-        it "answers an error in an ephemeral query" $ check lazyErrorEphemeralCase
-        it "answers 500 in the query server, which keeps serving" $ check lazyErrorServerCase
+        it "answers its message in an ephemeral query" $ check lazyErrorEphemeralCase
+        it "answers 500 with its message in the query server, which keeps serving" $ check lazyErrorServerCase
 
 check :: Value -> Expectation
 check case_ = do
@@ -136,10 +136,12 @@ serverCase = object
 jsonText :: Value -> T.Text
 jsonText = TE.decodeUtf8 . BL.toStrict . Aeson.encode
 
+-- | The error's message alone, without the CallStack lines GHC adds to the
+-- text of an @error@ call.
 lazyError :: Value
 lazyError = object
     [ "status" .= ("error" :: String)
-    , "error" .= object ["$match" .= ("contains" :: String), "value" .= ("price feed unavailable" :: String)]
+    , "error" .= ("price feed unavailable" :: String)
     ]
 
 lazyErrorEphemeralCase :: Value
