@@ -1,0 +1,126 @@
+{-# LANGUAGE OverloadedStrings #-}
+
+-- | A bot written the way Haskell bots were before params had JSON types:
+-- its handler reads params with 'Query.getParam' and 'Query.reqParams'. It
+-- runs through 'Query.run' in both query modes, to show such bots keep
+-- working.
+module HaskellBot
+    ( haskellBotArg
+    , main
+    , spec
+    ) where
+
+import Data.Aeson (Value, object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import Harness (runCase, sandboxQueryResult)
+import System.Environment (getExecutablePath)
+import Test.Hspec
+import qualified The0.Query as Query
+
+haskellBotArg :: String
+haskellBotArg = "haskell-bot"
+
+main :: FilePath -> IO ()
+main queryResultPath = do
+    Query.setResultPath queryResultPath
+    Query.handler "/echo" $ \req -> return $ object
+        [ "symbol" .= Query.getParam req "symbol" "none"
+        , "limit" .= Query.getParam req "limit" "10"
+        , "filter" .= Map.lookup "filter" (Query.reqParams req)
+        , "cursor" .= Map.lookup "cursor" (Query.reqParams req)
+        , "offset" .= Query.getParam req "offset" "0"
+        ]
+    Query.run
+
+spec :: Spec
+spec = describe "a bot reading text params" $ do
+    it "reads every param as text in an ephemeral query" $ check ephemeralCase
+    it "reads every param as text in the query server" $ check serverCase
+
+check :: Value -> Expectation
+check case_ = do
+    exe <- getExecutablePath
+    (problems, output) <- runCase case_ exe $ \sandbox ->
+        [haskellBotArg, sandboxQueryResult sandbox]
+    if null problems then pure () else expectationFailure (unlines problems ++ output)
+
+params :: Value
+params = object
+    [ "symbol" .= ("BTC/USD" :: String)
+    , "limit" .= (5 :: Int)
+    , "filter" .= object ["side" .= ("buy" :: String)]
+    , "cursor" .= Aeson.Null
+    ]
+
+-- | What the handler answers for 'params': every value as text, a null as
+-- absent.
+textParams :: Value
+textParams = object
+    [ "symbol" .= ("BTC/USD" :: String)
+    , "limit" .= ("5" :: String)
+    , "filter" .= ("{\"side\":\"buy\"}" :: String)
+    , "cursor" .= Aeson.Null
+    , "offset" .= ("0" :: String)
+    ]
+
+env :: [(Aeson.Key, Value)] -> Value
+env extra = object $
+    [ "BOT_ID" .= ("haskell-bot" :: String)
+    , "BOT_CONFIG" .= ("{}" :: String)
+    , "CODE_MOUNT_DIR" .= ("{{code_mount_dir}}" :: String)
+    , "STATE_DIR" .= ("{{state_dir}}" :: String)
+    ] ++ [key .= value | (key, value) <- extra]
+
+ephemeralCase :: Value
+ephemeralCase = object
+    [ "env" .= env
+        [ ("QUERY_PATH", "/echo")
+        , ("QUERY_PARAMS", Aeson.String (jsonText params))
+        ]
+    , "expect" .= object
+        [ "exit_code" .= (0 :: Int)
+        , "query_result" .= object ["status" .= ("ok" :: String), "data" .= textParams]
+        ]
+    ]
+
+serverCase :: Value
+serverCase = object
+    [ "env" .= env [("BOT_TYPE", "realtime"), ("THE0_QUERY_PORT", "{{port}}")]
+    , "requests" .=
+        [ -- A runtime query: the params as the body, and copied into the
+          -- query string as text, with the null left out.
+          object
+            [ "method" .= ("POST" :: String)
+            , "target" .= ("/echo?filter=%7B%22side%22%3A%22buy%22%7D&limit=5&symbol=BTC%2FUSD" :: String)
+            , "body" .= params
+            , "expect" .= object
+                [ "status" .= (200 :: Int)
+                , "body" .= object ["status" .= ("ok" :: String), "data" .= textParams]
+                ]
+            ]
+        , object
+            [ "method" .= ("GET" :: String)
+            , "target" .= ("/echo?symbol=BTC%2FUSD&limit=5" :: String)
+            , "expect" .= object
+                [ "status" .= (200 :: Int)
+                , "body" .= object
+                    [ "status" .= ("ok" :: String)
+                    , "data" .= object
+                        [ "symbol" .= ("BTC/USD" :: String)
+                        , "limit" .= ("5" :: String)
+                        , "filter" .= Aeson.Null
+                        , "cursor" .= Aeson.Null
+                        , "offset" .= ("0" :: String)
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+
+jsonText :: Value -> T.Text
+jsonText = TE.decodeUtf8 . BL.toStrict . Aeson.encode
