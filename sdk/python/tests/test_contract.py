@@ -26,9 +26,7 @@ SERVER_START_TIMEOUT_SECONDS = 30
 
 # Cases this SDK does not pass yet, each with the reason. A listed case that
 # starts passing fails the suite, so the list cannot go stale.
-KNOWN_FAILURES = {
-    "query-server-start-line": "the query server's start line uses _log and has no timestamp",
-}
+KNOWN_FAILURES = {}
 
 TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 
