@@ -783,6 +783,7 @@ inline void run_server() {
         response << "HTTP/1.1 " << answer.status << " " << detail::reason_phrase(answer.status) << "\r\n";
         response << "Content-Type: application/json\r\n";
         response << "Content-Length: " << response_body.size() << "\r\n";
+        response << "Connection: close\r\n";
         response << "\r\n";
         response << response_body;
 
