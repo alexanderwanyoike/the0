@@ -111,21 +111,22 @@ public static class Input
     /// then terminates the process with exit code 1.
     /// </summary>
     /// <param name="message">The error message to include in the output</param>
-    public static void Error(string message)
-    {
-        WriteResult(JsonSerializer.Serialize(new { status = "error", message }));
-        Log(message, level: LogLevel.Error);
-        Environment.Exit(1);
-    }
+    public static void Error(string message) => Error(message, null);
 
     /// <summary>
-    /// Output an error result with data to the result file and exit with code 1.
+    /// Output an error result with data to the result file, log the message and exit with code 1.
     /// Writes a JSON object with status "error", the message and, unless
-    /// <paramref name="data"/> is null, the data under "data".
+    /// <paramref name="data"/> is null, the data under "data". The error log
+    /// line on stderr carries the message only.
     /// </summary>
     /// <param name="message">The error message to include in the output</param>
     /// <param name="data">Any JSON-serializable value, or null for none</param>
-    public static void Error(string message, object? data) => Error(message);
+    public static void Error(string message, object? data)
+    {
+        WriteResult(StatusResult("error", message, data));
+        Log(message, level: LogLevel.Error);
+        Environment.Exit(1);
+    }
 
     /// <summary>
     /// Output a custom JSON result to the result file.
