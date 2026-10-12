@@ -31,6 +31,7 @@
 
 #include <nlohmann/json.hpp>
 #include "state.h"
+#include "the0.h"
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -391,7 +392,7 @@ inline void run_server() {
         std::exit(1);
     }
 
-    std::cerr << json{{"_log", "info"}, {"message", "Query server started on port " + std::to_string(port)}}.dump() << std::endl;
+    the0::log("Query server started on port " + std::to_string(port));
 
     while (true) {
         struct sockaddr_in client_addr;
