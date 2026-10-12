@@ -232,6 +232,18 @@ Params are JSON values. A param keeps its type (string, number, boolean, array, 
     - A typed accessor reads a string value that parses as the requested type. Query-string params are all strings, so `limit=50` from a manual call still reads as a number.
     - A typed accessor asked for a string returns a non-string value as its JSON text, as the string accessors do. A `null` param read as a string is absent, as in the first rule, never the text `"null"`.
 
+A typed accessor given a param of another type is a known language difference, not a rule of the contract. Such a param is present and not `null`, but is neither the requested type nor a string that parses as it, for example `"abc"` read as a number. Queries are read-only, so the stakes are low.
+
+| SDK | Typed accessor | A param of another type |
+|---|---|---|
+| Rust | `req.get_as::<T>(key)` | `None`, as for a missing param |
+| Haskell | `getParamAs req key` | `Nothing`, as for a missing param |
+| C++ | `req.get_as<T>(key)` | `std::nullopt`, as for a missing param; `get_as<T>(key, default)` gives the default |
+| .NET | `req.Get<T>(key, default)` | throws `JsonException` |
+| Scala | `req.getAs[T](key)` | throws `IllegalArgumentException` |
+
+A handler that needs to tell a mistyped param from a missing one checks the params themselves in Rust, Haskell and C++. In .NET and Scala it catches the exception, which otherwise fails the handler with the error response below.
+
 ### Responses
 
 Both modes answer with the same JSON object:
@@ -285,6 +297,14 @@ It reads the response body whatever the status code.
 | Scala | `sdk/scala/src/test/scala/the0/ContractSpec.scala` |
 | Haskell | `sdk/haskell/test/contract/Main.hs` |
 | C++ | not yet |
+
+The runtime runs the cases too, end to end, in `runtime/cmd/app/contract_e2e_test.go`. Python and Node.js bots built on the repo's own SDKs play each bot case and each ephemeral query case through `runtime execute` in the runtime image, with the wrappers and `BuildBotEnv`. The check adds what the runtime puts on top of a case's expectations:
+- the wrappers' result when the bot wrote none;
+- exit 1 for an error result;
+- the [run summary line](#the-run-summary-line) of a failed run;
+- the same lines in `bot.log` as on stdout and stderr.
+
+`runtime/cmd/app/testdata/contract-cases` adds cases in the same format for rules only the runtime enforces. The query server cases are left to the SDK harnesses. So is the query case without `QUERY_PATH`, which no runtime launch path produces. The runtime workflow runs the check on changes to `runtime/**` and `sdk/contract/**`.
 
 ## Bringing the SDKs into line
 

@@ -1,0 +1,18 @@
+{
+  "description": "result() with an error status writes it, and the bot returns normally: the SDK neither logs nor exits, and the runtime fails the run.",
+  "entrypoint": "bot",
+  "env": {
+    "BOT_ID": "contract-bot",
+    "BOT_CONFIG": "{\"symbol\":\"BTC/USD\",\"amount\":100.5}",
+    "BOT_TYPE": "scheduled",
+    "CODE_MOUNT_DIR": "{{code_mount_dir}}",
+    "STATE_DIR": "{{state_dir}}"
+  },
+  "script": [{"op": "result", "value": {"status": "error", "message": "Position limit breached"}}],
+  "expect": {
+    "exit_code": 0,
+    "stdout": [],
+    "stderr": [],
+    "result": {"status": "error", "message": "Position limit breached"}
+  }
+}
