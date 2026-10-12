@@ -201,6 +201,18 @@ def main(bot_id, config):
 			message:  "exchange unreachable",
 		},
 		{
+			name: "python bot writes an error result and returns",
+			bot: func(t *testing.T) botFixture {
+				return pythonBot(t, `import the0
+
+def main(bot_id, config):
+    the0.result({"status": "error", "message": "position limit breached"})
+`)
+			},
+			exitCode: 1,
+			message:  "position limit breached",
+		},
+		{
 			name: "python bot exits with its own code",
 			bot: func(t *testing.T) botFixture {
 				return pythonBot(t, `import sys
