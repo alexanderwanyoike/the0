@@ -94,10 +94,19 @@ object Query {
      * val limit = req.getAs[Int]("limit").getOrElse(10)
      * }}}
      *
+     * A string value that parses as T is read as T, so `?limit=5` gives 5 as an Int.
+     * Asked for a String, any other JSON value comes back as its JSON text.
+     *
      * @param key The parameter key
-     * @return Some(value) if found, None otherwise
+     * @return Some(value) if found, None when the parameter is missing or null
+     * @throws IllegalArgumentException when the parameter is not a T
      */
-    def getAs[T](key: String)(using reader: ParamReader[T]): Option[T] = None
+    def getAs[T](key: String)(using reader: ParamReader[T]): Option[T] =
+      jsonParams.get(key).filter(_ != JsonValue.Null).map { value =>
+        reader.read(value).getOrElse(
+          throw new IllegalArgumentException(s"Query param $key is not a ${reader.typeName}: ${value.render}")
+        )
+      }
   }
 
   /**
@@ -114,17 +123,28 @@ object Query {
 
   object ParamReader {
 
-    private def reader[T](name: String): ParamReader[T] = new ParamReader[T] {
+    // A string is also read through what it parses as: a query string carries every param as text.
+    private def reader[T](name: String)(direct: PartialFunction[JsonValue, T]): ParamReader[T] = new ParamReader[T] {
       val typeName: String = name
-      def read(value: JsonValue): Option[T] = None
+      def read(value: JsonValue): Option[T] = value match {
+        case JsonValue.Str(text) => JsonValue.parse(text).collect(direct)
+        case other => direct.lift(other)
+      }
     }
 
-    given ParamReader[String] = reader("String")
-    given ParamReader[Int] = reader("Int")
-    given ParamReader[Long] = reader("Long")
-    given ParamReader[Double] = reader("Double")
-    given ParamReader[BigDecimal] = reader("BigDecimal")
-    given ParamReader[Boolean] = reader("Boolean")
+    given ParamReader[String] = new ParamReader[String] {
+      val typeName: String = "String"
+      def read(value: JsonValue): Option[String] = value match {
+        case JsonValue.Str(text) => Some(text)
+        case other => Some(other.render)
+      }
+    }
+
+    given ParamReader[Int] = reader("Int") { case JsonValue.Num(n) if n.isValidInt => n.toInt }
+    given ParamReader[Long] = reader("Long") { case JsonValue.Num(n) if n.isValidLong => n.toLong }
+    given ParamReader[Double] = reader("Double") { case JsonValue.Num(n) => n.toDouble }
+    given ParamReader[BigDecimal] = reader("BigDecimal") { case JsonValue.Num(n) => n }
+    given ParamReader[Boolean] = reader("Boolean") { case JsonValue.Bool(b) => b }
   }
 
   object Request {
