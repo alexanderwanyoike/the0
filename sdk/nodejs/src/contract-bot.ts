@@ -43,6 +43,12 @@ function resolve(value: Json, bound: Bound): Json {
 
 type Args = Record<string, any>;
 
+/** Calls fn with the optional args the step gives, so an omitted one stays omitted. */
+function callWith(fn: (...values: any[]) => unknown, args: Args, required: string[], optional: string[] = []): unknown {
+  const given = optional.filter((name) => name in args);
+  return fn(...[...required, ...given].map((name) => args[name]));
+}
+
 async function perform(step: Step, request: query.QueryRequest | null, bound: Bound): Promise<Json> {
   const args: Args = {};
   for (const [key, value] of Object.entries(step)) {
@@ -57,23 +63,20 @@ async function perform(step: Step, request: query.QueryRequest | null, bound: Bo
       return { bot_id: id, config };
     }
     case "success":
-      return "data" in args ? the0.success(args.message, args.data) : the0.success(args.message);
+      return callWith(the0.success, args, ["message"], ["data"]);
     case "error":
-      return "data" in args ? the0.error(args.message, args.data) : the0.error(args.message);
+      return callWith(the0.error, args, ["message"], ["data"]);
     case "result":
       return the0.result(args.value);
     case "metric":
       return the0.metric(args.type, args.data);
     case "log":
-      if ("data" in args && "level" in args) return the0.log(args.message, args.data, args.level);
-      if ("data" in args) return the0.log(args.message, args.data);
-      if ("level" in args) return the0.log(args.message, args.level);
-      return the0.log(args.message);
+      return callWith(the0.log, args, ["message"], ["data", "level"]);
     case "raise":
       throw new Error(args.message);
 
     case "state.get":
-      return "default" in args ? state.get(args.key, args.default) : state.get(args.key);
+      return callWith(state.get, args, ["key"], ["default"]);
     case "state.set":
       return state.set(args.key, args.value);
     case "state.delete":
@@ -89,13 +92,11 @@ async function perform(step: Step, request: query.QueryRequest | null, bound: Bo
   if (request === null) {
     throw new Error(`contract-bot: op ${step.op} is only valid inside a query handler`);
   }
-  // The request's params can hold any JSON value, whatever its declared types say.
-  const get = request.get as (key: string, defaultValue?: Json) => Json;
   switch (step.op) {
     case "query.params":
       return { ...request.params };
     case "query.param":
-      return "default" in args ? get(args.key, args.default) : get(args.key);
+      return callWith(request.get, args, ["key"], ["default"]);
     case "query.config":
       return query.getConfig();
   }
