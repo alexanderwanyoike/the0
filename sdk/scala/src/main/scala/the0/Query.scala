@@ -80,6 +80,9 @@ object Query {
   // Bot config
   private var config: String = "{}"
 
+  // The contract tests point this into a sandbox, because /query is not writable outside a container.
+  private[the0] var queryResultPath: String = "/query/result.json"
+
   /**
    * Register a query handler (Express-like).
    *
@@ -157,7 +160,7 @@ object Query {
    * This avoids stdout pollution from runtime logs mixing with query results.
    */
   private def writeResult(json: String): Unit = {
-    val resultPath = Paths.get("/query/result.json")
+    val resultPath = Paths.get(queryResultPath)
     try {
       Files.createDirectories(resultPath.getParent)
       Files.writeString(resultPath, json)
