@@ -278,6 +278,7 @@ handleConnection sock = do
                             , encode $ object
                                 [ "status" .= ("error" :: String)
                                 , "error" .= ("No handler for path: " ++ path)
+                                , "available" .= Map.keys handlers
                                 ]
                             )
                         Just fn -> do
