@@ -10,20 +10,37 @@
  *   #include <the0/query.h>
  *   #include <the0/state.h>  // If needed in handlers
  *
+ *   using json = nlohmann::json;
+ *
  *   int main() {
  *       the0::query::handler("/portfolio", [](const the0::query::Request& req) {
  *           auto positions = the0::state::get_or("positions", json::array());
  *           return json{{"positions", positions}, {"count", positions.size()}};
  *       });
  *
- *       the0::query::handler("/status", [](const the0::query::Request& req) {
- *           auto symbol = req.get("symbol", "BTC/USD");
- *           return json{{"symbol", symbol}, {"active", true}};
+ *       // A param read with its JSON type, and a handler that can fail.
+ *       the0::query::handler("/trades", [](const the0::query::Request& req) {
+ *           int limit = req.get_as("limit", 10);
+ *           auto trades = the0::state::get("trades");
+ *           if (!trades) {
+ *               throw std::runtime_error("No trades yet");
+ *           }
+ *           return json{{"limit", limit}, {"trades", *trades}};
  *       });
  *
  *       the0::query::run();
  *       return 0;
  *   }
+ *
+ * Params are JSON values. An ephemeral query reads them from QUERY_PARAMS;
+ * the query server reads them from a JSON object body, or else from the URL
+ * query string, where every value is a string. req.get() returns a param as
+ * text (a non-string value as its JSON text), and req.get_as<T>() and
+ * req.values() keep the JSON types.
+ *
+ * A handler fails by throwing. The query answers
+ * {"status": "error", "error": <message>}: the query server responds 500 and
+ * keeps serving, and an ephemeral query exits 1.
  */
 
 #ifndef THE0_QUERY_H
@@ -121,14 +138,21 @@ std::optional<T> json_as(const json& value) {
  */
 class Request {
 public:
+    /** The query path, such as "/portfolio". */
     std::string path;
+    /**
+     * The params as text: a string as it is, any other JSON value as its
+     * JSON text, and a null left out. values() keeps their JSON types.
+     */
     std::map<std::string, std::string> params;
 
+    /** A request whose params are all strings. */
     Request(const std::string& p, const std::map<std::string, std::string>& prms)
         : path(p), params(prms), values_(prms) {}
 
     /**
-     * Get a parameter value.
+     * Get a parameter as text: a string as it is, any other JSON value as
+     * its JSON text. A null param reads as missing.
      * @param key The parameter key
      * @return The parameter value or empty string if not found
      */
@@ -138,7 +162,7 @@ public:
     }
 
     /**
-     * Get a parameter value with a default.
+     * Get a parameter as text, like get(key), with a default.
      * @param key The parameter key
      * @param default_value The default value if not found
      * @return The parameter value or the default
@@ -149,14 +173,16 @@ public:
     }
 
     /**
-     * Check if a parameter exists.
+     * Check if a parameter exists. A null param counts as missing, as it
+     * does for get().
      */
     bool has(const std::string& key) const {
         return params.find(key) != params.end();
     }
 
     /**
-     * A request from params with their JSON types.
+     * A request from params with their JSON types. Anything but a JSON
+     * object gives no params.
      * @param path The query path
      * @param values A JSON object of params
      */
@@ -186,6 +212,15 @@ public:
 
     /**
      * A param read as T, or std::nullopt when it is missing or is not a T.
+     *
+     * - A string param is parsed as T when it is not one already, so
+     *   get_as<int>("limit") reads "5" from a URL query string as 5.
+     * - Numbers are not converted between kinds: 0.25 is not an int, true
+     *   is not a number, and an integer must fit in T.
+     * - Asked for a std::string, it gives any other value as its JSON text,
+     *   as get() does, and a null param as std::nullopt.
+     * - Asked for a json, it gives the value as it is, null included.
+     *
      * @param key The parameter key
      */
     template <typename T>
