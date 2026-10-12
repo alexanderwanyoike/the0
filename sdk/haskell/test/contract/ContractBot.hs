@@ -98,9 +98,8 @@ perform step request bound = case op of
     "state.exists" -> Bool <$> State.exists (text "key")
     "state.clear" -> Null <$ State.clear
 
-    "query.params" -> pure (toJSON (Query.reqParams req))
-    "query.param" -> pure $
-        maybe (value "default") toJSON (Map.lookup (text "key") (Query.reqParams req))
+    "query.params" -> pure (toJSON (Query.reqValues req))
+    "query.param" -> pure $ fromMaybe (value "default") (Query.getParamAs req (text "key"))
     "query.config" -> Query.getConfig
 
     _ -> Prelude.error ("contract bot: unknown op " ++ show op)

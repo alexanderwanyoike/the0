@@ -57,8 +57,7 @@ portAttempts = 3
 -- says how the list is kept.
 knownFailures :: [(String, String)]
 knownFailures =
-    [ ("query-ephemeral-params", "ephemeral params turn every value into a string")
-    , ("query-server-params-json-body", "the query server reads params from the query string only")
+    [ ("query-server-params-json-body", "the query server reads params from the query string only")
     ]
 
 casesDir :: IO FilePath
