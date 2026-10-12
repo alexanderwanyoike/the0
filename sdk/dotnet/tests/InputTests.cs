@@ -87,9 +87,7 @@ public class InputTests : IDisposable
         Input.Log("Test message");
         var output = GetCapturedStderr();
 
-        Assert.Contains("\"timestamp\":", output);
-        // Timestamp should be numeric (Unix ms)
-        Assert.Matches(@"""timestamp"":\d+", output);
+        Assert.Matches(@"""timestamp"":""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z""", output);
     }
 
     [Fact]
@@ -207,9 +205,7 @@ public class InputTests : IDisposable
         Input.Metric("heartbeat", new { });
         var output = GetCapturedStdout();
 
-        Assert.Contains("\"timestamp\":", output);
-        // Timestamp should be numeric (Unix ms)
-        Assert.Matches(@"""timestamp"":\d+", output);
+        Assert.Matches(@"""timestamp"":""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z""", output);
     }
 
     [Fact]

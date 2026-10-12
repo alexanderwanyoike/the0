@@ -23,8 +23,6 @@ public class ContractTests
         ["bot-error"] = "Error() does not print its message on stderr",
         ["bot-error-with-data"] = "Error() ignores its data and does not print its message on stderr",
         ["bot-success-with-data"] = "Success() ignores its data",
-        ["output-log"] = "log timestamps are epoch milliseconds",
-        ["output-metric"] = "metric timestamps are epoch milliseconds",
         ["query-ephemeral-params"] = "a non-string value in QUERY_PARAMS drops every param, and the typed accessors are stubs",
         ["query-ephemeral-read-only-before-key-check"] = "State throws The0.ReadOnlyStateError, not the Query.ReadOnlyStateError the query module documents",
         ["query-ephemeral-state-read-only"] = "State throws The0.ReadOnlyStateError, not the Query.ReadOnlyStateError the query module documents",
