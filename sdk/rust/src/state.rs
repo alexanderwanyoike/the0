@@ -27,7 +27,7 @@
 //!     let keys = state::list();
 //!
 //!     // Delete a key
-//!     state::delete("portfolio");
+//!     state::delete("portfolio").ok();
 //!
 //!     // Clear all state
 //!     state::clear().ok();
@@ -50,7 +50,7 @@ pub enum StateError {
     /// JSON serialization/deserialization error
     Json(serde_json::Error),
     /// Attempted to modify state in query mode
-    ReadOnly(String),
+    ReadOnly(ReadOnlyStateError),
 }
 
 impl std::fmt::Display for StateError {
@@ -59,7 +59,7 @@ impl std::fmt::Display for StateError {
             StateError::InvalidKey(msg) => write!(f, "Invalid state key: {}", msg),
             StateError::Io(e) => write!(f, "IO error: {}", e),
             StateError::Json(e) => write!(f, "JSON error: {}", e),
-            StateError::ReadOnly(msg) => write!(f, "Read-only state: {}", msg),
+            StateError::ReadOnly(e) => write!(f, "Read-only state: {}", e),
         }
     }
 }
@@ -69,7 +69,32 @@ impl std::error::Error for StateError {
         match self {
             StateError::Io(e) => Some(e),
             StateError::Json(e) => Some(e),
+            StateError::ReadOnly(e) => Some(e),
             _ => None,
+        }
+    }
+}
+
+/// The error a state write fails with in query mode, where state is
+/// read-only. The query module offers this same type as
+/// `query::ReadOnlyStateError`.
+#[derive(Debug)]
+pub struct ReadOnlyStateError {
+    pub message: String,
+}
+
+impl std::fmt::Display for ReadOnlyStateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ReadOnlyStateError {}
+
+impl ReadOnlyStateError {
+    pub fn new(message: &str) -> Self {
+        Self {
+            message: message.to_string(),
         }
     }
 }
@@ -101,7 +126,9 @@ fn get_key_path(key: &str) -> PathBuf {
 /// Validate that a key is safe to use as a filename.
 fn validate_key(key: &str) -> Result<(), StateError> {
     if key.is_empty() {
-        return Err(StateError::InvalidKey("State key cannot be empty".to_string()));
+        return Err(StateError::InvalidKey(
+            "State key cannot be empty".to_string(),
+        ));
     }
     if key.contains('/') || key.contains('\\') || key.contains("..") {
         return Err(StateError::InvalidKey(
@@ -120,11 +147,10 @@ fn is_query_mode() -> bool {
 /// Returns an error if in query mode.
 fn check_write_allowed() -> Result<(), StateError> {
     if is_query_mode() {
-        return Err(StateError::ReadOnly(
+        return Err(StateError::ReadOnly(ReadOnlyStateError::new(
             "State modifications are not allowed during query execution. \
-             Queries are read-only. Use state::get() to read state values."
-                .to_string(),
-        ));
+             Queries are read-only. Use state::get() to read state values.",
+        )));
     }
     Ok(())
 }
@@ -211,7 +237,7 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 
 /// Delete a key from persistent state.
 ///
-/// Note: This function will return false if called during query execution.
+/// Note: This function will return an error if called during query execution.
 ///
 /// # Arguments
 ///
@@ -219,27 +245,32 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 ///
 /// # Returns
 ///
-/// `true` if the key existed and was deleted, `false` otherwise.
-/// Also returns `false` if in query mode (queries are read-only).
+/// `Ok(true)` if the key existed and was deleted, `Ok(false)` if it did not exist.
+///
+/// # Errors
+///
+/// Returns `StateError::ReadOnly` if called during query execution (queries are read-only),
+/// `StateError::InvalidKey` for an invalid key, and `StateError::Io` when the
+/// key's file exists but cannot be removed.
 ///
 /// # Example
 ///
 /// ```rust,no_run
 /// use the0_sdk::state;
 ///
-/// if state::delete("old_data") {
+/// if state::delete("old_data").expect("Failed to delete state") {
 ///     println!("Cleaned up old data");
 /// }
 /// ```
-pub fn delete(key: &str) -> bool {
-    if check_write_allowed().is_err() {
-        return false;
-    }
-    if validate_key(key).is_err() {
-        return false;
-    }
+pub fn delete(key: &str) -> Result<bool, StateError> {
+    check_write_allowed()?;
+    validate_key(key)?;
     let filepath = get_key_path(key);
-    fs::remove_file(&filepath).is_ok()
+    match fs::remove_file(&filepath) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// List all keys in persistent state.
@@ -448,7 +479,7 @@ mod tests {
         let _temp = setup_test_env();
         set("to_delete", &"value").unwrap();
         assert!(exists("to_delete"));
-        let result = delete("to_delete");
+        let result = delete("to_delete").unwrap();
         assert!(result);
         assert!(!exists("to_delete"));
     }
@@ -457,8 +488,20 @@ mod tests {
     #[serial]
     fn test_delete_nonexistent_key() {
         let _temp = setup_test_env();
-        let result = delete("nonexistent");
+        let result = delete("nonexistent").unwrap();
         assert!(!result);
+    }
+
+    #[test]
+    #[serial]
+    fn test_delete_reports_a_failed_removal() {
+        let temp = setup_test_env();
+        // A directory where the key's file belongs cannot be removed as a file.
+        fs::create_dir(temp.path().join("stuck.json")).unwrap();
+
+        let result = delete("stuck");
+
+        assert!(matches!(result, Err(StateError::Io(_))), "{result:?}");
     }
 
     #[test]
@@ -535,6 +578,17 @@ mod tests {
             StateError::InvalidKey(msg) => assert!(msg.to_lowercase().contains("path")),
             _ => panic!("Expected InvalidKey error"),
         }
+    }
+
+    #[test]
+    #[serial]
+    fn test_invalid_key_on_delete() {
+        let _temp = setup_test_env();
+        let result = delete("../escape");
+        assert!(
+            matches!(result, Err(StateError::InvalidKey(_))),
+            "{result:?}"
+        );
     }
 
     #[test]

@@ -35,7 +35,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-the0-sdk = "0.1"
+the0-sdk = "0.4"
 serde_json = "1.0"  # Required for config access
 ```
 
@@ -83,13 +83,33 @@ Parse configuration as a HashMap for easier access.
 
 Output success result and continue execution.
 
+### `input::success_with_data(message: &str, data: &Value)`
+
+Output success result with `data` under its `data` key, and continue execution.
+
 ### `input::error(message: &str) -> !`
 
-Output error result and exit with code 1.
+Output error result, print the message on stderr as an `error` log line, and exit with code 1.
+
+### `input::error_with_data(message: &str, data: &Value) -> !`
+
+Like `input::error`, with `data` under the result's `data` key. The log line carries only the message.
 
 ### `input::result(data: &Value)`
 
 Output custom JSON result.
+
+### `input::metric(metric_type: &str, data: &Value)` and `input::log(message, data, level)`
+
+Print a metric line on stdout or a log line on stderr, each with a UTC ISO 8601 `timestamp`.
+
+### `query::handler(path, handler)` and `query::try_handler(path, handler)`
+
+Register a query handler. A `try_handler` handler returns `Result<Value, HandlerError>`, and an `Err` answers the query as an error. Params are JSON values: `req.get(key)` returns one as text (a non-string as its JSON text, a `null` as `None`), `req.get_as::<T>(key)` deserializes it (parsing a string value, such as `"5"` from a query string, when it has to), and `req.values()` returns them all.
+
+### `state::delete(key: &str) -> Result<bool, StateError>`
+
+Delete a key, returning whether it existed. Like `state::set` and `state::clear`, it fails with `StateError::ReadOnly(query::ReadOnlyStateError)` during a query.
 
 ## Example Bot
 
