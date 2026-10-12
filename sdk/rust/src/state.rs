@@ -237,7 +237,7 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 
 /// Delete a key from persistent state.
 ///
-/// Note: This function will return false if called during query execution.
+/// Note: This function will return an error if called during query execution.
 ///
 /// # Arguments
 ///
@@ -246,7 +246,10 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 /// # Returns
 ///
 /// `Ok(true)` if the key existed and was deleted, `Ok(false)` otherwise.
-/// Also returns `Ok(false)` if in query mode (queries are read-only).
+///
+/// # Errors
+///
+/// Returns `StateError::ReadOnly` if called during query execution (queries are read-only).
 ///
 /// # Example
 ///
@@ -258,9 +261,7 @@ pub fn set<T: Serialize>(key: &str, value: &T) -> Result<(), StateError> {
 /// }
 /// ```
 pub fn delete(key: &str) -> Result<bool, StateError> {
-    if check_write_allowed().is_err() {
-        return Ok(false);
-    }
+    check_write_allowed()?;
     if validate_key(key).is_err() {
         return Ok(false);
     }
