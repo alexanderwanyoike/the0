@@ -323,13 +323,20 @@ object Query {
     Input.log(s"Query server started on port $port")
 
     while (true) {
-      try {
-        val clientSocket = serverSocket.accept()
-        handleConnection(clientSocket)
-      } catch {
-        case e: Exception =>
-          System.err.println(s"""{"_log": "error", "message": "Error handling request: ${escapeJson(e.getMessage)}"}""")
-      }
+      serveConnection(serverSocket)
+    }
+  }
+
+  /**
+   * Accept one connection and answer it, printing any error instead of throwing it.
+   */
+  private[the0] def serveConnection(serverSocket: ServerSocket): Unit = {
+    try {
+      val clientSocket = serverSocket.accept()
+      handleConnection(clientSocket)
+    } catch {
+      case e: Exception =>
+        System.err.println(s"""{"_log": "error", "message": "Error handling request: ${escapeJson(e.getMessage)}"}""")
     }
   }
 
