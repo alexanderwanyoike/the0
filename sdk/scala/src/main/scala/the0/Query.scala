@@ -48,13 +48,17 @@ object Query {
   /**
    * Request object passed to handlers (Express-like).
    *
+   * Build one with `Request(path, params)` or `Request.fromJson(path, jsonParams)`, which
+   * keep `params` and `jsonParams` in step.
+   *
    * @param path The query path
-   * @param params Each parameter as text
+   * @param params Each parameter as text: a string as itself, any other JSON value as its JSON text
    * @param jsonParams Each parameter as the JSON value it was sent as
    */
   case class Request(path: String, params: Map[String, String], jsonParams: Map[String, JsonValue]) {
     /**
-     * Get a parameter value.
+     * Get a parameter value as text: a string as itself, any other JSON value as its
+     * JSON text, such as `5`, `true`, `null` or `{"side":"buy"}`.
      * @param key The parameter key
      * @return Some(value) if found, None otherwise
      */
