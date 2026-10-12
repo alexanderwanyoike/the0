@@ -54,7 +54,7 @@ module The0.Query
 
 import Control.Exception (catch, SomeException)
 import Control.Monad (forM_, when)
-import Data.Aeson (FromJSON, Value(..), decode, encode, object, (.=), ToJSON)
+import Data.Aeson (FromJSON, Result(..), Value(..), decode, encode, fromJSON, object, (.=), ToJSON)
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Key (fromString, toText)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -96,7 +96,10 @@ reqValues (RequestValues _ values) = values
 -- | A param decoded into @a@, or 'Nothing' when it is missing or does not
 -- decode.
 getParamAs :: FromJSON a => Request -> String -> Maybe a
-getParamAs _ _ = Nothing
+getParamAs req key = Map.lookup key (reqValues req) >>= \value ->
+    case fromJSON value of
+        Success typed -> Just typed
+        Error _ -> Nothing
 
 textView :: Request -> (String, Map.Map String String)
 textView (RequestValues path values) = (path, Map.map valueToString values)
