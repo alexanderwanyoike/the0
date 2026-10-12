@@ -87,6 +87,14 @@ TEST_SUITE("the0::success") {
         CHECK(json["data"] == the0::json{{"order_id", "o-1"}, {"filled", 0.5}});
     }
 
+    TEST_CASE("replaces bytes that are not UTF-8") {
+        ResultFileContext ctx;
+        REQUIRE_NOTHROW(the0::success("Bought at caf\xE9"));
+
+        auto json = the0::json::parse(ctx.read_result());
+        CHECK(json["message"] == "Bought at caf\xEF\xBF\xBD");
+    }
+
     TEST_CASE("handles very long messages") {
         ResultFileContext ctx;
         std::string long_message(10000, 'x');

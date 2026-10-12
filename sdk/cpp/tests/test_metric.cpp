@@ -94,6 +94,15 @@ TEST_SUITE("the0::metric") {
         std::string output = capture.get();
         CHECK(output.back() == '\n');
     }
+
+    TEST_CASE("replaces bytes that are not UTF-8") {
+        CaptureStdout capture;
+        REQUIRE_NOTHROW(the0::metric("caf\xE9", {{"venue", "caf\xE9"}}));
+
+        auto json = the0::json::parse(capture.get());
+        CHECK(json["_metric"] == "caf\xEF\xBF\xBD");
+        CHECK(json["venue"] == "caf\xEF\xBF\xBD");
+    }
 }
 
 TEST_SUITE("the0::log") {
@@ -211,6 +220,14 @@ TEST_SUITE("the0::log") {
 
         std::string output = capture.get();
         CHECK(output.back() == '\n');
+    }
+
+    TEST_CASE("replaces bytes that are not UTF-8") {
+        CaptureStderr capture;
+        REQUIRE_NOTHROW(the0::log("caf\xE9 closed"));
+
+        auto json = the0::json::parse(capture.get());
+        CHECK(json["message"] == "caf\xEF\xBF\xBD closed");
     }
 }
 
