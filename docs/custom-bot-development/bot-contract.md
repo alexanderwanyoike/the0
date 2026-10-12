@@ -267,7 +267,8 @@ A case an SDK does not pass yet is listed in its harness as an expected failure,
 | SDK | Harness |
 |---|---|
 | Python | `sdk/python/tests/test_contract.py` |
-| Node.js, Rust, .NET, Scala, Haskell, C++ | not yet |
+| Node.js | `sdk/nodejs/src/contract.test.ts` |
+| Rust, .NET, Scala, Haskell, C++ | not yet |
 
 ## Bringing the SDKs into line
 
@@ -275,14 +276,14 @@ These are the rules each SDK does not follow yet. The SDKs come into line one at
 
 | Rule | Not followed yet by |
 |---|---|
-| `error()` prints its message on stderr | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| `error()` prints its message on stderr | Rust, .NET, Scala, Haskell, C++ |
 | Metric and log timestamps are ISO 8601 strings (these SDKs write epoch milliseconds as a number) | Rust, .NET, Scala, Haskell, C++ |
-| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Node.js, Rust, .NET, Scala, Haskell, C++ |
-| One read-only error type (these SDKs define a second, unused type in the query module) | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| The query server's start-up line is a log line (these SDKs print `{"_log": "info", ...}` with no timestamp) | Rust, .NET, Scala, Haskell, C++ |
+| One read-only error type (these SDKs define a second, unused type in the query module) | Rust, .NET, Scala, Haskell, C++ |
 | `state.delete()` fails in query mode (Rust returns `false` instead) | Rust |
 | Ephemeral query params keep their JSON types | Rust and .NET (drop every param when any is not a string), Scala (keeps only string pairs), Haskell and C++ (turn every value into a string) |
-| The query server reads the JSON body | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| The query server reads the JSON body | Rust, .NET, Scala, Haskell, C++ |
 | The query server URL-decodes the query string | Rust |
-| The query server's 404 includes `available` | Node.js, Rust, .NET, Scala, Haskell, C++ |
+| The query server's 404 includes `available` | Rust, .NET, Scala, Haskell, C++ |
 | `/info` lists `/info` | Rust |
 | A query handler can report an error (a Rust handler can only panic, which ends the process; Rust gains a way that keeps existing handlers compiling) | Rust |
