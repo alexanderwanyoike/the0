@@ -110,11 +110,13 @@ success msg = do
 -- | Output an error result to the result file and exit with code 1.
 --
 -- Writes a JSON object with status "error" and the provided message,
--- then terminates the process with exit code 1.
+-- prints the message on stderr as an @error@ log line, then terminates the
+-- process with exit code 1.
 error :: String -> IO a
 error msg = do
     let escaped = escapeJson msg
     writeResult $ "{\"status\":\"error\",\"message\":\"" ++ escaped ++ "\"}"
+    logError msg Nothing
     exitWith (ExitFailure 1)
 
 -- | Output a custom JSON result to the result file.
