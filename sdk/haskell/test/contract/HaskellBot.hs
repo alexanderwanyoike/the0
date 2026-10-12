@@ -8,9 +8,10 @@
 --   keep working.
 -- * @/lazy-error@ returns a result that fails only once it is evaluated, as
 --   pure code calling @error@, @head []@ or @fromJust Nothing@ does.
--- * @/metric@ prints a metric line while the query server keeps running, as
---   a realtime bot does. GHC block-buffers stdout on a pipe, and the server
---   stops on SIGTERM, which flushes nothing.
+-- * @/metric@ and @/log@ print a line while the query server keeps running,
+--   as a realtime bot does. GHC block-buffers stdout on a pipe, the bot
+--   block-buffers stderr as any bot may, and the server stops on SIGTERM,
+--   which flushes nothing.
 module HaskellBot
     ( haskellBotArg
     , main
@@ -25,6 +26,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Harness (runCase, sandboxQueryResult)
 import System.Environment (getExecutablePath)
+import System.IO (BufferMode(..), hSetBuffering, stderr)
 import Test.Hspec
 import qualified The0.Input as Input
 import qualified The0.Query as Query
@@ -34,6 +36,7 @@ haskellBotArg = "haskell-bot"
 
 main :: FilePath -> IO ()
 main queryResultPath = do
+    hSetBuffering stderr (BlockBuffering Nothing)
     Query.setResultPath queryResultPath
     Query.handler "/echo" $ \req -> return $ object
         [ "symbol" .= Query.getParam req "symbol" "none"
@@ -47,6 +50,9 @@ main queryResultPath = do
     Query.handler "/metric" $ \_ -> do
         Input.metric "price" (object ["value" .= (45000.5 :: Double)])
         return (object [])
+    Query.handler "/log" $ \_ -> do
+        Input.logInfo "Prices checked" Nothing
+        return (object [])
     Query.run
 
 spec :: Spec
@@ -59,8 +65,9 @@ spec = do
         it "answers its message in an ephemeral query" $ check lazyErrorEphemeralCase
         it "answers 500 with its message in the query server, which keeps serving" $ check lazyErrorServerCase
 
-    describe "a query server that prints lines" $
+    describe "a query server that prints lines" $ do
         it "flushes a metric line as soon as it prints it" $ check metricCase
+        it "flushes a log line as soon as it prints it" $ check logCase
 
 check :: Value -> Expectation
 check case_ = do
@@ -206,3 +213,31 @@ metricCase = object
             ]
         ]
     ]
+
+logCase :: Value
+logCase = object
+    [ "env" .= env [("BOT_TYPE", "realtime"), ("THE0_QUERY_PORT", "{{port}}")]
+    , "requests" .=
+        [ object
+            [ "method" .= ("POST" :: String)
+            , "target" .= ("/log" :: String)
+            , "expect" .= object
+                [ "status" .= (200 :: Int)
+                , "body" .= object ["status" .= ("ok" :: String), "data" .= object []]
+                ]
+            ]
+        ]
+    , "expect" .= object
+        [ "stderr" .=
+            [ logLine "info" (object ["$match" .= ("string" :: String)])
+            , logLine "info" ("Prices checked" :: String)
+            ]
+        ]
+    ]
+  where
+    logLine :: Aeson.ToJSON a => String -> a -> Value
+    logLine level message = object
+        [ "level" .= level
+        , "message" .= message
+        , "timestamp" .= object ["$match" .= ("timestamp" :: String)]
+        ]
