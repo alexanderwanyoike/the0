@@ -5,9 +5,11 @@ name: Publish SDKs to npm
 # this file breaks publishing until the npm config is updated to match.
 #
 # Idempotent: a package whose version already exists on npm is skipped, so
-# running the workflow publishes only what has been bumped.
+# each release tag publishes only what has been bumped.
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
