@@ -73,6 +73,14 @@ object Input {
   }
 
   /**
+   * Output a success result with data to the result file.
+   *
+   * @param message The success message to include in the output
+   * @param data JSON text placed under the result's "data" key
+   */
+  def success(message: String, data: String): Unit = success(message)
+
+  /**
    * Output an error result to the result file and exit with code 1.
    *
    * @param message The error message to include in the output
@@ -82,6 +90,14 @@ object Input {
     writeResult(s"""{"status":"error","message":"$escaped"}""")
     sys.exit(1)
   }
+
+  /**
+   * Output an error result with data to the result file and exit with code 1.
+   *
+   * @param message The error message to include in the output
+   * @param data JSON text placed under the result's "data" key
+   */
+  def error(message: String, data: String): Nothing = error(message)
 
   /**
    * Output a custom result to the result file.
