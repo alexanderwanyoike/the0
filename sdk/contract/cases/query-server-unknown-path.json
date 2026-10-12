@@ -16,6 +16,7 @@
       "target": "/status",
       "expect": {
         "status": 404,
+        "headers": {"Content-Type": "application/json"},
         "body": {
           "status": "error",
           "error": "No handler for path: /status",
