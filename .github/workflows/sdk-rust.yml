@@ -5,10 +5,12 @@ on:
     branches: [ main, dev ]
     paths:
       - 'sdk/rust/**'
+      - 'sdk/contract/**'
       - '.github/workflows/sdk-rust.yml'
   pull_request:
     paths:
       - 'sdk/rust/**'
+      - 'sdk/contract/**'
       - '.github/workflows/sdk-rust.yml'
   workflow_dispatch:
 

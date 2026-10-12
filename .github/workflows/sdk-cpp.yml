@@ -5,10 +5,12 @@ on:
     branches: [ main, dev ]
     paths:
       - 'sdk/cpp/**'
+      - 'sdk/contract/**'
       - '.github/workflows/sdk-cpp.yml'
   pull_request:
     paths:
       - 'sdk/cpp/**'
+      - 'sdk/contract/**'
       - '.github/workflows/sdk-cpp.yml'
   workflow_dispatch:
 
