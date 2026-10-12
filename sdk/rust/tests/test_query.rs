@@ -142,7 +142,29 @@ fn query_request_new_gives_string_values() {
     let req = query::QueryRequest::new("/test", params);
 
     assert_eq!(req.values()["limit"], json!("5"));
-    assert_eq!(req.get_as::<u32>("limit"), None);
+}
+
+#[test]
+fn query_request_get_as_parses_a_string_param() {
+    let params = [
+        ("limit", "5"),
+        ("live", "true"),
+        ("symbols", r#"["AAPL","MSFT"]"#),
+        ("symbol", "BTC/USD"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value.to_string()))
+    .collect();
+    let req = query::QueryRequest::new("/test", params);
+
+    assert_eq!(req.get_as::<usize>("limit"), Some(5));
+    assert_eq!(req.get_as::<bool>("live"), Some(true));
+    assert_eq!(
+        req.get_as::<Vec<String>>("symbols"),
+        Some(vec!["AAPL".to_string(), "MSFT".to_string()])
+    );
+    assert_eq!(req.get_as::<String>("limit"), Some("5".to_string()));
+    assert_eq!(req.get_as::<u32>("symbol"), None);
 }
 
 #[test]
