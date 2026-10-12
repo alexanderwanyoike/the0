@@ -269,17 +269,18 @@ public class InputTests : IDisposable
         // No assertion - just checking it doesn't throw
     }
 
-    [Fact]
-    public void Success_WithNullDataWritesNoDataKey()
+    /// <summary>
+    /// Runs <paramref name="write"/> with CODE_MOUNT_DIR pointing at a fresh
+    /// directory and returns the text of the result file it wrote.
+    /// </summary>
+    private static string WrittenResult(Action write)
     {
         var codeDir = Directory.CreateTempSubdirectory("the0_input_test_");
         try
         {
             Environment.SetEnvironmentVariable("CODE_MOUNT_DIR", codeDir.FullName.TrimStart('/'));
-            Input.Success("done", null);
-
-            var result = JsonNode.Parse(File.ReadAllText(Path.Combine(codeDir.FullName, "result.json")))!.AsObject();
-            Assert.False(result.ContainsKey("data"));
+            write();
+            return File.ReadAllText(Path.Combine(codeDir.FullName, "result.json"));
         }
         finally
         {
@@ -288,23 +289,21 @@ public class InputTests : IDisposable
     }
 
     [Fact]
+    public void Success_WithNullDataWritesNoDataKey()
+    {
+        var result = JsonNode.Parse(WrittenResult(() => Input.Success("done", null)))!.AsObject();
+
+        Assert.False(result.ContainsKey("data"));
+    }
+
+    [Fact]
     public void Success_WritesValidJsonForControlCharacters()
     {
-        var codeDir = Directory.CreateTempSubdirectory("the0_input_test_");
-        try
-        {
-            Environment.SetEnvironmentVariable("CODE_MOUNT_DIR", codeDir.FullName.TrimStart('/'));
-            Input.Success("line one\nline two\ttabbed");
+        var text = WrittenResult(() => Input.Success("line one\nline two\ttabbed"));
 
-            var text = File.ReadAllText(Path.Combine(codeDir.FullName, "result.json"));
-            JsonNode? result = null;
-            Assert.Null(Record.Exception(() => result = JsonNode.Parse(text)));
-            Assert.Equal("line one\nline two\ttabbed", result!["message"]!.GetValue<string>());
-        }
-        finally
-        {
-            codeDir.Delete(recursive: true);
-        }
+        JsonNode? result = null;
+        Assert.Null(Record.Exception(() => result = JsonNode.Parse(text)));
+        Assert.Equal("line one\nline two\ttabbed", result!["message"]!.GetValue<string>());
     }
 
     #endregion
