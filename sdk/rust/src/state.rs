@@ -489,6 +489,18 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_delete_reports_a_failed_removal() {
+        let temp = setup_test_env();
+        // A directory where the key's file belongs cannot be removed as a file.
+        fs::create_dir(temp.path().join("stuck.json")).unwrap();
+
+        let result = delete("stuck");
+
+        assert!(matches!(result, Err(StateError::Io(_))), "{result:?}");
+    }
+
+    #[test]
+    #[serial]
     fn test_list_keys() {
         let _temp = setup_test_env();
         set("key1", &"value1").unwrap();
