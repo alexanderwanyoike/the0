@@ -238,6 +238,21 @@ public class QueryTests : IDisposable
     }
 
     [Fact]
+    public void QueryRequest_TypedGetParsesAStringValueAsThatType()
+    {
+        var req = new Query.QueryRequest("/test", new Dictionary<string, string>
+        {
+            ["limit"] = "50",
+            ["live"] = "true",
+            ["symbols"] = """["AAPL","MSFT"]""",
+        });
+
+        Assert.Equal(50, Read(() => req.Get("limit", 10)));
+        Assert.True(Read(() => req.Get<bool>("live")));
+        Assert.Equal(new List<string> { "AAPL", "MSFT" }, Read(() => req.Get<List<string>>("symbols")));
+    }
+
+    [Fact]
     public void QueryRequest_TypedGetReturnsDefaultForMissing()
     {
         var req = TypedRequest();
