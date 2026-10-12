@@ -238,6 +238,15 @@ public class QueryTests : IDisposable
     }
 
     [Fact]
+    public void QueryRequest_TypedGetOfStringTreatsANullParamAsAbsent()
+    {
+        var req = TypedRequest();
+
+        Assert.Equal("start", Read(() => req.Get<string>("cursor", "start")));
+        Assert.Null(Read(() => req.Get<string>("cursor")));
+    }
+
+    [Fact]
     public void QueryRequest_TypedGetParsesAStringValueAsThatType()
     {
         var req = new Query.QueryRequest("/test", new Dictionary<string, string>
