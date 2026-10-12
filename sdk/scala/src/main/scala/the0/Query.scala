@@ -336,7 +336,7 @@ object Query {
       handleConnection(clientSocket)
     } catch {
       case e: Exception =>
-        System.err.println(s"""{"_log": "error", "message": "Error handling request: ${escapeJson(e.getMessage)}"}""")
+        Input.log(s"Error handling request: ${e.getMessage}", level = Input.LogLevel.Error)
     }
   }
 
