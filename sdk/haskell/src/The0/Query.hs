@@ -68,6 +68,7 @@ import System.Environment (lookupEnv)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
+import The0.Input (logInfo)
 import The0.State (ReadOnlyStateError(..))
 
 -- | Request object passed to handlers (Express-like).
@@ -241,10 +242,7 @@ runServer = do
     bind sock (SockAddrInet (fromIntegral port) 0)
     listen sock 10
 
-    hPutStrLn stderr $ BL.unpack $ encode $ object
-        [ "_log" .= ("info" :: String)
-        , "message" .= ("Query server started on port " ++ show port)
-        ]
+    logInfo ("Query server started on port " ++ show port) Nothing
 
     serverLoop sock
 
