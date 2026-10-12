@@ -48,7 +48,7 @@ import System.Environment (lookupEnv)
 import The0.Internal.Env (lookupEnvBytes)
 import System.Exit (exitWith, ExitCode(ExitFailure))
 import System.IO (hPutStrLn, stderr)
-import Control.Exception (catch, SomeException)
+import Control.Exception (catch, evaluate, SomeException)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 
@@ -97,6 +97,9 @@ resultFilePath = do
 -- | Write result to the result file.
 writeResult :: BL.ByteString -> IO ()
 writeResult content = do
+    -- Encoded before the file is opened, so a value that fails to evaluate
+    -- fails the bot instead of leaving an empty result behind.
+    _ <- evaluate (BL.length content)
     path <- resultFilePath
     BL.writeFile path content `catch` handleError
   where
