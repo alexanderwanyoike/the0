@@ -11,8 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"runtime/internal/model"
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/model"
 )
 
 // ---- Mock Implementations ----
@@ -690,7 +690,6 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 	assert.Equal(t, 1, mockK8s.CreateCalled, "should create pod for bot-1")
 	assert.Equal(t, 1, mockK8s.DeleteCalled, "should delete orphan pod")
 }
-
 
 func TestBotController_Reconcile_PropagatesNATSURLToSyncSidecar(t *testing.T) {
 	mockRepo := &MockBotRepository{

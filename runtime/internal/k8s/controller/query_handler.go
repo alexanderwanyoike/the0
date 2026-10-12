@@ -36,12 +36,12 @@ type K8sQueryHandler struct {
 
 // K8sQueryHandlerConfig contains configuration for the K8sQueryHandler.
 type K8sQueryHandlerConfig struct {
-	Clientset    *kubernetes.Clientset
-	Namespace    string
-	PodGenerator *podgen.PodGenerator
-	MinioClient  *minio.Client
+	Clientset     *kubernetes.Clientset
+	Namespace     string
+	PodGenerator  *podgen.PodGenerator
+	MinioClient   *minio.Client
 	StorageConfig *storage.Config
-	Logger       util.Logger
+	Logger        util.Logger
 }
 
 // NewK8sQueryHandler creates a new K8sQueryHandler instance.

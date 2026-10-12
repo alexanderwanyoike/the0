@@ -40,16 +40,16 @@ type SyncOptions struct {
 // SyncRunner runs sync in-process as a goroutine with proper lifecycle management.
 // This avoids subprocess timing issues - the runner signals when ready.
 type SyncRunner struct {
-	opts      SyncOptions
-	logger    util.Logger
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	ready     chan struct{}
-	initErr   error
-	syncers   []Syncer
-	syncMu    sync.Mutex
-	cleanup   func()
+	opts    SyncOptions
+	logger  util.Logger
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	ready   chan struct{}
+	initErr error
+	syncers []Syncer
+	syncMu  sync.Mutex
+	cleanup func()
 }
 
 // NewSyncRunner creates a new in-process sync runner.

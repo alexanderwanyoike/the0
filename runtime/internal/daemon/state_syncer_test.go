@@ -299,4 +299,3 @@ func TestStateSyncer_UploadTimeoutEnforced(t *testing.T) {
 	// That already proves the timeout wiring.
 	_ = errors.New // keep import if other asserts shift
 }
-

@@ -278,14 +278,14 @@ func TestCodeManager_Integration(t *testing.T) {
 func TestConfig_LoadFromEnv(t *testing.T) {
 	// Save original env vars
 	originalEnv := map[string]string{
-		"MINIO_ENDPOINT":          os.Getenv("MINIO_ENDPOINT"),
-		"MINIO_ACCESS_KEY":        os.Getenv("MINIO_ACCESS_KEY"),
-		"MINIO_SECRET_KEY":        os.Getenv("MINIO_SECRET_KEY"),
-		"MINIO_USE_SSL":           os.Getenv("MINIO_USE_SSL"),
-		"MINIO_CODE_BUCKET":       os.Getenv("MINIO_CODE_BUCKET"),
-		"MINIO_STATE_BUCKET":      os.Getenv("MINIO_STATE_BUCKET"),
-		"MAX_STATE_SIZE_MB":       os.Getenv("MAX_STATE_SIZE_MB"),
-		"MAX_STATE_FILE_SIZE_MB":  os.Getenv("MAX_STATE_FILE_SIZE_MB"),
+		"MINIO_ENDPOINT":         os.Getenv("MINIO_ENDPOINT"),
+		"MINIO_ACCESS_KEY":       os.Getenv("MINIO_ACCESS_KEY"),
+		"MINIO_SECRET_KEY":       os.Getenv("MINIO_SECRET_KEY"),
+		"MINIO_USE_SSL":          os.Getenv("MINIO_USE_SSL"),
+		"MINIO_CODE_BUCKET":      os.Getenv("MINIO_CODE_BUCKET"),
+		"MINIO_STATE_BUCKET":     os.Getenv("MINIO_STATE_BUCKET"),
+		"MAX_STATE_SIZE_MB":      os.Getenv("MAX_STATE_SIZE_MB"),
+		"MAX_STATE_FILE_SIZE_MB": os.Getenv("MAX_STATE_FILE_SIZE_MB"),
 	}
 
 	// Restore env vars after test
