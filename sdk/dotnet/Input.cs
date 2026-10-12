@@ -80,10 +80,7 @@ public static class Input
     /// Writes a JSON object with status "success" and the provided message.
     /// </summary>
     /// <param name="message">The success message to include in the output</param>
-    public static void Success(string message)
-    {
-        WriteResult(JsonSerializer.Serialize(new { status = "success", message }));
-    }
+    public static void Success(string message) => Success(message, null);
 
     /// <summary>
     /// Output a success result with data to the result file.
@@ -92,7 +89,20 @@ public static class Input
     /// </summary>
     /// <param name="message">The success message to include in the output</param>
     /// <param name="data">Any JSON-serializable value, or null for none</param>
-    public static void Success(string message, object? data) => Success(message);
+    public static void Success(string message, object? data)
+    {
+        WriteResult(StatusResult("success", message, data));
+    }
+
+    private static string StatusResult(string status, string message, object? data)
+    {
+        var result = new JsonObject { ["status"] = status, ["message"] = message };
+        if (data != null)
+        {
+            result["data"] = JsonSerializer.SerializeToNode(data);
+        }
+        return result.ToJsonString();
+    }
 
     /// <summary>
     /// Output an error result to the result file, log the message and exit with code 1.
