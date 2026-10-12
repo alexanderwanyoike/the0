@@ -121,8 +121,10 @@ pub mod input {
     }
 
     /// Output a success result with data to the result file.
-    pub fn success_with_data(message: &str, _data: &Value) {
-        success(message);
+    ///
+    /// Like [`success`], with `data` under the result's `data` key.
+    pub fn success_with_data(message: &str, data: &Value) {
+        write_result(&json!({ "status": "success", "message": message, "data": data }).to_string());
     }
 
     /// Output an error result to the result file and exit with code 1.
@@ -131,14 +133,24 @@ pub mod input {
     /// prints the message on stderr as an `error` log line, then terminates
     /// the process with exit code 1.
     pub fn error(message: &str) -> ! {
-        write_result(&json!({ "status": "error", "message": message }).to_string());
-        log(message, None, Some(LogLevel::Error));
-        std::process::exit(1);
+        fail(json!({ "status": "error", "message": message }), message)
     }
 
     /// Output an error result with data to the result file and exit with code 1.
-    pub fn error_with_data(message: &str, _data: &Value) -> ! {
-        error(message);
+    ///
+    /// Like [`error`], with `data` under the result's `data` key. The log line
+    /// carries only the message.
+    pub fn error_with_data(message: &str, data: &Value) -> ! {
+        fail(
+            json!({ "status": "error", "message": message, "data": data }),
+            message,
+        )
+    }
+
+    fn fail(result: Value, message: &str) -> ! {
+        write_result(&result.to_string());
+        log(message, None, Some(LogLevel::Error));
+        std::process::exit(1);
     }
 
     /// Output a custom JSON result to the result file.
