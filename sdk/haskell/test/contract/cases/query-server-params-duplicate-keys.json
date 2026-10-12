@@ -1,5 +1,5 @@
 {
-  "description": "A JSON body that repeats a key neither crashes nor hangs the query server, and it keeps serving.",
+  "description": "A JSON body that repeats a key is unreadable: the query server falls back to the query string, and keeps serving.",
   "entrypoint": "query",
   "env": {
     "BOT_ID": "contract-bot",
@@ -16,9 +16,9 @@
     {
       "method": "POST",
       "target": "/echo?limit=5",
-      "raw_body": "{\"limit\":5,\"limit\":5}",
+      "raw_body": "{\"limit\":7,\"limit\":8}",
       "content_type": "application/json",
-      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": 5}}}
+      "expect": {"status": 200, "body": {"status": "ok", "data": {"limit": "5"}}}
     },
     {
       "method": "GET",
