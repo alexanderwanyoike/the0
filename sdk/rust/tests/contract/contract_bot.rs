@@ -120,18 +120,16 @@ fn perform(step: &Value, request: Option<&QueryRequest>, bound: &Bound) -> Resul
             json!({ "bot_id": bot_id, "config": config })
         }
         "success" => {
-            if args.contains_key("data") {
-                return Err("this SDK's success() takes no data".into());
+            match args.get("data") {
+                Some(data) => input::success_with_data(&text("message"), data),
+                None => input::success(&text("message")),
             }
-            input::success(&text("message"));
             Value::Null
         }
-        "error" => {
-            if args.contains_key("data") {
-                return Err("this SDK's error() takes no data".into());
-            }
-            input::error(&text("message"))
-        }
+        "error" => match args.get("data") {
+            Some(data) => input::error_with_data(&text("message"), data),
+            None => input::error(&text("message")),
+        },
         "result" => {
             input::result(&args["value"]);
             Value::Null
