@@ -148,6 +148,15 @@ TEST_CASE("query::Request from JSON values") {
         CHECK(req.get("filter", "{}") == R"({"side":"buy"})");
         CHECK(req.has("live"));
     }
+
+    SUBCASE("string accessors treat a null param as absent") {
+        auto with_null = query::Request::from_values("/echo", {{"cursor", nullptr}});
+
+        CHECK(with_null.params.empty());
+        CHECK(with_null.get("cursor") == "");
+        CHECK(with_null.get("cursor", "start") == "start");
+        CHECK_FALSE(with_null.has("cursor"));
+    }
 }
 
 TEST_CASE("state read-only enforcement in query mode") {
