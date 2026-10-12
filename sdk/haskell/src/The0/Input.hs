@@ -37,6 +37,7 @@ module The0.Input
     ) where
 
 import Data.Aeson (Value(..), decode, encode, object, (.=), Object, ToJSON, toJSON)
+import Data.Aeson.Types (Pair)
 import Data.Aeson.Key (fromString)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -105,7 +106,7 @@ writeResult content = do
 --
 -- Writes a JSON object with status "success" and the provided message.
 success :: String -> IO ()
-success msg = result $ object ["status" .= ("success" :: String), "message" .= msg]
+success msg = result $ statusResult "success" msg []
 
 -- | Output an error result to the result file and exit with code 1.
 --
@@ -113,21 +114,23 @@ success msg = result $ object ["status" .= ("success" :: String), "message" .= m
 -- prints the message on stderr as an @error@ log line, then terminates the
 -- process with exit code 1.
 error :: String -> IO a
-error msg = do
-    result $ object ["status" .= ("error" :: String), "message" .= msg]
-    logError msg Nothing
-    exitWith (ExitFailure 1)
+error msg = failWith msg []
 
 -- | Output a success result carrying @data@ to the result file.
 successWithData :: ToJSON a => String -> a -> IO ()
-successWithData msg payload = result $ object
-    ["status" .= ("success" :: String), "message" .= msg, "data" .= payload]
+successWithData msg payload = result $ statusResult "success" msg ["data" .= payload]
 
 -- | Output an error result carrying @data@ to the result file and exit with
 -- code 1, as 'The0.Input.error' does.
 errorWithData :: ToJSON a => String -> a -> IO b
-errorWithData msg payload = do
-    result $ object ["status" .= ("error" :: String), "message" .= msg, "data" .= payload]
+errorWithData msg payload = failWith msg ["data" .= payload]
+
+statusResult :: String -> String -> [Pair] -> Value
+statusResult status msg extra = object $ ["status" .= status, "message" .= msg] ++ extra
+
+failWith :: String -> [Pair] -> IO a
+failWith msg extra = do
+    result $ statusResult "error" msg extra
     logError msg Nothing
     exitWith (ExitFailure 1)
 
