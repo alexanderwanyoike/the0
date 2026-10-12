@@ -312,33 +312,35 @@ val (botId, configJson) = Input.parse()
 
 ### Input.metric(type, data)
 
-Emits a metric to the platform dashboard:
+Emits a metric to the platform dashboard. The data is a JSON object as text, and the SDK adds a UTC ISO 8601 timestamp:
 
 ```scala
-Input.metric("price", Map("symbol" -> "AAPL", "value" -> 150.25))
-Input.metric("signal", Map("type" -> "BUY", "confidence" -> 0.85))
+Input.metric("price", """{"symbol":"AAPL","value":150.25}""")
+Input.metric("signal", """{"type":"BUY","confidence":0.85}""")
 ```
 
-### Input.log(message)
+### Input.log(message, data, level)
 
-Writes a log message:
+Writes a log line on stderr with a UTC ISO 8601 timestamp. `data`, a JSON object as text, and `level` are optional:
 
 ```scala
 Input.log(s"Processing $symbol")
-Input.log(s"Error: ${e.getMessage}")
+Input.log("Order placed", """{"order_id":"o-1"}""")
+Input.log(s"Error: ${e.getMessage}", level = Input.LogLevel.Error)
 ```
 
-### Input.success(message)
+### Input.success(message, data)
 
-Reports successful execution for scheduled bots:
+Reports successful execution for scheduled bots. The optional `data` is JSON text, placed under the result's `data` key:
 
 ```scala
 Input.success("Analysis complete")
+Input.success("Analysis complete", """{"signals":2}""")
 ```
 
-### Input.error(message)
+### Input.error(message, data)
 
-Reports failure and terminates with exit code 1:
+Reports failure: writes the error result, prints the message to the logs as an error line, and terminates with exit code 1. The optional `data` is JSON text and goes in the result only:
 
 ```scala
 if (prices.isEmpty) {
@@ -352,6 +354,20 @@ Outputs a custom JSON result:
 
 ```scala
 Input.resultRaw("""{"status":"success","trade_id":"abc123"}""")
+```
+
+### Query params
+
+A [query handler](./queries) reads each param in two ways. `req.get(key)` returns it as text: a string as itself, and any other JSON value as its JSON text, such as `5` or `{"side":"buy"}`. `req.getJson(key)` returns a `JsonValue` that keeps the JSON type:
+
+```scala
+Query.handler("/signals") { req =>
+  val limit = req.getJson("limit") match {
+    case Some(JsonValue.Num(n)) => n.toInt
+    case _ => 10
+  }
+  s"""{"limit": $limit}"""
+}
 ```
 
 ## Building
