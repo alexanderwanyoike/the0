@@ -6,10 +6,17 @@
 //! `contract-bot` as its first argument, and it then plays one case. Being one
 //! binary means the bot needs no build step of its own, and the harness owns
 //! `main`, so the test runner prints nothing on the bot's stdout.
+//!
+//! The cases describe a Linux container (absolute `/` paths, SIGTERM, signal
+//! exit statuses), so the harness is built on Unix only. Elsewhere the binary
+//! still needs a `main`, and it runs nothing.
 
+#[cfg(unix)]
 mod contract_bot;
+#[cfg(unix)]
 mod harness;
 
+#[cfg(unix)]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some(harness::CONTRACT_BOT_ARG) {
@@ -18,3 +25,6 @@ fn main() {
     }
     harness::run();
 }
+
+#[cfg(not(unix))]
+fn main() {}
