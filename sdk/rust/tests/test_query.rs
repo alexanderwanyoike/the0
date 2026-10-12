@@ -167,7 +167,7 @@ fn state_write_fails_with_the_query_modules_read_only_error() {
 }
 
 #[test]
-fn state_delete_throws_in_query_mode() {
+fn state_delete_fails_in_query_mode() {
     let mut env = EnvGuard::new();
     env.set("QUERY_PATH", "/portfolio");
     env.set("STATE_DIR", "/tmp/the0-test-state");
