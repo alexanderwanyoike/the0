@@ -9,7 +9,7 @@ order: 17
 This page is for SDK authors and for anyone changing how the runtime starts bots. It states what a bot, its SDK and the runtime agree on. Bot authors don't need it: the SDK pages cover the same ground through each SDK's API.
 
 Three parties take part:
-- **The runtime.** `runtime execute` runs inside the bot's container. It downloads the code and the state, sets the environment, starts the entrypoint, and saves state and logs.
+- **The runtime.** `runtime execute` runs inside the bot's container. It downloads the code and the state, sets the environment, starts the entrypoint, settles the run's exit code from its result, and saves state and logs.
 - **The wrappers.** `runtime/wrappers/python_bot.py` and `runtime/wrappers/node_bot.js` start Python and Node.js bot entrypoints and call their `main`. Compiled languages have no wrapper.
 - **The SDK.** It reads the environment and writes the outputs described here.
 
@@ -72,7 +72,7 @@ The file exports `main(bot_id, config)`. The wrapper does the following, in orde
    - Python takes the module's `main`.
    - Node.js takes `module.main`, then `module.default`, then the module itself. Whichever it takes must be a function.
 4. Calls `main(BOT_ID, <BOT_CONFIG parsed as JSON>)`. A Node.js `main` may return a promise.
-5. Settles the result and the exit code, as described in [What the wrappers add](#what-the-wrappers-add).
+5. Settles the result, as described in [What the wrappers add](#what-the-wrappers-add), and exits with the bot's exit code.
 
 If the file cannot be loaded, the wrapper exits 1. The Node.js wrapper also writes an error result.
 
@@ -109,24 +109,37 @@ Each call replaces the file, so the bot's last call wins. An SDK never writes a 
 2. Prints the message on stderr as a log line at level `error`, exactly as `log(message, "error")` would: `{"level": "error", "message": "...", "timestamp": "..."}`. The `data` goes in the result only.
 3. Exits with code 1. Nothing after it runs.
 
-Nothing reads a bot run's result file once the run is over, so the printed line and the exit code are the only trace a failed run leaves.
+The result file is not kept once the run is over: the runtime only reads it to settle the run (see [Exit codes](#exit-codes)). The logs and the exit code are the only trace a failed run leaves.
 
 ### Exit codes
 
-- **0 means the run succeeded; anything else means it failed.** The runtime passes the process's exit code through as the container's, so a non-zero exit marks the Kubernetes Job or the Docker run as failed. Failed scheduled runs are not retried.
-- **An uncaught error exits non-zero.** The SDK writes no result for it; the wrappers do, as described next.
-- **An error result fails the run, even when the process would exit 0.** An error result is a result file holding a JSON object whose `status` is exactly `"error"`, for example after `result({"status": "error", ...})` and a normal return. The result file is the bot's own verdict, so the run must show as failed everywhere.
-  - For Python and Node.js, the wrappers enforce this.
-  - Compiled bots run without a wrapper, so nothing enforces it for them yet. Their `error()` already exits 1.
+`runtime execute` settles the run's exit code once the bot process has exited, the same way for every runtime:
+- **0 means the run succeeded; anything else means it failed.** The runtime exits with the run's code, so a non-zero code marks the Kubernetes Job or the Docker run as failed. Failed scheduled runs are not retried.
+- **The process's own non-zero exit code always stands.** An uncaught error exits non-zero. The SDK writes no result for it; the wrappers do, as described in [What the wrappers add](#what-the-wrappers-add).
+- **An error result fails the run, even when the process exits 0.** The run then exits 1. An error result is a result file holding a JSON object whose `status` is exactly `"error"`, for example after `result({"status": "error", ...})` and a normal return. The result file is the bot's own verdict, so the run must show as failed everywhere.
+- **Only this run's result counts.** The runtime deletes any result file in the code directory before it starts the bot, so a file shipped in the code, or left by an earlier container in the same pod, never decides a run.
+
+### The run summary line
+
+When a run fails, the runtime prints one log line after the bot's own output, on stderr and in the bot's logs:
+
+```json
+{"level": "error", "message": "Run failed: Broker rejected the order", "timestamp": "2026-10-12T09:30:00.123456789Z"}
+```
+
+The text after `Run failed: ` is the error result's `message`. Without an error result, it is `Bot exited with code N`. An error result with no `message` gives `Bot reported an error`, and one whose `message` is not a string gives its JSON text.
+
+The SDK's `error()` line is the bot's own log; the summary is the runtime's. A bot that calls `error()` therefore shows its message in its own line and again in the summary, and nothing else repeats it. A bot on an older SDK whose `error()` prints nothing still gets the summary, so no failed run is silent.
+
+There is no summary when the runtime stops the bot itself, on a stop signal, or when the process cannot start, which has its own `Failed to start process` line.
 
 ### What the wrappers add
 
-After `main` ends, the Python and Node.js wrappers settle the result and the exit code:
+After `main` ends, the Python and Node.js wrappers settle the result:
 - **They never overwrite.** A result the bot wrote during the run stays as it is. A wrapper writes a result only when the bot wrote none:
   - A plain return writes `{"status": "success", "message": "Bot executed successfully"}`. When a Node.js `main` returns a value, that value is written instead.
-  - A failure writes `{"status": "error", "message": ...}`, with the error's message or `Bot exited with code N`. A failure is an uncaught error, a rejected promise, `error()`, or any non-zero exit.
-- **They keep the bot's exit code.** An uncaught error gives 1, and an error result turns an exit 0 into 1.
-- **They print an error result** on stderr as an error log line, so a failed run always leaves its message in the logs. An SDK whose `error()` already prints the message therefore shows it twice on these runtimes.
+  - A failure writes `{"status": "error", "message": ...}`, with the error's message or `Bot exited with code N`. A failure is an uncaught error, a rejected promise, `error()`, or any non-zero exit. The runtime's summary line takes its message from this result.
+- **They exit with the bot's exit code.** An uncaught error gives 1. They leave the error-result rule to the runtime, and print no log line of their own for a failure.
 - **Stop signals differ.**
   - On SIGTERM or SIGINT, the Python wrapper stops waiting for `main`, writes `{"status": "terminated", ...}` unless the bot wrote a result, and exits 0.
   - The Node.js wrapper catches both signals, but the abort signal it raises never reaches `main`, so a Node.js bot carries on until it finishes or the runtime kills it.
@@ -156,7 +169,7 @@ Each one is a single JSON object on one line, UTF-8, ending in a newline.
 The rules for both:
 - **Key order doesn't matter.**
 - **`data` must not use the SDK's keys** (`_metric`, `level`, `message`, `timestamp`). What happens when it does differs between SDKs and is not part of the contract.
-- **`error()`'s message and the query server's start-up line are log lines too**, though the SDK prints them for itself.
+- **`error()`'s message and the query server's start-up line are log lines too**, though the SDK prints them for itself. So is the runtime's [run summary line](#the-run-summary-line).
 - **Timestamps are UTC ISO 8601 strings ending in `Z`**, such as `2026-10-12T09:30:00Z` or `2026-10-12T09:30:00.123Z`. Fractional seconds are optional and may have any precision: Python writes microseconds, Node.js milliseconds.
 - **Consumers keep accepting the older forms**, because bots built on older SDK versions keep running. The frontend (`frontend/src/lib/events/event-parser.ts`) reads `timestamp`, `time` or `ts` in any of these forms:
   - an ISO string

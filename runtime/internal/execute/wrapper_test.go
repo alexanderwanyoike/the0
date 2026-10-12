@@ -171,13 +171,18 @@ func runWrapper(t *testing.T, bot botFixture, earlierResult string) wrapperRun {
 	return run
 }
 
-func TestBotWrapper_FailedRunExitsNonZeroAndLogsItsError(t *testing.T) {
-	cases := []struct {
-		name     string
-		bot      func(t *testing.T) botFixture
-		exitCode int
-		message  string
-	}{
+type failedRun struct {
+	name     string
+	bot      func(t *testing.T) botFixture
+	exitCode int
+	message  string
+	// sdkErrorLines are the messages of the error log lines the bot's own SDK
+	// prints during the run.
+	sdkErrorLines []string
+}
+
+func failedRuns() []failedRun {
+	return []failedRun{
 		{
 			name: "python bot calls the0.error",
 			bot: func(t *testing.T) botFixture {
@@ -187,8 +192,9 @@ def main(bot_id, config):
     the0.error("broker rejected the order")
 `)
 			},
-			exitCode: 1,
-			message:  "broker rejected the order",
+			exitCode:      1,
+			message:       "broker rejected the order",
+			sdkErrorLines: []string{"broker rejected the order"},
 		},
 		{
 			name: "python bot raises",
@@ -209,7 +215,7 @@ def main(bot_id, config):
     the0.result({"status": "error", "message": "position limit breached"})
 `)
 			},
-			exitCode: 1,
+			exitCode: 0,
 			message:  "position limit breached",
 		},
 		{
@@ -272,7 +278,7 @@ exports.main = async function (botId, config) {
 };
 `)
 			},
-			exitCode: 1,
+			exitCode: 0,
 			message:  "position limit breached",
 		},
 		{
@@ -283,7 +289,7 @@ exports.main = async function (botId, config) {
 };
 `)
 			},
-			exitCode: 1,
+			exitCode: 0,
 			message:  "position limit breached",
 		},
 		{
@@ -312,15 +318,30 @@ exports.main = async function (botId, config) {
 			message:  "position limit breached",
 		},
 	}
+}
 
-	for _, tc := range cases {
+// A wrapper exits with the bot's own code, so an error result and a normal
+// return exit 0 here: the runner fails that run, for every runtime alike.
+func TestBotWrapper_ExitCodeAndResultOfAFailedRun(t *testing.T) {
+	for _, tc := range failedRuns() {
 		t.Run(tc.name, func(t *testing.T) {
 			run := runWrapper(t, tc.bot(t), "")
 
 			assert.Equal(t, tc.exitCode, run.exitCode, "output:\n%s", run.output)
 			assert.Equal(t, "error", run.result["status"])
 			assert.Equal(t, tc.message, run.result["message"])
-			assert.Contains(t, run.errorLogMessages(), tc.message, "output:\n%s", run.output)
+		})
+	}
+}
+
+// The wrappers print no error line of their own: the runner prints the run's
+// summary line, so a wrapper's line would repeat the SDK's error() line.
+func TestBotWrapper_ErrorLogLinesOfAFailedRun(t *testing.T) {
+	for _, tc := range failedRuns() {
+		t.Run(tc.name, func(t *testing.T) {
+			run := runWrapper(t, tc.bot(t), "")
+
+			assert.Equal(t, tc.sdkErrorLines, run.errorLogMessages(), "output:\n%s", run.output)
 		})
 	}
 }
