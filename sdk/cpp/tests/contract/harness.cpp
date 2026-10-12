@@ -55,7 +55,6 @@ const std::map<std::string, std::string> KNOWN_FAILURES = {
     {"query-ephemeral-params", "every param is turned into a string"},
     {"query-ephemeral-params-not-object", "a JSON array gives params named after its indexes"},
     {"query-server-params-json-body", "the server reads params from the query string only"},
-    {"query-server-unknown-path", "the 404 does not list the available paths"},
 };
 
 constexpr auto RUN_TIMEOUT = std::chrono::seconds(60);
