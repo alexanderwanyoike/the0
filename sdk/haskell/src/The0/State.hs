@@ -41,15 +41,17 @@ module The0.State
     , ReadOnlyStateError(..)
     ) where
 
-import Control.Exception (Exception, catch, throwIO, SomeException)
+import Control.Exception (Exception, IOException, catch, throwIO, SomeException)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeExtension, dropExtension)
+import System.IO.Error (isDoesNotExistError)
 
 -- | Error thrown when attempting to modify state during query execution.
+-- "The0.Query" exports this same type for handler authors.
 newtype ReadOnlyStateError = ReadOnlyStateError String
     deriving (Show, Eq)
 
@@ -151,13 +153,13 @@ delete key = do
     filepath <- getKeyPath key
     exists' <- doesFileExist filepath
     if exists'
-        then do
-            success <- (removeFile filepath >> return True) `catch` handleError
-            return success
+        then (removeFile filepath >> return True) `catch` handleError
         else return False
   where
-    handleError :: SomeException -> IO Bool
-    handleError _ = return False
+    handleError :: IOException -> IO Bool
+    handleError e
+        | isDoesNotExistError e = return False
+        | otherwise = throwIO e
 
 -- | List all keys in persistent state.
 --

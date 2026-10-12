@@ -286,7 +286,6 @@ import Data.Aeson (FromJSON, ToJSON, object, (.=))
 import Data.Aeson.Key (fromText)
 import Data.Maybe (fromMaybe)
 import GHC.Generics
-import Text.Read (readMaybe)
 
 data PersistedState = PersistedState
   { psPrevShortSma :: Maybe Double
@@ -302,7 +301,7 @@ defaultState = PersistedState Nothing Nothing 0
 
 main :: IO ()
 main = do
-    Query.handler "/status" $ \req -> do
+    Query.handler "/status" $ \_ -> do
         persisted <- fromMaybe defaultState <$> State.get "bot_state"
         return $ object
             [ fromText "prev_short_sma" .= psPrevShortSma persisted
@@ -311,8 +310,7 @@ main = do
             ]
 
     Query.handler "/signals" $ \req -> do
-        let limitStr = Query.getParam req "limit" "10"
-            limit = fromMaybe 10 (readMaybe limitStr :: Maybe Int)
+        let limit = fromMaybe 10 (Query.getParamAs req "limit") :: Int
         persisted <- fromMaybe defaultState <$> State.get "bot_state"
         return $ object
             [ fromText "signal_count" .= psSignalCount persisted
