@@ -31,6 +31,7 @@
 //! }
 //! ```
 
+use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
@@ -75,15 +76,47 @@ pub struct QueryRequest {
     pub path: String,
     /// Dictionary of query parameters
     pub params: HashMap<String, String>,
+    values: HashMap<String, Value>,
 }
 
 impl QueryRequest {
     /// Create a new QueryRequest
     pub fn new(path: &str, params: HashMap<String, String>) -> Self {
+        let values = params
+            .iter()
+            .map(|(key, value)| (key.clone(), Value::String(value.clone())))
+            .collect();
         Self {
             path: path.to_string(),
             params,
+            values,
         }
+    }
+
+    /// Create a QueryRequest from params with their JSON types.
+    pub fn from_values(path: &str, values: HashMap<String, Value>) -> Self {
+        let params = values
+            .iter()
+            .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string())))
+            .collect();
+        Self {
+            path: path.to_string(),
+            params,
+            values,
+        }
+    }
+
+    /// Every param with its JSON type.
+    pub fn values(&self) -> &HashMap<String, Value> {
+        &self.values
+    }
+
+    /// A param deserialized into `T`, or `None` when it is missing or does
+    /// not deserialize into `T`.
+    pub fn get_as<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
+        self.values
+            .get(key)
+            .and_then(|value| T::deserialize(value).ok())
     }
 
     /// Get a parameter value with optional default.
