@@ -209,7 +209,7 @@ The runner picks its mode from the environment:
 ### Params
 
 Params are JSON values. A param keeps its type (string, number, boolean, array, object or `null`), and every SDK hands it to handlers without loss.
-- **Ephemeral queries** read params from `QUERY_PARAMS`, a JSON object. When it is missing or invalid, there are no params.
+- **Ephemeral queries** read params from `QUERY_PARAMS`, a JSON object. When it is missing, is not JSON, or is JSON but not an object, there are no params.
 - **The query server** reads params from the request body when the body is a JSON object. Otherwise (no body, or a body that isn't a JSON object), it reads them from the URL query string, URL-decoded, and every value is a string. The runtime sends both a body and a query string, so a manual `curl` call with a query string keeps working.
 - **Typed server params break string handlers.** An SDK whose query server used to read only the query string now hands realtime handlers typed params. A handler that treated every param as a string, or decoded object params from their JSON text (the runtime has sent them that way in the query string), must change. The Python SDK makes this change in 0.4.0.
 - **Accessors.**
