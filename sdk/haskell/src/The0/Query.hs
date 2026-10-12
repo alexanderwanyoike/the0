@@ -64,6 +64,7 @@ import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding.Error as TE
 import Network.HTTP.Types (urlDecode)
 import Network.Socket
 import Network.Socket.ByteString (recv, sendAll)
@@ -378,7 +379,7 @@ parseQueryString query =
         (a, "") -> [a]
         (a, _:rest) -> a : splitOn c rest
 
-    urlDecodeString = BS.unpack . urlDecode True . BS.pack
+    urlDecodeString = T.unpack . TE.decodeUtf8With TE.lenientDecode . urlDecode True . BS.pack
 
 -- | Convert a Value to a String for simple cases.
 valueToString :: Value -> String
