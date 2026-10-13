@@ -70,7 +70,7 @@ func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
 	startSubscriber(t, db)
 
 	events.PublishJSON(t, SubjectBotScheduleCreated, testScheduleEvent("retried-schedule", "0 0 * * *"))
-	eventstest.WaitForCreateAttempts(t, db, 1)
+	events.WaitForRetry(t)
 	eventstest.AcceptWrites(t, db, testCollection)
 
 	err := waitFor(15*time.Second, func() bool { return countSchedules(db, "retried-schedule") == 1 })
@@ -87,7 +87,7 @@ func TestDelivery_RetriedCreate_IsNotOvertakenByItsDelete(t *testing.T) {
 	startSubscriber(t, db)
 
 	events.PublishJSON(t, SubjectBotScheduleCreated, testScheduleEvent("created-then-deleted", "0 0 * * *"))
-	eventstest.WaitForCreateAttempts(t, db, 1)
+	events.WaitForRetry(t)
 	events.PublishJSON(t, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "created-then-deleted"})
 	eventstest.AcceptWrites(t, db, testCollection)
 	events.WaitForHandled(t)
