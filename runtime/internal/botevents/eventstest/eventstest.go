@@ -200,16 +200,14 @@ func AcceptWrites(t testing.TB, db *mongo.Database, collection string) {
 	require.NoError(t, db.RunCommand(context.Background(), cmd).Err())
 }
 
-// WaitForCreateAttempts waits until a subscriber's create handler has run n
-// times. It claims a partition slot before writing, so the claims count its
-// attempts even when the write itself is rejected.
-func WaitForCreateAttempts(t testing.TB, db *mongo.Database, n int) {
+// WaitForRetry waits until the consumer delivers the one event a test
+// published a second time, which it only does after the handler failed the
+// first delivery. A test learns a rejected write was attempted without
+// reading the store.
+func (e Events) WaitForRetry(t testing.TB) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		var partition struct {
-			BotCount int `bson:"bot_count"`
-		}
-		err := db.Collection("partitions").FindOne(context.Background(), bson.M{}).Decode(&partition)
-		return err == nil && partition.BotCount >= n
-	}, waitTimeout, 50*time.Millisecond, "the create handler should have run %d time(s)", n)
+		info, err := e.info()
+		return err == nil && info.Delivered.Consumer >= 2
+	}, waitTimeout, 50*time.Millisecond, "a failed event should be delivered again")
 }

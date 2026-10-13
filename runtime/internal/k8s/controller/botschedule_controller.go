@@ -13,11 +13,11 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"runtime/internal/desired"
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/model"
 	"runtime/internal/util"
@@ -39,10 +39,10 @@ const (
 // from the schedule, as in Docker mode, which never retries.
 const scheduledRunBackoffLimit int32 = 0
 
-// BotScheduleRepository provides access to bot schedule data from MongoDB.
-type BotScheduleRepository interface {
-	// FindAllEnabled returns all schedules that should be running.
-	FindAllEnabled(ctx context.Context) ([]model.BotSchedule, error)
+// DesiredSchedules are the schedules that should run on their cron, as the
+// desired module decides for both modes.
+type DesiredSchedules interface {
+	Schedules(ctx context.Context) ([]model.BotSchedule, error)
 }
 
 // K8sCronJobClient provides access to Kubernetes CronJob operations.
@@ -84,7 +84,7 @@ type BotScheduleControllerConfig struct {
 // BotScheduleController reconciles bot schedule state between MongoDB and Kubernetes.
 type BotScheduleController struct {
 	config       BotScheduleControllerConfig
-	scheduleRepo BotScheduleRepository
+	schedules    DesiredSchedules
 	cronClient   K8sCronJobClient
 	podGenerator *podgen.PodGenerator
 
@@ -96,7 +96,7 @@ type BotScheduleController struct {
 // NewBotScheduleController creates a new BotScheduleController.
 func NewBotScheduleController(
 	config BotScheduleControllerConfig,
-	scheduleRepo BotScheduleRepository,
+	schedules DesiredSchedules,
 	cronClient K8sCronJobClient,
 ) *BotScheduleController {
 	if config.Namespace == "" {
@@ -125,7 +125,7 @@ func NewBotScheduleController(
 
 	return &BotScheduleController{
 		config:       config,
-		scheduleRepo: scheduleRepo,
+		schedules:    schedules,
 		cronClient:   cronClient,
 		podGenerator: pg,
 		stopCh:       make(chan struct{}),
@@ -184,7 +184,7 @@ func (c *BotScheduleController) Reconcile(ctx context.Context) error {
 	util.LogMaster("[ScheduleController] Starting reconciliation")
 
 	// 1. Get desired state from MongoDB
-	desiredSchedules, err := c.scheduleRepo.FindAllEnabled(ctx)
+	desiredSchedules, err := c.schedules.Schedules(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get schedules from MongoDB: %w", err)
 	}
@@ -254,11 +254,12 @@ func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedu
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 
-	// Convert to K8s cron format if needed
-	k8sCronExpr := convertToK8sCronFormat(cronExpr)
+	if _, err := desired.NextExecutionTime(cronExpr, time.Now()); err != nil {
+		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
+	}
 
 	// Create CronJob spec using podGenerator
-	cronJob, err := c.createCronJobSpec(schedule, k8sCronExpr)
+	cronJob, err := c.createCronJobSpec(schedule, cronExpr)
 	if err != nil {
 		return fmt.Errorf("failed to create CronJob spec: %w", err)
 	}
@@ -278,10 +279,12 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule mode
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 
-	k8sCronExpr := convertToK8sCronFormat(cronExpr)
+	if _, err := desired.NextExecutionTime(cronExpr, time.Now()); err != nil {
+		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
+	}
 
 	// Update the CronJob
-	updated, err := c.createCronJobSpec(schedule, k8sCronExpr)
+	updated, err := c.createCronJobSpec(schedule, cronExpr)
 	if err != nil {
 		return fmt.Errorf("failed to create CronJob spec: %w", err)
 	}
@@ -297,8 +300,7 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule mode
 
 // createCronJobSpec creates a CronJob spec for the schedule using base images + init containers.
 func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cronExpr string) (*batchv1.CronJob, error) {
-	// Convert schedule to bot model for podGenerator
-	bot := c.scheduleToBot(schedule)
+	bot := desired.ScheduleToBot(schedule)
 
 	// Generate scheduled pod spec with daemon sidecar
 	podSpec, err := c.podGenerator.GenerateScheduledPodSpec(bot)
@@ -370,28 +372,6 @@ func backoffLimitDrifted(cronJob *batchv1.CronJob) bool {
 	return limit == nil || *limit != scheduledRunBackoffLimit
 }
 
-// scheduleToBot converts a BotSchedule to a Bot model for the image builder.
-func (c *BotScheduleController) scheduleToBot(schedule model.BotSchedule) model.Bot {
-	enabled := true
-	if schedule.Enabled != nil {
-		enabled = *schedule.Enabled
-	}
-	return model.Bot{
-		ID:     schedule.ID,
-		Config: schedule.Config,
-		CustomBotVersion: model.CustomBotVersion{
-			Version:  schedule.CustomBotVersion.Version,
-			FilePath: schedule.CustomBotVersion.FilePath,
-			Config: model.APIBotConfig{
-				Name:        schedule.CustomBotVersion.Config.Name,
-				Runtime:     schedule.CustomBotVersion.Config.Runtime,
-				Entrypoints: schedule.CustomBotVersion.Config.Entrypoints,
-			},
-		},
-		Enabled: &enabled,
-	}
-}
-
 // extractScheduleID extracts the schedule ID from a CronJob's labels.
 func extractScheduleID(cronJob *batchv1.CronJob) string {
 	if cronJob.Labels == nil {
@@ -410,18 +390,6 @@ func generateCronJobName(scheduleID string) string {
 	return strings.TrimRight(name, "-")
 }
 
-// convertToK8sCronFormat converts cron expressions to K8s format.
-// K8s CronJobs only support 5-field cron (minute hour day month weekday).
-// If the expression has 6 fields (with seconds), we strip the seconds field.
-func convertToK8sCronFormat(cronExpr string) string {
-	fields := strings.Fields(cronExpr)
-	if len(fields) == 6 {
-		// Strip the seconds field (first field)
-		return strings.Join(fields[1:], " ")
-	}
-	return cronExpr
-}
-
 // computeScheduleHash creates a hash of the schedule config. Controller-level
 // inputs that shape the generated pod (NATS URL, runtime image) are part of the
 // hash so changing them, as a platform upgrade does, updates existing CronJobs.
@@ -429,13 +397,11 @@ func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage strin
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
-		Enabled          *bool
 		NATSURL          string
 		RuntimeImage     string
 	}{
 		Config:           schedule.Config,
 		CustomBotVersion: schedule.CustomBotVersion.Version,
-		Enabled:          schedule.Enabled,
 		NATSURL:          natsURL,
 		RuntimeImage:     runtimeImage,
 	}
@@ -451,17 +417,6 @@ func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage strin
 
 	hash := sha256.Sum256(jsonBytes)
 	return hex.EncodeToString(hash[:])[:16]
-}
-
-// mustParseQuantityWithDefault parses a resource quantity string.
-// On invalid input, logs a warning and returns the provided default value.
-func mustParseQuantityWithDefault(s, defaultValue string) resource.Quantity {
-	q, err := resource.ParseQuantity(s)
-	if err != nil {
-		util.LogMaster("[ScheduleController] Warning: invalid resource quantity '%s': %v, using default '%s'", s, err, defaultValue)
-		return resource.MustParse(defaultValue)
-	}
-	return q
 }
 
 // ---- Real K8s CronJob Client Implementation ----
@@ -533,78 +488,4 @@ func (c *RealK8sCronJobClient) GetCronJob(ctx context.Context, namespace, name s
 		return nil, nil
 	}
 	return cronJob, err
-}
-
-// ---- Mock K8s CronJob Client for Testing ----
-
-// MockK8sCronJobClient is a mock implementation for testing.
-type MockK8sCronJobClient struct {
-	CronJobs     map[string]*batchv1.CronJob
-	ListError    error
-	CreateError  error
-	UpdateError  error
-	DeleteError  error
-	ListCalled   int
-	CreateCalled int
-	UpdateCalled int
-	DeleteCalled int
-}
-
-// NewMockK8sCronJobClient creates a new MockK8sCronJobClient.
-func NewMockK8sCronJobClient() *MockK8sCronJobClient {
-	return &MockK8sCronJobClient{
-		CronJobs: make(map[string]*batchv1.CronJob),
-	}
-}
-
-// ListCronJobs returns mock CronJobs.
-func (m *MockK8sCronJobClient) ListCronJobs(ctx context.Context, namespace string) ([]batchv1.CronJob, error) {
-	m.ListCalled++
-	if m.ListError != nil {
-		return nil, m.ListError
-	}
-	result := make([]batchv1.CronJob, 0, len(m.CronJobs))
-	for _, cj := range m.CronJobs {
-		result = append(result, *cj)
-	}
-	return result, nil
-}
-
-// CreateCronJob creates a mock CronJob.
-func (m *MockK8sCronJobClient) CreateCronJob(ctx context.Context, cronJob *batchv1.CronJob) error {
-	m.CreateCalled++
-	if m.CreateError != nil {
-		return m.CreateError
-	}
-	key := fmt.Sprintf("%s/%s", cronJob.Namespace, cronJob.Name)
-	m.CronJobs[key] = cronJob
-	return nil
-}
-
-// UpdateCronJob updates a mock CronJob.
-func (m *MockK8sCronJobClient) UpdateCronJob(ctx context.Context, cronJob *batchv1.CronJob) error {
-	m.UpdateCalled++
-	if m.UpdateError != nil {
-		return m.UpdateError
-	}
-	key := fmt.Sprintf("%s/%s", cronJob.Namespace, cronJob.Name)
-	m.CronJobs[key] = cronJob
-	return nil
-}
-
-// DeleteCronJob deletes a mock CronJob.
-func (m *MockK8sCronJobClient) DeleteCronJob(ctx context.Context, namespace, name string) error {
-	m.DeleteCalled++
-	if m.DeleteError != nil {
-		return m.DeleteError
-	}
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	delete(m.CronJobs, key)
-	return nil
-}
-
-// GetCronJob gets a mock CronJob.
-func (m *MockK8sCronJobClient) GetCronJob(ctx context.Context, namespace, name string) (*batchv1.CronJob, error) {
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	return m.CronJobs[key], nil
 }

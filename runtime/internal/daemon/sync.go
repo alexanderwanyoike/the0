@@ -1,3 +1,5 @@
+// Package daemon syncs a bot container's state and logs to storage, either
+// in-process for runtime execute or as the Kubernetes sync sidecar.
 package daemon
 
 import (
@@ -5,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -34,37 +35,47 @@ type SyncOptions struct {
 	StatePath     string        // State directory to sync (default: /state)
 	LogsPath      string        // Logs directory to sync (default: /var/the0/logs)
 	Interval      time.Duration // Backup sync interval - fsnotify handles immediate syncs (default: 60s)
-	WatchDone     string        // Path to done file - when it appears, sync and exit (for scheduled bots)
 	ReadinessPort int           // Port for health/readiness HTTP server (0 = disabled, used for K8s sidecar)
 }
 
-// SyncRunner runs sync in-process as a goroutine with proper lifecycle management.
-// This avoids subprocess timing issues - the runner signals when ready.
+// syncerFactory builds the syncers for opts, and what to do once they have
+// made their last sync.
+type syncerFactory func(ctx context.Context, opts SyncOptions, logger util.Logger) ([]Syncer, func(), error)
+
+// SyncRunner is the one sync loop: it syncs on file changes and on a backup
+// interval, and makes a final sync when stopped. runtime execute runs it
+// in-process and the sync sidecar runs it through Sync.
 type SyncRunner struct {
-	opts    SyncOptions
-	logger  util.Logger
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	ready   chan struct{}
-	initErr error
-	syncers []Syncer
-	syncMu  sync.Mutex
-	cleanup func()
+	opts       SyncOptions
+	logger     util.Logger
+	newSyncers syncerFactory
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	ready      chan struct{}
+	initErr    error
+	syncers    []Syncer
+	syncMu     sync.Mutex
+	cleanup    func()
 }
 
 // NewSyncRunner creates a new in-process sync runner.
 func NewSyncRunner(opts SyncOptions, logger util.Logger) *SyncRunner {
+	return newSyncRunner(opts, logger, storageSyncers)
+}
+
+func newSyncRunner(opts SyncOptions, logger util.Logger, newSyncers syncerFactory) *SyncRunner {
 	if logger == nil {
 		logger = util.NewLogger()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &SyncRunner{
-		opts:   opts,
-		logger: logger,
-		ctx:    ctx,
-		cancel: cancel,
-		ready:  make(chan struct{}),
+		opts:       opts,
+		logger:     logger,
+		newSyncers: newSyncers,
+		ctx:        ctx,
+		cancel:     cancel,
+		ready:      make(chan struct{}),
 	}
 }
 
@@ -121,56 +132,14 @@ func (r *SyncRunner) run() {
 
 	r.logger.Info("Sync runner starting", "bot_id", r.opts.BotID)
 
-	// Load config
-	cfg, err := storage.LoadConfigFromEnv()
+	syncers, cleanup, err := r.newSyncers(r.ctx, r.opts, r.logger)
 	if err != nil {
-		r.initErr = fmt.Errorf("failed to load config: %w", err)
+		r.initErr = err
 		close(r.ready)
 		return
 	}
-
-	// Create MinIO client
-	minioClient, err := storage.NewMinioClient(cfg)
-	if err != nil {
-		r.initErr = fmt.Errorf("failed to create MinIO client: %w", err)
-		close(r.ready)
-		return
-	}
-
-	// State syncer
-	stateManager := storage.NewStateManager(minioClient, cfg, r.logger)
-	stateSyncer := NewStateSyncer(r.opts.BotID, r.opts.StatePath, stateManager, r.logger)
-	r.syncers = append(r.syncers, stateSyncer)
-
-	// Logs syncer
-	var logsSyncer *LogsSyncer
-	var logPublisher LogPublisher
-	if r.opts.LogsPath != "" {
-		logUploader, err := miniologger.NewMinIOLogger(r.ctx, miniologger.MinioLoggerOptions{
-			Endpoint:   cfg.Endpoint,
-			AccessKey:  cfg.AccessKey,
-			SecretKey:  cfg.SecretKey,
-			UseSSL:     cfg.UseSSL,
-			LogsBucket: cfg.LogsBucket,
-		})
-		if err != nil {
-			r.logger.Info("Failed to create log uploader", "error", err.Error())
-		} else {
-			logPublisher = newLogPublisherFromEnv(r.logger)
-			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, logPublisher, r.logger)
-			if logsSyncer != nil {
-				r.syncers = append(r.syncers, logsSyncer)
-			}
-		}
-	}
-
-	r.cleanup = func() {
-		if logsSyncer != nil {
-			if err := logsSyncer.Close(); err != nil {
-				r.logger.Info("Failed to close logs syncer", "error", err.Error())
-			}
-		}
-	}
+	r.syncers = append(r.syncers, syncers...)
+	r.cleanup = cleanup
 
 	// Create file watcher
 	fileWatcher, err := NewFileWatcher(FileWatcherConfig{
@@ -227,6 +196,51 @@ func (r *SyncRunner) run() {
 	}
 }
 
+// storageSyncers sync state and, when its bucket is reachable, logs to the
+// storage the environment names.
+func storageSyncers(ctx context.Context, opts SyncOptions, logger util.Logger) ([]Syncer, func(), error) {
+	cfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	minioClient, err := storage.NewMinioClient(cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create MinIO client: %w", err)
+	}
+
+	stateManager := storage.NewStateManager(minioClient, cfg, logger)
+	syncers := []Syncer{NewStateSyncer(opts.BotID, opts.StatePath, stateManager, logger)}
+
+	var logsSyncer *LogsSyncer
+	if opts.LogsPath != "" {
+		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
+			Endpoint:   cfg.Endpoint,
+			AccessKey:  cfg.AccessKey,
+			SecretKey:  cfg.SecretKey,
+			UseSSL:     cfg.UseSSL,
+			LogsBucket: cfg.LogsBucket,
+		})
+		if err != nil {
+			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
+		} else {
+			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, newLogPublisherFromEnv(logger), logger)
+			if logsSyncer != nil {
+				syncers = append(syncers, logsSyncer)
+			}
+		}
+	}
+
+	cleanup := func() {
+		if logsSyncer != nil {
+			if err := logsSyncer.Close(); err != nil {
+				logger.Info("Failed to close logs syncer", "error", err.Error())
+			}
+		}
+	}
+	return syncers, cleanup, nil
+}
+
 // newLogPublisherFromEnv creates a LogPublisher from NATS_URL env var.
 // Returns nil if NATS_URL is not set or connection fails.
 func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
@@ -242,24 +256,24 @@ func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
 	return np
 }
 
-// Sync uses fsnotify to watch for file changes and immediately syncs to MinIO.
-// Also performs periodic backup syncs in case fsnotify misses events.
-// If opts.WatchDone is set, exits when done file appears (for scheduled bots).
-// Otherwise runs indefinitely as a sidecar container.
+// Sync runs a SyncRunner as the Kubernetes sync sidecar, serving readiness
+// once it has started, until it is cancelled or signalled. Stopping makes the
+// runner's final sync.
 func Sync(ctx context.Context, opts SyncOptions) error {
-	var logger util.Logger = util.NewLogger()
+	return runSidecar(ctx, opts, util.NewLogger(), storageSyncers, func() <-chan os.Signal {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+		return signals
+	})
+}
 
-	// Set defaults
-	if opts.StatePath == "" {
-		opts.StatePath = constants.DefaultStatePath
-	}
-	if opts.LogsPath == "" {
-		opts.LogsPath = constants.DefaultLogsPath
-	}
-	if opts.Interval == 0 {
-		opts.Interval = 60 * time.Second // Backup interval, fsnotify handles immediate syncs
-	}
-
+func runSidecar(
+	ctx context.Context,
+	opts SyncOptions,
+	logger util.Logger,
+	newSyncers syncerFactory,
+	notifySignals func() <-chan os.Signal,
+) error {
 	// Start health server for K8s readiness probes (if port specified)
 	var healthServer *health.Server
 	if opts.ReadinessPort > 0 {
@@ -273,119 +287,19 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		logger.Info("Health server started", "port", opts.ReadinessPort)
 	}
 
-	logger.Info("Daemon sync starting with fsnotify", "bot_id", opts.BotID, "backup_interval", opts.Interval)
+	logger.Info("Daemon sync starting with fsnotify", "bot_id", opts.BotID)
 
-	// Load config
-	cfg, err := storage.LoadConfigFromEnv()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	runner := newSyncRunner(opts, logger, newSyncers)
+	runner.Start()
+	select {
+	case <-runner.ready:
+	case <-ctx.Done():
+		runner.Stop()
+		return nil
 	}
-
-	// Create MinIO client
-	minioClient, err := storage.NewMinioClient(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create MinIO client: %w", err)
-	}
-
-	// Initialize syncers
-	var syncers []Syncer
-
-	// State syncer
-	stateManager := storage.NewStateManager(minioClient, cfg, logger)
-	stateSyncer := NewStateSyncer(opts.BotID, opts.StatePath, stateManager, logger)
-	syncers = append(syncers, stateSyncer)
-	logger.Info("State syncer initialized", "path", opts.StatePath)
-
-	// Logs syncer (optional - may fail if MinIO bucket doesn't exist)
-	var logsSyncer *LogsSyncer
-	var logPublisher LogPublisher
-	if opts.LogsPath != "" {
-		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
-			Endpoint:   cfg.Endpoint,
-			AccessKey:  cfg.AccessKey,
-			SecretKey:  cfg.SecretKey,
-			UseSSL:     cfg.UseSSL,
-			LogsBucket: cfg.LogsBucket,
-		})
-		if err != nil {
-			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
-		} else {
-			logPublisher = newLogPublisherFromEnv(logger)
-			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, logPublisher, logger)
-			if logsSyncer != nil {
-				syncers = append(syncers, logsSyncer)
-				logger.Info("Logs syncer initialized", "path", opts.LogsPath)
-			}
-		}
-	}
-
-	// Mutex to prevent concurrent syncs
-	var syncMu sync.Mutex
-
-	// Perform all sync operations (thread-safe)
-	doSync := func() {
-		syncMu.Lock()
-		defer syncMu.Unlock()
-		for _, syncer := range syncers {
-			syncer.Sync(ctx)
-		}
-	}
-
-	// Cleanup function
-	cleanup := func() {
-		if logsSyncer != nil {
-			if err := logsSyncer.Close(); err != nil {
-				logger.Info("Failed to close logs syncer", "error", err.Error())
-			}
-		}
-	}
-
-	// Create file watcher for immediate change detection
-	fileWatcher, err := NewFileWatcher(FileWatcherConfig{
-		Logger:   logger,
-		OnChange: doSync,
-		Debounce: 200 * time.Millisecond, // Quick debounce for responsiveness
-	})
-	if err != nil {
-		logger.Info("Failed to create file watcher, falling back to polling only: %v", err)
-	} else {
-		// Watch logs directory
-		if opts.LogsPath != "" {
-			if err := os.MkdirAll(opts.LogsPath, 0755); err == nil {
-				if err := fileWatcher.Watch(opts.LogsPath); err != nil {
-					logger.Info("Failed to watch logs path: %v", err)
-				} else {
-					logger.Info("Watching logs directory for changes", "path", opts.LogsPath)
-				}
-			}
-		}
-
-		// Watch state directory
-		if opts.StatePath != "" {
-			if err := os.MkdirAll(opts.StatePath, 0755); err == nil {
-				if err := fileWatcher.Watch(opts.StatePath); err != nil {
-					logger.Info("Failed to watch state path: %v", err)
-				} else {
-					logger.Info("Watching state directory for changes", "path", opts.StatePath)
-				}
-			}
-		}
-
-		// Watch done file's parent directory (for scheduled bots)
-		if opts.WatchDone != "" {
-			doneDir := filepath.Dir(opts.WatchDone)
-			if err := os.MkdirAll(doneDir, 0755); err == nil {
-				if err := fileWatcher.Watch(doneDir); err != nil {
-					logger.Info("Failed to watch done file directory: %v", err)
-				} else {
-					logger.Info("Watching for done file", "path", opts.WatchDone)
-				}
-			}
-		}
-
-		// Start the file watcher
-		go fileWatcher.Start()
-		defer fileWatcher.Stop()
+	if runner.initErr != nil {
+		runner.Stop()
+		return runner.initErr
 	}
 
 	// Signal readiness after initialization is complete
@@ -394,64 +308,13 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		logger.Info("Sync daemon ready")
 	}
 
-	// Signal handling
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
-
-	// Backup sync ticker (in case fsnotify misses events)
-	ticker := time.NewTicker(opts.Interval)
-	defer ticker.Stop()
-
-	// Check for done file (for scheduled bots)
-	checkDone := func() bool {
-		if opts.WatchDone == "" {
-			return false
-		}
-		_, err := os.Stat(opts.WatchDone)
-		return err == nil
+	select {
+	case <-ctx.Done():
+		logger.Info("Context cancelled, performing final sync")
+	case sig := <-notifySignals():
+		logger.Info("Received signal, performing final sync", "signal", sig.String())
 	}
-
-	// Done file check ticker (faster check since fsnotify may miss it)
-	var doneTicker *time.Ticker
-	if opts.WatchDone != "" {
-		doneTicker = time.NewTicker(500 * time.Millisecond) // Check every 500ms as backup
-		defer doneTicker.Stop()
-	}
-
-	// Main loop
-	for {
-		select {
-		case <-ticker.C:
-			// Backup periodic sync
-			doSync()
-
-		case <-func() <-chan time.Time {
-			if doneTicker != nil {
-				return doneTicker.C
-			}
-			return nil
-		}():
-			if checkDone() {
-				logger.Info("Done file detected, performing final sync")
-				doSync()
-				cleanup()
-				logger.Info("Daemon sync shutdown complete (bot finished)")
-				return nil
-			}
-
-		case <-ctx.Done():
-			logger.Info("Context cancelled, performing final sync")
-			doSync()
-			cleanup()
-			logger.Info("Daemon sync shutdown complete")
-			return nil
-
-		case sig := <-sigCh:
-			logger.Info("Received signal, performing final sync", "signal", sig.String())
-			doSync()
-			cleanup()
-			logger.Info("Daemon sync shutdown complete")
-			return nil
-		}
-	}
+	runner.Stop()
+	logger.Info("Daemon sync shutdown complete")
+	return nil
 }

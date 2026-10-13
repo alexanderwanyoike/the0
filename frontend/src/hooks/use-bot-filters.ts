@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { Bot } from "@/lib/api/api-client";
+import { isBotEnabled } from "@/lib/bot-utils";
 import {
   BOT_TYPE_OPTIONS,
   FilterFacet,
@@ -55,7 +56,7 @@ export function useBotFilters() {
 
         // Status filter
         if (status !== "all") {
-          const enabled = config?.enabled ?? true;
+          const enabled = isBotEnabled(config);
           if (status === "enabled" && !enabled) return false;
           if (status === "disabled" && enabled) return false;
         }

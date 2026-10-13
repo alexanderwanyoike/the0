@@ -1,4 +1,8 @@
-import { shouldUseLogStreaming, isScheduledBot } from "@/lib/bot-utils";
+import {
+  shouldUseLogStreaming,
+  isScheduledBot,
+  isBotEnabled,
+} from "@/lib/bot-utils";
 import { Bot } from "@/lib/api/api-client";
 
 function makeBot(config: Record<string, any> = {}): Bot {
@@ -68,5 +72,32 @@ describe("isScheduledBot", () => {
 
   it("returns false when config.type is not a string", () => {
     expect(isScheduledBot(makeBot({ type: 42 }))).toBe(false);
+  });
+});
+
+// The runtime runs a bot unless config.enabled is false (runtime/internal/desired),
+// so the dashboard shows exactly those bots as enabled.
+describe("isBotEnabled", () => {
+  it("is false when config.enabled is false", () => {
+    expect(isBotEnabled({ enabled: false })).toBe(false);
+  });
+
+  it("is true when config.enabled is true", () => {
+    expect(isBotEnabled({ enabled: true })).toBe(true);
+  });
+
+  it("is true when config has no enabled", () => {
+    expect(isBotEnabled({ symbol: "BTC/USD" })).toBe(true);
+  });
+
+  it("is true when there is no config", () => {
+    expect(isBotEnabled(undefined)).toBe(true);
+    expect(isBotEnabled(null)).toBe(true);
+  });
+
+  it("is true when config.enabled is anything but false", () => {
+    for (const enabled of [null, 0, "", "false"]) {
+      expect(isBotEnabled({ enabled })).toBe(true);
+    }
   });
 });

@@ -17,19 +17,19 @@ import (
 
 // ---- Mock Implementations ----
 
-// MockBotRepository is a mock implementation of BotRepository for testing.
-type MockBotRepository struct {
-	Bots   []model.Bot
-	Error  error
-	Called int
+// MockDesiredBots is a mock implementation of DesiredBots for testing.
+type MockDesiredBots struct {
+	Running []model.Bot
+	Error   error
+	Called  int
 }
 
-func (m *MockBotRepository) FindAllEnabled(ctx context.Context) ([]model.Bot, error) {
+func (m *MockDesiredBots) Bots(ctx context.Context) ([]model.Bot, error) {
 	m.Called++
 	if m.Error != nil {
 		return nil, m.Error
 	}
-	return m.Bots, nil
+	return m.Running, nil
 }
 
 // MockK8sClient is a mock implementation of K8sClient for testing.
@@ -83,7 +83,6 @@ func (m *MockK8sClient) GetPod(ctx context.Context, namespace, name string) (*co
 // ---- Helper Functions ----
 
 func createTestBot(id, name, version, runtime string) model.Bot {
-	enabled := true
 	return model.Bot{
 		ID: id,
 		Config: map[string]interface{}{
@@ -100,7 +99,6 @@ func createTestBot(id, name, version, runtime string) model.Bot {
 				},
 			},
 		},
-		Enabled: &enabled,
 	}
 }
 
@@ -133,8 +131,8 @@ func testControllerConfig() BotControllerConfig {
 // ---- Tests ----
 
 func TestBotController_Reconcile_CreatesPodForNewBot(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{
 			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
 		},
 	}
@@ -160,8 +158,8 @@ func TestBotController_Reconcile_CreatesPodForNewBot(t *testing.T) {
 }
 
 func TestBotController_Reconcile_DeletesPodForRemovedBot(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{}, // No desired bots
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{}, // No desired bots
 	}
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{
@@ -213,8 +211,8 @@ func TestBotController_Reconcile_NoActionForHealthyMatchingPod(t *testing.T) {
 		},
 	}
 
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{bot},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{bot},
 	}
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{existingPod},
@@ -255,8 +253,8 @@ func TestBotController_Reconcile_RecreatesPodOnConfigChange(t *testing.T) {
 		},
 	}
 
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{bot},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{bot},
 	}
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{existingPod},
@@ -306,8 +304,8 @@ func TestBotController_Reconcile_RecreatesFailedPod(t *testing.T) {
 		},
 	}
 
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{bot},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{bot},
 	}
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{existingPod},
@@ -328,7 +326,7 @@ func TestBotController_Reconcile_RecreatesFailedPod(t *testing.T) {
 }
 
 func TestBotController_Reconcile_RepositoryError(t *testing.T) {
-	mockRepo := &MockBotRepository{
+	mockRepo := &MockDesiredBots{
 		Error: errors.New("database connection lost"),
 	}
 	mockK8s := &MockK8sClient{}
@@ -348,8 +346,8 @@ func TestBotController_Reconcile_RepositoryError(t *testing.T) {
 }
 
 func TestBotController_Reconcile_K8sListError(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{
 			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
 		},
 	}
@@ -371,8 +369,8 @@ func TestBotController_Reconcile_K8sListError(t *testing.T) {
 }
 
 func TestBotController_Start_Stop(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{},
 	}
 	mockK8s := &MockK8sClient{}
 
@@ -402,8 +400,8 @@ func TestBotController_Start_Stop(t *testing.T) {
 }
 
 func TestBotController_DoubleStart(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{},
 	}
 	mockK8s := &MockK8sClient{}
 
@@ -431,7 +429,7 @@ func TestBotController_DoubleStart(t *testing.T) {
 }
 
 func TestBotController_StopWhenNotRunning(t *testing.T) {
-	mockRepo := &MockBotRepository{}
+	mockRepo := &MockDesiredBots{}
 	mockK8s := &MockK8sClient{}
 
 	controller := NewBotController(
@@ -446,8 +444,8 @@ func TestBotController_StopWhenNotRunning(t *testing.T) {
 }
 
 func TestBotController_ContextCancellation(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{},
 	}
 	mockK8s := &MockK8sClient{}
 
@@ -509,8 +507,8 @@ func TestIsPodHealthy(t *testing.T) {
 // ---- Mock Client Error Tests ----
 
 func TestMockK8sClient_ListError(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{
 			createTestBot("bot-1", "test-bot", "1.0.0", "python3.11"),
 		},
 	}
@@ -530,8 +528,8 @@ func TestMockK8sClient_ListError(t *testing.T) {
 }
 
 func TestMockK8sClient_CreateError(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{
 			createTestBot("bot-1", "test-bot", "1.0.0", "python3.11"),
 		},
 	}
@@ -553,8 +551,8 @@ func TestMockK8sClient_CreateError(t *testing.T) {
 }
 
 func TestMockK8sClient_DeleteError(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{}, // No desired bots
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{}, // No desired bots
 	}
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{
@@ -578,7 +576,7 @@ func TestMockK8sClient_DeleteError(t *testing.T) {
 // ---- Config Defaults Tests ----
 
 func TestNewBotController_Defaults(t *testing.T) {
-	mockRepo := &MockBotRepository{}
+	mockRepo := &MockDesiredBots{}
 	mockK8s := &MockK8sClient{}
 
 	controller := NewBotController(
@@ -593,7 +591,7 @@ func TestNewBotController_Defaults(t *testing.T) {
 }
 
 func TestNewBotController_CustomConfig(t *testing.T) {
-	mockRepo := &MockBotRepository{}
+	mockRepo := &MockDesiredBots{}
 	mockK8s := &MockK8sClient{}
 
 	controller := NewBotController(
@@ -614,8 +612,8 @@ func TestNewBotController_CustomConfig(t *testing.T) {
 // ---- Multiple Bots Tests ----
 
 func TestBotController_Reconcile_MultipleBots(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{
 			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
 			createTestBot("bot-2", "sma-crossover", "2.0.0", "nodejs20"),
 			createTestBot("bot-3", "rsi-tracker", "1.0.0", "python3.11"),
@@ -653,8 +651,8 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 	})
 	expectedPod2, _ := generator.GeneratePod(bot2)
 
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{bot1, bot2},
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{bot1, bot2},
 	}
 	mockK8s := &MockK8sClient{
 		Pods: []corev1.Pod{
@@ -692,8 +690,8 @@ func TestBotController_Reconcile_MixedStates(t *testing.T) {
 }
 
 func TestBotController_Reconcile_PropagatesNATSURLToSyncSidecar(t *testing.T) {
-	mockRepo := &MockBotRepository{
-		Bots: []model.Bot{
+	mockRepo := &MockDesiredBots{
+		Running: []model.Bot{
 			createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11"),
 		},
 	}
@@ -734,7 +732,7 @@ func TestBotController_Reconcile_ReplacesPodWhenNATSURLAdded(t *testing.T) {
 	require.NoError(t, err)
 	oldPod.Status.Phase = corev1.PodRunning
 
-	mockRepo := &MockBotRepository{Bots: []model.Bot{bot}}
+	mockRepo := &MockDesiredBots{Running: []model.Bot{bot}}
 	mockK8s := &MockK8sClient{Pods: []corev1.Pod{*oldPod}}
 
 	config := testControllerConfig()
@@ -765,7 +763,7 @@ func TestBotController_Reconcile_ReplacesPodWhenRuntimeImageChanges(t *testing.T
 	require.NoError(t, err)
 	oldPod.Status.Phase = corev1.PodRunning
 
-	mockRepo := &MockBotRepository{Bots: []model.Bot{bot}}
+	mockRepo := &MockDesiredBots{Running: []model.Bot{bot}}
 	mockK8s := &MockK8sClient{Pods: []corev1.Pod{*oldPod}}
 
 	config := testControllerConfig()

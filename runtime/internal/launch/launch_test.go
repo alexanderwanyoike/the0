@@ -46,7 +46,6 @@ func scheduledRun() launch.Settings {
 	s := realtimeRun()
 	s.SkipSync = false
 	s.BotType = "scheduled"
-	s.IsScheduled = true
 	return s
 }
 
@@ -229,12 +228,11 @@ func TestCommand_SkipsWhatRunsInASidecar(t *testing.T) {
 func TestEnv_AQueryLaunchSendsNoneOfARunsSettings(t *testing.T) {
 	sent := query()
 	sent.BotType = "scheduled"
-	sent.IsScheduled = true
 	sent.NATSURL = "nats://nats:4222"
 
 	env := names(sent.Env())
 
-	for _, runOnly := range []string{"BOT_TYPE", "IS_SCHEDULED", "NATS_URL"} {
+	for _, runOnly := range []string{"BOT_TYPE", "NATS_URL"} {
 		assert.NotContains(t, env, runOnly)
 	}
 }
@@ -242,7 +240,6 @@ func TestEnv_AQueryLaunchSendsNoneOfARunsSettings(t *testing.T) {
 func TestRead_ReadsOnlyTheSettingsOfTheLaunchsMode(t *testing.T) {
 	env := append(query().Env(),
 		launch.Var{Name: "BOT_TYPE", Value: "scheduled"},
-		launch.Var{Name: "IS_SCHEDULED", Value: "true"},
 		launch.Var{Name: "NATS_URL", Value: "nats://nats:4222"},
 	)
 
@@ -250,11 +247,6 @@ func TestRead_ReadsOnlyTheSettingsOfTheLaunchsMode(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, query(), got)
-}
-
-func TestEnv_SendsIsScheduledOnlyForAScheduledRun(t *testing.T) {
-	assert.NotContains(t, names(realtimeRun().Env()), "IS_SCHEDULED")
-	assert.Contains(t, scheduledRun().Env(), launch.Var{Name: "IS_SCHEDULED", Value: "true"})
 }
 
 func TestEnv_LeavesOutEmptySettingsButNotTheStorageConnection(t *testing.T) {

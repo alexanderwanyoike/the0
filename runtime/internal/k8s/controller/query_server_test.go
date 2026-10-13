@@ -16,10 +16,10 @@ func TestK8sBotResolver_QueryEntrypoint(t *testing.T) {
 		return model.CustomBotVersion{Config: model.APIBotConfig{Entrypoints: entrypoints}}
 	}
 	resolver := &k8sBotResolver{
-		botRepo: &MockBotRepository{Bots: []model.Bot{
+		bots: &MockDesiredBots{Running: []model.Bot{
 			{ID: "realtime-no-query", CustomBotVersion: withEntrypoints(map[string]string{"bot": "main.py"})},
 		}},
-		scheduleRepo: &MockBotScheduleRepository{Schedules: []model.BotSchedule{
+		schedules: &MockDesiredSchedules{Running: []model.BotSchedule{
 			{ID: "scheduled-no-query", CustomBotVersion: withEntrypoints(map[string]string{"bot": "main.py"})},
 			{ID: "scheduled-no-entrypoints", CustomBotVersion: withEntrypoints(nil)},
 			{ID: "scheduled-with-query", CustomBotVersion: withEntrypoints(map[string]string{"bot": "main.py", "query": "query.py"})},

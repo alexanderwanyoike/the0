@@ -3,10 +3,8 @@ package model
 // Bot represents a bot instance for execution.
 type Bot struct {
 	ID               string                 `bson:"id" json:"id"`
-	SegmentId        int32                  `bson:"segment_id"`
 	Config           map[string]interface{} `bson:"config"`
 	CustomBotVersion CustomBotVersion       `bson:"custom"`
-	Enabled          *bool                  `bson:"enabled,omitempty"`
 }
 
 // CustomBotVersion contains version-specific bot configuration.
@@ -32,49 +30,10 @@ type APIBotConfig struct {
 	Metadata    map[string]interface{} `json:"metadata" bson:"metadata"`
 }
 
-// IsEnabled returns true if the bot is enabled (default true for backward compatibility)
-func (b *Bot) IsEnabled() bool {
-	// Check struct field first (matches MongoDB query on top-level "enabled" field)
-	if b.Enabled != nil {
-		return *b.Enabled
-	}
-
-	// Fall back to Config["enabled"] for backward compatibility
-	if b.Config == nil {
-		return true // Default to enabled if no config
-	}
-
-	enabled, exists := b.Config["enabled"]
-	if !exists {
-		return true // Default to enabled if enabled field doesn't exist
-	}
-
-	// Handle different types that might be stored
-	switch v := enabled.(type) {
-	case bool:
-		return v
-	case string:
-		return v != "false" && v != "0"
-	case int:
-		return v != 0
-	case int32:
-		return v != 0
-	case int64:
-		return v != 0
-	case float32:
-		return v != 0.0
-	case float64:
-		return v != 0.0
-	default:
-		return true // Default to enabled for unknown types
-	}
-}
-
 // DeepCopy creates a complete copy of the Bot with no shared references.
 func (b Bot) DeepCopy() Bot {
 	cpy := Bot{
-		ID:        b.ID,
-		SegmentId: b.SegmentId,
+		ID: b.ID,
 	}
 
 	// Deep copy Config map
@@ -84,12 +43,6 @@ func (b Bot) DeepCopy() Bot {
 
 	// Deep copy CustomBotVersion
 	cpy.CustomBotVersion = b.CustomBotVersion.DeepCopy()
-
-	// Copy Enabled pointer
-	if b.Enabled != nil {
-		enabledCopy := *b.Enabled
-		cpy.Enabled = &enabledCopy
-	}
 
 	return cpy
 }

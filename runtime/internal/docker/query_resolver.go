@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"runtime/internal/constants"
+	"runtime/internal/desired"
 	"runtime/internal/model"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -43,8 +44,8 @@ func (r *MultiBotResolver) GetBot(ctx context.Context, botID string) (*model.Bot
 	if err == nil {
 		// Mark as scheduled - these should never use realtime query mode
 		r.scheduledIDs[botID] = true
-		// Convert BotSchedule to Bot for query execution
-		return r.scheduleToBot(schedule), nil
+		bot := desired.ScheduleToBot(*schedule)
+		return &bot, nil
 	}
 
 	return nil, fmt.Errorf("bot not found: %s", botID)
@@ -102,13 +103,4 @@ func (r *MultiBotResolver) getScheduleFromCollection(ctx context.Context, dbName
 	}
 
 	return &schedule, nil
-}
-
-// scheduleToBot converts a BotSchedule to a Bot model for query execution.
-func (r *MultiBotResolver) scheduleToBot(schedule *model.BotSchedule) *model.Bot {
-	return &model.Bot{
-		ID:               schedule.ID,
-		Config:           schedule.Config,
-		CustomBotVersion: schedule.CustomBotVersion,
-	}
 }

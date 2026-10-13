@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"runtime/internal/constants"
+	"runtime/internal/desired"
 	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/subscriber"
 	"runtime/internal/util"
 
-	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
-
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -38,13 +37,14 @@ type ScheduleService struct {
 	state       *ScheduleState
 	logger      util.Logger
 	mongoClient *mongo.Client
+	desired     *desired.State
 
 	// Dependency health checking
 	depChecker   *DependencyChecker
 	healthServer *health.Server
 
 	// NATS subscriber for API events
-	subscriber *schedulenatssubscriber.NATSSubscriber
+	subscriber *subscriber.Subscriber
 
 	// Lifecycle
 	ctx    context.Context
@@ -194,29 +194,30 @@ func (s *ScheduleService) initMongoDB(ctx context.Context) error {
 	}
 
 	s.mongoClient = client
+	s.desired = desired.New(desired.NewMongoRepository(
+		client.Database(constants.BOT_RUNNER_DB_NAME).Collection(constants.BOT_RUNNER_COLLECTION),
+		client.Database(s.config.DBName).Collection(s.config.Collection),
+	))
 	s.logger.Info("Connected to MongoDB")
 	return nil
 }
 
 // initNATSSubscriber initializes the NATS subscriber for schedule events
 func (s *ScheduleService) initNATSSubscriber(ctx context.Context) error {
-	subscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
-		NATSUrl:                    s.config.NATSUrl,
-		DBName:                     s.config.DBName,
-		CollectionName:             s.config.Collection,
-		MaxBotSchedulePerPartition: 100, // Not used in simplified mode
-		MaxRetries:                 3,
-		Logger:                     s.logger,
+	sub, err := subscriber.New(ctx, subscriber.Options{
+		NATSUrl:   s.config.NATSUrl,
+		Schedules: &subscriber.Collection{DB: s.config.DBName, Name: s.config.Collection},
+		Logger:    s.logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create NATS subscriber: %w", err)
 	}
 
-	if err := subscriber.Start(ctx); err != nil {
+	if err := sub.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start NATS subscriber: %w", err)
 	}
 
-	s.subscriber = subscriber
+	s.subscriber = sub
 	return nil
 }
 
@@ -260,8 +261,7 @@ func (s *ScheduleService) checkAndExecuteSchedules() {
 	now := time.Now()
 	s.logger.Info("Checking for due schedules at %v", now.Format(time.RFC3339))
 
-	// Find schedules that are due (next_execution_time <= now)
-	dueSchedules, err := s.getDueSchedules(ctx, now)
+	dueSchedules, err := s.desired.DueSchedules(ctx, now)
 	if err != nil {
 		s.logger.Error("Failed to get due schedules: %v", err)
 		return
@@ -294,44 +294,6 @@ func (s *ScheduleService) checkAndExecuteSchedules() {
 	s.state.mu.Lock()
 	s.state.lastCheck = now
 	s.state.mu.Unlock()
-}
-
-// getDueSchedules retrieves schedules that are due for execution
-func (s *ScheduleService) getDueSchedules(ctx context.Context, now time.Time) ([]model.BotSchedule, error) {
-	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
-
-	// Query for enabled schedules with next_execution_time <= now
-	// Check both root level "enabled" field and nested "config.enabled" field
-	filter := bson.M{
-		"next_execution_time": bson.M{"$lte": now.Unix()},
-		"$and": []bson.M{
-			{
-				"$or": []bson.M{
-					{"enabled": bson.M{"$ne": false}},     // root level not disabled
-					{"enabled": bson.M{"$exists": false}}, // root level field missing = enabled by default
-				},
-			},
-			{
-				"$or": []bson.M{
-					{"config.enabled": bson.M{"$ne": false}},     // config level not disabled
-					{"config.enabled": bson.M{"$exists": false}}, // config level field missing = enabled by default
-				},
-			},
-		},
-	}
-
-	cursor, err := collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var schedules []model.BotSchedule
-	if err = cursor.All(ctx, &schedules); err != nil {
-		return nil, err
-	}
-
-	return schedules, nil
 }
 
 // orphanGrace is how long a scheduled container must have been exited before
@@ -429,10 +391,12 @@ func (s *ScheduleService) executeSchedule(ctx context.Context, schedule model.Bo
 		s.state.mu.Unlock()
 	}
 
-	// Update next execution time
-	if err := s.updateNextExecutionTime(ctx, schedule); err != nil {
+	next, err := s.desired.ScheduleRan(ctx, schedule, time.Now())
+	if err != nil {
 		s.logger.Error("Failed to update next execution time for schedule %s: %v", schedule.ID, err)
+		return
 	}
+	s.logger.Info("Updated next execution time for schedule %s to %v", schedule.ID, next.Format(time.RFC3339))
 }
 
 // toExecutable converts a BotSchedule to an Executable
@@ -445,36 +409,7 @@ func (s *ScheduleService) toExecutable(schedule model.BotSchedule) model.Executa
 		Config:          schedule.Config,
 		FilePath:        schedule.CustomBotVersion.FilePath,
 		IsLongRunning:   false, // Scheduled bots run once and exit
-		Segment:         -1,
 	}
-}
-
-// updateNextExecutionTime calculates and updates the next execution time
-func (s *ScheduleService) updateNextExecutionTime(ctx context.Context, schedule model.BotSchedule) error {
-	// Get cron expression from config
-	cronExpr, ok := schedule.Config["schedule"].(string)
-	if !ok || cronExpr == "" {
-		return fmt.Errorf("missing schedule cron expression for schedule %s", schedule.ID)
-	}
-
-	// Calculate next execution time
-	nextTime, err := util.CalculateNextExecutionTime(cronExpr, time.Now())
-	if err != nil {
-		return fmt.Errorf("failed to calculate next execution time: %w", err)
-	}
-
-	// Update in MongoDB
-	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
-	filter := bson.M{"id": schedule.ID}
-	update := bson.M{"$set": bson.M{"next_execution_time": nextTime.Unix()}}
-
-	_, err = collection.UpdateOne(ctx, filter, update)
-	if err != nil {
-		return fmt.Errorf("failed to update next execution time in MongoDB: %w", err)
-	}
-
-	s.logger.Info("Updated next execution time for schedule %s to %v", schedule.ID, nextTime.Format(time.RFC3339))
-	return nil
 }
 
 // shutdown performs graceful shutdown

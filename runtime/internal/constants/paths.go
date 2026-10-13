@@ -10,9 +10,6 @@ const (
 
 	// DefaultLogsPath is the default directory for bot logs
 	DefaultLogsPath = "/var/the0/logs"
-
-	// DefaultDoneFilePath is the path to the done marker file for scheduled bots
-	DefaultDoneFilePath = "/var/the0/done"
 )
 
 // Language wrapper paths

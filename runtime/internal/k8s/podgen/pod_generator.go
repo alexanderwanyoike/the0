@@ -139,7 +139,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		}).
 		WithLaunch(settings).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
-		WithSyncSidecar(g.config.RuntimeImage, bot.ID, false)
+		WithSyncSidecar(g.config.RuntimeImage, bot.ID)
 
 	// Add query entrypoint if configured
 	if botConfig.queryEntrypoint != "" {
@@ -172,7 +172,6 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 	settings.Mode = launch.Run
 	settings.SkipQueryServer = true
 	settings.BotType = "scheduled"
-	settings.IsScheduled = true
 	settings.NATSURL = g.config.NATSURL
 
 	// Build the pod for scheduled execution - NO sidecars
@@ -426,13 +425,11 @@ func (g *PodGenerator) computeConfigHash(bot model.Bot) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
-		Enabled          *bool
 		NATSURL          string
 		RuntimeImage     string
 	}{
 		Config:           bot.Config,
 		CustomBotVersion: bot.CustomBotVersion.Version,
-		Enabled:          bot.Enabled,
 		NATSURL:          g.config.NATSURL,
 		RuntimeImage:     g.config.RuntimeImage,
 	}

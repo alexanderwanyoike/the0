@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"runtime/internal/constants"
+	"runtime/internal/desired"
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/launch"
 	"runtime/internal/runtime/storage"
@@ -82,12 +83,10 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	logger := config.Logger
 	logger.Info("Creating controller manager", "namespace", config.Namespace)
 
-	// Create bot repository
-	botRepo := NewMongoBotRepository(
-		mongoClient,
-		constants.BOT_RUNNER_DB_NAME,
-		constants.BOT_RUNNER_COLLECTION,
-	)
+	state := desired.New(desired.NewMongoRepository(
+		mongoClient.Database(constants.BOT_RUNNER_DB_NAME).Collection(constants.BOT_RUNNER_COLLECTION),
+		mongoClient.Database(constants.BOT_SCHEDULER_DB_NAME).Collection(constants.BOT_SCHEDULE_COLLECTION),
+	))
 
 	// Create bot pod client
 	botControllerName := "the0-bot-controller"
@@ -111,15 +110,8 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			RuntimeImage:           config.RuntimeImage,
 			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
-		botRepo,
+		state,
 		podClient,
-	)
-
-	// Create schedule repository
-	scheduleRepo := NewMongoBotScheduleRepository(
-		mongoClient,
-		constants.BOT_SCHEDULER_DB_NAME,
-		constants.BOT_SCHEDULE_COLLECTION,
 	)
 
 	// Create CronJob client
@@ -144,7 +136,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			RuntimeImage:           config.RuntimeImage,
 			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
 		},
-		scheduleRepo,
+		state,
 		cronClient,
 	)
 
@@ -197,13 +189,13 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 
 	// Create query server
 	queryServer := NewK8sQueryServer(K8sQueryServerConfig{
-		Port:         9477,
-		Handler:      queryHandler,
-		BotRepo:      botRepo,
-		ScheduleRepo: scheduleRepo,
-		Clientset:    clientset,
-		Namespace:    config.Namespace,
-		Logger:       logger,
+		Port:      9477,
+		Handler:   queryHandler,
+		Bots:      state,
+		Schedules: state,
+		Clientset: clientset,
+		Namespace: config.Namespace,
+		Logger:    logger,
 	})
 
 	return &Manager{

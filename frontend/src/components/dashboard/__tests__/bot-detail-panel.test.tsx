@@ -61,6 +61,7 @@ jest.mock("@/hooks/use-bot-logs", () => ({
 }));
 
 jest.mock("@/lib/bot-utils", () => ({
+  ...jest.requireActual("@/lib/bot-utils"),
   // All loaded bots stream; these tests exercise a scheduled bot's defaults
   shouldUseLogStreaming: (bot: unknown) => bot !== null,
   isScheduledBot: () => true,

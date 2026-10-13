@@ -105,7 +105,6 @@ func TestScheduleService_ToExecutable(t *testing.T) {
 	assert.Equal(t, "bot", executable.Entrypoint)
 	assert.Equal(t, "bots/scheduled-bot.zip", executable.FilePath)
 	assert.False(t, executable.IsLongRunning) // Scheduled bots run once
-	assert.Equal(t, int32(-1), executable.Segment)
 	assert.Equal(t, "BTC/USD", executable.Config["symbol"])
 }
 
@@ -560,8 +559,8 @@ func TestScheduleLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	dc.SetLastResult(false, false)
 	service.depChecker = dc
 
-	// NOTE: mongoClient is nil, so if the dep gate regressed and checkSchedules() ran,
-	// it would panic on the MongoDB query, causing the test to fail. This provides
+	// NOTE: desired is nil, so if the dep gate regressed and checkSchedules() ran,
+	// it would panic reading the due schedules, causing the test to fail. This provides
 	// an implicit safety net beyond the explicit start-count assertion below.
 
 	// Start the actual schedule loop goroutine

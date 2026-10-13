@@ -284,7 +284,6 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 	if executable.IsLongRunning {
 		settings.BotType = "realtime"
 	}
-	settings.IsScheduled = !executable.IsLongRunning
 	settings.NATSURL = config.NatsURL
 	return settings
 }

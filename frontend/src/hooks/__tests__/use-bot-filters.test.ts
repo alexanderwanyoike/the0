@@ -96,6 +96,20 @@ describe("useBotFilters", () => {
     expect(filtered.map((b) => b.id)).toEqual(["bot-1", "bot-2"]);
   });
 
+  it("status filter 'enabled' keeps every bot the runtime runs", () => {
+    const { result } = renderHook(() => useBotFilters());
+    const runByTheRuntime: Bot[] = [0, "", null].map((enabled, i) => ({
+      id: `runs-${i}`,
+      config: { name: `Runs ${i}`, enabled },
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    }));
+
+    act(() => result.current.setStatus("enabled"));
+    const filtered = result.current.filterBots(runByTheRuntime);
+    expect(filtered.map((b) => b.id)).toEqual(["runs-0", "runs-1", "runs-2"]);
+  });
+
   it("status filter 'disabled' returns only disabled bots", () => {
     const { result } = renderHook(() => useBotFilters());
     const bots = makeBots();

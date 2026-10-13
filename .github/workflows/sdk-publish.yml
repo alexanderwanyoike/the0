@@ -258,7 +258,9 @@ jobs:
             [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::could not read the module coordinates from sbt (got '$value')"; exit 1; }
           done
           URL="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/${ORG//.//}/$ARTIFACT/$VERSION/$ARTIFACT-$VERSION.pom"
-          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
+          # GitHub Packages answers a file it has with a 302 to its storage; curl
+          # follows it without sending the credentials to that other host.
+          STATUS=$(curl -sS -L -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
           case "$STATUS" in
             200) echo "$ORG:$ARTIFACT:$VERSION is already on GitHub Packages, skipping"; echo "publish=false" >> "$GITHUB_OUTPUT" ;;
             404) echo "$ORG:$ARTIFACT:$VERSION is not on GitHub Packages yet"; echo "publish=true" >> "$GITHUB_OUTPUT" ;;

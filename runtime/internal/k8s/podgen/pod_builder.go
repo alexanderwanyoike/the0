@@ -208,15 +208,12 @@ const SyncSidecarReadinessPort = 8079
 // - Start before the main container
 // - Must pass startup probe before main container starts
 // - Keep running alongside main container
-func (b *PodBuilder) WithSyncSidecar(image string, botID string, watchDone bool) *PodBuilder {
+func (b *PodBuilder) WithSyncSidecar(image string, botID string) *PodBuilder {
 	args := []string{
 		"--bot-id", botID,
 		"--state-path", "/state",
 		"--logs-path", "/var/the0/logs",
 		"--readiness-port", fmt.Sprintf("%d", SyncSidecarReadinessPort),
-	}
-	if watchDone {
-		args = append(args, "--watch-done", "/var/the0/done")
 	}
 
 	// Native sidecar uses restartPolicy on the container (K8s 1.28+)
