@@ -25,11 +25,11 @@ func TestCalculateNextExecutionTime(t *testing.T) {
 			description: "Should parse standard 5-field cron expression",
 		},
 		{
-			name:        "Valid 6-field cron expression - every second",
+			name:        "Invalid cron expression - 6 fields with seconds",
 			cronExpr:    "* * * * * *",
 			baseTime:    baseTime,
-			expectError: false,
-			description: "Should parse 6-field cron expression with seconds",
+			expectError: true,
+			description: "Should reject a seconds field, which Kubernetes CronJobs cannot honour",
 		},
 		{
 			name:        "Valid specific time - daily at 9 AM",
@@ -132,12 +132,11 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 		assert.Equal(t, expectedNext, nextTime)
 	})
 
-	t.Run("Six-field format with seconds", func(t *testing.T) {
+	t.Run("Six-field format with seconds is rejected rather than trimmed", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 30, 30, 0, time.UTC)
-		nextTime, err := CalculateNextExecutionTime("0 * * * * *", baseTime) // Every minute at 0 seconds
+		nextTime, err := CalculateNextExecutionTime("30 0 9 * * *", baseTime)
 
-		assert.NoError(t, err)
-		expectedNext := time.Date(2023, 1, 1, 12, 31, 0, 0, time.UTC)
-		assert.Equal(t, expectedNext, nextTime)
+		assert.Error(t, err)
+		assert.Equal(t, time.Time{}, nextTime)
 	})
 }
