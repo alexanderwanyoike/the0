@@ -6,19 +6,16 @@ import (
 	"time"
 )
 
+// CalculateNextExecutionTime accepts standard 5-field cron (and descriptors
+// such as @daily) only. Kubernetes CronJobs cannot honour a seconds field, so
+// both modes refuse one rather than run the schedule at a different time.
 func CalculateNextExecutionTime(
 	cronExpr string,
 	t time.Time,
 ) (time.Time, error) {
-	// Try to parse with seconds first (6-field format)
-	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	schedule, err := parser.Parse(cronExpr)
+	schedule, err := cron.ParseStandard(cronExpr)
 	if err != nil {
-		// If that fails, try standard 5-field format (without seconds)
-		schedule, err = cron.ParseStandard(cronExpr)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to parse cron expression: %v", err)
-		}
+		return time.Time{}, fmt.Errorf("failed to parse cron expression: %v", err)
 	}
 
 	return schedule.Next(t), nil
