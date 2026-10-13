@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,52 +18,6 @@ import (
 	"runtime/internal/constants"
 	"runtime/internal/s3test"
 )
-
-// TestRunDaemonInit_MissingEnvironment tests init fails with missing MinIO config
-func TestRunDaemonInit_MissingEnvironment(t *testing.T) {
-	// Clear MinIO environment variables
-	os.Unsetenv("MINIO_ENDPOINT")
-	os.Unsetenv("MINIO_ACCESS_KEY")
-	os.Unsetenv("MINIO_SECRET_KEY")
-
-	daemonBotID = constants.TestBotID
-	daemonCodePath = t.TempDir()
-	daemonStatePath = t.TempDir()
-	daemonCodeFile = ""
-
-	err := runDaemonInit(nil, nil)
-	assert.Error(t, err, "Should fail with missing MinIO config")
-	assert.Contains(t, err.Error(), "MINIO_ENDPOINT")
-}
-
-// TestRunDaemonInit_InvalidEndpoint tests init fails with invalid endpoint
-func TestRunDaemonInit_InvalidEndpoint(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	// Set environment with invalid endpoint
-	os.Setenv("MINIO_ENDPOINT", fmt.Sprintf("invalid-host:%d", constants.TestInvalidPort))
-	os.Setenv("MINIO_ACCESS_KEY", "testkey")
-	os.Setenv("MINIO_SECRET_KEY", "testsecret")
-	defer func() {
-		os.Unsetenv("MINIO_ENDPOINT")
-		os.Unsetenv("MINIO_ACCESS_KEY")
-		os.Unsetenv("MINIO_SECRET_KEY")
-	}()
-
-	daemonBotID = constants.TestBotID
-	daemonCodePath = t.TempDir()
-	daemonStatePath = t.TempDir()
-	daemonCodeFile = ""
-
-	err := runDaemonInit(nil, nil)
-	// Should fail to connect or timeout, but not panic
-	if err != nil {
-		// Expected - can't connect to invalid host
-		assert.NotNil(t, err)
-	}
-}
 
 // TestRunDaemonSync_MissingEnvironment tests sync fails with missing MinIO config
 func TestRunDaemonSync_MissingEnvironment(t *testing.T) {
@@ -83,17 +36,6 @@ func TestRunDaemonSync_MissingEnvironment(t *testing.T) {
 	assert.Contains(t, err.Error(), "MINIO_ENDPOINT")
 }
 
-// TestDaemonInit_Defaults tests that default paths are applied
-func TestDaemonInit_Defaults(t *testing.T) {
-	daemonBotID = constants.TestBotID
-	daemonCodePath = ""  // Should default to constants.TestBotDir
-	daemonStatePath = "" // Should default to constants.TestStateDir
-	daemonCodeFile = ""
-
-	// We can't run this without MinIO, but we can verify flags are set
-	assert.Equal(t, constants.TestBotID, daemonBotID)
-}
-
 // TestDaemonSync_Defaults tests that default values are applied
 func TestDaemonSync_Defaults(t *testing.T) {
 	daemonBotID = constants.TestBotID
@@ -103,16 +45,6 @@ func TestDaemonSync_Defaults(t *testing.T) {
 
 	// We can't run this without MinIO, but we can verify flags are set
 	assert.Equal(t, constants.TestBotID, daemonBotID)
-}
-
-// TestDaemonInit_CodeFileSpecified tests init with explicit code file path
-func TestDaemonInit_CodeFileSpecified(t *testing.T) {
-	daemonBotID = constants.TestBotID
-	daemonCodePath = constants.TestBotDir
-	daemonStatePath = constants.TestStateDir
-	daemonCodeFile = constants.TestCodeFile
-
-	assert.Equal(t, constants.TestCodeFile, daemonCodeFile)
 }
 
 // TestDaemonSync_WatchDoneSpecified tests sync with watch-done file
@@ -191,166 +123,6 @@ func createStateTarGz(t *testing.T, files map[string]string) []byte {
 	require.NoError(t, err)
 
 	return buf.Bytes()
-}
-
-// TestRunDaemonInit_Integration tests full init workflow with MinIO
-func TestRunDaemonInit_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	minioClient, endpoint := startMinIOTestContainer(t)
-
-	ctx := context.Background()
-
-	// Create test bot code
-	testCode := createTestBotZip(t, map[string]string{
-		"main.py":     "print('Hello from test bot')",
-		"config.json": `{"version": "1.0.0"}`,
-		"README.md":   "# Test Bot",
-	})
-
-	// Upload to MinIO
-	codeObjectPath := "test-bot/v1.0.0/code.zip"
-	_, err := minioClient.PutObject(ctx, "custom-bots", codeObjectPath,
-		bytes.NewReader(testCode), int64(len(testCode)),
-		minio.PutObjectOptions{ContentType: "application/zip"})
-	require.NoError(t, err)
-
-	// Set up environment
-	codeDir := t.TempDir()
-	stateDir := t.TempDir()
-
-	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
-	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
-	defer func() {
-		os.Unsetenv("MINIO_ENDPOINT")
-		os.Unsetenv("MINIO_ACCESS_KEY")
-		os.Unsetenv("MINIO_SECRET_KEY")
-	}()
-
-	// Configure daemon init
-	daemonBotID = "test-bot"
-	daemonCodePath = codeDir
-	daemonStatePath = stateDir
-	daemonCodeFile = codeObjectPath
-
-	// Run daemon init
-	err = runDaemonInit(nil, nil)
-	require.NoError(t, err, "Daemon init should succeed")
-
-	// Verify files were extracted
-	assert.FileExists(t, filepath.Join(codeDir, "main.py"))
-	assert.FileExists(t, filepath.Join(codeDir, "config.json"))
-	assert.FileExists(t, filepath.Join(codeDir, "README.md"))
-
-	// Verify file contents
-	content, err := os.ReadFile(filepath.Join(codeDir, "main.py"))
-	require.NoError(t, err)
-	assert.Equal(t, "print('Hello from test bot')", string(content))
-}
-
-// TestRunDaemonInit_MultipleFiles tests init with multiple code files
-func TestRunDaemonInit_MultipleFiles(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	minioClient, endpoint := startMinIOTestContainer(t)
-
-	ctx := context.Background()
-
-	// Create test bot code with multiple files
-	testCode := createTestBotZip(t, map[string]string{
-		"bot.js":       "console.log('main');",
-		"utils.js":     "exports.helper = () => {};",
-		"package.json": `{"name": "test-bot", "version": "1.0.0"}`,
-		"README.md":    "# Test Bot\n\nA test bot.",
-	})
-
-	// Upload code to MinIO
-	codeObjectPath := "test-bot-multi/v1.0.0/code.zip"
-	_, err := minioClient.PutObject(ctx, "custom-bots", codeObjectPath,
-		bytes.NewReader(testCode), int64(len(testCode)),
-		minio.PutObjectOptions{ContentType: "application/zip"})
-	require.NoError(t, err)
-
-	// Set up environment
-	codeDir := t.TempDir()
-	stateDir := t.TempDir()
-
-	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
-	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
-	defer func() {
-		os.Unsetenv("MINIO_ENDPOINT")
-		os.Unsetenv("MINIO_ACCESS_KEY")
-		os.Unsetenv("MINIO_SECRET_KEY")
-	}()
-
-	// Configure daemon init
-	daemonBotID = "test-bot-multi"
-	daemonCodePath = codeDir
-	daemonStatePath = stateDir
-	daemonCodeFile = codeObjectPath
-
-	// Run daemon init
-	err = runDaemonInit(nil, nil)
-	require.NoError(t, err, "Daemon init should succeed")
-
-	// Verify all files were extracted
-	assert.FileExists(t, filepath.Join(codeDir, "bot.js"))
-	assert.FileExists(t, filepath.Join(codeDir, "utils.js"))
-	assert.FileExists(t, filepath.Join(codeDir, "package.json"))
-	assert.FileExists(t, filepath.Join(codeDir, "README.md"))
-
-	// Verify file contents
-	content, err := os.ReadFile(filepath.Join(codeDir, "bot.js"))
-	require.NoError(t, err)
-	assert.Equal(t, "console.log('main');", string(content))
-
-	// Avoid unused variable warning
-	_ = minioClient
-}
-
-// TestRunDaemonInit_NoCodeFile tests init without code file (only state)
-func TestRunDaemonInit_NoCodeFile(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	minioClient, endpoint := startMinIOTestContainer(t)
-
-	// Set up environment
-	codeDir := t.TempDir()
-	stateDir := t.TempDir()
-
-	os.Setenv("MINIO_ENDPOINT", endpoint)
-	os.Setenv("MINIO_ACCESS_KEY", s3test.AccessKey)
-	os.Setenv("MINIO_SECRET_KEY", s3test.SecretKey)
-	defer func() {
-		os.Unsetenv("MINIO_ENDPOINT")
-		os.Unsetenv("MINIO_ACCESS_KEY")
-		os.Unsetenv("MINIO_SECRET_KEY")
-	}()
-
-	// Configure daemon init with empty code file
-	daemonBotID = "test-bot-no-code"
-	daemonCodePath = codeDir
-	daemonStatePath = stateDir
-	daemonCodeFile = "" // No code to download
-
-	// Run daemon init - should succeed even without code
-	err := runDaemonInit(nil, nil)
-	require.NoError(t, err, "Daemon init should succeed without code file")
-
-	// Verify directories exist
-	assert.DirExists(t, codeDir)
-	assert.DirExists(t, stateDir)
-
-	// Avoid unused variable warning
-	_ = minioClient
 }
 
 // TestRunDaemonSync_ShortRun tests sync runs briefly without errors

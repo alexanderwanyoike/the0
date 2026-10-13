@@ -12,25 +12,7 @@ import (
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Bot container daemon commands",
-	Long:  `Commands for initializing and syncing bot state in containers (Docker and K8s).`,
-}
-
-var daemonInitCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize bot environment (download code and state)",
-	Long: `Downloads bot code and state from MinIO to prepare the container environment.
-Used as init container (K8s) or entrypoint prefix (Docker).
-
-Note: Entrypoint generation has been removed. The 'runtime execute' command
-now handles execution directly using language-specific wrappers.
-
-Required environment variables:
-  MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
-
-Optional environment variables:
-  MINIO_CODE_BUCKET (default: custom-bots)
-  MINIO_STATE_BUCKET (default: bot-state)`,
-	RunE: runDaemonInit,
+	Long:  `Commands for syncing bot state and logs in containers (Docker and K8s).`,
 }
 
 var daemonSyncCmd = &cobra.Command{
@@ -52,23 +34,14 @@ Optional environment variables:
 
 var (
 	daemonBotID         string
-	daemonCodePath      string
 	daemonStatePath     string
 	daemonLogsPath      string
-	daemonCodeFile      string
 	daemonSyncInterval  time.Duration
 	daemonWatchDone     string
 	daemonReadinessPort int
 )
 
 func init() {
-	// Init command flags
-	daemonInitCmd.Flags().StringVar(&daemonBotID, "bot-id", "", "Bot ID (required)")
-	daemonInitCmd.Flags().StringVar(&daemonCodePath, "code-path", "/bot", "Path to extract code")
-	daemonInitCmd.Flags().StringVar(&daemonStatePath, "state-path", "/state", "Path for state directory")
-	daemonInitCmd.Flags().StringVar(&daemonCodeFile, "code-file", "", "MinIO object path for code (e.g., my-bot/v1.0.0/code.zip)")
-	daemonInitCmd.MarkFlagRequired("bot-id")
-
 	// Sync command flags
 	daemonSyncCmd.Flags().StringVar(&daemonBotID, "bot-id", "", "Bot ID (required)")
 	daemonSyncCmd.Flags().StringVar(&daemonStatePath, "state-path", "/state", "Path for state directory")
@@ -78,18 +51,8 @@ func init() {
 	daemonSyncCmd.Flags().IntVar(&daemonReadinessPort, "readiness-port", 0, "Port for health/readiness HTTP server (K8s sidecar mode)")
 	daemonSyncCmd.MarkFlagRequired("bot-id")
 
-	daemonCmd.AddCommand(daemonInitCmd)
 	daemonCmd.AddCommand(daemonSyncCmd)
 	rootCmd.AddCommand(daemonCmd)
-}
-
-func runDaemonInit(cmd *cobra.Command, args []string) error {
-	return daemon.Init(context.Background(), daemon.InitOptions{
-		BotID:     daemonBotID,
-		CodePath:  daemonCodePath,
-		StatePath: daemonStatePath,
-		CodeFile:  daemonCodeFile,
-	})
 }
 
 func runDaemonSync(cmd *cobra.Command, args []string) error {

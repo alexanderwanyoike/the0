@@ -4,9 +4,6 @@ import "time"
 
 // Test timeouts and intervals
 const (
-	// TestInvalidPort is a port number guaranteed to be invalid
-	TestInvalidPort = 99999
-
 	// Test sync intervals
 	TestDefaultSyncInterval = 60 * time.Second
 	TestCustomSyncInterval  = 30 * time.Second
@@ -21,9 +18,6 @@ const (
 const (
 	// TestBotID is a standard bot ID for tests
 	TestBotID = "test-bot"
-
-	// TestCodeFile is a sample code file path
-	TestCodeFile = "custom-bot/v2.0.0/code.zip"
 
 	// TestDoneFilePath is a path for done file testing
 	TestDoneFilePath = "/tmp/done"

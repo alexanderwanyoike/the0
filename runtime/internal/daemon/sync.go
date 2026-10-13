@@ -1,3 +1,5 @@
+// Package daemon syncs a bot container's state and logs to storage, either
+// in-process for runtime execute or as the Kubernetes sync sidecar.
 package daemon
 
 import (
