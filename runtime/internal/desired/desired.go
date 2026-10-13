@@ -85,17 +85,20 @@ func (s *State) DueSchedules(ctx context.Context, now time.Time) ([]model.BotSch
 }
 
 // ScheduleRan records that schedule ran at ranAt, so its next run is the
-// cron's next tick after ranAt.
-func (s *State) ScheduleRan(ctx context.Context, schedule model.BotSchedule, ranAt time.Time) error {
+// cron's next tick after ranAt, which it returns.
+func (s *State) ScheduleRan(ctx context.Context, schedule model.BotSchedule, ranAt time.Time) (time.Time, error) {
 	cron, ok := schedule.Config["schedule"].(string)
 	if !ok || cron == "" {
-		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
+		return time.Time{}, fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 	next, err := util.CalculateNextExecutionTime(cron, ranAt)
 	if err != nil {
-		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
+		return time.Time{}, fmt.Errorf("schedule %s: %w", schedule.ID, err)
 	}
-	return s.repo.SetNextExecutionTime(ctx, schedule.ID, next)
+	if err := s.repo.SetNextExecutionTime(ctx, schedule.ID, next); err != nil {
+		return time.Time{}, err
+	}
+	return next, nil
 }
 
 // ScheduleToBot is schedule as the Bot its runs and queries launch.

@@ -128,10 +128,11 @@ func TestScheduleRan_MovesTheNextRunToTheCronsNextTickAfterTheRun(t *testing.T) 
 	ranAt := time.Date(2026, 10, 13, 9, 0, 42, 0, time.UTC)
 	repo := &fakeRepository{}
 
-	err := desired.New(repo).ScheduleRan(context.Background(), schedule("daily", "0 9 * * *", ranAt), ranAt)
+	next, err := desired.New(repo).ScheduleRan(context.Background(), schedule("daily", "0 9 * * *", ranAt), ranAt)
 
 	require.NoError(t, err)
-	assert.Equal(t, time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC), repo.nextRuns["daily"])
+	assert.Equal(t, time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC), next)
+	assert.Equal(t, next, repo.nextRuns["daily"])
 }
 
 func TestScheduleRan_LeavesTheNextRunWhenTheCronCannotBeRead(t *testing.T) {
@@ -146,7 +147,7 @@ func TestScheduleRan_LeavesTheNextRunWhenTheCronCannotBeRead(t *testing.T) {
 			s := schedule("broken", "", time.Time{})
 			s.Config["schedule"] = cron
 
-			err := desired.New(repo).ScheduleRan(context.Background(), s, time.Now())
+			_, err := desired.New(repo).ScheduleRan(context.Background(), s, time.Now())
 
 			assert.Error(t, err)
 			assert.Empty(t, repo.nextRuns)
