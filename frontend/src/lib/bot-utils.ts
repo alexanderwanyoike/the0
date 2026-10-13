@@ -13,6 +13,17 @@ export function shouldUseLogStreaming(bot: Bot | null): boolean {
 }
 
 /**
+ * Whether a bot is enabled, by the runtime's rule (runtime/internal/desired):
+ * it runs unless config.enabled is false, so any other value, or none,
+ * leaves it enabled.
+ */
+export function isBotEnabled(
+  config: Record<string, any> | null | undefined,
+): boolean {
+  return config?.enabled !== false;
+}
+
+/**
  * Whether a bot runs on a cron schedule rather than continuously.
  * Drives UI defaults (interval picker starts in "latest" mode because a
  * scheduled bot's most recent output is rarely inside today's window),
