@@ -11,9 +11,8 @@ import (
 	"runtime/internal/desired"
 	"runtime/internal/k8s/health"
 	"runtime/internal/model"
+	"runtime/internal/subscriber"
 	"runtime/internal/util"
-
-	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
@@ -45,7 +44,7 @@ type ScheduleService struct {
 	healthServer *health.Server
 
 	// NATS subscriber for API events
-	subscriber *schedulenatssubscriber.NATSSubscriber
+	subscriber *subscriber.Subscriber
 
 	// Lifecycle
 	ctx    context.Context
@@ -205,22 +204,20 @@ func (s *ScheduleService) initMongoDB(ctx context.Context) error {
 
 // initNATSSubscriber initializes the NATS subscriber for schedule events
 func (s *ScheduleService) initNATSSubscriber(ctx context.Context) error {
-	subscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
-		NATSUrl:        s.config.NATSUrl,
-		DBName:         s.config.DBName,
-		CollectionName: s.config.Collection,
-		MaxRetries:     3,
-		Logger:         s.logger,
+	sub, err := subscriber.New(ctx, subscriber.Options{
+		NATSUrl:   s.config.NATSUrl,
+		Schedules: &subscriber.Collection{DB: s.config.DBName, Name: s.config.Collection},
+		Logger:    s.logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create NATS subscriber: %w", err)
 	}
 
-	if err := subscriber.Start(ctx); err != nil {
+	if err := sub.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start NATS subscriber: %w", err)
 	}
 
-	s.subscriber = subscriber
+	s.subscriber = sub
 	return nil
 }
 

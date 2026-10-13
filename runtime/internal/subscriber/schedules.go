@@ -4,30 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"runtime/internal/botevents"
-	"runtime/internal/constants"
-	"runtime/internal/desired"
-	"runtime/internal/model"
-	"runtime/internal/util"
-	"strconv"
-	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOptions "go.mongodb.org/mongo-driver/mongo/options"
-)
 
-const (
-	SubjectBotScheduleCreated = "the0.bot-schedule.created"
-	SubjectBotScheduleUpdated = "the0.bot-schedule.updated"
-	SubjectBotScheduleDeleted = "the0.bot-schedule.deleted"
+	"runtime/internal/botevents"
+	"runtime/internal/desired"
+	"runtime/internal/model"
 )
-
-// ConsumerName names this subscriber's durable consumer (botevents.Config.Name).
-const ConsumerName = "runtime-bot-schedule-events"
 
 type BotScheduleMessage struct {
 	ID     string                 `json:"id"`
@@ -50,179 +36,20 @@ type CustomBotScheduleVersionData struct {
 	Version   string             `json:"version"`
 }
 
-type SubscriberOptions struct {
-	NATSUrl        string
-	DBName         string
-	CollectionName string
-	MaxRetries     int
-	Logger         util.Logger
-}
-
-func DefaultOptions() SubscriberOptions {
-	return SubscriberOptions{
-		NATSUrl:        os.Getenv("NATS_URL"),
-		DBName:         constants.BOT_SCHEDULER_DB_NAME,
-		CollectionName: constants.BOT_SCHEDULE_COLLECTION,
-		MaxRetries:     getDefaultMaxRetries(),
-		Logger:         &util.DefaultLogger{},
-	}
-}
-
-func getDefaultMaxRetries() int {
-	maxRetries := os.Getenv("MAX_RETRIES")
-	if maxRetries == "" {
-		return 3
-	}
-
-	retries, err := strconv.Atoi(maxRetries)
-	if err != nil {
-		return 3
-	}
-
-	return retries
-}
-
-type Subscriber interface {
-	Start(ctx context.Context) error
-	Stop() error
-}
-
-type NATSSubscriber struct {
-	mongoClient    *mongo.Client
-	natsConn       *nats.Conn
-	dbName         string
-	collectionName string
-	maxRetries     int
-	events         *botevents.Consumer
-	stopChan       chan struct{}
-	wg             sync.WaitGroup
-	logger         util.Logger
-}
-
-func NewNATSSubscriber(
-	ctx context.Context,
-	options ...SubscriberOptions,
-) (*NATSSubscriber, error) {
-	// Set the default options
-	opts := DefaultOptions()
-	if len(options) > 0 {
-		opts = options[0]
-		if opts.Logger == nil {
-			opts.Logger = &util.DefaultLogger{}
-		}
-
-		if opts.MaxRetries <= 0 {
-			opts.MaxRetries = getDefaultMaxRetries()
-		}
-	}
-
-	// Validate NATS URL
-	if opts.NATSUrl == "" {
-		return nil, fmt.Errorf("NATS_URL environment variable is not set")
-	}
-
-	// Get MongoDB URI from environment variable
-	mongoUri := os.Getenv("MONGO_URI")
-	if mongoUri == "" {
-		return nil, fmt.Errorf("MONGO_URI environment variable is not set")
-	}
-
-	mongoClient, err := mongo.Connect(ctx, mongoOptions.Client().ApplyURI(mongoUri))
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MongoDB: %v", err)
-	}
-
-	// Verify MongoDB connection
-	if err := mongoClient.Ping(ctx, nil); err != nil {
-		return nil, fmt.Errorf("failed to ping MongoDB: %v", err)
-	}
-
-	// Create NATS connection
-	natsConn, err := botevents.Connect(opts.NATSUrl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
-	}
-
-	return &NATSSubscriber{
-		mongoClient:    mongoClient,
-		natsConn:       natsConn,
-		dbName:         opts.DBName,
-		collectionName: opts.CollectionName,
-		maxRetries:     opts.MaxRetries,
-		stopChan:       make(chan struct{}),
-		wg:             sync.WaitGroup{},
-		logger:         opts.Logger,
-	}, nil
-}
-
-func (s *NATSSubscriber) Start(ctx context.Context) error {
-	s.logger.Info("Starting NATS Subscriber...")
-
-	events, err := botevents.NewConsumer(s.natsConn, botevents.Config{
-		Name:     ConsumerName,
-		Subjects: []string{SubjectBotScheduleCreated, SubjectBotScheduleUpdated, SubjectBotScheduleDeleted},
-		Handler:  s.handle,
-		Logger:   s.logger,
-	})
-	if err != nil {
-		return err
-	}
-	if err := events.Start(ctx); err != nil {
-		return err
-	}
-	s.events = events
-
-	s.logger.Info("NATS Subscriber started successfully")
-	return nil
-}
-
-func (s *NATSSubscriber) handle(ctx context.Context, subject string, data []byte) error {
+func (s *Subscriber) handleSchedule(ctx context.Context, subject string, data []byte) error {
 	switch subject {
 	case SubjectBotScheduleCreated:
-		return s.handleCreate(ctx, data)
+		return s.createSchedule(ctx, data)
 	case SubjectBotScheduleUpdated:
-		return s.handleUpdate(ctx, data)
+		return s.updateSchedule(ctx, data)
 	case SubjectBotScheduleDeleted:
-		return s.handleDelete(ctx, data)
+		return s.deleteSchedule(ctx, data)
 	default:
 		return botevents.Permanent(fmt.Errorf("unknown subject: %s", subject))
 	}
 }
 
-// IsReady reports whether the subscriber is bound to THE0_EVENTS and
-// receiving events.
-func (s *NATSSubscriber) IsReady() bool {
-	return s.events != nil && s.events.Ready()
-}
-
-func (s *NATSSubscriber) Stop() error {
-	s.logger.Info("Stopping NATS Subscriber")
-
-	// Stop all message processing
-	close(s.stopChan)
-
-	// Wait for all goroutines to finish
-	s.wg.Wait()
-
-	if s.events != nil {
-		s.events.Stop()
-	}
-
-	// Close NATS connection
-	if s.natsConn != nil {
-		s.natsConn.Close()
-	}
-
-	// Disconnect from MongoDB
-	if err := s.mongoClient.Disconnect(context.Background()); err != nil {
-		return fmt.Errorf("failed to disconnect from MongoDB: %v", err)
-	}
-
-	s.logger.Info("NATS Subscriber stopped successfully")
-	return nil
-}
-
-func (s *NATSSubscriber) parseEventMessage(data []byte) (*BotScheduleMessage, error) {
+func (s *Subscriber) parseScheduleMessage(data []byte) (*BotScheduleMessage, error) {
 	var event BotScheduleEvent
 	if err := json.Unmarshal(data, &event); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event: %v", err)
@@ -244,13 +71,13 @@ func (s *NATSSubscriber) parseEventMessage(data []byte) (*BotScheduleMessage, er
 	return botScheduleMessage, nil
 }
 
-func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
-	message, err := s.parseEventMessage(data)
+func (s *Subscriber) createSchedule(ctx context.Context, data []byte) error {
+	message, err := s.parseScheduleMessage(data)
 	if err != nil {
 		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
-	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
+	collection := s.schedules
 	filter := bson.M{"id": message.ID}
 	count, err := collection.CountDocuments(ctx, filter)
 
@@ -266,13 +93,13 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
 	return s.upsertBotSchedule(ctx, collection, *message)
 }
 
-func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
-	message, err := s.parseEventMessage(data)
+func (s *Subscriber) updateSchedule(ctx context.Context, data []byte) error {
+	message, err := s.parseScheduleMessage(data)
 	if err != nil {
 		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
-	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
+	collection := s.schedules
 	filter := bson.M{"id": message.ID}
 	var existingBot model.BotSchedule
 	err = collection.FindOne(ctx, filter).Decode(&existingBot)
@@ -320,13 +147,13 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
 	return nil
 }
 
-func (s *NATSSubscriber) handleDelete(ctx context.Context, data []byte) error {
-	message, err := s.parseEventMessage(data)
+func (s *Subscriber) deleteSchedule(ctx context.Context, data []byte) error {
+	message, err := s.parseScheduleMessage(data)
 	if err != nil {
 		return botevents.Permanent(fmt.Errorf("failed to parse message: %v", err))
 	}
 
-	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
+	collection := s.schedules
 	filter := bson.M{"id": message.ID}
 
 	result, err := collection.DeleteOne(ctx, filter)
@@ -343,7 +170,7 @@ func (s *NATSSubscriber) handleDelete(ctx context.Context, data []byte) error {
 }
 
 // upsertBotSchedule inserts or updates a bot schedule in the collection.
-func (s *NATSSubscriber) upsertBotSchedule(
+func (s *Subscriber) upsertBotSchedule(
 	ctx context.Context,
 	collection *mongo.Collection,
 	message BotScheduleMessage,
@@ -407,19 +234,4 @@ func getMapKeys(m map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
-}
-
-type MockSubscriber struct {
-	// Mocked methods and fields for testing
-	SubscribeCalled bool
-}
-
-func (m *MockSubscriber) Start(ctx context.Context) error {
-	m.SubscribeCalled = true
-	return nil
-}
-
-func (m *MockSubscriber) Stop() error {
-	m.SubscribeCalled = false
-	return nil
 }
