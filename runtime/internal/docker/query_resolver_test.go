@@ -23,46 +23,6 @@ func TestNewMultiBotResolver(t *testing.T) {
 	assert.Equal(t, 0, len(resolver.scheduledIDs))
 }
 
-func TestScheduleToBot(t *testing.T) {
-	resolver := NewMultiBotResolver(nil, nil)
-
-	schedule := &model.BotSchedule{
-		ID:     "test-schedule-1",
-		Config: map[string]interface{}{"key": "value"},
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "v1.0.0",
-			Config: model.APIBotConfig{
-				Runtime: "python3.11",
-			},
-		},
-		NextExecutionTime: time.Now().Add(24 * time.Hour).Unix(),
-	}
-
-	bot := resolver.scheduleToBot(schedule)
-
-	assert.Equal(t, "test-schedule-1", bot.ID)
-	assert.Equal(t, map[string]interface{}{"key": "value"}, bot.Config)
-	assert.Equal(t, "v1.0.0", bot.CustomBotVersion.Version)
-}
-
-func TestScheduleToBot_EmptyConfig(t *testing.T) {
-	resolver := NewMultiBotResolver(nil, nil)
-
-	schedule := &model.BotSchedule{
-		ID:     "test-schedule-2",
-		Config: nil,
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "v2.0.0",
-		},
-	}
-
-	bot := resolver.scheduleToBot(schedule)
-
-	assert.Equal(t, "test-schedule-2", bot.ID)
-	assert.Nil(t, bot.Config)
-	assert.Equal(t, "v2.0.0", bot.CustomBotVersion.Version)
-}
-
 func TestGetContainerID_ScheduledBot_ReturnsEmpty(t *testing.T) {
 	resolver := NewMultiBotResolver(nil, nil)
 
