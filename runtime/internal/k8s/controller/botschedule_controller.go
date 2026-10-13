@@ -13,7 +13,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -451,17 +450,6 @@ func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage strin
 
 	hash := sha256.Sum256(jsonBytes)
 	return hex.EncodeToString(hash[:])[:16]
-}
-
-// mustParseQuantityWithDefault parses a resource quantity string.
-// On invalid input, logs a warning and returns the provided default value.
-func mustParseQuantityWithDefault(s, defaultValue string) resource.Quantity {
-	q, err := resource.ParseQuantity(s)
-	if err != nil {
-		util.LogMaster("[ScheduleController] Warning: invalid resource quantity '%s': %v, using default '%s'", s, err, defaultValue)
-		return resource.MustParse(defaultValue)
-	}
-	return q
 }
 
 // ---- Real K8s CronJob Client Implementation ----
