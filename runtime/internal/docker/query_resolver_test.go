@@ -23,46 +23,6 @@ func TestNewMultiBotResolver(t *testing.T) {
 	assert.Equal(t, 0, len(resolver.scheduledIDs))
 }
 
-func TestScheduleToBot(t *testing.T) {
-	resolver := NewMultiBotResolver(nil, nil)
-
-	schedule := &model.BotSchedule{
-		ID:     "test-schedule-1",
-		Config: map[string]interface{}{"key": "value"},
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "v1.0.0",
-			Config: model.APIBotConfig{
-				Runtime: "python3.11",
-			},
-		},
-		NextExecutionTime: time.Now().Add(24 * time.Hour).Unix(),
-	}
-
-	bot := resolver.scheduleToBot(schedule)
-
-	assert.Equal(t, "test-schedule-1", bot.ID)
-	assert.Equal(t, map[string]interface{}{"key": "value"}, bot.Config)
-	assert.Equal(t, "v1.0.0", bot.CustomBotVersion.Version)
-}
-
-func TestScheduleToBot_EmptyConfig(t *testing.T) {
-	resolver := NewMultiBotResolver(nil, nil)
-
-	schedule := &model.BotSchedule{
-		ID:     "test-schedule-2",
-		Config: nil,
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "v2.0.0",
-		},
-	}
-
-	bot := resolver.scheduleToBot(schedule)
-
-	assert.Equal(t, "test-schedule-2", bot.ID)
-	assert.Nil(t, bot.Config)
-	assert.Equal(t, "v2.0.0", bot.CustomBotVersion.Version)
-}
-
 func TestGetContainerID_ScheduledBot_ReturnsEmpty(t *testing.T) {
 	resolver := NewMultiBotResolver(nil, nil)
 
@@ -127,7 +87,6 @@ func TestGetBot_FromRealtimeCollection(t *testing.T) {
 	resolver := NewMultiBotResolver(client, nil)
 
 	// Insert a bot into realtime collection
-	enabled := true
 	testBot := model.Bot{
 		ID:     "realtime-bot-1",
 		Config: map[string]interface{}{"strategy": "momentum"},
@@ -137,7 +96,6 @@ func TestGetBot_FromRealtimeCollection(t *testing.T) {
 				Runtime: "python3.11",
 			},
 		},
-		Enabled: &enabled,
 	}
 
 	collection := client.Database(constants.BOT_RUNNER_DB_NAME).Collection(constants.BOT_RUNNER_COLLECTION)
@@ -150,7 +108,6 @@ func TestGetBot_FromRealtimeCollection(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "realtime-bot-1", bot.ID)
 	assert.Equal(t, "v1.2.3", bot.CustomBotVersion.Version)
-	assert.True(t, bot.IsEnabled())
 
 	// Verify it's marked as NOT scheduled
 	assert.False(t, resolver.scheduledIDs["realtime-bot-1"])
@@ -256,7 +213,6 @@ func TestGetBot_PreferRealtimeOverScheduled(t *testing.T) {
 	// Insert bot in both collections with same ID
 	botID := "duplicate-bot"
 
-	enabled := true
 	realtimeBot := model.Bot{
 		ID:     botID,
 		Config: map[string]interface{}{"source": "realtime"},
@@ -266,7 +222,6 @@ func TestGetBot_PreferRealtimeOverScheduled(t *testing.T) {
 				Runtime: "python3.11",
 			},
 		},
-		Enabled: &enabled,
 	}
 
 	scheduledBot := model.BotSchedule{

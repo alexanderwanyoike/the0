@@ -20,10 +20,10 @@ import (
 	"runtime/internal/util"
 )
 
-// BotRepository provides access to bot data from MongoDB.
-type BotRepository interface {
-	// FindAllEnabled returns all bots that should be running.
-	FindAllEnabled(ctx context.Context) ([]model.Bot, error)
+// DesiredBots are the realtime Bots that should be running, as the desired
+// module decides for both modes.
+type DesiredBots interface {
+	Bots(ctx context.Context) ([]model.Bot, error)
 }
 
 // K8sClient provides access to Kubernetes Pod operations.
@@ -70,7 +70,7 @@ type BotControllerConfig struct {
 // enabled or have been deleted.
 type BotController struct {
 	config       BotControllerConfig
-	botRepo      BotRepository
+	bots         DesiredBots
 	k8sClient    K8sClient
 	podGenerator *podgen.PodGenerator
 
@@ -83,7 +83,7 @@ type BotController struct {
 // NewBotController creates a new BotController.
 func NewBotController(
 	config BotControllerConfig,
-	botRepo BotRepository,
+	bots DesiredBots,
 	k8sClient K8sClient,
 ) *BotController {
 	if config.Namespace == "" {
@@ -111,7 +111,7 @@ func NewBotController(
 
 	return &BotController{
 		config:       config,
-		botRepo:      botRepo,
+		bots:         bots,
 		k8sClient:    k8sClient,
 		podGenerator: podgen.NewPodGenerator(podGenConfig),
 		stopCh:       make(chan struct{}),
@@ -174,7 +174,7 @@ func (c *BotController) Reconcile(ctx context.Context) error {
 	util.LogMaster("[BotController] Starting reconciliation")
 
 	// 1. Get desired state from MongoDB (all enabled bots)
-	desiredBots, err := c.botRepo.FindAllEnabled(ctx)
+	desiredBots, err := c.bots.Bots(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get desired bots from MongoDB: %w", err)
 	}

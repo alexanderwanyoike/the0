@@ -425,13 +425,11 @@ func (g *PodGenerator) computeConfigHash(bot model.Bot) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
-		Enabled          *bool
 		NATSURL          string
 		RuntimeImage     string
 	}{
 		Config:           bot.Config,
 		CustomBotVersion: bot.CustomBotVersion.Version,
-		Enabled:          bot.Enabled,
 		NATSURL:          g.config.NATSURL,
 		RuntimeImage:     g.config.RuntimeImage,
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"runtime/internal/constants"
+	"runtime/internal/desired"
 	"runtime/internal/k8s/health"
 	"runtime/internal/model"
 	"runtime/internal/util"
@@ -41,6 +42,7 @@ type BotService struct {
 	state       *ServiceState
 	logger      util.Logger
 	mongoClient *mongo.Client
+	desired     *desired.State
 
 	// Dependency health checking
 	depChecker   *DependencyChecker
@@ -181,6 +183,10 @@ func (s *BotService) initMongoDB(ctx context.Context) error {
 	}
 
 	s.mongoClient = client
+	s.desired = desired.New(desired.NewMongoRepository(
+		client.Database(s.config.DBName).Collection(s.config.Collection),
+		client.Database(constants.BOT_SCHEDULER_DB_NAME).Collection(constants.BOT_SCHEDULE_COLLECTION),
+	))
 	s.logger.Info("Connected to MongoDB")
 	return nil
 }
@@ -237,7 +243,7 @@ func (s *BotService) reconcile() {
 	s.logger.Info("Starting reconciliation cycle")
 
 	// Step 1: Get desired state from database (all enabled bots)
-	desiredBots, err := s.getDesiredBots(ctx)
+	desiredBots, err := s.desired.Bots(ctx)
 	if err != nil {
 		s.logger.Error("Failed to get desired bots: %v", err)
 		return
@@ -279,51 +285,12 @@ func (s *BotService) reconcile() {
 	s.logger.Info("Reconciliation completed in %v", time.Since(start))
 }
 
-// getDesiredBots retrieves all enabled bots from MongoDB
-func (s *BotService) getDesiredBots(ctx context.Context) ([]model.Bot, error) {
-	collection := s.mongoClient.Database(s.config.DBName).Collection(s.config.Collection)
-
-	// Query for enabled bots
-	// Check both root level "enabled" field and nested "config.enabled" field
-	filter := bson.M{
-		"$and": []bson.M{
-			{
-				"$or": []bson.M{
-					{"enabled": bson.M{"$ne": false}},     // root level not disabled
-					{"enabled": bson.M{"$exists": false}}, // root level field missing = enabled by default
-				},
-			},
-			{
-				"$or": []bson.M{
-					{"config.enabled": bson.M{"$ne": false}},     // config level not disabled
-					{"config.enabled": bson.M{"$exists": false}}, // config level field missing = enabled by default
-				},
-			},
-		},
-	}
-
-	cursor, err := collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var bots []model.Bot
-	if err = cursor.All(ctx, &bots); err != nil {
-		return nil, err
-	}
-
-	return bots, nil
-}
-
 // performReconciliation handles the actual reconciliation logic
 func (s *BotService) performReconciliation(ctx context.Context, desiredBots []model.Bot, actualContainers []*ContainerInfo) {
 	// Build lookup maps
 	desiredBotsMap := make(map[string]model.Bot)
 	for _, bot := range desiredBots {
-		if bot.IsEnabled() {
-			desiredBotsMap[bot.ID] = bot
-		}
+		desiredBotsMap[bot.ID] = bot
 	}
 
 	// Handle possible duplicate containers per bot

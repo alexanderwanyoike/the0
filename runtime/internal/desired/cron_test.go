@@ -1,4 +1,4 @@
-package util
+package desired
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCalculateNextExecutionTime(t *testing.T) {
+func TestNextExecutionTime(t *testing.T) {
 	baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -25,11 +25,11 @@ func TestCalculateNextExecutionTime(t *testing.T) {
 			description: "Should parse standard 5-field cron expression",
 		},
 		{
-			name:        "Valid 6-field cron expression - every second",
+			name:        "Invalid cron expression - 6 fields with seconds",
 			cronExpr:    "* * * * * *",
 			baseTime:    baseTime,
-			expectError: false,
-			description: "Should parse 6-field cron expression with seconds",
+			expectError: true,
+			description: "Should reject a seconds field, which Kubernetes CronJobs cannot honour",
 		},
 		{
 			name:        "Valid specific time - daily at 9 AM",
@@ -91,7 +91,7 @@ func TestCalculateNextExecutionTime(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			nextTime, err := CalculateNextExecutionTime(tt.cronExpr, tt.baseTime)
+			nextTime, err := NextExecutionTime(tt.cronExpr, tt.baseTime)
 
 			if tt.expectError {
 				assert.Error(t, err, tt.description)
@@ -104,10 +104,10 @@ func TestCalculateNextExecutionTime(t *testing.T) {
 	}
 }
 
-func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
+func TestNextExecutionTimeSpecificCases(t *testing.T) {
 	t.Run("Every minute should advance by one minute", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 30, 0, 0, time.UTC)
-		nextTime, err := CalculateNextExecutionTime("* * * * *", baseTime)
+		nextTime, err := NextExecutionTime("* * * * *", baseTime)
 
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 1, 12, 31, 0, 0, time.UTC)
@@ -116,7 +116,7 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 
 	t.Run("Daily at 9 AM should advance to next 9 AM", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC) // Sunday noon
-		nextTime, err := CalculateNextExecutionTime("0 9 * * *", baseTime)
+		nextTime, err := NextExecutionTime("0 9 * * *", baseTime)
 
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 2, 9, 0, 0, 0, time.UTC) // Monday 9 AM
@@ -125,19 +125,18 @@ func TestCalculateNextExecutionTimeSpecificCases(t *testing.T) {
 
 	t.Run("Weekly on Monday should advance to next Monday", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC) // Sunday
-		nextTime, err := CalculateNextExecutionTime("0 10 * * 1", baseTime)
+		nextTime, err := NextExecutionTime("0 10 * * 1", baseTime)
 
 		assert.NoError(t, err)
 		expectedNext := time.Date(2023, 1, 2, 10, 0, 0, 0, time.UTC) // Monday 10 AM
 		assert.Equal(t, expectedNext, nextTime)
 	})
 
-	t.Run("Six-field format with seconds", func(t *testing.T) {
+	t.Run("Six-field format with seconds is rejected rather than trimmed", func(t *testing.T) {
 		baseTime := time.Date(2023, 1, 1, 12, 30, 30, 0, time.UTC)
-		nextTime, err := CalculateNextExecutionTime("0 * * * * *", baseTime) // Every minute at 0 seconds
+		nextTime, err := NextExecutionTime("30 0 9 * * *", baseTime)
 
-		assert.NoError(t, err)
-		expectedNext := time.Date(2023, 1, 1, 12, 31, 0, 0, time.UTC)
-		assert.Equal(t, expectedNext, nextTime)
+		assert.Error(t, err)
+		assert.Equal(t, time.Time{}, nextTime)
 	})
 }

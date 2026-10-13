@@ -275,6 +275,35 @@ func TestSubscriber_BotScheduleUpdated_UpdatesMongo(t *testing.T) {
 
 // TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule verifies that updating a
 // non-existent bot schedule creates it (robust upsert behavior)
+func TestSubscriber_BotScheduleEnabledAgain_NextRunsAtTheCronsNextTick(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := context.Background()
+	events.ResetStream(t)
+	db := sharedInfra.GetDatabase("schedule_enabled_again")
+	missedWhileDisabled := time.Now().Add(-48 * time.Hour).Unix()
+	_, err := db.Collection(testCollection).InsertOne(ctx, model.BotSchedule{
+		ID:                "enabled-again",
+		NextExecutionTime: missedWhileDisabled,
+		Config:            map[string]interface{}{"symbol": "BTC/USD", "schedule": "0 9 * * *", "enabled": false},
+		CustomBotVersion:  model.CustomBotVersion{Version: "1.0.0"},
+	})
+	require.NoError(t, err)
+	startSubscriber(t, db)
+
+	enabled := testScheduleEvent("enabled-again", "0 9 * * *")
+	enabled.Config["enabled"] = true
+	events.PublishJSON(t, SubjectBotScheduleUpdated, enabled)
+	events.WaitForHandled(t)
+
+	var stored model.BotSchedule
+	require.NoError(t, db.Collection(testCollection).FindOne(ctx, bson.M{"id": "enabled-again"}).Decode(&stored))
+	assert.Greater(t, stored.NextExecutionTime, time.Now().Unix(),
+		"a schedule enabled again waits for its cron's next tick, as its new CronJob does in Kubernetes, "+
+			"rather than running at once for a tick it missed while disabled")
+}
+
 func TestSubscriber_BotScheduleUpdated_NotFound_CreatesSchedule(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

@@ -522,12 +522,11 @@ func TestDefaultBotServiceConfig(t *testing.T) {
 	assert.NotNil(t, config.Logger)
 }
 
-// Test helper to create a bot with enabled status
-func createTestBot(id string, config map[string]interface{}, enabled bool) model.Bot {
+// Test helper to create a bot
+func createTestBot(id string, config map[string]interface{}) model.Bot {
 	return model.Bot{
-		ID:      id,
-		Enabled: &enabled,
-		Config:  config,
+		ID:     id,
+		Config: config,
 		CustomBotVersion: model.CustomBotVersion{
 			FilePath: "bots/test.zip",
 			Config: model.APIBotConfig{
@@ -559,7 +558,7 @@ func TestPerformReconciliation_StartNewBot(t *testing.T) {
 
 	// Setup: Bot is desired but not running
 	desiredBots := []model.Bot{
-		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true),
+		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}),
 	}
 	actualContainers := []*ContainerInfo{} // No containers running
 
@@ -627,7 +626,7 @@ func TestPerformReconciliation_AdoptRunningContainer(t *testing.T) {
 	service.runner = mockRunner
 
 	// Setup: Bot is running but not tracked in state initially
-	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	desiredBots := []model.Bot{bot1}
 	actualContainers := []*ContainerInfo{
@@ -668,7 +667,7 @@ func TestPerformReconciliation_TrackedBotStaysTracked(t *testing.T) {
 	service.runner = mockRunner
 
 	// Setup: Bot is already tracked in state
-	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	// Pre-populate state (bot was tracked from previous reconciliation)
 	service.state.SetRunningBot(&RunningBot{
@@ -714,8 +713,8 @@ func TestPerformReconciliation_ConfigChanged(t *testing.T) {
 	oldConfig := map[string]interface{}{"symbol": "BTC"}
 	newConfig := map[string]interface{}{"symbol": "ETH"}
 
-	oldBot := createTestBot("bot1", oldConfig, true)
-	newBot := createTestBot("bot1", newConfig, true)
+	oldBot := createTestBot("bot1", oldConfig)
+	newBot := createTestBot("bot1", newConfig)
 
 	// Add bot with old config to state
 	service.state.SetRunningBot(&RunningBot{
@@ -761,7 +760,7 @@ func TestPerformReconciliation_NoChanges(t *testing.T) {
 
 	// Setup: Bot is running with same config
 	config := map[string]interface{}{"symbol": "BTC"}
-	bot1 := createTestBot("bot1", config, true)
+	bot1 := createTestBot("bot1", config)
 
 	// Add bot to state
 	service.state.SetRunningBot(&RunningBot{
@@ -806,7 +805,7 @@ func TestPerformReconciliation_DuplicateContainers(t *testing.T) {
 	service.runner = mockRunner
 
 	// Setup: Same bot running in multiple containers, already tracked
-	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	// Pre-populate state so bot survives cleanup
 	service.state.SetRunningBot(&RunningBot{
@@ -850,31 +849,6 @@ func TestPerformReconciliation_DuplicateContainers(t *testing.T) {
 	assert.Equal(t, "container1", bots["bot1"].ContainerID)
 }
 
-// Test performReconciliation - disabled bot not started
-func TestPerformReconciliation_DisabledBot(t *testing.T) {
-	service, err := NewBotService(BotServiceConfig{
-		MongoURI: "mongodb://localhost:27017",
-	})
-	require.NoError(t, err)
-	defer service.Stop()
-
-	mockRunner := NewMockDockerRunner()
-	service.runner = mockRunner
-
-	// Setup: Bot is disabled
-	disabledBot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, false)
-	desiredBots := []model.Bot{disabledBot}
-	actualContainers := []*ContainerInfo{}
-
-	// Call reconciliation
-	service.performReconciliation(service.ctx, desiredBots, actualContainers)
-
-	// Verify disabled bot was not started
-	bots := service.state.GetAllRunningBots()
-	assert.Len(t, bots, 0)
-	assert.Equal(t, 0, mockRunner.GetStartCallCount())
-}
-
 // Test performReconciliation - multiple bots
 func TestPerformReconciliation_MultipleBots(t *testing.T) {
 	service, err := NewBotService(BotServiceConfig{
@@ -887,14 +861,14 @@ func TestPerformReconciliation_MultipleBots(t *testing.T) {
 	service.runner = mockRunner
 
 	// Setup: Multiple bots with different states
-	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
-	bot2 := createTestBot("bot2", map[string]interface{}{"symbol": "ETH"}, true)
-	bot3 := createTestBot("bot3", map[string]interface{}{"symbol": "SOL"}, true)
+	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
+	bot2 := createTestBot("bot2", map[string]interface{}{"symbol": "ETH"})
+	bot3 := createTestBot("bot3", map[string]interface{}{"symbol": "SOL"})
 
 	desiredBots := []model.Bot{bot1, bot2, bot3}
 
 	// bot1 already running, bot2 needs to start, bot3 running with wrong config
-	oldBot3 := createTestBot("bot3", map[string]interface{}{"symbol": "OLD"}, true)
+	oldBot3 := createTestBot("bot3", map[string]interface{}{"symbol": "OLD"})
 	service.state.SetRunningBot(&RunningBot{
 		BotID:       "bot1",
 		ContainerID: "container1",
@@ -1003,7 +977,7 @@ func BenchmarkPerformReconciliation_NoChanges(b *testing.B) {
 	defer service.Stop()
 
 	// Setup stable state
-	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot1 := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 	service.state.SetRunningBot(&RunningBot{
 		BotID:       "bot1",
 		ContainerID: "container1",
@@ -1062,7 +1036,7 @@ func TestStartBot_ErrorStatus(t *testing.T) {
 	mockRunner.shouldFailStart = true
 	service.runner = mockRunner
 
-	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	// Initial failed restarts count
 	initialMetrics := service.state.GetMetrics()
@@ -1099,7 +1073,7 @@ func TestStopBot_FailureRevertsState(t *testing.T) {
 	mockRunner.shouldFailStop = true
 	service.runner = mockRunner
 
-	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	// Add bot to state
 	service.state.SetRunningBot(&RunningBot{
@@ -1152,7 +1126,7 @@ func TestReconcile_CrashedContainers(t *testing.T) {
 	// Add a crashed container to the mock
 	mockRunner.AddCrashedContainer("bot1", "crashed-container-1", 1)
 
-	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 	service.state.SetRunningBot(&RunningBot{
 		BotID:       "bot1",
 		ContainerID: "crashed-container-1",
@@ -1241,7 +1215,7 @@ func TestStopBot_TransitionToStoppingState(t *testing.T) {
 	}
 	service.runner = mockRunner
 
-	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 	service.state.SetRunningBot(&RunningBot{
 		BotID:       "bot1",
 		ContainerID: "container1",
@@ -1278,9 +1252,9 @@ func TestStartBot_ConcurrentCalls(t *testing.T) {
 
 	// Start multiple bots concurrently
 	bots := []model.Bot{
-		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true),
-		createTestBot("bot2", map[string]interface{}{"symbol": "ETH"}, true),
-		createTestBot("bot3", map[string]interface{}{"symbol": "SOL"}, true),
+		createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}),
+		createTestBot("bot2", map[string]interface{}{"symbol": "ETH"}),
+		createTestBot("bot3", map[string]interface{}{"symbol": "SOL"}),
 	}
 
 	for _, bot := range bots {
@@ -1314,8 +1288,8 @@ func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	dc.SetLastResult(false, false) // both deps down
 	service.depChecker = dc
 
-	// NOTE: mongoClient is nil, so if the dep gate regressed and reconcile() ran,
-	// it would panic on the MongoDB query, causing the test to fail. This provides
+	// NOTE: desired is nil, so if the dep gate regressed and reconcile() ran,
+	// it would panic reading the desired bots, causing the test to fail. This provides
 	// an implicit safety net beyond the explicit start-count assertion below.
 
 	// Start the actual reconciliation loop goroutine
@@ -1350,7 +1324,7 @@ func TestStartBot_BackoffAfterRepeatedFailures(t *testing.T) {
 	dc.SetLastResult(true, true)
 	service.depChecker = dc
 
-	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	// Fail 5 times
 	for i := 0; i < 5; i++ {
@@ -1382,7 +1356,7 @@ func TestStartBot_BackoffResets(t *testing.T) {
 	dc.SetLastResult(true, true)
 	service.depChecker = dc
 
-	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, true)
+	bot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"})
 
 	// Record some failures manually
 	for i := 0; i < 5; i++ {
