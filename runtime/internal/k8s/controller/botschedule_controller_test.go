@@ -197,6 +197,58 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 	assert.Equal(t, 0, mockCronClient.CreateCalled, "should not create CronJob without schedule expression")
 }
 
+func TestBotScheduleController_Reconcile_NoCronJobForASixFieldCron(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "30 0 9 * * *")
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{schedule},
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, mockCronClient.CreateCalled,
+		"a seconds field must be refused, not dropped into a CronJob that runs at another time")
+}
+
+func TestBotScheduleController_Reconcile_KeepsTheCronJobWhenTheCronGainsASecondsField(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "30 0 10 * * *")
+
+	mockRepo := &MockBotScheduleRepository{
+		Schedules: []model.BotSchedule{schedule},
+	}
+	mockCronClient := NewMockK8sCronJobClient()
+	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "schedule-schedule-1",
+			Namespace:   "the0",
+			Labels:      map[string]string{LabelScheduleID: "schedule-1"},
+			Annotations: map[string]string{AnnotationScheduleHash: "old-hash-value"},
+		},
+		Spec: batchv1.CronJobSpec{Schedule: "0 9 * * *"},
+	}
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+
+	err := controller.Reconcile(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, mockCronClient.UpdateCalled,
+		"a seconds field must be refused, not dropped into a CronJob that runs at another time")
+	assert.Equal(t, "0 9 * * *", mockCronClient.CronJobs["the0/schedule-schedule-1"].Spec.Schedule)
+}
+
 func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 	configHash := computeScheduleHash(schedule, "", "")
