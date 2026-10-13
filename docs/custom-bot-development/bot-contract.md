@@ -53,7 +53,7 @@ The working directory is the code directory, `/bot`. A query entrypoint never ru
 | `PYTHONPATH` | `python3.11` | `/bot/vendor:/bot`, followed by any inherited value. |
 | `PATH` | `nodejs20` | `/opt/node20/bin`, followed by the inherited value, so a bot that starts `node` itself gets Node.js 20 too. |
 
-The bot can also see the runtime's own settings, which are not part of the contract, and it must not rely on them. These include `CODE_FILE`, `RUNTIME`, `ENTRYPOINT`, `QUERY_ENTRYPOINT`, `QUERY_RESULT_KEY`, `IS_SCHEDULED`, `ENTRYPOINT_TYPE`, and the storage and NATS settings. The bot inherits them because `runtime execute` passes its own environment through. `runtime/internal/launch` defines the settings `runtime execute` reads.
+The bot can also see the runtime's own settings, which are not part of the contract, and it must not rely on them. These include `CODE_FILE`, `RUNTIME`, `ENTRYPOINT`, `QUERY_ENTRYPOINT`, `QUERY_RESULT_KEY`, `ENTRYPOINT_TYPE`, and the storage and NATS settings. The bot inherits them because `runtime execute` passes its own environment through. `runtime/internal/launch` defines the settings `runtime execute` reads.
 
 ## Entrypoints
 

@@ -172,7 +172,6 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 	settings.Mode = launch.Run
 	settings.SkipQueryServer = true
 	settings.BotType = "scheduled"
-	settings.IsScheduled = true
 	settings.NATSURL = g.config.NATSURL
 
 	// Build the pod for scheduled execution - NO sidecars

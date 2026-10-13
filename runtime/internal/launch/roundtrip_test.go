@@ -79,7 +79,6 @@ func launchOf(mode launch.Mode, botType string) launch.Settings {
 		QueryEntrypoint: "query.py",
 		BotConfig:       `{"symbol":"BTC/USD"}`,
 		BotType:         botType,
-		IsScheduled:     botType == "scheduled",
 		StateDir:        launch.DefaultStateDir,
 		Storage: launch.Storage{
 			Endpoint:  "minio:9000",
@@ -96,7 +95,6 @@ func launchOf(mode launch.Mode, botType string) launch.Settings {
 		s.QueryResultKey = roundTripResultKey
 		// A query is neither a realtime nor a scheduled run, and saves nothing.
 		s.BotType = ""
-		s.IsScheduled = false
 		s.NATSURL = ""
 	}
 	return s

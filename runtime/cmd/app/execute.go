@@ -37,7 +37,6 @@ Environment Variables (optional):
   QUERY_ENTRYPOINT - Query entrypoint for realtime bots
   BOT_TYPE         - "realtime" or "scheduled"
   QUERY_PARAMS     - JSON params for query mode
-  IS_SCHEDULED     - "true" for scheduled bots
 
 Execution Modes:
   runtime execute                          - Docker mode: spawns sync + query server subprocesses

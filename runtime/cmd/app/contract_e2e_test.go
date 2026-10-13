@@ -346,9 +346,6 @@ func launchEnv(t *testing.T, lang contractLanguage, c contractCase) []string {
 			t.Fatalf("the case sets %s, and this check does not know how the runtime sets it", key)
 		}
 	}
-	if c.Entrypoint == "bot" && c.Env["BOT_TYPE"] == "scheduled" {
-		env = append(env, "IS_SCHEDULED=true")
-	}
 	return env
 }
 

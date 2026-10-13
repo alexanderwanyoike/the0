@@ -98,9 +98,6 @@ type Settings struct {
 	// BotType is realtime or scheduled. A realtime run with a query
 	// entrypoint starts the query server.
 	BotType string
-	// IsScheduled marks a scheduled run, whose end the runner records in the
-	// done file for the sync.
-	IsScheduled bool
 
 	// QueryPath is the query a query launch answers. The command carries it.
 	QueryPath string
@@ -292,7 +289,6 @@ var variables = []variable{
 	text("ENTRYPOINT", func(s *Settings) *string { return &s.Entrypoint }),
 	text("BOT_CONFIG", func(s *Settings) *string { return &s.BotConfig }),
 	ofRuns(text("BOT_TYPE", func(s *Settings) *string { return &s.BotType })),
-	ofRuns(flag("IS_SCHEDULED", func(s *Settings) *bool { return &s.IsScheduled })),
 	text("QUERY_ENTRYPOINT", func(s *Settings) *string { return &s.QueryEntrypoint }),
 	text("QUERY_PARAMS", func(s *Settings) *string { return &s.QueryParams }),
 	text("QUERY_RESULT_KEY", func(s *Settings) *string { return &s.QueryResultKey }),
