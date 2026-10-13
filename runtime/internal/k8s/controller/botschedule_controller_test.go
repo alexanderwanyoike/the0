@@ -350,26 +350,6 @@ func TestBotScheduleController_Reconcile_StopsRetriesOnExistingCronJobs(t *testi
 	}
 }
 
-func TestConvertToK8sCronFormat(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"5 fields unchanged", "0 9 * * *", "0 9 * * *"},
-		{"6 fields strips seconds", "0 0 9 * * *", "0 9 * * *"},
-		{"5 fields with ranges", "0-30 */2 * * 1-5", "0-30 */2 * * 1-5"},
-		{"6 fields strips seconds preserves rest", "30 0 9 1 * 0", "0 9 1 * 0"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := convertToK8sCronFormat(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestGenerateCronJobName(t *testing.T) {
 	tests := []struct {
 		scheduleID string

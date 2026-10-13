@@ -253,11 +253,12 @@ func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedu
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 
-	// Convert to K8s cron format if needed
-	k8sCronExpr := convertToK8sCronFormat(cronExpr)
+	if _, err := util.CalculateNextExecutionTime(cronExpr, time.Now()); err != nil {
+		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
+	}
 
 	// Create CronJob spec using podGenerator
-	cronJob, err := c.createCronJobSpec(schedule, k8sCronExpr)
+	cronJob, err := c.createCronJobSpec(schedule, cronExpr)
 	if err != nil {
 		return fmt.Errorf("failed to create CronJob spec: %w", err)
 	}
@@ -277,10 +278,12 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule mode
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 
-	k8sCronExpr := convertToK8sCronFormat(cronExpr)
+	if _, err := util.CalculateNextExecutionTime(cronExpr, time.Now()); err != nil {
+		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
+	}
 
 	// Update the CronJob
-	updated, err := c.createCronJobSpec(schedule, k8sCronExpr)
+	updated, err := c.createCronJobSpec(schedule, cronExpr)
 	if err != nil {
 		return fmt.Errorf("failed to create CronJob spec: %w", err)
 	}
@@ -407,18 +410,6 @@ func generateCronJobName(scheduleID string) string {
 		name = name[:52]
 	}
 	return strings.TrimRight(name, "-")
-}
-
-// convertToK8sCronFormat converts cron expressions to K8s format.
-// K8s CronJobs only support 5-field cron (minute hour day month weekday).
-// If the expression has 6 fields (with seconds), we strip the seconds field.
-func convertToK8sCronFormat(cronExpr string) string {
-	fields := strings.Fields(cronExpr)
-	if len(fields) == 6 {
-		// Strip the seconds field (first field)
-		return strings.Join(fields[1:], " ")
-	}
-	return cronExpr
 }
 
 // computeScheduleHash creates a hash of the schedule config. Controller-level
