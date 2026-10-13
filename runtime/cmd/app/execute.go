@@ -13,7 +13,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"runtime/internal/constants"
 	"runtime/internal/daemon"
 	"runtime/internal/execute"
 	"runtime/internal/launch"
@@ -38,7 +37,6 @@ Environment Variables (optional):
   QUERY_ENTRYPOINT - Query entrypoint for realtime bots
   BOT_TYPE         - "realtime" or "scheduled"
   QUERY_PARAMS     - JSON params for query mode
-  IS_SCHEDULED     - "true" for scheduled bots
 
 Execution Modes:
   runtime execute                          - Docker mode: spawns sync + query server subprocesses
@@ -163,12 +161,6 @@ func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 			BotID:     cfg.BotID,
 			StatePath: cfg.StatePath,
 			LogsPath:  cfg.LogsPath,
-			WatchDone: func() string {
-				if cfg.IsScheduled {
-					return constants.DefaultDoneFilePath
-				}
-				return ""
-			}(),
 		}, logger)
 		syncRunner.Start()
 		// Wait for sync runner to initialize (with timeout)
@@ -202,15 +194,7 @@ func runBot(cfg *launch.Settings, logger *util.DefaultLogger) int {
 	// Step 5: Execute the bot (blocks)
 	exitCode := executeBotProcess(ctx, cfg, logger)
 
-	// Step 6: Write done file for scheduled bots
-	if cfg.IsScheduled {
-		doneFile := constants.DefaultDoneFilePath
-		if err := os.WriteFile(doneFile, []byte(fmt.Sprintf("%d", exitCode)), 0644); err != nil {
-			logger.Info("Failed to write done file: %v", err)
-		}
-	}
-
-	// Step 7: Cleanup (sync runner performs final sync)
+	// Step 6: Cleanup (sync runner performs final sync)
 	cleanup()
 
 	return exitCode

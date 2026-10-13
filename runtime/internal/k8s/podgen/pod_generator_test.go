@@ -89,7 +89,6 @@ func TestPodGenerator_GeneratePod_RealtimeBot(t *testing.T) {
 	assert.Equal(t, "main.py", envMap["ENTRYPOINT"])
 	assert.Equal(t, "python3.11", envMap["RUNTIME"])
 	assert.Equal(t, "realtime", envMap["BOT_TYPE"])
-	assert.Empty(t, envMap["IS_SCHEDULED"], "realtime bots should not have IS_SCHEDULED set")
 	assert.Contains(t, envMap["BOT_CONFIG"], "BTC/USD")
 	assert.Equal(t, "1", envMap["PYTHONUNBUFFERED"],
 		"python stdout must be unbuffered so metric() lines reach the log pipe immediately")
@@ -207,13 +206,12 @@ func TestPodGenerator_GenerateScheduledPodSpec(t *testing.T) {
 	assert.Equal(t, []string{"/app/runtime", "execute", "--skip-query-server"}, botCommand)
 	assert.NotContains(t, botCommand, "--skip-sync") // Sync runs inline for scheduled bots
 
-	// Bot should have BOT_TYPE=scheduled and IS_SCHEDULED=true
+	// Bot should have BOT_TYPE=scheduled
 	botEnvMap := make(map[string]string)
 	for _, env := range podSpec.Containers[0].Env {
 		botEnvMap[env.Name] = env.Value
 	}
 	assert.Equal(t, "scheduled", botEnvMap["BOT_TYPE"])
-	assert.Equal(t, "true", botEnvMap["IS_SCHEDULED"], "scheduled bots must set IS_SCHEDULED=true for done file mechanism")
 }
 
 func TestPodGenerator_GenerateQueryPod(t *testing.T) {

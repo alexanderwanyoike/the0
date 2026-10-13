@@ -4,9 +4,8 @@ import (
 	"testing"
 )
 
-// writtenCollections is everything the subscriber writes: its own collection
-// and the partition and counter bookkeeping.
-var writtenCollections = []string{testCollection, "partitions", "counters"}
+// writtenCollections is everything the subscriber writes.
+var writtenCollections = []string{testCollection}
 
 func TestRepeat_BotCreated_LeavesTheSameState(t *testing.T) {
 	if testing.Short() {
@@ -25,7 +24,7 @@ func TestRepeat_BotUpdated_LeavesTheSameState(t *testing.T) {
 	}
 	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_updated_repeatedly")
-	insertBot(t, db, "updated-repeatedly", 1)
+	insertBot(t, db, "updated-repeatedly")
 	startSubscriber(t, db)
 
 	updated := testBotMessage("updated-repeatedly")
@@ -39,7 +38,7 @@ func TestRepeat_BotDeleted_LeavesTheSameState(t *testing.T) {
 	}
 	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("bot_deleted_repeatedly")
-	insertBot(t, db, "deleted-repeatedly", 2)
+	insertBot(t, db, "deleted-repeatedly")
 	startSubscriber(t, db)
 
 	events.RequireRepeatIsHarmless(t, db, writtenCollections, SubjectBotDeleted, BotMessage{ID: "deleted-repeatedly"})

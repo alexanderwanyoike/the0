@@ -404,7 +404,6 @@ func TestLoadExecuteConfig_WithOptionalFields(t *testing.T) {
 	os.Setenv("QUERY_ENTRYPOINT", "query.py")
 	os.Setenv("QUERY_PARAMS", `{"limit": 10}`)
 	os.Setenv("QUERY_RESULT_KEY", "test-bot/123/result.json")
-	os.Setenv("IS_SCHEDULED", "true")
 	defer func() {
 		os.Unsetenv("BOT_ID")
 		os.Unsetenv("RUNTIME")
@@ -413,7 +412,6 @@ func TestLoadExecuteConfig_WithOptionalFields(t *testing.T) {
 		os.Unsetenv("QUERY_ENTRYPOINT")
 		os.Unsetenv("QUERY_PARAMS")
 		os.Unsetenv("QUERY_RESULT_KEY")
-		os.Unsetenv("IS_SCHEDULED")
 	}()
 
 	cfg, err := loadExecuteConfig()
@@ -423,7 +421,6 @@ func TestLoadExecuteConfig_WithOptionalFields(t *testing.T) {
 	assert.Equal(t, "query.py", cfg.QueryEntrypoint)
 	assert.Equal(t, `{"limit": 10}`, cfg.QueryParams)
 	assert.Equal(t, "test-bot/123/result.json", cfg.QueryResultKey)
-	assert.True(t, cfg.IsScheduled)
 }
 
 func TestLoadExecuteConfig_CustomPaths(t *testing.T) {

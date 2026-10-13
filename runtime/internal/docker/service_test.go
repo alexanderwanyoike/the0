@@ -320,7 +320,6 @@ func TestBotService_ToExecutable(t *testing.T) {
 	assert.Equal(t, "bot", executable.Entrypoint)
 	assert.Equal(t, "bots/my-bot.zip", executable.FilePath)
 	assert.True(t, executable.IsLongRunning)
-	assert.Equal(t, int32(-1), executable.Segment)
 	assert.Equal(t, "BTC/USD", executable.Config["symbol"])
 }
 

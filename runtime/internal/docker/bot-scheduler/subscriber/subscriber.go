@@ -50,22 +50,20 @@ type CustomBotScheduleVersionData struct {
 }
 
 type SubscriberOptions struct {
-	NATSUrl                    string
-	DBName                     string
-	CollectionName             string
-	MaxRetries                 int
-	MaxBotSchedulePerPartition int
-	Logger                     util.Logger
+	NATSUrl        string
+	DBName         string
+	CollectionName string
+	MaxRetries     int
+	Logger         util.Logger
 }
 
 func DefaultOptions() SubscriberOptions {
 	return SubscriberOptions{
-		NATSUrl:                    os.Getenv("NATS_URL"),
-		DBName:                     constants.BOT_SCHEDULER_DB_NAME,
-		CollectionName:             constants.BOT_SCHEDULE_COLLECTION,
-		MaxBotSchedulePerPartition: getDefaultMaxBotSchedulePerPartition(),
-		MaxRetries:                 getDefaultMaxRetries(),
-		Logger:                     &util.DefaultLogger{},
+		NATSUrl:        os.Getenv("NATS_URL"),
+		DBName:         constants.BOT_SCHEDULER_DB_NAME,
+		CollectionName: constants.BOT_SCHEDULE_COLLECTION,
+		MaxRetries:     getDefaultMaxRetries(),
+		Logger:         &util.DefaultLogger{},
 	}
 }
 
@@ -83,36 +81,21 @@ func getDefaultMaxRetries() int {
 	return retries
 }
 
-func getDefaultMaxBotSchedulePerPartition() int {
-	maxBotSchedulePerPartition := os.Getenv("MAX_BOT_SCHEDULE_PER_PARTITION")
-	if maxBotSchedulePerPartition == "" {
-		return 10
-	}
-
-	maxBotSchedule, err := strconv.Atoi(maxBotSchedulePerPartition)
-	if err != nil {
-		return 10
-	}
-
-	return maxBotSchedule
-}
-
 type Subscriber interface {
 	Start(ctx context.Context) error
 	Stop() error
 }
 
 type NATSSubscriber struct {
-	mongoClient                *mongo.Client
-	natsConn                   *nats.Conn
-	dbName                     string
-	collectionName             string
-	maxRetries                 int
-	maxBotSchedulePerPartition int
-	events                     *botevents.Consumer
-	stopChan                   chan struct{}
-	wg                         sync.WaitGroup
-	logger                     util.Logger
+	mongoClient    *mongo.Client
+	natsConn       *nats.Conn
+	dbName         string
+	collectionName string
+	maxRetries     int
+	events         *botevents.Consumer
+	stopChan       chan struct{}
+	wg             sync.WaitGroup
+	logger         util.Logger
 }
 
 func NewNATSSubscriber(
@@ -129,10 +112,6 @@ func NewNATSSubscriber(
 
 		if opts.MaxRetries <= 0 {
 			opts.MaxRetries = getDefaultMaxRetries()
-		}
-
-		if opts.MaxBotSchedulePerPartition <= 0 {
-			opts.MaxBotSchedulePerPartition = getDefaultMaxBotSchedulePerPartition()
 		}
 	}
 
@@ -164,15 +143,14 @@ func NewNATSSubscriber(
 	}
 
 	return &NATSSubscriber{
-		mongoClient:                mongoClient,
-		natsConn:                   natsConn,
-		dbName:                     opts.DBName,
-		collectionName:             opts.CollectionName,
-		maxRetries:                 opts.MaxRetries,
-		maxBotSchedulePerPartition: opts.MaxBotSchedulePerPartition,
-		stopChan:                   make(chan struct{}),
-		wg:                         sync.WaitGroup{},
-		logger:                     opts.Logger,
+		mongoClient:    mongoClient,
+		natsConn:       natsConn,
+		dbName:         opts.DBName,
+		collectionName: opts.CollectionName,
+		maxRetries:     opts.MaxRetries,
+		stopChan:       make(chan struct{}),
+		wg:             sync.WaitGroup{},
+		logger:         opts.Logger,
 	}, nil
 }
 
@@ -265,65 +243,6 @@ func (s *NATSSubscriber) parseEventMessage(data []byte) (*BotScheduleMessage, er
 	return botScheduleMessage, nil
 }
 
-func (s *NATSSubscriber) getNextSequenceValue(ctx context.Context, sequenceName string) (int32, error) {
-	collection := s.mongoClient.Database(s.dbName).Collection("counters")
-	filter := bson.M{"_id": sequenceName}
-	update := bson.M{"$inc": bson.M{"seq": 1}}
-	opts := mongoOptions.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(mongoOptions.After)
-
-	var counter struct {
-		Seq int32 `bson:"seq"`
-	}
-
-	err := collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&counter)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get next sequence value: %v", err)
-	}
-
-	return counter.Seq, nil
-}
-
-func (s *NATSSubscriber) findOrCreatePartition(ctx context.Context) (int32, error) {
-	partitionsCollection := s.mongoClient.Database(s.dbName).Collection("partitions")
-
-	// Step 1: Atomically find a partition with space and claim it
-	filter := bson.M{"bot_count": bson.M{"$lt": s.maxBotSchedulePerPartition}}
-	update := bson.M{"$inc": bson.M{"bot_count": 1}}
-	opts := mongoOptions.FindOneAndUpdate().SetReturnDocument(mongoOptions.After)
-
-	var partition struct {
-		ID int32 `bson:"_id"`
-	}
-
-	err := partitionsCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&partition)
-
-	if err == nil {
-		s.logger.Info("Found existing partition", "partition_id", partition.ID)
-		return partition.ID, nil
-	}
-
-	if err != mongo.ErrNoDocuments {
-		return 0, fmt.Errorf("failed to find or create partition: %w", err)
-	}
-
-	// Step 2: If no partition found, create a new one
-	s.logger.Info("No partition found, creating a new one")
-	newPartitionID, err := s.getNextSequenceValue(ctx, "partition_id")
-	if err != nil {
-		return 0, err
-	}
-	newPartition := bson.M{"_id": newPartitionID, "bot_count": 1}
-	_, err = partitionsCollection.InsertOne(ctx, newPartition)
-	if err != nil {
-		// This can happen in a race condition. A robust implementation would retry
-		s.logger.Error("Failed to create new partition, retrying", "error", err)
-		return 0, fmt.Errorf("failed to create new partition: %w", err)
-	}
-
-	s.logger.Info("Created new partition", "partition_id", newPartitionID)
-	return newPartitionID, nil
-}
-
 func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
 	message, err := s.parseEventMessage(data)
 	if err != nil {
@@ -343,12 +262,7 @@ func (s *NATSSubscriber) handleCreate(ctx context.Context, data []byte) error {
 		return nil
 	}
 
-	segmentId, err := s.findOrCreatePartition(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to find or create partition for bot schedule %s: %v", message.ID, err)
-	}
-
-	return s.upsertBotSchedule(ctx, collection, *message, segmentId)
+	return s.upsertBotSchedule(ctx, collection, *message)
 }
 
 func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
@@ -365,11 +279,7 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
 		if err == mongo.ErrNoDocuments {
 			// If not found, robust upsert: create a new bot schedule
 			s.logger.Info("Bot schedule not found, creating new one", "id", message.ID)
-			segmentId, err := s.findOrCreatePartition(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to find or create partition during upsert for bot schedule %s: %w", message.ID, err)
-			}
-			return s.upsertBotSchedule(ctx, collection, *message, segmentId)
+			return s.upsertBotSchedule(ctx, collection, *message)
 		}
 		return fmt.Errorf("failed to find bot schedule: %v", err)
 	}
@@ -420,31 +330,15 @@ func (s *NATSSubscriber) handleDelete(ctx context.Context, data []byte) error {
 	collection := s.mongoClient.Database(s.dbName).Collection(s.collectionName)
 	filter := bson.M{"id": message.ID}
 
-	var botScheduleToDelete model.BotSchedule
-	err = collection.FindOne(ctx, filter).Decode(&botScheduleToDelete)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			s.logger.Info("Bot schedule not found, nothing to delete", "id", message.ID)
-			return nil // No action needed if bot schedule does not exist
-		}
-		return fmt.Errorf("failed to find bot schedule: %v", err)
-	}
-
-	_, err = collection.DeleteOne(ctx, filter)
+	result, err := collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("failed to delete bot schedule: %v", err)
 	}
-	s.logger.Info("Deleted bot schedule from collection", "id", message.ID)
-
-	partitionsCollection := s.mongoClient.Database(s.dbName).Collection("partitions")
-	partitionFilter := bson.M{"_id": botScheduleToDelete.SegmentId}
-	update := bson.M{"$inc": bson.M{"bot_count": -1}}
-	_, err = partitionsCollection.UpdateOne(ctx, partitionFilter, update)
-	if err != nil {
-		s.logger.Error("CRITICAL: Failed to update partition count after bot schedule deletion.", "partition_id", botScheduleToDelete.SegmentId, "error", err)
-		return fmt.Errorf("failed to update partition count after bot schedule deletion: %w", err)
+	if result.DeletedCount == 0 {
+		s.logger.Info("Bot schedule not found, nothing to delete", "id", message.ID)
+		return nil
 	}
-	s.logger.Info("Updated partition count after bot schedule deletion", "partition_id", botScheduleToDelete.SegmentId)
+	s.logger.Info("Deleted bot schedule from collection", "id", message.ID)
 
 	return nil
 }
@@ -454,7 +348,6 @@ func (s *NATSSubscriber) upsertBotSchedule(
 	ctx context.Context,
 	collection *mongo.Collection,
 	message BotScheduleMessage,
-	segmentID int32,
 ) error {
 	schedule, ok := message.Config["schedule"].(string)
 	if !ok || schedule == "" {
@@ -491,7 +384,6 @@ func (s *NATSSubscriber) upsertBotSchedule(
 	botSchedule := model.BotSchedule{
 		ID:                message.ID,
 		NextExecutionTime: nextTime.Unix(),
-		SegmentId:         segmentID,
 		Config:            message.Config,
 		CustomBotVersion:  customBotVersion,
 	}
@@ -505,7 +397,7 @@ func (s *NATSSubscriber) upsertBotSchedule(
 		return fmt.Errorf("failed to insert or update bot schedule: %v", err)
 	}
 
-	s.logger.Info("Upserted bot schedule", "id", botSchedule.ID, "segment_id", botSchedule.SegmentId)
+	s.logger.Info("Upserted bot schedule", "id", botSchedule.ID)
 	return nil
 }
 

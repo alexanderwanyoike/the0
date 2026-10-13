@@ -31,7 +31,7 @@ func TestDelivery_BotDeletedWhileStopped_IsRemovedOnStart(t *testing.T) {
 	}
 	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("deleted_while_stopped")
-	insertBot(t, db, "deleted-while-stopped", 1)
+	insertBot(t, db, "deleted-while-stopped")
 
 	events.PublishJSON(t, SubjectBotDeleted, BotMessage{ID: "deleted-while-stopped"})
 	startSubscriber(t, db)
@@ -61,7 +61,7 @@ func TestDelivery_FailedEvent_IsRetried(t *testing.T) {
 	startSubscriber(t, db)
 
 	events.PublishJSON(t, SubjectBotCreated, testBotMessage("retried-bot"))
-	eventstest.WaitForCreateAttempts(t, db, 1)
+	events.WaitForRetry(t)
 	eventstest.AcceptWrites(t, db, testCollection)
 
 	err := WaitForDocument(db.Collection(testCollection), bson.M{"id": "retried-bot"}, 15*time.Second)
@@ -78,7 +78,7 @@ func TestDelivery_RetriedCreate_IsNotOvertakenByItsDelete(t *testing.T) {
 	startSubscriber(t, db)
 
 	events.PublishJSON(t, SubjectBotCreated, testBotMessage("created-then-deleted"))
-	eventstest.WaitForCreateAttempts(t, db, 1)
+	events.WaitForRetry(t)
 	events.PublishJSON(t, SubjectBotDeleted, BotMessage{ID: "created-then-deleted"})
 	eventstest.AcceptWrites(t, db, testCollection)
 	events.WaitForHandled(t)

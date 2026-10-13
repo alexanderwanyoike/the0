@@ -188,12 +188,11 @@ func (s *BotService) initMongoDB(ctx context.Context) error {
 // initNATSSubscriber initializes the NATS subscriber for bot events
 func (s *BotService) initNATSSubscriber(ctx context.Context) error {
 	subscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
-		NATSUrl:            s.config.NATSUrl,
-		DBName:             s.config.DBName,
-		CollectionName:     s.config.Collection,
-		MaxBotPerPartition: 100, // Not used in simplified mode
-		MaxRetries:         3,
-		Logger:             s.logger,
+		NATSUrl:        s.config.NATSUrl,
+		DBName:         s.config.DBName,
+		CollectionName: s.config.Collection,
+		MaxRetries:     3,
+		Logger:         s.logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create NATS subscriber: %w", err)
@@ -511,7 +510,6 @@ func (s *BotService) toExecutable(bot model.Bot) model.Executable {
 		Config:          bot.Config,
 		FilePath:        bot.CustomBotVersion.FilePath,
 		IsLongRunning:   true,
-		Segment:         -1,
 	}
 }
 

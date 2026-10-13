@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -72,12 +71,11 @@ func startSubscriber(t *testing.T, db *mongo.Database) *NATSSubscriber {
 	t.Helper()
 	t.Setenv("MONGO_URI", sharedInfra.MongoURI)
 	subscriber, err := NewNATSSubscriber(context.Background(), SubscriberOptions{
-		NATSUrl:                    sharedInfra.NATSURL,
-		DBName:                     db.Name(),
-		CollectionName:             testCollection,
-		MaxRetries:                 3,
-		MaxBotSchedulePerPartition: 10,
-		Logger:                     &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: testCollection,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = subscriber.Stop() })
@@ -99,20 +97,15 @@ func testScheduleEvent(id, schedule string) BotScheduleEvent {
 	}
 }
 
-// insertSchedule stores a schedule as an earlier created event would have,
-// in partition 1 with the given bot count.
-func insertSchedule(t *testing.T, db *mongo.Database, id string, partitionBotCount int) {
+// insertSchedule stores a schedule as an earlier created event would have.
+func insertSchedule(t *testing.T, db *mongo.Database, id string) {
 	t.Helper()
-	ctx := context.Background()
-	_, err := db.Collection(testCollection).InsertOne(ctx, model.BotSchedule{
+	_, err := db.Collection(testCollection).InsertOne(context.Background(), model.BotSchedule{
 		ID:                id,
 		NextExecutionTime: time.Now().Add(time.Hour).Unix(),
-		SegmentId:         1,
 		Config:            map[string]interface{}{"symbol": "BTC/USD", "schedule": "0 0 * * *"},
 		CustomBotVersion:  model.CustomBotVersion{Version: "1.0.0"},
 	})
-	require.NoError(t, err)
-	_, err = db.Collection("partitions").InsertOne(ctx, bson.M{"_id": int32(1), "bot_count": partitionBotCount})
 	require.NoError(t, err)
 }
 

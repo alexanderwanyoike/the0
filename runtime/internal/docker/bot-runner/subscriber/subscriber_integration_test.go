@@ -36,7 +36,7 @@ func waitFor(timeout time.Duration, condition func() bool) error {
 }
 
 // TestSubscriber_BotCreated_PersistsToMongo verifies that a bot.created event
-// results in a bot being inserted into MongoDB with proper partition assignment
+// results in a bot being inserted into MongoDB
 func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -57,12 +57,11 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 
 	// Create subscriber with test database
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -117,17 +116,6 @@ func TestSubscriber_BotCreated_PersistsToMongo(t *testing.T) {
 	assert.Equal(t, 100.0, result.Config["amount"])
 	assert.Equal(t, "python3.11", result.CustomBotVersion.Config.Runtime)
 	assert.Equal(t, "main.py", result.CustomBotVersion.Config.Entrypoints["bot"])
-	assert.True(t, result.SegmentId > 0, "SegmentId should be assigned")
-
-	// Verify partition was created
-	partitions := db.Collection("partitions")
-	var partition struct {
-		ID       int32 `bson:"_id"`
-		BotCount int32 `bson:"bot_count"`
-	}
-	err = partitions.FindOne(ctx, bson.M{"_id": result.SegmentId}).Decode(&partition)
-	require.NoError(t, err)
-	assert.Equal(t, int32(1), partition.BotCount)
 }
 
 // TestSubscriber_BotCreated_Duplicate_SkipsCreation verifies that duplicate
@@ -148,12 +136,11 @@ func TestSubscriber_BotCreated_Duplicate_SkipsCreation(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -210,12 +197,11 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -227,8 +213,7 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 
 	// Insert initial bot
 	initialBot := model.Bot{
-		ID:        "update-test-bot",
-		SegmentId: 1,
+		ID: "update-test-bot",
 		Config: map[string]interface{}{
 			"symbol": "ETH/USD",
 			"amount": 50.0,
@@ -246,11 +231,6 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 
 	collection := db.Collection(collectionName)
 	_, err = collection.InsertOne(ctx, initialBot)
-	require.NoError(t, err)
-
-	// Create partition
-	partitions := db.Collection("partitions")
-	_, err = partitions.InsertOne(ctx, bson.M{"_id": int32(1), "bot_count": 1})
 	require.NoError(t, err)
 
 	// Publish bot.updated event with new config
@@ -299,7 +279,6 @@ func TestSubscriber_BotUpdated_UpdatesMongo(t *testing.T) {
 	assert.Equal(t, "nodejs20", result.CustomBotVersion.Config.Runtime)
 	assert.Equal(t, "index.js", result.CustomBotVersion.Config.Entrypoints["bot"])
 	assert.Equal(t, "2.0.0", result.CustomBotVersion.Version)
-	assert.Equal(t, int32(1), result.SegmentId, "SegmentId should not change on update")
 }
 
 // TestSubscriber_BotUpdated_NotFound_CreatesBot verifies that updating a
@@ -320,12 +299,11 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -355,7 +333,7 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	require.NoError(t, err)
 	sharedInfra.natsConn.Flush()
 
-	// Wait for bot to be created with partition assignment
+	// Wait for bot to be created
 	collection := db.Collection(collectionName)
 	var result model.Bot
 	err = waitFor(5*time.Second, func() bool {
@@ -363,11 +341,10 @@ func TestSubscriber_BotUpdated_NotFound_CreatesBot(t *testing.T) {
 	})
 	require.NoError(t, err, "Bot should be created within 5 seconds")
 	assert.Equal(t, "from update", result.Config["created"])
-	assert.True(t, result.SegmentId > 0, "Should have partition assigned")
 }
 
 // TestSubscriber_BotDeleted_RemovesFromMongo verifies that a bot.deleted event
-// removes the bot from MongoDB and updates partition count
+// removes the bot from MongoDB
 func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -384,12 +361,11 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -401,9 +377,8 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 
 	// Insert bot to delete
 	botToDelete := model.Bot{
-		ID:        "delete-me",
-		SegmentId: 1,
-		Config:    map[string]interface{}{"test": "value"},
+		ID:     "delete-me",
+		Config: map[string]interface{}{"test": "value"},
 		CustomBotVersion: model.CustomBotVersion{
 			Config: model.APIBotConfig{
 				Runtime: "python3.11",
@@ -419,11 +394,6 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	_, err = collection.InsertOne(ctx, botToDelete)
 	require.NoError(t, err)
 
-	// Create partition with initial count
-	partitions := db.Collection("partitions")
-	_, err = partitions.InsertOne(ctx, bson.M{"_id": int32(1), "bot_count": 5})
-	require.NoError(t, err)
-
 	// Publish bot.deleted event
 	deleteMessage := BotMessage{
 		ID: "delete-me",
@@ -437,14 +407,6 @@ func TestSubscriber_BotDeleted_RemovesFromMongo(t *testing.T) {
 	count, err := collection.CountDocuments(ctx, bson.M{"id": "delete-me"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), count, "Bot should be deleted")
-
-	// Verify partition count was decremented
-	var partition struct {
-		BotCount int32 `bson:"bot_count"`
-	}
-	err = partitions.FindOne(ctx, bson.M{"_id": int32(1)}).Decode(&partition)
-	require.NoError(t, err)
-	assert.Equal(t, int32(4), partition.BotCount, "Partition count should be decremented")
 }
 
 // TestSubscriber_BotDeleted_NotFound_NoError verifies that deleting a
@@ -465,12 +427,11 @@ func TestSubscriber_BotDeleted_NotFound_NoError(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -512,12 +473,11 @@ func TestSubscriber_WrappedEventFormat(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -586,12 +546,11 @@ func TestSubscriber_InvalidJSON_LogsError(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)
@@ -648,12 +607,11 @@ func TestSubscriber_GracefulShutdown(t *testing.T) {
 	collectionName := "bots"
 
 	opts := SubscriberOptions{
-		NATSUrl:            sharedInfra.NATSURL,
-		DBName:             db.Name(),
-		CollectionName:     collectionName,
-		MaxRetries:         3,
-		MaxBotPerPartition: 10,
-		Logger:             &testLogger{t: t},
+		NATSUrl:        sharedInfra.NATSURL,
+		DBName:         db.Name(),
+		CollectionName: collectionName,
+		MaxRetries:     3,
+		Logger:         &testLogger{t: t},
 	}
 
 	subscriber, err := NewNATSSubscriber(ctx, opts)

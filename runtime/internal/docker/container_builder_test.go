@@ -148,7 +148,6 @@ func TestContainerBuilder_WithExecutable(t *testing.T) {
 			"symbol":    "BTC/USD",
 			"threshold": 100,
 		},
-		Segment: 5,
 	}
 
 	builder := NewContainerBuilder("python:3.11").
@@ -237,7 +236,6 @@ func TestContainerBuilder_WithExecutable_MarshalError(t *testing.T) {
 		Config: map[string]interface{}{
 			"unmarshalable": unmarshalable{Fn: func() {}},
 		},
-		Segment: 0,
 	}
 
 	builder := NewContainerBuilder("python:3.11").

@@ -4,9 +4,8 @@ import (
 	"testing"
 )
 
-// writtenCollections is everything the subscriber writes: its own collection
-// and the partition and counter bookkeeping.
-var writtenCollections = []string{testCollection, "partitions", "counters"}
+// writtenCollections is everything the subscriber writes.
+var writtenCollections = []string{testCollection}
 
 func TestRepeat_ScheduleCreated_LeavesTheSameState(t *testing.T) {
 	if testing.Short() {
@@ -25,7 +24,7 @@ func TestRepeat_ScheduleDeleted_LeavesTheSameState(t *testing.T) {
 	}
 	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("schedule_deleted_repeatedly")
-	insertSchedule(t, db, "deleted-repeatedly", 2)
+	insertSchedule(t, db, "deleted-repeatedly")
 	startSubscriber(t, db)
 
 	events.RequireRepeatIsHarmless(t, db, writtenCollections, SubjectBotScheduleDeleted, BotScheduleEvent{ID: "deleted-repeatedly"})
@@ -37,7 +36,7 @@ func TestRepeat_ScheduleUpdated_LeavesTheSameState(t *testing.T) {
 	}
 	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("schedule_updated_repeatedly")
-	insertSchedule(t, db, "updated-repeatedly", 1)
+	insertSchedule(t, db, "updated-repeatedly")
 	startSubscriber(t, db)
 
 	events.RequireRepeatIsHarmless(t, db, writtenCollections, SubjectBotScheduleUpdated, testScheduleEvent("updated-repeatedly", "0 12 * * *"))

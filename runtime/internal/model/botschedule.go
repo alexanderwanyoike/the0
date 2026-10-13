@@ -4,7 +4,6 @@ package model
 type BotSchedule struct {
 	ID                string                 `bson:"id"`
 	NextExecutionTime int64                  `bson:"next_execution_time"`
-	SegmentId         int32                  `bson:"segment_id"`
 	Config            map[string]interface{} `bson:"config"`
 	CustomBotVersion  CustomBotVersion       `bson:"custom"`
 	Enabled           *bool                  `bson:"enabled,omitempty"`

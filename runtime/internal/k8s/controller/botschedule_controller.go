@@ -13,7 +13,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -453,17 +452,6 @@ func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage strin
 	return hex.EncodeToString(hash[:])[:16]
 }
 
-// mustParseQuantityWithDefault parses a resource quantity string.
-// On invalid input, logs a warning and returns the provided default value.
-func mustParseQuantityWithDefault(s, defaultValue string) resource.Quantity {
-	q, err := resource.ParseQuantity(s)
-	if err != nil {
-		util.LogMaster("[ScheduleController] Warning: invalid resource quantity '%s': %v, using default '%s'", s, err, defaultValue)
-		return resource.MustParse(defaultValue)
-	}
-	return q
-}
-
 // ---- Real K8s CronJob Client Implementation ----
 
 // RealK8sCronJobClient implements K8sCronJobClient.
@@ -533,78 +521,4 @@ func (c *RealK8sCronJobClient) GetCronJob(ctx context.Context, namespace, name s
 		return nil, nil
 	}
 	return cronJob, err
-}
-
-// ---- Mock K8s CronJob Client for Testing ----
-
-// MockK8sCronJobClient is a mock implementation for testing.
-type MockK8sCronJobClient struct {
-	CronJobs     map[string]*batchv1.CronJob
-	ListError    error
-	CreateError  error
-	UpdateError  error
-	DeleteError  error
-	ListCalled   int
-	CreateCalled int
-	UpdateCalled int
-	DeleteCalled int
-}
-
-// NewMockK8sCronJobClient creates a new MockK8sCronJobClient.
-func NewMockK8sCronJobClient() *MockK8sCronJobClient {
-	return &MockK8sCronJobClient{
-		CronJobs: make(map[string]*batchv1.CronJob),
-	}
-}
-
-// ListCronJobs returns mock CronJobs.
-func (m *MockK8sCronJobClient) ListCronJobs(ctx context.Context, namespace string) ([]batchv1.CronJob, error) {
-	m.ListCalled++
-	if m.ListError != nil {
-		return nil, m.ListError
-	}
-	result := make([]batchv1.CronJob, 0, len(m.CronJobs))
-	for _, cj := range m.CronJobs {
-		result = append(result, *cj)
-	}
-	return result, nil
-}
-
-// CreateCronJob creates a mock CronJob.
-func (m *MockK8sCronJobClient) CreateCronJob(ctx context.Context, cronJob *batchv1.CronJob) error {
-	m.CreateCalled++
-	if m.CreateError != nil {
-		return m.CreateError
-	}
-	key := fmt.Sprintf("%s/%s", cronJob.Namespace, cronJob.Name)
-	m.CronJobs[key] = cronJob
-	return nil
-}
-
-// UpdateCronJob updates a mock CronJob.
-func (m *MockK8sCronJobClient) UpdateCronJob(ctx context.Context, cronJob *batchv1.CronJob) error {
-	m.UpdateCalled++
-	if m.UpdateError != nil {
-		return m.UpdateError
-	}
-	key := fmt.Sprintf("%s/%s", cronJob.Namespace, cronJob.Name)
-	m.CronJobs[key] = cronJob
-	return nil
-}
-
-// DeleteCronJob deletes a mock CronJob.
-func (m *MockK8sCronJobClient) DeleteCronJob(ctx context.Context, namespace, name string) error {
-	m.DeleteCalled++
-	if m.DeleteError != nil {
-		return m.DeleteError
-	}
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	delete(m.CronJobs, key)
-	return nil
-}
-
-// GetCronJob gets a mock CronJob.
-func (m *MockK8sCronJobClient) GetCronJob(ctx context.Context, namespace, name string) (*batchv1.CronJob, error) {
-	key := fmt.Sprintf("%s/%s", namespace, name)
-	return m.CronJobs[key], nil
 }
