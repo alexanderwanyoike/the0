@@ -18,7 +18,7 @@ export function shouldUseLogStreaming(bot: Bot | null): boolean {
  * leaves it enabled.
  */
 export function isBotEnabled(
-  config: Record<string, any> | null | undefined,
+  config: Record<string, unknown> | null | undefined,
 ): boolean {
   return config?.enabled !== false;
 }
