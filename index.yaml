@@ -5,6 +5,62 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: fixed
+          description: "Docker and Kubernetes run the same bots: both treat a bot or schedule as enabled unless config.enabled is false, and the dashboard shows a bot as enabled by the same rule"
+        - kind: fixed
+          description: "A schedule enabled again in Docker mode first runs at its next tick, as on Kubernetes, instead of at once for a tick it missed"
+        - kind: fixed
+          description: "The Kubernetes sync sidecar makes its final state and log sync within its deadline when stopped, instead of with an already cancelled context"
+        - kind: changed
+          description: "Schedules are standard 5-field cron in both modes; a 6-field expression is refused instead of having its seconds trimmed on Kubernetes"
+        - kind: changed
+          description: "One subscriber stores bot and schedule events on the same durable JetStream consumers, so an upgrade resumes where they stopped; the controller now uses one NATS connection and one MongoDB client"
+        - kind: removed
+          description: "Unused code: partitions, the daemon init command, the done-file mechanism and the IS_SCHEDULED variable it relied on"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.20.0
+    created: "2026-10-13T09:34:16.395858403Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: aefe6dd8f595304ea77d7579efdced00b475aecbba9268272b3f6ac57712fa7d
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.15.0/the0-0.15.0.tgz
+    version: 0.15.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: fixed
           description: "Deleting a custom bot version can no longer remove a bot deployed on it at the same moment: the database refuses the delete (migration 0008) and the api answers that the version is in use"
         - kind: fixed
           description: "Bucket name overrides reach bots: Docker passes its code, state, logs and query results buckets to bot containers, pods get the controller's code and state buckets, and logs are saved to the configured logs bucket instead of always bot-logs"
@@ -2605,4 +2661,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-12T17:47:09.174710969Z"
+generated: "2026-10-13T09:34:16.39635018Z"
