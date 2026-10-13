@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"runtime/internal/desired"
 	"runtime/internal/k8s/podgen"
 	"runtime/internal/model"
 	"runtime/internal/util"
@@ -38,10 +39,10 @@ const (
 // from the schedule, as in Docker mode, which never retries.
 const scheduledRunBackoffLimit int32 = 0
 
-// BotScheduleRepository provides access to bot schedule data from MongoDB.
-type BotScheduleRepository interface {
-	// FindAllEnabled returns all schedules that should be running.
-	FindAllEnabled(ctx context.Context) ([]model.BotSchedule, error)
+// DesiredSchedules are the schedules that should run on their cron, as the
+// desired module decides for both modes.
+type DesiredSchedules interface {
+	Schedules(ctx context.Context) ([]model.BotSchedule, error)
 }
 
 // K8sCronJobClient provides access to Kubernetes CronJob operations.
@@ -83,7 +84,7 @@ type BotScheduleControllerConfig struct {
 // BotScheduleController reconciles bot schedule state between MongoDB and Kubernetes.
 type BotScheduleController struct {
 	config       BotScheduleControllerConfig
-	scheduleRepo BotScheduleRepository
+	schedules    DesiredSchedules
 	cronClient   K8sCronJobClient
 	podGenerator *podgen.PodGenerator
 
@@ -95,7 +96,7 @@ type BotScheduleController struct {
 // NewBotScheduleController creates a new BotScheduleController.
 func NewBotScheduleController(
 	config BotScheduleControllerConfig,
-	scheduleRepo BotScheduleRepository,
+	schedules DesiredSchedules,
 	cronClient K8sCronJobClient,
 ) *BotScheduleController {
 	if config.Namespace == "" {
@@ -124,7 +125,7 @@ func NewBotScheduleController(
 
 	return &BotScheduleController{
 		config:       config,
-		scheduleRepo: scheduleRepo,
+		schedules:    schedules,
 		cronClient:   cronClient,
 		podGenerator: pg,
 		stopCh:       make(chan struct{}),
@@ -183,7 +184,7 @@ func (c *BotScheduleController) Reconcile(ctx context.Context) error {
 	util.LogMaster("[ScheduleController] Starting reconciliation")
 
 	// 1. Get desired state from MongoDB
-	desiredSchedules, err := c.scheduleRepo.FindAllEnabled(ctx)
+	desiredSchedules, err := c.schedules.Schedules(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get schedules from MongoDB: %w", err)
 	}
@@ -299,8 +300,7 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule mode
 
 // createCronJobSpec creates a CronJob spec for the schedule using base images + init containers.
 func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cronExpr string) (*batchv1.CronJob, error) {
-	// Convert schedule to bot model for podGenerator
-	bot := c.scheduleToBot(schedule)
+	bot := desired.ScheduleToBot(schedule)
 
 	// Generate scheduled pod spec with daemon sidecar
 	podSpec, err := c.podGenerator.GenerateScheduledPodSpec(bot)
@@ -370,28 +370,6 @@ func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedu
 func backoffLimitDrifted(cronJob *batchv1.CronJob) bool {
 	limit := cronJob.Spec.JobTemplate.Spec.BackoffLimit
 	return limit == nil || *limit != scheduledRunBackoffLimit
-}
-
-// scheduleToBot converts a BotSchedule to a Bot model for the image builder.
-func (c *BotScheduleController) scheduleToBot(schedule model.BotSchedule) model.Bot {
-	enabled := true
-	if schedule.Enabled != nil {
-		enabled = *schedule.Enabled
-	}
-	return model.Bot{
-		ID:     schedule.ID,
-		Config: schedule.Config,
-		CustomBotVersion: model.CustomBotVersion{
-			Version:  schedule.CustomBotVersion.Version,
-			FilePath: schedule.CustomBotVersion.FilePath,
-			Config: model.APIBotConfig{
-				Name:        schedule.CustomBotVersion.Config.Name,
-				Runtime:     schedule.CustomBotVersion.Config.Runtime,
-				Entrypoints: schedule.CustomBotVersion.Config.Entrypoints,
-			},
-		},
-		Enabled: &enabled,
-	}
 }
 
 // extractScheduleID extracts the schedule ID from a CronJob's labels.

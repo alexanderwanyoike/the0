@@ -9,8 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"runtime/internal/desired"
 	"runtime/internal/k8s/podgen"
-	"runtime/internal/model"
 	"runtime/internal/query"
 	"runtime/internal/util"
 )
@@ -19,7 +19,6 @@ import (
 type K8sQueryServer struct {
 	server    *query.Server
 	handler   *K8sQueryHandler
-	botRepo   BotRepository
 	clientset *kubernetes.Clientset
 	namespace string
 	logger    util.Logger
@@ -27,28 +26,28 @@ type K8sQueryServer struct {
 
 // K8sQueryServerConfig contains configuration for the K8sQueryServer.
 type K8sQueryServerConfig struct {
-	Port         int
-	Handler      *K8sQueryHandler
-	BotRepo      BotRepository
-	ScheduleRepo BotScheduleRepository
-	Clientset    *kubernetes.Clientset
-	Namespace    string
-	Logger       util.Logger
+	Port      int
+	Handler   *K8sQueryHandler
+	Bots      DesiredBots
+	Schedules DesiredSchedules
+	Clientset *kubernetes.Clientset
+	Namespace string
+	Logger    util.Logger
 }
 
 // k8sQueryExecutor adapts K8sQueryHandler to the query.Executor interface.
 type k8sQueryExecutor struct {
-	handler      *K8sQueryHandler
-	botRepo      BotRepository
-	scheduleRepo BotScheduleRepository
-	clientset    *kubernetes.Clientset
-	namespace    string
-	logger       util.Logger
+	handler   *K8sQueryHandler
+	bots      DesiredBots
+	schedules DesiredSchedules
+	clientset *kubernetes.Clientset
+	namespace string
+	logger    util.Logger
 }
 
 func (e *k8sQueryExecutor) ExecuteQuery(ctx context.Context, req query.Request, targetIP string) *query.Response {
 	// Try realtime bots first
-	bots, err := e.botRepo.FindAllEnabled(ctx)
+	bots, err := e.bots.Bots(ctx)
 	if err != nil {
 		e.logger.Error("Failed to query realtime bots: %v", err)
 	} else {
@@ -63,15 +62,15 @@ func (e *k8sQueryExecutor) ExecuteQuery(ctx context.Context, req query.Request, 
 	}
 
 	// Try scheduled bots
-	if e.scheduleRepo != nil {
-		schedules, err := e.scheduleRepo.FindAllEnabled(ctx)
+	if e.schedules != nil {
+		schedules, err := e.schedules.Schedules(ctx)
 		if err != nil {
 			e.logger.Error("Failed to query scheduled bots: %v", err)
 		} else {
 			for i := range schedules {
 				if schedules[i].ID == req.BotID {
 					// Found scheduled bot - convert to Bot model and execute (no pod IP)
-					bot := scheduleToBot(schedules[i])
+					bot := desired.ScheduleToBot(schedules[i])
 					resp, _ := e.handler.ExecuteQuery(ctx, req, bot, "")
 					return resp
 				}
@@ -80,28 +79,6 @@ func (e *k8sQueryExecutor) ExecuteQuery(ctx context.Context, req query.Request, 
 	}
 
 	return &query.Response{Status: "error", Error: fmt.Sprintf("bot not found: %s", req.BotID)}
-}
-
-// scheduleToBot converts a BotSchedule to a Bot model for query execution.
-func scheduleToBot(schedule model.BotSchedule) model.Bot {
-	enabled := true
-	if schedule.Enabled != nil {
-		enabled = *schedule.Enabled
-	}
-	return model.Bot{
-		ID:     schedule.ID,
-		Config: schedule.Config,
-		CustomBotVersion: model.CustomBotVersion{
-			Version:  schedule.CustomBotVersion.Version,
-			FilePath: schedule.CustomBotVersion.FilePath,
-			Config: model.APIBotConfig{
-				Name:        schedule.CustomBotVersion.Config.Name,
-				Runtime:     schedule.CustomBotVersion.Config.Runtime,
-				Entrypoints: schedule.CustomBotVersion.Config.Entrypoints,
-			},
-		},
-		Enabled: &enabled,
-	}
 }
 
 func (e *k8sQueryExecutor) getBotPodIP(ctx context.Context, botID string) string {
@@ -121,15 +98,15 @@ func (e *k8sQueryExecutor) getBotPodIP(ctx context.Context, botID string) string
 	return ""
 }
 
-// k8sBotResolver adapts BotRepository and BotScheduleRepository to the query.BotResolver interface.
+// k8sBotResolver adapts DesiredBots and DesiredSchedules to the query.BotResolver interface.
 type k8sBotResolver struct {
-	botRepo      BotRepository
-	scheduleRepo BotScheduleRepository
+	bots      DesiredBots
+	schedules DesiredSchedules
 }
 
 func (r *k8sBotResolver) ResolveBot(ctx context.Context, botID string) (string, error) {
 	// Try realtime bots first
-	bots, err := r.botRepo.FindAllEnabled(ctx)
+	bots, err := r.bots.Bots(ctx)
 	if err == nil {
 		for _, bot := range bots {
 			if bot.ID == botID {
@@ -143,8 +120,8 @@ func (r *k8sBotResolver) ResolveBot(ctx context.Context, botID string) (string, 
 	}
 
 	// Try scheduled bots
-	if r.scheduleRepo != nil {
-		schedules, err := r.scheduleRepo.FindAllEnabled(ctx)
+	if r.schedules != nil {
+		schedules, err := r.schedules.Schedules(ctx)
 		if err == nil {
 			for _, schedule := range schedules {
 				if schedule.ID == botID {
@@ -171,17 +148,17 @@ func NewK8sQueryServer(config K8sQueryServerConfig) *K8sQueryServer {
 	}
 
 	executor := &k8sQueryExecutor{
-		handler:      config.Handler,
-		botRepo:      config.BotRepo,
-		scheduleRepo: config.ScheduleRepo,
-		clientset:    config.Clientset,
-		namespace:    config.Namespace,
-		logger:       config.Logger,
+		handler:   config.Handler,
+		bots:      config.Bots,
+		schedules: config.Schedules,
+		clientset: config.Clientset,
+		namespace: config.Namespace,
+		logger:    config.Logger,
 	}
 
 	resolver := &k8sBotResolver{
-		botRepo:      config.BotRepo,
-		scheduleRepo: config.ScheduleRepo,
+		bots:      config.Bots,
+		schedules: config.Schedules,
 	}
 
 	server := query.NewServer(query.ServerConfig{
@@ -194,7 +171,6 @@ func NewK8sQueryServer(config K8sQueryServerConfig) *K8sQueryServer {
 	return &K8sQueryServer{
 		server:    server,
 		handler:   config.Handler,
-		botRepo:   config.BotRepo,
 		clientset: config.Clientset,
 		namespace: config.Namespace,
 		logger:    config.Logger,

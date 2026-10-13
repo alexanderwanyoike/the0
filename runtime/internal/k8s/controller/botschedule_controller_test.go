@@ -16,16 +16,16 @@ import (
 	"runtime/internal/model"
 )
 
-// MockBotScheduleRepository is a mock implementation of BotScheduleRepository.
-type MockBotScheduleRepository struct {
-	Schedules []model.BotSchedule
-	Error     error
-	Called    int
+// MockDesiredSchedules is a mock implementation of DesiredSchedules.
+type MockDesiredSchedules struct {
+	Running []model.BotSchedule
+	Error   error
+	Called  int
 }
 
-func (m *MockBotScheduleRepository) FindAllEnabled(ctx context.Context) ([]model.BotSchedule, error) {
+func (m *MockDesiredSchedules) Schedules(ctx context.Context) ([]model.BotSchedule, error) {
 	m.Called++
-	return m.Schedules, m.Error
+	return m.Running, m.Error
 }
 
 func createTestSchedule(id, name, version, runtime, schedule string) model.BotSchedule {
@@ -52,7 +52,7 @@ func createTestSchedule(id, name, version, runtime, schedule string) model.BotSc
 }
 
 func TestNewBotScheduleController(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
+	mockRepo := &MockDesiredSchedules{}
 	mockCronClient := NewMockK8sCronJobClient()
 
 	controller := NewBotScheduleController(
@@ -70,8 +70,8 @@ func TestNewBotScheduleController(t *testing.T) {
 func TestBotScheduleController_Reconcile_CreatesCronJob(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -99,8 +99,8 @@ func TestBotScheduleController_Reconcile_CreatesCronJob(t *testing.T) {
 }
 
 func TestBotScheduleController_Reconcile_DeletesOrphanedCronJob(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{}, // No schedules
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{}, // No schedules
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-orphan"] = &batchv1.CronJob{
@@ -129,8 +129,8 @@ func TestBotScheduleController_Reconcile_DeletesOrphanedCronJob(t *testing.T) {
 func TestBotScheduleController_Reconcile_UpdatesCronJobOnChange(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 10 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
@@ -180,8 +180,8 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 		},
 	}
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -200,8 +200,8 @@ func TestBotScheduleController_Reconcile_NoCronJobForScheduleWithoutExpression(t
 func TestBotScheduleController_Reconcile_NoCronJobForASixFieldCron(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "30 0 9 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -221,8 +221,8 @@ func TestBotScheduleController_Reconcile_NoCronJobForASixFieldCron(t *testing.T)
 func TestBotScheduleController_Reconcile_KeepsTheCronJobWhenTheCronGainsASecondsField(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "30 0 10 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
@@ -254,8 +254,8 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	configHash := computeScheduleHash(schedule, "", "")
 	noRetries := int32(0)
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
@@ -297,7 +297,7 @@ func TestBotScheduleController_Reconcile_ScheduledRunsAreNotRetried(t *testing.T
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller"},
-		&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
 		mockCronClient,
 	)
 
@@ -328,7 +328,7 @@ func TestBotScheduleController_Reconcile_StopsRetriesOnExistingCronJobs(t *testi
 			mockCronClient := NewMockK8sCronJobClient()
 			controller := NewBotScheduleController(
 				BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller"},
-				&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+				&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
 				mockCronClient,
 			)
 
@@ -390,29 +390,8 @@ func TestComputeScheduleHash(t *testing.T) {
 	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy, "", ""))
 }
 
-func TestScheduleToBot(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
-	mockCronClient := NewMockK8sCronJobClient()
-
-	controller := NewBotScheduleController(
-		BotScheduleControllerConfig{},
-		mockRepo,
-		mockCronClient,
-	)
-
-	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	bot := controller.scheduleToBot(schedule)
-
-	assert.Equal(t, "schedule-1", bot.ID)
-	assert.Equal(t, "daily-report", bot.CustomBotVersion.Config.Name)
-	assert.Equal(t, "1.0.0", bot.CustomBotVersion.Version)
-	assert.Equal(t, "python3.11", bot.CustomBotVersion.Config.Runtime)
-	assert.NotNil(t, bot.Enabled)
-	assert.True(t, *bot.Enabled)
-}
-
 func TestBotScheduleController_StartStop(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
+	mockRepo := &MockDesiredSchedules{}
 	mockCronClient := NewMockK8sCronJobClient()
 
 	controller := NewBotScheduleController(
@@ -450,7 +429,7 @@ func TestBotScheduleController_StartStop(t *testing.T) {
 }
 
 func TestBotScheduleController_DoubleStart(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
+	mockRepo := &MockDesiredSchedules{}
 	mockCronClient := NewMockK8sCronJobClient()
 
 	controller := NewBotScheduleController(
@@ -537,7 +516,7 @@ func TestMockK8sCronJobClient(t *testing.T) {
 // ---- Additional Coverage Tests ----
 
 func TestBotScheduleController_StopWhenNotRunning(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
+	mockRepo := &MockDesiredSchedules{}
 	mockCronClient := NewMockK8sCronJobClient()
 
 	controller := NewBotScheduleController(
@@ -552,7 +531,7 @@ func TestBotScheduleController_StopWhenNotRunning(t *testing.T) {
 }
 
 func TestBotScheduleController_ContextCancellation(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
+	mockRepo := &MockDesiredSchedules{}
 	mockCronClient := NewMockK8sCronJobClient()
 
 	controller := NewBotScheduleController(
@@ -582,7 +561,7 @@ func TestBotScheduleController_ContextCancellation(t *testing.T) {
 }
 
 func TestBotScheduleController_Reconcile_RepoError(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{
+	mockRepo := &MockDesiredSchedules{
 		Error: errors.New("database connection lost"),
 	}
 	mockCronClient := NewMockK8sCronJobClient()
@@ -603,8 +582,8 @@ func TestBotScheduleController_Reconcile_RepoError(t *testing.T) {
 func TestBotScheduleController_Reconcile_K8sListError(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.ListError = errors.New("k8s API error")
@@ -624,8 +603,8 @@ func TestBotScheduleController_Reconcile_K8sListError(t *testing.T) {
 func TestBotScheduleController_Reconcile_CreateError(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CreateError = errors.New("quota exceeded")
@@ -645,8 +624,8 @@ func TestBotScheduleController_Reconcile_CreateError(t *testing.T) {
 func TestBotScheduleController_Reconcile_UpdateError(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 10 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
@@ -676,8 +655,8 @@ func TestBotScheduleController_Reconcile_UpdateError(t *testing.T) {
 }
 
 func TestBotScheduleController_Reconcile_DeleteError(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{}, // No schedules
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{}, // No schedules
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 	mockCronClient.CronJobs["the0/schedule-orphan"] = &batchv1.CronJob{
@@ -750,8 +729,8 @@ func TestBotScheduleController_MultipleSchedules(t *testing.T) {
 		createTestSchedule("schedule-3", "hourly-check", "2.0.0", "python3.11", "0 * * * *"),
 	}
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: schedules,
+	mockRepo := &MockDesiredSchedules{
+		Running: schedules,
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -766,32 +745,6 @@ func TestBotScheduleController_MultipleSchedules(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, mockCronClient.CreateCalled)
 	assert.Len(t, mockCronClient.CronJobs, 3)
-}
-
-func TestScheduleToBot_NilEnabled(t *testing.T) {
-	mockRepo := &MockBotScheduleRepository{}
-	mockCronClient := NewMockK8sCronJobClient()
-
-	controller := NewBotScheduleController(
-		BotScheduleControllerConfig{},
-		mockRepo,
-		mockCronClient,
-	)
-
-	schedule := model.BotSchedule{
-		ID:      "schedule-1",
-		Enabled: nil, // nil Enabled
-		CustomBotVersion: model.CustomBotVersion{
-			Version: "1.0.0",
-			Config: model.APIBotConfig{
-				Name:    "test-bot",
-				Runtime: "python3.11",
-			},
-		},
-	}
-
-	bot := controller.scheduleToBot(schedule)
-	assert.True(t, *bot.Enabled, "should default to enabled=true when nil")
 }
 
 func TestMockK8sCronJobClient_Errors(t *testing.T) {
@@ -837,8 +790,8 @@ func TestMockK8sCronJobClient_Errors(t *testing.T) {
 func TestBotScheduleController_Reconcile_PropagatesNATSURLToBotContainer(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
 
-	mockRepo := &MockBotScheduleRepository{
-		Schedules: []model.BotSchedule{schedule},
+	mockRepo := &MockDesiredSchedules{
+		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
 
@@ -876,7 +829,7 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenNATSURLAdded(t *testi
 	// Seed a CronJob created before NATS_URL was configured
 	oldController := NewBotScheduleController(
 		BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller"},
-		&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
 		mockCronClient,
 	)
 	require.NoError(t, oldController.Reconcile(context.Background()))
@@ -889,7 +842,7 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenNATSURLAdded(t *testi
 			ControllerName: "test-controller",
 			NATSURL:        "nats://nats:4222",
 		},
-		&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
 		mockCronClient,
 	)
 	require.NoError(t, newController.Reconcile(context.Background()))
@@ -912,7 +865,7 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenRuntimeImageChanges(t
 	controllerFor := func(image string) *BotScheduleController {
 		return NewBotScheduleController(
 			BotScheduleControllerConfig{Namespace: "the0", ControllerName: "test-controller", RuntimeImage: image},
-			&MockBotScheduleRepository{Schedules: []model.BotSchedule{schedule}},
+			&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
 			mockCronClient,
 		)
 	}
