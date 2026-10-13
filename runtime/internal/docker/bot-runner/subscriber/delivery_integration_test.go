@@ -31,7 +31,7 @@ func TestDelivery_BotDeletedWhileStopped_IsRemovedOnStart(t *testing.T) {
 	}
 	events.ResetStream(t)
 	db := sharedInfra.GetDatabase("deleted_while_stopped")
-	insertBot(t, db, "deleted-while-stopped", 1)
+	insertBot(t, db, "deleted-while-stopped")
 
 	events.PublishJSON(t, SubjectBotDeleted, BotMessage{ID: "deleted-while-stopped"})
 	startSubscriber(t, db)

@@ -105,7 +105,6 @@ func TestScheduleService_ToExecutable(t *testing.T) {
 	assert.Equal(t, "bot", executable.Entrypoint)
 	assert.Equal(t, "bots/scheduled-bot.zip", executable.FilePath)
 	assert.False(t, executable.IsLongRunning) // Scheduled bots run once
-	assert.Equal(t, int32(-1), executable.Segment)
 	assert.Equal(t, "BTC/USD", executable.Config["symbol"])
 }
 

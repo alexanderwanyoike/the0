@@ -50,44 +50,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// cleanupSegmentContainers removes any leftover containers from previous test runs
-// This prevents test interference when ListManagedContainers queries Docker by labels
-func cleanupSegmentContainers(t *testing.T, segment int32) {
-	ctx := context.Background()
-
-	// Use Docker client directly to forcibly remove containers
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		t.Logf("Warning: Failed to create Docker client for cleanup: %v", err)
-		return
-	}
-	defer dockerClient.Close()
-
-	// List all containers (including stopped) with the segment label
-	filter := filters.NewArgs()
-	filter.Add("label", "runtime.managed=true")
-	filter.Add("label", fmt.Sprintf("runtime.segment=%d", segment))
-
-	containers, err := dockerClient.ContainerList(ctx, container.ListOptions{
-		All:     true, // Include stopped containers
-		Filters: filter,
-	})
-	if err != nil {
-		t.Logf("Warning: Failed to list containers for cleanup: %v", err)
-		return
-	}
-
-	for _, cont := range containers {
-		// Force remove the container (stops if running, then removes)
-		err := dockerClient.ContainerRemove(ctx, cont.ID, container.RemoveOptions{
-			Force: true,
-		})
-		if err != nil {
-			t.Logf("Warning: Failed to remove container %s: %v", cont.ID[:12], err)
-		}
-	}
-}
-
 func TestBuildContainerConfig_KeepsExitedContainersForOutputCapture(t *testing.T) {
 	runner := &dockerRunner{config: &DockerRunnerConfig{}, logger: &testLogger{}}
 
@@ -202,12 +164,6 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 
 	logger := &util.DefaultLogger{}
 
-	// Use a unique test segment to avoid conflicts with real running bots
-	const testSegment int32 = 99999
-
-	// Clean up any leftover containers from previous tests with same segment
-	cleanupSegmentContainers(t, testSegment)
-
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
 		Config: sharedMinIOServer.GetTestConfig(),
@@ -230,7 +186,6 @@ func TestIntegration_RealDocker_StartStopContainer_BotEntrypoint(t *testing.T) {
 		},
 		FilePath:      "real-test-bot.zip",
 		IsLongRunning: true, // Test long-running container
-		Segment:       testSegment,
 	}
 
 	// Create a real ZIP file with bot code and upload to MinIO
@@ -379,9 +334,6 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 
 	logger := &util.DefaultLogger{}
 
-	// Clean up any leftover containers from previous tests with same segment
-	cleanupSegmentContainers(t, 2)
-
 	runner, err := NewDockerRunner(DockerRunnerOptions{
 		Logger: logger,
 		Config: sharedMinIOServer.GetTestConfig(),
@@ -401,7 +353,6 @@ func TestIntegration_RealDocker_PythonBot(t *testing.T) {
 		},
 		FilePath:      "real-python-bot.zip",
 		IsLongRunning: true, // Change to true for bot entrypoint
-		Segment:       2,    // Unique segment to avoid interference with other tests
 	}
 
 	pyZipData := loadRealTestBotFile(t, "py-test-bot.zip")

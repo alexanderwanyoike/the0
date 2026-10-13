@@ -177,14 +177,12 @@ func TestBot_IsEnabled_UnknownType(t *testing.T) {
 
 func TestBot_DeepCopy_BasicFields(t *testing.T) {
 	original := Bot{
-		ID:        "bot-123",
-		SegmentId: 5,
+		ID: "bot-123",
 	}
 
 	copy := original.DeepCopy()
 
 	assert.Equal(t, original.ID, copy.ID)
-	assert.Equal(t, original.SegmentId, copy.SegmentId)
 }
 
 func TestBot_DeepCopy_ConfigIndependence(t *testing.T) {
@@ -586,8 +584,7 @@ func BenchmarkBot_IsEnabled(b *testing.B) {
 
 func BenchmarkBot_DeepCopy(b *testing.B) {
 	bot := Bot{
-		ID:        "bot-123",
-		SegmentId: 5,
+		ID: "bot-123",
 		Config: map[string]interface{}{
 			"key": "value",
 			"nested": map[string]interface{}{

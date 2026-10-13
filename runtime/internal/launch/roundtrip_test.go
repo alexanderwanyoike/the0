@@ -134,7 +134,6 @@ func dockerExecutable(isLongRunning bool) model.Executable {
 		Config:          roundTripBot.Config,
 		FilePath:        roundTripBot.CustomBotVersion.FilePath,
 		IsLongRunning:   isLongRunning,
-		Segment:         -1,
 	}
 }
 

@@ -3,7 +3,6 @@ package model
 // Bot represents a bot instance for execution.
 type Bot struct {
 	ID               string                 `bson:"id" json:"id"`
-	SegmentId        int32                  `bson:"segment_id"`
 	Config           map[string]interface{} `bson:"config"`
 	CustomBotVersion CustomBotVersion       `bson:"custom"`
 	Enabled          *bool                  `bson:"enabled,omitempty"`
@@ -73,8 +72,7 @@ func (b *Bot) IsEnabled() bool {
 // DeepCopy creates a complete copy of the Bot with no shared references.
 func (b Bot) DeepCopy() Bot {
 	cpy := Bot{
-		ID:        b.ID,
-		SegmentId: b.SegmentId,
+		ID: b.ID,
 	}
 
 	// Deep copy Config map

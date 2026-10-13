@@ -341,12 +341,11 @@ func runController() {
 	} else {
 		// Bot NATS subscriber
 		botSubscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
-			NATSUrl:            natsUrl,
-			DBName:             constants.BOT_RUNNER_DB_NAME,
-			CollectionName:     constants.BOT_RUNNER_COLLECTION,
-			MaxBotPerPartition: 100,
-			MaxRetries:         3,
-			Logger:             &util.DefaultLogger{},
+			NATSUrl:        natsUrl,
+			DBName:         constants.BOT_RUNNER_DB_NAME,
+			CollectionName: constants.BOT_RUNNER_COLLECTION,
+			MaxRetries:     3,
+			Logger:         &util.DefaultLogger{},
 		})
 		if err != nil {
 			util.LogMaster("Failed to create bot NATS subscriber: %v", err)
@@ -361,12 +360,11 @@ func runController() {
 
 		// Schedule NATS subscriber
 		scheduleSubscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
-			NATSUrl:                    natsUrl,
-			DBName:                     constants.BOT_SCHEDULER_DB_NAME,
-			CollectionName:             constants.BOT_SCHEDULE_COLLECTION,
-			MaxBotSchedulePerPartition: 100,
-			MaxRetries:                 3,
-			Logger:                     &util.DefaultLogger{},
+			NATSUrl:        natsUrl,
+			DBName:         constants.BOT_SCHEDULER_DB_NAME,
+			CollectionName: constants.BOT_SCHEDULE_COLLECTION,
+			MaxRetries:     3,
+			Logger:         &util.DefaultLogger{},
 		})
 		if err != nil {
 			util.LogMaster("Failed to create schedule NATS subscriber: %v", err)

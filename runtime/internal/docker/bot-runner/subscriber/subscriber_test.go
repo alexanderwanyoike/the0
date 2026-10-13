@@ -15,7 +15,6 @@ import (
 func TestDefaultOptions(t *testing.T) {
 	os.Setenv("NATS_URL", "nats://localhost:4222")
 	os.Setenv("MAX_RETRIES", "5")
-	os.Setenv("MAX_BOTS_PER_PARTITION", "20")
 
 	opts := DefaultOptions()
 
@@ -23,7 +22,6 @@ func TestDefaultOptions(t *testing.T) {
 	assert.Equal(t, constants.BOT_RUNNER_DB_NAME, opts.DBName)
 	assert.Equal(t, constants.BOT_RUNNER_COLLECTION, opts.CollectionName)
 	assert.Equal(t, 5, opts.MaxRetries)
-	assert.Equal(t, 20, opts.MaxBotPerPartition)
 }
 
 func TestParseEventMessage(t *testing.T) {
@@ -107,18 +105,4 @@ func TestGetDefaultMaxRetries(t *testing.T) {
 	// Test invalid value (should fall back to default)
 	os.Setenv("MAX_RETRIES", "invalid")
 	assert.Equal(t, 3, getDefaultMaxRetries())
-}
-
-func TestGetDefaultMaxBotsPerPartition(t *testing.T) {
-	// Test default value
-	os.Setenv("MAX_BOTS_PER_PARTITION", "")
-	assert.Equal(t, 10, getDefaultMaxBotsPerPartition())
-
-	// Test valid value
-	os.Setenv("MAX_BOTS_PER_PARTITION", "15")
-	assert.Equal(t, 15, getDefaultMaxBotsPerPartition())
-
-	// Test invalid value (should fall back to default)
-	os.Setenv("MAX_BOTS_PER_PARTITION", "invalid")
-	assert.Equal(t, 10, getDefaultMaxBotsPerPartition())
 }

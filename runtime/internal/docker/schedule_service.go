@@ -201,12 +201,11 @@ func (s *ScheduleService) initMongoDB(ctx context.Context) error {
 // initNATSSubscriber initializes the NATS subscriber for schedule events
 func (s *ScheduleService) initNATSSubscriber(ctx context.Context) error {
 	subscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
-		NATSUrl:                    s.config.NATSUrl,
-		DBName:                     s.config.DBName,
-		CollectionName:             s.config.Collection,
-		MaxBotSchedulePerPartition: 100, // Not used in simplified mode
-		MaxRetries:                 3,
-		Logger:                     s.logger,
+		NATSUrl:        s.config.NATSUrl,
+		DBName:         s.config.DBName,
+		CollectionName: s.config.Collection,
+		MaxRetries:     3,
+		Logger:         s.logger,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create NATS subscriber: %w", err)
@@ -445,7 +444,6 @@ func (s *ScheduleService) toExecutable(schedule model.BotSchedule) model.Executa
 		Config:          schedule.Config,
 		FilePath:        schedule.CustomBotVersion.FilePath,
 		IsLongRunning:   false, // Scheduled bots run once and exit
-		Segment:         -1,
 	}
 }
 

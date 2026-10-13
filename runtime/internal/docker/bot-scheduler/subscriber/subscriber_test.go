@@ -13,7 +13,6 @@ import (
 func TestDefaultOptions(t *testing.T) {
 	os.Setenv("NATS_URL", "nats://localhost:4222")
 	os.Setenv("MAX_RETRIES", "5")
-	os.Setenv("MAX_BOT_SCHEDULE_PER_PARTITION", "20")
 
 	opts := DefaultOptions()
 
@@ -21,7 +20,6 @@ func TestDefaultOptions(t *testing.T) {
 	assert.Equal(t, constants.BOT_SCHEDULER_DB_NAME, opts.DBName)
 	assert.Equal(t, constants.BOT_SCHEDULE_COLLECTION, opts.CollectionName)
 	assert.Equal(t, 5, opts.MaxRetries)
-	assert.Equal(t, 20, opts.MaxBotSchedulePerPartition)
 }
 
 func TestParseEventMessage(t *testing.T) {
@@ -162,51 +160,6 @@ func TestGetDefaultMaxRetries(t *testing.T) {
 
 	// Clean up
 	os.Unsetenv("MAX_RETRIES")
-}
-
-func TestGetDefaultMaxBotSchedulePerPartition(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected int
-	}{
-		{
-			name:     "Default when not set",
-			envValue: "",
-			expected: 10,
-		},
-		{
-			name:     "Valid environment value",
-			envValue: "15",
-			expected: 15,
-		},
-		{
-			name:     "Invalid environment value",
-			envValue: "invalid",
-			expected: 10,
-		},
-		{
-			name:     "Zero value",
-			envValue: "0",
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envValue == "" {
-				os.Unsetenv("MAX_BOT_SCHEDULE_PER_PARTITION")
-			} else {
-				os.Setenv("MAX_BOT_SCHEDULE_PER_PARTITION", tt.envValue)
-			}
-
-			result := getDefaultMaxBotSchedulePerPartition()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-
-	// Clean up
-	os.Unsetenv("MAX_BOT_SCHEDULE_PER_PARTITION")
 }
 
 func TestNewNATSSubscriber(t *testing.T) {
