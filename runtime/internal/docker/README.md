@@ -60,9 +60,8 @@ flowchart TD
     F -->|No| H[Execute bot process]
     G --> H
     H --> I{Bot exits?}
-    I -->|Scheduled| J[Write done file]
+    I -->|Run ends| L[Final sync]
     I -->|Crash| K[Signal cleanup]
-    J --> L[Final sync]
     K --> L
     L --> M[Container exits]
 ```
@@ -71,7 +70,7 @@ flowchart TD
 
 The daemon sync process periodically (every 60s) computes a hash of the state directory and uploads changes to MinIO when detected. Logs are also synced periodically.
 
-For scheduled bots, the daemon also watches for a "done" file. When the bot completes and writes its exit code to this file, the daemon performs a final sync and then exits, allowing the container to terminate cleanly.
+When the bot exits, `runtime execute` stops the sync, which performs a final sync of state and logs before the container exits.
 
 ## Services
 

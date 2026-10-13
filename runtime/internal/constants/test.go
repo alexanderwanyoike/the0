@@ -18,9 +18,6 @@ const (
 const (
 	// TestBotID is a standard bot ID for tests
 	TestBotID = "test-bot"
-
-	// TestDoneFilePath is a path for done file testing
-	TestDoneFilePath = "/tmp/done"
 )
 
 // Test paths - these match production defaults

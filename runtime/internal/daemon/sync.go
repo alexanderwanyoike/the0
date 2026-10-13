@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -36,7 +35,6 @@ type SyncOptions struct {
 	StatePath     string        // State directory to sync (default: /state)
 	LogsPath      string        // Logs directory to sync (default: /var/the0/logs)
 	Interval      time.Duration // Backup sync interval - fsnotify handles immediate syncs (default: 60s)
-	WatchDone     string        // Path to done file - when it appears, sync and exit (for scheduled bots)
 	ReadinessPort int           // Port for health/readiness HTTP server (0 = disabled, used for K8s sidecar)
 }
 
@@ -246,8 +244,7 @@ func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
 
 // Sync uses fsnotify to watch for file changes and immediately syncs to MinIO.
 // Also performs periodic backup syncs in case fsnotify misses events.
-// If opts.WatchDone is set, exits when done file appears (for scheduled bots).
-// Otherwise runs indefinitely as a sidecar container.
+// It runs as the sync sidecar until it is cancelled or signalled.
 func Sync(ctx context.Context, opts SyncOptions) error {
 	var logger util.Logger = util.NewLogger()
 
@@ -373,18 +370,6 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 			}
 		}
 
-		// Watch done file's parent directory (for scheduled bots)
-		if opts.WatchDone != "" {
-			doneDir := filepath.Dir(opts.WatchDone)
-			if err := os.MkdirAll(doneDir, 0755); err == nil {
-				if err := fileWatcher.Watch(doneDir); err != nil {
-					logger.Info("Failed to watch done file directory: %v", err)
-				} else {
-					logger.Info("Watching for done file", "path", opts.WatchDone)
-				}
-			}
-		}
-
 		// Start the file watcher
 		go fileWatcher.Start()
 		defer fileWatcher.Stop()
@@ -404,42 +389,12 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 
-	// Check for done file (for scheduled bots)
-	checkDone := func() bool {
-		if opts.WatchDone == "" {
-			return false
-		}
-		_, err := os.Stat(opts.WatchDone)
-		return err == nil
-	}
-
-	// Done file check ticker (faster check since fsnotify may miss it)
-	var doneTicker *time.Ticker
-	if opts.WatchDone != "" {
-		doneTicker = time.NewTicker(500 * time.Millisecond) // Check every 500ms as backup
-		defer doneTicker.Stop()
-	}
-
 	// Main loop
 	for {
 		select {
 		case <-ticker.C:
 			// Backup periodic sync
 			doSync()
-
-		case <-func() <-chan time.Time {
-			if doneTicker != nil {
-				return doneTicker.C
-			}
-			return nil
-		}():
-			if checkDone() {
-				logger.Info("Done file detected, performing final sync")
-				doSync()
-				cleanup()
-				logger.Info("Daemon sync shutdown complete (bot finished)")
-				return nil
-			}
 
 		case <-ctx.Done():
 			logger.Info("Context cancelled, performing final sync")

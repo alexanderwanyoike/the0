@@ -47,16 +47,6 @@ func TestDaemonSync_Defaults(t *testing.T) {
 	assert.Equal(t, constants.TestBotID, daemonBotID)
 }
 
-// TestDaemonSync_WatchDoneSpecified tests sync with watch-done file
-func TestDaemonSync_WatchDoneSpecified(t *testing.T) {
-	daemonBotID = constants.TestBotID
-	daemonStatePath = constants.TestStateDir
-	daemonLogsPath = constants.TestLogsDir
-	daemonWatchDone = constants.TestDoneFilePath
-
-	assert.Equal(t, constants.TestDoneFilePath, daemonWatchDone)
-}
-
 // TestDaemonSync_CustomInterval tests sync with custom interval
 func TestDaemonSync_CustomInterval(t *testing.T) {
 	daemonBotID = constants.TestBotID

@@ -139,7 +139,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		}).
 		WithLaunch(settings).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
-		WithSyncSidecar(g.config.RuntimeImage, bot.ID, false)
+		WithSyncSidecar(g.config.RuntimeImage, bot.ID)
 
 	// Add query entrypoint if configured
 	if botConfig.queryEntrypoint != "" {
