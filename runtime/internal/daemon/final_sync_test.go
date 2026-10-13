@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -112,4 +114,53 @@ func TestSyncRunner_StoppedMakesItsFinalSyncWithAFreshDeadline(t *testing.T) {
 	runner.Stop()
 
 	requireFinalSync(t, syncer, stoppedAt, 2*time.Second)
+}
+
+func TestSidecar_CancelledStillMakesItsFinalSyncWithinTheDeadline(t *testing.T) {
+	syncer := newFakeSyncer(3*time.Second, false)
+	built := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan error, 1)
+	go func() {
+		stopped <- runSidecar(ctx, syncOptions(t, time.Hour), &util.NopLogger{}, syncersOf(syncer, built), noSignals)
+	}()
+	<-built
+
+	stoppedAt := time.Now()
+	cancel()
+
+	requireFinalSync(t, syncer, stoppedAt, 2*time.Second)
+	requireStopped(t, stopped)
+}
+
+func TestSidecar_SignalledWhileASyncHangsStillMakesItsFinalSyncWithinTheDeadline(t *testing.T) {
+	syncer := newFakeSyncer(3*time.Second, true)
+	built := make(chan struct{})
+	signals := make(chan os.Signal, 1)
+	stopped := make(chan error, 1)
+	go func() {
+		stopped <- runSidecar(context.Background(), syncOptions(t, 10*time.Millisecond), &util.NopLogger{},
+			syncersOf(syncer, built), func() <-chan os.Signal { return signals })
+	}()
+	<-syncer.hangStart
+
+	stoppedAt := time.Now()
+	signals <- syscall.SIGTERM
+
+	requireFinalSync(t, syncer, stoppedAt, 2*time.Second)
+	requireStopped(t, stopped)
+}
+
+func noSignals() <-chan os.Signal {
+	return make(chan os.Signal)
+}
+
+func requireStopped(t *testing.T, stopped <-chan error) {
+	t.Helper()
+	select {
+	case err := <-stopped:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the sidecar did not exit after its final sync")
+	}
 }
