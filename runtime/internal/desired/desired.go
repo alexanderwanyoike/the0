@@ -100,6 +100,19 @@ func (s *State) ScheduleRan(ctx context.Context, schedule model.BotSchedule, ran
 	return next, nil
 }
 
+// Reschedules reports whether updating stored to config moves its next run
+// to the cron's next tick after the update: when the cron changes, or when
+// the schedule is enabled again, since its stored next run stopped moving
+// while it was disabled. Kubernetes behaves the same way, because enabling a
+// schedule creates a new CronJob.
+func Reschedules(stored model.BotSchedule, config map[string]interface{}) bool {
+	storedCron, ok := stored.Config["schedule"].(string)
+	if !ok || storedCron != config["schedule"] {
+		return true
+	}
+	return !IsEnabled(stored.Config) && IsEnabled(config)
+}
+
 // ScheduleToBot is schedule as the Bot its runs and queries launch.
 func ScheduleToBot(schedule model.BotSchedule) model.Bot {
 	return model.Bot{
