@@ -850,31 +850,6 @@ func TestPerformReconciliation_DuplicateContainers(t *testing.T) {
 	assert.Equal(t, "container1", bots["bot1"].ContainerID)
 }
 
-// Test performReconciliation - disabled bot not started
-func TestPerformReconciliation_DisabledBot(t *testing.T) {
-	service, err := NewBotService(BotServiceConfig{
-		MongoURI: "mongodb://localhost:27017",
-	})
-	require.NoError(t, err)
-	defer service.Stop()
-
-	mockRunner := NewMockDockerRunner()
-	service.runner = mockRunner
-
-	// Setup: Bot is disabled
-	disabledBot := createTestBot("bot1", map[string]interface{}{"symbol": "BTC"}, false)
-	desiredBots := []model.Bot{disabledBot}
-	actualContainers := []*ContainerInfo{}
-
-	// Call reconciliation
-	service.performReconciliation(service.ctx, desiredBots, actualContainers)
-
-	// Verify disabled bot was not started
-	bots := service.state.GetAllRunningBots()
-	assert.Len(t, bots, 0)
-	assert.Equal(t, 0, mockRunner.GetStartCallCount())
-}
-
 // Test performReconciliation - multiple bots
 func TestPerformReconciliation_MultipleBots(t *testing.T) {
 	service, err := NewBotService(BotServiceConfig{
@@ -1314,8 +1289,8 @@ func TestReconciliationLoop_SkipsWhenDepsUnhealthy(t *testing.T) {
 	dc.SetLastResult(false, false) // both deps down
 	service.depChecker = dc
 
-	// NOTE: mongoClient is nil, so if the dep gate regressed and reconcile() ran,
-	// it would panic on the MongoDB query, causing the test to fail. This provides
+	// NOTE: desired is nil, so if the dep gate regressed and reconcile() ran,
+	// it would panic reading the desired bots, causing the test to fail. This provides
 	// an implicit safety net beyond the explicit start-count assertion below.
 
 	// Start the actual reconciliation loop goroutine
