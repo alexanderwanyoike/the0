@@ -42,8 +42,9 @@ type SyncOptions struct {
 // made their last sync.
 type syncerFactory func(ctx context.Context, opts SyncOptions, logger util.Logger) ([]Syncer, func(), error)
 
-// SyncRunner runs sync in-process as a goroutine with proper lifecycle management.
-// This avoids subprocess timing issues - the runner signals when ready.
+// SyncRunner is the one sync loop: it syncs on file changes and on a backup
+// interval, and makes a final sync when stopped. runtime execute runs it
+// in-process and the sync sidecar runs it through Sync.
 type SyncRunner struct {
 	opts       SyncOptions
 	logger     util.Logger
@@ -255,9 +256,9 @@ func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
 	return np
 }
 
-// Sync uses fsnotify to watch for file changes and immediately syncs to MinIO.
-// Also performs periodic backup syncs in case fsnotify misses events.
-// It runs as the sync sidecar until it is cancelled or signalled.
+// Sync runs a SyncRunner as the Kubernetes sync sidecar, serving readiness
+// once it has started, until it is cancelled or signalled. Stopping makes the
+// runner's final sync.
 func Sync(ctx context.Context, opts SyncOptions) error {
 	return runSidecar(ctx, opts, util.NewLogger(), storageSyncers, func() <-chan os.Signal {
 		signals := make(chan os.Signal, 1)
@@ -273,17 +274,6 @@ func runSidecar(
 	newSyncers syncerFactory,
 	notifySignals func() <-chan os.Signal,
 ) error {
-	// Set defaults
-	if opts.StatePath == "" {
-		opts.StatePath = constants.DefaultStatePath
-	}
-	if opts.LogsPath == "" {
-		opts.LogsPath = constants.DefaultLogsPath
-	}
-	if opts.Interval == 0 {
-		opts.Interval = 60 * time.Second // Backup interval, fsnotify handles immediate syncs
-	}
-
 	// Start health server for K8s readiness probes (if port specified)
 	var healthServer *health.Server
 	if opts.ReadinessPort > 0 {
@@ -297,59 +287,19 @@ func runSidecar(
 		logger.Info("Health server started", "port", opts.ReadinessPort)
 	}
 
-	logger.Info("Daemon sync starting with fsnotify", "bot_id", opts.BotID, "backup_interval", opts.Interval)
+	logger.Info("Daemon sync starting with fsnotify", "bot_id", opts.BotID)
 
-	syncers, cleanup, err := newSyncers(ctx, opts, logger)
-	if err != nil {
-		return err
+	runner := newSyncRunner(opts, logger, newSyncers)
+	runner.Start()
+	select {
+	case <-runner.ready:
+	case <-ctx.Done():
+		runner.Stop()
+		return nil
 	}
-
-	// Mutex to prevent concurrent syncs
-	var syncMu sync.Mutex
-
-	// Perform all sync operations (thread-safe)
-	doSync := func() {
-		syncMu.Lock()
-		defer syncMu.Unlock()
-		for _, syncer := range syncers {
-			syncer.Sync(ctx)
-		}
-	}
-
-	// Create file watcher for immediate change detection
-	fileWatcher, err := NewFileWatcher(FileWatcherConfig{
-		Logger:   logger,
-		OnChange: doSync,
-		Debounce: 200 * time.Millisecond, // Quick debounce for responsiveness
-	})
-	if err != nil {
-		logger.Info("Failed to create file watcher, falling back to polling only: %v", err)
-	} else {
-		// Watch logs directory
-		if opts.LogsPath != "" {
-			if err := os.MkdirAll(opts.LogsPath, 0755); err == nil {
-				if err := fileWatcher.Watch(opts.LogsPath); err != nil {
-					logger.Info("Failed to watch logs path: %v", err)
-				} else {
-					logger.Info("Watching logs directory for changes", "path", opts.LogsPath)
-				}
-			}
-		}
-
-		// Watch state directory
-		if opts.StatePath != "" {
-			if err := os.MkdirAll(opts.StatePath, 0755); err == nil {
-				if err := fileWatcher.Watch(opts.StatePath); err != nil {
-					logger.Info("Failed to watch state path: %v", err)
-				} else {
-					logger.Info("Watching state directory for changes", "path", opts.StatePath)
-				}
-			}
-		}
-
-		// Start the file watcher
-		go fileWatcher.Start()
-		defer fileWatcher.Stop()
+	if runner.initErr != nil {
+		runner.Stop()
+		return runner.initErr
 	}
 
 	// Signal readiness after initialization is complete
@@ -358,33 +308,13 @@ func runSidecar(
 		logger.Info("Sync daemon ready")
 	}
 
-	// Signal handling
-	sigCh := notifySignals()
-
-	// Backup sync ticker (in case fsnotify misses events)
-	ticker := time.NewTicker(opts.Interval)
-	defer ticker.Stop()
-
-	// Main loop
-	for {
-		select {
-		case <-ticker.C:
-			// Backup periodic sync
-			doSync()
-
-		case <-ctx.Done():
-			logger.Info("Context cancelled, performing final sync")
-			doSync()
-			cleanup()
-			logger.Info("Daemon sync shutdown complete")
-			return nil
-
-		case sig := <-sigCh:
-			logger.Info("Received signal, performing final sync", "signal", sig.String())
-			doSync()
-			cleanup()
-			logger.Info("Daemon sync shutdown complete")
-			return nil
-		}
+	select {
+	case <-ctx.Done():
+		logger.Info("Context cancelled, performing final sync")
+	case sig := <-notifySignals():
+		logger.Info("Received signal, performing final sync", "signal", sig.String())
 	}
+	runner.Stop()
+	logger.Info("Daemon sync shutdown complete")
+	return nil
 }
