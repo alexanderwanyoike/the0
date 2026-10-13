@@ -15,14 +15,13 @@ import (
 
 	"runtime/internal/constants"
 	dockerrunner "runtime/internal/docker"
-	botnatssubscriber "runtime/internal/docker/bot-runner/subscriber"
-	schedulenatssubscriber "runtime/internal/docker/bot-scheduler/subscriber"
 	"runtime/internal/gc"
 	"runtime/internal/k8s/controller"
 	"runtime/internal/k8s/detect"
 	"runtime/internal/k8s/health"
 	"runtime/internal/launch"
 	"runtime/internal/runtime/storage"
+	"runtime/internal/subscriber"
 	"runtime/internal/util"
 )
 
@@ -331,7 +330,7 @@ func runController() {
 	}
 	defer mongoClient.Disconnect(context.Background())
 
-	// Start NATS subscribers to sync bots and schedules from API to MongoDB
+	// Start the NATS subscriber to sync bots and schedules from API to MongoDB
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -339,45 +338,23 @@ func runController() {
 	if natsUrl == "" {
 		util.LogMaster("WARNING: NATS_URL not set, bots/schedules won't be synced from API")
 	} else {
-		// Bot NATS subscriber
-		botSubscriber, err := botnatssubscriber.NewNATSSubscriber(ctx, botnatssubscriber.SubscriberOptions{
-			NATSUrl:        natsUrl,
-			DBName:         constants.BOT_RUNNER_DB_NAME,
-			CollectionName: constants.BOT_RUNNER_COLLECTION,
-			MaxRetries:     3,
-			Logger:         &util.DefaultLogger{},
+		events, err := subscriber.New(ctx, subscriber.Options{
+			NATSUrl:   natsUrl,
+			Bots:      &subscriber.Collection{DB: constants.BOT_RUNNER_DB_NAME, Name: constants.BOT_RUNNER_COLLECTION},
+			Schedules: &subscriber.Collection{DB: constants.BOT_SCHEDULER_DB_NAME, Name: constants.BOT_SCHEDULE_COLLECTION},
+			Logger:    &util.DefaultLogger{},
 		})
 		if err != nil {
-			util.LogMaster("Failed to create bot NATS subscriber: %v", err)
+			util.LogMaster("Failed to create NATS subscriber: %v", err)
 			os.Exit(1)
 		}
-		if err := botSubscriber.Start(ctx); err != nil {
-			util.LogMaster("Failed to start bot NATS subscriber: %v", err)
+		if err := events.Start(ctx); err != nil {
+			util.LogMaster("Failed to start NATS subscriber: %v", err)
+			events.Stop() // Clean up before exit
 			os.Exit(1)
 		}
-		defer botSubscriber.Stop()
-		util.LogMaster("Bot NATS subscriber started - listening for bot events")
-
-		// Schedule NATS subscriber
-		scheduleSubscriber, err := schedulenatssubscriber.NewNATSSubscriber(ctx, schedulenatssubscriber.SubscriberOptions{
-			NATSUrl:        natsUrl,
-			DBName:         constants.BOT_SCHEDULER_DB_NAME,
-			CollectionName: constants.BOT_SCHEDULE_COLLECTION,
-			MaxRetries:     3,
-			Logger:         &util.DefaultLogger{},
-		})
-		if err != nil {
-			util.LogMaster("Failed to create schedule NATS subscriber: %v", err)
-			botSubscriber.Stop() // Clean up before exit
-			os.Exit(1)
-		}
-		if err := scheduleSubscriber.Start(ctx); err != nil {
-			util.LogMaster("Failed to start schedule NATS subscriber: %v", err)
-			botSubscriber.Stop() // Clean up before exit
-			os.Exit(1)
-		}
-		defer scheduleSubscriber.Stop()
-		util.LogMaster("Schedule NATS subscriber started - listening for schedule events")
+		defer events.Stop()
+		util.LogMaster("NATS subscriber started - listening for bot and schedule events")
 	}
 
 	// Create controller manager
