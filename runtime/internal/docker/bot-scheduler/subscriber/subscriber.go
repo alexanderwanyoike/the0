@@ -293,13 +293,11 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
 		},
 	}
 
-	// Recalculate next execution time if the schedule is updated
-	existingSchedule, existingOk := existingBot.Config["schedule"].(string)
 	newSchedule, newOk := message.Config["schedule"].(string)
 	if !newOk || newSchedule == "" {
 		return botevents.Permanent(fmt.Errorf("missing or invalid schedule in message config"))
 	}
-	if !existingOk || existingSchedule != newSchedule {
+	if desired.Reschedules(existingBot, message.Config) {
 		nextTime, err := desired.NextExecutionTime(
 			newSchedule,
 			time.Now(),
