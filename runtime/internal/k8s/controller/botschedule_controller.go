@@ -397,13 +397,11 @@ func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage strin
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
-		Enabled          *bool
 		NATSURL          string
 		RuntimeImage     string
 	}{
 		Config:           schedule.Config,
 		CustomBotVersion: schedule.CustomBotVersion.Version,
-		Enabled:          schedule.Enabled,
 		NATSURL:          natsURL,
 		RuntimeImage:     runtimeImage,
 	}

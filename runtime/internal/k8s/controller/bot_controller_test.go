@@ -83,7 +83,6 @@ func (m *MockK8sClient) GetPod(ctx context.Context, namespace, name string) (*co
 // ---- Helper Functions ----
 
 func createTestBot(id, name, version, runtime string) model.Bot {
-	enabled := true
 	return model.Bot{
 		ID: id,
 		Config: map[string]interface{}{
@@ -100,7 +99,6 @@ func createTestBot(id, name, version, runtime string) model.Bot {
 				},
 			},
 		},
-		Enabled: &enabled,
 	}
 }
 

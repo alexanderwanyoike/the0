@@ -29,7 +29,6 @@ func (m *MockDesiredSchedules) Schedules(ctx context.Context) ([]model.BotSchedu
 }
 
 func createTestSchedule(id, name, version, runtime, schedule string) model.BotSchedule {
-	enabled := true
 	return model.BotSchedule{
 		ID: id,
 		Config: map[string]interface{}{
@@ -47,7 +46,6 @@ func createTestSchedule(id, name, version, runtime, schedule string) model.BotSc
 				},
 			},
 		},
-		Enabled: &enabled,
 	}
 }
 
