@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"runtime/internal/model"
-	"runtime/internal/util"
 )
 
 // Repository is where the runtime stores the Bots and schedules the api
@@ -91,7 +90,7 @@ func (s *State) ScheduleRan(ctx context.Context, schedule model.BotSchedule, ran
 	if !ok || cron == "" {
 		return time.Time{}, fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
-	next, err := util.CalculateNextExecutionTime(cron, ranAt)
+	next, err := NextExecutionTime(cron, ranAt)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("schedule %s: %w", schedule.ID, err)
 	}

@@ -1,4 +1,4 @@
-package util
+package desired
 
 import (
 	"fmt"
@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// CalculateNextExecutionTime accepts standard 5-field cron (and descriptors
+// NextExecutionTime accepts standard 5-field cron (and descriptors
 // such as @daily) only. Kubernetes CronJobs cannot honour a seconds field, so
 // both modes refuse one rather than run the schedule at a different time.
-func CalculateNextExecutionTime(
+func NextExecutionTime(
 	cronExpr string,
 	t time.Time,
 ) (time.Time, error) {

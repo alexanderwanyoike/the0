@@ -254,7 +254,7 @@ func (c *BotScheduleController) ensureCronJobRunning(ctx context.Context, schedu
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 
-	if _, err := util.CalculateNextExecutionTime(cronExpr, time.Now()); err != nil {
+	if _, err := desired.NextExecutionTime(cronExpr, time.Now()); err != nil {
 		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
 	}
 
@@ -279,7 +279,7 @@ func (c *BotScheduleController) updateCronJob(ctx context.Context, schedule mode
 		return fmt.Errorf("schedule %s has no cron expression", schedule.ID)
 	}
 
-	if _, err := util.CalculateNextExecutionTime(cronExpr, time.Now()); err != nil {
+	if _, err := desired.NextExecutionTime(cronExpr, time.Now()); err != nil {
 		return fmt.Errorf("schedule %s: %w", schedule.ID, err)
 	}
 

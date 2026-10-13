@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/internal/botevents"
 	"runtime/internal/constants"
+	"runtime/internal/desired"
 	"runtime/internal/model"
 	"runtime/internal/util"
 	"strconv"
@@ -299,7 +300,7 @@ func (s *NATSSubscriber) handleUpdate(ctx context.Context, data []byte) error {
 		return botevents.Permanent(fmt.Errorf("missing or invalid schedule in message config"))
 	}
 	if !existingOk || existingSchedule != newSchedule {
-		nextTime, err := util.CalculateNextExecutionTime(
+		nextTime, err := desired.NextExecutionTime(
 			newSchedule,
 			time.Now(),
 		)
@@ -354,7 +355,7 @@ func (s *NATSSubscriber) upsertBotSchedule(
 		return botevents.Permanent(fmt.Errorf("missing or invalid schedule in message config"))
 	}
 
-	nextTime, err := util.CalculateNextExecutionTime(
+	nextTime, err := desired.NextExecutionTime(
 		schedule,
 		time.Now(),
 	)
