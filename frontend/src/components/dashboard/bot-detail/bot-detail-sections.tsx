@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { isBotEnabled } from "@/lib/bot-utils";
 import type { DetailBot as Bot } from "./use-bot-detail";
 
 const DeleteBotDialog = ({
@@ -100,7 +101,7 @@ export const BotDetailHeader = ({
   onOpenUpdateModal,
   onDelete,
 }: BotDetailHeaderProps) => {
-  const enabled = bot.config.enabled ?? true;
+  const enabled = isBotEnabled(bot.config);
 
   return (
     <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

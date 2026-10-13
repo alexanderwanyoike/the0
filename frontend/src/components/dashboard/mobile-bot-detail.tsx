@@ -22,6 +22,7 @@ import {
 } from "@/components/bot/interval-picker";
 import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { Bot as ApiBotType } from "@/lib/api/api-client";
+import { isBotEnabled } from "@/lib/bot-utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -141,7 +142,7 @@ export function MobileBotDetail({
         </div>
         <div className="flex items-center gap-1.5">
           <Switch
-            checked={bot.config.enabled ?? true}
+            checked={isBotEnabled(bot.config)}
             onCheckedChange={onToggleEnabled}
             disabled={isUpdatingEnabled}
           />

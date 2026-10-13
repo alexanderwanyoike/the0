@@ -3,6 +3,7 @@
 import cronstrue from "cronstrue";
 import { Clock } from "lucide-react";
 import { Bot } from "@/lib/api/api-client";
+import { isBotEnabled } from "@/lib/bot-utils";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { MobileBotCard } from "@/components/bot-list/bot-list";
@@ -17,7 +18,7 @@ export function BotListItem({ bot, isActive, onClick }: BotListItemProps) {
   const config = bot.config as Record<string, any>;
   const name = config?.name || bot.id;
   const symbol = config?.symbol || "";
-  const enabled = config?.enabled ?? true;
+  const enabled = isBotEnabled(config);
 
   return (
     <button
@@ -72,7 +73,7 @@ export function MobileBotListItem({
   const name = config?.name || bot.id;
   const symbol = config?.symbol || "";
   const botType = config?.type || "Bot";
-  const enabled = config?.enabled ?? true;
+  const enabled = isBotEnabled(config);
 
   return (
     <MobileBotCard
