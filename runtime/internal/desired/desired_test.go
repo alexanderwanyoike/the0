@@ -155,6 +155,30 @@ func TestScheduleRan_LeavesTheNextRunWhenTheCronCannotBeRead(t *testing.T) {
 	}
 }
 
+func TestReschedules_WhenTheCronChangesOrTheScheduleIsEnabledAgain(t *testing.T) {
+	tests := []struct {
+		name   string
+		stored map[string]interface{}
+		update map[string]interface{}
+		want   bool
+	}{
+		{"cron changes", map[string]interface{}{"schedule": "0 9 * * *"}, map[string]interface{}{"schedule": "0 10 * * *"}, true},
+		{"enabled again", map[string]interface{}{"schedule": "0 9 * * *", "enabled": false}, map[string]interface{}{"schedule": "0 9 * * *", "enabled": true}, true},
+		{"enabled again by dropping enabled", map[string]interface{}{"schedule": "0 9 * * *", "enabled": false}, map[string]interface{}{"schedule": "0 9 * * *"}, true},
+		{"stored without a cron", map[string]interface{}{}, map[string]interface{}{"schedule": "0 9 * * *"}, true},
+		{"other config changes", map[string]interface{}{"schedule": "0 9 * * *", "symbol": "BTC/USD"}, map[string]interface{}{"schedule": "0 9 * * *", "symbol": "ETH/USD"}, false},
+		{"disabled", map[string]interface{}{"schedule": "0 9 * * *"}, map[string]interface{}{"schedule": "0 9 * * *", "enabled": false}, false},
+		{"stays disabled", map[string]interface{}{"schedule": "0 9 * * *", "enabled": false}, map[string]interface{}{"schedule": "0 9 * * *", "enabled": false}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stored := model.BotSchedule{ID: "s", Config: tt.stored}
+
+			assert.Equal(t, tt.want, desired.Reschedules(stored, tt.update))
+		})
+	}
+}
+
 func TestScheduleToBot_IsTheScheduleAsABot(t *testing.T) {
 	s := schedule("schedule-1", "0 9 * * *", time.Now())
 	s.CustomBotVersion = model.CustomBotVersion{
