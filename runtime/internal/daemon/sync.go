@@ -38,33 +38,43 @@ type SyncOptions struct {
 	ReadinessPort int           // Port for health/readiness HTTP server (0 = disabled, used for K8s sidecar)
 }
 
+// syncerFactory builds the syncers for opts, and what to do once they have
+// made their last sync.
+type syncerFactory func(ctx context.Context, opts SyncOptions, logger util.Logger) ([]Syncer, func(), error)
+
 // SyncRunner runs sync in-process as a goroutine with proper lifecycle management.
 // This avoids subprocess timing issues - the runner signals when ready.
 type SyncRunner struct {
-	opts    SyncOptions
-	logger  util.Logger
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	ready   chan struct{}
-	initErr error
-	syncers []Syncer
-	syncMu  sync.Mutex
-	cleanup func()
+	opts       SyncOptions
+	logger     util.Logger
+	newSyncers syncerFactory
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	ready      chan struct{}
+	initErr    error
+	syncers    []Syncer
+	syncMu     sync.Mutex
+	cleanup    func()
 }
 
 // NewSyncRunner creates a new in-process sync runner.
 func NewSyncRunner(opts SyncOptions, logger util.Logger) *SyncRunner {
+	return newSyncRunner(opts, logger, storageSyncers)
+}
+
+func newSyncRunner(opts SyncOptions, logger util.Logger, newSyncers syncerFactory) *SyncRunner {
 	if logger == nil {
 		logger = util.NewLogger()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &SyncRunner{
-		opts:   opts,
-		logger: logger,
-		ctx:    ctx,
-		cancel: cancel,
-		ready:  make(chan struct{}),
+		opts:       opts,
+		logger:     logger,
+		newSyncers: newSyncers,
+		ctx:        ctx,
+		cancel:     cancel,
+		ready:      make(chan struct{}),
 	}
 }
 
@@ -121,56 +131,14 @@ func (r *SyncRunner) run() {
 
 	r.logger.Info("Sync runner starting", "bot_id", r.opts.BotID)
 
-	// Load config
-	cfg, err := storage.LoadConfigFromEnv()
+	syncers, cleanup, err := r.newSyncers(r.ctx, r.opts, r.logger)
 	if err != nil {
-		r.initErr = fmt.Errorf("failed to load config: %w", err)
+		r.initErr = err
 		close(r.ready)
 		return
 	}
-
-	// Create MinIO client
-	minioClient, err := storage.NewMinioClient(cfg)
-	if err != nil {
-		r.initErr = fmt.Errorf("failed to create MinIO client: %w", err)
-		close(r.ready)
-		return
-	}
-
-	// State syncer
-	stateManager := storage.NewStateManager(minioClient, cfg, r.logger)
-	stateSyncer := NewStateSyncer(r.opts.BotID, r.opts.StatePath, stateManager, r.logger)
-	r.syncers = append(r.syncers, stateSyncer)
-
-	// Logs syncer
-	var logsSyncer *LogsSyncer
-	var logPublisher LogPublisher
-	if r.opts.LogsPath != "" {
-		logUploader, err := miniologger.NewMinIOLogger(r.ctx, miniologger.MinioLoggerOptions{
-			Endpoint:   cfg.Endpoint,
-			AccessKey:  cfg.AccessKey,
-			SecretKey:  cfg.SecretKey,
-			UseSSL:     cfg.UseSSL,
-			LogsBucket: cfg.LogsBucket,
-		})
-		if err != nil {
-			r.logger.Info("Failed to create log uploader", "error", err.Error())
-		} else {
-			logPublisher = newLogPublisherFromEnv(r.logger)
-			logsSyncer = NewLogsSyncer(r.opts.BotID, r.opts.LogsPath, logUploader, logPublisher, r.logger)
-			if logsSyncer != nil {
-				r.syncers = append(r.syncers, logsSyncer)
-			}
-		}
-	}
-
-	r.cleanup = func() {
-		if logsSyncer != nil {
-			if err := logsSyncer.Close(); err != nil {
-				r.logger.Info("Failed to close logs syncer", "error", err.Error())
-			}
-		}
-	}
+	r.syncers = append(r.syncers, syncers...)
+	r.cleanup = cleanup
 
 	// Create file watcher
 	fileWatcher, err := NewFileWatcher(FileWatcherConfig{
@@ -227,6 +195,51 @@ func (r *SyncRunner) run() {
 	}
 }
 
+// storageSyncers sync state and, when its bucket is reachable, logs to the
+// storage the environment names.
+func storageSyncers(ctx context.Context, opts SyncOptions, logger util.Logger) ([]Syncer, func(), error) {
+	cfg, err := storage.LoadConfigFromEnv()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	minioClient, err := storage.NewMinioClient(cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create MinIO client: %w", err)
+	}
+
+	stateManager := storage.NewStateManager(minioClient, cfg, logger)
+	syncers := []Syncer{NewStateSyncer(opts.BotID, opts.StatePath, stateManager, logger)}
+
+	var logsSyncer *LogsSyncer
+	if opts.LogsPath != "" {
+		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
+			Endpoint:   cfg.Endpoint,
+			AccessKey:  cfg.AccessKey,
+			SecretKey:  cfg.SecretKey,
+			UseSSL:     cfg.UseSSL,
+			LogsBucket: cfg.LogsBucket,
+		})
+		if err != nil {
+			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
+		} else {
+			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, newLogPublisherFromEnv(logger), logger)
+			if logsSyncer != nil {
+				syncers = append(syncers, logsSyncer)
+			}
+		}
+	}
+
+	cleanup := func() {
+		if logsSyncer != nil {
+			if err := logsSyncer.Close(); err != nil {
+				logger.Info("Failed to close logs syncer", "error", err.Error())
+			}
+		}
+	}
+	return syncers, cleanup, nil
+}
+
 // newLogPublisherFromEnv creates a LogPublisher from NATS_URL env var.
 // Returns nil if NATS_URL is not set or connection fails.
 func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
@@ -246,8 +259,20 @@ func newLogPublisherFromEnv(logger util.Logger) LogPublisher {
 // Also performs periodic backup syncs in case fsnotify misses events.
 // It runs as the sync sidecar until it is cancelled or signalled.
 func Sync(ctx context.Context, opts SyncOptions) error {
-	var logger util.Logger = util.NewLogger()
+	return runSidecar(ctx, opts, util.NewLogger(), storageSyncers, func() <-chan os.Signal {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+		return signals
+	})
+}
 
+func runSidecar(
+	ctx context.Context,
+	opts SyncOptions,
+	logger util.Logger,
+	newSyncers syncerFactory,
+	notifySignals func() <-chan os.Signal,
+) error {
 	// Set defaults
 	if opts.StatePath == "" {
 		opts.StatePath = constants.DefaultStatePath
@@ -274,48 +299,9 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 
 	logger.Info("Daemon sync starting with fsnotify", "bot_id", opts.BotID, "backup_interval", opts.Interval)
 
-	// Load config
-	cfg, err := storage.LoadConfigFromEnv()
+	syncers, cleanup, err := newSyncers(ctx, opts, logger)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Create MinIO client
-	minioClient, err := storage.NewMinioClient(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create MinIO client: %w", err)
-	}
-
-	// Initialize syncers
-	var syncers []Syncer
-
-	// State syncer
-	stateManager := storage.NewStateManager(minioClient, cfg, logger)
-	stateSyncer := NewStateSyncer(opts.BotID, opts.StatePath, stateManager, logger)
-	syncers = append(syncers, stateSyncer)
-	logger.Info("State syncer initialized", "path", opts.StatePath)
-
-	// Logs syncer (optional - may fail if MinIO bucket doesn't exist)
-	var logsSyncer *LogsSyncer
-	var logPublisher LogPublisher
-	if opts.LogsPath != "" {
-		logUploader, err := miniologger.NewMinIOLogger(ctx, miniologger.MinioLoggerOptions{
-			Endpoint:   cfg.Endpoint,
-			AccessKey:  cfg.AccessKey,
-			SecretKey:  cfg.SecretKey,
-			UseSSL:     cfg.UseSSL,
-			LogsBucket: cfg.LogsBucket,
-		})
-		if err != nil {
-			logger.Info("Failed to create log uploader, logs will not be synced", "error", err.Error())
-		} else {
-			logPublisher = newLogPublisherFromEnv(logger)
-			logsSyncer = NewLogsSyncer(opts.BotID, opts.LogsPath, logUploader, logPublisher, logger)
-			if logsSyncer != nil {
-				syncers = append(syncers, logsSyncer)
-				logger.Info("Logs syncer initialized", "path", opts.LogsPath)
-			}
-		}
+		return err
 	}
 
 	// Mutex to prevent concurrent syncs
@@ -327,15 +313,6 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 		defer syncMu.Unlock()
 		for _, syncer := range syncers {
 			syncer.Sync(ctx)
-		}
-	}
-
-	// Cleanup function
-	cleanup := func() {
-		if logsSyncer != nil {
-			if err := logsSyncer.Close(); err != nil {
-				logger.Info("Failed to close logs syncer", "error", err.Error())
-			}
 		}
 	}
 
@@ -382,8 +359,7 @@ func Sync(ctx context.Context, opts SyncOptions) error {
 	}
 
 	// Signal handling
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	sigCh := notifySignals()
 
 	// Backup sync ticker (in case fsnotify misses events)
 	ticker := time.NewTicker(opts.Interval)
