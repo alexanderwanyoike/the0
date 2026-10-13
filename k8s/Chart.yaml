@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.14.0
-appVersion: "1.19.0"
+version: 0.15.0
+appVersion: "1.20.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,17 +31,17 @@ annotations:
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: fixed
-      description: "Deleting a custom bot version can no longer remove a bot deployed on it at the same moment: the database refuses the delete (migration 0008) and the api answers that the version is in use"
+      description: "Docker and Kubernetes run the same bots: both treat a bot or schedule as enabled unless config.enabled is false, and the dashboard shows a bot as enabled by the same rule"
     - kind: fixed
-      description: "Bucket name overrides reach bots: Docker passes its code, state, logs and query results buckets to bot containers, pods get the controller's code and state buckets, and logs are saved to the configured logs bucket instead of always bot-logs"
+      description: "A schedule enabled again in Docker mode first runs at its next tick, as on Kubernetes, instead of at once for a tick it missed"
     - kind: fixed
-      description: "Compiled bots' query binaries are made executable before a query or the query server runs them"
+      description: "The Kubernetes sync sidecar makes its final state and log sync within its deadline when stopped, instead of with an already cancelled context"
     - kind: changed
-      description: "A query starts as runtime execute --query=<path> on Docker and Kubernetes alike, without a bot run's settings, and always gets QUERY_PARAMS, an empty object when there are none"
+      description: "Schedules are standard 5-field cron in both modes; a 6-field expression is refused instead of having its seconds trimmed on Kubernetes"
+    - kind: changed
+      description: "One subscriber stores bot and schedule events on the same durable JetStream consumers, so an upgrade resumes where they stopped; the controller now uses one NATS connection and one MongoDB client"
     - kind: removed
-      description: "The unused QUERY_PARAM_<key> variables are no longer set; bots read QUERY_PARAMS"
-    - kind: changed
-      description: "One launch module in the runtime defines every setting a launcher passes to runtime execute, checked by a round-trip test for every mode on both backends; the controller's --minio-bucket default is now custom-bots, the bucket pods have always read"
+      description: "Unused code: partitions, the daemon init command, the done-file mechanism and the IS_SCHEDULED variable it relied on"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
