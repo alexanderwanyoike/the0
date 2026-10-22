@@ -45,7 +45,7 @@ annotations:
     - kind: security
       description: "Frontend on next 15.5.28 (GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r)"
     - kind: security
-      description: "Docs site built with vite 6.4.5 (GHSA-587h-7wmj-h5pm)"
+      description: "Docs site built with vite 6.4.5 and dompurify 3.4.17 (GHSA-587h-7wmj-h5pm, GHSA-mrv2-3pqr-j5jr)"
     - kind: fixed
       description: "The api image builds against current Alpine packages again"
   artifacthub.io/images: |
