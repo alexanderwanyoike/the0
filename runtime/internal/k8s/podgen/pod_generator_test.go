@@ -800,3 +800,19 @@ func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigChanged_KeepsAPodWhoseBotCanNoLongerBeGenerated(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{MinIOEndpoint: "minio:9000", RuntimeImage: "the0/runtime:latest"})
+	bot := natsTestBot("rt-bot", "python3.11")
+	pod, err := generator.GeneratePod(bot)
+	require.NoError(t, err)
+
+	broken := bot
+	broken.Config = map[string]interface{}{"symbol": "ETH/USD"}
+	broken.CustomBotVersion.Config.Entrypoints = map[string]string{}
+	_, err = generator.GeneratePod(broken)
+	require.Error(t, err)
+
+	assert.False(t, generator.ConfigChanged(pod, broken),
+		"the controller deletes changed pods, and a bot it cannot generate could not be recreated")
+}
