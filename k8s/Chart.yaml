@@ -38,6 +38,12 @@ annotations:
       description: "Storage credentials are no longer stored in plain text in bot pod, CronJob and Job specs"
     - kind: changed
       description: "Upgrading restarts every realtime bot pod and rewrites every scheduled-bot CronJob once"
+    - kind: security
+      description: "Runtime and CLI built with Go 1.26.10, which distrusts compromised intermediate certificates in crypto/x509 (GO-2026-6809)"
+    - kind: security
+      description: "follow-redirects 1.16.1 in the api and frontend, which strips credential headers on cross-origin redirects (GHSA-8r9p-f939-6h3c, GHSA-q3jh-wrc6-jgq8)"
+    - kind: fixed
+      description: "The api image builds against current Alpine packages again"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api
