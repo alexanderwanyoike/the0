@@ -23,9 +23,11 @@ export async function GET(
       headers.Authorization = token;
     }
 
+    const { search } = new URL(req.url);
+
     try {
       const upstream = await fetch(
-        `${apiUrl}/logs/${encodeURIComponent(botId)}/stream`,
+        `${apiUrl}/logs/${encodeURIComponent(botId)}/stream${search}`,
         {
           headers,
           signal: req.signal,
