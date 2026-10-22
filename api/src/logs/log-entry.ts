@@ -21,14 +21,21 @@ interface ParsedLine {
   timestamp: string | null;
 }
 
+/**
+ * The runtime's `<unix ns>-<index>` form. Files from before the runtime
+ * stamped keys can hold a `_key` a bot logged itself, which is not unique.
+ */
+const RUNTIME_KEY = /^\d+-\d+$/;
+
 function parseLine(line: string): ParsedLine {
   try {
     const parsed = JSON.parse(line);
     if (parsed === null || typeof parsed !== "object") {
       return { key: null, timestamp: null };
     }
+    const key = parsed._key;
     return {
-      key: typeof parsed._key === "string" ? parsed._key : null,
+      key: typeof key === "string" && RUNTIME_KEY.test(key) ? key : null,
       timestamp: typeof parsed.timestamp === "string" ? parsed.timestamp : null,
     };
   } catch {
@@ -40,14 +47,14 @@ function parseLine(line: string): ParsedLine {
 export const utcDay = (date: Date): string =>
   date.toISOString().slice(0, 10).replace(/-/g, "");
 
-const RUNTIME_KEY = /^(\d{7,})-\d+$/;
+const KEY_CHUNK_NS = /^(\d{7,})-\d+$/;
 
 /**
  * The runtime names a chunk's daily file after the UTC day of the chunk time
  * it puts in every `_key` of that chunk, so a live line can name its file.
  */
 export function runtimeKeyDay(key: string): string | null {
-  const match = RUNTIME_KEY.exec(key);
+  const match = KEY_CHUNK_NS.exec(key);
   if (!match) return null;
   const millis = Number(match[1].slice(0, -6));
   const day = new Date(millis);
