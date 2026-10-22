@@ -88,7 +88,7 @@ describe("LogStreamService", () => {
       expect(mockRes.flushHeaders).toHaveBeenCalled();
     });
 
-    it("should send history event on connect", async () => {
+    it("should send the newest history oldest-first, like update events", async () => {
       await service.stream("bot-history", userId, mockReq, mockRes);
 
       expect(mockLogsService.getLogs).toHaveBeenCalledWith(
@@ -97,6 +97,7 @@ describe("LogStreamService", () => {
           date: expect.any(String),
           limit: 1000,
           offset: 0,
+          sort: "asc",
         },
         "user123",
       );
