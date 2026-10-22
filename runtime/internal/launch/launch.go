@@ -49,6 +49,12 @@ const DefaultStateDir = "/state/.the0-state"
 
 const stateDirName = ".the0-state"
 
+// AccessKeyEnv and SecretKeyEnv carry Storage's credentials.
+const (
+	AccessKeyEnv = "MINIO_ACCESS_KEY"
+	SecretKeyEnv = "MINIO_SECRET_KEY"
+)
+
 // Storage is the MinIO the bot's code, state, logs and query results are in.
 type Storage struct {
 	Endpoint  string
@@ -297,8 +303,8 @@ var variables = []variable{
 	text("LOGS_PATH", func(s *Settings) *string { return &s.LogsPath }),
 	text("STATE_DIR", func(s *Settings) *string { return &s.StateDir }),
 	synced(always("MINIO_ENDPOINT", func(s *Settings) *string { return &s.Storage.Endpoint })),
-	synced(always("MINIO_ACCESS_KEY", func(s *Settings) *string { return &s.Storage.AccessKey })),
-	synced(always("MINIO_SECRET_KEY", func(s *Settings) *string { return &s.Storage.SecretKey })),
+	synced(always(AccessKeyEnv, func(s *Settings) *string { return &s.Storage.AccessKey })),
+	synced(always(SecretKeyEnv, func(s *Settings) *string { return &s.Storage.SecretKey })),
 	synced(boolean("MINIO_USE_SSL", func(s *Settings) *bool { return &s.Storage.UseSSL })),
 	synced(text("MINIO_CODE_BUCKET", func(s *Settings) *string { return &s.Storage.CodeBucket })),
 	synced(text("MINIO_STATE_BUCKET", func(s *Settings) *string { return &s.Storage.StateBucket })),
