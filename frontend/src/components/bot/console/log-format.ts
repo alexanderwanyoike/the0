@@ -70,13 +70,15 @@ export function metricTimestamp(
   return metricDataTimestamp(metricData.timestamp);
 }
 
-/** Metric fields worth showing: everything except the _metric marker and
- *  the timestamp, with objects JSON-encoded. */
+/** Metric fields worth showing: everything except the _metric marker, the
+ *  runtime's _key and the timestamp, with objects JSON-encoded. */
 export function metricDisplayData(
   metricData: Record<string, unknown>,
 ): { key: string; value: string }[] {
   return Object.entries(metricData)
-    .filter(([key]) => key !== "_metric" && key !== "timestamp")
+    .filter(
+      ([key]) => key !== "_metric" && key !== "_key" && key !== "timestamp",
+    )
     .map(([key, value]) => ({
       key,
       value: typeof value === "object" ? JSON.stringify(value) : String(value),

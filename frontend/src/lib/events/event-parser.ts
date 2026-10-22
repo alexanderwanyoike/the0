@@ -76,6 +76,37 @@ function extractLevel(
   return undefined;
 }
 
+/** The runtime stamps every stored line with `_key`; it identifies the
+ *  entry and is not part of what the bot wrote. */
+function withoutEntryKey<T extends Record<string, unknown>>(parsed: T): T {
+  if (!("_key" in parsed)) return parsed;
+  const rest: Record<string, unknown> = { ...parsed };
+  delete rest._key;
+  return rest as T;
+}
+
+/**
+ * The plain text inside a line the runtime wrapped as {message, timestamp,
+ * _key} because the bot printed something other than a JSON object.
+ */
+function unwrapRuntimeLine(content: string): string | null {
+  if (!content.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const wrapperOnly = Object.keys(parsed).every(
+      (key) => key === "message" || key === "timestamp" || key === "_key",
+    );
+    return wrapperOnly && typeof parsed.message === "string"
+      ? parsed.message
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Try to parse content as JSON metric.
  */
@@ -90,7 +121,7 @@ function tryParseMetric(content: string): MetricPayload | null {
   try {
     const parsed = JSON.parse(jsonMatch[1]);
     if (parsed && typeof parsed === "object" && "_metric" in parsed) {
-      return parsed as MetricPayload;
+      return withoutEntryKey(parsed) as MetricPayload;
     }
   } catch {
     // Not valid JSON
@@ -122,7 +153,7 @@ function tryParseStructuredLog(content: string): StructuredLog | null {
         "msg" in parsed ||
         ("fields" in parsed && parsed.fields?.message)) // Rust tracing format
     ) {
-      return parsed as StructuredLog;
+      return withoutEntryKey(parsed) as StructuredLog;
     }
   } catch {
     // Not valid JSON
@@ -358,6 +389,10 @@ export function parseLogLine(
   content: string,
   timestamp?: string | null,
 ): BotEvent {
+  const wrapped = unwrapRuntimeLine(content);
+  if (wrapped !== null) {
+    return { ...parseLogLine(wrapped, timestamp), raw: content };
+  }
   for (const parser of parsers) {
     const result = parser(content, timestamp);
     if (result) return result;
