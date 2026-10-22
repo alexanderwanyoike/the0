@@ -171,7 +171,7 @@ func TestAppendBotLogs(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		timestamp := time.Now().Format("20060102")
+		timestamp := time.Now().UTC().Format("20060102")
 		objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
@@ -230,7 +230,7 @@ func TestAppendBotLogs(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		timestamp := time.Now().Format("20060102")
+		timestamp := time.Now().UTC().Format("20060102")
 		objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
@@ -339,10 +339,10 @@ func TestGetLogFilePathEdgeCases(t *testing.T) {
 			expected: "logs/leap-year-bot/20240229.log",
 		},
 		{
-			name:     "Different timezone should not affect date",
+			name:     "Uses the UTC date whatever the zone",
 			botID:    "tz-bot",
 			date:     time.Date(2023, 12, 31, 23, 59, 59, 0, time.FixedZone("EST", -5*60*60)),
-			expected: "logs/tz-bot/20231231.log",
+			expected: "logs/tz-bot/20240101.log",
 		},
 	}
 
@@ -440,7 +440,7 @@ func TestComposeAppend(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
+	timestamp := time.Now().UTC().Format("20060102")
 	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 	obj, err := client.GetObject(context.Background(), "test-compose-logs", objectPath, minio.GetObjectOptions{})
@@ -516,7 +516,7 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
+	timestamp := time.Now().UTC().Format("20060102")
 	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 	obj, err := client.GetObject(context.Background(), "test-first-write", objectPath, minio.GetObjectOptions{})
@@ -527,6 +527,31 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "hello world", string(content), "the chunk is stored exactly as given")
+}
+
+func TestAppendBotLogs_DailyFileIsTheUTCDateOfTheChunkTime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	server := s3test.StartT(t)
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      server.Endpoint,
+		AccessKey:     s3test.AccessKey,
+		SecretKey:     s3test.SecretKey,
+		LogsBucket:    "test-utc-day-logs",
+		ResultsBucket: "test-utc-day-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	// 01:00 at UTC+5 is 20:00 the previous day in UTC.
+	at := time.Date(2026, 10, 22, 1, 0, 0, 0, time.FixedZone("UTC+5", 5*60*60))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), "utc-bot", "line\n", at))
+
+	_, err = server.Client.StatObject(context.Background(), "test-utc-day-logs",
+		"logs/utc-bot/20261021.log", minio.StatObjectOptions{})
+	assert.NoError(t, err, "the chunk should land in the UTC day's file")
 }
 
 // fakeMultipartClient is a controllable implementation of multipartClient.
@@ -614,7 +639,7 @@ func primeDailyLog(t *testing.T, client *minio.Client, bucket, botID string, siz
 	for i := range payload {
 		payload[i] = 'x'
 	}
-	dailyKey := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().Format("20060102"))
+	dailyKey := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().UTC().Format("20060102"))
 	_, err := client.PutObject(context.Background(), bucket, dailyKey, bytes.NewReader(payload), int64(len(payload)), minio.PutObjectOptions{ContentType: "text/plain"})
 	require.NoError(t, err)
 }
@@ -640,11 +665,11 @@ func TestComposeAppendSmallTail(t *testing.T) {
 	defer logger.Close()
 
 	botID := "small-tail-bot"
-	day := time.Now().Format("20060102")
+	day := time.Now().UTC().Format("20060102")
 	bulk := strings.Repeat("x", int(composeMinPartSize)+1)
 	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk, time.Now()))
 	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line", time.Now()))
-	if time.Now().Format("20060102") != day {
+	if time.Now().UTC().Format("20060102") != day {
 		t.Skip("appends straddled midnight, so the tail started a new daily log instead of composing")
 	}
 
