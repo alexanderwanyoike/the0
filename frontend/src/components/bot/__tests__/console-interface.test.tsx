@@ -907,12 +907,12 @@ describe("ConsoleInterface", () => {
       );
     }
 
-    function localStamp(ms: number) {
+    function utcStamp(ms: number) {
       const d = new Date(ms);
       const p = (n: number) => String(n).padStart(2, "0");
       return {
-        date: `${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-        time: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
+        date: `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`,
+        time: `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`,
       };
     }
 
@@ -920,7 +920,7 @@ describe("ConsoleInterface", () => {
       renderMetricWithoutParsedTimestamp(
         '{"_metric":"price","value":1,"timestamp":1704103200}',
       );
-      const { date, time } = localStamp(1704103200 * 1000);
+      const { date, time } = utcStamp(1704103200 * 1000);
       expect(screen.getByText(date)).toBeInTheDocument();
       expect(screen.getByText(time)).toBeInTheDocument();
       expect(screen.getByText("value: 1")).toBeInTheDocument();
@@ -930,7 +930,7 @@ describe("ConsoleInterface", () => {
       renderMetricWithoutParsedTimestamp(
         '{"_metric":"price","value":2,"timestamp":"1704103260000Z"}',
       );
-      const { time } = localStamp(1704103260000);
+      const { time } = utcStamp(1704103260000);
       expect(screen.getByText(time)).toBeInTheDocument();
     });
 
@@ -938,7 +938,7 @@ describe("ConsoleInterface", () => {
       renderMetricWithoutParsedTimestamp(
         '{"_metric":"price","value":3,"timestamp":"2024-01-01T10:01:30Z"}',
       );
-      const { time } = localStamp(Date.parse("2024-01-01T10:01:30Z"));
+      const { time } = utcStamp(Date.parse("2024-01-01T10:01:30Z"));
       expect(screen.getByText(time)).toBeInTheDocument();
     });
 

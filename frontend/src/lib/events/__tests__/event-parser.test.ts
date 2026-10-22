@@ -16,7 +16,7 @@ describe("event-parser", () => {
       expect(event.type).toBe("log");
       expect(event.level).toBe("INFO");
       expect(event.data).toBe("INFO: Starting bot...");
-      expect(event.timestamp).toEqual(new Date("2024-01-20T10:30:00"));
+      expect(event.timestamp).toEqual(new Date("2024-01-20T10:30:00Z"));
       expect(event.raw).toBe(line);
     });
 
@@ -68,7 +68,7 @@ describe("event-parser", () => {
       expect(event.type).toBe("metric");
       expect(event.metricType).toBe("portfolio_value");
       expect(event.data).toEqual({ _metric: "portfolio_value", value: 10000 });
-      expect(event.timestamp).toEqual(new Date("2024-01-20T10:30:01"));
+      expect(event.timestamp).toEqual(new Date("2024-01-20T10:30:01Z"));
     });
 
     it("should parse a metric with level prefix", () => {
@@ -151,7 +151,7 @@ describe("event-parser", () => {
       const event = parseLogLine(content, null);
 
       expect(event.type).toBe("log");
-      expect(event.timestamp).toEqual(new Date("2026-03-30T13:00:26"));
+      expect(event.timestamp).toEqual(new Date("2026-03-30T13:00:26Z"));
       expect(event.data).toBe("INFO:main:Starting bot");
     });
 
@@ -210,7 +210,7 @@ describe("event-parser", () => {
       const event = parseLogLine(content);
 
       expect(event.type).toBe("log");
-      expect(event.timestamp).toEqual(new Date("2026-03-30T13:00:26"));
+      expect(event.timestamp).toEqual(new Date("2026-03-30T13:00:26Z"));
       expect(event.data).toBe("INFO:main:Starting bot");
     });
 

@@ -5,13 +5,20 @@ import {
   metricTimestamp,
 } from "../log-format";
 
-const local = (ms: number) => formatTimestamp(new Date(ms));
+const display = (ms: number) => formatTimestamp(new Date(ms));
 
 describe("formatTimestamp", () => {
-  it("formats local month-day and zero-padded time", () => {
-    expect(formatTimestamp(new Date(2024, 0, 5, 3, 4, 9))).toEqual({
+  it("formats the UTC month-day and zero-padded time", () => {
+    expect(formatTimestamp(new Date("2024-01-05T03:04:09Z"))).toEqual({
       date: "01-05",
       time: "03:04:09",
+    });
+  });
+
+  it("shows the UTC day, the day the line's log file is named by", () => {
+    expect(formatTimestamp(new Date("2026-10-22T23:30:00Z"))).toEqual({
+      date: "10-22",
+      time: "23:30:00",
     });
   });
 
@@ -23,7 +30,7 @@ describe("formatTimestamp", () => {
 
 describe("metricTimestamp", () => {
   it("prefers the parsed event timestamp", () => {
-    const parsed = new Date(2024, 0, 5, 3, 4, 9);
+    const parsed = new Date("2024-01-05T03:04:09Z");
     expect(metricTimestamp(parsed, { timestamp: 0 })).toEqual(
       formatTimestamp(parsed),
     );
@@ -31,20 +38,20 @@ describe("metricTimestamp", () => {
 
   it("treats small numbers as epoch seconds and large ones as milliseconds", () => {
     expect(metricTimestamp(null, { timestamp: 1704103200 })).toEqual(
-      local(1704103200 * 1000),
+      display(1704103200 * 1000),
     );
     expect(metricTimestamp(null, { timestamp: 1704103200123 })).toEqual(
-      local(1704103200123),
+      display(1704103200123),
     );
   });
 
   it("parses digit strings (optionally Z-suffixed) and date strings", () => {
     expect(metricTimestamp(null, { timestamp: "1704103200Z" })).toEqual(
-      local(1704103200 * 1000),
+      display(1704103200 * 1000),
     );
     expect(
       metricTimestamp(null, { timestamp: "2024-01-01T10:00:00Z" }),
-    ).toEqual(local(Date.parse("2024-01-01T10:00:00Z")));
+    ).toEqual(display(Date.parse("2024-01-01T10:00:00Z")));
   });
 
   it("returns null when there is nothing usable", () => {

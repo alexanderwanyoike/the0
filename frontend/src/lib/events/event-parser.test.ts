@@ -25,8 +25,16 @@ describe("event-parser", () => {
 
         expect(result.type).toBe("log");
         expect(result.data).toBe("Hello world");
-        expect(result.timestamp).toEqual(new Date("2025-12-27T14:30:45"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T14:30:45Z"));
         expect(result.level).toBe("INFO");
+      });
+
+      it("reads a bracket timestamp as UTC, like every log time", () => {
+        const result = parseLogLine("[2026-10-22 23:30:00] Late fill");
+
+        expect(result.timestamp?.toISOString()).toBe(
+          "2026-10-22T23:30:00.000Z",
+        );
       });
 
       it("extracts DEBUG level from log line", () => {
@@ -76,7 +84,7 @@ describe("event-parser", () => {
           "[2025-12-27 10:00:00] ERROR: Critical failure",
         );
 
-        expect(result.timestamp).toEqual(new Date("2025-12-27T10:00:00"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T10:00:00Z"));
         expect(result.level).toBe("ERROR");
         expect(result.data).toBe("ERROR: Critical failure");
       });
@@ -104,7 +112,7 @@ describe("event-parser", () => {
 
         expect(result.type).toBe("metric");
         expect(result.metricType).toBe("portfolio");
-        expect(result.timestamp).toEqual(new Date("2025-12-27T15:00:00"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T15:00:00Z"));
       });
 
       it("parses a metric with level prefix", () => {
@@ -226,7 +234,7 @@ describe("event-parser", () => {
           '[2025-12-27 14:00:00] {"level": "info", "msg": "Test"}';
         const result = parseLogLine(content);
 
-        expect(result.timestamp).toEqual(new Date("2025-12-27T14:00:00"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T14:00:00Z"));
       });
 
       it("returns null timestamp when no timestamp found anywhere", () => {
