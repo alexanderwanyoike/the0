@@ -121,6 +121,48 @@ func TestLogEntryText(t *testing.T) {
 	}
 }
 
+func TestLogEntryTime(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry internal.LogEntry
+		want  string
+	}{
+		{
+			name:  "shows the line's own timestamp",
+			entry: internal.LogEntry{Date: "20261022", Timestamp: "2026-10-22T23:59:59.999Z"},
+			want:  "2026-10-22 23:59:59 UTC",
+		},
+		{
+			name:  "shows a timestamp written with an offset in UTC",
+			entry: internal.LogEntry{Date: "20261022", Timestamp: "2026-10-22T10:00:00+02:00"},
+			want:  "2026-10-22 08:00:00 UTC",
+		},
+		{
+			name:  "falls back to the day of the log file without a timestamp",
+			entry: internal.LogEntry{Date: "20261022"},
+			want:  "2026-10-22",
+		},
+		{
+			name:  "falls back to the day of the log file for an unreadable timestamp",
+			entry: internal.LogEntry{Date: "20261022", Timestamp: "yesterday"},
+			want:  "2026-10-22",
+		},
+		{
+			name:  "shows an unreadable date as sent",
+			entry: internal.LogEntry{Date: "today"},
+			want:  "today",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := logEntryTime(tt.entry); got != tt.want {
+				t.Errorf("logEntryTime() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBotLogsParams(t *testing.T) {
 	t.Run("asks for one day's newest entries oldest first", func(t *testing.T) {
 		got := botLogsParams("20261022", 100)
