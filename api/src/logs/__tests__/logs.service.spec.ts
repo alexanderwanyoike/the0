@@ -94,16 +94,19 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(3);
       expect(result.data!.entries[0]).toEqual({
+        key: "20260401:0",
         date: "20260401",
         content: '{"level":"info","msg":"started"}',
         timestamp: null,
       });
       expect(result.data!.entries[1]).toEqual({
+        key: "20260401:33",
         date: "20260401",
         content: '{"level":"info","msg":"running"}',
         timestamp: null,
       });
       expect(result.data!.entries[2]).toEqual({
+        key: "20260401:66",
         date: "20260401",
         content: '{"level":"info","msg":"done"}',
         timestamp: null,
@@ -605,13 +608,34 @@ describe("LogsService", () => {
     });
   });
 
-  describe("getLogs - line normalization", () => {
-    it("should normalize NDJSON wrapped text with extracted message and timestamp", async () => {
-      const lines = [
-        '{"timestamp":"2026-03-30T13:00:26Z","message":"INFO:main:Starting bot"}',
-      ].join("\n");
+  describe("getLogs - entry shape", () => {
+    it("should pass a runtime line through verbatim, keyed by its _key", async () => {
+      const line =
+        '{"_key":"1792674000123456789-0","message":"Bought 1 BTC","timestamp":"2026-10-22T10:00:00.123Z"}';
+      mockMinioClient.getObject.mockResolvedValue(stringStream(line + "\n"));
 
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+      const result = await service.getLogs("bot-1", {
+        date: "20261022",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toEqual([
+        {
+          key: "1792674000123456789-0",
+          date: "20261022",
+          timestamp: "2026-10-22T10:00:00.123Z",
+          content: line,
+        },
+      ]);
+    });
+
+    it("should key a line without _key by its file date and byte offset", async () => {
+      const wrapped =
+        '{"timestamp":"2026-03-30T13:00:27Z","message":"Running strategy"}';
+      const content = `plain one\n${wrapped}\nlast\n`;
+      mockMinioClient.getObject.mockResolvedValue(stringStream(content));
 
       const result = await service.getLogs("bot-1", {
         date: "20260330",
@@ -620,20 +644,71 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0]).toEqual({
-        date: "20260330",
-        content: "INFO:main:Starting bot",
-        timestamp: "2026-03-30T13:00:26Z",
-      });
+      expect(result.data!.entries).toHaveLength(3);
+      expect(result.data!.entries).toEqual(
+        expect.arrayContaining([
+          {
+            key: "20260330:0",
+            date: "20260330",
+            timestamp: null,
+            content: "plain one",
+          },
+          {
+            key: "20260330:10",
+            date: "20260330",
+            timestamp: "2026-03-30T13:00:27Z",
+            content: wrapped,
+          },
+          {
+            key: `20260330:${11 + wrapped.length}`,
+            date: "20260330",
+            timestamp: null,
+            content: "last",
+          },
+        ]),
+      );
     });
 
-    it("should normalize metric lines keeping full JSON as content with timestamp", async () => {
-      const metricLine =
-        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
-      const lines = [metricLine].join("\n");
+    it("should give a line the same key whether it was tailed or streamed", async () => {
+      const content = "first\nsecond\nthird\n";
+      mockMinioClient.getObject.mockImplementation(
+        async (_bucket: string, path: string) => {
+          if (!path.endsWith("20260401.log")) throw { code: "NoSuchKey" };
+          return stringStream(content, 4);
+        },
+      );
 
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+      const tailed = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+      const streamed = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 100,
+        offset: 0,
+        type: "all",
+        sort: "asc",
+      });
+
+      const keysByContent = (entries: { key: string; content: string }[]) =>
+        Object.fromEntries(entries.map((e) => [e.content, e.key]));
+      expect(keysByContent(tailed.data!.entries)).toEqual({
+        first: "20260401:0",
+        second: "20260401:6",
+        third: "20260401:13",
+      });
+      expect(keysByContent(streamed.data!.entries)).toEqual(
+        keysByContent(tailed.data!.entries),
+      );
+    });
+
+    it("should count key offsets from the start of the file when tailing mid-file", async () => {
+      const tailBytes = 512 * 1024;
+      mockMinioClient.statObject.mockResolvedValue({ size: tailBytes + 100 });
+      mockMinioClient.getPartialObject.mockResolvedValue(
+        stringStream("partial\nline-a\nline-b\n"),
+      );
 
       const result = await service.getLogs("bot-1", {
         date: "20260401",
@@ -642,31 +717,79 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(1);
+      expect(
+        result.data!.entries.map((e) => [e.content, e.key]).sort(),
+      ).toEqual([
+        ["line-a", "20260401:108"],
+        ["line-b", "20260401:115"],
+      ]);
+    });
+
+    it("should count key offsets in bytes, not characters", async () => {
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream("prix: 10€\nnext\n"),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+
+      const next = result.data!.entries.find((e) => e.content === "next");
+      expect(next!.key).toBe("20260401:12");
+    });
+
+    it("should keep a bot's own string timestamp as written", async () => {
+      const line = '{"timestamp":"2026-10-22 12:00:00+02:00","message":"x"}';
+      mockMinioClient.getObject.mockResolvedValue(stringStream(line));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20261022",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.data!.entries[0].timestamp).toBe(
+        "2026-10-22 12:00:00+02:00",
+      );
+    });
+
+    it("should report a null timestamp for plain text and non-string timestamps", async () => {
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream(
+          '[2026-03-30 13:00:26] INFO:main:Starting bot\n{"timestamp":1792674000,"message":"x"}\n',
+        ),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260330",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.data!.entries.map((e) => e.timestamp)).toEqual([
+        null,
+        null,
+      ]);
+    });
+
+    it("should keep a metric line's full JSON as content", async () => {
+      const metricLine =
+        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
+      mockMinioClient.getObject.mockResolvedValue(stringStream(metricLine));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+
       expect(result.data!.entries[0]).toEqual({
+        key: "20260401:0",
         date: "20260401",
         content: metricLine,
         timestamp: "2026-04-01T10:00:00Z",
-      });
-    });
-
-    it("should handle old format plain text with null timestamp", async () => {
-      const lines = ["[2026-03-30 13:00:26] INFO:main:Starting bot"].join("\n");
-
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
-
-      const result = await service.getLogs("bot-1", {
-        date: "20260330",
-        limit: 100,
-        offset: 0,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0]).toEqual({
-        date: "20260330",
-        content: "[2026-03-30 13:00:26] INFO:main:Starting bot",
-        timestamp: null,
       });
     });
 
@@ -690,48 +813,6 @@ describe("LogsService", () => {
       expect(result.data!.entries).toHaveLength(1);
       expect(result.data!.entries[0].content).toContain('"_metric"');
       expect(result.data!.entries[0].timestamp).toBe("2026-04-01T10:00:00Z");
-    });
-
-    it("should handle mixed old and new format lines", async () => {
-      const metricLine =
-        '{"_metric":"sharpe","value":1.5,"timestamp":"2026-04-01T10:05:00Z"}';
-      const lines = [
-        "[2026-03-30 13:00:26] INFO:main:Starting bot",
-        '{"timestamp":"2026-03-30T13:00:27Z","message":"Running strategy"}',
-        metricLine,
-      ].join("\n");
-
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
-
-      const result = await service.getLogs("bot-1", {
-        date: "20260330",
-        limit: 100,
-        offset: 0,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(3);
-
-      // Old format: content as-is, timestamp null
-      expect(result.data!.entries[0]).toEqual({
-        date: "20260330",
-        content: "[2026-03-30 13:00:26] INFO:main:Starting bot",
-        timestamp: null,
-      });
-
-      // NDJSON wrapped text: extracted message, extracted timestamp
-      expect(result.data!.entries[1]).toEqual({
-        date: "20260330",
-        content: "Running strategy",
-        timestamp: "2026-03-30T13:00:27Z",
-      });
-
-      // Metric line: full JSON as content, extracted timestamp
-      expect(result.data!.entries[2]).toEqual({
-        date: "20260330",
-        content: metricLine,
-        timestamp: "2026-04-01T10:05:00Z",
-      });
     });
   });
 
