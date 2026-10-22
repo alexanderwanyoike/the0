@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authFetch } from "@/lib/auth-fetch";
-import { buildLogsSearchParams, expandLogEntries } from "@/lib/log-utils";
+import { buildLogsSearchParams } from "@/lib/log-utils";
 import { validateSSEAuth } from "@/lib/sse/sse-auth";
 import { readSSEEvents } from "@/lib/sse/sse-stream-reader";
 import type { LogEntry, LogsQuery } from "@/types/logs";
@@ -11,15 +11,16 @@ import type { LogEntry, LogsQuery } from "@/types/logs";
 
 interface LogsResponse {
   data: LogEntry[];
-  total: number;
   hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export interface LogsPage {
-  /** One entry per non-empty line, in API order. */
+  /** In API order. */
   entries: LogEntry[];
-  total: number;
   hasMore: boolean;
+  /** `before` for the next older page; null when there is none. */
+  nextCursor: string | null;
 }
 
 export async function fetchLogsPage(
@@ -38,9 +39,9 @@ export async function fetchLogsPage(
 
   const result: LogsResponse = await response.json();
   return {
-    entries: expandLogEntries(result.data),
-    total: result.total,
+    entries: result.data,
     hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
   };
 }
 

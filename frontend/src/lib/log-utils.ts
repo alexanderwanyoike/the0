@@ -4,25 +4,6 @@ export const MAX_LOG_ENTRIES = 10000;
 
 const entryKey = (l: LogEntry) => `${l.date}|${l.content}`;
 
-/**
- * Split multi-line log entries into individual LogEntry items.
- * Preserves date, content, and timestamp on each expanded line.
- */
-export function expandLogEntries(entries: LogEntry[]): LogEntry[] {
-  const expanded: LogEntry[] = [];
-  for (const entry of entries) {
-    const lines = entry.content.split("\n").filter((l) => l.trim() !== "");
-    for (const line of lines) {
-      expanded.push({
-        date: entry.date,
-        content: line,
-        timestamp: entry.timestamp,
-      });
-    }
-  }
-  return expanded;
-}
-
 /** A date or date range pins the view to history, which live streaming
  *  cannot extend. */
 export function isHistoricalQuery(query: LogsQuery): boolean {
@@ -78,29 +59,29 @@ export function mergeUniqueEntries(
     : [...unique, ...prev].slice(0, MAX_LOG_ENTRIES);
 }
 
+/** The api's type=metrics rule (logs.service isMetricLine), which history
+ *  is filtered by, so live lines are filtered the same way. */
+function isMetricLine(content: string): boolean {
+  try {
+    return Boolean(JSON.parse(content)._metric);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Turn an SSE "update" payload into log entries. Throws on payloads that are
- * not a log line, so the caller decides how to report them.
+ * Turn an SSE "update" payload (the entries of one live chunk) into log
+ * entries. Throws on payloads that are not a list of entries, so the caller
+ * decides how to report them.
  */
 export function parseLiveUpdate(data: string, type?: string): LogEntry[] {
-  const parsed: { content: string; timestamp: string } = JSON.parse(data);
-  const entries = expandLogEntries([
-    {
-      date: parsed.timestamp,
-      content: parsed.content,
-      timestamp: parsed.timestamp,
-    },
-  ]);
-  // Mirror the server-side type=metrics filter (logs.service) for live
-  // lines: history is filtered by the API, appends must match.
-  if (type !== "metrics") return entries;
-  return entries.filter((entry) => {
-    try {
-      return !!JSON.parse(entry.content)?._metric;
-    } catch {
-      return false;
-    }
-  });
+  const entries: unknown = JSON.parse(data);
+  if (!Array.isArray(entries)) {
+    throw new TypeError("Live update is not a list of log entries");
+  }
+  return type === "metrics"
+    ? entries.filter((entry: LogEntry) => isMetricLine(entry.content))
+    : entries;
 }
 
 export function formatLogsForExport(logs: LogEntry[]): string {

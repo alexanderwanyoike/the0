@@ -62,7 +62,6 @@ export interface UseBotLogsReturn {
   isFetching: boolean;
   error: string | null;
   hasMore: boolean;
-  total: number;
   query: LogsQuery;
   connected: boolean;
   lastUpdate: Date | null;
@@ -97,7 +96,6 @@ export const useBotLogs = ({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
   const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -187,7 +185,6 @@ export const useBotLogs = ({
         setHasEarlierLogs(live ? page.hasMore : false);
         setHasMore(live ? false : page.hasMore);
       }
-      setTotal(page.total);
       setLastUpdate(new Date());
     },
     [flushPendingUpdates],
@@ -289,7 +286,6 @@ export const useBotLogs = ({
         return;
       }
       setLogs((prev) => [...prev, ...entries].slice(-MAX_LOG_ENTRIES));
-      setTotal((prev) => prev + entries.length);
       setLastUpdate(new Date());
     } catch (err) {
       console.error("Failed to parse update SSE event:", err);
@@ -309,7 +305,6 @@ export const useBotLogs = ({
     setError(null);
     setQuery(startQuery);
     setHasMore(false);
-    setTotal(0);
     setLastUpdate(null);
     setHasEarlierLogs(false);
     setLoadingEarlier(false);
@@ -465,7 +460,6 @@ export const useBotLogs = ({
     isFetching,
     error,
     hasMore,
-    total,
     query,
     connected,
     lastUpdate,
