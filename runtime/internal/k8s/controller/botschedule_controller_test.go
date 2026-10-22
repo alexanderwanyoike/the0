@@ -881,3 +881,28 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenRuntimeImageChanges(t
 	require.NotNil(t, cronJob)
 	assert.Equal(t, "ghcr.io/the0/runtime:1.14.9", cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
 }
+
+func TestBotScheduleController_Reconcile_CronJobReadsStorageCredentialsFromTheSecret(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{
+			Namespace:          "the0",
+			ControllerName:     "test-controller",
+			MinIOAccessKey:     "access-key",
+			MinIOSecretKey:     "secret-key",
+			StorageCredentials: testStorageCredentialsSecret("the0-the0-secrets"),
+		},
+		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
+		mockCronClient,
+	)
+
+	require.NoError(t, controller.Reconcile(context.Background()))
+
+	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+	require.NotNil(t, cronJob)
+	bot := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0]
+	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_ACCESS_KEY"))
+	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_SECRET_KEY"))
+}

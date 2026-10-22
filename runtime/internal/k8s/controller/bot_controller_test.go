@@ -776,3 +776,43 @@ func TestBotController_Reconcile_ReplacesPodWhenRuntimeImageChanges(t *testing.T
 	assert.Equal(t, 1, mockK8s.DeleteCalled,
 		"pod on an older runtime image must be replaced after a platform upgrade")
 }
+
+func TestBotController_Reconcile_PodReadsStorageCredentialsFromTheSecret(t *testing.T) {
+	config := testControllerConfig()
+	config.StorageCredentials = testStorageCredentialsSecret("the0-the0-secrets")
+	mockK8s := &MockK8sClient{}
+
+	controller := NewBotController(
+		config,
+		&MockDesiredBots{Running: []model.Bot{createTestBot("bot-1", "price-alerts", "1.0.0", "python3.11")}},
+		mockK8s,
+	)
+
+	require.NoError(t, controller.Reconcile(context.Background()))
+
+	require.Len(t, mockK8s.CreatedPods, 1)
+	bot := mockK8s.CreatedPods[0].Spec.Containers[0]
+	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_ACCESS_KEY"))
+	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_SECRET_KEY"))
+}
+
+func testStorageCredentialsSecret(name string) podgen.StorageCredentialsSecret {
+	return podgen.StorageCredentialsSecret{Name: name, AccessKeyKey: "minio-access-key", SecretKeyKey: "minio-secret-key"}
+}
+
+// storageSecretName is the Secret the env var named name is read from, or ""
+// when it carries a literal value.
+func storageSecretName(t *testing.T, env []corev1.EnvVar, name string) string {
+	t.Helper()
+	for _, variable := range env {
+		if variable.Name != name {
+			continue
+		}
+		if variable.ValueFrom == nil || variable.ValueFrom.SecretKeyRef == nil {
+			return ""
+		}
+		return variable.ValueFrom.SecretKeyRef.Name
+	}
+	t.Fatalf("%s is not set", name)
+	return ""
+}
