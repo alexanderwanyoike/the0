@@ -1082,6 +1082,6 @@ func displayLogEntries(logs []internal.LogEntry) {
 		}
 
 		// Display log entry
-		fmt.Printf("[%s] %s\n", cyan.Sprint(timeStr), white.Sprint(log.Content))
+		fmt.Printf("[%s] %s\n", cyan.Sprint(timeStr), white.Sprint(logEntryText(log.Content)))
 	}
 }
