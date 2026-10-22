@@ -13,6 +13,10 @@ import {
 } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
+import { LogEntry, storedLogEntry } from "./log-entry";
+import { LineSplitter } from "./line-splitter";
+
+export type { LogEntry } from "./log-entry";
 
 export interface LogsQuery {
   date?: string;
@@ -27,12 +31,6 @@ export interface LogsQuery {
   // Parsed datetime bounds (set by parseDateQuery for datetime ranges)
   startTime?: Date;
   endTime?: Date;
-}
-
-export interface LogEntry {
-  date: string;
-  content: string;
-  timestamp: string | null;
 }
 
 interface DatedLogsRead {
@@ -298,13 +296,12 @@ export class LogsService {
     const stream = await this.openLogStream(logPath);
     if (!stream) return;
 
-    let leftover = "";
+    const splitter = new LineSplitter();
     for await (const chunk of stream) {
-      const lines = (leftover + chunk.toString("utf-8")).split("\n");
-      leftover = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!this.collectLine(line, logDate, query, entries, skipped)) continue;
+      for (const { line, offset } of splitter.push(chunk)) {
+        if (!this.collectLine(line, offset, logDate, query, entries, skipped)) {
+          continue;
+        }
         if (query.type !== "metrics" && entries.length >= query.limit) {
           (
             stream as NodeJS.ReadableStream & { destroy?: () => void }
@@ -314,7 +311,17 @@ export class LogsService {
       }
     }
 
-    this.collectTrailingLine(leftover, logDate, query, entries, skipped);
+    const trailing = splitter.rest();
+    if (trailing) {
+      this.collectTrailingLine(
+        trailing.line,
+        trailing.offset,
+        logDate,
+        query,
+        entries,
+        skipped,
+      );
+    }
   }
 
   private async openLogStream(
@@ -331,15 +338,16 @@ export class LogsService {
   /** @returns true when the line was appended to `entries`. */
   private collectLine(
     line: string,
+    offset: number,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
     skipped: { count: number },
   ): boolean {
     if (!this.passesLineFilters(line, query, skipped)) return false;
-    const normalized = this.normalizeLine(line, logDate);
-    if (LogsService.isOutsideTimeWindow(normalized, query)) return false;
-    entries.push(normalized);
+    const entry = storedLogEntry(line, logDate, offset);
+    if (LogsService.isOutsideTimeWindow(entry, query)) return false;
+    entries.push(entry);
     return true;
   }
 
@@ -350,6 +358,7 @@ export class LogsService {
    */
   private collectTrailingLine(
     leftover: string,
+    offset: number,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
@@ -357,9 +366,9 @@ export class LogsService {
   ): void {
     if (!this.passesLineFilters(leftover, query, skipped)) return;
     if (query.type !== "metrics" && entries.length >= query.limit) return;
-    const normalized = this.normalizeLine(leftover, logDate);
-    if (LogsService.isOutsideTimeWindow(normalized, query)) return;
-    entries.push(normalized);
+    const entry = storedLogEntry(leftover, logDate, offset);
+    if (LogsService.isOutsideTimeWindow(entry, query)) return;
+    entries.push(entry);
   }
 
   /** Not a pure check: a line skipped for the offset is consumed here. */
@@ -418,7 +427,7 @@ export class LogsService {
       throw error;
     }
 
-    const fileSize = stat.size;
+    const fileSize = stat.size ?? 0;
     const start = Math.max(0, fileSize - LogsService.TAIL_BYTES);
 
     let stream: NodeJS.ReadableStream;
@@ -437,21 +446,21 @@ export class LogsService {
       throw error;
     }
 
-    const chunks: Buffer[] = [];
+    const splitter = new LineSplitter(start);
+    const lines = [];
     for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      lines.push(...splitter.push(chunk));
     }
-    const content = Buffer.concat(chunks).toString("utf-8");
-
-    const lines = content.split("\n");
+    const trailing = splitter.rest();
+    if (trailing) lines.push(trailing);
     // Drop first line if reading from mid-file (likely partial)
     if (start > 0) lines.shift();
 
-    for (const line of lines) {
+    for (const { line, offset } of lines) {
       if (!line.trim()) continue;
-      const normalized = this.normalizeLine(line, logDate);
-      if (LogsService.isOutsideTimeWindow(normalized, query)) continue;
-      entries.push(normalized);
+      const entry = storedLogEntry(line, logDate, offset);
+      if (LogsService.isOutsideTimeWindow(entry, query)) continue;
+      entries.push(entry);
     }
 
     // Keep only the last `limit` entries (skip for metrics - return all)
@@ -460,25 +469,6 @@ export class LogsService {
     }
 
     return start > 0;
-  }
-
-  private normalizeLine(line: string, logDate: string): LogEntry {
-    try {
-      const parsed = JSON.parse(line);
-      const timestamp = parsed.timestamp || null;
-
-      if (parsed._metric) {
-        // Metric line - keep full JSON as content for frontend metric rendering
-        return { date: logDate, content: line, timestamp };
-      }
-
-      // NDJSON wrapped text - extract message for clean display
-      const content = parsed.message || line;
-      return { date: logDate, content, timestamp };
-    } catch {
-      // Old format or plain text - not JSON
-      return { date: logDate, content: line, timestamp: null };
-    }
   }
 
   private parseDateQuery(query: LogsQuery): string[] {
