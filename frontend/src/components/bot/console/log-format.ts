@@ -1,4 +1,5 @@
 import { parseLogLine } from "@/lib/events/event-parser";
+import type { LogEntry } from "@/types/logs";
 
 type ParsedLogLine = ReturnType<typeof parseLogLine>;
 
@@ -23,6 +24,14 @@ export function cachedParseLogLine(
     }
   }
   return result;
+}
+
+/** The text a console line shows: what search matches, not the stored JSON. */
+export function displayText(log: LogEntry): string {
+  const event = cachedParseLogLine(log.content, log.timestamp);
+  return typeof event.data === "string"
+    ? event.data
+    : JSON.stringify(event.data);
 }
 
 export type DisplayTimestamp = { date: string; time: string };

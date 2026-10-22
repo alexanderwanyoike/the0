@@ -7,6 +7,7 @@ import { RefreshCw, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LogEntry } from "@/types/logs";
 import { SmartLogEntry } from "./console/log-entries";
+import { displayText } from "./console/log-format";
 import { ConsoleFilterPanel, ConsoleToolbar } from "./console/console-toolbar";
 import { useConsoleFilters } from "./console/use-console-filters";
 
@@ -203,8 +204,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   // No reversal needed - the API returns data in the requested sort order
   const displayLogs = useMemo(() => {
     if (searchQuery === "") return logs;
+    const needle = searchQuery.toLowerCase();
     return logs.filter((log) =>
-      log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+      displayText(log).toLowerCase().includes(needle),
     );
   }, [logs, searchQuery]);
 
