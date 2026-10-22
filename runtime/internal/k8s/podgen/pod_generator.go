@@ -376,15 +376,15 @@ func ExtractConfigHash(pod *corev1.Pod) string {
 }
 
 // ConfigChanged returns true if the pod the generator writes for bot differs
-// from the one pod was created from.
-func (g *PodGenerator) ConfigChanged(pod *corev1.Pod, bot model.Bot) bool {
+// from the one pod was created from. When bot cannot be generated it returns
+// false with the reason: the caller replaces a changed pod by deleting it, and
+// a bot that cannot be generated could not be recreated, so it keeps running.
+func (g *PodGenerator) ConfigChanged(pod *corev1.Pod, bot model.Bot) (bool, error) {
 	wanted, err := g.GeneratePod(bot)
 	if err != nil {
-		// The caller replaces a changed pod by deleting it, and a bot that
-		// cannot be generated could not be recreated, so keep it running.
-		return false
+		return false, err
 	}
-	return ExtractConfigHash(pod) != ExtractConfigHash(wanted)
+	return ExtractConfigHash(pod) != ExtractConfigHash(wanted), nil
 }
 
 // getResourceLimits extracts resource limits from bot config or returns defaults.

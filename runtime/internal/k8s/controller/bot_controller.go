@@ -208,6 +208,13 @@ func (c *BotController) Reconcile(ctx context.Context) error {
 	// 3. Reconcile: create pods for bots that don't have them
 	for _, bot := range desiredBots {
 		pod, exists := actualPodMap[bot.ID]
+		configChanged := false
+		if exists {
+			var err error
+			if configChanged, err = c.podGenerator.ConfigChanged(pod, bot); err != nil {
+				util.LogMaster("[BotController] Keeping pod for bot %s on its old config, the new one cannot be applied: %v", bot.ID, err)
+			}
+		}
 
 		if !exists {
 			// Bot desired but no pod exists -> create pod
@@ -215,7 +222,7 @@ func (c *BotController) Reconcile(ctx context.Context) error {
 				util.LogMaster("[BotController] Failed to create pod for bot %s: %v", bot.ID, err)
 				// Continue with other bots
 			}
-		} else if c.podGenerator.ConfigChanged(pod, bot) {
+		} else if configChanged {
 			// Config changed -> delete pod (will be recreated next cycle)
 			util.LogMaster("[BotController] Config changed for bot %s, deleting pod for recreation", bot.ID)
 			if err := c.k8sClient.DeletePod(ctx, c.config.Namespace, pod.Name); err != nil {
