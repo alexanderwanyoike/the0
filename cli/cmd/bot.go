@@ -985,8 +985,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Keep track of last seen timestamp to avoid duplicates
-	var lastTimestamp int64 = 0
+	watch := &logWatch{}
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -1000,16 +999,8 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 		os.Exit(1)
 	}
 
-	if len(logs) > 0 {
-		displayLogEntries(logs)
-		// Update last timestamp
-		for _, log := range logs {
-			if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-				if logTime.Unix() > lastTimestamp {
-					lastTimestamp = logTime.Unix()
-				}
-			}
-		}
+	if fresh := watch.newEntries(logs); len(fresh) > 0 {
+		displayLogEntries(fresh)
 	}
 
 	logger.Newline()
@@ -1028,26 +1019,8 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 				continue
 			}
 
-			// Filter out logs we've already seen
-			var unseenLogs []internal.LogEntry
-			for _, log := range newLogs {
-				if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-					if logTime.Unix() > lastTimestamp {
-						unseenLogs = append(unseenLogs, log)
-					}
-				}
-			}
-
-			if len(unseenLogs) > 0 {
-				displayLogEntries(unseenLogs)
-				// Update last timestamp
-				for _, log := range unseenLogs {
-					if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-						if logTime.Unix() > lastTimestamp {
-							lastTimestamp = logTime.Unix()
-						}
-					}
-				}
+			if fresh := watch.newEntries(newLogs); len(fresh) > 0 {
+				displayLogEntries(fresh)
 			}
 		}
 	}
