@@ -155,8 +155,11 @@ type APIKeyValidationResponse struct {
 
 // LogEntry represents a single log entry
 type LogEntry struct {
-	Date    string `json:"date"`
-	Content string `json:"content"`
+	Key  string `json:"key"`
+	Date string `json:"date"`
+	// Empty when the api sends null: the line has no timestamp of its own.
+	Timestamp string `json:"timestamp"`
+	Content   string `json:"content"`
 }
 
 // LogsResponse represents the API response for bot logs
