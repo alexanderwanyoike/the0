@@ -3,6 +3,32 @@ import { withAdminAuth } from "@/lib/middleware/admin-auth";
 
 export const dynamic = "force-dynamic";
 
+const OPENING_COMMENT = new TextEncoder().encode(": connected\n\n");
+
+/**
+ * Next sends the response head with the first body chunk. The api may have
+ * nothing to send until its first keepalive, so an SSE comment goes first
+ * and the client sees the stream open at once.
+ */
+function openingAtOnce(
+  body: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(OPENING_COMMENT);
+    },
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ botId: string }> },
@@ -41,7 +67,8 @@ export async function GET(
         );
       }
 
-      return new NextResponse(upstream.body, {
+      const body = upstream.body ? openingAtOnce(upstream.body) : null;
+      return new NextResponse(body, {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache, no-transform",
