@@ -141,17 +141,11 @@ export class LogsService {
     const dates = this.parseDateQuery(query);
     if (!dates.length) return Failure(LogsService.INVALID_WINDOW);
 
-    const { entries, metricsHasMore } = await this.readDatedLogs(
-      botId,
-      dates,
-      query,
-    );
-    // For metrics we know the exact filtered count before truncation, so
-    // hasMore can be computed precisely instead of the >=limit heuristic
-    // used for raw logs (whose streams stop early at the limit).
-    const hasMore =
-      query.type === "metrics" ? metricsHasMore : entries.length >= query.limit;
-    return Ok({ entries, hasMore });
+    if (!this.isSingleDayTail(dates, query)) {
+      return Ok(await this.readNewestFirst(botId, [...dates].reverse(), query));
+    }
+    const { entries } = await this.readDatedLogs(botId, dates, query);
+    return Ok({ entries, hasMore: entries.length >= query.limit });
   }
 
   private static readonly INVALID_WINDOW =
@@ -345,8 +339,15 @@ export class LogsService {
       const end = bound?.date === date ? bound.offset : undefined;
       const dayEntries: LogEntry[] = [];
       if (query.type === "metrics") {
-        // Metric lines are sparse; stream the whole day file.
-        await this.streamFilteredLogs(logPath, date, query, dayEntries, end);
+        // Metric lines can be anywhere in the day, so read all of it.
+        await this.streamNewestLogs(
+          logPath,
+          date,
+          query,
+          dayEntries,
+          maxNeeded,
+          end,
+        );
       } else {
         // Raw logs can be huge; tail keeps only the newest lines per day.
         const truncated = await this.tailFilteredLogs(
@@ -359,14 +360,14 @@ export class LogsService {
         if (truncated && dayEntries.length < maxNeeded) {
           // The tail window held fewer lines than needed (very long lines
           // or a deep offset). Skipping the rest of the day would silently
-          // splice in older days' entries, so re-read the whole day capped
-          // the same way the dateRange desc path caps its reads.
+          // splice in older days' entries, so re-read the whole day.
           dayEntries.length = 0;
-          await this.streamFilteredLogs(
+          await this.streamNewestLogs(
             logPath,
             date,
-            { ...query, limit: Math.max(maxNeeded, 10000) },
+            query,
             dayEntries,
+            maxNeeded,
             end,
           );
         }
@@ -436,6 +437,38 @@ export class LogsService {
         entries,
       );
     }
+  }
+
+  /**
+   * Reads the whole file (up to `end`) but keeps only its newest `keep`
+   * matching entries, so memory stays bounded however long the day is.
+   */
+  private async streamNewestLogs(
+    logPath: string,
+    logDate: string,
+    query: LogsQuery,
+    entries: LogEntry[],
+    keep: number,
+    end?: number,
+  ): Promise<void> {
+    const stream = await this.openLogStream(logPath, end);
+    if (!stream) return;
+
+    const newest: LogEntry[] = [];
+    const take = (line: string, offset: number) => {
+      this.collectLine(line, offset, logDate, query, newest);
+      // Trimming in batches keeps the splice cost linear overall.
+      if (newest.length >= 2 * keep) newest.splice(0, newest.length - keep);
+    };
+    const splitter = new LineSplitter();
+    for await (const chunk of stream) {
+      for (const { line, offset } of splitter.push(chunk)) take(line, offset);
+    }
+    const trailing = splitter.rest();
+    if (trailing) take(trailing.line, trailing.offset);
+
+    if (newest.length > keep) newest.splice(0, newest.length - keep);
+    entries.push(...newest);
   }
 
   private async openLogStream(
