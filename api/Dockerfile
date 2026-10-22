@@ -6,17 +6,17 @@ WORKDIR /app
 
 # Install dependencies for building (needed for some native modules)
 FROM base AS deps
-# libexpat is listed explicitly to overwrite the base image's pinned world
-# entry: the DHI image pins libexpat at a checksum while Alpine's repo has
-# moved python3 to require libexpat >= 2.8.0, and without the overwrite apk
-# cannot resolve and the build fails.
-RUN apk add --no-cache libexpat libc6-compat python3 make g++
+# musl and libexpat are listed explicitly to overwrite the base image's world
+# entries, which pin them at a checksum. Alpine's repo moves on (python3 needs
+# libexpat >= 2.8.0, g++ pulls a musl-dev that needs a newer musl), and without
+# the overwrite apk cannot resolve and the build fails.
+RUN apk add --no-cache musl libexpat libc6-compat python3 make g++
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 # Install only runtime dependencies for the production image
 FROM base AS prod-deps
-RUN apk add --no-cache libexpat libc6-compat python3 make g++
+RUN apk add --no-cache musl libexpat libc6-compat python3 make g++
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production=true \
   && yarn cache clean
