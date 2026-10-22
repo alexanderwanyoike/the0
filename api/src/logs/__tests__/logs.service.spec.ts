@@ -733,12 +733,13 @@ describe("LogsService", () => {
       const tailBytes = 512 * 1024;
       mockMinioClient.statObject.mockResolvedValue({ size: tailBytes + 100 });
       mockMinioClient.getPartialObject.mockResolvedValue(
-        stringStream("partial\nline-a\nline-b\n"),
+        stringStream("partial\nline-a\nline-b\nline-c\n"),
       );
 
+      // The tail holds limit + 1 whole lines, so the day is not read whole
       const result = await service.getLogs("bot-1", {
         date: "20260401",
-        limit: 100,
+        limit: 2,
         offset: 0,
       });
 
@@ -746,8 +747,8 @@ describe("LogsService", () => {
       expect(
         result.data!.entries.map((e) => [e.content, e.key]).sort(),
       ).toEqual([
-        ["line-a", "20260401:108"],
         ["line-b", "20260401:115"],
+        ["line-c", "20260401:122"],
       ]);
     });
 
@@ -1052,20 +1053,19 @@ describe("LogsService", () => {
         stringStream(tailContent),
       );
 
+      // The tail holds limit + 1 whole lines, so the day is not read whole
       const result = await service.getLogs("bot-1", {
         date: "20260401",
-        limit: 100,
+        limit: 1,
         offset: 0,
         sort: "asc",
       });
 
       expect(result.success).toBe(true);
-      // The partial first line should be dropped
-      expect(result.data!.entries).toHaveLength(2);
-      expect(messageOf(result.data!.entries[0])).toBe("complete-line-1");
-      expect(messageOf(result.data!.entries[1])).toBe("complete-line-2");
-      // getPartialObject should have been called (not getObject)
+      expect(result.data!.entries.map(messageOf)).toEqual(["complete-line-2"]);
+      expect(result.data!.hasMore).toBe(true);
       expect(mockMinioClient.getPartialObject).toHaveBeenCalled();
+      expect(mockMinioClient.getObject).not.toHaveBeenCalled();
     });
   });
 
@@ -1924,6 +1924,17 @@ describe("LogsService", () => {
       });
     });
 
+    it("should read the whole day when its tail holds fewer than limit lines", async () => {
+      // Five 200 KB lines: the last 512 KB holds only two whole lines
+      const lines = ["a", "b", "c", "d", "e"].map((c) => c.repeat(200 * 1024));
+      serveFiles({ "20260401": lines.join("\n") + "\n" });
+
+      const newest = await page({ limit: 3 });
+
+      expect(newest.entries.map((e) => e.content[0])).toEqual(["e", "d", "c"]);
+      expect(newest.hasMore).toBe(true);
+      expect(newest.nextCursor).toBe(`20260401:${2 * (200 * 1024 + 1)}`);
+    });
     describe("windows holding more than the read cap", () => {
       // A realtime bot writing a metric every 5s fills ~17k lines a day
       const metric = (day: string, i: number) => `{"_metric":"${day}-${i}"}`;
