@@ -478,15 +478,22 @@ describe("LogsService", () => {
       ]);
     });
 
-    it("should stop reading older days once the desc read cap is reached", async () => {
-      const day1 = Array.from(
-        { length: 10000 },
-        (_, i) => `{"msg":"d1-${i}"}`,
-      ).join("\n");
-
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1 + "\n"))
-        .mockResolvedValueOnce(stringStream('{"msg":"d2-0"}\n'));
+    it("should return the newest entries when an older day alone fills the read cap", async () => {
+      const files: Record<string, string> = {
+        "logs/bot-1/20260401.log":
+          Array.from({ length: 10000 }, (_, i) => `{"msg":"d1-${i}"}`).join(
+            "\n",
+          ) + "\n",
+        "logs/bot-1/20260402.log": '{"msg":"d2-0"}\n',
+      };
+      mockMinioClient.getObject.mockImplementation(
+        async (_bucket: string, path: string) => stringStream(files[path]),
+      );
+      mockMinioClient.statObject.mockImplementation(
+        async (_bucket: string, path: string) => ({
+          size: Buffer.byteLength(files[path]),
+        }),
+      );
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -496,10 +503,9 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockMinioClient.getObject).toHaveBeenCalledTimes(1);
       expect(result.data!.entries.map(messageOf)).toEqual([
+        '{"msg":"d2-0"}',
         '{"msg":"d1-9999"}',
-        '{"msg":"d1-9998"}',
       ]);
       expect(result.data!.hasMore).toBe(true);
     });
@@ -1893,6 +1899,106 @@ describe("LogsService", () => {
         expect(newest.entries.map(messageOf)).toEqual(["02", "03"]);
         expect(newest.hasMore).toBe(true);
         expect(newest.nextCursor).toBe(`20260401:${at("01").length + 1}`);
+      });
+    });
+
+    describe("windows holding more than the read cap", () => {
+      // A realtime bot writing a metric every 5s fills ~17k lines a day
+      const metric = (day: string, i: number) => `{"_metric":"${day}-${i}"}`;
+      const metrics = (day: string, count: number) =>
+        Array.from({ length: count }, (_, i) => metric(day, i)).join("\n") +
+        "\n";
+
+      it("should return the newest metrics of the window and continue with before", async () => {
+        serveFiles({
+          "20260401": metrics("d1", 10000),
+          "20260402": metrics("d2", 3),
+        });
+        const window: Partial<LogsQuery> = {
+          date: undefined,
+          dateRange: "20260401-20260402",
+          type: "metrics",
+          limit: 2,
+        };
+
+        const newest = await page(window);
+        const older = await page({ ...window, before: newest.nextCursor! });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric("d2", 2),
+          metric("d2", 1),
+        ]);
+        expect(older.entries.map((e) => e.content)).toEqual([
+          metric("d2", 0),
+          metric("d1", 9999),
+        ]);
+      });
+
+      it("should return the newest metrics oldest-first when sort=asc", async () => {
+        serveFiles({
+          "20260401": metrics("d1", 10000),
+          "20260402": metrics("d2", 3),
+        });
+
+        const newest = await page({
+          date: undefined,
+          dateRange: "20260401-20260402",
+          type: "metrics",
+          limit: 2,
+          sort: "asc",
+        });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric("d2", 1),
+          metric("d2", 2),
+        ]);
+      });
+
+      it("should return the newest metrics of one day holding more than the cap", async () => {
+        serveFiles({ "20260401": metrics("d1", 17000) });
+
+        const newest = await page({ type: "metrics", limit: 2 });
+        const older = await page({
+          type: "metrics",
+          limit: 2,
+          before: newest.nextCursor!,
+        });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric("d1", 16999),
+          metric("d1", 16998),
+        ]);
+        expect(older.entries.map((e) => e.content)).toEqual([
+          metric("d1", 16997),
+          metric("d1", 16996),
+        ]);
+      });
+
+      it("should continue a raw log window with before past a day that fills the cap", async () => {
+        const lines = (day: string, count: number) =>
+          Array.from({ length: count }, (_, i) => `${day}-${i}`).join("\n") +
+          "\n";
+        serveFiles({
+          "20260401": lines("d1", 10000),
+          "20260402": lines("d2", 1),
+        });
+        const window: Partial<LogsQuery> = {
+          date: undefined,
+          dateRange: "20260401-20260402",
+          limit: 2,
+        };
+
+        const newest = await page(window);
+        const older = await page({ ...window, before: newest.nextCursor! });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          "d2-0",
+          "d1-9999",
+        ]);
+        expect(older.entries.map((e) => e.content)).toEqual([
+          "d1-9998",
+          "d1-9997",
+        ]);
       });
     });
 
