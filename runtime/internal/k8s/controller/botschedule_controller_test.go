@@ -249,13 +249,20 @@ func TestBotScheduleController_Reconcile_KeepsTheCronJobWhenTheCronGainsASeconds
 
 func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	configHash := computeScheduleHash(schedule, "", "")
-	noRetries := int32(0)
-
 	mockRepo := &MockDesiredSchedules{
 		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+	generated, err := controller.createCronJobSpec(schedule, "0 9 * * *")
+	require.NoError(t, err)
+	configHash := generated.Annotations[AnnotationScheduleHash]
+	noRetries := int32(0)
+
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "schedule-schedule-1",
@@ -275,13 +282,7 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 		},
 	}
 
-	controller := NewBotScheduleController(
-		BotScheduleControllerConfig{Namespace: "the0"},
-		mockRepo,
-		mockCronClient,
-	)
-
-	err := controller.Reconcile(context.Background())
+	err = controller.Reconcile(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, mockCronClient.CreateCalled)
@@ -372,9 +373,16 @@ func TestComputeScheduleHash(t *testing.T) {
 	schedule2 := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 10 * * *")
 	schedule3 := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 9 * * *")
 
-	hash1 := computeScheduleHash(schedule1, "", "")
-	hash2 := computeScheduleHash(schedule2, "", "")
-	hash3 := computeScheduleHash(schedule3, "", "")
+	controller := NewBotScheduleController(BotScheduleControllerConfig{}, &MockDesiredSchedules{}, NewMockK8sCronJobClient())
+	hashOf := func(schedule model.BotSchedule) string {
+		cronJob, err := controller.createCronJobSpec(schedule, schedule.Config["schedule"].(string))
+		require.NoError(t, err)
+		return computeScheduleHash(schedule, cronJob)
+	}
+
+	hash1 := hashOf(schedule1)
+	hash2 := hashOf(schedule2)
+	hash3 := hashOf(schedule3)
 
 	// Hashes should be 16 characters
 	assert.Len(t, hash1, 16)
@@ -385,7 +393,7 @@ func TestComputeScheduleHash(t *testing.T) {
 
 	// Same config should produce same hash
 	schedule1Copy := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy, "", ""))
+	assert.Equal(t, hash1, hashOf(schedule1Copy))
 }
 
 func TestBotScheduleController_StartStop(t *testing.T) {
@@ -880,4 +888,105 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenRuntimeImageChanges(t
 	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
 	require.NotNil(t, cronJob)
 	assert.Equal(t, "ghcr.io/the0/runtime:1.14.9", cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
+}
+
+func TestBotScheduleController_Reconcile_CronJobReadsStorageCredentialsFromTheSecret(t *testing.T) {
+	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+	mockCronClient := NewMockK8sCronJobClient()
+
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{
+			Namespace:          "the0",
+			ControllerName:     "test-controller",
+			MinIOAccessKey:     "access-key",
+			MinIOSecretKey:     "secret-key",
+			StorageCredentials: testStorageCredentialsSecret("the0-the0-secrets"),
+		},
+		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
+		mockCronClient,
+	)
+
+	require.NoError(t, controller.Reconcile(context.Background()))
+
+	cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+	require.NotNil(t, cronJob)
+	bot := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0]
+	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_ACCESS_KEY"))
+	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_SECRET_KEY"))
+}
+
+func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageCredentialsChange(t *testing.T) {
+	literal := func(secretKey string) BotScheduleControllerConfig {
+		return BotScheduleControllerConfig{
+			Namespace:      "the0",
+			ControllerName: "test-controller",
+			MinIOAccessKey: "access-key",
+			MinIOSecretKey: secretKey,
+		}
+	}
+	fromSecret := func(name string) BotScheduleControllerConfig {
+		config := literal("secret-key")
+		config.StorageCredentials = testStorageCredentialsSecret(name)
+		return config
+	}
+
+	cases := []struct {
+		name          string
+		before, after BotScheduleControllerConfig
+		check         func(t *testing.T, env []corev1.EnvVar)
+	}{
+		{
+			name:   "literal secret key rotated",
+			before: literal("old-secret-key"),
+			after:  literal("new-secret-key"),
+			check: func(t *testing.T, env []corev1.EnvVar) {
+				assert.Equal(t, "new-secret-key", envToMap(env)["MINIO_SECRET_KEY"])
+			},
+		},
+		{
+			name:   "literal credentials replaced by the secret",
+			before: literal("secret-key"),
+			after:  fromSecret("the0-the0-secrets"),
+			check: func(t *testing.T, env []corev1.EnvVar) {
+				assert.Equal(t, "the0-the0-secrets", storageSecretName(t, env, "MINIO_SECRET_KEY"))
+			},
+		},
+		{
+			name:   "secret renamed",
+			before: fromSecret("the0-secrets"),
+			after:  fromSecret("the0-the0-secrets"),
+			check: func(t *testing.T, env []corev1.EnvVar) {
+				assert.Equal(t, "the0-the0-secrets", storageSecretName(t, env, "MINIO_SECRET_KEY"))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+			mockCronClient := NewMockK8sCronJobClient()
+			controllerWith := func(config BotScheduleControllerConfig) *BotScheduleController {
+				return NewBotScheduleController(config, &MockDesiredSchedules{Running: []model.BotSchedule{schedule}}, mockCronClient)
+			}
+
+			require.NoError(t, controllerWith(tc.before).Reconcile(context.Background()))
+			require.Equal(t, 1, mockCronClient.CreateCalled)
+
+			require.NoError(t, controllerWith(tc.after).Reconcile(context.Background()))
+
+			assert.Equal(t, 1, mockCronClient.UpdateCalled,
+				"an existing CronJob must follow the controller's storage credentials")
+			cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+			require.NotNil(t, cronJob)
+			tc.check(t, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env)
+		})
+	}
+}
+
+func envToMap(env []corev1.EnvVar) map[string]string {
+	values := make(map[string]string, len(env))
+	for _, variable := range env {
+		values[variable.Name] = variable.Value
+	}
+	return values
 }

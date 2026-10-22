@@ -26,6 +26,7 @@ type PodBuilder struct {
 	botEnv             []corev1.EnvVar
 	botResources       corev1.ResourceRequirements
 	launch             launch.Settings
+	storageCredentials StorageCredentialsSecret
 
 	// Sidecar containers (optional)
 	syncSidecar  *corev1.Container
@@ -185,6 +186,13 @@ func (b *PodBuilder) WithLaunch(settings launch.Settings) *PodBuilder {
 	return b
 }
 
+// WithStorageCredentialsFrom makes every container read the storage
+// credentials from secret, when it is named, instead of the launch's values.
+func (b *PodBuilder) WithStorageCredentialsFrom(secret StorageCredentialsSecret) *PodBuilder {
+	b.storageCredentials = secret
+	return b
+}
+
 // WithResources sets resource limits and requests for the bot container.
 func (b *PodBuilder) WithResources(memoryLimit, cpuLimit, memoryRequest, cpuRequest string) *PodBuilder {
 	b.botResources = corev1.ResourceRequirements{
@@ -285,13 +293,29 @@ func (b *PodBuilder) WithQuerySidecar(image string) *PodBuilder {
 
 // containerEnv is the bot container's own environment followed by env.
 func (b *PodBuilder) containerEnv(env []launch.Var) []corev1.EnvVar {
-	return append(append([]corev1.EnvVar{}, b.botEnv...), envVars(env)...)
+	return append(append([]corev1.EnvVar{}, b.botEnv...), b.envVars(env)...)
 }
 
-func envVars(env []launch.Var) []corev1.EnvVar {
+func (b *PodBuilder) envVars(env []launch.Var) []corev1.EnvVar {
+	secretKeys := map[string]string{}
+	if b.storageCredentials.Name != "" {
+		secretKeys[launch.AccessKeyEnv] = b.storageCredentials.AccessKeyField
+		secretKeys[launch.SecretKeyEnv] = b.storageCredentials.SecretKeyField
+	}
 	vars := make([]corev1.EnvVar, 0, len(env))
 	for _, variable := range env {
-		vars = append(vars, corev1.EnvVar{Name: variable.Name, Value: variable.Value})
+		key, fromSecret := secretKeys[variable.Name]
+		if !fromSecret {
+			vars = append(vars, corev1.EnvVar{Name: variable.Name, Value: variable.Value})
+			continue
+		}
+		vars = append(vars, corev1.EnvVar{
+			Name: variable.Name,
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: b.storageCredentials.Name},
+				Key:                  key,
+			}},
+		})
 	}
 	return vars
 }
@@ -329,7 +353,7 @@ func (b *PodBuilder) Build() (*corev1.Pod, error) {
 	var initContainers []corev1.Container
 	if b.syncSidecar != nil {
 		syncSidecar := *b.syncSidecar
-		syncSidecar.Env = envVars(b.launch.SyncEnv())
+		syncSidecar.Env = b.envVars(b.launch.SyncEnv())
 		initContainers = append(initContainers, syncSidecar)
 	}
 

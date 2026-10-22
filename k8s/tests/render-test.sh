@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Renders the chart under several release names and checks that in-cluster
-# URLs point at the Services the chart actually creates. Service names come
-# from the release name, and Flux names releases "<namespace>-<name>", so a
-# URL hardcoded for a release called "the0" breaks real installs.
+# URLs and Secret references point at the Services and Secrets the chart
+# actually creates. Their names come from the release name, and Flux names
+# releases "<namespace>-<name>", so a name hardcoded for a release called
+# "the0" breaks real installs.
 set -euo pipefail
 
 CHART_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,6 +21,18 @@ api_env() {
     | awk -v n="$name" '$0 ~ "- name: " n "$" { getline; sub(/^ *value: /, ""); gsub(/"/, ""); print }'
 }
 
+controller_arg() {
+  local release=$1 flag=$2
+  shift 2
+  helm template "$release" "$CHART_DIR" --show-only templates/bot-controller.yaml "$@" \
+    | awk -v f="--$flag=" 'index($0, f) { sub(/.*--[^=]*=/, ""); sub(/"$/, ""); print; exit }'
+}
+
+secret_name() {
+  helm template "$1" "$CHART_DIR" --show-only templates/secrets.yaml \
+    | awk '/^kind: Secret$/ { s = 1 } s && /^  name: / { print $2; exit }'
+}
+
 check() {
   if [[ "$2" == "$3" ]]; then
     echo "ok   $1"
@@ -34,6 +47,17 @@ for release in the0 the0-the0 trading; do
   check "api RUNTIME_QUERY_URL reaches the bot-controller Service (release $release)" \
     "http://$service:9477" "$(api_env "$release" RUNTIME_QUERY_URL)"
 done
+
+for release in the0 the0-the0 trading; do
+  check "bot pods read storage credentials from the chart's Secret (release $release)" \
+    "$(secret_name "$release")" "$(controller_arg "$release" storage-credentials-secret)"
+done
+check "bot pods read storage credentials from global.existingSecret" \
+  "the0-secrets" "$(controller_arg the0-the0 storage-credentials-secret --set global.existingSecret=the0-secrets)"
+check "bot pods read the access key from the Secret's minio-access-key" \
+  "minio-access-key" "$(controller_arg the0 storage-credentials-access-key-field)"
+check "bot pods read the secret key from the Secret's minio-secret-key" \
+  "minio-secret-key" "$(controller_arg the0 storage-credentials-secret-key-field)"
 
 override="http://query.example:9477"
 check "api RUNTIME_QUERY_URL honours an explicit override" \
