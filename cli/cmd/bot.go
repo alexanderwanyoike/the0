@@ -854,8 +854,7 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 			os.Exit(1)
 		}
 	} else {
-		// Default to current date
-		dateParam = time.Now().Format("20060102")
+		dateParam = defaultLogDate(time.Now())
 	}
 
 	// Validate limit
@@ -899,6 +898,10 @@ func botLogsParams(dateParam string, limit int) *internal.LogsParams {
 		params.Date = dateParam
 	}
 	return params
+}
+
+func defaultLogDate(now time.Time) string {
+	return now.Format("20060102")
 }
 
 func validateDateParam(dateParam string) error {
