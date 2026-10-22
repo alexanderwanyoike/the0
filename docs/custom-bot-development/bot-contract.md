@@ -179,7 +179,7 @@ The frontend reads each line as follows:
 - A JSON object with `level`, `message` or `msg` is a log line at its `level`.
 - Anything else is plain text, at INFO unless it starts with `INFO:`, `WARN:` or `ERROR:`.
 
-A known limitation: the api's log history reduces any JSON line that is not a metric to its `message` (`normalizeLine` in `api/src/logs/logs.service.ts`). Lines loaded from history therefore show at INFO whatever their level, `error()`'s line included.
+The api passes every line through as written, in the same entry shape for log history and the live stream, so a line keeps its `level` whichever way it was loaded. The runtime adds a `_key` field to each line it stores; a bot's own `_key` is overwritten, so don't log one.
 
 ## State
 
