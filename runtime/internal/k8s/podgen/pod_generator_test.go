@@ -712,9 +712,9 @@ func TestPodGenerator_StorageCredentialsComeFromTheSecret(t *testing.T) {
 		MinIOBucket:    "bots",
 		RuntimeImage:   "the0/runtime:latest",
 		StorageCredentials: StorageCredentialsSecret{
-			Name:         "the0-the0-secrets",
-			AccessKeyKey: "minio-access-key",
-			SecretKeyKey: "minio-secret-key",
+			Name:           "the0-the0-secrets",
+			AccessKeyField: "minio-access-key",
+			SecretKeyField: "minio-secret-key",
 		},
 	})
 	bot := natsTestBot("creds-bot", "python3.11")
@@ -781,7 +781,7 @@ func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
 		{"state bucket", func(c *PodGeneratorConfig) { c.MinIOStateBucket = "other-state" }},
 		{"literal secret key rotated", func(c *PodGeneratorConfig) { c.MinIOSecretKey = "rotated" }},
 		{"credentials moved to the secret", func(c *PodGeneratorConfig) {
-			c.StorageCredentials = StorageCredentialsSecret{Name: "the0-the0-secrets", AccessKeyKey: "minio-access-key", SecretKeyKey: "minio-secret-key"}
+			c.StorageCredentials = StorageCredentialsSecret{Name: "the0-the0-secrets", AccessKeyField: "minio-access-key", SecretKeyField: "minio-secret-key"}
 		}},
 		{"runtime image pull policy", func(c *PodGeneratorConfig) { c.RuntimeImagePullPolicy = corev1.PullAlways }},
 	}

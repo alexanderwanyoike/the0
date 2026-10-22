@@ -299,8 +299,8 @@ func (b *PodBuilder) containerEnv(env []launch.Var) []corev1.EnvVar {
 func (b *PodBuilder) envVars(env []launch.Var) []corev1.EnvVar {
 	secretKeys := map[string]string{}
 	if b.storageCredentials.Name != "" {
-		secretKeys[launch.AccessKeyEnv] = b.storageCredentials.AccessKeyKey
-		secretKeys[launch.SecretKeyEnv] = b.storageCredentials.SecretKeyKey
+		secretKeys[launch.AccessKeyEnv] = b.storageCredentials.AccessKeyField
+		secretKeys[launch.SecretKeyEnv] = b.storageCredentials.SecretKeyField
 	}
 	vars := make([]corev1.EnvVar, 0, len(env))
 	for _, variable := range env {

@@ -797,7 +797,7 @@ func TestBotController_Reconcile_PodReadsStorageCredentialsFromTheSecret(t *test
 }
 
 func testStorageCredentialsSecret(name string) podgen.StorageCredentialsSecret {
-	return podgen.StorageCredentialsSecret{Name: name, AccessKeyKey: "minio-access-key", SecretKeyKey: "minio-secret-key"}
+	return podgen.StorageCredentialsSecret{Name: name, AccessKeyField: "minio-access-key", SecretKeyField: "minio-secret-key"}
 }
 
 // storageSecretName is the Secret the env var named name is read from, or ""

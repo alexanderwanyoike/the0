@@ -380,9 +380,9 @@ func runController() {
 		RuntimeImagePullPolicy: runtimeImagePullPolicy,
 		Logger:                 &util.DefaultLogger{},
 		StorageCredentials: podgen.StorageCredentialsSecret{
-			Name:         storageCredentialsSecret,
-			AccessKeyKey: storageCredentialsAccessKeyField,
-			SecretKeyKey: storageCredentialsSecretKeyField,
+			Name:           storageCredentialsSecret,
+			AccessKeyField: storageCredentialsAccessKeyField,
+			SecretKeyField: storageCredentialsSecretKeyField,
 		},
 	})
 	if err != nil {

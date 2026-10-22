@@ -80,9 +80,9 @@ type PodGeneratorConfig struct {
 // StorageCredentialsSecret is the Secret, and its keys, that holds the storage
 // credentials.
 type StorageCredentialsSecret struct {
-	Name         string
-	AccessKeyKey string
-	SecretKeyKey string
+	Name           string
+	AccessKeyField string
+	SecretKeyField string
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
