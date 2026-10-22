@@ -29,6 +29,98 @@ func TestDefaultLogDate(t *testing.T) {
 	})
 }
 
+func TestLogEntryText(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "an SDK log line shows its level and message",
+			content: `{"_key":"1792713599999000000-0","level":"info","message":"Bought 1 BTC","timestamp":"2026-10-22T23:59:59.999Z"}`,
+			want:    "INFO Bought 1 BTC",
+		},
+		{
+			name:    "a plain text line the runtime wrapped shows its message",
+			content: `{"_key":"1792713599999000000-1","message":"connecting to exchange","timestamp":"2026-10-22T23:59:59.999Z"}`,
+			want:    "connecting to exchange",
+		},
+		{
+			name:    "a structured logger line shows its msg",
+			content: `{"_key":"1792713599999000000-2","level":"warn","msg":"order book stale","timestamp":"2026-10-22T23:59:59.999Z"}`,
+			want:    "WARN order book stale",
+		},
+		{
+			name:    "message wins over msg",
+			content: `{"level":"error","message":"order rejected","msg":"ignored"}`,
+			want:    "ERROR order rejected",
+		},
+		{
+			name:    "a level that is not a string is left out",
+			content: `{"level":30,"msg":"pino line"}`,
+			want:    "pino line",
+		},
+		{
+			name:    "a metric line prints as JSON without its key",
+			content: `{"_key":"1792713599999000000-3","_metric":"price","symbol":"BTC/USD","timestamp":"2026-10-22T23:59:59.999Z","value":45000.5}`,
+			want:    `{"_metric":"price","symbol":"BTC/USD","timestamp":"2026-10-22T23:59:59.999Z","value":45000.5}`,
+		},
+		{
+			name:    "a metric line keeps its numbers as written",
+			content: `{"_key":"1792713599999000000-4","_metric":"fill","order_id":12345678901234567890,"price":1.10}`,
+			want:    `{"_metric":"fill","order_id":12345678901234567890,"price":1.10}`,
+		},
+		{
+			name:    "a metric line stored before keyed lines prints verbatim",
+			content: `{"_metric": "price", "value": 45000.5, "timestamp": "2026-10-22T23:59:59Z"}`,
+			want:    `{"_metric": "price", "value": 45000.5, "timestamp": "2026-10-22T23:59:59Z"}`,
+		},
+		{
+			name:    "a metric line is not shown as a message",
+			content: `{"_key":"1792713599999000000-5","_metric":"signal","message":"go long"}`,
+			want:    `{"_metric":"signal","message":"go long"}`,
+		},
+		{
+			name:    "an object without a message prints as JSON without its key",
+			content: `{"_key":"1792713599999000000-6","event":"tick","timestamp":"2026-10-22T23:59:59.999Z"}`,
+			want:    `{"event":"tick","timestamp":"2026-10-22T23:59:59.999Z"}`,
+		},
+		{
+			name:    "an empty message prints the object without its key",
+			content: `{"_key":"1792713599999000000-7","level":"info","message":""}`,
+			want:    `{"level":"info","message":""}`,
+		},
+		{
+			name:    "a message that is not a string prints the object without its key",
+			content: `{"_key":"1792713599999000000-8","message":{"text":"nested"}}`,
+			want:    `{"message":{"text":"nested"}}`,
+		},
+		{
+			name:    "a plain text line stored before the runtime wrapped lines prints verbatim",
+			content: "Bot started on BTC/USD",
+			want:    "Bot started on BTC/USD",
+		},
+		{
+			name:    "JSON that is not an object prints verbatim",
+			content: `[1,2,3]`,
+			want:    `[1,2,3]`,
+		},
+		{
+			name:    "a line that only looks like JSON prints verbatim",
+			content: `{not json at all`,
+			want:    `{not json at all`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := logEntryText(tt.content); got != tt.want {
+				t.Errorf("logEntryText() =\n  %s\nwant\n  %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBotLogsParams(t *testing.T) {
 	t.Run("asks for one day's newest entries oldest first", func(t *testing.T) {
 		got := botLogsParams("20261022", 100)
