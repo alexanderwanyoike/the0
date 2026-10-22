@@ -487,14 +487,14 @@ func TestConfigChanged(t *testing.T) {
 	require.NoError(t, err)
 
 	// Same config should not be changed
-	assert.False(t, generator.ConfigChanged(pod, bot))
+	assert.False(t, configChanged(t, generator, pod, bot))
 
 	// Modified config should be detected
 	botModified := bot
 	botModified.Config = map[string]interface{}{
 		"key": "value2",
 	}
-	assert.True(t, generator.ConfigChanged(pod, botModified))
+	assert.True(t, configChanged(t, generator, pod, botModified))
 
 	// A generator with a different NATS URL must also detect a change, so
 	// existing pods are reconciled when live streaming is (re)configured
@@ -505,7 +505,7 @@ func TestConfigChanged(t *testing.T) {
 		MinIOBucket:    "bots",
 		NATSURL:        "nats://nats:4222",
 	})
-	assert.True(t, natsGenerator.ConfigChanged(pod, bot))
+	assert.True(t, configChanged(t, natsGenerator, pod, bot))
 }
 
 func TestSanitizeLabelValue(t *testing.T) {
@@ -789,13 +789,13 @@ func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
 	bot := natsTestBot("rt-bot", "python3.11")
 	pod, err := NewPodGenerator(base).GeneratePod(bot)
 	require.NoError(t, err)
-	require.False(t, NewPodGenerator(base).ConfigChanged(pod, bot))
+	require.False(t, configChanged(t, NewPodGenerator(base), pod, bot))
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := base
 			tc.change(&changed)
-			assert.True(t, NewPodGenerator(changed).ConfigChanged(pod, bot),
+			assert.True(t, configChanged(t, NewPodGenerator(changed), pod, bot),
 				"a running pod must be replaced when the pod the generator writes changes")
 		})
 	}
@@ -813,6 +813,15 @@ func TestConfigChanged_KeepsAPodWhoseBotCanNoLongerBeGenerated(t *testing.T) {
 	_, err = generator.GeneratePod(broken)
 	require.Error(t, err)
 
-	assert.False(t, generator.ConfigChanged(pod, broken),
+	changed, err := generator.ConfigChanged(pod, broken)
+	assert.Error(t, err, "the caller needs to know why the bot's new config is not applied")
+	assert.False(t, changed,
 		"the controller deletes changed pods, and a bot it cannot generate could not be recreated")
+}
+
+func configChanged(t *testing.T, generator *PodGenerator, pod *corev1.Pod, bot model.Bot) bool {
+	t.Helper()
+	changed, err := generator.ConfigChanged(pod, bot)
+	require.NoError(t, err)
+	return changed
 }
