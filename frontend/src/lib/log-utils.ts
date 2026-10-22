@@ -23,7 +23,7 @@ export function buildLogsSearchParams(query: LogsQuery): URLSearchParams {
     );
   }
   if (query.limit) searchParams.set("limit", query.limit.toString());
-  if (query.offset) searchParams.set("offset", query.offset.toString());
+  if (query.before) searchParams.set("before", query.before);
   if (query.type) searchParams.set("type", query.type);
   if (query.sort) searchParams.set("sort", query.sort);
   return searchParams;

@@ -98,7 +98,6 @@ export function useBotEvents({
   const initialQuery = latest
     ? {
         limit: 1000,
-        offset: 0,
         type: "metrics" as const,
         sort: "desc" as const,
         lookbackDays: DEFAULT_LOOKBACK_DAYS,
@@ -109,10 +108,9 @@ export function useBotEvents({
             ? `${dateRange.start}--${dateRange.end}`
             : `${dateRange.start}-${dateRange.end}`,
           limit: 1000,
-          offset: 0,
           type: "metrics" as const,
         }
-      : { limit: 1000, offset: 0, type: "metrics" as const };
+      : { limit: 1000, type: "metrics" as const };
 
   // With streaming, metric history still loads via REST (type=metrics) and
   // new lines append live over SSE; non-metric lines are filtered out by

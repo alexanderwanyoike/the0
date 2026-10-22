@@ -215,7 +215,6 @@ export function useBotDetailLogs(botId: string, bot: DetailBot | null) {
     initialQuery: scheduled
       ? {
           limit: 1000,
-          offset: 0,
           sort: "desc" as const,
           lookbackDays: DEFAULT_LOOKBACK_DAYS,
         }

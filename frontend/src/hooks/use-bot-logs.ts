@@ -78,7 +78,7 @@ export interface UseBotLogsReturn {
   exportLogs: () => void;
 }
 
-const DEFAULT_QUERY: LogsQuery = { limit: 1000, offset: 0, sort: "desc" };
+const DEFAULT_QUERY: LogsQuery = { limit: 1000, sort: "desc" };
 /** How far back latest mode is willing to scan for a bot's most recent
  *  output. Scheduled bots that run weekly stay well inside this window. */
 export const DEFAULT_LOOKBACK_DAYS = 30;
@@ -123,8 +123,9 @@ export const useBotLogs = ({
   // buffered here, then merged (deduped) once history lands.
   const historyLoadedRef = useRef(false);
   const pendingUpdatesRef = useRef<LogEntry[]>([]);
-  // Offset for backfilling earlier logs in live mode
-  const earlierOffsetRef = useRef(0);
+  // `before` for the next older page. Only ever a REST page's nextCursor:
+  // live lines arrive after it and must not move it.
+  const nextCursorRef = useRef<string | null>(null);
   // Prop refs so effects/callbacks read latest values without re-running
   const streamingRef = useRef(streaming);
   streamingRef.current = streaming;
@@ -163,27 +164,23 @@ export const useBotLogs = ({
   // -- REST fetch (history, filters, pagination, polling) --
 
   const applyPage = useCallback(
-    (
-      page: LogsPage,
-      queryParams: LogsQuery,
-      merge: PageMerge,
-      live: boolean,
-    ) => {
+    (page: LogsPage, merge: PageMerge, live: boolean) => {
+      nextCursorRef.current = page.nextCursor;
+      const hasOlder = page.hasMore && page.nextCursor !== null;
       if (merge) {
         setLogs((prev) => mergeUniqueEntries(prev, page.entries, merge));
-        if (merge === "append") setHasMore(page.hasMore);
-        else setHasEarlierLogs(page.hasMore);
+        if (merge === "append") setHasMore(hasOlder);
+        else setHasEarlierLogs(hasOlder);
       } else {
         historyLoadedRef.current = true;
         hasDataRef.current = true;
-        earlierOffsetRef.current = queryParams.limit || 100;
         setLogs(page.entries.slice(-MAX_LOG_ENTRIES));
         // Merge in any live updates that arrived while the fetch was in
         // flight (React applies the updater after the set above).
         flushPendingUpdates();
         // Live history extends backwards (earlier logs); REST pages forwards
-        setHasEarlierLogs(live ? page.hasMore : false);
-        setHasMore(live ? false : page.hasMore);
+        setHasEarlierLogs(live ? hasOlder : false);
+        setHasMore(live ? false : hasOlder);
       }
       setLastUpdate(new Date());
     },
@@ -246,7 +243,6 @@ export const useBotLogs = ({
         const live = streamingRef.current && !isHistoricalQuery(queryParams);
         applyPage(
           { ...page, entries: toDisplayOrder(page.entries, live, merge) },
-          queryParams,
           merge,
           live,
         );
@@ -305,6 +301,7 @@ export const useBotLogs = ({
     setError(null);
     setQuery(startQuery);
     setHasMore(false);
+    nextCursorRef.current = null;
     setLastUpdate(null);
     setHasEarlierLogs(false);
     setLoadingEarlier(false);
@@ -346,7 +343,7 @@ export const useBotLogs = ({
 
   const updateQuery = useCallback(
     (params: Partial<LogsQuery>) => {
-      const updatedQuery = { ...query, ...params, offset: 0 };
+      const updatedQuery = { ...query, ...params };
       setQuery(updatedQuery);
       paginatedRef.current = false;
       fetchLogs(updatedQuery, false);
@@ -387,10 +384,8 @@ export const useBotLogs = ({
   }, [updateQuery]);
 
   const refresh = useCallback(() => {
-    const refreshQuery = { ...query, offset: 0 };
-    setQuery(refreshQuery);
     paginatedRef.current = false;
-    fetchLogs(refreshQuery, false);
+    fetchLogs(query, false);
     // Re-establish SSE in live mode (no-op otherwise)
     setSseNonce((n) => n + 1);
   }, [query, fetchLogs]);
@@ -400,17 +395,12 @@ export const useBotLogs = ({
     loadingMoreRef.current = true;
     setLoadingMore(true);
 
-    const nextQuery = {
-      ...query,
-      offset: (query.offset || 0) + (query.limit || 100),
-    };
-
     try {
-      const ok = await fetchLogs(nextQuery, "append");
-      if (ok) {
-        setQuery(nextQuery);
-        paginatedRef.current = true;
-      }
+      const ok = await fetchLogs(
+        { ...query, before: nextCursorRef.current ?? undefined },
+        "append",
+      );
+      if (ok) paginatedRef.current = true;
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
@@ -423,12 +413,10 @@ export const useBotLogs = ({
     setLoadingEarlier(true);
 
     try {
-      const limit = query.limit || 100;
-      const offset = earlierOffsetRef.current || limit;
-      const ok = await fetchLogs({ ...query, offset }, "prepend");
-      if (ok) {
-        earlierOffsetRef.current = offset + limit;
-      }
+      await fetchLogs(
+        { ...query, before: nextCursorRef.current ?? undefined },
+        "prepend",
+      );
     } finally {
       loadingEarlierRef.current = false;
       setLoadingEarlier(false);
