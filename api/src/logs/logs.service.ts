@@ -42,11 +42,6 @@ export interface LogsPage {
   nextCursor: string | null;
 }
 
-interface DatedLogsRead {
-  entries: LogEntry[];
-  metricsHasMore: boolean;
-}
-
 interface PageRead {
   entries: LogEntry[];
   hasMore: boolean;
@@ -144,7 +139,7 @@ export class LogsService {
     if (!this.isSingleDayTail(dates, query)) {
       return Ok(await this.readNewestFirst(botId, [...dates].reverse(), query));
     }
-    const { entries } = await this.readDatedLogs(botId, dates, query);
+    const entries = await this.readSingleDay(botId, dates[0], query);
     return Ok({ entries, hasMore: entries.length >= query.limit });
   }
 
@@ -261,59 +256,16 @@ export class LogsService {
     return entry;
   }
 
-  private async readDatedLogs(
+  /** The day's newest `limit` lines in `sort` order, from its tail. */
+  private async readSingleDay(
     botId: string,
-    dates: string[],
+    date: string,
     query: LogsQuery,
-  ): Promise<DatedLogsRead> {
-    const sortOrder = query.sort || "desc";
-
-    if (this.isSingleDayTail(dates, query)) {
-      // Single date, non-metrics: tail for the latest entries (file order)
-      const entries: LogEntry[] = [];
-      await this.tailFilteredLogs(
-        dayLogPath(botId, dates[0]),
-        dates[0],
-        query,
-        entries,
-      );
-      if (sortOrder === "desc") entries.reverse();
-      return { entries, metricsHasMore: false };
-    }
-
-    // Multi-date or metrics: the newest entries, read from the window start
-    const read = await this.streamDatesNewestFirst(botId, dates, query);
-    if (sortOrder === "asc") read.entries.reverse();
-    return read;
-  }
-
-  /**
-   * Reads entries in chronological order, reverses to newest-first, then
-   * applies offset and limit. Total reads are capped to prevent memory
-   * exhaustion on huge ranges.
-   */
-  private async streamDatesNewestFirst(
-    botId: string,
-    dates: string[],
-    query: LogsQuery,
-  ): Promise<DatedLogsRead> {
+  ): Promise<LogEntry[]> {
     const entries: LogEntry[] = [];
-    const maxRead = Math.max(query.offset + query.limit, 10000);
-    const cappedQuery = { ...query, limit: maxRead };
-    for (const date of dates) {
-      await this.streamFilteredLogs(
-        dayLogPath(botId, date),
-        date,
-        cappedQuery,
-        entries,
-      );
-      if (entries.length >= maxRead) break;
-    }
-    entries.reverse();
-    const metricsHasMore = entries.length > query.offset + query.limit;
-    entries.splice(0, query.offset);
-    if (entries.length > query.limit) entries.length = query.limit;
-    return { entries, metricsHasMore };
+    await this.tailFilteredLogs(dayLogPath(botId, date), date, query, entries);
+    if (query.sort !== "asc") entries.reverse();
+    return entries;
   }
 
   /**
@@ -372,12 +324,6 @@ export class LogsService {
           );
         }
       }
-      // Keep only the newest maxNeeded lines per day so a huge day (many
-      // metrics, or the full-read fallback above) can't grow the working
-      // set beyond ~2x maxNeeded.
-      if (dayEntries.length > maxNeeded) {
-        dayEntries.splice(0, dayEntries.length - maxNeeded);
-      }
       collected = dayEntries.concat(collected);
       if (collected.length >= maxNeeded) break;
     }
@@ -399,44 +345,6 @@ export class LogsService {
       current.setUTCDate(current.getUTCDate() - 1);
     }
     return dates;
-  }
-
-  /** `end` limits the read to the file's bytes before that offset. */
-  private async streamFilteredLogs(
-    logPath: string,
-    logDate: string,
-    query: LogsQuery,
-    entries: LogEntry[],
-    end?: number,
-  ): Promise<void> {
-    const stream = await this.openLogStream(logPath, end);
-    if (!stream) return;
-
-    const splitter = new LineSplitter();
-    for await (const chunk of stream) {
-      for (const { line, offset } of splitter.push(chunk)) {
-        if (!this.collectLine(line, offset, logDate, query, entries)) {
-          continue;
-        }
-        if (query.type !== "metrics" && entries.length >= query.limit) {
-          (
-            stream as NodeJS.ReadableStream & { destroy?: () => void }
-          ).destroy?.();
-          return;
-        }
-      }
-    }
-
-    const trailing = splitter.rest();
-    if (trailing) {
-      this.collectTrailingLine(
-        trailing.line,
-        trailing.offset,
-        logDate,
-        query,
-        entries,
-      );
-    }
   }
 
   /**
@@ -504,25 +412,6 @@ export class LogsService {
     if (LogsService.isOutsideTimeWindow(entry, query)) return false;
     entries.push(entry);
     return true;
-  }
-
-  /**
-   * Complete lines stop the stream once a raw-log read reaches its limit;
-   * the content after the last newline has no stream left to stop, so the
-   * limit is checked before taking it instead.
-   */
-  private collectTrailingLine(
-    leftover: string,
-    offset: number,
-    logDate: string,
-    query: LogsQuery,
-    entries: LogEntry[],
-  ): void {
-    if (!this.passesLineFilters(leftover, query)) return;
-    if (query.type !== "metrics" && entries.length >= query.limit) return;
-    const entry = this.storedEntry(leftover, logDate, offset);
-    if (LogsService.isOutsideTimeWindow(entry, query)) return;
-    entries.push(entry);
   }
 
   private passesLineFilters(line: string, query: LogsQuery): boolean {
