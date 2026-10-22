@@ -1839,6 +1839,18 @@ describe("LogsService", () => {
       expect(result.error).not.toMatch(/not found/i);
     });
 
+    it("should reject a position cursor whose offset is not a safe byte offset", async () => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        before: `20260401:${"9".repeat(22)}`,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/cursor/i);
+      expect(mockMinioClient.getPartialObject).not.toHaveBeenCalled();
+    });
     it("should reject a malformed cursor", async () => {
       const result = await service.getLogs("bot-1", {
         date: "20260401",
