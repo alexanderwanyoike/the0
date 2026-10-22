@@ -249,13 +249,20 @@ func TestBotScheduleController_Reconcile_KeepsTheCronJobWhenTheCronGainsASeconds
 
 func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 	schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	configHash := computeScheduleHash(schedule, "", "")
-	noRetries := int32(0)
-
 	mockRepo := &MockDesiredSchedules{
 		Running: []model.BotSchedule{schedule},
 	}
 	mockCronClient := NewMockK8sCronJobClient()
+	controller := NewBotScheduleController(
+		BotScheduleControllerConfig{Namespace: "the0"},
+		mockRepo,
+		mockCronClient,
+	)
+	generated, err := controller.createCronJobSpec(schedule, "0 9 * * *")
+	require.NoError(t, err)
+	configHash := generated.Annotations[AnnotationScheduleHash]
+	noRetries := int32(0)
+
 	mockCronClient.CronJobs["the0/schedule-schedule-1"] = &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "schedule-schedule-1",
@@ -275,13 +282,7 @@ func TestBotScheduleController_Reconcile_NoChangesNeeded(t *testing.T) {
 		},
 	}
 
-	controller := NewBotScheduleController(
-		BotScheduleControllerConfig{Namespace: "the0"},
-		mockRepo,
-		mockCronClient,
-	)
-
-	err := controller.Reconcile(context.Background())
+	err = controller.Reconcile(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, mockCronClient.CreateCalled)
@@ -372,9 +373,16 @@ func TestComputeScheduleHash(t *testing.T) {
 	schedule2 := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 10 * * *")
 	schedule3 := createTestSchedule("schedule-1", "daily-report", "2.0.0", "python3.11", "0 9 * * *")
 
-	hash1 := computeScheduleHash(schedule1, "", "")
-	hash2 := computeScheduleHash(schedule2, "", "")
-	hash3 := computeScheduleHash(schedule3, "", "")
+	controller := NewBotScheduleController(BotScheduleControllerConfig{}, &MockDesiredSchedules{}, NewMockK8sCronJobClient())
+	hashOf := func(schedule model.BotSchedule) string {
+		cronJob, err := controller.createCronJobSpec(schedule, schedule.Config["schedule"].(string))
+		require.NoError(t, err)
+		return computeScheduleHash(schedule, cronJob)
+	}
+
+	hash1 := hashOf(schedule1)
+	hash2 := hashOf(schedule2)
+	hash3 := hashOf(schedule3)
 
 	// Hashes should be 16 characters
 	assert.Len(t, hash1, 16)
@@ -385,7 +393,7 @@ func TestComputeScheduleHash(t *testing.T) {
 
 	// Same config should produce same hash
 	schedule1Copy := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
-	assert.Equal(t, hash1, computeScheduleHash(schedule1Copy, "", ""))
+	assert.Equal(t, hash1, hashOf(schedule1Copy))
 }
 
 func TestBotScheduleController_StartStop(t *testing.T) {

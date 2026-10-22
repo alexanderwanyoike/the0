@@ -312,13 +312,11 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 		return nil, fmt.Errorf("failed to generate pod spec: %w", err)
 	}
 
-	configHash := computeScheduleHash(schedule, c.config.NATSURL, c.config.RuntimeImage)
-
 	successfulJobsHistory := int32(3)
 	failedJobsHistory := int32(1)
 	backoffLimit := scheduledRunBackoffLimit
 
-	return &batchv1.CronJob{
+	cronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      generateCronJobName(schedule.ID),
 			Namespace: c.config.Namespace,
@@ -327,9 +325,6 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 				podgen.LabelCustomBotID: schedule.CustomBotVersion.Config.Name,
 				podgen.LabelRuntime:     schedule.CustomBotVersion.Config.Runtime,
 				LabelScheduleManagedBy:  c.config.ControllerName,
-			},
-			Annotations: map[string]string{
-				AnnotationScheduleHash: configHash,
 			},
 		},
 		Spec: batchv1.CronJobSpec{
@@ -354,17 +349,23 @@ func (c *BotScheduleController) createCronJobSpec(schedule model.BotSchedule, cr
 				},
 			},
 		},
-	}, nil
+	}
+	cronJob.Annotations = map[string]string{
+		AnnotationScheduleHash: computeScheduleHash(schedule, cronJob),
+	}
+	return cronJob, nil
 }
 
 // scheduleChanged returns true if the schedule config has changed.
 func (c *BotScheduleController) scheduleChanged(cronJob *batchv1.CronJob, schedule model.BotSchedule) bool {
-	existingHash := ""
-	if cronJob.Annotations != nil {
-		existingHash = cronJob.Annotations[AnnotationScheduleHash]
+	cronExpr, _ := schedule.Config["schedule"].(string)
+	wanted, err := c.createCronJobSpec(schedule, cronExpr)
+	if err != nil {
+		// updateCronJob reports why the schedule cannot be applied.
+		return true
 	}
-	currentHash := computeScheduleHash(schedule, c.config.NATSURL, c.config.RuntimeImage)
-	return existingHash != currentHash || backoffLimitDrifted(cronJob)
+	return cronJob.Annotations[AnnotationScheduleHash] != wanted.Annotations[AnnotationScheduleHash] ||
+		backoffLimitDrifted(cronJob)
 }
 
 // backoffLimitDrifted reads the limit off the live CronJob because the hash only
@@ -394,20 +395,21 @@ func generateCronJobName(scheduleID string) string {
 	return strings.TrimRight(name, "-")
 }
 
-// computeScheduleHash creates a hash of the schedule config. Controller-level
-// inputs that shape the generated pod (NATS URL, runtime image) are part of the
-// hash so changing them, as a platform upgrade does, updates existing CronJobs.
-func computeScheduleHash(schedule model.BotSchedule, natsURL, runtimeImage string) string {
+// computeScheduleHash hashes the schedule together with the CronJob generated
+// for it. Hashing the generated CronJob, not a list of the controller inputs
+// behind it, means any change to what the controller writes, such as the
+// runtime image, NATS URL or storage credentials, updates existing CronJobs.
+func computeScheduleHash(schedule model.BotSchedule, cronJob *batchv1.CronJob) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
-		NATSURL          string
-		RuntimeImage     string
+		Labels           map[string]string
+		Spec             batchv1.CronJobSpec
 	}{
 		Config:           schedule.Config,
 		CustomBotVersion: schedule.CustomBotVersion.Version,
-		NATSURL:          natsURL,
-		RuntimeImage:     runtimeImage,
+		Labels:           cronJob.Labels,
+		Spec:             cronJob.Spec,
 	}
 
 	jsonBytes, err := json.Marshal(data)
