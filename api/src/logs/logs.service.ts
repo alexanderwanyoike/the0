@@ -4,7 +4,13 @@ import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
 import { AuthenticatedRequest } from "@/auth/auth.types";
-import { Result, Ok, Failure, errorMessage, hasErrorCode } from "@/common/result";
+import {
+  Result,
+  Ok,
+  Failure,
+  errorMessage,
+  hasErrorCode,
+} from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
 
@@ -44,7 +50,10 @@ export class LogsService {
 
   /** AWS/MinIO use "NoSuchKey", Cloudflare R2 uses "NotFound". */
   private static isNotFoundError(error: unknown): boolean {
-    return hasErrorCode(error) && (error.code === "NoSuchKey" || error.code === "NotFound");
+    return (
+      hasErrorCode(error) &&
+      (error.code === "NoSuchKey" || error.code === "NotFound")
+    );
   }
 
   constructor(

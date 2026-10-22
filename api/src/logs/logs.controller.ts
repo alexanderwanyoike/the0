@@ -96,15 +96,19 @@ export class LogsController {
       throw new BadRequestException("Invalid bot ID");
     }
 
-    const result = await this.logsService.getLogs(botId, {
-      date: query.date,
-      dateRange: query.dateRange,
-      lookbackDays: query.lookbackDays,
-      limit: query.limit || 100,
-      offset: query.offset || 0,
-      type: query.type,
-      sort: query.sort || "desc",
-    }, user.uid);
+    const result = await this.logsService.getLogs(
+      botId,
+      {
+        date: query.date,
+        dateRange: query.dateRange,
+        lookbackDays: query.lookbackDays,
+        limit: query.limit || 100,
+        offset: query.offset || 0,
+        type: query.type,
+        sort: query.sort || "desc",
+      },
+      user.uid,
+    );
 
     if (!result.success) {
       if (
@@ -221,11 +225,15 @@ export class LogsController {
       (today.getMonth() + 1).toString().padStart(2, "0") +
       today.getDate().toString().padStart(2, "0");
 
-    const historyResult = await this.logsService.getLogs(botId, {
-      date: todayStr,
-      limit: 1000,
-      offset: 0,
-    }, userId);
+    const historyResult = await this.logsService.getLogs(
+      botId,
+      {
+        date: todayStr,
+        limit: 1000,
+        offset: 0,
+      },
+      userId,
+    );
 
     if (
       !historyResult.success &&

@@ -22,7 +22,10 @@ describe("LogsController", () => {
       getLogs: jest
         .fn()
         .mockResolvedValue(
-          Ok({ entries: [{ date: "20260210", content: "test log line" }], hasMore: false }),
+          Ok({
+            entries: [{ date: "20260210", content: "test log line" }],
+            hasMore: false,
+          }),
         ),
     };
 
@@ -66,7 +69,13 @@ describe("LogsController", () => {
       expect(result.hasMore).toBe(false);
       expect(mockLogsService.getLogs).toHaveBeenCalledWith(
         "bot-123",
-        { date: undefined, dateRange: undefined, limit: 100, offset: 0, sort: "desc" },
+        {
+          date: undefined,
+          dateRange: undefined,
+          limit: 100,
+          offset: 0,
+          sort: "desc",
+        },
         "user123",
       );
     });
@@ -77,7 +86,11 @@ describe("LogsController", () => {
       );
 
       await expect(
-        controller.getLogs("bot-123", { limit: 100, offset: 0 } as any, mockUser),
+        controller.getLogs(
+          "bot-123",
+          { limit: 100, offset: 0 } as any,
+          mockUser,
+        ),
       ).rejects.toThrow("Bot not found or access denied");
     });
 
@@ -87,7 +100,11 @@ describe("LogsController", () => {
       );
 
       await expect(
-        controller.getLogs("bot-123", { limit: 100, offset: 0 } as any, mockUser),
+        controller.getLogs(
+          "bot-123",
+          { limit: 100, offset: 0 } as any,
+          mockUser,
+        ),
       ).rejects.toThrow("Invalid date format");
     });
 
@@ -280,11 +297,15 @@ describe("LogsController", () => {
     it("should send history event on connect", async () => {
       await controller.streamLogs("bot-history", mockUser, mockReq, mockRes);
 
-      expect(mockLogsService.getLogs).toHaveBeenCalledWith("bot-history", {
-        date: expect.any(String),
-        limit: 1000,
-        offset: 0,
-      }, "user123");
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+        "bot-history",
+        {
+          date: expect.any(String),
+          limit: 1000,
+          offset: 0,
+        },
+        "user123",
+      );
 
       const historyWrite = mockRes.write.mock.calls.find((call: string[]) =>
         call[0].startsWith("event: history"),
@@ -514,7 +535,12 @@ describe("LogsController", () => {
         end: jest.fn(),
         writableEnded: false,
       };
-      await controller.streamLogs("bot-nats-fail", mockUser, mockReq2, mockRes2);
+      await controller.streamLogs(
+        "bot-nats-fail",
+        mockUser,
+        mockReq2,
+        mockRes2,
+      );
 
       // Should retry subscribe since the dead one wasn't stored
       expect(mockNatsService.subscribe).toHaveBeenCalledTimes(2);

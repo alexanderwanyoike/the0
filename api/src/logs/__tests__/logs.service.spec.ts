@@ -641,9 +641,7 @@ describe("LogsService", () => {
     });
 
     it("should handle old format plain text with null timestamp", async () => {
-      const lines = [
-        "[2026-03-30 13:00:26] INFO:main:Starting bot",
-      ].join("\n");
+      const lines = ["[2026-03-30 13:00:26] INFO:main:Starting bot"].join("\n");
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
@@ -828,11 +826,12 @@ describe("LogsService", () => {
 
     it("should respect limit for metrics scattered through a large file", async () => {
       // 200 lines: 150 noise + 50 metrics scattered throughout
-      const lines = Array.from({ length: 200 }, (_, i) =>
-        i % 4 === 0
-          ? `{"_metric":true,"name":"metric-${i}","value":${i}}`
-          : `{"level":"info","message":"noise-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from({ length: 200 }, (_, i) =>
+          i % 4 === 0
+            ? `{"_metric":true,"name":"metric-${i}","value":${i}}`
+            : `{"level":"info","message":"noise-${i}"}`,
+        ).join("\n") + "\n";
 
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
@@ -851,10 +850,12 @@ describe("LogsService", () => {
     });
 
     it("should still respect limit for non-metrics queries", async () => {
-      const lines = Array.from(
-        { length: 50 },
-        (_, i) => `{"timestamp":"2026-04-01T10:00:00Z","message":"line-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from(
+          { length: 50 },
+          (_, i) =>
+            `{"timestamp":"2026-04-01T10:00:00Z","message":"line-${i}"}`,
+        ).join("\n") + "\n";
 
       // Tail path: single date, non-metrics
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
@@ -1083,10 +1084,12 @@ describe("LogsService", () => {
 
   describe("getLogs - sort parameter", () => {
     it("should return newest-first by default for single date (tail path)", async () => {
-      const lines = Array.from(
-        { length: 10 },
-        (_, i) => `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from(
+          { length: 10 },
+          (_, i) =>
+            `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
+        ).join("\n") + "\n";
 
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
@@ -1106,10 +1109,12 @@ describe("LogsService", () => {
     });
 
     it("should return oldest-first when sort=asc for single date", async () => {
-      const lines = Array.from(
-        { length: 10 },
-        (_, i) => `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from(
+          { length: 10 },
+          (_, i) =>
+            `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
+        ).join("\n") + "\n";
 
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
@@ -1263,9 +1268,15 @@ describe("LogsService", () => {
       const yesterday = localDateStr(1);
       const older = localDateStr(2);
       mockFiles({
-        [`logs/bot-1/${today}.log`]: [metric("t", 1), metric("t", 2)].join("\n"),
-        [`logs/bot-1/${yesterday}.log`]: [metric("y", 1), metric("y", 2)].join("\n"),
-        [`logs/bot-1/${older}.log`]: [metric("o", 1), metric("o", 2)].join("\n"),
+        [`logs/bot-1/${today}.log`]: [metric("t", 1), metric("t", 2)].join(
+          "\n",
+        ),
+        [`logs/bot-1/${yesterday}.log`]: [metric("y", 1), metric("y", 2)].join(
+          "\n",
+        ),
+        [`logs/bot-1/${older}.log`]: [metric("o", 1), metric("o", 2)].join(
+          "\n",
+        ),
       });
 
       const result = await service.getLogs("bot-1", {

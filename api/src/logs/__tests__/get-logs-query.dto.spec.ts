@@ -34,10 +34,12 @@ describe("GetLogsQueryDto", () => {
     });
 
     it("rejects lookbackDays outside 1-90", async () => {
-      expect((await validateQuery({ lookbackDays: "0" })).errors.length)
-        .toBeGreaterThan(0);
-      expect((await validateQuery({ lookbackDays: "91" })).errors.length)
-        .toBeGreaterThan(0);
+      expect(
+        (await validateQuery({ lookbackDays: "0" })).errors.length,
+      ).toBeGreaterThan(0);
+      expect(
+        (await validateQuery({ lookbackDays: "91" })).errors.length,
+      ).toBeGreaterThan(0);
     });
   });
 });
