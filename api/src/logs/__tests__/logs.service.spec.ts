@@ -75,6 +75,31 @@ describe("LogsService", () => {
     );
   });
 
+  /** Serves consecutive daily files from `start` by path, in any read order. */
+  function serveDaysFrom(start: string, ...days: string[]) {
+    const files: Record<string, string> = {};
+    const day = new Date(
+      Date.UTC(+start.slice(0, 4), +start.slice(4, 6) - 1, +start.slice(6, 8)),
+    );
+    for (const content of days) {
+      const name = day.toISOString().slice(0, 10).replace(/-/g, "");
+      files[`logs/bot-1/${name}.log`] = content;
+      day.setUTCDate(day.getUTCDate() + 1);
+    }
+    const read = (path: string) => {
+      if (files[path] === undefined) throw { code: "NoSuchKey" };
+      return files[path];
+    };
+    mockMinioClient.getObject.mockImplementation(
+      async (_bucket: string, path: string) => stringStream(read(path)),
+    );
+    mockMinioClient.statObject.mockImplementation(
+      async (_bucket: string, path: string) => ({
+        size: Buffer.byteLength(read(path)),
+      }),
+    );
+  }
+
   describe("getLogs - line-level streaming", () => {
     it("should return each line as a separate LogEntry", async () => {
       const lines = [
@@ -188,9 +213,7 @@ describe("LogsService", () => {
       ).join("\n");
 
       // Use a two-day range so dates.length > 1 triggers the stream path
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(lines))
-        .mockResolvedValueOnce(stringStream("")); // second day empty
+      serveDaysFrom("20260401", lines, ""); // second day empty
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -382,9 +405,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -404,9 +425,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -423,9 +442,7 @@ describe("LogsService", () => {
     it("should skip blank lines on the stream path", async () => {
       const content = '{"msg":"a"}\n\n   \n{"msg":"b"}\n';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(content))
-        .mockResolvedValueOnce(stringStream(""));
+      serveDaysFrom("20260401", content, "");
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -445,9 +462,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -874,9 +889,7 @@ describe("LogsService", () => {
         '{"timestamp":"2026-04-02T02:00:00Z","message":"d2-line2"}',
       ].join("\n");
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -1057,10 +1070,7 @@ describe("LogsService", () => {
       const day2 = '{"timestamp":"2026-04-02T12:00:00Z","message":"day2 line"}';
       const day3 = '{"timestamp":"2026-04-03T12:00:00Z","message":"day3 line"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2))
-        .mockResolvedValueOnce(stringStream(day3));
+      serveDaysFrom("20260401", day1, day2, day3);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260403",
@@ -1086,9 +1096,7 @@ describe("LogsService", () => {
         '{"timestamp":"2026-04-03T02:00:00Z","message":"after range"}',
       ].join("\n");
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1Lines))
-        .mockResolvedValueOnce(stringStream(day2Lines));
+      serveDaysFrom("20260402", day1Lines, day2Lines);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "2026-04-02T23:00:00Z--2026-04-03T01:00:00Z",
@@ -1245,9 +1253,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -1270,9 +1276,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -1291,9 +1295,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
