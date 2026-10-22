@@ -73,8 +73,7 @@ type BotScheduleControllerConfig struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
-	// StorageCredentials, when named, is the Secret bot pods read the MinIO
-	// credentials from.
+
 	StorageCredentials podgen.StorageCredentialsSecret
 	// NATSURL for live log publishing from bot pods (empty disables)
 	NATSURL string
@@ -396,9 +395,7 @@ func generateCronJobName(scheduleID string) string {
 }
 
 // computeScheduleHash hashes the schedule together with the CronJob generated
-// for it. Hashing the generated CronJob, not a list of the controller inputs
-// behind it, means any change to what the controller writes, such as the
-// runtime image, NATS URL or storage credentials, updates existing CronJobs.
+// for it, for the reason podgen's computeConfigHash hashes generated pods.
 func computeScheduleHash(schedule model.BotSchedule, cronJob *batchv1.CronJob) string {
 	data := struct {
 		Config           map[string]interface{}

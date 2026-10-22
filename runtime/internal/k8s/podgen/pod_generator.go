@@ -62,8 +62,6 @@ type PodGeneratorConfig struct {
 	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
 	MinIOUseSSL      bool
 
-	// StorageCredentials, when named, is where pods read MinIOAccessKey and
-	// MinIOSecretKey from instead of carrying them as literal values.
 	StorageCredentials StorageCredentialsSecret
 
 	// NATSURL enables live log streaming: the sync process publishes bot log
@@ -77,8 +75,10 @@ type PodGeneratorConfig struct {
 	RuntimeImagePullPolicy corev1.PullPolicy
 }
 
-// StorageCredentialsSecret is the Secret, and its keys, that holds the storage
-// credentials.
+// StorageCredentialsSecret is the Secret, and its keys, that pods read the
+// storage credentials from, so that a rotated Secret reaches the next pod
+// without the controller rewriting it. An empty Name makes pods carry the
+// credentials as literal values instead.
 type StorageCredentialsSecret struct {
 	Name           string
 	AccessKeyField string

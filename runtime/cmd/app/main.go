@@ -51,7 +51,6 @@ var (
 	minioBucket    string
 	minioUseSSL    bool
 
-	// Secret that bot pods read the MinIO credentials from
 	storageCredentialsSecret         string
 	storageCredentialsAccessKeyField string
 	storageCredentialsSecretKeyField string

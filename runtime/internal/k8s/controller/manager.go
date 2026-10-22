@@ -35,8 +35,6 @@ type ManagerConfig struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
-	// StorageCredentials, when named, is the Secret bot pods read the MinIO
-	// credentials from.
 	StorageCredentials podgen.StorageCredentialsSecret
 
 	// NATSURL for live log publishing from bot pods (empty disables)
