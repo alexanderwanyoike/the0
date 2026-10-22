@@ -23,6 +23,7 @@ import { LogsService } from "./logs.service";
 import { LogStreamService } from "./log-stream.service";
 import { isValidBotId } from "./bot-id";
 import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
+import { StreamLogsQueryDto } from "./dto/stream-logs-query.dto";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
@@ -98,18 +99,23 @@ export class LogsController {
   @ApiOperation({
     summary: "Stream a bot's logs as server-sent events",
     description:
-      "Sends today's logs as a `history` event, then live `update` events. " +
-      "`warning` and `error` events report degraded or failed streams.",
+      "Sends today's logs as a `history` event (skipped with " +
+      "`history=false`), then each live chunk as an `update` event holding " +
+      "an array of entries in the REST shape. `warning` and `error` events " +
+      "report degraded or failed streams.",
   })
   @ApiParam(BOT_ID_PARAM)
   @ApiProduces("text/event-stream")
   @ApiOkResponse({ description: "Event stream" })
   async streamLogs(
     @Param("botId") botId: string,
+    @Query() query: StreamLogsQueryDto,
     @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    await this.logStream.stream(botId, user.uid, req, res);
+    await this.logStream.stream(botId, user.uid, req, res, {
+      history: query.history !== false,
+    });
   }
 }

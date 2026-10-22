@@ -9,6 +9,10 @@ export const ACCESS_DENIED_MESSAGE = "Bot not found or access denied";
 
 const KEEPALIVE_MS = 15000;
 
+export interface StreamOptions {
+  history?: boolean;
+}
+
 @Injectable()
 export class LogStreamService {
   constructor(
@@ -16,11 +20,16 @@ export class LogStreamService {
     private readonly fanOut: LogFanOut,
   ) {}
 
+  /**
+   * `history: false` skips the read of today's file. The ownership check
+   * runs either way: the stream must never outlive a refused user.
+   */
   async stream(
     botId: string,
     userId: string,
     req: Request,
     res: Response,
+    options: StreamOptions = {},
   ): Promise<void> {
     // Validate botId before using as NATS subject
     if (!isValidBotId(botId)) {
@@ -47,7 +56,10 @@ export class LogStreamService {
     };
     req.on("close", cleanup);
 
-    const shouldContinue = await this.sendHistoricalLogs(res, botId, userId);
+    const shouldContinue =
+      options.history === false
+        ? await this.checkAccess(res, botId, userId)
+        : await this.sendHistoricalLogs(res, botId, userId);
     if (!shouldContinue) return;
 
     // If client disconnected during history fetch, clean up immediately
@@ -65,6 +77,15 @@ export class LogStreamService {
     }
 
     keepalive = this.startKeepalive(res, botId);
+  }
+
+  private async checkAccess(
+    res: Response,
+    botId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const access = await this.logsService.checkAccess(botId, userId);
+    return access.success || !this.endOnAccessError(res, access.error);
   }
 
   private async sendHistoricalLogs(
