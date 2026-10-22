@@ -45,10 +45,25 @@ jest.mock("@/lib/api/api-client", () => ({
   },
 }));
 
+/** The bot page's shared log stream, or null while the module is missing. */
+function mockSharedStreamFor(botId: string): unknown {
+  let useShared: ((id: string) => unknown) | undefined;
+  try {
+    useShared = jest.requireActual(
+      "@/hooks/bot-logs/bot-log-stream",
+    ).useSharedBotLogStream;
+  } catch {
+    return null;
+  }
+  return useShared!(botId);
+}
+
 const mockUseBotLogs = jest.fn();
 jest.mock("@/hooks/use-bot-logs", () => ({
   useBotLogs: (...args: unknown[]) => {
-    mockUseBotLogs(...args);
+    mockUseBotLogs(...args, {
+      sharedStream: mockSharedStreamFor("bot-123") !== null,
+    });
     return {
       logs: [],
       loading: false,
@@ -83,7 +98,10 @@ jest.mock("@/hooks/use-media-query", () => ({
 }));
 
 jest.mock("@/components/bot/bot-dashboard-loader", () => ({
-  BotDashboardLoader: () => <div data-testid="bot-dashboard" />,
+  BotDashboardLoader: function MockDashboard() {
+    const shared = mockSharedStreamFor("bot-123") !== null;
+    return <div data-testid="bot-dashboard" data-shared-stream={shared} />;
+  },
 }));
 
 jest.mock("@/components/bot/console-interface", () => ({
@@ -399,9 +417,33 @@ describe("BotDetailPanel", () => {
     });
   });
 
+  describe("one log stream per bot page", () => {
+    it("gives the console and the dashboard the bot page's stream", async () => {
+      mockGetBot.mockResolvedValue({
+        success: true,
+        data: {
+          ...mockBot,
+          customBotId: "custom-1",
+          config: { ...mockBot.config, hasFrontend: true },
+        },
+      } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await screen.findByText("Test Bot");
+      expect(screen.getByTestId("bot-dashboard")).toHaveAttribute(
+        "data-shared-stream",
+        "true",
+      );
+      expect(mockUseBotLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: "bot-123" }),
+        { sharedStream: true },
+      );
+    });
+  });
+
   describe("log order", () => {
     it("asks for logs in the chronological order the console shows", async () => {
-      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as never);
       render(<BotDetailPanel botId="bot-123" />);
 
       await screen.findByText("Test Bot");
@@ -409,6 +451,7 @@ describe("BotDetailPanel", () => {
         expect.objectContaining({
           initialQuery: expect.objectContaining({ sort: "asc" }),
         }),
+        expect.anything(),
       );
     });
   });
