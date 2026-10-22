@@ -4,6 +4,7 @@ import { PinoLogger } from "nestjs-pino";
 import { NatsService } from "@/nats/nats.service";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
 import { sseEvent } from "./sse";
+import { liveLogEntries } from "./log-entry";
 
 interface BotSubscription {
   unsubscribe: () => void;
@@ -27,6 +28,7 @@ export class LogFanOut {
     string,
     Promise<SubscriptionResult>
   >();
+  private chunkSeq = 0;
 
   constructor(
     private readonly natsService: NatsService,
@@ -105,10 +107,9 @@ export class LogFanOut {
     const subscribeResult = this.natsService.subscribe(
       natsSubject,
       (msg: string) => {
-        const event = sseEvent("update", {
-          content: msg,
-          timestamp: new Date().toISOString(),
-        });
+        const entries = liveLogEntries(msg, new Date(), this.chunkSeq++);
+        if (!entries.length) return;
+        const event = sseEvent("update", entries);
         for (const client of clients) {
           try {
             if (client.writableEnded) {
