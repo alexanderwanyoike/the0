@@ -35,6 +35,10 @@ type ManagerConfig struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
+	// StorageCredentials, when named, is the Secret bot pods read the MinIO
+	// credentials from.
+	StorageCredentials podgen.StorageCredentialsSecret
+
 	// NATSURL for live log publishing from bot pods (empty disables)
 	NATSURL string
 
@@ -106,6 +110,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			MinIOSecretKey:         config.MinIOSecretKey,
 			MinIOBucket:            config.MinIOBucket,
 			MinIOUseSSL:            config.MinIOUseSSL,
+			StorageCredentials:     config.StorageCredentials,
 			NATSURL:                config.NATSURL,
 			RuntimeImage:           config.RuntimeImage,
 			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
@@ -132,6 +137,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 			MinIOSecretKey:         config.MinIOSecretKey,
 			MinIOBucket:            config.MinIOBucket,
 			MinIOUseSSL:            config.MinIOUseSSL,
+			StorageCredentials:     config.StorageCredentials,
 			NATSURL:                config.NATSURL,
 			RuntimeImage:           config.RuntimeImage,
 			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
@@ -160,6 +166,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 		MinIOSecretKey:         config.MinIOSecretKey,
 		MinIOBucket:            config.MinIOBucket,
 		MinIOUseSSL:            config.MinIOUseSSL,
+		StorageCredentials:     config.StorageCredentials,
 		RuntimeImage:           config.RuntimeImage,
 		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	})

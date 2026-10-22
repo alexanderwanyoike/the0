@@ -19,6 +19,7 @@ import (
 	"runtime/internal/k8s/controller"
 	"runtime/internal/k8s/detect"
 	"runtime/internal/k8s/health"
+	"runtime/internal/k8s/podgen"
 	"runtime/internal/launch"
 	"runtime/internal/runtime/storage"
 	"runtime/internal/subscriber"
@@ -49,6 +50,11 @@ var (
 	minioSecretKey string
 	minioBucket    string
 	minioUseSSL    bool
+
+	// Secret that bot pods read the MinIO credentials from
+	storageCredentialsSecret         string
+	storageCredentialsAccessKeyField string
+	storageCredentialsSecretKeyField string
 
 	// Runtime image for init containers and sidecars
 	runtimeImage           string
@@ -161,6 +167,9 @@ func main() {
 	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", launch.DefaultCodeBucket), "MinIO bucket for bot code")
 	controllerCmd.Flags().StringVar(&runtimeImage, "runtime-image", getEnv("RUNTIME_IMAGE", "runtime:latest"), "Runtime image for init containers and sidecars")
 	controllerCmd.Flags().StringVar(&runtimeImagePullPolicy, "runtime-image-pull-policy", getEnv("RUNTIME_IMAGE_PULL_POLICY", "IfNotPresent"), "Image pull policy for runtime init/sidecar (Never, IfNotPresent, Always)")
+	controllerCmd.Flags().StringVar(&storageCredentialsSecret, "storage-credentials-secret", getEnv("STORAGE_CREDENTIALS_SECRET", ""), "Secret bot pods read the MinIO credentials from (empty writes them into pod specs)")
+	controllerCmd.Flags().StringVar(&storageCredentialsAccessKeyField, "storage-credentials-access-key-field", "minio-access-key", "Key of the MinIO access key in --storage-credentials-secret")
+	controllerCmd.Flags().StringVar(&storageCredentialsSecretKeyField, "storage-credentials-secret-key-field", "minio-secret-key", "Key of the MinIO secret key in --storage-credentials-secret")
 	// MinIO credentials read from environment only (not CLI flags) for security
 	minioAccessKey = getEnv("MINIO_ACCESS_KEY", "")
 	minioSecretKey = getEnv("MINIO_SECRET_KEY", "")
@@ -370,6 +379,11 @@ func runController() {
 		RuntimeImage:           runtimeImage,
 		RuntimeImagePullPolicy: runtimeImagePullPolicy,
 		Logger:                 &util.DefaultLogger{},
+		StorageCredentials: podgen.StorageCredentialsSecret{
+			Name:         storageCredentialsSecret,
+			AccessKeyKey: storageCredentialsAccessKeyField,
+			SecretKeyKey: storageCredentialsSecretKeyField,
+		},
 	})
 	if err != nil {
 		util.LogMaster("Failed to create controller manager: %v", err)
