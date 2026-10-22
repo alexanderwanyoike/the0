@@ -2048,8 +2048,6 @@ describe("LogsService", () => {
     });
 
     describe("repeated runtime keys", () => {
-      // A storage append that completed but timed out is retried with the
-      // same bytes, so one daily file can hold a chunk twice.
       const keyed = (i: number) =>
         `{"_key":"1775001600000000000-${i}","message":"m${i}"}`;
       const file = [keyed(1), keyed(2), keyed(1), keyed(3)].join("\n") + "\n";

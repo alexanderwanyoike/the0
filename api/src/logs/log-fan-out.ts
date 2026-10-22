@@ -121,7 +121,6 @@ export class LogFanOut {
             clients.delete(client);
           }
         }
-        // If all clients disconnected, clean up the NATS subscription
         if (clients.size === 0) {
           const sub = this.activeSubscriptions.get(botId);
           if (sub) {

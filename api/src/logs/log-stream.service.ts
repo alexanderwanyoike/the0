@@ -32,7 +32,6 @@ export class LogStreamService {
     res: Response,
     options: StreamOptions = {},
   ): Promise<void> {
-    // Validate botId before using as NATS subject
     if (!isValidBotId(botId)) {
       res.status(400);
       res.setHeader("Content-Type", "text/event-stream");
@@ -45,9 +44,9 @@ export class LogStreamService {
 
     sendSSEHeaders(res);
 
-    // Register cleanup early - before any awaits - so client disconnects
-    // during getLogs are caught. Track disconnected flag to avoid adding
-    // a stale client to the fan-out set.
+    // Registered before any await so a disconnect during the access check or
+    // history read is seen; `disconnected` keeps a gone client out of the
+    // fan-out set.
     let disconnected = false;
     let keepalive: ReturnType<typeof setInterval> | null = null;
     const cleanup = () => {
@@ -63,7 +62,6 @@ export class LogStreamService {
         : await this.sendHistoricalLogs(res, botId, userId);
     if (!shouldContinue) return;
 
-    // If client disconnected during history fetch, clean up immediately
     if (disconnected) {
       cleanup();
       return;
@@ -71,7 +69,6 @@ export class LogStreamService {
 
     await this.fanOut.join(botId, res);
 
-    // If client disconnected during subscription, clean up immediately
     if (disconnected) {
       cleanup();
       return;
