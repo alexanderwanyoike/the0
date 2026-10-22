@@ -1072,16 +1072,6 @@ func displayLogEntries(logs []internal.LogEntry) {
 	white := color.New(color.FgWhite)
 
 	for _, log := range logs {
-		// Parse and format date
-		logTime, err := time.Parse(time.RFC3339, log.Date)
-		var timeStr string
-		if err != nil {
-			timeStr = log.Date // Fallback to original date string
-		} else {
-			timeStr = logTime.Format("2006-01-02 15:04:05")
-		}
-
-		// Display log entry
-		fmt.Printf("[%s] %s\n", cyan.Sprint(timeStr), white.Sprint(logEntryText(log.Content)))
+		fmt.Printf("[%s] %s\n", cyan.Sprint(logEntryTime(log)), white.Sprint(logEntryText(log.Content)))
 	}
 }

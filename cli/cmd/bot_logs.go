@@ -4,7 +4,18 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"time"
+
+	"the0/internal"
 )
+
+func logEntryTime(entry internal.LogEntry) string {
+	logTime, err := time.Parse(time.RFC3339, entry.Date)
+	if err != nil {
+		return entry.Date
+	}
+	return logTime.Format("2006-01-02 15:04:05")
+}
 
 func logEntryText(content string) string {
 	members, ok := jsonObjectMembers(content)
