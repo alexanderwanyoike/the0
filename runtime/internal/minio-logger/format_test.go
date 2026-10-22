@@ -2,6 +2,7 @@ package miniologger
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -20,18 +21,20 @@ func TestFormatLogChunk_PlainText(t *testing.T) {
 
 	assert.Equal(t, "INFO:main:Starting bot", obj["message"])
 
-	tsStr, ok := obj["timestamp"].(string)
-	require.True(t, ok, "timestamp should be a string")
-	_, err = time.Parse(time.RFC3339, tsStr)
-	assert.NoError(t, err, "timestamp should be valid RFC3339: %s", tsStr)
+	assert.Equal(t, "2026-04-01T10:00:00.000Z", obj["timestamp"])
+	assert.Equal(t, fmt.Sprintf("%d-0", ts.UnixNano()), obj["_key"])
 }
 
 func TestFormatLogChunk_JSONWithTimestamp(t *testing.T) {
 	ts := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
-	input := `{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}`
+	input := `{"_metric":"price","value":42,"timestamp":"2026-04-01T09:59:58Z"}`
 	output := FormatLogChunk(input, ts)
 
-	assert.Equal(t, input+"\n", output, "JSON with timestamp should pass through unchanged")
+	obj := decodeLine(t, output)
+	assert.Equal(t, "2026-04-01T09:59:58Z", obj["timestamp"], "the bot's own timestamp is kept")
+	assert.Equal(t, fmt.Sprintf("%d-0", ts.UnixNano()), obj["_key"])
+	assert.Equal(t, "price", obj["_metric"])
+	assert.Equal(t, float64(42), obj["value"])
 }
 
 func TestFormatLogChunk_JSONWithoutTimestamp(t *testing.T) {
@@ -43,7 +46,8 @@ func TestFormatLogChunk_JSONWithoutTimestamp(t *testing.T) {
 	err := json.Unmarshal([]byte(strings.TrimSpace(output)), &obj)
 	require.NoError(t, err, "output should be valid JSON: %s", output)
 
-	assert.Contains(t, obj, "timestamp", "should have timestamp field added")
+	assert.Equal(t, "2026-04-01T10:00:00.000Z", obj["timestamp"], "should have timestamp field added")
+	assert.Equal(t, fmt.Sprintf("%d-0", ts.UnixNano()), obj["_key"])
 	assert.Equal(t, "info", obj["level"], "original level field should be preserved")
 	assert.Equal(t, float64(1711800000), obj["time"], "original time field should be preserved")
 	assert.Equal(t, "connected", obj["msg"], "original msg field should be preserved")
@@ -94,11 +98,9 @@ func TestFormatLogChunk_NoDoubleTimestamp(t *testing.T) {
 	input := `{"timestamp":"2026-04-01T10:00:00Z","message":"hello"}`
 	output := FormatLogChunk(input, ts)
 
-	assert.Equal(t, input+"\n", output, "JSON with timestamp should pass through exactly")
-
-	var obj map[string]interface{}
-	err := json.Unmarshal([]byte(strings.TrimSpace(output)), &obj)
-	require.NoError(t, err)
+	obj := decodeLine(t, output)
+	assert.Equal(t, "2026-04-01T10:00:00Z", obj["timestamp"])
+	assert.Equal(t, "hello", obj["message"])
 
 	// Count occurrences of "timestamp" in the raw output to confirm no duplication
 	count := strings.Count(strings.TrimSpace(output), `"timestamp"`)
@@ -163,4 +165,62 @@ INFO:main:Posted BID: 1.0 @ $150.25
 		require.NoError(t, err)
 		assert.Contains(t, obj, "message", "plain text line %d should have message field", idx)
 	}
+}
+
+func TestFormatLogChunk_TimestampIsUTCWithMilliseconds(t *testing.T) {
+	ts := time.Date(2026, 10, 22, 15, 0, 0, 123456789, time.FixedZone("UTC+2", 2*60*60))
+	output := FormatLogChunk("hello", ts)
+
+	obj := decodeLine(t, output)
+	assert.Equal(t, "2026-10-22T13:00:00.123Z", obj["timestamp"])
+}
+
+func TestFormatLogChunk_KeysCountEmittedLinesOnly(t *testing.T) {
+	ts := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	input := "plain\n\n   \n{\"level\":\"info\"}\n{\"timestamp\":\"2026-04-01T09:00:00Z\"}\n[1,2]\nnull\n"
+
+	lines := decodeLines(t, FormatLogChunk(input, ts))
+
+	require.Len(t, lines, 5)
+	for i, obj := range lines {
+		assert.Equal(t, fmt.Sprintf("%d-%d", ts.UnixNano(), i), obj["_key"], "line %d", i)
+		assert.Contains(t, obj, "timestamp", "line %d", i)
+	}
+	assert.Equal(t, "[1,2]", lines[3]["message"], "non-object JSON is wrapped as a message")
+	assert.Equal(t, "null", lines[4]["message"], "JSON null is wrapped as a message")
+}
+
+func TestFormatLogChunk_RuntimeOwnsTheKey(t *testing.T) {
+	ts := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	output := FormatLogChunk(`{"_key":"bot-chosen","message":"hi"}`, ts)
+
+	obj := decodeLine(t, output)
+	assert.Equal(t, fmt.Sprintf("%d-0", ts.UnixNano()), obj["_key"])
+	assert.Equal(t, 1, strings.Count(output, `"_key"`), "the bot's key must not survive as a duplicate field")
+}
+
+func TestFormatLogChunk_KeepsJSONValuesExact(t *testing.T) {
+	ts := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	output := FormatLogChunk(`{"order_id":12345678901234567890,"timestamp":"2026-04-01T10:00:00Z"}`, ts)
+
+	assert.Contains(t, output, `"order_id":12345678901234567890`)
+}
+
+func decodeLine(t *testing.T, output string) map[string]interface{} {
+	t.Helper()
+	lines := decodeLines(t, output)
+	require.Len(t, lines, 1)
+	return lines[0]
+}
+
+func decodeLines(t *testing.T, output string) []map[string]interface{} {
+	t.Helper()
+	require.True(t, strings.HasSuffix(output, "\n"), "every line ends with a newline")
+	var lines []map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
+		var obj map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &obj), "line should be a JSON object: %s", line)
+		lines = append(lines, obj)
+	}
+	return lines
 }
