@@ -906,3 +906,79 @@ func TestBotScheduleController_Reconcile_CronJobReadsStorageCredentialsFromTheSe
 	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_ACCESS_KEY"))
 	assert.Equal(t, "the0-the0-secrets", storageSecretName(t, bot.Env, "MINIO_SECRET_KEY"))
 }
+
+func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageCredentialsChange(t *testing.T) {
+	literal := func(secretKey string) BotScheduleControllerConfig {
+		return BotScheduleControllerConfig{
+			Namespace:      "the0",
+			ControllerName: "test-controller",
+			MinIOAccessKey: "access-key",
+			MinIOSecretKey: secretKey,
+		}
+	}
+	fromSecret := func(name string) BotScheduleControllerConfig {
+		config := literal("secret-key")
+		config.StorageCredentials = testStorageCredentialsSecret(name)
+		return config
+	}
+
+	cases := []struct {
+		name          string
+		before, after BotScheduleControllerConfig
+		check         func(t *testing.T, env []corev1.EnvVar)
+	}{
+		{
+			name:   "literal secret key rotated",
+			before: literal("old-secret-key"),
+			after:  literal("new-secret-key"),
+			check: func(t *testing.T, env []corev1.EnvVar) {
+				assert.Equal(t, "new-secret-key", envToMap(env)["MINIO_SECRET_KEY"])
+			},
+		},
+		{
+			name:   "literal credentials replaced by the secret",
+			before: literal("secret-key"),
+			after:  fromSecret("the0-the0-secrets"),
+			check: func(t *testing.T, env []corev1.EnvVar) {
+				assert.Equal(t, "the0-the0-secrets", storageSecretName(t, env, "MINIO_SECRET_KEY"))
+			},
+		},
+		{
+			name:   "secret renamed",
+			before: fromSecret("the0-secrets"),
+			after:  fromSecret("the0-the0-secrets"),
+			check: func(t *testing.T, env []corev1.EnvVar) {
+				assert.Equal(t, "the0-the0-secrets", storageSecretName(t, env, "MINIO_SECRET_KEY"))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+			mockCronClient := NewMockK8sCronJobClient()
+			controllerWith := func(config BotScheduleControllerConfig) *BotScheduleController {
+				return NewBotScheduleController(config, &MockDesiredSchedules{Running: []model.BotSchedule{schedule}}, mockCronClient)
+			}
+
+			require.NoError(t, controllerWith(tc.before).Reconcile(context.Background()))
+			require.Equal(t, 1, mockCronClient.CreateCalled)
+
+			require.NoError(t, controllerWith(tc.after).Reconcile(context.Background()))
+
+			assert.Equal(t, 1, mockCronClient.UpdateCalled,
+				"an existing CronJob must follow the controller's storage credentials")
+			cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+			require.NotNil(t, cronJob)
+			tc.check(t, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env)
+		})
+	}
+}
+
+func envToMap(env []corev1.EnvVar) map[string]string {
+	values := make(map[string]string, len(env))
+	for _, variable := range env {
+		values[variable.Name] = variable.Value
+	}
+	return values
+}
