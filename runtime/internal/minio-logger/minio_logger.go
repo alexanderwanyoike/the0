@@ -204,8 +204,7 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string,
 	botMutex.Lock()
 	defer botMutex.Unlock()
 
-	// Generate file path: logs/{bot_id}/{YYYYMMDD}.log
-	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, at.Format("20060102"))
+	dailyKey := m.GetLogFilePath(id, at)
 	m.logger.Debug("Attempting to append logs to MinIO", "path", dailyKey, "bucket", m.logsBucket)
 
 	// Upload the new chunk as a temporary object. The clock, not at, names
@@ -386,8 +385,8 @@ func (m *minIOLogger) Close() error {
 	return nil
 }
 
-// GetLogFilePath returns the MinIO path for a bot's log file for a specific date
+// GetLogFilePath returns logs/{bot_id}/{YYYYMMDD}.log for the UTC date of
+// date, the same day the UTC timestamps in the file fall on.
 func (m *minIOLogger) GetLogFilePath(id string, date time.Time) string {
-	timestamp := date.Format("20060102") // YYYYMMDD format
-	return fmt.Sprintf("logs/%s/%s.log", id, timestamp)
+	return fmt.Sprintf("logs/%s/%s.log", id, date.UTC().Format("20060102"))
 }
