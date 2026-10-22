@@ -121,6 +121,7 @@ func NewBotScheduleController(
 		MinIOSecretKey:         config.MinIOSecretKey,
 		MinIOBucket:            config.MinIOBucket,
 		MinIOUseSSL:            config.MinIOUseSSL,
+		StorageCredentials:     config.StorageCredentials,
 		NATSURL:                config.NATSURL,
 		RuntimeImage:           config.RuntimeImage,
 		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
