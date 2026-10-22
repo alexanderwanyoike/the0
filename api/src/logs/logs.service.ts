@@ -146,10 +146,6 @@ export class LogsService {
     return !query.date && !query.dateRange && !!query.lookbackDays;
   }
 
-  private isSingleDayTail(dates: string[], query: LogsQuery): boolean {
-    return dates.length === 1 && query.type !== "metrics" && !query.startTime;
-  }
-
   /**
    * The `limit` entries just older than the cursor entry, walking the
    * window's days newest-first from the cursor's day.
@@ -250,18 +246,6 @@ export class LogsService {
     const entry = storedLogEntry(line, date, offset);
     this.offsets.set(entry, offset);
     return entry;
-  }
-
-  /** The day's newest `limit` lines in `sort` order, from its tail. */
-  private async readSingleDay(
-    botId: string,
-    date: string,
-    query: LogsQuery,
-  ): Promise<LogEntry[]> {
-    const entries: LogEntry[] = [];
-    await this.tailFilteredLogs(dayLogPath(botId, date), date, query, entries);
-    if (query.sort !== "asc") entries.reverse();
-    return entries;
   }
 
   /**
