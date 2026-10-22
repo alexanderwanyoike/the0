@@ -1,7 +1,6 @@
 import {
   MAX_LOG_ENTRIES,
   buildLogsSearchParams,
-  expandLogEntries,
   formatLogsForExport,
   isHistoricalQuery,
   mergeUniqueEntries,
@@ -13,21 +12,6 @@ import type { LogEntry } from "@/types/logs";
 const entry = (content: string, date = "2024-01-01"): LogEntry => ({
   date,
   content,
-});
-
-describe("expandLogEntries", () => {
-  it("splits multi-line content into one entry per non-empty line", () => {
-    expect(
-      expandLogEntries([
-        { date: "d", content: "a\n\n  \nb", timestamp: "t" },
-        { date: "e", content: "c" },
-      ]),
-    ).toEqual([
-      { date: "d", content: "a", timestamp: "t" },
-      { date: "d", content: "b", timestamp: "t" },
-      { date: "e", content: "c", timestamp: undefined },
-    ]);
-  });
 });
 
 describe("isHistoricalQuery", () => {
@@ -148,37 +132,43 @@ describe("mergeUniqueEntries", () => {
 });
 
 describe("parseLiveUpdate", () => {
-  const payload = (content: string) =>
-    JSON.stringify({ content, timestamp: "2024-01-01T00:00:00Z" });
-
-  it("expands the update into timestamped lines", () => {
-    expect(parseLiveUpdate(payload("one\ntwo"))).toEqual([
-      {
-        date: "2024-01-01T00:00:00Z",
-        content: "one",
-        timestamp: "2024-01-01T00:00:00Z",
-      },
-      {
-        date: "2024-01-01T00:00:00Z",
-        content: "two",
-        timestamp: "2024-01-01T00:00:00Z",
-      },
-    ]);
+  const liveEntry = (index: number, content: string): LogEntry => ({
+    key: `1792713599999000000-${index}`,
+    date: "20261022",
+    timestamp: "2026-10-22T23:59:59.999Z",
+    content,
   });
 
-  it("keeps only metric lines for a metrics query", () => {
-    const content = [
-      '{"_metric":"price","v":1}',
-      "plain line",
-      "{bad json",
-    ].join("\n");
-    expect(
-      parseLiveUpdate(payload(content), "metrics").map((e) => e.content),
-    ).toEqual(['{"_metric":"price","v":1}']);
+  it("returns the entries of an update as sent", () => {
+    const entries = [
+      liveEntry(0, '{"_key":"1792713599999000000-0","message":"one"}'),
+      liveEntry(1, '{"_key":"1792713599999000000-1","message":"two"}'),
+    ];
+    expect(parseLiveUpdate(JSON.stringify(entries))).toEqual(entries);
+  });
+
+  it("keeps only metric lines for a metrics query, by the api's rule", () => {
+    const metric = liveEntry(0, '{"_metric":"price","v":1}');
+    const entries = [
+      metric,
+      liveEntry(1, '{"message":"mentions _metric in passing"}'),
+      liveEntry(2, '{"_metric":"","v":1}'),
+      liveEntry(3, "null"),
+      liveEntry(4, "{bad json"),
+    ];
+    expect(parseLiveUpdate(JSON.stringify(entries), "metrics")).toEqual([
+      metric,
+    ]);
   });
 
   it("throws on payloads that are not JSON", () => {
     expect(() => parseLiveUpdate("{nope")).toThrow(SyntaxError);
+  });
+
+  it("throws on payloads that are not a list of entries", () => {
+    expect(() =>
+      parseLiveUpdate(JSON.stringify({ content: "a", timestamp: "t" })),
+    ).toThrow();
   });
 });
 

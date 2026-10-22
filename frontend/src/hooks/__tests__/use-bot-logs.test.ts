@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-fetch";
 import { validateSSEAuth } from "@/lib/sse/sse-auth";
+import type { LogEntry } from "@/types/logs";
 
 // Mock dependencies
 jest.mock("@/contexts/auth-context", () => ({
@@ -76,18 +77,37 @@ function createMockSSEStream(signal?: AbortSignal): {
   };
 }
 
+type TestEntry = Partial<LogEntry> & { content: string };
+
+/** A full api entry; tests that do not care about keys key it by content. */
+function logEntry({ content, ...fields }: TestEntry): LogEntry {
+  return {
+    key: content,
+    date: "20240101",
+    timestamp: null,
+    content,
+    ...fields,
+  };
+}
+
 function restResponse({
   data = [],
-  total = data.length,
   hasMore = false,
+  nextCursor = null,
 }: {
-  data?: { date: string; content: string; timestamp?: string }[];
-  total?: number;
+  data?: TestEntry[];
   hasMore?: boolean;
+  nextCursor?: string | null;
 } = {}) {
   return {
     ok: true,
-    json: async () => ({ data, total, hasMore }),
+    json: async () => ({
+      success: true,
+      data: data.map(logEntry),
+      hasMore,
+      nextCursor,
+      message: "Logs retrieved successfully",
+    }),
   } as any;
 }
 
@@ -108,8 +128,8 @@ function streamCallCount() {
 describe("useBotLogs", () => {
   const mockToast = jest.fn();
   const mockLogs = [
-    { date: "2024-01-01T10:00:00Z", content: "Log line 1\nLog line 2" },
-    { date: "2024-01-01T10:01:00Z", content: "Log line 3" },
+    logEntry({ content: "Log line 1", timestamp: "2024-01-01T10:00:00Z" }),
+    logEntry({ content: "Log line 2", timestamp: "2024-01-01T10:01:00Z" }),
   ];
 
   beforeEach(() => {
@@ -131,7 +151,7 @@ describe("useBotLogs", () => {
   it("should return loading state initially", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: mockLogs, total: 2, hasMore: false }),
+      json: async () => ({ data: mockLogs, hasMore: false }),
     } as Response);
 
     const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -143,10 +163,10 @@ describe("useBotLogs", () => {
     });
   });
 
-  it("should fetch and expand logs successfully", async () => {
+  it("holds one log per api entry, as sent", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: mockLogs, total: 3, hasMore: false }),
+      json: async () => ({ data: mockLogs, hasMore: false, nextCursor: null }),
     } as Response);
 
     const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -155,10 +175,7 @@ describe("useBotLogs", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Logs should be expanded (each line becomes a separate entry)
-    expect(result.current.logs.length).toBe(3); // "Log line 1", "Log line 2", "Log line 3"
-    expect(result.current.logs[0].content).toBe("Log line 1");
-    expect(result.current.logs[1].content).toBe("Log line 2");
+    expect(result.current.logs).toEqual(mockLogs);
     expect(result.current.error).toBeNull();
   });
 
@@ -214,7 +231,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "2024-01-01", content: "Page 1" }],
-          total: 2,
           hasMore: true,
         }),
       } as Response)
@@ -222,7 +238,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "2024-01-01", content: "Page 2" }],
-          total: 2,
           hasMore: false,
         }),
       } as Response);
@@ -251,7 +266,6 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: [{ date: "2024-01-01", content: "Log entry" }],
-        total: 1,
         hasMore: false,
       }),
     } as Response);
@@ -284,7 +298,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: initialLogs,
-          total: 11000,
           hasMore: true,
         }),
       } as Response)
@@ -295,7 +308,6 @@ describe("useBotLogs", () => {
             date: "2024-01-01",
             content: `Extra ${i}`,
           })),
-          total: 11000,
           hasMore: false,
         }),
       } as Response);
@@ -332,7 +344,6 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: hugeLogs,
-        total: 12000,
         hasMore: false,
       }),
     } as Response);
@@ -350,42 +361,11 @@ describe("useBotLogs", () => {
     expect(result.current.logs[0].content).toBe("Huge 2000");
   });
 
-  it("should preserve timestamp field when expanding log entries", async () => {
-    mockAuthFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: [
-          {
-            date: "20260403",
-            content: "line1\nline2",
-            timestamp: "2026-04-03T10:00:00Z",
-          },
-        ],
-        total: 2,
-        hasMore: false,
-      }),
-    } as Response);
-
-    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    // Both expanded lines should carry the original timestamp
-    expect(result.current.logs).toHaveLength(2);
-    expect(result.current.logs[0].timestamp).toBe("2026-04-03T10:00:00Z");
-    expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:00:00Z");
-  });
-
-  // ---- Navigation bugs ----
-
   it("should reset state when botId changes", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         data: [{ date: "20240101", content: "Bot A log" }],
-        total: 1,
         hasMore: false,
       }),
     } as Response);
@@ -416,7 +396,6 @@ describe("useBotLogs", () => {
           ok: true,
           json: async () => ({
             data: [{ date: "20240101", content: "Bot A" }],
-            total: 1,
             hasMore: false,
           }),
         } as any;
@@ -441,7 +420,6 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: [{ date: "20240101", content: "Bot C" }],
-        total: 1,
         hasMore: false,
       }),
     } as any);
@@ -460,7 +438,6 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: [{ date: "20240101", content: "Log" }],
-        total: 1,
         hasMore: false,
       }),
     } as Response);
@@ -488,7 +465,7 @@ describe("useBotLogs", () => {
   it("should encode botId in URL", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     renderHook(() => useBotLogs({ botId: "bot/special&chars" }));
@@ -504,7 +481,7 @@ describe("useBotLogs", () => {
   it("should handle rapid botId changes without errors", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     const { result, rerender } = renderHook(
@@ -528,7 +505,6 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: [{ date: "20260401", content: "Log" }],
-        total: 1,
         hasMore: false,
       }),
     } as Response);
@@ -578,7 +554,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "20260401", content: "Log" }],
-          total: 1,
           hasMore: false,
         }),
       } as Response);
@@ -646,7 +621,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: initialLogs,
-          total: 4000,
           hasMore: true,
         }),
       } as Response)
@@ -657,7 +631,6 @@ describe("useBotLogs", () => {
             date: "2024-01-01",
             content: `Extra ${i}`,
           })),
-          total: 4000,
           hasMore: false,
         }),
       } as Response);
@@ -690,7 +663,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "2024-01-01", content: `Page ${callCount}` }],
-          total: 10,
           hasMore: true,
         }),
       } as Response;
@@ -728,7 +700,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "2024-01-01", content: "Page 1" }],
-          total: 2,
           hasMore: true,
         }),
       } as Response);
@@ -758,7 +729,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "2024-01-01", content: "Page 2" }],
-          total: 2,
           hasMore: false,
         }),
       } as Response);
@@ -786,7 +756,7 @@ describe("useBotLogs", () => {
   it("should build correct URL with query parameters", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     renderHook(() =>
@@ -810,7 +780,7 @@ describe("useBotLogs", () => {
     beforeEach(() => {
       mockAuthFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ data: [], total: 0, hasMore: false }),
+        json: async () => ({ data: [], hasMore: false }),
       } as Response);
     });
 
@@ -922,7 +892,7 @@ describe("useBotLogs", () => {
   it("should include sort=desc in URL by default", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -938,7 +908,7 @@ describe("useBotLogs", () => {
   it("should pass sort=asc when query sort is changed", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -968,7 +938,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "20260406", content: "Log" }],
-          total: 1,
           hasMore: false,
         }),
       } as Response);
@@ -1011,7 +980,6 @@ describe("useBotLogs", () => {
         ok: true,
         json: async () => ({
           data: [{ date: "20260406", content: "Log" }],
-          total: 1,
           hasMore: false,
         }),
       } as Response);
@@ -1053,7 +1021,6 @@ describe("useBotLogs", () => {
         if (callCount === 1) {
           return restResponse({
             data: [{ date: "20240101", content: "Page 1" }],
-            total: 2,
             hasMore: true,
           });
         }
@@ -1082,7 +1049,6 @@ describe("useBotLogs", () => {
         resolveSecond!(
           restResponse({
             data: [{ date: "20240101", content: "Page 2" }],
-            total: 2,
             hasMore: false,
           }),
         );
@@ -1103,7 +1069,6 @@ describe("useBotLogs", () => {
           if (callCount === 1) {
             return restResponse({
               data: [{ date: "20240101", content: "Page 1" }],
-              total: 2,
               hasMore: true,
             });
           }
@@ -1145,7 +1110,6 @@ describe("useBotLogs", () => {
           slowResolve!(
             restResponse({
               data: [{ date: "20240101", content: "Page 2" }],
-              total: 2,
               hasMore: false,
             }),
           );
@@ -1254,7 +1218,6 @@ describe("useBotLogs", () => {
     function setupStreamingMocks(
       rest: {
         data?: { date: string; content: string; timestamp?: string }[];
-        total?: number;
         hasMore?: boolean;
       } = {},
     ) {
@@ -1282,7 +1245,6 @@ describe("useBotLogs", () => {
           { date: "2024-01-01T10:01:00Z", content: "newest" },
           { date: "2024-01-01T10:00:00Z", content: "oldest" },
         ],
-        total: 2,
       });
 
       const { result } = renderHook(() =>
@@ -1317,10 +1279,12 @@ describe("useBotLogs", () => {
       });
 
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: "New log entry",
-          timestamp: "2024-01-01T10:02:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "New log entry",
+            timestamp: "2024-01-01T10:02:00Z",
+          }),
+        ]);
       });
 
       await waitFor(() => {
@@ -1379,14 +1343,18 @@ describe("useBotLogs", () => {
 
       // Updates arrive while REST history is still in flight
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: "overlap line",
-          timestamp: "2024-01-01T10:01:00Z",
-        });
-        currentMockStream!.controller.push("update", {
-          content: "fresh line",
-          timestamp: "2024-01-01T10:02:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "overlap line",
+            timestamp: "2024-01-01T10:01:00Z",
+          }),
+        ]);
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "fresh line",
+            timestamp: "2024-01-01T10:02:00Z",
+          }),
+        ]);
       });
 
       // History resolves already containing the overlapping line
@@ -1395,17 +1363,14 @@ describe("useBotLogs", () => {
           restResponse({
             data: [
               {
-                date: "2024-01-01T10:01:00Z",
                 content: "overlap line",
                 timestamp: "2024-01-01T10:01:00Z",
               },
               {
-                date: "2024-01-01T10:00:00Z",
                 content: "old line",
                 timestamp: "2024-01-01T10:00:00Z",
               },
             ],
-            total: 2,
           }),
         );
       });
@@ -1458,10 +1423,12 @@ describe("useBotLogs", () => {
 
       // An update arrives while the replace fetch is still in flight
       act(() => {
-        liveStream!.controller.push("update", {
-          content: "mid-refresh line",
-          timestamp: "2024-01-01T10:05:00Z",
-        });
+        liveStream!.controller.push("update", [
+          logEntry({
+            content: "mid-refresh line",
+            timestamp: "2024-01-01T10:05:00Z",
+          }),
+        ]);
       });
 
       await act(async () => {
@@ -1723,7 +1690,6 @@ describe("useBotLogs", () => {
 
       await waitFor(() => {
         expect(result.current.logs).toEqual([]);
-        expect(result.current.total).toBe(0);
       });
     });
 
@@ -1776,7 +1742,7 @@ describe("useBotLogs", () => {
         date: "2024-01-01T10:00:00Z",
         content: `Entry ${i}`,
       }));
-      setupStreamingMocks({ data: entries, total: 10000 });
+      setupStreamingMocks({ data: entries });
 
       const { result } = renderHook(() =>
         useBotLogs({
@@ -1789,10 +1755,9 @@ describe("useBotLogs", () => {
       await waitFor(() => expect(result.current.logs).toHaveLength(10000));
 
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: "New entry",
-          timestamp: "2024-01-01T11:00:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({ content: "New entry", timestamp: "2024-01-01T11:00:00Z" }),
+        ]);
       });
 
       await waitFor(() => {
@@ -1806,7 +1771,6 @@ describe("useBotLogs", () => {
     it("exposes hasEarlierLogs when the initial live fetch has more", async () => {
       setupStreamingMocks({
         data: [{ date: "2024-01-01T10:00:00Z", content: "Log" }],
-        total: 500,
         hasMore: true,
       });
 
@@ -1822,7 +1786,6 @@ describe("useBotLogs", () => {
     it("prepends earlier logs without duplicating existing entries", async () => {
       setupStreamingMocks({
         data: [{ date: "2024-01-01T10:00:00Z", content: "Current log" }],
-        total: 2,
         hasMore: true,
       });
 
@@ -1837,7 +1800,6 @@ describe("useBotLogs", () => {
           { date: "2024-01-01T10:00:00Z", content: "Current log" },
           { date: "2024-01-01T09:00:00Z", content: "Earlier log" },
         ],
-        total: 2,
         hasMore: false,
       });
 
@@ -1877,14 +1839,18 @@ describe("useBotLogs", () => {
       });
 
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: JSON.stringify({ _metric: "trade", price: 100 }),
-          timestamp: "2024-01-01T10:01:00Z",
-        });
-        currentMockStream!.controller.push("update", {
-          content: "plain non-metric log line",
-          timestamp: "2024-01-01T10:02:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: JSON.stringify({ _metric: "trade", price: 100 }),
+            timestamp: "2024-01-01T10:01:00Z",
+          }),
+        ]);
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "plain non-metric log line",
+            timestamp: "2024-01-01T10:02:00Z",
+          }),
+        ]);
       });
 
       await waitFor(() => {
@@ -1926,7 +1892,6 @@ describe("useBotLogs", () => {
       ok: true,
       json: async () => ({
         data: [{ date: "20260406", content: "Log" }],
-        total: 1,
         hasMore: false,
       }),
     } as Response;
@@ -2085,7 +2050,10 @@ describe("useBotLogs", () => {
     it("downloads the loaded lines as dated plain text", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "first\nsecond" }],
+          data: [
+            { content: "first", date: "20240101" },
+            { content: "second", date: "20240101" },
+          ],
         }),
       );
       const originalCreate = URL.createObjectURL;
@@ -2117,7 +2085,7 @@ describe("useBotLogs", () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:logs");
         expect(blobs[0].type).toBe("text/plain");
         expect(await blobs[0].text()).toBe(
-          "[2024-01-01T10:00:00Z] first\n[2024-01-01T10:00:00Z] second",
+          "[20240101] first\n[20240101] second",
         );
       } finally {
         createSpy.mockRestore();
@@ -2132,7 +2100,6 @@ describe("useBotLogs", () => {
       mockAuthFetch.mockResolvedValueOnce(
         restResponse({
           data: [{ date: "2024-01-01T10:00:00Z", content: "page one" }],
-          total: 2,
           hasMore: true,
         }),
       );
@@ -2175,7 +2142,6 @@ describe("useBotLogs", () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
           data: [{ date: "2024-01-01T10:00:00Z", content: "row" }],
-          total: 3,
           hasMore: true,
         }),
       );
@@ -2209,7 +2175,6 @@ describe("useBotLogs", () => {
             { date: "2024-01-01T10:01:00Z", content: "newest" },
             { date: "2024-01-01T10:00:00Z", content: "oldest" },
           ],
-          total: 4,
           hasMore: true,
         }),
       );
@@ -2223,7 +2188,6 @@ describe("useBotLogs", () => {
       ]);
       expect(result.current.hasMore).toBe(true);
       expect(result.current.hasEarlierLogs).toBe(false);
-      expect(result.current.total).toBe(4);
     });
 
     it("advances the earlier-logs offset by one page per successful load", async () => {
@@ -2236,7 +2200,6 @@ describe("useBotLogs", () => {
         }
         return restResponse({
           data: [{ date: "2024-01-01T10:00:00Z", content: "Current" }],
-          total: 10,
           hasMore: true,
         });
       });
@@ -2298,10 +2261,12 @@ describe("useBotLogs", () => {
 
         act(() => {
           stream!.controller.push("update", "{not json");
-          stream!.controller.push("update", {
-            content: "after bad line",
-            timestamp: "2024-01-01T10:05:00Z",
-          });
+          stream!.controller.push("update", [
+            logEntry({
+              content: "after bad line",
+              timestamp: "2024-01-01T10:05:00Z",
+            }),
+          ]);
         });
 
         await waitFor(() => {
@@ -2310,54 +2275,12 @@ describe("useBotLogs", () => {
             "after bad line",
           ]);
         });
-        expect(result.current.total).toBe(2);
         expect(errorSpy).toHaveBeenCalledWith(
           "Failed to parse update SSE event:",
           expect.any(Error),
         );
       } finally {
         errorSpy.mockRestore();
-        (
-          stream as ReturnType<typeof createMockSSEStream> | null
-        )?.controller.close();
-      }
-    });
-
-    it("splits a multi-line update into one entry per non-empty line", async () => {
-      let stream: ReturnType<typeof createMockSSEStream> | null = null;
-      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
-        if (typeof url === "string" && url.includes("/stream")) {
-          stream = createMockSSEStream(opts?.signal);
-          return { ok: true, body: stream.stream } as any;
-        }
-        return restResponse();
-      });
-
-      try {
-        const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true }),
-        );
-        await waitFor(() => {
-          expect(result.current.connected).toBe(true);
-          expect(result.current.loading).toBe(false);
-        });
-
-        act(() => {
-          stream!.controller.push("update", {
-            content: "line a\n\nline b",
-            timestamp: "2024-01-01T10:05:00Z",
-          });
-        });
-
-        await waitFor(() => {
-          expect(result.current.logs.map((l) => l.content)).toEqual([
-            "line a",
-            "line b",
-          ]);
-        });
-        expect(result.current.logs[0].date).toBe("2024-01-01T10:05:00Z");
-        expect(result.current.total).toBe(2);
-      } finally {
         (
           stream as ReturnType<typeof createMockSSEStream> | null
         )?.controller.close();
