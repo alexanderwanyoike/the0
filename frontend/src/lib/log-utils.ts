@@ -75,12 +75,12 @@ function isMetricLine(content: string): boolean {
  * entries. Throws on payloads that are not a list of entries, so the caller
  * decides how to report them.
  */
-export function parseLiveUpdate(data: string, type?: string): LogEntry[] {
+export function parseLiveUpdate(data: string): LogEntry[] {
   const entries: unknown = JSON.parse(data);
   if (!Array.isArray(entries)) {
     throw new TypeError("Live update is not a list of log entries");
   }
-  return filterLiveEntries(entries, type);
+  return entries;
 }
 
 /** The live entries a query of `type` shows. */

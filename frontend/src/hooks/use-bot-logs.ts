@@ -30,6 +30,7 @@ import {
   isHistoricalQuery,
   mergeLiveEntries,
   mergeUniqueEntries,
+  filterLiveEntries,
   parseLiveUpdate,
 } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
@@ -268,7 +269,10 @@ export const useBotLogs = ({
 
   const handleUpdateEvent = useCallback((data: string) => {
     try {
-      const entries = parseLiveUpdate(data, queryRef.current.type);
+      const entries = filterLiveEntries(
+        parseLiveUpdate(data),
+        queryRef.current.type,
+      );
       if (entries.length === 0) return;
       if (!historyLoadedRef.current) {
         pendingUpdatesRef.current.push(...entries);
