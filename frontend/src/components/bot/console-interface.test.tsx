@@ -318,6 +318,33 @@ describe("ConsoleInterface", () => {
       expect(screen.getByText("lowercase message")).toBeInTheDocument();
     });
 
+    it("searches the text a stored line shows, not its JSON", async () => {
+      const stored = (key: string, message: string): LogEntry => ({
+        key,
+        date: "20261022",
+        timestamp: "2026-10-22T10:00:00.000Z",
+        content: JSON.stringify({
+          _key: key,
+          message,
+          timestamp: "2026-10-22T10:00:00.000Z",
+        }).replace("&", "\\u0026"),
+      });
+      const logs = [
+        stored("1792713599999000000-0", "Bought BTC & ETH"),
+        stored("1792713599999000000-1", "Sold"),
+      ];
+
+      render(<ConsoleInterface {...defaultProps} logs={logs} />);
+      fireEvent.click(findFilterButton()!);
+      const searchInput = screen.getByPlaceholderText("Search logs...");
+
+      fireEvent.change(searchInput, { target: { value: "btc & eth" } });
+      expect(screen.getByText("1 entries")).toBeInTheDocument();
+
+      fireEvent.change(searchInput, { target: { value: "_key" } });
+      expect(screen.getByText("> No logs match filter")).toBeInTheDocument();
+    });
+
     it("shows 'No logs match filter' when search has no results", async () => {
       const logs: LogEntry[] = [{ date: "20251227", content: "Some log" }];
 
