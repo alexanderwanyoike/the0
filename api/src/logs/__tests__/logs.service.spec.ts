@@ -89,6 +89,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -169,6 +170,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 5,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -294,6 +296,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -547,6 +550,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
         type: "all",
       });
 
@@ -848,6 +852,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 10,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -980,6 +985,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -1008,6 +1014,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -1194,9 +1201,13 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(5);
-      // Tail already returns newest-first; sort=desc should keep that order
-      expect(messageOf(result.data!.entries[0])).toBe("line-5");
-      expect(messageOf(result.data!.entries[4])).toBe("line-9");
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        "line-9",
+        "line-8",
+        "line-7",
+        "line-6",
+        "line-5",
+      ]);
     });
 
     it("should return oldest-first when sort=asc for single date", async () => {
@@ -1219,9 +1230,14 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(5);
-      // sort=asc on tail path: reverse the newest-first to oldest-first
-      expect(messageOf(result.data!.entries[0])).toBe("line-9");
-      expect(messageOf(result.data!.entries[4])).toBe("line-5");
+      // The newest five, oldest of them first
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        "line-5",
+        "line-6",
+        "line-7",
+        "line-8",
+        "line-9",
+      ]);
     });
 
     it("should return newest-first for date range when sort=desc", async () => {
