@@ -19,6 +19,7 @@ import { DeleteBot, DeployBot, UpdateBot } from "@/bot/commands/bot-commands";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
+import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 
@@ -267,17 +268,10 @@ export class McpService {
   }
 
   private async handleLogsSummary(input: { bot_id: string }, actor: Actor) {
-    // Get recent logs to analyze - use today's date as default
-    const today = new Date();
-    const todayStr =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
-
     const result = await this.logsService.getLogs(
       input.bot_id,
       {
-        date: todayStr,
+        date: utcDay(new Date()),
         limit: 100,
         offset: 0,
       },

@@ -13,7 +13,7 @@ import {
 } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
-import { LogEntry, runtimeKeyDay, storedLogEntry } from "./log-entry";
+import { LogEntry, runtimeKeyDay, storedLogEntry, utcDay } from "./log-entry";
 import { LineSplitter } from "./line-splitter";
 
 export type { LogEntry } from "./log-entry";
@@ -430,18 +430,13 @@ export class LogsService {
     return { entries, hasMore, readNewestFirst: true };
   }
 
-  /** Newest-first YYYYMMDD list: today back through `days` days (local time,
-   *  matching the runtime's day bucketing of log files). */
+  /** Newest-first YYYYMMDD list: today back through `days` UTC days. */
   private generateLookbackDates(days: number): string[] {
     const dates: string[] = [];
     const current = new Date();
     for (let i = 0; i < days; i++) {
-      dates.push(
-        current.getFullYear().toString() +
-          (current.getMonth() + 1).toString().padStart(2, "0") +
-          current.getDate().toString().padStart(2, "0"),
-      );
-      current.setDate(current.getDate() - 1);
+      dates.push(utcDay(current));
+      current.setUTCDate(current.getUTCDate() - 1);
     }
     return dates;
   }
@@ -675,10 +670,7 @@ export class LogsService {
         query.startTime = startTime;
         query.endTime = endTime;
 
-        // Generate date list from the datetime range
-        const startDate = parts[0].slice(0, 10).replace(/-/g, "");
-        const endDate = parts[1].slice(0, 10).replace(/-/g, "");
-        return this.generateDateRange(startDate, endDate);
+        return this.generateDateRange(utcDay(startTime), utcDay(endTime));
       }
 
       // Legacy YYYYMMDD-YYYYMMDD format
@@ -699,48 +691,34 @@ export class LogsService {
   }
 
   private isValidDateFormat(date: string): boolean {
-    const dateRegex = /^\d{8}$/;
-    if (!dateRegex.test(date)) {
-      return false;
-    }
+    const day = LogsService.parseDay(date);
+    return day !== null && utcDay(day) === date;
+  }
 
-    const year = parseInt(date.substring(0, 4));
-    const month = parseInt(date.substring(4, 6));
-    const day = parseInt(date.substring(6, 8));
-
-    const dateObj = new Date(year, month - 1, day);
-    return (
-      dateObj.getFullYear() === year &&
-      dateObj.getMonth() === month - 1 &&
-      dateObj.getDate() === day
+  /** Midnight UTC of a YYYYMMDD day; out-of-range parts roll over. */
+  private static parseDay(date: string): Date | null {
+    if (!/^\d{8}$/.test(date)) return null;
+    return new Date(
+      Date.UTC(
+        parseInt(date.substring(0, 4)),
+        parseInt(date.substring(4, 6)) - 1,
+        parseInt(date.substring(6, 8)),
+      ),
     );
   }
 
   private generateDateRange(startDate: string, endDate: string): string[] {
     const dates: string[] = [];
-    const start = new Date(
-      parseInt(startDate.substring(0, 4)),
-      parseInt(startDate.substring(4, 6)) - 1,
-      parseInt(startDate.substring(6, 8)),
-    );
-    const end = new Date(
-      parseInt(endDate.substring(0, 4)),
-      parseInt(endDate.substring(4, 6)) - 1,
-      parseInt(endDate.substring(6, 8)),
-    );
-
-    if (start > end) {
+    const start = LogsService.parseDay(startDate);
+    const end = LogsService.parseDay(endDate);
+    if (!start || !end || start > end) {
       return [];
     }
 
     const current = new Date(start);
     while (current <= end) {
-      const dateStr =
-        current.getFullYear().toString() +
-        (current.getMonth() + 1).toString().padStart(2, "0") +
-        current.getDate().toString().padStart(2, "0");
-      dates.push(dateStr);
-      current.setDate(current.getDate() + 1);
+      dates.push(utcDay(current));
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return dates;

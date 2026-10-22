@@ -4,6 +4,7 @@ import { LogsService } from "./logs.service";
 import { LogFanOut } from "./log-fan-out";
 import { isValidBotId } from "./bot-id";
 import { sendSSEHeaders, sseEvent } from "./sse";
+import { utcDay } from "./log-entry";
 
 export const ACCESS_DENIED_MESSAGE = "Bot not found or access denied";
 
@@ -93,19 +94,10 @@ export class LogStreamService {
     botId: string,
     userId: string,
   ): Promise<boolean> {
-    // JS getFullYear()/getMonth()/getDate() return local time, matching
-    // the runtime's minio_logger which uses time.Now().Format("20060102").
-    // This assumes API and runtime run in the same timezone (true in Docker Compose).
-    const today = new Date();
-    const todayStr =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
-
     const historyResult = await this.logsService.getLogs(
       botId,
       {
-        date: todayStr,
+        date: utcDay(new Date()),
         limit: 1000,
         offset: 0,
       },
