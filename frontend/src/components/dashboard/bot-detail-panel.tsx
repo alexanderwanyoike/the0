@@ -7,6 +7,7 @@ import { ConsoleInterface } from "@/components/bot/console-interface";
 import { IntervalPicker } from "@/components/bot/interval-picker";
 import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { BotLogStreamProvider } from "@/hooks/bot-logs/bot-log-stream";
 import { MobileBotDetail } from "./mobile-bot-detail";
 import {
   BotConfigCard,
@@ -102,6 +103,21 @@ const ConsolePanel = ({ botId, logs }: { botId: string; logs: DetailLogs }) => (
 
 export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const owned = useOwnedBot(botId);
+  // The views read logs only once the owner's bot loads; match their bot id
+  return (
+    <BotLogStreamProvider botId={owned.bot ? botId : ""}>
+      <BotDetailContent botId={botId} owned={owned} />
+    </BotLogStreamProvider>
+  );
+}
+
+function BotDetailContent({
+  botId,
+  owned,
+}: {
+  botId: string;
+  owned: ReturnType<typeof useOwnedBot>;
+}) {
   const { bot } = owned;
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const mediaQuery = useMediaQuery("(min-width: 1280px)");

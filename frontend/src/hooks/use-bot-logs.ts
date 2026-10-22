@@ -4,12 +4,13 @@
  * One hook serves both the console and custom dashboards:
  * - History ALWAYS comes from REST (GET /api/logs/:botId). This keeps a single
  *   code path for history and lets consumers filter server-side (type=metrics).
- * - With `streaming: true` and no date filter active, an SSE connection
- *   (GET /api/logs/:botId/stream) appends new lines live. The SSE "history"
- *   event is intentionally ignored (REST is the source of history); it still
- *   serves as the server-side ownership check for the stream.
- * - Setting a date/dateRange filter suspends SSE; clearing it reconnects.
- * - If SSE fails, the hook falls back to REST polling at `refreshInterval`.
+ * - With `streaming: true` and no date filter active, live lines arrive over
+ *   the bot's log stream (GET /api/logs/:botId/stream?history=false). On a
+ *   bot page that stream is the page's one connection (BotLogStreamProvider),
+ *   shared by the console and the dashboard.
+ * - Setting a date/dateRange filter unsubscribes; clearing it subscribes
+ *   again. The connection stays open while any view is subscribed.
+ * - While the stream is down, the hook polls REST at `refreshInterval`.
  * - With `streaming: false`, plain REST with optional `autoRefresh` polling.
  *
  * Abort semantics: intentional aborts (unmount, bot switch, filter change) are
@@ -31,16 +32,16 @@ import {
   mergeLiveEntries,
   mergeUniqueEntries,
   filterLiveEntries,
-  parseLiveUpdate,
 } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
 import {
   fetchLogsPage,
   LogsPage,
   useAutoRefreshPolling,
-  useLiveLogStream,
+  useLiveLogs,
   useLogPolling,
 } from "./bot-logs/log-transport";
+import { useBotLogStream } from "./bot-logs/bot-log-stream";
 
 interface UseBotLogsProps {
   botId: string;
@@ -101,11 +102,10 @@ export const useBotLogs = ({
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  // Bumped by refresh() to force an SSE reconnect in live mode
-  const [sseNonce, setSseNonce] = useState(0);
 
   const { user } = useAuth();
   const { toast } = useToast();
+  const stream = useBotLogStream(botId);
 
   const restAbortRef = useRef<AbortController | null>(null);
   // True once a replace fetch has delivered data for the current bot. While
@@ -265,24 +265,17 @@ export const useBotLogs = ({
   );
   fetchLogsRef.current = fetchLogs;
 
-  // -- SSE live updates --
+  // -- Live lines --
 
-  const handleUpdateEvent = useCallback((data: string) => {
-    try {
-      const entries = filterLiveEntries(
-        parseLiveUpdate(data),
-        queryRef.current.type,
-      );
-      if (entries.length === 0) return;
-      if (!historyLoadedRef.current) {
-        pendingUpdatesRef.current.push(...entries);
-        return;
-      }
-      setLogs((prev) => mergeLiveEntries(prev, entries, queryRef.current.sort));
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error("Failed to parse update SSE event:", err);
+  const handleLiveEntries = useCallback((live: LogEntry[]) => {
+    const entries = filterLiveEntries(live, queryRef.current.type);
+    if (entries.length === 0) return;
+    if (!historyLoadedRef.current) {
+      pendingUpdatesRef.current.push(...entries);
+      return;
     }
+    setLogs((prev) => mergeLiveEntries(prev, entries, queryRef.current.sort));
+    setLastUpdate(new Date());
   }, []);
 
   // -- Lifecycle: reset + initial fetch on bot/user/mode change --
@@ -326,12 +319,10 @@ export const useBotLogs = ({
     isPolling,
   });
 
-  const connected = useLiveLogStream({
-    botId,
-    user,
-    liveMode,
-    reconnectKey: sseNonce,
-    onUpdate: handleUpdateEvent,
+  const connected = useLiveLogs({
+    stream,
+    live: liveMode && !!botId && !!user,
+    onEntries: handleLiveEntries,
     startPolling,
     stopPolling,
   });
@@ -383,9 +374,9 @@ export const useBotLogs = ({
   const refresh = useCallback(() => {
     paginatedRef.current = false;
     fetchLogs(query, false);
-    // Re-establish SSE in live mode (no-op otherwise)
-    setSseNonce((n) => n + 1);
-  }, [query, fetchLogs]);
+    // A healthy stream may be serving other views of the page
+    if (stream.status === "down") stream.reconnect();
+  }, [query, fetchLogs, stream]);
 
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore) return;
