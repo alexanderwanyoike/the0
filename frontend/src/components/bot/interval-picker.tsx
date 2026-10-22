@@ -126,8 +126,7 @@ export function IntervalPicker({
           size="sm"
           className={cn(
             "h-7 px-2.5 text-xs font-mono",
-            value.label === "live" &&
-              "bg-secondary text-secondary-foreground",
+            value.label === "live" && "bg-secondary text-secondary-foreground",
           )}
           onClick={() => onChange(LIVE_INTERVAL)}
         >

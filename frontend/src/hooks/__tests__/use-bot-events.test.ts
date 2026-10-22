@@ -508,7 +508,7 @@ describe("useBotEvents", () => {
 
     it("returns loading state from useBotLogs", () => {
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [],
         loading: true,
         error: null,
@@ -536,7 +536,7 @@ describe("useBotEvents", () => {
   describe("error state", () => {
     it("returns error from useBotLogs", () => {
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [],
         loading: false,
         error: "Failed to fetch logs",
@@ -740,7 +740,7 @@ describe("useBotEvents", () => {
 
       // Simulate events change
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [
           { date: "20240101", content: "[2024-01-01 12:00:00] INFO: New log" },
         ],
@@ -766,7 +766,7 @@ describe("useBotEvents", () => {
   describe("empty state", () => {
     it("handles empty logs array", () => {
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [],
         loading: false,
         error: null,

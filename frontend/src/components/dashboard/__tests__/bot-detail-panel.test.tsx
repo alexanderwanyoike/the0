@@ -1,4 +1,11 @@
-import { render, screen, waitFor, act, fireEvent, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BotDetailPanel } from "../bot-detail-panel";
 import { BotService } from "@/lib/api/api-client";
@@ -301,7 +308,9 @@ describe("BotDetailPanel", () => {
         success: false,
         error: { message: "nope" },
       } as any);
-      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       render(<BotDetailPanel botId="bot-123" />);
       await screen.findByText("Enabled");
@@ -325,7 +334,9 @@ describe("BotDetailPanel", () => {
     async function confirmDelete() {
       await screen.findByText("Test Bot");
       await userEvent.click(screen.getByRole("button", { name: /delete/i }));
-      await userEvent.click(screen.getByRole("button", { name: /delete bot/i }));
+      await userEvent.click(
+        screen.getByRole("button", { name: /delete bot/i }),
+      );
     }
 
     it("moves to the next remaining bot", async () => {
@@ -365,7 +376,9 @@ describe("BotDetailPanel", () => {
         success: false,
         error: { message: "delete broke" },
       } as any);
-      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       render(<BotDetailPanel botId="bot-123" />);
       await confirmDelete();
@@ -457,12 +470,16 @@ describe("BotDetailPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: /update via cli/i }));
 
       const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText("Update Bot via CLI")).toBeInTheDocument();
+      expect(
+        within(dialog).getByText("Update Bot via CLI"),
+      ).toBeInTheDocument();
       expect(within(dialog).getByDisplayValue("bot-123")).toBeInTheDocument();
       expect(
         within(dialog).getByDisplayValue("the0 bot update bot-123 config.json"),
       ).toBeInTheDocument();
-      expect(within(dialog).getByText("the0 bot logs bot-123")).toBeInTheDocument();
+      expect(
+        within(dialog).getByText("the0 bot logs bot-123"),
+      ).toBeInTheDocument();
 
       const [copyId, copyCommand] = within(dialog).getAllByRole("button", {
         name: /copy/i,
@@ -491,7 +508,9 @@ describe("BotDetailPanel", () => {
       mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
       render(<BotDetailPanel botId="bot-123" />);
 
-      expect(await screen.findByTestId("mobile-bot-detail")).toBeInTheDocument();
+      expect(
+        await screen.findByTestId("mobile-bot-detail"),
+      ).toBeInTheDocument();
       expect(screen.queryByText("Bot Details")).not.toBeInTheDocument();
     });
 

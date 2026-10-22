@@ -282,10 +282,7 @@ const parseStructuredJSON: LogLineParser = (content, apiTimestamp) => {
   const bracketTs = extractTimestamp(content);
   const structuredTs = extractTimestampFromStructuredLog(structuredLog);
   // API timestamp > structured log timestamp > bracket timestamp
-  const effectiveTs = resolveTimestamp(
-    apiTimestamp,
-    structuredTs ?? bracketTs,
-  );
+  const effectiveTs = resolveTimestamp(apiTimestamp, structuredTs ?? bracketTs);
   const structuredLevel = mapStructuredLogLevel(structuredLog.level);
 
   const message =

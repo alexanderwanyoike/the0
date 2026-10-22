@@ -818,7 +818,12 @@ describe("useBotLogs", () => {
       renderHook(() =>
         useBotLogs({
           botId: "bot-1",
-          initialQuery: { limit: 100, offset: 0, sort: "desc", lookbackDays: 30 },
+          initialQuery: {
+            limit: 100,
+            offset: 0,
+            sort: "desc",
+            lookbackDays: 30,
+          },
         }),
       );
 
@@ -1215,7 +1220,11 @@ describe("useBotLogs", () => {
         mockAuthFetch.mockResolvedValue(restResponse());
 
         const { unmount } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", autoRefresh: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1242,11 +1251,13 @@ describe("useBotLogs", () => {
       controller: MockSSEStreamController;
     } | null = null;
 
-    function setupStreamingMocks(rest: {
-      data?: { date: string; content: string; timestamp?: string }[];
-      total?: number;
-      hasMore?: boolean;
-    } = {}) {
+    function setupStreamingMocks(
+      rest: {
+        data?: { date: string; content: string; timestamp?: string }[];
+        total?: number;
+        hasMore?: boolean;
+      } = {},
+    ) {
       mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
         if (typeof url === "string" && url.includes("/stream")) {
           currentMockStream = createMockSSEStream(opts?.signal);
@@ -1490,7 +1501,11 @@ describe("useBotLogs", () => {
         });
 
         const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1531,7 +1546,11 @@ describe("useBotLogs", () => {
         });
 
         const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1585,7 +1604,11 @@ describe("useBotLogs", () => {
       jest.useFakeTimers();
       try {
         const { result, unmount } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1839,7 +1862,12 @@ describe("useBotLogs", () => {
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 100, offset: 0, sort: "desc", type: "metrics" },
+          initialQuery: {
+            limit: 100,
+            offset: 0,
+            sort: "desc",
+            type: "metrics",
+          },
         }),
       );
 
@@ -1875,7 +1903,12 @@ describe("useBotLogs", () => {
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 100, offset: 0, sort: "desc", type: "metrics" },
+          initialQuery: {
+            limit: 100,
+            offset: 0,
+            sort: "desc",
+            type: "metrics",
+          },
         }),
       );
 
@@ -2284,7 +2317,9 @@ describe("useBotLogs", () => {
         );
       } finally {
         errorSpy.mockRestore();
-        (stream as ReturnType<typeof createMockSSEStream> | null)?.controller.close();
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
       }
     });
 
@@ -2323,7 +2358,9 @@ describe("useBotLogs", () => {
         expect(result.current.logs[0].date).toBe("2024-01-01T10:05:00Z");
         expect(result.current.total).toBe(2);
       } finally {
-        (stream as ReturnType<typeof createMockSSEStream> | null)?.controller.close();
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
       }
     });
   });
