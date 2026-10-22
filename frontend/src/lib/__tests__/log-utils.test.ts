@@ -9,8 +9,10 @@ import {
 } from "../log-utils";
 import type { LogEntry } from "@/types/logs";
 
-const entry = (content: string, date = "2024-01-01"): LogEntry => ({
-  date,
+const entry = (content: string, key = content): LogEntry => ({
+  key,
+  date: "20240101",
+  timestamp: null,
   content,
 });
 
@@ -91,24 +93,31 @@ describe("toDisplayOrder", () => {
 });
 
 describe("mergeUniqueEntries", () => {
-  it("appends only entries not already present by date and content", () => {
+  it("appends only entries whose key is not already held", () => {
     const merged = mergeUniqueEntries(
-      [entry("a"), entry("b")],
-      [entry("b"), entry("c"), entry("a", "2024-01-02")],
+      [entry("a", "k1"), entry("b", "k2")],
+      [entry("b", "k2"), entry("c", "k3")],
       "append",
     );
-    expect(merged.map((e) => `${e.date}|${e.content}`)).toEqual([
-      "2024-01-01|a",
-      "2024-01-01|b",
-      "2024-01-01|c",
-      "2024-01-02|a",
+    expect(merged.map((e) => e.key)).toEqual(["k1", "k2", "k3"]);
+  });
+
+  it("keeps distinct lines that share a day and content", () => {
+    const merged = mergeUniqueEntries(
+      [entry("heartbeat", "1792713599999000000-0")],
+      [entry("heartbeat", "1792713600999000000-0")],
+      "append",
+    );
+    expect(merged.map((e) => e.key)).toEqual([
+      "1792713599999000000-0",
+      "1792713600999000000-0",
     ]);
   });
 
   it("prepends unique entries ahead of existing ones", () => {
     const merged = mergeUniqueEntries(
-      [entry("b")],
-      [entry("a"), entry("b")],
+      [entry("b", "k2")],
+      [entry("a", "k1"), entry("b", "k2")],
       "prepend",
     );
     expect(merged.map((e) => e.content)).toEqual(["a", "b"]);
@@ -174,8 +183,8 @@ describe("parseLiveUpdate", () => {
 
 describe("formatLogsForExport", () => {
   it("prefixes each line with its date", () => {
-    expect(formatLogsForExport([entry("a"), entry("b", "d2")])).toBe(
-      "[2024-01-01] a\n[d2] b",
-    );
+    expect(
+      formatLogsForExport([entry("a"), { ...entry("b"), date: "20240102" }]),
+    ).toBe("[20240101] a\n[20240102] b");
   });
 });

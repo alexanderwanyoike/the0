@@ -1290,6 +1290,72 @@ describe("useBotLogs", () => {
       });
     });
 
+    it("shows a live line once when the history already holds it", async () => {
+      const stored = {
+        key: "1792713599999000000-0",
+        date: "20261022",
+        timestamp: "2026-10-22T23:59:59.999Z",
+        content: '{"_key":"1792713599999000000-0","message":"filled"}',
+      };
+      setupStreamingMocks({ data: [stored] });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(1);
+      });
+
+      act(() => {
+        currentMockStream!.controller.push("update", [stored]);
+        currentMockStream!.controller.push("update", [
+          logEntry({ content: "after" }),
+        ]);
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs.map((l) => l.key)).toEqual([
+          "1792713599999000000-0",
+          "after",
+        ]);
+      });
+    });
+
+    it("shows a repeated live chunk once", async () => {
+      setupStreamingMocks();
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.loading).toBe(false);
+      });
+
+      const chunk = [
+        logEntry({ content: "a", key: "1792713599999000000-0" }),
+        logEntry({ content: "b", key: "1792713599999000000-1" }),
+      ];
+      act(() => {
+        currentMockStream!.controller.push("update", chunk);
+        currentMockStream!.controller.push("update", chunk);
+        currentMockStream!.controller.push("update", [
+          logEntry({ content: "c" }),
+        ]);
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "a",
+          "b",
+          "c",
+        ]);
+      });
+    });
+
     it("ignores SSE history events (history comes from REST)", async () => {
       setupStreamingMocks({
         data: [logEntry({ content: "REST history" })],
