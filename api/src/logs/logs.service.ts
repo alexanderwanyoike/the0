@@ -38,6 +38,11 @@ interface DatedLogsRead {
   metricsHasMore: boolean;
 }
 
+interface PageRead {
+  entries: LogEntry[];
+  hasMore: boolean;
+}
+
 const dayLogPath = (botId: string, date: string): string =>
   `logs/${botId}/${date}.log`;
 
@@ -77,43 +82,55 @@ export class LogsService {
       return Failure("Bot not found or access denied");
     }
 
-    // Latest mode: no explicit window - serve the newest entries regardless
-    // of when the bot last ran (scheduled bots may not have run today).
-    if (!query.date && !query.dateRange && query.lookbackDays) {
-      try {
-        return Ok(await this.getLatestLogs(botId, query));
-      } catch (error: unknown) {
-        this.logger.error({ err: error }, "Error fetching latest logs");
-        return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
-      }
-    }
-
-    // Generate date list from query
-    const dates = this.parseDateQuery(query);
-    if (!dates.length) {
-      return Failure(
-        "Invalid date or dateRange format. Use YYYYMMDD, YYYYMMDD-YYYYMMDD, or ISO datetime range with -- separator",
-      );
-    }
-
     try {
-      const { entries, metricsHasMore } = await this.readDatedLogs(
-        botId,
-        dates,
-        query,
-      );
-      // For metrics we know the exact filtered count before truncation, so
-      // hasMore can be computed precisely instead of the >=limit heuristic
-      // used for raw logs (whose streams stop early at the limit).
-      const hasMore =
-        query.type === "metrics"
-          ? metricsHasMore
-          : entries.length >= query.limit;
-      return Ok({ entries, hasMore });
+      return await this.readPage(botId, query);
     } catch (error: unknown) {
-      this.logger.error({ err: error }, "Error fetching logs");
+      this.logger.error(
+        { err: error },
+        this.isLatestMode(query)
+          ? "Error fetching latest logs"
+          : "Error fetching logs",
+      );
       return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
+  }
+
+  private async readPage(
+    botId: string,
+    query: LogsQuery,
+  ): Promise<Result<PageRead, string>> {
+    // Latest mode: no explicit window - serve the newest entries regardless
+    // of when the bot last ran (scheduled bots may not have run today).
+    if (this.isLatestMode(query)) {
+      const dates = this.generateLookbackDates(query.lookbackDays!);
+      return Ok(await this.readNewestFirst(botId, dates, query));
+    }
+
+    const dates = this.parseDateQuery(query);
+    if (!dates.length) return Failure(LogsService.INVALID_WINDOW);
+
+    const { entries, metricsHasMore } = await this.readDatedLogs(
+      botId,
+      dates,
+      query,
+    );
+    // For metrics we know the exact filtered count before truncation, so
+    // hasMore can be computed precisely instead of the >=limit heuristic
+    // used for raw logs (whose streams stop early at the limit).
+    const hasMore =
+      query.type === "metrics" ? metricsHasMore : entries.length >= query.limit;
+    return Ok({ entries, hasMore });
+  }
+
+  private static readonly INVALID_WINDOW =
+    "Invalid date or dateRange format. Use YYYYMMDD, YYYYMMDD-YYYYMMDD, or ISO datetime range with -- separator";
+
+  private isLatestMode(query: LogsQuery): boolean {
+    return !query.date && !query.dateRange && !!query.lookbackDays;
+  }
+
+  private isSingleDayTail(dates: string[], query: LogsQuery): boolean {
+    return dates.length === 1 && query.type !== "metrics" && !query.startTime;
   }
 
   private async readDatedLogs(
@@ -123,7 +140,7 @@ export class LogsService {
   ): Promise<DatedLogsRead> {
     const sortOrder = query.sort || "desc";
 
-    if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
+    if (this.isSingleDayTail(dates, query)) {
       // Single date, non-metrics: tail for the latest entries (file order)
       const entries: LogEntry[] = [];
       await this.tailFilteredLogs(
@@ -200,16 +217,15 @@ export class LogsService {
   }
 
   /**
-   * Latest mode: walk day files newest-first (today back through
-   * lookbackDays) and collect entries until offset+limit+1 are found. The
-   * +1 sentinel lets hasMore reflect real data instead of guessing whether
-   * unscanned days would have contributed anything.
+   * Walks day files newest-first and collects entries until offset+limit+1
+   * are found. The +1 sentinel lets hasMore reflect real data instead of
+   * guessing whether unscanned days would have contributed anything.
    */
-  private async getLatestLogs(
+  private async readNewestFirst(
     botId: string,
+    dates: string[],
     query: LogsQuery,
-  ): Promise<{ entries: LogEntry[]; hasMore: boolean }> {
-    const dates = this.generateLookbackDates(query.lookbackDays!);
+  ): Promise<PageRead> {
     const maxNeeded = query.offset + query.limit + 1;
 
     // Chronological accumulator: each older day is prepended as a block, so
