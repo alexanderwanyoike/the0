@@ -50,21 +50,22 @@ describe("buildLogsSearchParams", () => {
     expect(buildLogsSearchParams({}).get("date")).toBe(today);
   });
 
-  it("includes paging, type and sort only when set and non-zero", () => {
+  it("includes the cursor, type and sort only when set", () => {
     const params = buildLogsSearchParams({
       date: "20240101",
       limit: 50,
-      offset: 0,
       type: "metrics",
       sort: "asc",
     });
     expect(params.get("limit")).toBe("50");
-    expect(params.has("offset")).toBe(false);
+    expect(params.has("before")).toBe(false);
     expect(params.get("type")).toBe("metrics");
     expect(params.get("sort")).toBe("asc");
     expect(
-      buildLogsSearchParams({ date: "20240101", offset: 20 }).get("offset"),
-    ).toBe("20");
+      buildLogsSearchParams({ date: "20240101", before: "20240101:20" }).get(
+        "before",
+      ),
+    ).toBe("20240101:20");
   });
 });
 

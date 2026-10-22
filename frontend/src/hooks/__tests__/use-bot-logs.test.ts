@@ -232,6 +232,7 @@ describe("useBotLogs", () => {
         json: async () => ({
           data: [logEntry({ content: "Page 1" })],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response)
       .mockResolvedValueOnce({
@@ -243,7 +244,7 @@ describe("useBotLogs", () => {
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
     );
 
     await waitFor(() => {
@@ -298,6 +299,7 @@ describe("useBotLogs", () => {
         json: async () => ({
           data: initialLogs,
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response)
       .mockResolvedValueOnce({
@@ -311,7 +313,7 @@ describe("useBotLogs", () => {
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 8000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 8000 } }),
     );
 
     await waitFor(() => {
@@ -346,7 +348,7 @@ describe("useBotLogs", () => {
     } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 15000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 15000 } }),
     );
 
     await waitFor(() => {
@@ -618,6 +620,7 @@ describe("useBotLogs", () => {
         json: async () => ({
           data: initialLogs,
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response)
       .mockResolvedValueOnce({
@@ -631,7 +634,7 @@ describe("useBotLogs", () => {
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 2000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 2000 } }),
     );
 
     await waitFor(() => {
@@ -650,44 +653,6 @@ describe("useBotLogs", () => {
     expect(result.current.hasMore).toBe(false);
   });
 
-  it("should advance offset on consecutive loadMore calls", async () => {
-    let callCount = 0;
-    mockAuthFetch.mockImplementation(async () => {
-      callCount++;
-      return {
-        ok: true,
-        json: async () => ({
-          data: [logEntry({ content: `Page ${callCount}` })],
-          hasMore: true,
-        }),
-      } as Response;
-    });
-
-    const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
-    );
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    // First loadMore: offset should be 1
-    await act(async () => {
-      await result.current.loadMore();
-    });
-
-    const firstLoadMoreUrl = mockAuthFetch.mock.calls[1][0] as string;
-    expect(firstLoadMoreUrl).toContain("offset=1");
-
-    // Second loadMore: offset should be 2 (not 1 again)
-    await act(async () => {
-      await result.current.loadMore();
-    });
-
-    const secondLoadMoreUrl = mockAuthFetch.mock.calls[2][0] as string;
-    expect(secondLoadMoreUrl).toContain("offset=2");
-  });
-
   it("should not overwrite paginated data when auto-refresh fires", async () => {
     jest.useFakeTimers();
     try {
@@ -696,6 +661,7 @@ describe("useBotLogs", () => {
         json: async () => ({
           data: [logEntry({ content: "Page 1" })],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response);
 
@@ -704,7 +670,7 @@ describe("useBotLogs", () => {
           botId: "bot-1",
           autoRefresh: true,
           refreshInterval: 5000,
-          initialQuery: { limit: 1, offset: 0 },
+          initialQuery: { limit: 1 },
         }),
       );
 
@@ -757,7 +723,7 @@ describe("useBotLogs", () => {
     renderHook(() =>
       useBotLogs({
         botId: "bot-1",
-        initialQuery: { limit: 50, offset: 10 },
+        initialQuery: { limit: 50 },
       }),
     );
 
@@ -768,7 +734,6 @@ describe("useBotLogs", () => {
     const calledUrl = mockAuthFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("/api/logs/bot-1");
     expect(calledUrl).toContain("limit=50");
-    expect(calledUrl).toContain("offset=10");
   });
 
   describe("latest mode (lookbackDays)", () => {
@@ -785,7 +750,6 @@ describe("useBotLogs", () => {
           botId: "bot-1",
           initialQuery: {
             limit: 100,
-            offset: 0,
             sort: "desc",
             lookbackDays: 30,
           },
@@ -834,7 +798,7 @@ describe("useBotLogs", () => {
       const { result } = renderHook(() =>
         useBotLogs({
           botId: "bot-1",
-          initialQuery: { limit: 100, offset: 0, lookbackDays: 30 },
+          initialQuery: { limit: 100, lookbackDays: 30 },
         }),
       );
 
@@ -861,7 +825,7 @@ describe("useBotLogs", () => {
       const { result } = renderHook(() =>
         useBotLogs({
           botId: "bot-1",
-          initialQuery: { limit: 100, offset: 0, lookbackDays: 30 },
+          initialQuery: { limit: 100, lookbackDays: 30 },
         }),
       );
 
@@ -1017,6 +981,7 @@ describe("useBotLogs", () => {
           return restResponse({
             data: [logEntry({ content: "Page 1" })],
             hasMore: true,
+            nextCursor: "20240101:0",
           });
         }
         return new Promise((resolve) => {
@@ -1025,7 +990,7 @@ describe("useBotLogs", () => {
       });
 
       const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
       );
 
       await waitFor(() => expect(result.current.hasMore).toBe(true));
@@ -1065,6 +1030,7 @@ describe("useBotLogs", () => {
             return restResponse({
               data: [logEntry({ content: "Page 1" })],
               hasMore: true,
+              nextCursor: "20240101:0",
             });
           }
           return new Promise((resolve) => {
@@ -1077,7 +1043,7 @@ describe("useBotLogs", () => {
             botId: "bot-1",
             autoRefresh: true,
             refreshInterval: 5000,
-            initialQuery: { limit: 1, offset: 0 },
+            initialQuery: { limit: 1 },
           }),
         );
 
@@ -1808,7 +1774,7 @@ describe("useBotLogs", () => {
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 10000, offset: 0, sort: "desc" },
+          initialQuery: { limit: 10000, sort: "desc" },
         }),
       );
 
@@ -1832,6 +1798,7 @@ describe("useBotLogs", () => {
       setupStreamingMocks({
         data: [logEntry({ content: "Log" })],
         hasMore: true,
+        nextCursor: "20240101:0",
       });
 
       const { result } = renderHook(() =>
@@ -1847,6 +1814,7 @@ describe("useBotLogs", () => {
       setupStreamingMocks({
         data: [logEntry({ content: "Current log" })],
         hasMore: true,
+        nextCursor: "20240101:0",
       });
 
       const { result } = renderHook(() =>
@@ -1886,7 +1854,6 @@ describe("useBotLogs", () => {
           streaming: true,
           initialQuery: {
             limit: 100,
-            offset: 0,
             sort: "desc",
             type: "metrics",
           },
@@ -1931,7 +1898,6 @@ describe("useBotLogs", () => {
           streaming: true,
           initialQuery: {
             limit: 100,
-            offset: 0,
             sort: "desc",
             type: "metrics",
           },
@@ -2161,11 +2127,12 @@ describe("useBotLogs", () => {
         restResponse({
           data: [logEntry({ content: "page one" })],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       );
 
       const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
       );
       await waitFor(() => expect(result.current.hasMore).toBe(true));
 
@@ -2176,7 +2143,6 @@ describe("useBotLogs", () => {
 
       expect(result.current.error).toBe("page two failed");
       expect(mockToast).not.toHaveBeenCalled();
-      expect(result.current.query.offset).toBe(0);
       expect(result.current.logs.map((l) => l.content)).toEqual(["page one"]);
       expect(result.current.loadingMore).toBe(false);
     });
@@ -2197,34 +2163,6 @@ describe("useBotLogs", () => {
 
       expect(restCallCount()).toBe(1);
     });
-
-    it("resets the offset to zero when the query changes after paginating", async () => {
-      mockAuthFetch.mockResolvedValue(
-        restResponse({
-          data: [logEntry({ content: "row" })],
-          hasMore: true,
-        }),
-      );
-
-      const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
-      );
-      await waitFor(() => expect(result.current.hasMore).toBe(true));
-
-      await act(async () => {
-        await result.current.loadMore();
-      });
-      expect(result.current.query.offset).toBe(1);
-
-      act(() => {
-        result.current.updateQuery({ type: "metrics" });
-      });
-
-      expect(result.current.query.offset).toBe(0);
-      const lastUrl = mockAuthFetch.mock.calls.at(-1)![0] as string;
-      expect(lastUrl).not.toContain("offset=");
-      expect(lastUrl).toContain("type=metrics");
-    });
   });
 
   describe("history order and page direction", () => {
@@ -2236,6 +2174,7 @@ describe("useBotLogs", () => {
             logEntry({ content: "oldest" }),
           ],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       );
 
@@ -2249,19 +2188,79 @@ describe("useBotLogs", () => {
       expect(result.current.hasMore).toBe(true);
       expect(result.current.hasEarlierLogs).toBe(false);
     });
+  });
 
-    it("advances the earlier-logs offset by one page per successful load", async () => {
+  describe("paging older entries", () => {
+    it("pages older entries before each page's nextCursor", async () => {
+      mockAuthFetch
+        .mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "newest" })],
+            hasMore: true,
+            nextCursor: "20240101:200",
+          }),
+        )
+        .mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "older" })],
+            hasMore: true,
+            nextCursor: "20240101:100",
+          }),
+        )
+        .mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "oldest" })],
+            hasMore: false,
+            nextCursor: null,
+          }),
+        );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
+      );
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      const urls = mockAuthFetch.mock.calls.map((c) => c[0] as string);
+      expect(urls[0]).not.toContain("before=");
+      expect(urls[1]).toContain("before=20240101%3A200");
+      expect(urls[2]).toContain("before=20240101%3A100");
+      urls.forEach((url) => expect(url).not.toContain("offset="));
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "newest",
+        "older",
+        "oldest",
+      ]);
+      expect(result.current.hasMore).toBe(false);
+    });
+
+    it("loads earlier logs before the history's nextCursor, never a live line's key", async () => {
       const streams: ReturnType<typeof createMockSSEStream>[] = [];
+      let restCalls = 0;
       mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
         if (typeof url === "string" && url.includes("/stream")) {
           const s = createMockSSEStream(opts?.signal);
           streams.push(s);
           return { ok: true, body: s.stream } as any;
         }
-        return restResponse({
-          data: [logEntry({ content: "Current" })],
-          hasMore: true,
-        });
+        restCalls++;
+        return restCalls === 1
+          ? restResponse({
+              data: [logEntry({ content: "Current" })],
+              hasMore: true,
+              nextCursor: "20240101:200",
+            })
+          : restResponse({
+              data: [logEntry({ content: "Earlier" })],
+              hasMore: true,
+              nextCursor: "20240101:100",
+            });
       });
 
       try {
@@ -2269,11 +2268,21 @@ describe("useBotLogs", () => {
           useBotLogs({
             botId: "bot-1",
             streaming: true,
-            initialQuery: { limit: 2, offset: 0, sort: "desc" },
+            initialQuery: { limit: 2, sort: "asc" },
           }),
         );
-        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.hasEarlierLogs).toBe(true);
+        });
         expect(result.current.hasMore).toBe(false);
+
+        act(() => {
+          streams[0].controller.push("update", [
+            logEntry({ content: "live", key: "1792713599999000000-0" }),
+          ]);
+        });
+        await waitFor(() => expect(result.current.logs).toHaveLength(2));
 
         await act(async () => {
           await result.current.loadEarlierLogs();
@@ -2285,12 +2294,41 @@ describe("useBotLogs", () => {
         const restUrls = mockAuthFetch.mock.calls
           .map((c) => c[0] as string)
           .filter((u) => !u.includes("/stream"));
-        expect(restUrls[1]).toContain("offset=2");
-        expect(restUrls[2]).toContain("offset=4");
+        expect(restUrls[1]).toContain("before=20240101%3A200");
+        expect(restUrls[2]).toContain("before=20240101%3A100");
+        restUrls.forEach((url) => expect(url).not.toContain("offset="));
         expect(result.current.loadingEarlier).toBe(false);
       } finally {
         streams.forEach((s) => s.controller.close());
       }
+    });
+
+    it("starts again from the newest page when the query changes after paging", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [logEntry({ content: "row" })],
+          hasMore: true,
+          nextCursor: "20240101:100",
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
+      );
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+      expect(mockAuthFetch.mock.calls.at(-1)![0]).toContain("before=");
+
+      act(() => {
+        result.current.updateQuery({ type: "metrics" });
+      });
+
+      const lastUrl = mockAuthFetch.mock.calls.at(-1)![0] as string;
+      expect(lastUrl).not.toContain("before=");
+      expect(lastUrl).toContain("type=metrics");
     });
   });
 

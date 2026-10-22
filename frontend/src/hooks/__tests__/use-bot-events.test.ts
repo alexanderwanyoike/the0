@@ -148,7 +148,7 @@ describe("useBotEvents", () => {
         streaming: false,
         autoRefresh: false,
         refreshInterval: 30000,
-        initialQuery: { limit: 1000, offset: 0, type: "metrics" },
+        initialQuery: { limit: 1000, type: "metrics" },
       });
     });
 
@@ -232,7 +232,6 @@ describe("useBotEvents", () => {
         expect.objectContaining({
           initialQuery: {
             limit: 1000,
-            offset: 0,
             type: "metrics",
             sort: "desc",
             lookbackDays: 30,
