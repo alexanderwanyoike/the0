@@ -111,32 +111,22 @@ func withoutRuntimeKey(content string, members []jsonMember) string {
 	return "{" + strings.Join(kept, ",") + "}"
 }
 
+// logWatch remembers only the previous fetch's keys: each fetch is the newest
+// `limit` entries, so an entry that left that window never comes back and
+// the set stays bounded however long the watch runs.
 type logWatch struct {
-	started       bool
-	lastTimestamp int64
+	previous map[string]struct{}
 }
 
 func (w *logWatch) newEntries(logs []internal.LogEntry) []internal.LogEntry {
 	var fresh []internal.LogEntry
-	if !w.started {
-		w.started = true
-		fresh = logs
-	} else {
-		for _, log := range logs {
-			if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-				if logTime.Unix() > w.lastTimestamp {
-					fresh = append(fresh, log)
-				}
-			}
+	current := make(map[string]struct{}, len(logs))
+	for _, log := range logs {
+		current[log.Key] = struct{}{}
+		if _, printed := w.previous[log.Key]; !printed {
+			fresh = append(fresh, log)
 		}
 	}
-
-	for _, log := range fresh {
-		if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-			if logTime.Unix() > w.lastTimestamp {
-				w.lastTimestamp = logTime.Unix()
-			}
-		}
-	}
+	w.previous = current
 	return fresh
 }
