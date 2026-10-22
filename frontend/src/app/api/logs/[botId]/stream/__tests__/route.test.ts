@@ -77,7 +77,26 @@ describe("GET /api/logs/[botId]/stream", () => {
 
     // Verify the body is piped through
     const text = await response.text();
-    expect(text).toBe('data: {"type":"log"}\n\n');
+    expect(text).toMatch(/data: \{"type":"log"\}\n\n$/);
+  });
+
+  it("sends an SSE comment before any upstream event", async () => {
+    // An upstream with nothing to say yet: no history, no live line
+    const silent = new ReadableStream<Uint8Array>();
+    mockFetch.mockResolvedValueOnce(new Response(silent, { status: 200 }));
+
+    const { req, params } = makeRequest("bot-123", {
+      token: "Bearer test-token",
+      search: "?history=false",
+    });
+    const response = await GET(req, { params });
+
+    // Next sends the response head with the first body chunk, so without
+    // one the client waits for the api's first keepalive to see the stream
+    const reader = response.body!.getReader();
+    const { value } = await reader.read();
+    expect(new TextDecoder().decode(value)).toBe(": connected\n\n");
+    void reader.cancel();
   });
 
   it("returns 401 when no auth token is provided", async () => {
