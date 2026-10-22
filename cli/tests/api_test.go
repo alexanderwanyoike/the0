@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"the0/internal"
@@ -631,6 +632,34 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAPIClient_GetBotLogs_DecodesKeyAndTimestamp(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"success": true,
+			"data": [
+				{"key": "1792713599999000000-0", "date": "20261022", "timestamp": "2026-10-22T23:59:59.999Z", "content": "keyed"},
+				{"key": "20261022:42", "date": "20261022", "timestamp": null, "content": "legacy"}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	client := internal.NewAPIClient(server.URL)
+	logs, err := client.GetBotLogs(&internal.Auth{APIKey: "test-key"}, "bot-1", &internal.LogsParams{Date: "20261022"})
+	if err != nil {
+		t.Fatalf("GetBotLogs() unexpected error = %v", err)
+	}
+
+	want := []internal.LogEntry{
+		{Key: "1792713599999000000-0", Date: "20261022", Timestamp: "2026-10-22T23:59:59.999Z", Content: "keyed"},
+		{Key: "20261022:42", Date: "20261022", Content: "legacy"},
+	}
+	if !reflect.DeepEqual(logs, want) {
+		t.Errorf("GetBotLogs() = %+v, want %+v", logs, want)
 	}
 }
 
