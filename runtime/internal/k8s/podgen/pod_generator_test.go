@@ -761,3 +761,42 @@ func assertSecretKeyRef(t *testing.T, env []corev1.EnvVar, name, secret, key str
 	}
 	t.Errorf("%s is not set", name)
 }
+
+func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
+	base := PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+	}
+	cases := []struct {
+		name   string
+		change func(*PodGeneratorConfig)
+	}{
+		{"storage endpoint", func(c *PodGeneratorConfig) { c.MinIOEndpoint = "storage.example:443" }},
+		{"storage SSL", func(c *PodGeneratorConfig) { c.MinIOUseSSL = true }},
+		{"code bucket", func(c *PodGeneratorConfig) { c.MinIOBucket = "other-bots" }},
+		{"state bucket", func(c *PodGeneratorConfig) { c.MinIOStateBucket = "other-state" }},
+		{"literal secret key rotated", func(c *PodGeneratorConfig) { c.MinIOSecretKey = "rotated" }},
+		{"credentials moved to the secret", func(c *PodGeneratorConfig) {
+			c.StorageCredentials = StorageCredentialsSecret{Name: "the0-the0-secrets", AccessKeyKey: "minio-access-key", SecretKeyKey: "minio-secret-key"}
+		}},
+		{"runtime image pull policy", func(c *PodGeneratorConfig) { c.RuntimeImagePullPolicy = corev1.PullAlways }},
+	}
+
+	bot := natsTestBot("rt-bot", "python3.11")
+	pod, err := NewPodGenerator(base).GeneratePod(bot)
+	require.NoError(t, err)
+	require.False(t, NewPodGenerator(base).ConfigChanged(pod, bot))
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := base
+			tc.change(&changed)
+			assert.True(t, NewPodGenerator(changed).ConfigChanged(pod, bot),
+				"a running pod must be replaced when the pod the generator writes changes")
+		})
+	}
+}
