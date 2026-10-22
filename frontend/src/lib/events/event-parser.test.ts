@@ -278,6 +278,74 @@ describe("event-parser", () => {
       });
     });
 
+    describe("lines as the runtime stores them", () => {
+      const TS = "2026-10-22T10:00:00.000Z";
+      const stored = (fields: Record<string, unknown>) =>
+        JSON.stringify({
+          ...fields,
+          timestamp: TS,
+          _key: "1792713599999000000-0",
+        });
+
+      it("reads a wrapped plain line like the line itself", () => {
+        const result = parseLogLine(
+          stored({ message: "ERROR: order rejected" }),
+          TS,
+        );
+
+        expect(result.type).toBe("log");
+        expect(result.data).toBe("ERROR: order rejected");
+        expect(result.level).toBe("ERROR");
+        expect(result.timestamp).toEqual(new Date(TS));
+      });
+
+      it("strips the bracket timestamp of a wrapped legacy line", () => {
+        const result = parseLogLine(
+          stored({ message: "[2026-10-22 10:00:00] WARN: slow fill" }),
+          TS,
+        );
+
+        expect(result.data).toBe("WARN: slow fill");
+        expect(result.level).toBe("WARN");
+      });
+
+      it("keeps the runtime's key out of a metric's data", () => {
+        const result = parseLogLine(stored({ _metric: "price", value: 1 }), TS);
+
+        expect(result.type).toBe("metric");
+        expect(result.data).toEqual({
+          _metric: "price",
+          value: 1,
+          timestamp: TS,
+        });
+      });
+
+      it("keeps the runtime's key out of a structured log shown whole", () => {
+        const result = parseLogLine(
+          stored({ level: "info", fields: { order: 1 } }),
+          TS,
+        );
+
+        expect(result.data).toBe(
+          JSON.stringify({
+            level: "info",
+            fields: { order: 1 },
+            timestamp: TS,
+          }),
+        );
+      });
+
+      it("keeps a structured log's own fields", () => {
+        const result = parseLogLine(
+          stored({ level: "warn", message: "ERROR: in the text", order: 1 }),
+          TS,
+        );
+
+        expect(result.data).toBe("ERROR: in the text");
+        expect(result.level).toBe("WARN");
+      });
+    });
+
     describe("edge cases", () => {
       it("handles empty string", () => {
         const result = parseLogLine("");

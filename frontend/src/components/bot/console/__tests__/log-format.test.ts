@@ -70,6 +70,16 @@ describe("metricDisplayData", () => {
       { key: "ok", value: "true" },
     ]);
   });
+
+  it("drops the runtime's entry key", () => {
+    expect(
+      metricDisplayData({
+        _metric: "price",
+        _key: "1792713599999000000-0",
+        value: 2.5,
+      }),
+    ).toEqual([{ key: "value", value: "2.5" }]);
+  });
 });
 
 describe("levelStyle", () => {
