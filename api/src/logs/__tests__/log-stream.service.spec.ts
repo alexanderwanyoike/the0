@@ -4,6 +4,7 @@ import { LogsService } from "../logs.service";
 import { NatsService } from "@/nats/nats.service";
 import { PinoLogger } from "nestjs-pino";
 import { Ok, Failure } from "@/common/result";
+import { Readable } from "stream";
 
 describe("LogStreamService", () => {
   let service: LogStreamService;
@@ -335,6 +336,124 @@ describe("LogStreamService", () => {
 
       // Cleanup second client to clear keepalive interval
       if (closeHandler2) closeHandler2();
+    });
+  });
+
+  describe("live entries", () => {
+    let mockReq: any;
+    let mockRes: any;
+    let closeHandler: (() => void) | null;
+
+    const runtimeLine = (index: number, message: string) =>
+      `{"_key":"1792713599999000000-${index}","message":"${message}","timestamp":"2026-10-22T23:59:59.999Z"}`;
+
+    const updates = (): unknown[] =>
+      mockRes.write.mock.calls
+        .map((call: string[]) => call[0])
+        .filter((event: string) => event.startsWith("event: update"))
+        .map((event: string) =>
+          JSON.parse(event.slice(event.indexOf("data: ") + 6)),
+        );
+
+    const publish = async (botId: string, payload: string) => {
+      await service.stream(botId, userId, mockReq, mockRes);
+      const natsCallback = (mockNatsService.subscribe as jest.Mock).mock
+        .calls[0][1];
+      natsCallback(payload);
+    };
+
+    beforeEach(() => {
+      closeHandler = null;
+      mockReq = {
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === "close") closeHandler = handler;
+        }),
+      };
+      mockRes = {
+        status: jest.fn(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        writableEnded: false,
+      };
+    });
+
+    afterEach(() => {
+      if (closeHandler) closeHandler();
+    });
+
+    it("should send a chunk as one update event with an entry per line", async () => {
+      const first = runtimeLine(0, "Bought 1 BTC");
+      const second = runtimeLine(1, "Sold 1 BTC");
+
+      await publish("bot-live", `${first}\n${second}\n`);
+
+      expect(updates()).toEqual([
+        [
+          {
+            key: "1792713599999000000-0",
+            date: "20261022",
+            timestamp: "2026-10-22T23:59:59.999Z",
+            content: first,
+          },
+          {
+            key: "1792713599999000000-1",
+            date: "20261022",
+            timestamp: "2026-10-22T23:59:59.999Z",
+            content: second,
+          },
+        ],
+      ]);
+    });
+
+    it("should send a live line as the same entry REST returns for the stored line", async () => {
+      const line = runtimeLine(0, "Bought 1 BTC");
+      const minio = {
+        statObject: jest.fn().mockResolvedValue({ size: line.length + 1 }),
+        getObject: jest.fn().mockResolvedValue(Readable.from([`${line}\n`])),
+        getPartialObject: jest.fn(),
+      };
+      const logsService = new LogsService(
+        { user: { uid: userId } } as any,
+        minio as any,
+        { get: jest.fn().mockReturnValue("bot-logs") } as any,
+        {
+          findOneByUserId: jest.fn().mockResolvedValue(Ok({ id: "bot-live" })),
+        } as any,
+        mockLogger as PinoLogger,
+      );
+      const stored = await logsService.getLogs(
+        "bot-live",
+        { date: "20261022", limit: 10, offset: 0 },
+        userId,
+      );
+
+      await publish("bot-live", `${line}\n`);
+
+      expect(stored.success).toBe(true);
+      expect(updates()).toEqual([stored.data!.entries]);
+    });
+
+    it("should still deliver a raw chunk from a runtime that does not format lines", async () => {
+      await publish("bot-raw", "plain text\nsecond line");
+
+      const [entries] = updates() as {
+        key: string;
+        date: string;
+        timestamp: string;
+        content: string;
+      }[][];
+      expect(entries.map((e) => e.content)).toEqual([
+        "plain text",
+        "second line",
+      ]);
+      expect(new Set(entries.map((e) => e.key)).size).toBe(2);
+      for (const entry of entries) {
+        expect(entry.key).toMatch(/^live:/);
+        expect(new Date(entry.timestamp).toISOString()).toBe(entry.timestamp);
+        expect(entry.date).toBe(entry.timestamp.slice(0, 10).replace(/-/g, ""));
+      }
     });
   });
 });
