@@ -158,10 +158,10 @@ func TestAppendBotLogs(t *testing.T) {
 		botID := "test-bot-123"
 
 		// Test appending logs multiple times
-		err = logger.AppendBotLogs(context.Background(), botID, "First log entry", time.Now())
+		err = logger.AppendBotLogs(context.Background(), botID, "First log entry\n", time.Now())
 		assert.NoError(t, err)
 
-		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry", time.Now())
+		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry\n", time.Now())
 		assert.NoError(t, err)
 
 		// Verify logs were written by reading them back
@@ -181,10 +181,8 @@ func TestAppendBotLogs(t *testing.T) {
 		content, err := io.ReadAll(obj)
 		require.NoError(t, err)
 
-		contentStr := string(content)
-		assert.Contains(t, contentStr, "First log entry")
-		assert.Contains(t, contentStr, "Second log entry")
-		assert.Contains(t, contentStr, time.Now().Format("2006-01-02")) // Should have timestamps
+		assert.Equal(t, "First log entry\nSecond log entry\n", string(content),
+			"chunks are stored exactly as given, the caller formats them")
 	})
 
 	t.Run("ConcurrentAppends", func(t *testing.T) {
@@ -217,7 +215,7 @@ func TestAppendBotLogs(t *testing.T) {
 		for i := 0; i < numGoroutines; i++ {
 			go func(index int) {
 				defer wg.Done()
-				logEntry := fmt.Sprintf("Log entry from goroutine %d", index)
+				logEntry := fmt.Sprintf("Log entry from goroutine %d\n", index)
 				err := logger.AppendBotLogs(context.Background(), botID, logEntry, time.Now())
 				assert.NoError(t, err)
 			}(i)
@@ -396,7 +394,7 @@ func TestGetMutexConcurrency(t *testing.T) {
 // TestComposeAppend verifies that AppendBotLogs scales with chunk size rather
 // than accumulated file size by appending many chunks and checking that each
 // append completes within a bounded duration. It also verifies that the final
-// file content is the ordered concatenation of all chunks with timestamps.
+// file content is the ordered concatenation of all chunks.
 func TestComposeAppend(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test")
@@ -470,9 +468,7 @@ func TestComposeAppend(t *testing.T) {
 		lastIdx = idx
 	}
 
-	// Each entry must have a timestamp prefix like [2026-04-01 ...]
-	todayPrefix := time.Now().Format("2006-01-02")
-	assert.Contains(t, contentStr, todayPrefix, "file should contain today's date in timestamp prefixes")
+	assert.Equal(t, strings.Join(chunks, ""), contentStr, "chunks are stored exactly as given")
 
 	// Verify no temp objects were left behind. Because cleanup is synchronous
 	// (runs before AppendBotLogs returns), we can assert immediately without
@@ -530,8 +526,7 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 	content, err := io.ReadAll(obj)
 	require.NoError(t, err)
 
-	assert.Contains(t, string(content), "hello world")
-	assert.Contains(t, string(content), time.Now().Format("2006-01-02"))
+	assert.Equal(t, "hello world", string(content), "the chunk is stored exactly as given")
 }
 
 // fakeMultipartClient is a controllable implementation of multipartClient.
