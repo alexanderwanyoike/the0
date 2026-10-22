@@ -150,6 +150,7 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			AnnotationConfigHash: g.computeConfigHash(bot),
 		}).
 		WithLaunch(settings).
+		WithStorageCredentialsFrom(g.config.StorageCredentials).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
 		WithSyncSidecar(g.config.RuntimeImage, bot.ID)
 
@@ -203,6 +204,7 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 			AnnotationConfigHash: g.computeConfigHash(bot),
 		}).
 		WithLaunch(settings).
+		WithStorageCredentialsFrom(g.config.StorageCredentials).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 	// Note: No query sidecar - queries are ephemeral
 
@@ -255,6 +257,7 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 			LabelManagedBy:        g.config.ControllerName,
 		}).
 		WithLaunch(settings).
+		WithStorageCredentialsFrom(g.config.StorageCredentials).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 
 	return builder.Build()
