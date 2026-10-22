@@ -43,13 +43,13 @@ export interface MetricPayload {
 
 /**
  * Extract timestamp from log line.
- * Expected format: [2006-01-02 15:04:05] content
+ * Expected format: [2006-01-02 15:04:05] content, in UTC like every log time.
  * Returns null if no timestamp found.
  */
 function extractTimestamp(content: string): Date | null {
   const match = content.match(/^\[(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\]/);
   if (match) {
-    return new Date(match[1].replace(" ", "T"));
+    return new Date(`${match[1].replace(" ", "T")}Z`);
   }
   return null;
 }

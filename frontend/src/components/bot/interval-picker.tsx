@@ -185,6 +185,7 @@ export function IntervalPicker({
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
             mode="range"
+            timeZone="UTC"
             selected={range}
             onSelect={handleRangeSelect}
             numberOfMonths={2}

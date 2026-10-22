@@ -28,16 +28,17 @@ export function cachedParseLogLine(
 export type DisplayTimestamp = { date: string; time: string };
 
 /**
- * Format a Date to compact display format.
- * Returns null for null input or invalid Date objects.
+ * Format a Date to compact display format, in UTC so the day shown is the
+ * day of the log file the line is in. Returns null for null input or
+ * invalid Date objects.
  */
 export function formatTimestamp(date: Date | null): DisplayTimestamp | null {
   if (!date || isNaN(date.getTime())) return null;
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(date.getUTCSeconds()).padStart(2, "0");
   return {
     date: `${month}-${day}`,
     time: `${hours}:${minutes}:${seconds}`,
