@@ -7,6 +7,7 @@ const createJestConfig = nextJest({
 });
 
 const customJestConfig: Config = {
+  globalSetup: "<rootDir>/src/test/global-setup.ts",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   testEnvironment: "jest-fixed-jsdom",
   collectCoverageFrom: [
