@@ -403,6 +403,25 @@ describe("LogStreamService", () => {
         expect(mockNatsService.subscribe).toHaveBeenCalled();
       });
 
+      it("should send a first body chunk once access is granted when history=false", async () => {
+        const { streamService } = withOwner(userId);
+
+        await streamService.stream("bot-1", userId, mockReq, mockRes, {
+          history: false,
+        });
+
+        expect(events()[0]).toBe(": connected\n\n");
+      });
+
+      it("should not send the first body chunk to a user who does not own the bot", async () => {
+        const { streamService } = withOwner("someone-else");
+
+        await streamService.stream("bot-1", userId, mockReq, mockRes, {
+          history: false,
+        });
+
+        expect(events()).not.toContain(": connected\n\n");
+      });
       it("should still reject a user who does not own the bot when history=false", async () => {
         const { streamService, botService } = withOwner("someone-else");
 
