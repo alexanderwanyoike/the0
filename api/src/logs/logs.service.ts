@@ -124,7 +124,7 @@ export class LogsService {
     const sortOrder = query.sort || "desc";
 
     if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
-      // Single date, non-metrics: tail for latest entries (returns newest-first)
+      // Single date, non-metrics: tail for the latest entries (file order)
       const entries: LogEntry[] = [];
       await this.tailFilteredLogs(
         dayLogPath(botId, dates[0]),
@@ -132,7 +132,7 @@ export class LogsService {
         query,
         entries,
       );
-      if (sortOrder === "asc") entries.reverse();
+      if (sortOrder === "desc") entries.reverse();
       return { entries, metricsHasMore: false };
     }
 
