@@ -22,6 +22,16 @@ function stringStream(content: string, chunkSize?: number): Readable {
   return stream;
 }
 
+/** The text a stored line carries, whether wrapped as NDJSON or plain. */
+function messageOf(entry: { content: string }): string {
+  try {
+    const parsed = JSON.parse(entry.content);
+    return typeof parsed?.message === "string" ? parsed.message : entry.content;
+  } catch {
+    return entry.content;
+  }
+}
+
 describe("LogsService", () => {
   let service: LogsService;
   let mockMinioClient: any;
@@ -214,7 +224,7 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // Default sort is desc: newest 2 of the 4 metrics, with hasMore
       // signalling the older ones are reachable via offset
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         '{"_metric":true,"name":"m4","value":4}',
         '{"_metric":true,"name":"m3","value":3}',
       ]);
@@ -418,7 +428,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         '{"msg":"a"}',
         '{"msg":"b"}',
       ]);
@@ -440,7 +450,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         '{"msg":"d2-l1"}',
         '{"msg":"d2-l2"}',
       ]);
@@ -465,7 +475,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(mockMinioClient.getObject).toHaveBeenCalledTimes(1);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         '{"msg":"d1-9999"}',
         '{"msg":"d1-9998"}',
       ]);
@@ -540,15 +550,15 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // All lines should be returned regardless of format
       expect(result.data!.entries).toHaveLength(4);
-      expect(result.data!.entries[0].content).toBe(
+      expect(messageOf(result.data!.entries[0])).toBe(
         "[2026-03-30 13:00:26] INFO:main:Starting bot",
       );
       expect(result.data!.entries[0].timestamp).toBeNull();
-      expect(result.data!.entries[1].content).toBe(
+      expect(messageOf(result.data!.entries[1])).toBe(
         '{"level":"info","msg":"json line"}',
       );
       expect(result.data!.entries[1].timestamp).toBeNull();
-      expect(result.data!.entries[2].content).toBe("plain text log line");
+      expect(messageOf(result.data!.entries[2])).toBe("plain text log line");
       expect(result.data!.entries[2].timestamp).toBeNull();
       expect(result.data!.entries[3].content).toContain('"_metric"');
       expect(result.data!.entries[3].timestamp).toBeNull();
@@ -762,8 +772,8 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(10);
       // The returned entries should be the LAST 10 lines, not the first 10
-      expect(result.data!.entries[0].content).toBe("line-90");
-      expect(result.data!.entries[9].content).toBe("line-99");
+      expect(messageOf(result.data!.entries[0])).toBe("line-90");
+      expect(messageOf(result.data!.entries[9])).toBe("line-99");
     });
 
     it("should return chronological entries for date range", async () => {
@@ -791,10 +801,10 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(4);
       // Chronological order: day1 first, then day2
-      expect(result.data!.entries[0].content).toBe("d1-line1");
-      expect(result.data!.entries[1].content).toBe("d1-line2");
-      expect(result.data!.entries[2].content).toBe("d2-line1");
-      expect(result.data!.entries[3].content).toBe("d2-line2");
+      expect(messageOf(result.data!.entries[0])).toBe("d1-line1");
+      expect(messageOf(result.data!.entries[1])).toBe("d1-line2");
+      expect(messageOf(result.data!.entries[2])).toBe("d2-line1");
+      expect(messageOf(result.data!.entries[3])).toBe("d2-line2");
     });
 
     it("should stream from start for metrics filter on single date", async () => {
@@ -894,9 +904,9 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // All lines should be returned, nothing skipped
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toBe("line-1");
-      expect(result.data!.entries[1].content).toBe("line-2");
-      expect(result.data!.entries[2].content).toBe("line-3");
+      expect(messageOf(result.data!.entries[0])).toBe("line-1");
+      expect(messageOf(result.data!.entries[1])).toBe("line-2");
+      expect(messageOf(result.data!.entries[2])).toBe("line-3");
     });
 
     it("should drop partial first line when tailing from mid-file", async () => {
@@ -922,8 +932,8 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // The partial first line should be dropped
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toBe("complete-line-1");
-      expect(result.data!.entries[1].content).toBe("complete-line-2");
+      expect(messageOf(result.data!.entries[0])).toBe("complete-line-1");
+      expect(messageOf(result.data!.entries[1])).toBe("complete-line-2");
       // getPartialObject should have been called (not getObject)
       expect(mockMinioClient.getPartialObject).toHaveBeenCalled();
     });
@@ -949,8 +959,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toBe("in range 1");
-      expect(result.data!.entries[1].content).toBe("in range 2");
+      expect(messageOf(result.data!.entries[0])).toBe("in range 1");
+      expect(messageOf(result.data!.entries[1])).toBe("in range 2");
     });
 
     it("should still work with YYYYMMDD date range", async () => {
@@ -972,9 +982,9 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toBe("day1 line");
-      expect(result.data!.entries[1].content).toBe("day2 line");
-      expect(result.data!.entries[2].content).toBe("day3 line");
+      expect(messageOf(result.data!.entries[0])).toBe("day1 line");
+      expect(messageOf(result.data!.entries[1])).toBe("day2 line");
+      expect(messageOf(result.data!.entries[2])).toBe("day3 line");
     });
 
     it("should handle datetime range spanning midnight", async () => {
@@ -1000,8 +1010,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toBe("late night");
-      expect(result.data!.entries[1].content).toBe("early morning");
+      expect(messageOf(result.data!.entries[0])).toBe("late night");
+      expect(messageOf(result.data!.entries[1])).toBe("early morning");
     });
 
     it("should include lines without timestamps when filtering by datetime", async () => {
@@ -1025,11 +1035,11 @@ describe("LogsService", () => {
       // "in range" is in window, old format and plain text have no timestamp so included,
       // "after range" is outside the window so excluded
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toBe("in range");
-      expect(result.data!.entries[1].content).toBe(
+      expect(messageOf(result.data!.entries[0])).toBe("in range");
+      expect(messageOf(result.data!.entries[1])).toBe(
         "[2026-04-03 09:00:00] INFO:main:old format no json timestamp",
       );
-      expect(result.data!.entries[2].content).toBe(
+      expect(messageOf(result.data!.entries[2])).toBe(
         "plain text line with no timestamp at all",
       );
     });
@@ -1050,7 +1060,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "in range",
         "plain trailing line",
       ]);
@@ -1078,7 +1088,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0].content).toBe("mid-morning");
+      expect(messageOf(result.data!.entries[0])).toBe("mid-morning");
     });
   });
 
@@ -1104,8 +1114,8 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(5);
       // Tail already returns newest-first; sort=desc should keep that order
-      expect(result.data!.entries[0].content).toBe("line-5");
-      expect(result.data!.entries[4].content).toBe("line-9");
+      expect(messageOf(result.data!.entries[0])).toBe("line-5");
+      expect(messageOf(result.data!.entries[4])).toBe("line-9");
     });
 
     it("should return oldest-first when sort=asc for single date", async () => {
@@ -1129,8 +1139,8 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(5);
       // sort=asc on tail path: reverse the newest-first to oldest-first
-      expect(result.data!.entries[0].content).toBe("line-9");
-      expect(result.data!.entries[4].content).toBe("line-5");
+      expect(messageOf(result.data!.entries[0])).toBe("line-9");
+      expect(messageOf(result.data!.entries[4])).toBe("line-5");
     });
 
     it("should return newest-first for date range when sort=desc", async () => {
@@ -1251,7 +1261,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "new-2",
         "new-1",
         "old-2",
@@ -1288,7 +1298,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       // Unlike date-range metric queries, latest mode respects limit
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         metric("t", 2),
         metric("t", 1),
         metric("y", 2),
@@ -1312,7 +1322,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual(["c", "b"]);
+      expect(result.data!.entries.map(messageOf)).toEqual(["c", "b"]);
       expect(result.data!.hasMore).toBe(true);
       // Only today's file was opened; older days were never touched
       const touchedPaths = [
@@ -1338,7 +1348,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       // Newest-first flat order is [t2, t1, y2, y1]; offset 2 -> [y2, y1]
-      expect(result.data!.entries.map((e) => e.content)).toEqual(["y2", "y1"]);
+      expect(result.data!.entries.map(messageOf)).toEqual(["y2", "y1"]);
       expect(result.data!.hasMore).toBe(false);
     });
 
@@ -1358,7 +1368,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "y1",
         "y2",
         "t1",
@@ -1410,7 +1420,7 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // Tail yielded only 2 of the needed 4 entries, so the day is re-read
       // in full and the newest 3 lines are returned
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "line-5",
         "line-4",
         "line-3",
@@ -1432,7 +1442,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0].content).toBe("explicit-date");
+      expect(messageOf(result.data!.entries[0])).toBe("explicit-date");
       expect(result.data!.entries[0].date).toBe("20260401");
     });
 
@@ -1469,7 +1479,7 @@ describe("LogsService", () => {
         type: "metrics",
       });
       expect(page1.success).toBe(true);
-      expect(page1.data!.entries.map((e) => e.content)).toEqual([
+      expect(page1.data!.entries.map(messageOf)).toEqual([
         metricLine(5),
         metricLine(4),
       ]);
@@ -1481,7 +1491,7 @@ describe("LogsService", () => {
         offset: 2,
         type: "metrics",
       });
-      expect(page2.data!.entries.map((e) => e.content)).toEqual([
+      expect(page2.data!.entries.map(messageOf)).toEqual([
         metricLine(3),
         metricLine(2),
       ]);
@@ -1493,9 +1503,7 @@ describe("LogsService", () => {
         offset: 4,
         type: "metrics",
       });
-      expect(page3.data!.entries.map((e) => e.content)).toEqual([
-        metricLine(1),
-      ]);
+      expect(page3.data!.entries.map(messageOf)).toEqual([metricLine(1)]);
       expect(page3.data!.hasMore).toBe(false);
     });
 
@@ -1530,7 +1538,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         metricLine(1),
         metricLine(2),
       ]);
@@ -1558,7 +1566,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       // Newest-first across days: day2's metrics come first
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         metricLine(3),
         metricLine(2),
       ]);
