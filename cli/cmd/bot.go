@@ -901,7 +901,7 @@ func botLogsParams(dateParam string, limit int) *internal.LogsParams {
 }
 
 func defaultLogDate(now time.Time) string {
-	return now.Format("20060102")
+	return now.UTC().Format("20060102")
 }
 
 func validateDateParam(dateParam string) error {
