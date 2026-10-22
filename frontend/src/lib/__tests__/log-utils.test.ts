@@ -5,7 +5,6 @@ import {
   isHistoricalQuery,
   mergeUniqueEntries,
   parseLiveUpdate,
-  toDisplayOrder,
 } from "../log-utils";
 import type { LogEntry } from "@/types/logs";
 
@@ -66,30 +65,6 @@ describe("buildLogsSearchParams", () => {
         "before",
       ),
     ).toBe("20240101:20");
-  });
-});
-
-describe("toDisplayOrder", () => {
-  const page = [entry("newest"), entry("oldest")];
-
-  it("reverses live replace and prepend pages into chronological order", () => {
-    expect(toDisplayOrder(page, true, false).map((e) => e.content)).toEqual([
-      "oldest",
-      "newest",
-    ]);
-    expect(toDisplayOrder(page, true, "prepend").map((e) => e.content)).toEqual(
-      ["oldest", "newest"],
-    );
-  });
-
-  it("keeps API order for appended pages and non-live views", () => {
-    expect(toDisplayOrder(page, true, "append")).toBe(page);
-    expect(toDisplayOrder(page, false, false)).toBe(page);
-  });
-
-  it("does not mutate the input page", () => {
-    toDisplayOrder(page, true, false);
-    expect(page[0].content).toBe("newest");
   });
 });
 

@@ -90,10 +90,11 @@ function logEntry({ content, ...fields }: TestEntry): LogEntry {
   };
 }
 
+/** The api pairs hasMore with the cursor of the next older page. */
 function restResponse({
   data = [],
   hasMore = false,
-  nextCursor = null,
+  nextCursor = hasMore ? "20240101:0" : null,
 }: {
   data?: TestEntry[];
   hasMore?: boolean;
@@ -848,7 +849,7 @@ describe("useBotLogs", () => {
     });
   });
 
-  it("should include sort=desc in URL by default", async () => {
+  it("asks for chronological order (sort=asc) by default", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ data: [], hasMore: false }),
@@ -861,10 +862,10 @@ describe("useBotLogs", () => {
     });
 
     const url = mockAuthFetch.mock.calls[0][0] as string;
-    expect(url).toContain("sort=desc");
+    expect(url).toContain("sort=asc");
   });
 
-  it("should pass sort=asc when query sort is changed", async () => {
+  it("asks for sort=desc when the query sort is changed", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ data: [], hasMore: false }),
@@ -879,7 +880,7 @@ describe("useBotLogs", () => {
     mockAuthFetch.mockClear();
 
     act(() => {
-      result.current.updateQuery({ sort: "asc" });
+      result.current.updateQuery({ sort: "desc" });
     });
 
     await waitFor(() => {
@@ -887,7 +888,7 @@ describe("useBotLogs", () => {
     });
 
     const url = mockAuthFetch.mock.calls[0][0] as string;
-    expect(url).toContain("sort=asc");
+    expect(url).toContain("sort=desc");
   });
 
   it("should reconfigure polling when refreshInterval changes", async () => {
@@ -1203,8 +1204,8 @@ describe("useBotLogs", () => {
     it("fetches history via REST and connects SSE", async () => {
       setupStreamingMocks({
         data: [
-          logEntry({ content: "newest" }),
           logEntry({ content: "oldest" }),
+          logEntry({ content: "newest" }),
         ],
       });
 
@@ -1217,10 +1218,10 @@ describe("useBotLogs", () => {
         expect(result.current.logs).toHaveLength(2);
       });
 
-      // History arrives desc from the API but is displayed chronologically
-      // (oldest first) so live appends land at the bottom.
-      expect(result.current.logs[0].content).toBe("oldest");
-      expect(result.current.logs[1].content).toBe("newest");
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "oldest",
+        "newest",
+      ]);
       expect(streamCallCount()).toBe(1);
       expect(restCallCount()).toBe(1);
     });
@@ -1390,12 +1391,12 @@ describe("useBotLogs", () => {
           restResponse({
             data: [
               {
-                content: "overlap line",
-                timestamp: "2024-01-01T10:01:00Z",
-              },
-              {
                 content: "old line",
                 timestamp: "2024-01-01T10:00:00Z",
+              },
+              {
+                content: "overlap line",
+                timestamp: "2024-01-01T10:01:00Z",
               },
             ],
           }),
@@ -1774,7 +1775,7 @@ describe("useBotLogs", () => {
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 10000, sort: "desc" },
+          initialQuery: { limit: 10000, sort: "asc" },
         }),
       );
 
@@ -2166,7 +2167,7 @@ describe("useBotLogs", () => {
   });
 
   describe("history order and page direction", () => {
-    it("keeps the API order and exposes hasMore (not hasEarlierLogs) without streaming", async () => {
+    it("offers older pages at the bottom of a newest-first view", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
           data: [
@@ -2174,11 +2175,16 @@ describe("useBotLogs", () => {
             logEntry({ content: "oldest" }),
           ],
           hasMore: true,
-          nextCursor: "20240101:0",
         }),
       );
 
-      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
+      const { result } = renderHook(() =>
+        useBotLogs({
+          botId: "bot-1",
+          streaming: true,
+          initialQuery: { limit: 2, sort: "desc" },
+        }),
+      );
       await waitFor(() => expect(result.current.logs).toHaveLength(2));
 
       expect(result.current.logs.map((l) => l.content)).toEqual([
@@ -2187,6 +2193,102 @@ describe("useBotLogs", () => {
       ]);
       expect(result.current.hasMore).toBe(true);
       expect(result.current.hasEarlierLogs).toBe(false);
+
+      mockAuthFetch.mockResolvedValue(
+        restResponse({ data: [logEntry({ content: "older still" })] }),
+      );
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "newest",
+        "oldest",
+        "older still",
+      ]);
+    });
+
+    it("offers older pages at the top of a chronological view", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [
+            logEntry({ content: "oldest" }),
+            logEntry({ content: "newest" }),
+          ],
+          hasMore: true,
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 2, sort: "asc" } }),
+      );
+      await waitFor(() => expect(result.current.logs).toHaveLength(2));
+
+      expect(result.current.hasEarlierLogs).toBe(true);
+      expect(result.current.hasMore).toBe(false);
+
+      mockAuthFetch.mockResolvedValue(
+        restResponse({ data: [logEntry({ content: "older still" })] }),
+      );
+      await act(async () => {
+        await result.current.loadEarlierLogs();
+      });
+
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "older still",
+        "oldest",
+        "newest",
+      ]);
+    });
+
+    it("puts live lines on the newest side of a newest-first view", async () => {
+      let stream: ReturnType<typeof createMockSSEStream> | null = null;
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          stream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: stream.stream } as any;
+        }
+        return restResponse({
+          data: [
+            logEntry({ content: "newer" }),
+            logEntry({ content: "older" }),
+          ],
+        });
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            initialQuery: { limit: 2, sort: "desc" },
+          }),
+        );
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.logs).toHaveLength(2);
+        });
+
+        act(() => {
+          stream!.controller.push("update", [
+            logEntry({ content: "live 1" }),
+            logEntry({ content: "live 2" }),
+          ]);
+        });
+
+        await waitFor(() => {
+          expect(result.current.logs.map((l) => l.content)).toEqual([
+            "live 2",
+            "live 1",
+            "newer",
+            "older",
+          ]);
+        });
+      } finally {
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
+      }
     });
   });
 

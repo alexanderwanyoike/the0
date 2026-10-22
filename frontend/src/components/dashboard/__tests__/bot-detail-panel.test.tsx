@@ -45,26 +45,29 @@ jest.mock("@/lib/api/api-client", () => ({
   },
 }));
 
+const mockUseBotLogs = jest.fn();
 jest.mock("@/hooks/use-bot-logs", () => ({
-  useBotLogs: () => ({
-    logs: [],
-    loading: false,
-    error: null,
-    hasMore: false,
-    total: 0,
-    query: {},
-    refresh: jest.fn(),
-    loadMore: jest.fn(),
-    loadEarlierLogs: jest.fn(),
-    updateQuery: jest.fn(),
-    setDateFilter: jest.fn(),
-    setDateRangeFilter: jest.fn(),
-    exportLogs: jest.fn(),
-    connected: false,
-    lastUpdate: null,
-    hasEarlierLogs: false,
-    loadingEarlier: false,
-  }),
+  useBotLogs: (...args: unknown[]) => {
+    mockUseBotLogs(...args);
+    return {
+      logs: [],
+      loading: false,
+      error: null,
+      hasMore: false,
+      query: {},
+      refresh: jest.fn(),
+      loadMore: jest.fn(),
+      loadEarlierLogs: jest.fn(),
+      updateQuery: jest.fn(),
+      setDateFilter: jest.fn(),
+      setDateRangeFilter: jest.fn(),
+      exportLogs: jest.fn(),
+      connected: false,
+      lastUpdate: null,
+      hasEarlierLogs: false,
+      loadingEarlier: false,
+    };
+  },
 }));
 
 jest.mock("@/lib/bot-utils", () => ({
@@ -393,6 +396,20 @@ describe("BotDetailPanel", () => {
       expect(mockRemoveBotFromList).not.toHaveBeenCalled();
       expect(mockReplace).not.toHaveBeenCalled();
       errorSpy.mockRestore();
+    });
+  });
+
+  describe("log order", () => {
+    it("asks for logs in the chronological order the console shows", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await screen.findByText("Test Bot");
+      expect(mockUseBotLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          initialQuery: expect.objectContaining({ sort: "asc" }),
+        }),
+      );
     });
   });
 
