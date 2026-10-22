@@ -1,6 +1,6 @@
 module runtime
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/docker/docker v28.5.2+incompatible
