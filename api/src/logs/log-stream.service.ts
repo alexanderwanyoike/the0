@@ -91,32 +91,28 @@ export class LogStreamService {
       userId,
     );
 
-    if (
-      !historyResult.success &&
-      historyResult.error?.includes("Authentication required")
-    ) {
-      res.write(sseEvent("error", { message: "Authentication required" }));
-      res.end();
-      return false;
-    }
-
-    if (
-      !historyResult.success &&
-      (historyResult.error?.includes("not found") ||
-        historyResult.error?.includes("access denied"))
-    ) {
-      res.write(sseEvent("error", { message: ACCESS_DENIED_MESSAGE }));
-      res.end();
-      return false;
-    }
-
     if (historyResult.success && historyResult.data) {
       res.write(sseEvent("history", historyResult.data.entries));
-    } else if (!historyResult.success) {
-      res.write(sseEvent("warning", { message: "History unavailable" }));
+      return true;
     }
-
+    if (this.endOnAccessError(res, historyResult.error)) return false;
+    res.write(sseEvent("warning", { message: "History unavailable" }));
     return true;
+  }
+
+  /** @returns true when the error refused access and the stream was ended. */
+  private endOnAccessError(res: Response, error: string | null): boolean {
+    if (error?.includes("Authentication required")) {
+      res.write(sseEvent("error", { message: "Authentication required" }));
+      res.end();
+      return true;
+    }
+    if (error?.includes("not found") || error?.includes("access denied")) {
+      res.write(sseEvent("error", { message: ACCESS_DENIED_MESSAGE }));
+      res.end();
+      return true;
+    }
+    return false;
   }
 
   private startKeepalive(

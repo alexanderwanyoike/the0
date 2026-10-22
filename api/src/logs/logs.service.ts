@@ -90,18 +90,27 @@ export class LogsService {
     this.logBucket = this.configService.get<string>("LOG_BUCKET") || "bot-logs";
   }
 
-  async getLogs(
+  /** Whether the user (else the request's user) may read the bot's logs. */
+  async checkAccess(
     botId: string,
-    query: LogsQuery,
     userId?: string,
-  ): Promise<Result<LogsPage, string>> {
-    // Verify bot ownership
+  ): Promise<Result<true, string>> {
     const uid = userId || this.request?.user?.uid;
     if (!uid) return Failure("Authentication required");
     const botResult = await this.botService.findOneByUserId(uid, botId);
     if (!botResult.success) {
       return Failure("Bot not found or access denied");
     }
+    return Ok(true);
+  }
+
+  async getLogs(
+    botId: string,
+    query: LogsQuery,
+    userId?: string,
+  ): Promise<Result<LogsPage, string>> {
+    const access = await this.checkAccess(botId, userId);
+    if (!access.success) return Failure(access.error);
 
     try {
       const read = await this.readPage(botId, query);
