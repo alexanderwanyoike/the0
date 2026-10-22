@@ -31,6 +31,52 @@ describe("LogsController", () => {
   });
 
   describe("getLogs", () => {
+    it("should return a page with its next cursor and no total", async () => {
+      const entries = [
+        {
+          key: "20260210:0",
+          date: "20260210",
+          content: "a",
+          timestamp: null as string | null,
+        },
+      ];
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries, hasMore: true, nextCursor: "20260210:0" }),
+      );
+
+      const result = await controller.getLogs(
+        "bot-123",
+        { limit: 1 } as any,
+        mockUser,
+      );
+
+      expect(result).toEqual({
+        success: true,
+        data: entries,
+        hasMore: true,
+        nextCursor: "20260210:0",
+        message: "Logs retrieved successfully",
+      });
+    });
+
+    it("should pass the before cursor to the service", async () => {
+      (mockLogsService.getLogs as jest.Mock).mockResolvedValue(
+        Ok({ entries: [], hasMore: false, nextCursor: null }),
+      );
+
+      await controller.getLogs(
+        "bot-123",
+        { date: "20260210", before: "20260210:42" } as any,
+        mockUser,
+      );
+
+      expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+        "bot-123",
+        expect.objectContaining({ before: "20260210:42" }),
+        "user123",
+      );
+    });
+
     it("should return logs successfully", async () => {
       const mockLogs = [{ date: "20260210", content: "test log" }];
       (mockLogsService.getLogs as jest.Mock).mockResolvedValue(

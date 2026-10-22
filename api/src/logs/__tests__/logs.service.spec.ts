@@ -1671,6 +1671,222 @@ describe("LogsService", () => {
     });
   });
 
+  describe("getLogs - cursor paging", () => {
+    /** Serves logs/bot-1/<date>.log from `files`, ranged reads included. */
+    function serveFiles(files: Record<string, string>) {
+      const content = (path: string) => {
+        const date = path.slice("logs/bot-1/".length, -".log".length);
+        if (files[date] === undefined) throw { code: "NoSuchKey" };
+        return Buffer.from(files[date]);
+      };
+      mockMinioClient.statObject.mockImplementation(
+        async (_bucket: string, path: string) => ({
+          size: content(path).length,
+        }),
+      );
+      mockMinioClient.getObject.mockImplementation(
+        async (_bucket: string, path: string) => Readable.from([content(path)]),
+      );
+      mockMinioClient.getPartialObject.mockImplementation(
+        async (_bucket: string, path: string, start: number, length = 0) => {
+          const bytes = content(path);
+          return Readable.from([
+            bytes.subarray(start, length ? start + length : bytes.length),
+          ]);
+        },
+      );
+    }
+
+    const page = async (query: Partial<LogsQuery>) => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        ...query,
+      });
+      expect(result.success).toBe(true);
+      return result.data!;
+    };
+
+    it("should return the entries strictly older than the cursor entry", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\n" });
+
+      const older = await page({ before: "20260401:4" });
+
+      expect(older.entries.map((e) => e.content)).toEqual(["b", "a"]);
+      expect(older.hasMore).toBe(false);
+      expect(older.nextCursor).toBeNull();
+    });
+
+    it("should page backwards with nextCursor until no older entries remain", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\ne\n" });
+
+      const seen: string[] = [];
+      let result = await page({ limit: 2 });
+      seen.push(...result.entries.map((e) => e.content));
+      while (result.nextCursor) {
+        result = await page({ limit: 2, before: result.nextCursor });
+        seen.push(...result.entries.map((e) => e.content));
+      }
+
+      expect(seen).toEqual(["e", "d", "c", "b", "a"]);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it("should not shift a page when new lines are appended after the cursor", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\n" });
+      const first = await page({ limit: 2 });
+
+      serveFiles({ "20260401": "a\nb\nc\nd\nnew-1\nnew-2\n" });
+      const second = await page({ limit: 2, before: first.nextCursor! });
+
+      expect(first.entries.map((e) => e.content)).toEqual(["d", "c"]);
+      expect(second.entries.map((e) => e.content)).toEqual(["b", "a"]);
+    });
+
+    it("should accept a runtime _key as the cursor", async () => {
+      const line = (i: number) =>
+        `{"_key":"1775001600000000000-${i}","message":"m${i}"}`;
+      serveFiles({ "20260401": [0, 1, 2, 3].map(line).join("\n") + "\n" });
+
+      const older = await page({ before: "1775001600000000000-2" });
+
+      expect(older.entries.map((e) => e.key)).toEqual([
+        "1775001600000000000-1",
+        "1775001600000000000-0",
+      ]);
+    });
+
+    it("should continue into earlier days of the window", async () => {
+      serveFiles({ "20260401": "d1-a\nd1-b\n", "20260402": "d2-a\nd2-b\n" });
+
+      const older = await page({
+        date: undefined,
+        dateRange: "20260401-20260402",
+        before: "20260402:5",
+      });
+
+      expect(older.entries.map((e) => e.content)).toEqual([
+        "d2-a",
+        "d1-b",
+        "d1-a",
+      ]);
+    });
+
+    it("should return the entries just before the cursor oldest-first when sort=asc", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\ne\n" });
+
+      const older = await page({ before: "20260401:8", limit: 2, sort: "asc" });
+
+      expect(older.entries.map((e) => e.content)).toEqual(["c", "d"]);
+      expect(older.hasMore).toBe(true);
+      expect(older.nextCursor).toBe("20260401:4");
+    });
+
+    it("should keep only metric lines older than the cursor when type=metrics", async () => {
+      serveFiles({
+        "20260401":
+          '{"_metric":"m1"}\nlog\n{"_metric":"m2"}\n{"_metric":"m3"}\n',
+      });
+
+      const older = await page({ before: "20260401:38", type: "metrics" });
+
+      expect(older.entries.map((e) => e.content)).toEqual([
+        '{"_metric":"m2"}',
+        '{"_metric":"m1"}',
+      ]);
+    });
+
+    it("should reject a cursor that matches no entry", async () => {
+      serveFiles({ "20260401": "a\n" });
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        before: "1775001600000000000-9",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/cursor/i);
+      expect(result.error).not.toMatch(/not found/i);
+    });
+
+    it("should reject a malformed cursor", async () => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        before: "not-a-key",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/cursor/i);
+    });
+
+    it("should refuse before combined with offset", async () => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 5,
+        before: "20260401:4",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/offset/);
+    });
+
+    it("should report nextCursor on an offset page that has more", async () => {
+      serveFiles({ "20260401": "a\nb\nc\n" });
+
+      const first = await page({ limit: 2 });
+
+      expect(first.hasMore).toBe(true);
+      expect(first.nextCursor).toBe("20260401:2");
+    });
+
+    describe("repeated runtime keys", () => {
+      // A storage append that completed but timed out is retried with the
+      // same bytes, so one daily file can hold a chunk twice.
+      const keyed = (i: number) =>
+        `{"_key":"1775001600000000000-${i}","message":"m${i}"}`;
+      const file = [keyed(1), keyed(2), keyed(1), keyed(3)].join("\n") + "\n";
+
+      it("should return a repeated key once", async () => {
+        serveFiles({ "20260401": file });
+
+        const all = await page({});
+
+        expect(all.entries.map((e) => e.key)).toEqual([
+          "1775001600000000000-3",
+          "1775001600000000000-2",
+          "1775001600000000000-1",
+        ]);
+      });
+
+      it("should page across a repeated key without skipping or looping", async () => {
+        serveFiles({ "20260401": file });
+
+        const keys: string[] = [];
+        let result = await page({ limit: 1 });
+        keys.push(...result.entries.map((e) => e.key));
+        for (let i = 0; result.nextCursor && i < 10; i++) {
+          result = await page({ limit: 1, before: result.nextCursor });
+          keys.push(...result.entries.map((e) => e.key));
+        }
+
+        expect(result.nextCursor).toBeNull();
+        expect(new Set(keys)).toEqual(
+          new Set([
+            "1775001600000000000-1",
+            "1775001600000000000-2",
+            "1775001600000000000-3",
+          ]),
+        );
+      });
+    });
+  });
+
   describe("getLogs - auth and validation", () => {
     it("should return failure when user is not authenticated", async () => {
       const unauthService = new LogsService(

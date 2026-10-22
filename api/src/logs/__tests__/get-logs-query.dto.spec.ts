@@ -42,4 +42,22 @@ describe("GetLogsQueryDto", () => {
       ).toBeGreaterThan(0);
     });
   });
+
+  describe("before cursor", () => {
+    it.each(["20260401:4", "1792713599999000000-3"])(
+      "accepts before=%s",
+      async (before) => {
+        const { dto, errors } = await validateQuery({ before });
+
+        expect(errors).toHaveLength(0);
+        expect(dto.before).toBe(before);
+      },
+    );
+
+    it("rejects a before longer than any entry key", async () => {
+      const { errors } = await validateQuery({ before: "1".repeat(65) });
+
+      expect(errors[0].property).toBe("before");
+    });
+  });
 });
