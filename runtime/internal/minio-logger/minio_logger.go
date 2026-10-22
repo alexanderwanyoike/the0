@@ -16,8 +16,9 @@ import (
 )
 
 type MinIOLogger interface {
-	// AppendBotLogs appends a chunk to the bot's daily log file; at is the
-	// chunk time, which picks the daily file.
+	// AppendBotLogs appends an already formatted chunk (see FormatLogChunk)
+	// to the bot's daily log file as is; at is the chunk time, which picks
+	// the daily file.
 	AppendBotLogs(ctx context.Context, id string, logs string, at time.Time) error
 	StoreFinalLogs(ctx context.Context, id string, logs string) error
 	Close() error
@@ -207,13 +208,12 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string,
 	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, at.Format("20060102"))
 	m.logger.Debug("Attempting to append logs to MinIO", "path", dailyKey, "bucket", m.logsBucket)
 
-	// Format the new log entry as NDJSON with guaranteed timestamp fields.
-	content := FormatLogChunk(logs, at)
-
-	// Upload the new chunk as a temporary object.
-	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, at.UnixNano())
-	reader := strings.NewReader(content)
-	_, err := m.client.PutObject(ctx, m.logsBucket, tmpKey, reader, int64(len(content)), minio.PutObjectOptions{
+	// Upload the new chunk as a temporary object. The clock, not at, names
+	// it: a retried chunk reuses at and must not collide with a temp object
+	// whose cleanup failed.
+	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, time.Now().UnixNano())
+	reader := strings.NewReader(logs)
+	_, err := m.client.PutObject(ctx, m.logsBucket, tmpKey, reader, int64(len(logs)), minio.PutObjectOptions{
 		ContentType: "text/plain",
 	})
 	if err != nil {
@@ -282,7 +282,7 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string,
 
 		var buffer bytes.Buffer
 		buffer.Write(existingContent)
-		buffer.WriteString(content)
+		buffer.WriteString(logs)
 
 		combined := bytes.NewReader(buffer.Bytes())
 		_, err = m.client.PutObject(ctx, m.logsBucket, dailyKey, combined, int64(buffer.Len()), minio.PutObjectOptions{

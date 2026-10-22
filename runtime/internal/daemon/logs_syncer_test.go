@@ -115,7 +115,7 @@ func TestLogsSyncer_DefaultUploadTimeoutIs120s(t *testing.T) {
 	require.NotNil(t, syncer)
 
 	start := time.Now()
-	err := syncer.uploadChunk(context.Background(), "hello")
+	err := syncer.uploadChunk(context.Background(), logChunk{content: "hello"})
 	require.NoError(t, err)
 
 	require.False(t, recorder.observedDeadline.IsZero(), "upload should have observed a ctx deadline")
@@ -130,7 +130,7 @@ func TestLogsSyncer_WithUploadTimeoutOverridesDefault(t *testing.T) {
 	require.NotNil(t, syncer)
 
 	start := time.Now()
-	err := syncer.uploadChunk(context.Background(), "hello")
+	err := syncer.uploadChunk(context.Background(), logChunk{content: "hello"})
 	require.NoError(t, err)
 
 	gotTimeout := recorder.observedDeadline.Sub(start)
@@ -143,7 +143,7 @@ func TestLogsSyncer_UploadTimeoutEnforced(t *testing.T) {
 	syncer := NewLogsSyncer("bot-1", "/logs", recorder, nil, &util.DefaultLogger{}, WithLogsUploadTimeout(50*time.Millisecond))
 	require.NotNil(t, syncer)
 
-	err := syncer.uploadChunk(context.Background(), "hello")
+	err := syncer.uploadChunk(context.Background(), logChunk{content: "hello"})
 	require.Error(t, err, "upload must error when mock blocks past the configured timeout")
 	assert.True(t, errors.Is(err, context.DeadlineExceeded),
 		"error should wrap context.DeadlineExceeded, got %v", err)
