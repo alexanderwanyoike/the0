@@ -100,6 +100,7 @@ export class LogStreamService {
         date: utcDay(new Date()),
         limit: 1000,
         offset: 0,
+        sort: "asc",
       },
       userId,
     );
