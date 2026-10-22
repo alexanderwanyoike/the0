@@ -113,6 +113,9 @@ spec:
             - "--minio-bucket={{ .Values.botController.minio.bucket }}"
             - "--runtime-image={{ .Values.botController.runtimeImage | default (printf "%s:%s" .Values.botController.image.repository .Chart.AppVersion) }}"
             - "--runtime-image-pull-policy={{ .Values.botController.runtimeImagePullPolicy }}"
+            - "--storage-credentials-secret={{ include "the0.secretName" . }}"
+            - "--storage-credentials-access-key-field=minio-access-key"
+            - "--storage-credentials-secret-key-field=minio-secret-key"
           env:
             - name: NAMESPACE
               value: {{ .Release.Namespace | quote }}
