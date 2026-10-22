@@ -338,6 +338,28 @@ describe("LogStreamService", () => {
       if (closeHandler2) closeHandler2();
     });
 
+    describe("UTC day files", () => {
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it("should read today's history from the UTC day file", async () => {
+        // Tests run in Pacific/Kiritimati (UTC+14), where this is Oct 23
+        jest.useFakeTimers({
+          now: new Date("2026-10-22T12:00:00Z"),
+          doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+        });
+
+        await service.stream("bot-utc", userId, mockReq, mockRes);
+
+        expect(mockLogsService.getLogs).toHaveBeenCalledWith(
+          "bot-utc",
+          expect.objectContaining({ date: "20261022" }),
+          userId,
+        );
+      });
+    });
+
     describe("history opt-out", () => {
       const events = (): string[] =>
         mockRes.write.mock.calls.map((call: string[]) => call[0]);

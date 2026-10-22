@@ -1309,15 +1309,11 @@ describe("LogsService", () => {
   });
 
   describe("getLogs - lookbackDays (latest mode)", () => {
-    /** Local-time YYYYMMDD for N days ago, matching the service's day bucketing. */
-    function localDateStr(daysAgo: number): string {
+    /** UTC YYYYMMDD for N days ago, matching the daily log file names. */
+    function utcDateStr(daysAgo: number): string {
       const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      return (
-        d.getFullYear().toString() +
-        String(d.getMonth() + 1).padStart(2, "0") +
-        String(d.getDate()).padStart(2, "0")
-      );
+      d.setUTCDate(d.getUTCDate() - daysAgo);
+      return d.toISOString().slice(0, 10).replace(/-/g, "");
     }
 
     /** Mock MinIO so each logs/bot-1/<date>.log resolves to the given content. */
@@ -1344,8 +1340,8 @@ describe("LogsService", () => {
     }
 
     it("should return newest-first entries across day files without a date param", async () => {
-      const today = localDateStr(0);
-      const older = localDateStr(2);
+      const today = utcDateStr(0);
+      const older = utcDateStr(2);
       mockFiles({
         [`logs/bot-1/${older}.log`]: '{"message":"old-1"}\n{"message":"old-2"}',
         [`logs/bot-1/${today}.log`]: '{"message":"new-1"}\n{"message":"new-2"}',
@@ -1371,9 +1367,9 @@ describe("LogsService", () => {
     it("should return the newest `limit` metric entries across days", async () => {
       const metric = (day: string, n: number) =>
         `{"_metric":"signal","run":"${day}-${n}","timestamp":"2026-01-01T0${n}:00:00Z"}`;
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
-      const older = localDateStr(2);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
+      const older = utcDateStr(2);
       mockFiles({
         [`logs/bot-1/${today}.log`]: [metric("t", 1), metric("t", 2)].join(
           "\n",
@@ -1404,8 +1400,8 @@ describe("LogsService", () => {
     });
 
     it("should stop scanning older days once enough entries are collected", async () => {
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
       mockFiles({
         [`logs/bot-1/${today}.log`]:
           '{"message":"a"}\n{"message":"b"}\n{"message":"c"}',
@@ -1430,8 +1426,8 @@ describe("LogsService", () => {
     });
 
     it("should apply offset across the lookback window for pagination", async () => {
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
       mockFiles({
         [`logs/bot-1/${today}.log`]: '{"message":"t1"}\n{"message":"t2"}',
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
@@ -1450,8 +1446,8 @@ describe("LogsService", () => {
     });
 
     it("should return chronological order when sort=asc", async () => {
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
       mockFiles({
         [`logs/bot-1/${today}.log`]: '{"message":"t1"}\n{"message":"t2"}',
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
@@ -1474,7 +1470,7 @@ describe("LogsService", () => {
     });
 
     it("should fall back to a full read when the tail window holds too few lines", async () => {
-      const today = localDateStr(0);
+      const today = utcDateStr(0);
       const todayPath = `logs/bot-1/${today}.log`;
       // File larger than the 512KB tail window whose tail only contains 2
       // lines (very long lines); the full file has 5
@@ -1887,6 +1883,51 @@ describe("LogsService", () => {
     });
   });
 
+  describe("getLogs - UTC day files", () => {
+    // Tests run in Pacific/Kiritimati (UTC+14), where this is Oct 23
+    beforeEach(() => {
+      jest.useFakeTimers({
+        now: new Date("2026-10-22T12:00:00Z"),
+        doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+      });
+      mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
+      mockMinioClient.getObject.mockRejectedValue({ code: "NoSuchKey" });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    const readPaths = () =>
+      [
+        ...mockMinioClient.statObject.mock.calls,
+        ...mockMinioClient.getObject.mock.calls,
+      ].map((call: string[]) => call[1]);
+
+    it("should start a lookback at today's UTC day", async () => {
+      await service.getLogs("bot-1", {
+        lookbackDays: 2,
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(new Set(readPaths())).toEqual(
+        new Set(["logs/bot-1/20261022.log", "logs/bot-1/20261021.log"]),
+      );
+    });
+
+    it("should read the UTC days a datetime range with an offset covers", async () => {
+      await service.getLogs("bot-1", {
+        dateRange: "2026-10-22T01:00:00+05:00--2026-10-22T03:00:00+05:00",
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(new Set(readPaths())).toEqual(
+        new Set(["logs/bot-1/20261021.log"]),
+      );
+    });
+  });
   describe("getLogs - auth and validation", () => {
     it("should return failure when user is not authenticated", async () => {
       const unauthService = new LogsService(

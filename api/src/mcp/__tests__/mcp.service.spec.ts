@@ -575,6 +575,33 @@ describe("McpService", () => {
         expect(data.error_count).toBe(0);
       });
 
+      it("should summarise today's UTC day file", async () => {
+        // Tests run in Pacific/Kiritimati (UTC+14), where this is Oct 23
+        jest.useFakeTimers({
+          now: new Date("2026-10-22T12:00:00Z"),
+          doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+        });
+        try {
+          logsService.getLogs.mockResolvedValue(
+            Ok({ entries: [], hasMore: false, nextCursor: null }),
+          );
+
+          await service.handleToolCall(
+            "logs_summary",
+            { bot_id: "bot-123" },
+            actor,
+          );
+
+          expect(logsService.getLogs).toHaveBeenCalledWith(
+            "bot-123",
+            expect.objectContaining({ date: "20261022" }),
+            actor.userId,
+          );
+        } finally {
+          jest.useRealTimers();
+        }
+      });
+
       it("should count errors in logs", async () => {
         const logsWithErrors = [
           {
