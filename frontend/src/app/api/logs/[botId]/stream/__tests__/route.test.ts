@@ -28,13 +28,13 @@ import { GET } from "../route";
 
 function makeRequest(
   botId: string,
-  { token }: { token?: string } = {},
+  { token, search = "" }: { token?: string; search?: string } = {},
 ): { req: NextRequest; params: Promise<{ botId: string }> } {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = token;
 
   const req = new NextRequest(
-    "http://localhost:3001/api/logs/" + botId + "/stream",
+    "http://localhost:3001/api/logs/" + botId + "/stream" + search,
     {
       headers,
     },
@@ -119,6 +119,25 @@ describe("GET /api/logs/[botId]/stream", () => {
       typeof call[0] === "string" ? call[0] : (call[0]?.url ?? String(call[0]));
     expect(calledUrl).toBe(
       "http://localhost:3000/logs/bot%2Fspecial%20chars/stream",
+    );
+  });
+
+  it("forwards the query string to the upstream stream", async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(new ReadableStream(), { status: 200 }),
+    );
+
+    const { req, params } = makeRequest("bot-123", {
+      token: "Bearer test-token",
+      search: "?history=false",
+    });
+    await GET(req, { params });
+
+    const call = mockFetch.mock.calls[0];
+    const calledUrl =
+      typeof call[0] === "string" ? call[0] : (call[0]?.url ?? String(call[0]));
+    expect(calledUrl).toBe(
+      "http://localhost:3000/logs/bot-123/stream?history=false",
     );
   });
 
