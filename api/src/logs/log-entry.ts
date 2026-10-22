@@ -46,7 +46,7 @@ const RUNTIME_KEY = /^(\d{7,})-\d+$/;
  * The runtime names a chunk's daily file after the UTC day of the chunk time
  * it puts in every `_key` of that chunk, so a live line can name its file.
  */
-function runtimeKeyDay(key: string): string | null {
+export function runtimeKeyDay(key: string): string | null {
   const match = RUNTIME_KEY.exec(key);
   if (!match) return null;
   const millis = Number(match[1].slice(0, -6));

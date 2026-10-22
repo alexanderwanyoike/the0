@@ -45,7 +45,8 @@ export class LogsController {
     summary: "Read a bot's logs",
     description:
       "Pass `date`, `dateRange` or `lookbackDays`. Without a date or range, " +
-      "`lookbackDays` returns the newest entries from up to that many days.",
+      "`lookbackDays` returns the newest entries from up to that many days. " +
+      "Page to older entries with `before=<nextCursor>`.",
   })
   @ApiParam(BOT_ID_PARAM)
   @ApiBadRequestResponse({ description: "Invalid bot ID or query" })
@@ -67,6 +68,7 @@ export class LogsController {
         lookbackDays: query.lookbackDays,
         limit: query.limit || 100,
         offset: query.offset || 0,
+        before: query.before,
         type: query.type,
         sort: query.sort || "desc",
       },
@@ -87,6 +89,7 @@ export class LogsController {
       success: true,
       data: result.data.entries,
       hasMore: result.data.hasMore,
+      nextCursor: result.data.nextCursor,
       message: "Logs retrieved successfully",
     };
   }
