@@ -2,8 +2,6 @@ import type { LogEntry, LogsQuery, PageMerge } from "@/types/logs";
 
 export const MAX_LOG_ENTRIES = 10000;
 
-const entryKey = (l: LogEntry) => `${l.date}|${l.content}`;
-
 /** A date or date range pins the view to history, which live streaming
  *  cannot extend. */
 export function isHistoricalQuery(query: LogsQuery): boolean {
@@ -52,8 +50,8 @@ export function mergeUniqueEntries(
   page: LogEntry[],
   direction: "append" | "prepend",
 ): LogEntry[] {
-  const existing = new Set(prev.map(entryKey));
-  const unique = page.filter((l) => !existing.has(entryKey(l)));
+  const existing = new Set(prev.map((l) => l.key));
+  const unique = page.filter((l) => !existing.has(l.key));
   return direction === "append"
     ? [...prev, ...unique].slice(-MAX_LOG_ENTRIES)
     : [...unique, ...prev].slice(0, MAX_LOG_ENTRIES);

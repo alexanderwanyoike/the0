@@ -285,7 +285,7 @@ export const useBotLogs = ({
         pendingUpdatesRef.current.push(...entries);
         return;
       }
-      setLogs((prev) => [...prev, ...entries].slice(-MAX_LOG_ENTRIES));
+      setLogs((prev) => mergeUniqueEntries(prev, entries, "append"));
       setLastUpdate(new Date());
     } catch (err) {
       console.error("Failed to parse update SSE event:", err);
