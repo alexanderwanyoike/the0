@@ -702,3 +702,62 @@ func TestPodGenerator_NATSURLPropagation(t *testing.T) {
 		assert.False(t, present)
 	})
 }
+
+func TestPodGenerator_StorageCredentialsComeFromTheSecret(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "literal-access-key",
+		MinIOSecretKey: "literal-secret-key",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+		StorageCredentials: StorageCredentialsSecret{
+			Name:         "the0-the0-secrets",
+			AccessKeyKey: "minio-access-key",
+			SecretKeyKey: "minio-secret-key",
+		},
+	})
+	bot := natsTestBot("creds-bot", "python3.11")
+	bot.CustomBotVersion.Config.Entrypoints["query"] = "query.py"
+
+	realtime, err := generator.GeneratePod(bot)
+	require.NoError(t, err)
+	scheduled, err := generator.GenerateScheduledPodSpec(bot)
+	require.NoError(t, err)
+	queryPod, err := generator.GenerateQueryPod(bot, "/status", nil, "creds-bot/1/result.json")
+	require.NoError(t, err)
+
+	specs := map[string]corev1.PodSpec{
+		"realtime":  realtime.Spec,
+		"scheduled": *scheduled,
+		"query":     queryPod.Spec,
+	}
+	for kind, spec := range specs {
+		containers := append(append([]corev1.Container{}, spec.InitContainers...), spec.Containers...)
+		for _, container := range containers {
+			t.Run(kind+"/"+container.Name, func(t *testing.T) {
+				for _, env := range container.Env {
+					assert.NotContains(t, []string{"literal-access-key", "literal-secret-key"}, env.Value,
+						"%s must not carry a storage credential as a literal value", env.Name)
+				}
+				assertSecretKeyRef(t, container.Env, "MINIO_ACCESS_KEY", "the0-the0-secrets", "minio-access-key")
+				assertSecretKeyRef(t, container.Env, "MINIO_SECRET_KEY", "the0-the0-secrets", "minio-secret-key")
+			})
+		}
+	}
+}
+
+func assertSecretKeyRef(t *testing.T, env []corev1.EnvVar, name, secret, key string) {
+	t.Helper()
+	for _, variable := range env {
+		if variable.Name != name {
+			continue
+		}
+		require.NotNil(t, variable.ValueFrom, "%s must come from the secret", name)
+		require.NotNil(t, variable.ValueFrom.SecretKeyRef, "%s must come from the secret", name)
+		assert.Equal(t, secret, variable.ValueFrom.SecretKeyRef.Name)
+		assert.Equal(t, key, variable.ValueFrom.SecretKeyRef.Key)
+		return
+	}
+	t.Errorf("%s is not set", name)
+}
