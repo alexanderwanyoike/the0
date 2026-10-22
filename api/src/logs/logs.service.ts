@@ -50,8 +50,6 @@ interface DatedLogsRead {
 interface PageRead {
   entries: LogEntry[];
   hasMore: boolean;
-  /** False when the read started at the oldest entry and paged forward. */
-  readNewestFirst: boolean;
 }
 
 /** Entries before this byte position of this daily file are older. */
@@ -153,7 +151,7 @@ export class LogsService {
     // used for raw logs (whose streams stop early at the limit).
     const hasMore =
       query.type === "metrics" ? metricsHasMore : entries.length >= query.limit;
-    return Ok({ entries, hasMore, readNewestFirst: true });
+    return Ok({ entries, hasMore });
   }
 
   private static readonly INVALID_WINDOW =
@@ -240,7 +238,7 @@ export class LogsService {
     const oldest =
       query.sort === "asc" ? entries[0] : entries[entries.length - 1];
     const nextCursor =
-      read.hasMore && read.readNewestFirst && oldest
+      read.hasMore && oldest
         ? `${oldest.date}:${this.offsets.get(oldest)}`
         : null;
     return { entries, hasMore: read.hasMore, nextCursor };
@@ -326,32 +324,6 @@ export class LogsService {
     return { entries, metricsHasMore };
   }
 
-  private async streamDatesOldestFirst(
-    botId: string,
-    dates: string[],
-    query: LogsQuery,
-  ): Promise<DatedLogsRead> {
-    const entries: LogEntry[] = [];
-    const skipped = { count: 0 };
-    for (const date of dates) {
-      await this.streamFilteredLogs(
-        dayLogPath(botId, date),
-        date,
-        query,
-        entries,
-        skipped,
-      );
-      // Metric streams don't stop at the limit mid-file (the whole day
-      // is read), so one extra entry past the limit is the hasMore
-      // sentinel; raw-log streams stop exactly at the limit.
-      if (entries.length > query.limit) break;
-      if (query.type !== "metrics" && entries.length >= query.limit) break;
-    }
-    const metricsHasMore = entries.length > query.limit;
-    if (entries.length > query.limit) entries.length = query.limit;
-    return { entries, metricsHasMore };
-  }
-
   /**
    * Walks day files newest-first and collects entries until offset+limit+1
    * are found. The +1 sentinel lets hasMore reflect real data instead of
@@ -425,7 +397,7 @@ export class LogsService {
     const hasMore = afterOffset.length > query.limit;
     const entries = afterOffset.slice(0, query.limit);
     if (query.sort === "asc") entries.reverse();
-    return { entries, hasMore, readNewestFirst: true };
+    return { entries, hasMore };
   }
 
   /** Newest-first YYYYMMDD list: today back through `days` UTC days. */
