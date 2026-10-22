@@ -304,16 +304,14 @@ export class LogsService {
     query: LogsQuery,
   ): Promise<DatedLogsRead> {
     const entries: LogEntry[] = [];
-    const skipped = { count: 0 };
     const maxRead = Math.max(query.offset + query.limit, 10000);
-    const cappedQuery = { ...query, offset: 0, limit: maxRead };
+    const cappedQuery = { ...query, limit: maxRead };
     for (const date of dates) {
       await this.streamFilteredLogs(
         dayLogPath(botId, date),
         date,
         cappedQuery,
         entries,
-        skipped,
       );
       if (entries.length >= maxRead) break;
     }
@@ -347,22 +345,14 @@ export class LogsService {
       const end = bound?.date === date ? bound.offset : undefined;
       const dayEntries: LogEntry[] = [];
       if (query.type === "metrics") {
-        // Metric lines are sparse; stream the whole day file. Offset is
-        // deliberately zeroed - pagination applies to the flattened result.
-        await this.streamFilteredLogs(
-          logPath,
-          date,
-          { ...query, offset: 0 },
-          dayEntries,
-          { count: 0 },
-          end,
-        );
+        // Metric lines are sparse; stream the whole day file.
+        await this.streamFilteredLogs(logPath, date, query, dayEntries, end);
       } else {
         // Raw logs can be huge; tail keeps only the newest lines per day.
         const truncated = await this.tailFilteredLogs(
           logPath,
           date,
-          { ...query, offset: 0, limit: maxNeeded },
+          { ...query, limit: maxNeeded },
           dayEntries,
           end,
         );
@@ -375,9 +365,8 @@ export class LogsService {
           await this.streamFilteredLogs(
             logPath,
             date,
-            { ...query, offset: 0, limit: Math.max(maxNeeded, 10000) },
+            { ...query, limit: Math.max(maxNeeded, 10000) },
             dayEntries,
-            { count: 0 },
             end,
           );
         }
@@ -417,7 +406,6 @@ export class LogsService {
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-    skipped: { count: number },
     end?: number,
   ): Promise<void> {
     const stream = await this.openLogStream(logPath, end);
@@ -426,7 +414,7 @@ export class LogsService {
     const splitter = new LineSplitter();
     for await (const chunk of stream) {
       for (const { line, offset } of splitter.push(chunk)) {
-        if (!this.collectLine(line, offset, logDate, query, entries, skipped)) {
+        if (!this.collectLine(line, offset, logDate, query, entries)) {
           continue;
         }
         if (query.type !== "metrics" && entries.length >= query.limit) {
@@ -446,7 +434,6 @@ export class LogsService {
         logDate,
         query,
         entries,
-        skipped,
       );
     }
   }
@@ -478,9 +465,8 @@ export class LogsService {
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-    skipped: { count: number },
   ): boolean {
-    if (!this.passesLineFilters(line, query, skipped)) return false;
+    if (!this.passesLineFilters(line, query)) return false;
     const entry = this.storedEntry(line, logDate, offset);
     if (LogsService.isOutsideTimeWindow(entry, query)) return false;
     entries.push(entry);
@@ -498,30 +484,17 @@ export class LogsService {
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-    skipped: { count: number },
   ): void {
-    if (!this.passesLineFilters(leftover, query, skipped)) return;
+    if (!this.passesLineFilters(leftover, query)) return;
     if (query.type !== "metrics" && entries.length >= query.limit) return;
     const entry = this.storedEntry(leftover, logDate, offset);
     if (LogsService.isOutsideTimeWindow(entry, query)) return;
     entries.push(entry);
   }
 
-  /** Not a pure check: a line skipped for the offset is consumed here. */
-  private passesLineFilters(
-    line: string,
-    query: LogsQuery,
-    skipped: { count: number },
-  ): boolean {
+  private passesLineFilters(line: string, query: LogsQuery): boolean {
     if (!line.trim()) return false;
-    if (query.type === "metrics" && !LogsService.isMetricLine(line)) {
-      return false;
-    }
-    if (skipped.count < query.offset) {
-      skipped.count++;
-      return false;
-    }
-    return true;
+    return query.type !== "metrics" || LogsService.isMetricLine(line);
   }
 
   /** Metric detection parses JSON instead of string-matching "_metric",
