@@ -28,9 +28,9 @@ import {
   MAX_LOG_ENTRIES,
   formatLogsForExport,
   isHistoricalQuery,
+  mergeLiveEntries,
   mergeUniqueEntries,
   parseLiveUpdate,
-  toDisplayOrder,
 } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -78,7 +78,7 @@ export interface UseBotLogsReturn {
   exportLogs: () => void;
 }
 
-const DEFAULT_QUERY: LogsQuery = { limit: 1000, sort: "desc" };
+const DEFAULT_QUERY: LogsQuery = { limit: 1000, sort: "asc" };
 /** How far back latest mode is willing to scan for a bot's most recent
  *  output. Scheduled bots that run weekly stay well inside this window. */
 export const DEFAULT_LOOKBACK_DAYS = 30;
@@ -127,8 +127,6 @@ export const useBotLogs = ({
   // live lines arrive after it and must not move it.
   const nextCursorRef = useRef<string | null>(null);
   // Prop refs so effects/callbacks read latest values without re-running
-  const streamingRef = useRef(streaming);
-  streamingRef.current = streaming;
   const initialQueryRef = useRef(initialQuery);
   initialQueryRef.current = initialQuery;
   const queryRef = useRef(query);
@@ -158,13 +156,13 @@ export const useBotLogs = ({
     if (pendingUpdatesRef.current.length === 0) return;
     const pending = pendingUpdatesRef.current;
     pendingUpdatesRef.current = [];
-    setLogs((prev) => mergeUniqueEntries(prev, pending, "append"));
+    setLogs((prev) => mergeLiveEntries(prev, pending, queryRef.current.sort));
   }, []);
 
   // -- REST fetch (history, filters, pagination, polling) --
 
   const applyPage = useCallback(
-    (page: LogsPage, merge: PageMerge, live: boolean) => {
+    (page: LogsPage, merge: PageMerge, sort: LogsQuery["sort"]) => {
       nextCursorRef.current = page.nextCursor;
       const hasOlder = page.hasMore && page.nextCursor !== null;
       if (merge) {
@@ -178,9 +176,9 @@ export const useBotLogs = ({
         // Merge in any live updates that arrived while the fetch was in
         // flight (React applies the updater after the set above).
         flushPendingUpdates();
-        // Live history extends backwards (earlier logs); REST pages forwards
-        setHasEarlierLogs(live ? hasOlder : false);
-        setHasMore(live ? false : hasOlder);
+        // Older pages extend the oldest side of the order shown
+        setHasEarlierLogs(sort === "asc" ? hasOlder : false);
+        setHasMore(sort === "asc" ? false : hasOlder);
       }
       setLastUpdate(new Date());
     },
@@ -240,12 +238,7 @@ export const useBotLogs = ({
         }
 
         const page = await fetchLogsPage(botId, queryParams, controller.signal);
-        const live = streamingRef.current && !isHistoricalQuery(queryParams);
-        applyPage(
-          { ...page, entries: toDisplayOrder(page.entries, live, merge) },
-          merge,
-          live,
-        );
+        applyPage(page, merge, queryParams.sort);
         return true;
       } catch (err: any) {
         // Intentional aborts (unmount, bot switch, filter change) are silent.
@@ -281,7 +274,7 @@ export const useBotLogs = ({
         pendingUpdatesRef.current.push(...entries);
         return;
       }
-      setLogs((prev) => mergeUniqueEntries(prev, entries, "append"));
+      setLogs((prev) => mergeLiveEntries(prev, entries, queryRef.current.sort));
       setLastUpdate(new Date());
     } catch (err) {
       console.error("Failed to parse update SSE event:", err);

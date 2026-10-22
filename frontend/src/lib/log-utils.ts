@@ -1,4 +1,4 @@
-import type { LogEntry, LogsQuery, PageMerge } from "@/types/logs";
+import type { LogEntry, LogsQuery } from "@/types/logs";
 
 export const MAX_LOG_ENTRIES = 10000;
 
@@ -30,18 +30,6 @@ export function buildLogsSearchParams(query: LogsQuery): URLSearchParams {
 }
 
 /**
- * Live mode fetches sort=desc (latest N) but displays chronologically so SSE
- * appends land at the bottom. Appended pages are already in display order.
- */
-export function toDisplayOrder(
-  entries: LogEntry[],
-  live: boolean,
-  merge: PageMerge,
-): LogEntry[] {
-  return live && merge !== "append" ? [...entries].reverse() : entries;
-}
-
-/**
  * Join a page onto existing logs, skipping entries already present. Trimming
  * a full buffer keeps the side the page was added to.
  */
@@ -55,6 +43,21 @@ export function mergeUniqueEntries(
   return direction === "append"
     ? [...prev, ...unique].slice(-MAX_LOG_ENTRIES)
     : [...unique, ...prev].slice(0, MAX_LOG_ENTRIES);
+}
+
+/**
+ * Join live lines onto logs shown in `sort` order: on the newest side, the
+ * end of a chronological view or the top of a newest-first one. A live chunk
+ * is oldest-first, so a newest-first view takes it newest line first.
+ */
+export function mergeLiveEntries(
+  prev: LogEntry[],
+  entries: LogEntry[],
+  sort: LogsQuery["sort"],
+): LogEntry[] {
+  return sort === "asc"
+    ? mergeUniqueEntries(prev, entries, "append")
+    : mergeUniqueEntries(prev, [...entries].reverse(), "prepend");
 }
 
 /** The api's type=metrics rule (logs.service isMetricLine), which history
