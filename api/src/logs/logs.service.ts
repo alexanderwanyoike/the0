@@ -136,11 +136,7 @@ export class LogsService {
     const dates = this.parseDateQuery(query);
     if (!dates.length) return Failure(LogsService.INVALID_WINDOW);
 
-    if (!this.isSingleDayTail(dates, query)) {
-      return Ok(await this.readNewestFirst(botId, [...dates].reverse(), query));
-    }
-    const entries = await this.readSingleDay(botId, dates[0], query);
-    return Ok({ entries, hasMore: entries.length >= query.limit });
+    return Ok(await this.readNewestFirst(botId, [...dates].reverse(), query));
   }
 
   private static readonly INVALID_WINDOW =
