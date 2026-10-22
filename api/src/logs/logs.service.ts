@@ -53,7 +53,8 @@ interface FilePosition {
   offset: number;
 }
 
-const POSITION_KEY = /^(\d{8}):(\d+)$/;
+// 15 digits stay within Number.MAX_SAFE_INTEGER, far past any daily file.
+const POSITION_KEY = /^(\d{8}):(\d{1,15})$/;
 
 const dayLogPath = (botId: string, date: string): string =>
   `logs/${botId}/${date}.log`;
