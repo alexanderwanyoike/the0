@@ -35,6 +35,8 @@ type ManagerConfig struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 
+	StorageCredentials podgen.StorageCredentialsSecret
+
 	// NATSURL for live log publishing from bot pods (empty disables)
 	NATSURL string
 
@@ -96,23 +98,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	}
 
 	// Create bot controller
-	botCtrl := NewBotController(
-		BotControllerConfig{
-			Namespace:              config.Namespace,
-			ReconcileInterval:      config.ReconcileInterval,
-			ControllerName:         botControllerName,
-			MinIOEndpoint:          config.MinIOEndpoint,
-			MinIOAccessKey:         config.MinIOAccessKey,
-			MinIOSecretKey:         config.MinIOSecretKey,
-			MinIOBucket:            config.MinIOBucket,
-			MinIOUseSSL:            config.MinIOUseSSL,
-			NATSURL:                config.NATSURL,
-			RuntimeImage:           config.RuntimeImage,
-			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
-		},
-		state,
-		podClient,
-	)
+	botCtrl := NewBotController(config.botControllerConfig(botControllerName), state, podClient)
 
 	// Create CronJob client
 	scheduleControllerName := "the0-schedule-controller"
@@ -122,23 +108,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	}
 
 	// Create schedule controller
-	scheduleCtrl := NewBotScheduleController(
-		BotScheduleControllerConfig{
-			Namespace:              config.Namespace,
-			ReconcileInterval:      config.ReconcileInterval,
-			ControllerName:         scheduleControllerName,
-			MinIOEndpoint:          config.MinIOEndpoint,
-			MinIOAccessKey:         config.MinIOAccessKey,
-			MinIOSecretKey:         config.MinIOSecretKey,
-			MinIOBucket:            config.MinIOBucket,
-			MinIOUseSSL:            config.MinIOUseSSL,
-			NATSURL:                config.NATSURL,
-			RuntimeImage:           config.RuntimeImage,
-			RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
-		},
-		state,
-		cronClient,
-	)
+	scheduleCtrl := NewBotScheduleController(config.scheduleControllerConfig(scheduleControllerName), state, cronClient)
 
 	// Create K8s clientset for query server
 	k8sConfig, err := rest.InClusterConfig()
@@ -152,17 +122,7 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 	}
 
 	// Create pod generator for query handler
-	podGenerator := podgen.NewPodGenerator(podgen.PodGeneratorConfig{
-		Namespace:              config.Namespace,
-		ControllerName:         "the0-query-handler",
-		MinIOEndpoint:          config.MinIOEndpoint,
-		MinIOAccessKey:         config.MinIOAccessKey,
-		MinIOSecretKey:         config.MinIOSecretKey,
-		MinIOBucket:            config.MinIOBucket,
-		MinIOUseSSL:            config.MinIOUseSSL,
-		RuntimeImage:           config.RuntimeImage,
-		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
-	})
+	podGenerator := podgen.NewPodGenerator(config.queryPodGeneratorConfig())
 
 	// Create MinIO client for query result storage
 	storageCfg := &storage.Config{
@@ -206,6 +166,55 @@ func NewManager(mongoClient *mongo.Client, config ManagerConfig) (*Manager, erro
 		queryServer:        queryServer,
 		stopCh:             make(chan struct{}),
 	}, nil
+}
+
+func (config ManagerConfig) botControllerConfig(name string) BotControllerConfig {
+	return BotControllerConfig{
+		Namespace:              config.Namespace,
+		ReconcileInterval:      config.ReconcileInterval,
+		ControllerName:         name,
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		StorageCredentials:     config.StorageCredentials,
+		NATSURL:                config.NATSURL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
+	}
+}
+
+func (config ManagerConfig) scheduleControllerConfig(name string) BotScheduleControllerConfig {
+	return BotScheduleControllerConfig{
+		Namespace:              config.Namespace,
+		ReconcileInterval:      config.ReconcileInterval,
+		ControllerName:         name,
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		StorageCredentials:     config.StorageCredentials,
+		NATSURL:                config.NATSURL,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: config.RuntimeImagePullPolicy,
+	}
+}
+
+func (config ManagerConfig) queryPodGeneratorConfig() podgen.PodGeneratorConfig {
+	return podgen.PodGeneratorConfig{
+		Namespace:              config.Namespace,
+		ControllerName:         "the0-query-handler",
+		MinIOEndpoint:          config.MinIOEndpoint,
+		MinIOAccessKey:         config.MinIOAccessKey,
+		MinIOSecretKey:         config.MinIOSecretKey,
+		MinIOBucket:            config.MinIOBucket,
+		MinIOUseSSL:            config.MinIOUseSSL,
+		StorageCredentials:     config.StorageCredentials,
+		RuntimeImage:           config.RuntimeImage,
+		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
+	}
 }
 
 // Start starts all controllers and waits for them to be ready.

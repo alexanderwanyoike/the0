@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.15.0
-appVersion: "1.20.0"
+version: 0.15.1
+appVersion: "1.20.1"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -31,17 +31,23 @@ annotations:
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
     - kind: fixed
-      description: "Docker and Kubernetes run the same bots: both treat a bot or schedule as enabled unless config.enabled is false, and the dashboard shows a bot as enabled by the same rule"
+      description: "Rotating the storage credentials no longer breaks scheduled bots: bot, CronJob and query pods read the storage keys from the release's Secret instead of keeping copies of them"
     - kind: fixed
-      description: "A schedule enabled again in Docker mode first runs at its next tick, as on Kubernetes, instead of at once for a tick it missed"
+      description: "Existing CronJobs and realtime bot pods are updated whenever anything the controller writes into them changes, such as the storage endpoint, buckets or credentials"
+    - kind: security
+      description: "Storage credentials are no longer stored in plain text in bot pod, CronJob and Job specs"
+    - kind: changed
+      description: "Upgrading restarts every realtime bot pod and rewrites every scheduled-bot CronJob once"
+    - kind: security
+      description: "Runtime and CLI built with Go 1.26.10, which distrusts compromised intermediate certificates in crypto/x509 (GO-2026-6809)"
+    - kind: security
+      description: "follow-redirects 1.16.1 in the api and frontend, which strips credential headers on cross-origin redirects (GHSA-8r9p-f939-6h3c, GHSA-q3jh-wrc6-jgq8)"
+    - kind: security
+      description: "Frontend on next 15.5.28 (GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r)"
+    - kind: security
+      description: "Docs site built with vite 6.4.5 and dompurify 3.4.17 (GHSA-587h-7wmj-h5pm, GHSA-mrv2-3pqr-j5jr)"
     - kind: fixed
-      description: "The Kubernetes sync sidecar makes its final state and log sync within its deadline when stopped, instead of with an already cancelled context"
-    - kind: changed
-      description: "Schedules are standard 5-field cron in both modes; a 6-field expression is refused instead of having its seconds trimmed on Kubernetes"
-    - kind: changed
-      description: "One subscriber stores bot and schedule events on the same durable JetStream consumers, so an upgrade resumes where they stopped; the controller now uses one NATS connection and one MongoDB client"
-    - kind: removed
-      description: "Unused code: partitions, the daemon init command, the done-file mechanism and the IS_SCHEDULED variable it relied on"
+      description: "The api image builds against current Alpine packages again"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

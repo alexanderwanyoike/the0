@@ -487,14 +487,14 @@ func TestConfigChanged(t *testing.T) {
 	require.NoError(t, err)
 
 	// Same config should not be changed
-	assert.False(t, generator.ConfigChanged(pod, bot))
+	assert.False(t, configChanged(t, generator, pod, bot))
 
 	// Modified config should be detected
 	botModified := bot
 	botModified.Config = map[string]interface{}{
 		"key": "value2",
 	}
-	assert.True(t, generator.ConfigChanged(pod, botModified))
+	assert.True(t, configChanged(t, generator, pod, botModified))
 
 	// A generator with a different NATS URL must also detect a change, so
 	// existing pods are reconciled when live streaming is (re)configured
@@ -505,7 +505,7 @@ func TestConfigChanged(t *testing.T) {
 		MinIOBucket:    "bots",
 		NATSURL:        "nats://nats:4222",
 	})
-	assert.True(t, natsGenerator.ConfigChanged(pod, bot))
+	assert.True(t, configChanged(t, natsGenerator, pod, bot))
 }
 
 func TestSanitizeLabelValue(t *testing.T) {
@@ -701,4 +701,127 @@ func TestPodGenerator_NATSURLPropagation(t *testing.T) {
 		_, present = botEnv["NATS_URL"]
 		assert.False(t, present)
 	})
+}
+
+func TestPodGenerator_StorageCredentialsComeFromTheSecret(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "literal-access-key",
+		MinIOSecretKey: "literal-secret-key",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+		StorageCredentials: StorageCredentialsSecret{
+			Name:           "the0-the0-secrets",
+			AccessKeyField: "minio-access-key",
+			SecretKeyField: "minio-secret-key",
+		},
+	})
+	bot := natsTestBot("creds-bot", "python3.11")
+	bot.CustomBotVersion.Config.Entrypoints["query"] = "query.py"
+
+	realtime, err := generator.GeneratePod(bot)
+	require.NoError(t, err)
+	scheduled, err := generator.GenerateScheduledPodSpec(bot)
+	require.NoError(t, err)
+	queryPod, err := generator.GenerateQueryPod(bot, "/status", nil, "creds-bot/1/result.json")
+	require.NoError(t, err)
+
+	specs := map[string]corev1.PodSpec{
+		"realtime":  realtime.Spec,
+		"scheduled": *scheduled,
+		"query":     queryPod.Spec,
+	}
+	for kind, spec := range specs {
+		containers := append(append([]corev1.Container{}, spec.InitContainers...), spec.Containers...)
+		for _, container := range containers {
+			t.Run(kind+"/"+container.Name, func(t *testing.T) {
+				for _, env := range container.Env {
+					assert.NotContains(t, []string{"literal-access-key", "literal-secret-key"}, env.Value,
+						"%s must not carry a storage credential as a literal value", env.Name)
+				}
+				assertSecretKeyRef(t, container.Env, "MINIO_ACCESS_KEY", "the0-the0-secrets", "minio-access-key")
+				assertSecretKeyRef(t, container.Env, "MINIO_SECRET_KEY", "the0-the0-secrets", "minio-secret-key")
+			})
+		}
+	}
+}
+
+func assertSecretKeyRef(t *testing.T, env []corev1.EnvVar, name, secret, key string) {
+	t.Helper()
+	for _, variable := range env {
+		if variable.Name != name {
+			continue
+		}
+		require.NotNil(t, variable.ValueFrom, "%s must come from the secret", name)
+		require.NotNil(t, variable.ValueFrom.SecretKeyRef, "%s must come from the secret", name)
+		assert.Equal(t, secret, variable.ValueFrom.SecretKeyRef.Name)
+		assert.Equal(t, key, variable.ValueFrom.SecretKeyRef.Key)
+		return
+	}
+	t.Errorf("%s is not set", name)
+}
+
+func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
+	base := PodGeneratorConfig{
+		Namespace:      "the0",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "key",
+		MinIOSecretKey: "secret",
+		MinIOBucket:    "bots",
+		RuntimeImage:   "the0/runtime:latest",
+	}
+	cases := []struct {
+		name   string
+		change func(*PodGeneratorConfig)
+	}{
+		{"storage endpoint", func(c *PodGeneratorConfig) { c.MinIOEndpoint = "storage.example:443" }},
+		{"storage SSL", func(c *PodGeneratorConfig) { c.MinIOUseSSL = true }},
+		{"code bucket", func(c *PodGeneratorConfig) { c.MinIOBucket = "other-bots" }},
+		{"state bucket", func(c *PodGeneratorConfig) { c.MinIOStateBucket = "other-state" }},
+		{"literal secret key rotated", func(c *PodGeneratorConfig) { c.MinIOSecretKey = "rotated" }},
+		{"credentials moved to the secret", func(c *PodGeneratorConfig) {
+			c.StorageCredentials = StorageCredentialsSecret{Name: "the0-the0-secrets", AccessKeyField: "minio-access-key", SecretKeyField: "minio-secret-key"}
+		}},
+		{"runtime image pull policy", func(c *PodGeneratorConfig) { c.RuntimeImagePullPolicy = corev1.PullAlways }},
+	}
+
+	bot := natsTestBot("rt-bot", "python3.11")
+	pod, err := NewPodGenerator(base).GeneratePod(bot)
+	require.NoError(t, err)
+	require.False(t, configChanged(t, NewPodGenerator(base), pod, bot))
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := base
+			tc.change(&changed)
+			assert.True(t, configChanged(t, NewPodGenerator(changed), pod, bot),
+				"a running pod must be replaced when the pod the generator writes changes")
+		})
+	}
+}
+
+func TestConfigChanged_KeepsAPodWhoseBotCanNoLongerBeGenerated(t *testing.T) {
+	generator := NewPodGenerator(PodGeneratorConfig{MinIOEndpoint: "minio:9000", RuntimeImage: "the0/runtime:latest"})
+	bot := natsTestBot("rt-bot", "python3.11")
+	pod, err := generator.GeneratePod(bot)
+	require.NoError(t, err)
+
+	broken := bot
+	broken.Config = map[string]interface{}{"symbol": "ETH/USD"}
+	broken.CustomBotVersion.Config.Entrypoints = map[string]string{}
+	_, err = generator.GeneratePod(broken)
+	require.Error(t, err)
+
+	changed, err := generator.ConfigChanged(pod, broken)
+	assert.Error(t, err, "the caller needs to know why the bot's new config is not applied")
+	assert.False(t, changed,
+		"the controller deletes changed pods, and a bot it cannot generate could not be recreated")
+}
+
+func configChanged(t *testing.T, generator *PodGenerator, pod *corev1.Pod, bot model.Bot) bool {
+	t.Helper()
+	changed, err := generator.ConfigChanged(pod, bot)
+	require.NoError(t, err)
+	return changed
 }

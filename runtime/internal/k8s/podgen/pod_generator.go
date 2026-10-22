@@ -62,6 +62,8 @@ type PodGeneratorConfig struct {
 	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
 	MinIOUseSSL      bool
 
+	StorageCredentials StorageCredentialsSecret
+
 	// NATSURL enables live log streaming: the sync process publishes bot log
 	// lines to NATS for the API's SSE fan-out. Empty disables publishing.
 	NATSURL string
@@ -71,6 +73,16 @@ type PodGeneratorConfig struct {
 
 	// RuntimeImagePullPolicy for init and sidecar containers (default: IfNotPresent)
 	RuntimeImagePullPolicy corev1.PullPolicy
+}
+
+// StorageCredentialsSecret is the Secret, and its keys, that pods read the
+// storage credentials from, so that a rotated Secret reaches the next pod
+// without the controller rewriting it. An empty Name makes pods carry the
+// credentials as literal values instead.
+type StorageCredentialsSecret struct {
+	Name           string
+	AccessKeyField string
+	SecretKeyField string
 }
 
 // PodGenerator generates Kubernetes Pod specs from Bot models.
@@ -134,10 +146,8 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 			LabelRuntime:          botConfig.runtime,
 			LabelManagedBy:        g.config.ControllerName,
 		}).
-		WithAnnotations(map[string]string{
-			AnnotationConfigHash: g.computeConfigHash(bot),
-		}).
 		WithLaunch(settings).
+		WithStorageCredentialsFrom(g.config.StorageCredentials).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest).
 		WithSyncSidecar(g.config.RuntimeImage, bot.ID)
 
@@ -146,7 +156,12 @@ func (g *PodGenerator) GeneratePod(bot model.Bot) (*corev1.Pod, error) {
 		builder.WithQuerySidecar(image)
 	}
 
-	return builder.Build()
+	pod, err := builder.Build()
+	if err != nil {
+		return nil, err
+	}
+	pod.Annotations[AnnotationConfigHash] = computeConfigHash(bot, pod)
+	return pod, nil
 }
 
 // GenerateScheduledPodSpec creates a Pod spec for scheduled bots (CronJobs).
@@ -187,10 +202,8 @@ func (g *PodGenerator) GenerateScheduledPodSpec(bot model.Bot) (*corev1.PodSpec,
 			LabelRuntime:          botConfig.runtime,
 			LabelManagedBy:        g.config.ControllerName,
 		}).
-		WithAnnotations(map[string]string{
-			AnnotationConfigHash: g.computeConfigHash(bot),
-		}).
 		WithLaunch(settings).
+		WithStorageCredentialsFrom(g.config.StorageCredentials).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 	// Note: No query sidecar - queries are ephemeral
 
@@ -243,6 +256,7 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 			LabelManagedBy:        g.config.ControllerName,
 		}).
 		WithLaunch(settings).
+		WithStorageCredentialsFrom(g.config.StorageCredentials).
 		WithResources(botConfig.memoryLimit, botConfig.cpuLimit, botConfig.memoryRequest, botConfig.cpuRequest)
 
 	return builder.Build()
@@ -361,13 +375,16 @@ func ExtractConfigHash(pod *corev1.Pod) string {
 	return pod.Annotations[AnnotationConfigHash]
 }
 
-// ConfigChanged returns true if the desired pod spec has changed since the pod
-// was created, either from the bot's own config or from generator-level inputs
-// (e.g. NATS URL) that shape the pod environment.
-func (g *PodGenerator) ConfigChanged(pod *corev1.Pod, bot model.Bot) bool {
-	existingHash := ExtractConfigHash(pod)
-	currentHash := g.computeConfigHash(bot)
-	return existingHash != currentHash
+// ConfigChanged returns true if the pod the generator writes for bot differs
+// from the one pod was created from. When bot cannot be generated it returns
+// false with the reason: the caller replaces a changed pod by deleting it, and
+// a bot that cannot be generated could not be recreated, so it keeps running.
+func (g *PodGenerator) ConfigChanged(pod *corev1.Pod, bot model.Bot) (bool, error) {
+	wanted, err := g.GeneratePod(bot)
+	if err != nil {
+		return false, err
+	}
+	return ExtractConfigHash(pod) != ExtractConfigHash(wanted), nil
 }
 
 // getResourceLimits extracts resource limits from bot config or returns defaults.
@@ -417,21 +434,21 @@ func parseResourceOrDefault(value, defaultValue string) resource.Quantity {
 	return q
 }
 
-// computeConfigHash creates a hash of the bot config for change detection.
-// Generator-level inputs that shape the pod (NATS URL, runtime image) are part
-// of the hash so changing them, as a platform upgrade does, reconciles existing
-// pods.
-func (g *PodGenerator) computeConfigHash(bot model.Bot) string {
+// computeConfigHash hashes the bot together with the pod generated for it.
+// Hashing the generated pod, not a list of the generator inputs behind it,
+// means any change to what the generator writes, such as the storage endpoint
+// or credentials, replaces running pods.
+func computeConfigHash(bot model.Bot, pod *corev1.Pod) string {
 	data := struct {
 		Config           map[string]interface{}
 		CustomBotVersion string
-		NATSURL          string
-		RuntimeImage     string
+		Labels           map[string]string
+		Spec             corev1.PodSpec
 	}{
 		Config:           bot.Config,
 		CustomBotVersion: bot.CustomBotVersion.Version,
-		NATSURL:          g.config.NATSURL,
-		RuntimeImage:     g.config.RuntimeImage,
+		Labels:           pod.Labels,
+		Spec:             pod.Spec,
 	}
 
 	jsonBytes, err := json.Marshal(data)

@@ -17,6 +17,9 @@
 
 # Stage 1: Build the runtime binary from Go source
 FROM dhi.io/golang:1.26-alpine3.22-dev AS runtime-builder
+# The image sets GOTOOLCHAIN=local and can lag a Go security release; auto lets
+# go fetch the go.mod version (checked against sum.golang.org) until it catches up.
+ENV GOTOOLCHAIN=auto
 RUN apk --no-cache add make git
 WORKDIR /build
 COPY go.mod go.sum ./

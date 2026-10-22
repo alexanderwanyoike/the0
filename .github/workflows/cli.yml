@@ -24,7 +24,7 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: cli/go.sum
 
     - name: Download dependencies
@@ -49,7 +49,7 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: cli/go.sum
 
     - name: Install golangci-lint
