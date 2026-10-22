@@ -800,6 +800,28 @@ describe("LogsService", () => {
       ]);
     });
 
+    it("should ignore a _key the runtime did not write", async () => {
+      // Before the runtime stamped keys, a bot could log its own _key
+      const lines = [
+        '{"_key":"order-1","message":"a"}',
+        '{"_key":"order-1","message":"b"}',
+      ];
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream(lines.join("\n") + "\n"),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.data!.entries.map((e) => [e.key, e.content])).toEqual([
+        ["20260401:0", lines[0]],
+        [`20260401:${lines[0].length + 1}`, lines[1]],
+      ]);
+    });
     it("should keep a metric line's full JSON as content", async () => {
       const metricLine =
         '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';

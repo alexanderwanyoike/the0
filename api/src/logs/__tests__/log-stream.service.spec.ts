@@ -529,6 +529,13 @@ describe("LogStreamService", () => {
       expect(updates()).toEqual([stored.data!.entries]);
     });
 
+    it("should give a live line with a bot-written _key a process-unique key", async () => {
+      await publish("bot-raw", '{"_key":"order-1","message":"a"}\n');
+
+      const [entries] = updates() as { key: string }[][];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].key).toMatch(/^live:/);
+    });
     it("should still deliver a raw chunk from a runtime that does not format lines", async () => {
       await publish("bot-raw", "plain text\nsecond line");
 
