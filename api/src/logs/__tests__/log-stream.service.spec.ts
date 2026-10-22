@@ -337,6 +337,78 @@ describe("LogStreamService", () => {
       // Cleanup second client to clear keepalive interval
       if (closeHandler2) closeHandler2();
     });
+
+    describe("history opt-out", () => {
+      const events = (): string[] =>
+        mockRes.write.mock.calls.map((call: string[]) => call[0]);
+
+      /** A stream service over a real LogsService, so ownership is real. */
+      const withOwner = (ownerId: string, request: any = { user: null }) => {
+        const botService = {
+          findOneByUserId: jest.fn(async (uid: string) =>
+            uid === ownerId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
+          ),
+        };
+        const logsService = new LogsService(
+          request,
+          { getObject: jest.fn(), statObject: jest.fn() } as any,
+          { get: jest.fn().mockReturnValue("bot-logs") } as any,
+          botService as any,
+          mockLogger as PinoLogger,
+        );
+        const streamService = new LogStreamService(
+          logsService,
+          new LogFanOut(
+            mockNatsService as NatsService,
+            mockLogger as PinoLogger,
+          ),
+        );
+        return { streamService, botService };
+      };
+
+      it("should skip the history read when history=false", async () => {
+        const { streamService } = withOwner(userId);
+
+        await streamService.stream("bot-1", userId, mockReq, mockRes, {
+          history: false,
+        });
+
+        expect(events().some((e) => e.startsWith("event: history"))).toBe(
+          false,
+        );
+        expect(mockRes.end).not.toHaveBeenCalled();
+        expect(mockNatsService.subscribe).toHaveBeenCalled();
+      });
+
+      it("should still reject a user who does not own the bot when history=false", async () => {
+        const { streamService, botService } = withOwner("someone-else");
+
+        await streamService.stream("bot-1", userId, mockReq, mockRes, {
+          history: false,
+        });
+
+        expect(botService.findOneByUserId).toHaveBeenCalledWith(
+          userId,
+          "bot-1",
+        );
+        const error = events().find((e) => e.startsWith("event: error"));
+        expect(error).toContain(ACCESS_DENIED_MESSAGE);
+        expect(mockRes.end).toHaveBeenCalled();
+        expect(mockNatsService.subscribe).not.toHaveBeenCalled();
+      });
+
+      it("should still reject a stream without a user when history=false", async () => {
+        const { streamService } = withOwner(userId);
+
+        await streamService.stream("bot-1", "", mockReq, mockRes, {
+          history: false,
+        });
+
+        const error = events().find((e) => e.startsWith("event: error"));
+        expect(error).toContain("Authentication required");
+        expect(mockNatsService.subscribe).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe("live entries", () => {

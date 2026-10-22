@@ -279,13 +279,35 @@ describe("LogsController", () => {
       const req = {} as any;
       const res = {} as any;
 
-      await controller.streamLogs("bot-123", mockUser, req, res);
+      await controller.streamLogs("bot-123", {}, mockUser, req, res);
 
       expect(mockLogStream.stream).toHaveBeenCalledWith(
         "bot-123",
         "user123",
         req,
         res,
+        { history: true },
+      );
+    });
+
+    it("should pass history=false through to LogStreamService", async () => {
+      const req = {} as any;
+      const res = {} as any;
+
+      await controller.streamLogs(
+        "bot-123",
+        { history: false },
+        mockUser,
+        req,
+        res,
+      );
+
+      expect(mockLogStream.stream).toHaveBeenCalledWith(
+        "bot-123",
+        "user123",
+        req,
+        res,
+        { history: false },
       );
     });
   });
