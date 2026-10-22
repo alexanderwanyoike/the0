@@ -131,7 +131,7 @@ func TestAppendBotLogs(t *testing.T) {
 			mutexesMu: sync.RWMutex{},
 		}
 
-		err := logger.AppendBotLogs(context.Background(), "test-bot", "")
+		err := logger.AppendBotLogs(context.Background(), "test-bot", "", time.Now())
 		assert.NoError(t, err) // Should not error on empty logs
 	})
 
@@ -158,10 +158,10 @@ func TestAppendBotLogs(t *testing.T) {
 		botID := "test-bot-123"
 
 		// Test appending logs multiple times
-		err = logger.AppendBotLogs(context.Background(), botID, "First log entry")
+		err = logger.AppendBotLogs(context.Background(), botID, "First log entry", time.Now())
 		assert.NoError(t, err)
 
-		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry")
+		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry", time.Now())
 		assert.NoError(t, err)
 
 		// Verify logs were written by reading them back
@@ -218,7 +218,7 @@ func TestAppendBotLogs(t *testing.T) {
 			go func(index int) {
 				defer wg.Done()
 				logEntry := fmt.Sprintf("Log entry from goroutine %d", index)
-				err := logger.AppendBotLogs(context.Background(), botID, logEntry)
+				err := logger.AppendBotLogs(context.Background(), botID, logEntry, time.Now())
 				assert.NoError(t, err)
 			}(i)
 		}
@@ -431,7 +431,7 @@ func TestComposeAppend(t *testing.T) {
 
 	// Append all chunks.
 	for i, chunk := range chunks {
-		err := logger.AppendBotLogs(context.Background(), botID, chunk)
+		err := logger.AppendBotLogs(context.Background(), botID, chunk, time.Now())
 		require.NoError(t, err, "chunk %d failed", i)
 	}
 
@@ -510,7 +510,7 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 
 	botID := "first-write-bot"
 
-	err = logger.AppendBotLogs(context.Background(), botID, "hello world")
+	err = logger.AppendBotLogs(context.Background(), botID, "hello world", time.Now())
 	require.NoError(t, err)
 
 	// Read back
@@ -647,8 +647,8 @@ func TestComposeAppendSmallTail(t *testing.T) {
 	botID := "small-tail-bot"
 	day := time.Now().Format("20060102")
 	bulk := strings.Repeat("x", int(composeMinPartSize)+1)
-	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk))
-	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line"))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk, time.Now()))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line", time.Now()))
 	if time.Now().Format("20060102") != day {
 		t.Skip("appends straddled midnight, so the tail started a new daily log instead of composing")
 	}
@@ -691,7 +691,7 @@ func TestAppendBotLogs_AbortsOnCompleteMultipartError(t *testing.T) {
 	fake := &fakeMultipartClient{completeErr: fmt.Errorf("simulated r2 complete failure")}
 	logger.mpClient = fake
 
-	err = logger.AppendBotLogs(context.Background(), botID, "new chunk")
+	err = logger.AppendBotLogs(context.Background(), botID, "new chunk", time.Now())
 	require.Error(t, err, "AppendBotLogs should surface the compose failure")
 	assert.Contains(t, err.Error(), "simulated r2 complete failure")
 
@@ -725,7 +725,7 @@ func TestAppendBotLogs_AbortsOnCopyPartError(t *testing.T) {
 	fake := &fakeMultipartClient{copyErr: fmt.Errorf("simulated uploadpartcopy failure"), copyErrPart: 2}
 	logger.mpClient = fake
 
-	err = logger.AppendBotLogs(context.Background(), botID, "new chunk")
+	err = logger.AppendBotLogs(context.Background(), botID, "new chunk", time.Now())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "simulated uploadpartcopy failure")
 
@@ -760,7 +760,7 @@ func TestAppendBotLogs_NoLeakedUploadsOnHappyCompose(t *testing.T) {
 		chunk[i] = 'y'
 	}
 	for i := 0; i < 10; i++ {
-		err := logger.AppendBotLogs(context.Background(), botID, string(chunk))
+		err := logger.AppendBotLogs(context.Background(), botID, string(chunk), time.Now())
 		require.NoError(t, err, "append %d failed", i)
 	}
 
@@ -790,7 +790,7 @@ func TestMinIOLoggerInterface(t *testing.T) {
 	assert.NotNil(t, logger)
 
 	// Test interface methods exist (will fail without real MinIO, but interface is satisfied)
-	err := logger.AppendBotLogs(context.Background(), "test", "")
+	err := logger.AppendBotLogs(context.Background(), "test", "", time.Now())
 	assert.NoError(t, err) // Empty logs should not error
 
 	err = logger.StoreFinalLogs(context.Background(), "test", "")
@@ -800,7 +800,7 @@ func TestMinIOLoggerInterface(t *testing.T) {
 	assert.NoError(t, err) // Close should not error
 
 	// Test that AppendBotLogs fails gracefully with nil client when logs are non-empty
-	err = logger.AppendBotLogs(context.Background(), "test", "some logs")
+	err = logger.AppendBotLogs(context.Background(), "test", "some logs", time.Now())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "MinIO client is not initialized")
 

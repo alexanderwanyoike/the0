@@ -204,7 +204,7 @@ func (l *LogsSyncer) uploadChunk(ctx context.Context, content string) error {
 	syncCtx, cancel := context.WithTimeout(ctx, l.uploadTimeout)
 	defer cancel()
 
-	return l.logUploader.AppendBotLogs(syncCtx, l.botID, content)
+	return l.logUploader.AppendBotLogs(syncCtx, l.botID, content, time.Now())
 }
 
 // Close cleans up all owned resources (uploader and publisher).

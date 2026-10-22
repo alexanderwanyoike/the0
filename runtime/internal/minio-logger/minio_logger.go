@@ -16,7 +16,9 @@ import (
 )
 
 type MinIOLogger interface {
-	AppendBotLogs(ctx context.Context, id string, logs string) error
+	// AppendBotLogs appends a chunk to the bot's daily log file; at is the
+	// chunk time, which picks the daily file.
+	AppendBotLogs(ctx context.Context, id string, logs string, at time.Time) error
 	StoreFinalLogs(ctx context.Context, id string, logs string) error
 	Close() error
 }
@@ -187,7 +189,7 @@ func (m *minIOLogger) getMutex(botID string) *sync.Mutex {
 // log files below this threshold.
 const composeMinPartSize = 5 * 1024 * 1024 // 5 MiB
 
-func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string) error {
+func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string, at time.Time) error {
 	if logs == "" {
 		return nil // No logs to append
 	}
@@ -201,19 +203,15 @@ func (m *minIOLogger) AppendBotLogs(ctx context.Context, id string, logs string)
 	botMutex.Lock()
 	defer botMutex.Unlock()
 
-	// Single clock read for the entire append to avoid midnight-boundary splits
-	// where the daily key, timestamp prefix, and temp key disagree on the date.
-	now := time.Now()
-
 	// Generate file path: logs/{bot_id}/{YYYYMMDD}.log
-	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, now.Format("20060102"))
+	dailyKey := fmt.Sprintf("logs/%s/%s.log", id, at.Format("20060102"))
 	m.logger.Debug("Attempting to append logs to MinIO", "path", dailyKey, "bucket", m.logsBucket)
 
 	// Format the new log entry as NDJSON with guaranteed timestamp fields.
-	content := FormatLogChunk(logs, now)
+	content := FormatLogChunk(logs, at)
 
 	// Upload the new chunk as a temporary object.
-	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, now.UnixNano())
+	tmpKey := fmt.Sprintf("logs/%s/.tmp-%d", id, at.UnixNano())
 	reader := strings.NewReader(content)
 	_, err := m.client.PutObject(ctx, m.logsBucket, tmpKey, reader, int64(len(content)), minio.PutObjectOptions{
 		ContentType: "text/plain",

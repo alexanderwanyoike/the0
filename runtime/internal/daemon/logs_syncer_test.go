@@ -32,7 +32,7 @@ type MockMinIOLogger struct {
 	CloseCalled     bool
 }
 
-func (m *MockMinIOLogger) AppendBotLogs(ctx context.Context, botID, content string) error {
+func (m *MockMinIOLogger) AppendBotLogs(ctx context.Context, botID, content string, at time.Time) error {
 	m.AppendCalls = append(m.AppendCalls, struct {
 		BotID   string
 		Content string
@@ -90,7 +90,7 @@ type slowDeadlineRecordingUploader struct {
 	returnErr        error
 }
 
-func (s *slowDeadlineRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string) error {
+func (s *slowDeadlineRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string, at time.Time) error {
 	if d, ok := ctx.Deadline(); ok {
 		s.observedDeadline = d
 	}
@@ -361,7 +361,7 @@ type orderRecordingUploader struct {
 	err   error
 }
 
-func (o *orderRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string) error {
+func (o *orderRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string, at time.Time) error {
 	*o.order = append(*o.order, "upload")
 	return o.err
 }
