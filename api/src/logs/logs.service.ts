@@ -153,9 +153,7 @@ export class LogsService {
     // used for raw logs (whose streams stop early at the limit).
     const hasMore =
       query.type === "metrics" ? metricsHasMore : entries.length >= query.limit;
-    const readNewestFirst =
-      query.sort !== "asc" || this.isSingleDayTail(dates, query);
-    return Ok({ entries, hasMore, readNewestFirst });
+    return Ok({ entries, hasMore, readNewestFirst: true });
   }
 
   private static readonly INVALID_WINDOW =
@@ -291,10 +289,10 @@ export class LogsService {
       return { entries, metricsHasMore: false };
     }
 
-    // Multi-date or metrics: stream from start (returns oldest-first)
-    return sortOrder === "desc"
-      ? this.streamDatesNewestFirst(botId, dates, query)
-      : this.streamDatesOldestFirst(botId, dates, query);
+    // Multi-date or metrics: the newest entries, read from the window start
+    const read = await this.streamDatesNewestFirst(botId, dates, query);
+    if (sortOrder === "asc") read.entries.reverse();
+    return read;
   }
 
   /**
