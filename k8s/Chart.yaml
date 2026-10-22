@@ -42,6 +42,10 @@ annotations:
       description: "Runtime and CLI built with Go 1.26.10, which distrusts compromised intermediate certificates in crypto/x509 (GO-2026-6809)"
     - kind: security
       description: "follow-redirects 1.16.1 in the api and frontend, which strips credential headers on cross-origin redirects (GHSA-8r9p-f939-6h3c, GHSA-q3jh-wrc6-jgq8)"
+    - kind: security
+      description: "Frontend on next 15.5.28 (GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r)"
+    - kind: security
+      description: "Docs site built with vite 6.4.5 (GHSA-587h-7wmj-h5pm)"
     - kind: fixed
       description: "The api image builds against current Alpine packages again"
   artifacthub.io/images: |
