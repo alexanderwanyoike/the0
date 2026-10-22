@@ -201,9 +201,10 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toContain("line-5");
-      expect(result.data!.entries[1].content).toContain("line-6");
-      expect(result.data!.entries[2].content).toContain("line-7");
+      // The newest three after skipping five, oldest of them first
+      expect(result.data!.entries[0].content).toContain("line-2");
+      expect(result.data!.entries[1].content).toContain("line-3");
+      expect(result.data!.entries[2].content).toContain("line-4");
     });
 
     it("should return the newest `limit` metrics and report hasMore when type=metrics", async () => {
@@ -256,8 +257,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toContain("m2");
-      expect(result.data!.entries[1].content).toContain("m3");
+      expect(result.data!.entries[0].content).toContain("m1");
+      expect(result.data!.entries[1].content).toContain("m2");
     });
 
     it("should stop reading early once limit is reached (stream path)", async () => {
@@ -394,9 +395,9 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(4);
-      expect(result.data!.entries[0].content).toContain("d1-l1");
-      expect(result.data!.entries[2].content).toContain("d1-l3");
-      expect(result.data!.entries[3].content).toContain("d2-l1");
+      expect(result.data!.entries[0].content).toContain("d1-l3");
+      expect(result.data!.entries[1].content).toContain("d2-l1");
+      expect(result.data!.entries[3].content).toContain("d2-l3");
     });
 
     it("should apply offset across multiple date files", async () => {
@@ -457,8 +458,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries.map(messageOf)).toEqual([
-        '{"msg":"d2-l1"}',
-        '{"msg":"d2-l2"}',
+        '{"msg":"d1-l1"}',
+        '{"msg":"d1-l2"}',
       ]);
     });
 
@@ -1632,8 +1633,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries.map(messageOf)).toEqual([
-        metricLine(1),
-        metricLine(2),
+        metricLine(3),
+        metricLine(4),
       ]);
       expect(result.data!.hasMore).toBe(true);
     });
@@ -1839,6 +1840,58 @@ describe("LogsService", () => {
 
       expect(first.hasMore).toBe(true);
       expect(first.nextCursor).toBe("20260401:2");
+    });
+
+    describe("ascending pages", () => {
+      it("should return the newest entries of a multi-day window oldest-first and page back with nextCursor", async () => {
+        serveFiles({ "20260401": "a\nb\n", "20260402": "c\nd\n" });
+        const window: Partial<LogsQuery> = {
+          date: undefined,
+          dateRange: "20260401-20260402",
+          limit: 2,
+          sort: "asc",
+        };
+
+        const newest = await page(window);
+        const older = await page({ ...window, before: newest.nextCursor! });
+
+        expect(newest.entries.map((e) => e.content)).toEqual(["c", "d"]);
+        expect(newest.nextCursor).toBe("20260402:0");
+        expect(older.entries.map((e) => e.content)).toEqual(["a", "b"]);
+        expect(older.nextCursor).toBeNull();
+      });
+
+      it("should return the newest metrics oldest-first with nextCursor", async () => {
+        const metric = (n: number) => `{"_metric":"m${n}"}`;
+        serveFiles({ "20260401": [1, 2, 3].map(metric).join("\n") + "\n" });
+
+        const newest = await page({ limit: 2, type: "metrics", sort: "asc" });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric(2),
+          metric(3),
+        ]);
+        expect(newest.nextCursor).toBe(`20260401:${metric(1).length + 1}`);
+      });
+
+      it("should return the newest entries of a datetime window oldest-first", async () => {
+        const at = (hour: string) =>
+          `{"message":"${hour}","timestamp":"2026-04-01T${hour}:00:00Z"}`;
+        serveFiles({
+          "20260401": ["01", "02", "03", "04"].map(at).join("\n") + "\n",
+        });
+
+        const newest = await page({
+          date: undefined,
+          dateRange: "2026-04-01T00:00:00Z--2026-04-01T03:30:00Z",
+          limit: 2,
+          sort: "asc",
+        });
+
+        expect(newest.entries.map(messageOf)).toEqual(["02", "03"]);
+        expect(newest.hasMore).toBe(true);
+        expect(newest.nextCursor).toBe(`20260401:${at("01").length + 1}`);
+      });
     });
 
     describe("repeated runtime keys", () => {
