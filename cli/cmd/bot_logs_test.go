@@ -235,6 +235,17 @@ func TestBotLogsParams(t *testing.T) {
 	})
 }
 
+func TestWatchLogsParams(t *testing.T) {
+	t.Run("asks for one entry more than it prints", func(t *testing.T) {
+		got := watchLogsParams("20261022", 100)
+
+		want := &internal.LogsParams{Date: "20261022", Limit: 101, Sort: "asc"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("watchLogsParams() = %+v, want %+v", got, want)
+		}
+	})
+}
+
 func watchEntries(keys ...string) []internal.LogEntry {
 	entries := make([]internal.LogEntry, len(keys))
 	for i, key := range keys {
@@ -367,6 +378,44 @@ func TestLogWatchNewEntries(t *testing.T) {
 
 		if got, want := append(first, next...), watchEntries("a", "b", "c", "d"); !reflect.DeepEqual(got, want) {
 			t.Errorf("printed = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("prints at most limit entries, the newest", func(t *testing.T) {
+		watch := newLogWatch(2)
+
+		got, _ := watch.newEntries(watchEntries("a", "b", "c"))
+
+		if want := watchEntries("b", "c"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("does not warn when exactly limit entries arrived", func(t *testing.T) {
+		watch := newLogWatch(1)
+		watch.newEntries(watchEntries("a", "b"))
+
+		got, mayHaveSkipped := watch.newEntries(watchEntries("b", "c"))
+
+		if mayHaveSkipped {
+			t.Error("newEntries() mayHaveSkipped = true, want false")
+		}
+		if want := watchEntries("c"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("warns and prints the newest limit entries when more arrived", func(t *testing.T) {
+		watch := newLogWatch(2)
+		watch.newEntries(watchEntries("a", "b", "c"))
+
+		got, mayHaveSkipped := watch.newEntries(watchEntries("d", "e", "f"))
+
+		if !mayHaveSkipped {
+			t.Error("newEntries() mayHaveSkipped = false, want true")
+		}
+		if want := watchEntries("e", "f"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
 		}
 	})
 }
