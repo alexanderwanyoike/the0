@@ -46,6 +46,7 @@ jest.mock("@/lib/api/api-client", () => ({
 }));
 
 const mockUseBotLogs = jest.fn();
+let mockLogsFetching = false;
 jest.mock("@/hooks/use-bot-logs", () => ({
   useBotLogs: (...args: unknown[]) => {
     const { useSharedBotLogStream } = jest.requireActual(
@@ -57,6 +58,7 @@ jest.mock("@/hooks/use-bot-logs", () => ({
     return {
       logs: [],
       loading: false,
+      isFetching: mockLogsFetching,
       error: null,
       hasMore: false,
       query: {},
@@ -98,8 +100,18 @@ jest.mock("@/components/bot/bot-dashboard-loader", () => ({
 }));
 
 jest.mock("@/components/bot/console-interface", () => ({
-  ConsoleInterface: ({ viewKey }: { viewKey?: string }) => (
-    <div data-testid="console-interface" data-view={viewKey} />
+  ConsoleInterface: ({
+    viewKey,
+    fetching,
+  }: {
+    viewKey?: string;
+    fetching?: boolean;
+  }) => (
+    <div
+      data-testid="console-interface"
+      data-view={viewKey}
+      data-fetching={String(fetching)}
+    />
   ),
   ConnectionStatusIndicator: () => (
     <div data-testid="connection-status-indicator" />
@@ -453,6 +465,24 @@ describe("BotDetailPanel", () => {
       expect(before).toBeTruthy();
       expect(after).toBeTruthy();
       expect(after).not.toBe(before);
+    });
+  });
+
+  describe("console fetch state", () => {
+    afterEach(() => {
+      mockLogsFetching = false;
+    });
+
+    it("tells the console while its logs are being fetched", async () => {
+      mockLogsFetching = true;
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Test Bot");
+
+      expect(screen.getByTestId("console-interface")).toHaveAttribute(
+        "data-fetching",
+        "true",
+      );
     });
   });
 

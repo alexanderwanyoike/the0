@@ -98,6 +98,35 @@ describe("console scroll position", () => {
       });
     });
 
+    it("forgets the jump when the new window has no lines", () => {
+      const view = (viewKey: string, logs: LogEntry[]) => (
+        <ConsoleInterface {...props} sort="asc" viewKey={viewKey} logs={logs} />
+      );
+      const { rerender } = render(view("live", [1, 2, 3].map(line)));
+      rerender(view("1h", []));
+      rerender(view("1h", [4].map(line)));
+      rerender(view("1h", [4, 5].map(line)));
+      expect(mockScrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it("forgets the jump when the new window fails to load", () => {
+      const view = (viewKey: string, logs: LogEntry[], fetching: boolean) => (
+        <ConsoleInterface
+          {...props}
+          sort="asc"
+          viewKey={viewKey}
+          logs={logs}
+          fetching={fetching}
+        />
+      );
+      const shown = [1, 2, 3].map(line);
+      const { rerender } = render(view("live", shown, false));
+      rerender(view("1h", shown, true));
+      rerender(view("1h", shown, false));
+      rerender(view("1h", [1, 2, 3, 4].map(line), false));
+      expect(mockScrollToIndex).not.toHaveBeenCalled();
+    });
+
     it("keeps the reader's place when earlier or live lines join", () => {
       const view = (logs: LogEntry[]) => (
         <ConsoleInterface {...props} sort="asc" viewKey="live" logs={logs} />
