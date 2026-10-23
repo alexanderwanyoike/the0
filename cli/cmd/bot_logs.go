@@ -163,8 +163,9 @@ func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEnt
 
 	current := make(map[string]struct{}, len(logs))
 	for _, log := range logs {
-		current[log.Key] = struct{}{}
-		if _, printed := w.previous[log.Key]; !printed {
+		key := watchKey(log)
+		current[key] = struct{}{}
+		if _, printed := w.previous[key]; !printed {
 			fresh = append(fresh, log)
 		}
 	}
@@ -173,4 +174,13 @@ func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEnt
 	mayHaveSkipped = len(w.previous) > 0 && len(fresh) == len(logs)
 	w.previous = current
 	return fresh, mayHaveSkipped
+}
+
+// watchKey falls back to day and content for an api that predates entry
+// keys; identical lines on one day then print once.
+func watchKey(entry internal.LogEntry) string {
+	if entry.Key != "" {
+		return entry.Key
+	}
+	return entry.Date + "|" + entry.Content
 }
