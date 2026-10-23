@@ -1,8 +1,13 @@
+/** One log line, in the same shape from REST and from the live stream. */
 export interface LogEntry {
+  /** Stable across REST and SSE: two entries with one key are one line. */
+  key: string;
+  /** YYYYMMDD, the UTC day of the daily log file. */
   date: string;
+  /** The line's own timestamp, null when it has none. */
+  timestamp: string | null;
+  /** The stored line, verbatim. */
   content: string;
-  /** API-extracted timestamp from NDJSON. Null/undefined for old-format logs. */
-  timestamp?: string | null;
 }
 
 export interface LogsQuery {
@@ -12,7 +17,9 @@ export interface LogsQuery {
    *  the bot last ran. Ignored when date/dateRange is set. */
   lookbackDays?: number;
   limit?: number;
-  offset?: number;
+  /** Entry key: only entries older than it. Only ever a page's nextCursor,
+   *  a position key whose day a live view reads its older pages from. */
+  before?: string;
   type?: string;
   sort?: "asc" | "desc";
 }

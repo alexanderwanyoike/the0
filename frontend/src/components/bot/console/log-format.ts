@@ -1,4 +1,5 @@
 import { parseLogLine } from "@/lib/events/event-parser";
+import type { LogEntry } from "@/types/logs";
 
 type ParsedLogLine = ReturnType<typeof parseLogLine>;
 
@@ -25,19 +26,28 @@ export function cachedParseLogLine(
   return result;
 }
 
+/** The text a console line shows: what search matches, not the stored JSON. */
+export function displayText(log: LogEntry): string {
+  const event = cachedParseLogLine(log.content, log.timestamp);
+  return typeof event.data === "string"
+    ? event.data
+    : JSON.stringify(event.data);
+}
+
 export type DisplayTimestamp = { date: string; time: string };
 
 /**
- * Format a Date to compact display format.
- * Returns null for null input or invalid Date objects.
+ * Format a Date to compact display format, in UTC so the day shown is the
+ * day of the log file the line is in. Returns null for null input or
+ * invalid Date objects.
  */
 export function formatTimestamp(date: Date | null): DisplayTimestamp | null {
   if (!date || isNaN(date.getTime())) return null;
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(date.getUTCSeconds()).padStart(2, "0");
   return {
     date: `${month}-${day}`,
     time: `${hours}:${minutes}:${seconds}`,
@@ -70,13 +80,15 @@ export function metricTimestamp(
   return metricDataTimestamp(metricData.timestamp);
 }
 
-/** Metric fields worth showing: everything except the _metric marker and
- *  the timestamp, with objects JSON-encoded. */
+/** Metric fields worth showing: everything except the _metric marker, the
+ *  runtime's _key and the timestamp, with objects JSON-encoded. */
 export function metricDisplayData(
   metricData: Record<string, unknown>,
 ): { key: string; value: string }[] {
   return Object.entries(metricData)
-    .filter(([key]) => key !== "_metric" && key !== "timestamp")
+    .filter(
+      ([key]) => key !== "_metric" && key !== "_key" && key !== "timestamp",
+    )
     .map(([key, value]) => ({
       key,
       value: typeof value === "object" ? JSON.stringify(value) : String(value),

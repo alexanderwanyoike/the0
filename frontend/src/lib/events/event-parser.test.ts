@@ -25,8 +25,16 @@ describe("event-parser", () => {
 
         expect(result.type).toBe("log");
         expect(result.data).toBe("Hello world");
-        expect(result.timestamp).toEqual(new Date("2025-12-27T14:30:45"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T14:30:45Z"));
         expect(result.level).toBe("INFO");
+      });
+
+      it("reads a bracket timestamp as UTC, like every log time", () => {
+        const result = parseLogLine("[2026-10-22 23:30:00] Late fill");
+
+        expect(result.timestamp?.toISOString()).toBe(
+          "2026-10-22T23:30:00.000Z",
+        );
       });
 
       it("extracts DEBUG level from log line", () => {
@@ -76,7 +84,7 @@ describe("event-parser", () => {
           "[2025-12-27 10:00:00] ERROR: Critical failure",
         );
 
-        expect(result.timestamp).toEqual(new Date("2025-12-27T10:00:00"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T10:00:00Z"));
         expect(result.level).toBe("ERROR");
         expect(result.data).toBe("ERROR: Critical failure");
       });
@@ -104,7 +112,7 @@ describe("event-parser", () => {
 
         expect(result.type).toBe("metric");
         expect(result.metricType).toBe("portfolio");
-        expect(result.timestamp).toEqual(new Date("2025-12-27T15:00:00"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T15:00:00Z"));
       });
 
       it("parses a metric with level prefix", () => {
@@ -226,7 +234,7 @@ describe("event-parser", () => {
           '[2025-12-27 14:00:00] {"level": "info", "msg": "Test"}';
         const result = parseLogLine(content);
 
-        expect(result.timestamp).toEqual(new Date("2025-12-27T14:00:00"));
+        expect(result.timestamp).toEqual(new Date("2025-12-27T14:00:00Z"));
       });
 
       it("returns null timestamp when no timestamp found anywhere", () => {
@@ -275,6 +283,74 @@ describe("event-parser", () => {
         // Structured log level should take precedence
         expect(result.level).toBe("WARN");
         expect(result.data).toBe("Overridden level");
+      });
+    });
+
+    describe("lines as the runtime stores them", () => {
+      const TS = "2026-10-22T10:00:00.000Z";
+      const stored = (fields: Record<string, unknown>) =>
+        JSON.stringify({
+          ...fields,
+          timestamp: TS,
+          _key: "1792713599999000000-0",
+        });
+
+      it("reads a wrapped plain line like the line itself", () => {
+        const result = parseLogLine(
+          stored({ message: "ERROR: order rejected" }),
+          TS,
+        );
+
+        expect(result.type).toBe("log");
+        expect(result.data).toBe("ERROR: order rejected");
+        expect(result.level).toBe("ERROR");
+        expect(result.timestamp).toEqual(new Date(TS));
+      });
+
+      it("strips the bracket timestamp of a wrapped legacy line", () => {
+        const result = parseLogLine(
+          stored({ message: "[2026-10-22 10:00:00] WARN: slow fill" }),
+          TS,
+        );
+
+        expect(result.data).toBe("WARN: slow fill");
+        expect(result.level).toBe("WARN");
+      });
+
+      it("keeps the runtime's key out of a metric's data", () => {
+        const result = parseLogLine(stored({ _metric: "price", value: 1 }), TS);
+
+        expect(result.type).toBe("metric");
+        expect(result.data).toEqual({
+          _metric: "price",
+          value: 1,
+          timestamp: TS,
+        });
+      });
+
+      it("keeps the runtime's key out of a structured log shown whole", () => {
+        const result = parseLogLine(
+          stored({ level: "info", fields: { order: 1 } }),
+          TS,
+        );
+
+        expect(result.data).toBe(
+          JSON.stringify({
+            level: "info",
+            fields: { order: 1 },
+            timestamp: TS,
+          }),
+        );
+      });
+
+      it("keeps a structured log's own fields", () => {
+        const result = parseLogLine(
+          stored({ level: "warn", message: "ERROR: in the text", order: 1 }),
+          TS,
+        );
+
+        expect(result.data).toBe("ERROR: in the text");
+        expect(result.level).toBe("WARN");
       });
     });
 

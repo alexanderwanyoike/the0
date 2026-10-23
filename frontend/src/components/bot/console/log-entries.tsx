@@ -65,7 +65,10 @@ const EntryTimestamp = ({
   className: string;
 }) =>
   ts && (
-    <span className={cn(className, "flex-shrink-0 select-none tabular-nums")}>
+    <span
+      className={cn(className, "flex-shrink-0 select-none tabular-nums")}
+      title={`${ts.date} ${ts.time} UTC`}
+    >
       <span className="text-[9px]">{ts.date}</span> <span>{ts.time}</span>
     </span>
   );

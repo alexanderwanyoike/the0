@@ -4,12 +4,13 @@
  * One hook serves both the console and custom dashboards:
  * - History ALWAYS comes from REST (GET /api/logs/:botId). This keeps a single
  *   code path for history and lets consumers filter server-side (type=metrics).
- * - With `streaming: true` and no date filter active, an SSE connection
- *   (GET /api/logs/:botId/stream) appends new lines live. The SSE "history"
- *   event is intentionally ignored (REST is the source of history); it still
- *   serves as the server-side ownership check for the stream.
- * - Setting a date/dateRange filter suspends SSE; clearing it reconnects.
- * - If SSE fails, the hook falls back to REST polling at `refreshInterval`.
+ * - With `streaming: true` and no date filter active, live lines arrive over
+ *   the bot's log stream (GET /api/logs/:botId/stream?history=false). On a
+ *   bot page that stream is the page's one connection (BotLogStreamProvider),
+ *   shared by the console and the dashboard.
+ * - Setting a date/dateRange filter unsubscribes; clearing it subscribes
+ *   again. The connection stays open while any view is subscribed.
+ * - While the stream is down, the hook polls REST at `refreshInterval`.
  * - With `streaming: false`, plain REST with optional `autoRefresh` polling.
  *
  * Abort semantics: intentional aborts (unmount, bot switch, filter change) are
@@ -28,18 +29,19 @@ import {
   MAX_LOG_ENTRIES,
   formatLogsForExport,
   isHistoricalQuery,
+  mergeLiveEntries,
   mergeUniqueEntries,
-  parseLiveUpdate,
-  toDisplayOrder,
+  filterLiveEntries,
 } from "@/lib/log-utils";
 import { useAuth } from "@/contexts/auth-context";
 import {
   fetchLogsPage,
   LogsPage,
   useAutoRefreshPolling,
-  useLiveLogStream,
+  useLiveLogs,
   useLogPolling,
 } from "./bot-logs/log-transport";
+import { useBotLogStream } from "./bot-logs/bot-log-stream";
 
 interface UseBotLogsProps {
   botId: string;
@@ -62,7 +64,6 @@ export interface UseBotLogsReturn {
   isFetching: boolean;
   error: string | null;
   hasMore: boolean;
-  total: number;
   query: LogsQuery;
   connected: boolean;
   lastUpdate: Date | null;
@@ -79,7 +80,7 @@ export interface UseBotLogsReturn {
   exportLogs: () => void;
 }
 
-const DEFAULT_QUERY: LogsQuery = { limit: 1000, offset: 0, sort: "desc" };
+const DEFAULT_QUERY: LogsQuery = { limit: 1000, sort: "asc" };
 /** How far back latest mode is willing to scan for a bot's most recent
  *  output. Scheduled bots that run weekly stay well inside this window. */
 export const DEFAULT_LOOKBACK_DAYS = 30;
@@ -97,18 +98,19 @@ export const useBotLogs = ({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState<LogsQuery>(initialQuery);
   const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasEarlierLogs, setHasEarlierLogs] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  // Bumped by refresh() to force an SSE reconnect in live mode
-  const [sseNonce, setSseNonce] = useState(0);
 
   const { user } = useAuth();
   const { toast } = useToast();
+  const stream = useBotLogStream(botId);
 
   const restAbortRef = useRef<AbortController | null>(null);
+  const pageAbortRef = useRef<AbortController | null>(null);
+  // Settles when the replace fetch in flight does; null when none is
+  const replaceSettledRef = useRef<Promise<void> | null>(null);
   // True once a replace fetch has delivered data for the current bot. While
   // set, replace fetches are background refreshes: they must not flip
   // `loading` (which would unmount dashboards into their loading screen).
@@ -125,11 +127,10 @@ export const useBotLogs = ({
   // buffered here, then merged (deduped) once history lands.
   const historyLoadedRef = useRef(false);
   const pendingUpdatesRef = useRef<LogEntry[]>([]);
-  // Offset for backfilling earlier logs in live mode
-  const earlierOffsetRef = useRef(0);
+  // `before` for the next older page. Only ever a REST page's nextCursor:
+  // live lines arrive after it and must not move it.
+  const nextCursorRef = useRef<string | null>(null);
   // Prop refs so effects/callbacks read latest values without re-running
-  const streamingRef = useRef(streaming);
-  streamingRef.current = streaming;
   const initialQueryRef = useRef(initialQuery);
   initialQueryRef.current = initialQuery;
   const queryRef = useRef(query);
@@ -137,20 +138,21 @@ export const useBotLogs = ({
 
   const liveMode = streaming && !isHistoricalQuery(query);
 
+  // Background refetch (polls, the stream opening) that skips views the
+  // user has paged, whose older pages a replace would drop.
+  const refetchUnlessPaged = useCallback(() => {
+    if (
+      !paginatedRef.current &&
+      !loadingMoreRef.current &&
+      !loadingEarlierRef.current
+    ) {
+      fetchLogsRef.current();
+    }
+  }, []);
+
   const { startPolling, stopPolling, isPolling } = useLogPolling(
     refreshInterval,
-    () => {
-      // Skip the tick while the user has paginated or a pagination fetch
-      // is in flight - fetchLogs aborts the previous request, so firing
-      // here would silently cancel their load-more/load-earlier click.
-      if (
-        !paginatedRef.current &&
-        !loadingMoreRef.current &&
-        !loadingEarlierRef.current
-      ) {
-        fetchLogsRef.current();
-      }
-    },
+    refetchUnlessPaged,
   );
 
   // -- Pending live updates (SSE lines buffered while history is in flight) --
@@ -159,35 +161,34 @@ export const useBotLogs = ({
     if (pendingUpdatesRef.current.length === 0) return;
     const pending = pendingUpdatesRef.current;
     pendingUpdatesRef.current = [];
-    setLogs((prev) => mergeUniqueEntries(prev, pending, "append"));
+    setLogs((prev) => mergeLiveEntries(prev, pending, queryRef.current.sort));
   }, []);
 
   // -- REST fetch (history, filters, pagination, polling) --
 
   const applyPage = useCallback(
-    (
-      page: LogsPage,
-      queryParams: LogsQuery,
-      merge: PageMerge,
-      live: boolean,
-    ) => {
+    (page: LogsPage, merge: PageMerge, sort: LogsQuery["sort"]) => {
+      nextCursorRef.current = page.nextCursor;
+      const hasOlder = page.hasMore && page.nextCursor !== null;
       if (merge) {
         setLogs((prev) => mergeUniqueEntries(prev, page.entries, merge));
-        if (merge === "append") setHasMore(page.hasMore);
-        else setHasEarlierLogs(page.hasMore);
+        if (merge === "append") setHasMore(hasOlder);
+        else setHasEarlierLogs(hasOlder);
       } else {
+        // The view restarts from this page: older pages were read from a
+        // cursor it replaces
+        pageAbortRef.current?.abort();
+        paginatedRef.current = false;
         historyLoadedRef.current = true;
         hasDataRef.current = true;
-        earlierOffsetRef.current = queryParams.limit || 100;
         setLogs(page.entries.slice(-MAX_LOG_ENTRIES));
         // Merge in any live updates that arrived while the fetch was in
         // flight (React applies the updater after the set above).
         flushPendingUpdates();
-        // Live history extends backwards (earlier logs); REST pages forwards
-        setHasEarlierLogs(live ? page.hasMore : false);
-        setHasMore(live ? false : page.hasMore);
+        // Older pages extend the oldest side of the order shown
+        setHasEarlierLogs(sort === "asc" ? hasOlder : false);
+        setHasMore(sort === "asc" ? false : hasOlder);
       }
-      setTotal(page.total);
       setLastUpdate(new Date());
     },
     [flushPendingUpdates],
@@ -223,9 +224,28 @@ export const useBotLogs = ({
     ): Promise<boolean> => {
       if (!botId) return false;
 
-      restAbortRef.current?.abort();
+      // A replace supersedes everything in flight. A page never aborts a
+      // replace: live lines would stay buffered with no history to join.
       const controller = new AbortController();
-      restAbortRef.current = controller;
+      let settleReplace = (): void => {};
+      if (!merge) {
+        const settled: Promise<void> = new Promise((resolve) => {
+          settleReplace = () => {
+            if (replaceSettledRef.current === settled) {
+              replaceSettledRef.current = null;
+            }
+            resolve();
+          };
+        });
+        replaceSettledRef.current = settled;
+      }
+      pageAbortRef.current?.abort();
+      if (merge) {
+        pageAbortRef.current = controller;
+      } else {
+        restAbortRef.current?.abort();
+        restAbortRef.current = controller;
+      }
 
       // Buffer live updates while a replace fetch is in flight: an SSE line
       // that arrives after the server snapshots the response would otherwise
@@ -246,13 +266,9 @@ export const useBotLogs = ({
         }
 
         const page = await fetchLogsPage(botId, queryParams, controller.signal);
-        const live = streamingRef.current && !isHistoricalQuery(queryParams);
-        applyPage(
-          { ...page, entries: toDisplayOrder(page.entries, live, merge) },
-          queryParams,
-          merge,
-          live,
-        );
+        // Superseded after its response arrived: the newer fetch owns state
+        if (controller.signal.aborted) return false;
+        applyPage(page, merge, queryParams.sort);
         return true;
       } catch (err: any) {
         // Intentional aborts (unmount, bot switch, filter change) are silent.
@@ -267,10 +283,14 @@ export const useBotLogs = ({
         handleFetchFailure(err, merge, wasHistoryLoaded);
         return false;
       } finally {
+        settleReplace();
         if (!controller.signal.aborted) {
-          setLoading(false);
-          setIsFetching(false);
-          setLoadingEarlier(false);
+          if (merge) {
+            setLoadingEarlier(false);
+          } else {
+            setLoading(false);
+            setIsFetching(false);
+          }
         }
       }
     },
@@ -278,22 +298,15 @@ export const useBotLogs = ({
   );
   fetchLogsRef.current = fetchLogs;
 
-  // -- SSE live updates --
-
-  const handleUpdateEvent = useCallback((data: string) => {
-    try {
-      const entries = parseLiveUpdate(data, queryRef.current.type);
-      if (entries.length === 0) return;
-      if (!historyLoadedRef.current) {
-        pendingUpdatesRef.current.push(...entries);
-        return;
-      }
-      setLogs((prev) => [...prev, ...entries].slice(-MAX_LOG_ENTRIES));
-      setTotal((prev) => prev + entries.length);
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error("Failed to parse update SSE event:", err);
+  const handleLiveEntries = useCallback((live: LogEntry[]) => {
+    const entries = filterLiveEntries(live, queryRef.current.type);
+    if (entries.length === 0) return;
+    if (!historyLoadedRef.current) {
+      pendingUpdatesRef.current.push(...entries);
+      return;
     }
+    setLogs((prev) => mergeLiveEntries(prev, entries, queryRef.current.sort));
+    setLastUpdate(new Date());
   }, []);
 
   // -- Lifecycle: reset + initial fetch on bot/user/mode change --
@@ -309,7 +322,7 @@ export const useBotLogs = ({
     setError(null);
     setQuery(startQuery);
     setHasMore(false);
-    setTotal(0);
+    nextCursorRef.current = null;
     setLastUpdate(null);
     setHasEarlierLogs(false);
     setLoadingEarlier(false);
@@ -323,6 +336,7 @@ export const useBotLogs = ({
 
     return () => {
       restAbortRef.current?.abort();
+      pageAbortRef.current?.abort();
     };
   }, [botId, user, streaming]);
 
@@ -337,12 +351,11 @@ export const useBotLogs = ({
     isPolling,
   });
 
-  const connected = useLiveLogStream({
-    botId,
-    user,
-    liveMode,
-    reconnectKey: sseNonce,
-    onUpdate: handleUpdateEvent,
+  const connected = useLiveLogs({
+    stream,
+    live: liveMode && !!botId && !!user,
+    onEntries: handleLiveEntries,
+    onOpen: refetchUnlessPaged,
     startPolling,
     stopPolling,
   });
@@ -351,7 +364,7 @@ export const useBotLogs = ({
 
   const updateQuery = useCallback(
     (params: Partial<LogsQuery>) => {
-      const updatedQuery = { ...query, ...params, offset: 0 };
+      const updatedQuery = { ...query, ...params };
       setQuery(updatedQuery);
       paginatedRef.current = false;
       fetchLogs(updatedQuery, false);
@@ -392,35 +405,36 @@ export const useBotLogs = ({
   }, [updateQuery]);
 
   const refresh = useCallback(() => {
-    const refreshQuery = { ...query, offset: 0 };
-    setQuery(refreshQuery);
     paginatedRef.current = false;
-    fetchLogs(refreshQuery, false);
-    // Re-establish SSE in live mode (no-op otherwise)
-    setSseNonce((n) => n + 1);
-  }, [query, fetchLogs]);
+    fetchLogs(query, false);
+    // A healthy stream may be serving other views of the page
+    if (stream.status === "down") stream.reconnect();
+  }, [query, fetchLogs, stream]);
+
+  // A page read while a replace is in flight would come from the cursor the
+  // replace is about to change, so it waits and reads the fresh one.
+  const fetchOlderPage = useCallback(
+    async (merge: "append" | "prepend"): Promise<boolean> => {
+      while (replaceSettledRef.current) await replaceSettledRef.current;
+      const before = nextCursorRef.current;
+      if (!before) return false;
+      return fetchLogsRef.current({ ...queryRef.current, before }, merge);
+    },
+    [],
+  );
 
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore) return;
     loadingMoreRef.current = true;
     setLoadingMore(true);
 
-    const nextQuery = {
-      ...query,
-      offset: (query.offset || 0) + (query.limit || 100),
-    };
-
     try {
-      const ok = await fetchLogs(nextQuery, "append");
-      if (ok) {
-        setQuery(nextQuery);
-        paginatedRef.current = true;
-      }
+      if (await fetchOlderPage("append")) paginatedRef.current = true;
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [fetchLogs, hasMore, query]);
+  }, [fetchOlderPage, hasMore]);
 
   const loadEarlierLogs = useCallback(async () => {
     if (!botId || !user || loadingEarlier) return;
@@ -428,17 +442,12 @@ export const useBotLogs = ({
     setLoadingEarlier(true);
 
     try {
-      const limit = query.limit || 100;
-      const offset = earlierOffsetRef.current || limit;
-      const ok = await fetchLogs({ ...query, offset }, "prepend");
-      if (ok) {
-        earlierOffsetRef.current = offset + limit;
-      }
+      if (await fetchOlderPage("prepend")) paginatedRef.current = true;
     } finally {
       loadingEarlierRef.current = false;
       setLoadingEarlier(false);
     }
-  }, [botId, user, loadingEarlier, fetchLogs, query]);
+  }, [botId, user, loadingEarlier, fetchOlderPage]);
 
   const exportLogs = useCallback(() => {
     if (logs.length === 0) {
@@ -450,11 +459,13 @@ export const useBotLogs = ({
       return;
     }
 
-    const blob = new Blob([formatLogsForExport(logs)], { type: "text/plain" });
+    const blob = new Blob([formatLogsForExport(logs)], {
+      type: "application/x-ndjson",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
+    a.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.ndjson`;
     a.click();
     URL.revokeObjectURL(url);
   }, [logs, botId, toast]);
@@ -465,7 +476,6 @@ export const useBotLogs = ({
     isFetching,
     error,
     hasMore,
-    total,
     query,
     connected,
     lastUpdate,

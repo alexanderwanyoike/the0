@@ -1,33 +1,26 @@
 import {
   MAX_LOG_ENTRIES,
   buildLogsSearchParams,
-  expandLogEntries,
+  filterLiveEntries,
   formatLogsForExport,
   isHistoricalQuery,
   mergeUniqueEntries,
   parseLiveUpdate,
-  toDisplayOrder,
 } from "../log-utils";
 import type { LogEntry } from "@/types/logs";
 
-const entry = (content: string, date = "2024-01-01"): LogEntry => ({
-  date,
+const entry = (content: string, key = content): LogEntry => ({
+  key,
+  date: "20240101",
+  timestamp: null,
   content,
 });
 
-describe("expandLogEntries", () => {
-  it("splits multi-line content into one entry per non-empty line", () => {
-    expect(
-      expandLogEntries([
-        { date: "d", content: "a\n\n  \nb", timestamp: "t" },
-        { date: "e", content: "c" },
-      ]),
-    ).toEqual([
-      { date: "d", content: "a", timestamp: "t" },
-      { date: "d", content: "b", timestamp: "t" },
-      { date: "e", content: "c", timestamp: undefined },
-    ]);
-  });
+const liveEntry = (index: number, content: string): LogEntry => ({
+  key: `1792713599999000000-${index}`,
+  date: "20261022",
+  timestamp: "2026-10-22T23:59:59.999Z",
+  content,
 });
 
 describe("isHistoricalQuery", () => {
@@ -64,67 +57,67 @@ describe("buildLogsSearchParams", () => {
     expect(buildLogsSearchParams({}).get("date")).toBe(today);
   });
 
-  it("includes paging, type and sort only when set and non-zero", () => {
+  it("reads an older page of a live view from its cursor's day", () => {
+    jest.useFakeTimers({ now: new Date("2026-10-23T00:05:00Z") });
+    try {
+      const params = buildLogsSearchParams({
+        before: "20261022:5000",
+        limit: 100,
+      });
+      expect(params.get("date")).toBe("20261022");
+      expect(buildLogsSearchParams({ limit: 100 }).get("date")).toBe(
+        "20261023",
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("includes the cursor, type and sort only when set", () => {
     const params = buildLogsSearchParams({
       date: "20240101",
       limit: 50,
-      offset: 0,
       type: "metrics",
       sort: "asc",
     });
     expect(params.get("limit")).toBe("50");
-    expect(params.has("offset")).toBe(false);
+    expect(params.has("before")).toBe(false);
     expect(params.get("type")).toBe("metrics");
     expect(params.get("sort")).toBe("asc");
     expect(
-      buildLogsSearchParams({ date: "20240101", offset: 20 }).get("offset"),
-    ).toBe("20");
-  });
-});
-
-describe("toDisplayOrder", () => {
-  const page = [entry("newest"), entry("oldest")];
-
-  it("reverses live replace and prepend pages into chronological order", () => {
-    expect(toDisplayOrder(page, true, false).map((e) => e.content)).toEqual([
-      "oldest",
-      "newest",
-    ]);
-    expect(toDisplayOrder(page, true, "prepend").map((e) => e.content)).toEqual(
-      ["oldest", "newest"],
-    );
-  });
-
-  it("keeps API order for appended pages and non-live views", () => {
-    expect(toDisplayOrder(page, true, "append")).toBe(page);
-    expect(toDisplayOrder(page, false, false)).toBe(page);
-  });
-
-  it("does not mutate the input page", () => {
-    toDisplayOrder(page, true, false);
-    expect(page[0].content).toBe("newest");
+      buildLogsSearchParams({ date: "20240101", before: "20240101:20" }).get(
+        "before",
+      ),
+    ).toBe("20240101:20");
   });
 });
 
 describe("mergeUniqueEntries", () => {
-  it("appends only entries not already present by date and content", () => {
+  it("appends only entries whose key is not already held", () => {
     const merged = mergeUniqueEntries(
-      [entry("a"), entry("b")],
-      [entry("b"), entry("c"), entry("a", "2024-01-02")],
+      [entry("a", "k1"), entry("b", "k2")],
+      [entry("b", "k2"), entry("c", "k3")],
       "append",
     );
-    expect(merged.map((e) => `${e.date}|${e.content}`)).toEqual([
-      "2024-01-01|a",
-      "2024-01-01|b",
-      "2024-01-01|c",
-      "2024-01-02|a",
+    expect(merged.map((e) => e.key)).toEqual(["k1", "k2", "k3"]);
+  });
+
+  it("keeps distinct lines that share a day and content", () => {
+    const merged = mergeUniqueEntries(
+      [entry("heartbeat", "1792713599999000000-0")],
+      [entry("heartbeat", "1792713600999000000-0")],
+      "append",
+    );
+    expect(merged.map((e) => e.key)).toEqual([
+      "1792713599999000000-0",
+      "1792713600999000000-0",
     ]);
   });
 
   it("prepends unique entries ahead of existing ones", () => {
     const merged = mergeUniqueEntries(
-      [entry("b")],
-      [entry("a"), entry("b")],
+      [entry("b", "k2")],
+      [entry("a", "k1"), entry("b", "k2")],
       "prepend",
     );
     expect(merged.map((e) => e.content)).toEqual(["a", "b"]);
@@ -148,44 +141,73 @@ describe("mergeUniqueEntries", () => {
 });
 
 describe("parseLiveUpdate", () => {
-  const payload = (content: string) =>
-    JSON.stringify({ content, timestamp: "2024-01-01T00:00:00Z" });
-
-  it("expands the update into timestamped lines", () => {
-    expect(parseLiveUpdate(payload("one\ntwo"))).toEqual([
-      {
-        date: "2024-01-01T00:00:00Z",
-        content: "one",
-        timestamp: "2024-01-01T00:00:00Z",
-      },
-      {
-        date: "2024-01-01T00:00:00Z",
-        content: "two",
-        timestamp: "2024-01-01T00:00:00Z",
-      },
-    ]);
-  });
-
-  it("keeps only metric lines for a metrics query", () => {
-    const content = [
-      '{"_metric":"price","v":1}',
-      "plain line",
-      "{bad json",
-    ].join("\n");
-    expect(
-      parseLiveUpdate(payload(content), "metrics").map((e) => e.content),
-    ).toEqual(['{"_metric":"price","v":1}']);
+  it("returns the entries of an update as sent", () => {
+    const entries = [
+      liveEntry(0, '{"_key":"1792713599999000000-0","message":"one"}'),
+      liveEntry(1, '{"_key":"1792713599999000000-1","message":"two"}'),
+    ];
+    expect(parseLiveUpdate(JSON.stringify(entries))).toEqual(entries);
   });
 
   it("throws on payloads that are not JSON", () => {
     expect(() => parseLiveUpdate("{nope")).toThrow(SyntaxError);
   });
+
+  it("throws on payloads that are not a list of entries", () => {
+    expect(() =>
+      parseLiveUpdate(JSON.stringify({ content: "a", timestamp: "t" })),
+    ).toThrow();
+  });
+});
+
+describe("filterLiveEntries", () => {
+  it("keeps only metric lines for a metrics query, by the api's rule", () => {
+    const metric = liveEntry(0, '{"_metric":"price","v":1}');
+    const entries = [
+      metric,
+      liveEntry(1, '{"message":"mentions _metric in passing"}'),
+      liveEntry(2, '{"_metric":"","v":1}'),
+      liveEntry(3, "null"),
+      liveEntry(4, "{bad json"),
+    ];
+    expect(filterLiveEntries(entries, "metrics")).toEqual([metric]);
+  });
+
+  it("keeps every line for other queries", () => {
+    const entries = [liveEntry(0, "plain"), liveEntry(1, '{"_metric":"a"}')];
+    expect(filterLiveEntries(entries)).toEqual(entries);
+  });
 });
 
 describe("formatLogsForExport", () => {
-  it("prefixes each line with its date", () => {
-    expect(formatLogsForExport([entry("a"), entry("b", "d2")])).toBe(
-      "[2024-01-01] a\n[d2] b",
+  it("wraps a stored plain-text line as {message}", () => {
+    const plain = 'old plain line with a "quote"';
+    const exported = formatLogsForExport([
+      entry(plain),
+      entry('{"message":"json line"}'),
+    ]);
+    expect(exported).toBe(
+      JSON.stringify({ message: plain }) + '\n{"message":"json line"}\n',
     );
+    exported
+      .trimEnd()
+      .split("\n")
+      .forEach((line) => expect(() => JSON.parse(line)).not.toThrow());
+  });
+
+  it("writes the stored lines as NDJSON, one per line", () => {
+    const lines = [
+      '{"_key":"1792713599999000000-0","message":"a"}',
+      '{"_metric":"price","value":1}',
+    ];
+    const exported = formatLogsForExport([
+      entry(lines[0]),
+      { ...entry(lines[1]), date: "20240102" },
+    ]);
+    expect(exported).toBe(lines.join("\n") + "\n");
+    exported
+      .trimEnd()
+      .split("\n")
+      .forEach((line) => expect(() => JSON.parse(line)).not.toThrow());
   });
 });

@@ -98,9 +98,8 @@ export function useBotEvents({
   const initialQuery = latest
     ? {
         limit: 1000,
-        offset: 0,
         type: "metrics" as const,
-        sort: "desc" as const,
+        sort: "asc" as const,
         lookbackDays: DEFAULT_LOOKBACK_DAYS,
       }
     : dateRange
@@ -109,10 +108,10 @@ export function useBotEvents({
             ? `${dateRange.start}--${dateRange.end}`
             : `${dateRange.start}-${dateRange.end}`,
           limit: 1000,
-          offset: 0,
           type: "metrics" as const,
+          sort: "asc" as const,
         }
-      : { limit: 1000, offset: 0, type: "metrics" as const };
+      : { limit: 1000, type: "metrics" as const, sort: "asc" as const };
 
   // With streaming, metric history still loads via REST (type=metrics) and
   // new lines append live over SSE; non-metric lines are filtered out by
@@ -201,11 +200,7 @@ export function useBotEvents({
       all.push(...parsed);
     }
 
-    // The API returns newest-first for desc queries but every event util
-    // (latest, extractTimeSeries, groupByRun) assumes chronological order.
-    // Stable-sort here so utils are correct regardless of fetch order;
-    // fallback-stamped events share their parse time and keep relative order.
-    return all.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    return all;
   }, [rawLogs]);
 
   // Create bound utilities

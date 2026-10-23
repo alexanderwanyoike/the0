@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LogEntry } from "@/types/logs";
 import { SmartLogEntry } from "./console/log-entries";
+import { displayText } from "./console/log-format";
 import { ConsoleFilterPanel, ConsoleToolbar } from "./console/console-toolbar";
 import { useConsoleFilters } from "./console/use-console-filters";
 
@@ -43,6 +44,11 @@ interface ConsoleInterfaceProps {
   sort?: "asc" | "desc";
   /** Callback when user toggles sort order */
   onSortChange?: (sort: "asc" | "desc") => void;
+  /** Names the window of logs shown (such as the interval); a new one opens
+   *  at its newest line. */
+  viewKey?: string;
+  /** Whether the logs are being read again (such as for a new window). */
+  fetching?: boolean;
 }
 
 const PagerButton = ({
@@ -99,6 +105,8 @@ type ConsoleLogViewProps = Pick<
   searchQuery: string;
   sort: "asc" | "desc";
   autoScroll: boolean;
+  view: string;
+  fetching: boolean;
 };
 
 const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
@@ -115,9 +123,41 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
   hasMore,
   loadMore,
   loadingMore,
+  view,
+  fetching,
 }) => {
   const [, setIsUserAtBottom] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const newestIndex = sort === "asc" ? displayLogs.length - 1 : 0;
+
+  // The old window's lines stay up until the new window's arrive, so the
+  // jump to the newest line waits for them. Earlier pages and live lines
+  // keep the reader's place.
+  const viewRef = useRef(view);
+  const jumpPendingRef = useRef(false);
+  useEffect(() => {
+    if (viewRef.current === view) return;
+    viewRef.current = view;
+    jumpPendingRef.current = true;
+  }, [view]);
+  useEffect(() => {
+    if (!jumpPendingRef.current) return;
+    jumpPendingRef.current = false;
+    if (displayLogs.length === 0) return;
+    virtuosoRef.current?.scrollToIndex({
+      index: newestIndex,
+      align: sort === "asc" ? "end" : "start",
+    });
+    // Only new lines end the wait; a sort flip remounts the list instead
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayLogs]);
+  // A read that ends with no new lines (it failed) ends the wait too, or a
+  // later search or live line would jump the reader away
+  const wasFetchingRef = useRef(fetching);
+  useEffect(() => {
+    if (wasFetchingRef.current && !fetching) jumpPendingRef.current = false;
+    wasFetchingRef.current = fetching;
+  }, [fetching]);
 
   // Background refreshes keep showing the current lines; only an empty
   // console shows the spinner.
@@ -139,8 +179,10 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
 
   return (
     <Virtuoso
+      key={sort}
       ref={virtuosoRef}
       data={displayLogs}
+      initialTopMostItemIndex={newestIndex}
       overscan={50}
       followOutput={
         connected && sort === "asc" && autoScroll ? "smooth" : false
@@ -193,9 +235,17 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   lastUpdate,
   sort = "desc",
   onSortChange,
+  viewKey = "",
+  fetching = false,
   ...pagination
 }) => {
   const filters = useConsoleFilters(onDateChange, onDateRangeChange);
+  const view = [
+    viewKey,
+    filters.selectedDate,
+    filters.dateRange.start,
+    filters.dateRange.end,
+  ].join("|");
   const { searchQuery } = filters;
   const [autoScroll, setAutoScroll] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -203,8 +253,9 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   // No reversal needed - the API returns data in the requested sort order
   const displayLogs = useMemo(() => {
     if (searchQuery === "") return logs;
+    const needle = searchQuery.toLowerCase();
     return logs.filter((log) =>
-      log.content.toLowerCase().includes(searchQuery.toLowerCase()),
+      displayText(log).toLowerCase().includes(needle),
     );
   }, [logs, searchQuery]);
 
@@ -252,6 +303,8 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           sort={sort}
           autoScroll={autoScroll}
           searchQuery={searchQuery}
+          view={view}
+          fetching={fetching}
         />
       </div>
     </div>

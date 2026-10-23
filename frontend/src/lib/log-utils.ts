@@ -1,27 +1,9 @@
-import type { LogEntry, LogsQuery, PageMerge } from "@/types/logs";
+import type { LogEntry, LogsQuery } from "@/types/logs";
 
 export const MAX_LOG_ENTRIES = 10000;
 
-const entryKey = (l: LogEntry) => `${l.date}|${l.content}`;
-
-/**
- * Split multi-line log entries into individual LogEntry items.
- * Preserves date, content, and timestamp on each expanded line.
- */
-export function expandLogEntries(entries: LogEntry[]): LogEntry[] {
-  const expanded: LogEntry[] = [];
-  for (const entry of entries) {
-    const lines = entry.content.split("\n").filter((l) => l.trim() !== "");
-    for (const line of lines) {
-      expanded.push({
-        date: entry.date,
-        content: line,
-        timestamp: entry.timestamp,
-      });
-    }
-  }
-  return expanded;
-}
+/** The api's nextCursor: `<YYYYMMDD>:<byte offset>` in that day's file. */
+const POSITION_CURSOR = /^(\d{8}):\d+$/;
 
 /** A date or date range pins the view to history, which live streaming
  *  cannot extend. */
@@ -38,28 +20,21 @@ export function buildLogsSearchParams(query: LogsQuery): URLSearchParams {
   } else if (query.lookbackDays) {
     searchParams.set("lookbackDays", query.lookbackDays.toString());
   } else {
+    // A live view's older pages belong to its cursor's day, which stops
+    // being today at midnight UTC
+    const cursorDay = query.before
+      ? POSITION_CURSOR.exec(query.before)?.[1]
+      : undefined;
     searchParams.set(
       "date",
-      new Date().toISOString().slice(0, 10).replace(/-/g, ""),
+      cursorDay ?? new Date().toISOString().slice(0, 10).replace(/-/g, ""),
     );
   }
   if (query.limit) searchParams.set("limit", query.limit.toString());
-  if (query.offset) searchParams.set("offset", query.offset.toString());
+  if (query.before) searchParams.set("before", query.before);
   if (query.type) searchParams.set("type", query.type);
   if (query.sort) searchParams.set("sort", query.sort);
   return searchParams;
-}
-
-/**
- * Live mode fetches sort=desc (latest N) but displays chronologically so SSE
- * appends land at the bottom. Appended pages are already in display order.
- */
-export function toDisplayOrder(
-  entries: LogEntry[],
-  live: boolean,
-  merge: PageMerge,
-): LogEntry[] {
-  return live && merge !== "append" ? [...entries].reverse() : entries;
 }
 
 /**
@@ -71,38 +46,71 @@ export function mergeUniqueEntries(
   page: LogEntry[],
   direction: "append" | "prepend",
 ): LogEntry[] {
-  const existing = new Set(prev.map(entryKey));
-  const unique = page.filter((l) => !existing.has(entryKey(l)));
+  const existing = new Set(prev.map((l) => l.key));
+  const unique = page.filter((l) => !existing.has(l.key));
   return direction === "append"
     ? [...prev, ...unique].slice(-MAX_LOG_ENTRIES)
     : [...unique, ...prev].slice(0, MAX_LOG_ENTRIES);
 }
 
 /**
- * Turn an SSE "update" payload into log entries. Throws on payloads that are
- * not a log line, so the caller decides how to report them.
+ * Join live lines onto logs shown in `sort` order: on the newest side, the
+ * end of a chronological view or the top of a newest-first one. A live chunk
+ * is oldest-first, so a newest-first view takes it newest line first.
  */
-export function parseLiveUpdate(data: string, type?: string): LogEntry[] {
-  const parsed: { content: string; timestamp: string } = JSON.parse(data);
-  const entries = expandLogEntries([
-    {
-      date: parsed.timestamp,
-      content: parsed.content,
-      timestamp: parsed.timestamp,
-    },
-  ]);
-  // Mirror the server-side type=metrics filter (logs.service) for live
-  // lines: history is filtered by the API, appends must match.
-  if (type !== "metrics") return entries;
-  return entries.filter((entry) => {
-    try {
-      return !!JSON.parse(entry.content)?._metric;
-    } catch {
-      return false;
-    }
-  });
+export function mergeLiveEntries(
+  prev: LogEntry[],
+  entries: LogEntry[],
+  sort: LogsQuery["sort"],
+): LogEntry[] {
+  return sort === "asc"
+    ? mergeUniqueEntries(prev, entries, "append")
+    : mergeUniqueEntries(prev, [...entries].reverse(), "prepend");
+}
+
+/** The api's type=metrics rule (logs.service isMetricLine), which history
+ *  is filtered by, so live lines are filtered the same way. */
+function isMetricLine(content: string): boolean {
+  try {
+    return Boolean(JSON.parse(content)._metric);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Turn an SSE "update" payload (the entries of one live chunk) into log
+ * entries. Throws on payloads that are not a list of entries, so the caller
+ * decides how to report them.
+ */
+export function parseLiveUpdate(data: string): LogEntry[] {
+  const entries: unknown = JSON.parse(data);
+  if (!Array.isArray(entries)) {
+    throw new TypeError("Live update is not a list of log entries");
+  }
+  return entries;
+}
+
+export function filterLiveEntries(
+  entries: LogEntry[],
+  type?: string,
+): LogEntry[] {
+  return type === "metrics"
+    ? entries.filter((entry) => isMetricLine(entry.content))
+    : entries;
+}
+
+/** Lines stored before the runtime wrote JSON are wrapped the way the
+ *  runtime wraps plain text, so every exported line is JSON. */
+function asJsonLine(content: string): string {
+  try {
+    JSON.parse(content);
+    return content;
+  } catch {
+    return JSON.stringify({ message: content });
+  }
 }
 
 export function formatLogsForExport(logs: LogEntry[]): string {
-  return logs.map((log) => `[${log.date}] ${log.content}`).join("\n");
+  return logs.map((log) => `${asJsonLine(log.content)}\n`).join("");
 }
