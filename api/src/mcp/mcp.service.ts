@@ -23,9 +23,17 @@ import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 
-// The same prefixes the frontend reads a plain-text line's level from.
-const LEVEL_PREFIX = /^(?:\[[^\]]*\]\s*)?(DEBUG|INFO|WARN(?:ING)?|ERROR):/i;
-const ERROR_LEVELS = new Set(["error", "critical", "fatal"]);
+const LEVEL_PREFIX =
+  /^(?:\[[^\]]*\]\s*)?(DEBUG|INFO|WARN(?:ING)?|ERROR|CRITICAL|FATAL):/i;
+const ERROR_PREFIXES = new Set(["ERROR", "CRITICAL", "FATAL"]);
+// Pino levels as numbers or digit strings, as the frontend maps them.
+const ERROR_LEVELS = new Set(["error", "critical", "fatal", "50", "60"]);
+
+function isErrorLevel(level: string | number): boolean {
+  return typeof level === "number"
+    ? level > 40
+    : ERROR_LEVELS.has(level.toLowerCase());
+}
 
 /**
  * Entry content is the stored line verbatim, so a JSON line is judged by
@@ -43,8 +51,8 @@ function isErrorLine(content: string): boolean {
   }
   const line = parsed as Record<string, unknown>;
   if (line._metric) return false;
-  if (typeof line.level === "string") {
-    return ERROR_LEVELS.has(line.level.toLowerCase());
+  if (typeof line.level === "string" || typeof line.level === "number") {
+    return isErrorLevel(line.level);
   }
   const message = line.message ?? line.msg;
   return typeof message === "string" && isErrorText(message);
@@ -52,7 +60,7 @@ function isErrorLine(content: string): boolean {
 
 function isErrorText(text: string): boolean {
   const prefix = LEVEL_PREFIX.exec(text);
-  if (prefix) return prefix[1].toUpperCase() === "ERROR";
+  if (prefix) return ERROR_PREFIXES.has(prefix[1].toUpperCase());
   const lower = text.toLowerCase();
   return lower.includes("error") || lower.includes("failed");
 }
