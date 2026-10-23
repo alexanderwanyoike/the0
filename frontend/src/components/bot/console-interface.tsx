@@ -47,6 +47,8 @@ interface ConsoleInterfaceProps {
   /** Names the window of logs shown (such as the interval); a new one opens
    *  at its newest line. */
   viewKey?: string;
+  /** Whether the logs are being read again (such as for a new window). */
+  fetching?: boolean;
 }
 
 const PagerButton = ({
@@ -104,6 +106,7 @@ type ConsoleLogViewProps = Pick<
   sort: "asc" | "desc";
   autoScroll: boolean;
   view: string;
+  fetching: boolean;
 };
 
 const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
@@ -121,6 +124,7 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
   loadMore,
   loadingMore,
   view,
+  fetching,
 }) => {
   const [, setIsUserAtBottom] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -137,8 +141,9 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
     jumpPendingRef.current = true;
   }, [view]);
   useEffect(() => {
-    if (!jumpPendingRef.current || displayLogs.length === 0) return;
+    if (!jumpPendingRef.current) return;
     jumpPendingRef.current = false;
+    if (displayLogs.length === 0) return;
     virtuosoRef.current?.scrollToIndex({
       index: newestIndex,
       align: sort === "asc" ? "end" : "start",
@@ -146,6 +151,13 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
     // Only new lines end the wait; a sort flip remounts the list instead
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayLogs]);
+  // A read that ends with no new lines (it failed) ends the wait too, or a
+  // later search or live line would jump the reader away
+  const wasFetchingRef = useRef(fetching);
+  useEffect(() => {
+    if (wasFetchingRef.current && !fetching) jumpPendingRef.current = false;
+    wasFetchingRef.current = fetching;
+  }, [fetching]);
 
   // Background refreshes keep showing the current lines; only an empty
   // console shows the spinner.
@@ -224,6 +236,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   sort = "desc",
   onSortChange,
   viewKey = "",
+  fetching = false,
   ...pagination
 }) => {
   const filters = useConsoleFilters(onDateChange, onDateRangeChange);
@@ -291,6 +304,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           autoScroll={autoScroll}
           searchQuery={searchQuery}
           view={view}
+          fetching={fetching}
         />
       </div>
     </div>

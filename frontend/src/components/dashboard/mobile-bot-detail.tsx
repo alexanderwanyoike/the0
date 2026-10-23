@@ -48,6 +48,7 @@ interface MobileBotDetailProps {
   maskedConfig: Record<string, any>;
   logs: any[];
   logsLoading: boolean;
+  logsFetching?: boolean;
   refreshLogs: () => void;
   setDateFilter: (date: string | null) => void;
   setDateRangeFilter: (startDate: string, endDate: string) => void;
@@ -86,6 +87,7 @@ export function MobileBotDetail({
   maskedConfig,
   logs,
   logsLoading,
+  logsFetching,
   refreshLogs,
   setDateFilter,
   setDateRangeFilter,
@@ -219,6 +221,7 @@ export function MobileBotDetail({
             sort={sort}
             onSortChange={onSortChange}
             viewKey={intervalViewKey}
+            fetching={logsFetching}
             className="h-full"
             compact
           />

@@ -101,6 +101,7 @@ const ConsolePanel = ({ botId, logs }: { botId: string; logs: DetailLogs }) => (
         sort={logs.sortOrder}
         onSortChange={logs.handleSortChange}
         viewKey={intervalViewKey(logs.interval)}
+        fetching={logs.logsFetching}
         className="h-full"
         compact
       />
@@ -154,6 +155,7 @@ function BotDetailContent({
           maskedConfig={owned.maskedConfig}
           logs={logs.logs}
           logsLoading={logs.logsLoading}
+          logsFetching={logs.logsFetching}
           refreshLogs={logs.refreshLogs}
           setDateFilter={logs.setDateFilter}
           setDateRangeFilter={logs.setDateRangeFilter}

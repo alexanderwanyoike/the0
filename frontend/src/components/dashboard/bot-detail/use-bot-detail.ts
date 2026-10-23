@@ -244,6 +244,7 @@ export function useBotDetailLogs(botId: string, bot: DetailBot | null) {
     handleSortChange,
     logs: logsHook.logs,
     logsLoading: logsHook.loading,
+    logsFetching: logsHook.isFetching,
     refreshLogs: logsHook.refresh,
     setDateFilter: logsHook.setDateFilter,
     setDateRangeFilter: logsHook.setDateRangeFilter,
