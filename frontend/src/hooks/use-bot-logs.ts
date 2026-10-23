@@ -413,10 +413,11 @@ export const useBotLogs = ({
     setLoadingEarlier(true);
 
     try {
-      await fetchLogs(
+      const ok = await fetchLogs(
         { ...query, before: nextCursorRef.current ?? undefined },
         "prepend",
       );
+      if (ok) paginatedRef.current = true;
     } finally {
       loadingEarlierRef.current = false;
       setLoadingEarlier(false);
