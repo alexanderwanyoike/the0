@@ -98,7 +98,7 @@ func NewBotLogsCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&watchMode, "watch", "w", false, "Watch logs in real-time (polls every 5 seconds)")
+	cmd.Flags().BoolVarP(&watchMode, "watch", "w", false, "Watch logs in real-time (polls every second)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum number of log entries to return (max 1000)")
 
 	return cmd
