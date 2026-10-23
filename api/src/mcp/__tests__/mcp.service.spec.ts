@@ -670,6 +670,40 @@ describe("McpService", () => {
 
         expect(JSON.parse(result.content[0].text).error_count).toBe(3);
       });
+
+      it("should count pino numeric levels and CRITICAL or FATAL prefixes", async () => {
+        const contents = [
+          // errors
+          '{"level":50,"msg":"order rejected"}',
+          '{"level":60,"msg":"crashed"}',
+          '{"level":"50","msg":"order rejected"}',
+          "CRITICAL: exchange down",
+          "FATAL: out of memory",
+          // not errors
+          '{"level":30,"msg":"filled, no error"}',
+          '{"level":"40","msg":"slow fill, retry failed once"}',
+        ];
+        logsService.getLogs.mockResolvedValue(
+          Ok({
+            entries: contents.map((content, i) => ({
+              key: `20261022:${i}`,
+              date: "20261022",
+              content,
+              timestamp: null as string | null,
+            })),
+            hasMore: false,
+            nextCursor: null,
+          }),
+        );
+
+        const result = await service.handleToolCall(
+          "logs_summary",
+          { bot_id: "bot-123" },
+          actor,
+        );
+
+        expect(JSON.parse(result.content[0].text).error_count).toBe(5);
+      });
     });
 
     describe("bot_state_list", () => {
