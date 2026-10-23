@@ -1012,7 +1012,6 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 			logger.Info("Stopped watching logs")
 			return
 		case <-ticker.C:
-			// Fetch new logs since last timestamp
 			newLogs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
 			if err != nil {
 				logger.Error("Error fetching logs: %v", err)
