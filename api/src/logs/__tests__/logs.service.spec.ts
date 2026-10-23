@@ -22,6 +22,16 @@ function stringStream(content: string, chunkSize?: number): Readable {
   return stream;
 }
 
+/** The text a stored line carries, whether wrapped as NDJSON or plain. */
+function messageOf(entry: { content: string }): string {
+  try {
+    const parsed = JSON.parse(entry.content);
+    return typeof parsed?.message === "string" ? parsed.message : entry.content;
+  } catch {
+    return entry.content;
+  }
+}
+
 describe("LogsService", () => {
   let service: LogsService;
   let mockMinioClient: any;
@@ -65,6 +75,31 @@ describe("LogsService", () => {
     );
   });
 
+  /** Serves consecutive daily files from `start` by path, in any read order. */
+  function serveDaysFrom(start: string, ...days: string[]) {
+    const files: Record<string, string> = {};
+    const day = new Date(
+      Date.UTC(+start.slice(0, 4), +start.slice(4, 6) - 1, +start.slice(6, 8)),
+    );
+    for (const content of days) {
+      const name = day.toISOString().slice(0, 10).replace(/-/g, "");
+      files[`logs/bot-1/${name}.log`] = content;
+      day.setUTCDate(day.getUTCDate() + 1);
+    }
+    const read = (path: string) => {
+      if (files[path] === undefined) throw { code: "NoSuchKey" };
+      return files[path];
+    };
+    mockMinioClient.getObject.mockImplementation(
+      async (_bucket: string, path: string) => stringStream(read(path)),
+    );
+    mockMinioClient.statObject.mockImplementation(
+      async (_bucket: string, path: string) => ({
+        size: Buffer.byteLength(read(path)),
+      }),
+    );
+  }
+
   describe("getLogs - line-level streaming", () => {
     it("should return each line as a separate LogEntry", async () => {
       const lines = [
@@ -79,21 +114,25 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(3);
       expect(result.data!.entries[0]).toEqual({
+        key: "20260401:0",
         date: "20260401",
         content: '{"level":"info","msg":"started"}',
         timestamp: null,
       });
       expect(result.data!.entries[1]).toEqual({
+        key: "20260401:33",
         date: "20260401",
         content: '{"level":"info","msg":"running"}',
         timestamp: null,
       });
       expect(result.data!.entries[2]).toEqual({
+        key: "20260401:66",
         date: "20260401",
         content: '{"level":"info","msg":"done"}',
         timestamp: null,
@@ -156,6 +195,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 5,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -165,17 +205,13 @@ describe("LogsService", () => {
       expect(result.data!.entries[4].content).toContain("line-49");
     });
 
-    it("should respect offset at the line level (date range uses stream)", async () => {
-      // Offset is meaningful for stream-from-start (multi-date range) queries
+    it("should apply offset counting back from the newest entry", async () => {
       const lines = Array.from(
         { length: 10 },
         (_, i) => `{"level":"info","msg":"line-${i}"}`,
       ).join("\n");
 
-      // Use a two-day range so dates.length > 1 triggers the stream path
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(lines))
-        .mockResolvedValueOnce(stringStream("")); // second day empty
+      serveDaysFrom("20260401", lines, ""); // second day empty
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -186,9 +222,10 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toContain("line-5");
-      expect(result.data!.entries[1].content).toContain("line-6");
-      expect(result.data!.entries[2].content).toContain("line-7");
+      // The newest three after skipping five, oldest of them first
+      expect(result.data!.entries[0].content).toContain("line-2");
+      expect(result.data!.entries[1].content).toContain("line-3");
+      expect(result.data!.entries[2].content).toContain("line-4");
     });
 
     it("should return the newest `limit` metrics and report hasMore when type=metrics", async () => {
@@ -214,7 +251,7 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // Default sort is desc: newest 2 of the 4 metrics, with hasMore
       // signalling the older ones are reachable via offset
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         '{"_metric":true,"name":"m4","value":4}',
         '{"_metric":true,"name":"m3","value":3}',
       ]);
@@ -241,30 +278,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toContain("m2");
-      expect(result.data!.entries[1].content).toContain("m3");
-    });
-
-    it("should stop reading early once limit is reached (stream path)", async () => {
-      // Use date range to trigger stream-from-start path
-      const lines = Array.from(
-        { length: 1000 },
-        (_, i) => `{"level":"info","msg":"line-${i}"}`,
-      ).join("\n");
-
-      const stream = stringStream(lines);
-      const destroySpy = jest.spyOn(stream, "destroy");
-      mockMinioClient.getObject.mockResolvedValue(stream);
-
-      const result = await service.getLogs("bot-1", {
-        dateRange: "20260401-20260401",
-        limit: 2,
-        offset: 0,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(2);
-      expect(destroySpy).toHaveBeenCalled();
+      expect(result.data!.entries[0].content).toContain("m1");
+      expect(result.data!.entries[1].content).toContain("m2");
     });
 
     it("should handle multi-chunk streams correctly", async () => {
@@ -281,6 +296,7 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
@@ -306,7 +322,7 @@ describe("LogsService", () => {
     });
 
     it("should return empty array when log file does not exist", async () => {
-      // Single-date tail path calls statObject first
+      // A day's read starts by statting its file
       mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
 
       const result = await service.getLogs("bot-1", {
@@ -320,7 +336,6 @@ describe("LogsService", () => {
     });
 
     it("should return empty array when log file does not exist (date range)", async () => {
-      // Multi-date range triggers stream path, which handles NoSuchKey on getObject
       mockMinioClient.getObject.mockRejectedValue({ code: "NoSuchKey" });
 
       const result = await service.getLogs("bot-1", {
@@ -333,7 +348,7 @@ describe("LogsService", () => {
       expect(result.data!.entries).toEqual([]);
     });
 
-    it("should handle R2 NotFound error on tail path (statObject)", async () => {
+    it("should treat an R2 NotFound from statObject as a missing file", async () => {
       // Cloudflare R2 returns "NotFound" instead of "NoSuchKey"
       mockMinioClient.statObject.mockRejectedValue({ code: "NotFound" });
 
@@ -347,7 +362,7 @@ describe("LogsService", () => {
       expect(result.data!.entries).toEqual([]);
     });
 
-    it("should handle R2 NotFound error on stream path (getObject)", async () => {
+    it("should treat an R2 NotFound from getObject as a missing file", async () => {
       mockMinioClient.getObject.mockRejectedValue({ code: "NotFound" });
 
       const result = await service.getLogs("bot-1", {
@@ -365,9 +380,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -378,18 +391,16 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(4);
-      expect(result.data!.entries[0].content).toContain("d1-l1");
-      expect(result.data!.entries[2].content).toContain("d1-l3");
-      expect(result.data!.entries[3].content).toContain("d2-l1");
+      expect(result.data!.entries[0].content).toContain("d1-l3");
+      expect(result.data!.entries[1].content).toContain("d2-l1");
+      expect(result.data!.entries[3].content).toContain("d2-l3");
     });
 
     it("should apply offset across multiple date files", async () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -403,12 +414,10 @@ describe("LogsService", () => {
       expect(result.data!.entries[0].content).toContain("d1-l2");
       expect(result.data!.entries[1].content).toContain("d2-l1");
     });
-    it("should skip blank lines on the stream path", async () => {
+    it("should skip blank lines", async () => {
       const content = '{"msg":"a"}\n\n   \n{"msg":"b"}\n';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(content))
-        .mockResolvedValueOnce(stringStream(""));
+      serveDaysFrom("20260401", content, "");
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -418,7 +427,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         '{"msg":"a"}',
         '{"msg":"b"}',
       ]);
@@ -428,9 +437,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -440,21 +447,28 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
-        '{"msg":"d2-l1"}',
-        '{"msg":"d2-l2"}',
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        '{"msg":"d1-l1"}',
+        '{"msg":"d1-l2"}',
       ]);
     });
 
-    it("should stop reading older days once the desc read cap is reached", async () => {
-      const day1 = Array.from(
-        { length: 10000 },
-        (_, i) => `{"msg":"d1-${i}"}`,
-      ).join("\n");
-
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1 + "\n"))
-        .mockResolvedValueOnce(stringStream('{"msg":"d2-0"}\n'));
+    it("should return the newest entries when an older day holds 10000 lines", async () => {
+      const files: Record<string, string> = {
+        "logs/bot-1/20260401.log":
+          Array.from({ length: 10000 }, (_, i) => `{"msg":"d1-${i}"}`).join(
+            "\n",
+          ) + "\n",
+        "logs/bot-1/20260402.log": '{"msg":"d2-0"}\n',
+      };
+      mockMinioClient.getObject.mockImplementation(
+        async (_bucket: string, path: string) => stringStream(files[path]),
+      );
+      mockMinioClient.statObject.mockImplementation(
+        async (_bucket: string, path: string) => ({
+          size: Buffer.byteLength(files[path]),
+        }),
+      );
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -464,10 +478,9 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockMinioClient.getObject).toHaveBeenCalledTimes(1);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        '{"msg":"d2-0"}',
         '{"msg":"d1-9999"}',
-        '{"msg":"d1-9998"}',
       ]);
       expect(result.data!.hasMore).toBe(true);
     });
@@ -534,21 +547,22 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
         type: "all",
       });
 
       expect(result.success).toBe(true);
       // All lines should be returned regardless of format
       expect(result.data!.entries).toHaveLength(4);
-      expect(result.data!.entries[0].content).toBe(
+      expect(messageOf(result.data!.entries[0])).toBe(
         "[2026-03-30 13:00:26] INFO:main:Starting bot",
       );
       expect(result.data!.entries[0].timestamp).toBeNull();
-      expect(result.data!.entries[1].content).toBe(
+      expect(messageOf(result.data!.entries[1])).toBe(
         '{"level":"info","msg":"json line"}',
       );
       expect(result.data!.entries[1].timestamp).toBeNull();
-      expect(result.data!.entries[2].content).toBe("plain text log line");
+      expect(messageOf(result.data!.entries[2])).toBe("plain text log line");
       expect(result.data!.entries[2].timestamp).toBeNull();
       expect(result.data!.entries[3].content).toContain('"_metric"');
       expect(result.data!.entries[3].timestamp).toBeNull();
@@ -595,13 +609,34 @@ describe("LogsService", () => {
     });
   });
 
-  describe("getLogs - line normalization", () => {
-    it("should normalize NDJSON wrapped text with extracted message and timestamp", async () => {
-      const lines = [
-        '{"timestamp":"2026-03-30T13:00:26Z","message":"INFO:main:Starting bot"}',
-      ].join("\n");
+  describe("getLogs - entry shape", () => {
+    it("should pass a runtime line through verbatim, keyed by its _key", async () => {
+      const line =
+        '{"_key":"1792674000123456789-0","message":"Bought 1 BTC","timestamp":"2026-10-22T10:00:00.123Z"}';
+      mockMinioClient.getObject.mockResolvedValue(stringStream(line + "\n"));
 
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+      const result = await service.getLogs("bot-1", {
+        date: "20261022",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data!.entries).toEqual([
+        {
+          key: "1792674000123456789-0",
+          date: "20261022",
+          timestamp: "2026-10-22T10:00:00.123Z",
+          content: line,
+        },
+      ]);
+    });
+
+    it("should key a line without _key by its file date and byte offset", async () => {
+      const wrapped =
+        '{"timestamp":"2026-03-30T13:00:27Z","message":"Running strategy"}';
+      const content = `plain one\n${wrapped}\nlast\n`;
+      mockMinioClient.getObject.mockResolvedValue(stringStream(content));
 
       const result = await service.getLogs("bot-1", {
         date: "20260330",
@@ -610,20 +645,92 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0]).toEqual({
-        date: "20260330",
-        content: "INFO:main:Starting bot",
-        timestamp: "2026-03-30T13:00:26Z",
-      });
+      expect(result.data!.entries).toHaveLength(3);
+      expect(result.data!.entries).toEqual(
+        expect.arrayContaining([
+          {
+            key: "20260330:0",
+            date: "20260330",
+            timestamp: null,
+            content: "plain one",
+          },
+          {
+            key: "20260330:10",
+            date: "20260330",
+            timestamp: "2026-03-30T13:00:27Z",
+            content: wrapped,
+          },
+          {
+            key: `20260330:${11 + wrapped.length}`,
+            date: "20260330",
+            timestamp: null,
+            content: "last",
+          },
+        ]),
+      );
     });
 
-    it("should normalize metric lines keeping full JSON as content with timestamp", async () => {
-      const metricLine =
-        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
-      const lines = [metricLine].join("\n");
+    it("should give a line the same key whether it was tailed or streamed", async () => {
+      const content = "first\nsecond\nthird\n";
+      mockMinioClient.getObject.mockImplementation(
+        async (_bucket: string, path: string) => {
+          if (!path.endsWith("20260401.log")) throw { code: "NoSuchKey" };
+          return stringStream(content, 4);
+        },
+      );
 
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
+      const tailed = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+      const streamed = await service.getLogs("bot-1", {
+        dateRange: "20260401-20260402",
+        limit: 100,
+        offset: 0,
+        type: "all",
+        sort: "asc",
+      });
+
+      const keysByContent = (entries: { key: string; content: string }[]) =>
+        Object.fromEntries(entries.map((e) => [e.content, e.key]));
+      expect(keysByContent(tailed.data!.entries)).toEqual({
+        first: "20260401:0",
+        second: "20260401:6",
+        third: "20260401:13",
+      });
+      expect(keysByContent(streamed.data!.entries)).toEqual(
+        keysByContent(tailed.data!.entries),
+      );
+    });
+
+    it("should count key offsets from the start of the file when tailing mid-file", async () => {
+      const tailBytes = 512 * 1024;
+      mockMinioClient.statObject.mockResolvedValue({ size: tailBytes + 100 });
+      mockMinioClient.getPartialObject.mockResolvedValue(
+        stringStream("partial\nline-a\nline-b\nline-c\n"),
+      );
+
+      // The tail holds limit + 1 whole lines, so the day is not read whole
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 2,
+        offset: 0,
+      });
+
+      expect(result.success).toBe(true);
+      expect(
+        result.data!.entries.map((e) => [e.content, e.key]).sort(),
+      ).toEqual([
+        ["line-b", "20260401:115"],
+        ["line-c", "20260401:122"],
+      ]);
+    });
+
+    it("should count key offsets in bytes, not characters", async () => {
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream("prix: 10€\nnext\n"),
+      );
 
       const result = await service.getLogs("bot-1", {
         date: "20260401",
@@ -631,34 +738,85 @@ describe("LogsService", () => {
         offset: 0,
       });
 
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(1);
+      const next = result.data!.entries.find((e) => e.content === "next");
+      expect(next!.key).toBe("20260401:12");
+    });
+
+    it("should keep a bot's own string timestamp as written", async () => {
+      const line = '{"timestamp":"2026-10-22 12:00:00+02:00","message":"x"}';
+      mockMinioClient.getObject.mockResolvedValue(stringStream(line));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20261022",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.data!.entries[0].timestamp).toBe(
+        "2026-10-22 12:00:00+02:00",
+      );
+    });
+
+    it("should report a null timestamp for plain text and non-string timestamps", async () => {
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream(
+          '[2026-03-30 13:00:26] INFO:main:Starting bot\n{"timestamp":1792674000,"message":"x"}\n',
+        ),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260330",
+        limit: 100,
+        offset: 0,
+      });
+
+      expect(result.data!.entries.map((e) => e.timestamp)).toEqual([
+        null,
+        null,
+      ]);
+    });
+
+    it.each(["order-1", "2024-10", "12345-1"])(
+      "should ignore a _key the runtime did not write (%s)",
+      async (botKey) => {
+        // Before the runtime stamped keys, a bot could log its own _key
+        const lines = [
+          `{"_key":"${botKey}","message":"a"}`,
+          `{"_key":"${botKey}","message":"b"}`,
+        ];
+        mockMinioClient.getObject.mockResolvedValue(
+          stringStream(lines.join("\n") + "\n"),
+        );
+
+        const result = await service.getLogs("bot-1", {
+          date: "20260401",
+          limit: 100,
+          offset: 0,
+          sort: "asc",
+        });
+
+        expect(result.data!.entries.map((e) => [e.key, e.content])).toEqual([
+          ["20260401:0", lines[0]],
+          [`20260401:${lines[0].length + 1}`, lines[1]],
+        ]);
+      },
+    );
+    it("should keep a metric line's full JSON as content", async () => {
+      const metricLine =
+        '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
+      mockMinioClient.getObject.mockResolvedValue(stringStream(metricLine));
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+      });
+
       expect(result.data!.entries[0]).toEqual({
+        key: "20260401:0",
         date: "20260401",
         content: metricLine,
         timestamp: "2026-04-01T10:00:00Z",
-      });
-    });
-
-    it("should handle old format plain text with null timestamp", async () => {
-      const lines = [
-        "[2026-03-30 13:00:26] INFO:main:Starting bot",
-      ].join("\n");
-
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
-
-      const result = await service.getLogs("bot-1", {
-        date: "20260330",
-        limit: 100,
-        offset: 0,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0]).toEqual({
-        date: "20260330",
-        content: "[2026-03-30 13:00:26] INFO:main:Starting bot",
-        timestamp: null,
       });
     });
 
@@ -682,48 +840,6 @@ describe("LogsService", () => {
       expect(result.data!.entries).toHaveLength(1);
       expect(result.data!.entries[0].content).toContain('"_metric"');
       expect(result.data!.entries[0].timestamp).toBe("2026-04-01T10:00:00Z");
-    });
-
-    it("should handle mixed old and new format lines", async () => {
-      const metricLine =
-        '{"_metric":"sharpe","value":1.5,"timestamp":"2026-04-01T10:05:00Z"}';
-      const lines = [
-        "[2026-03-30 13:00:26] INFO:main:Starting bot",
-        '{"timestamp":"2026-03-30T13:00:27Z","message":"Running strategy"}',
-        metricLine,
-      ].join("\n");
-
-      mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
-
-      const result = await service.getLogs("bot-1", {
-        date: "20260330",
-        limit: 100,
-        offset: 0,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(3);
-
-      // Old format: content as-is, timestamp null
-      expect(result.data!.entries[0]).toEqual({
-        date: "20260330",
-        content: "[2026-03-30 13:00:26] INFO:main:Starting bot",
-        timestamp: null,
-      });
-
-      // NDJSON wrapped text: extracted message, extracted timestamp
-      expect(result.data!.entries[1]).toEqual({
-        date: "20260330",
-        content: "Running strategy",
-        timestamp: "2026-03-30T13:00:27Z",
-      });
-
-      // Metric line: full JSON as content, extracted timestamp
-      expect(result.data!.entries[2]).toEqual({
-        date: "20260330",
-        content: metricLine,
-        timestamp: "2026-04-01T10:05:00Z",
-      });
     });
   });
 
@@ -759,17 +875,17 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 10,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(10);
       // The returned entries should be the LAST 10 lines, not the first 10
-      expect(result.data!.entries[0].content).toBe("line-90");
-      expect(result.data!.entries[9].content).toBe("line-99");
+      expect(messageOf(result.data!.entries[0])).toBe("line-90");
+      expect(messageOf(result.data!.entries[9])).toBe("line-99");
     });
 
     it("should return chronological entries for date range", async () => {
-      // Two dates with a few lines each - should stream from start
       const day1 = [
         '{"timestamp":"2026-04-01T01:00:00Z","message":"d1-line1"}',
         '{"timestamp":"2026-04-01T02:00:00Z","message":"d1-line2"}',
@@ -779,9 +895,7 @@ describe("LogsService", () => {
         '{"timestamp":"2026-04-02T02:00:00Z","message":"d2-line2"}',
       ].join("\n");
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -793,13 +907,13 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(4);
       // Chronological order: day1 first, then day2
-      expect(result.data!.entries[0].content).toBe("d1-line1");
-      expect(result.data!.entries[1].content).toBe("d1-line2");
-      expect(result.data!.entries[2].content).toBe("d2-line1");
-      expect(result.data!.entries[3].content).toBe("d2-line2");
+      expect(messageOf(result.data!.entries[0])).toBe("d1-line1");
+      expect(messageOf(result.data!.entries[1])).toBe("d1-line2");
+      expect(messageOf(result.data!.entries[2])).toBe("d2-line1");
+      expect(messageOf(result.data!.entries[3])).toBe("d2-line2");
     });
 
-    it("should stream from start for metrics filter on single date", async () => {
+    it("should find metrics anywhere in a single day", async () => {
       const lines = [
         '{"level":"info","message":"noise"}',
         '{"_metric":true,"name":"pnl","value":42}',
@@ -819,20 +933,20 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      // Metrics from anywhere in the file, streamed from start
       expect(result.data!.entries[0].content).toContain('"name":"pnl"');
       expect(result.data!.entries[1].content).toContain('"name":"sharpe"');
-      // getObject should have been called (not getPartialObject)
+      // Metrics are read from the whole day, not its tail
       expect(mockMinioClient.getObject).toHaveBeenCalled();
     });
 
     it("should respect limit for metrics scattered through a large file", async () => {
       // 200 lines: 150 noise + 50 metrics scattered throughout
-      const lines = Array.from({ length: 200 }, (_, i) =>
-        i % 4 === 0
-          ? `{"_metric":true,"name":"metric-${i}","value":${i}}`
-          : `{"level":"info","message":"noise-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from({ length: 200 }, (_, i) =>
+          i % 4 === 0
+            ? `{"_metric":true,"name":"metric-${i}","value":${i}}`
+            : `{"level":"info","message":"noise-${i}"}`,
+        ).join("\n") + "\n";
 
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
@@ -851,12 +965,13 @@ describe("LogsService", () => {
     });
 
     it("should still respect limit for non-metrics queries", async () => {
-      const lines = Array.from(
-        { length: 50 },
-        (_, i) => `{"timestamp":"2026-04-01T10:00:00Z","message":"line-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from(
+          { length: 50 },
+          (_, i) =>
+            `{"timestamp":"2026-04-01T10:00:00Z","message":"line-${i}"}`,
+        ).join("\n") + "\n";
 
-      // Tail path: single date, non-metrics
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
@@ -888,14 +1003,15 @@ describe("LogsService", () => {
         date: "20260401",
         limit: 100,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
       // All lines should be returned, nothing skipped
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toBe("line-1");
-      expect(result.data!.entries[1].content).toBe("line-2");
-      expect(result.data!.entries[2].content).toBe("line-3");
+      expect(messageOf(result.data!.entries[0])).toBe("line-1");
+      expect(messageOf(result.data!.entries[1])).toBe("line-2");
+      expect(messageOf(result.data!.entries[2])).toBe("line-3");
     });
 
     it("should drop partial first line when tailing from mid-file", async () => {
@@ -912,23 +1028,85 @@ describe("LogsService", () => {
         stringStream(tailContent),
       );
 
+      // The tail holds limit + 1 whole lines, so the day is not read whole
       const result = await service.getLogs("bot-1", {
         date: "20260401",
-        limit: 100,
+        limit: 1,
         offset: 0,
+        sort: "asc",
       });
 
       expect(result.success).toBe(true);
-      // The partial first line should be dropped
-      expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toBe("complete-line-1");
-      expect(result.data!.entries[1].content).toBe("complete-line-2");
-      // getPartialObject should have been called (not getObject)
+      expect(result.data!.entries.map(messageOf)).toEqual(["complete-line-2"]);
+      expect(result.data!.hasMore).toBe(true);
       expect(mockMinioClient.getPartialObject).toHaveBeenCalled();
+      expect(mockMinioClient.getObject).not.toHaveBeenCalled();
     });
   });
 
   describe("getLogs - datetime range filtering", () => {
+    it("should stop reading a day once its lines pass the end of the window", async () => {
+      // 10000 lines a second apart from midnight; the window holds the first 600
+      const at = (i: number) =>
+        new Date(Date.UTC(2026, 3, 1) + i * 1000).toISOString();
+      const lines = Array.from(
+        { length: 10000 },
+        (_, i) => `{"message":"m${i}","timestamp":"${at(i)}"}\n`,
+      );
+      const file = Buffer.from(lines.join(""));
+      let linesRead = 0;
+      mockMinioClient.statObject.mockResolvedValue({ size: file.length });
+      mockMinioClient.getPartialObject.mockImplementation(
+        async (_b: string, _p: string, start: number, length = 0) =>
+          Readable.from([
+            file.subarray(start, length ? start + length : file.length),
+          ]),
+      );
+      mockMinioClient.getObject.mockImplementation(async () =>
+        Readable.from(
+          (function* () {
+            for (const line of lines) {
+              linesRead++;
+              yield Buffer.from(line);
+            }
+          })(),
+        ),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: `${at(0)}--${at(599)}`,
+        limit: 2,
+        offset: 0,
+      });
+
+      expect(result.data!.entries.map(messageOf)).toEqual(["m599", "m598"]);
+      expect(linesRead).toBeLessThan(1000);
+    });
+
+    it("should keep reading past lines without a timestamp", async () => {
+      const lines = [
+        '{"message":"a","timestamp":"2026-04-01T00:00:00Z"}',
+        "no timestamp here",
+        '{"message":"b","timestamp":"2026-04-01T00:00:01Z"}',
+        '{"message":"late","timestamp":"2026-04-01T05:00:00Z"}',
+      ];
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream(lines.join("\n") + "\n"),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "2026-04-01T00:00:00Z--2026-04-01T00:00:01Z",
+        limit: 10,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        "a",
+        "no timestamp here",
+        "b",
+      ]);
+    });
     it("should filter lines by timestamp when datetime range is provided", async () => {
       const lines = [
         '{"timestamp":"2026-04-03T09:30:00Z","message":"before range"}',
@@ -948,8 +1126,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toBe("in range 1");
-      expect(result.data!.entries[1].content).toBe("in range 2");
+      expect(messageOf(result.data!.entries[0])).toBe("in range 1");
+      expect(messageOf(result.data!.entries[1])).toBe("in range 2");
     });
 
     it("should still work with YYYYMMDD date range", async () => {
@@ -957,10 +1135,7 @@ describe("LogsService", () => {
       const day2 = '{"timestamp":"2026-04-02T12:00:00Z","message":"day2 line"}';
       const day3 = '{"timestamp":"2026-04-03T12:00:00Z","message":"day3 line"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2))
-        .mockResolvedValueOnce(stringStream(day3));
+      serveDaysFrom("20260401", day1, day2, day3);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260403",
@@ -971,9 +1146,9 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toBe("day1 line");
-      expect(result.data!.entries[1].content).toBe("day2 line");
-      expect(result.data!.entries[2].content).toBe("day3 line");
+      expect(messageOf(result.data!.entries[0])).toBe("day1 line");
+      expect(messageOf(result.data!.entries[1])).toBe("day2 line");
+      expect(messageOf(result.data!.entries[2])).toBe("day3 line");
     });
 
     it("should handle datetime range spanning midnight", async () => {
@@ -986,9 +1161,7 @@ describe("LogsService", () => {
         '{"timestamp":"2026-04-03T02:00:00Z","message":"after range"}',
       ].join("\n");
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1Lines))
-        .mockResolvedValueOnce(stringStream(day2Lines));
+      serveDaysFrom("20260402", day1Lines, day2Lines);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "2026-04-02T23:00:00Z--2026-04-03T01:00:00Z",
@@ -999,8 +1172,8 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      expect(result.data!.entries[0].content).toBe("late night");
-      expect(result.data!.entries[1].content).toBe("early morning");
+      expect(messageOf(result.data!.entries[0])).toBe("late night");
+      expect(messageOf(result.data!.entries[1])).toBe("early morning");
     });
 
     it("should include lines without timestamps when filtering by datetime", async () => {
@@ -1024,11 +1197,11 @@ describe("LogsService", () => {
       // "in range" is in window, old format and plain text have no timestamp so included,
       // "after range" is outside the window so excluded
       expect(result.data!.entries).toHaveLength(3);
-      expect(result.data!.entries[0].content).toBe("in range");
-      expect(result.data!.entries[1].content).toBe(
+      expect(messageOf(result.data!.entries[0])).toBe("in range");
+      expect(messageOf(result.data!.entries[1])).toBe(
         "[2026-04-03 09:00:00] INFO:main:old format no json timestamp",
       );
-      expect(result.data!.entries[2].content).toBe(
+      expect(messageOf(result.data!.entries[2])).toBe(
         "plain text line with no timestamp at all",
       );
     });
@@ -1049,15 +1222,13 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "in range",
         "plain trailing line",
       ]);
     });
 
-    it("should use tail path for single-date datetime range and filter by time", async () => {
-      // When the datetime range spans a single day, it should use the tail path
-      // but still apply time filtering
+    it("should filter a single-day datetime range by time", async () => {
       const lines = [
         '{"timestamp":"2026-04-03T08:00:00Z","message":"morning"}',
         '{"timestamp":"2026-04-03T10:30:00Z","message":"mid-morning"}',
@@ -1077,16 +1248,18 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0].content).toBe("mid-morning");
+      expect(messageOf(result.data!.entries[0])).toBe("mid-morning");
     });
   });
 
   describe("getLogs - sort parameter", () => {
-    it("should return newest-first by default for single date (tail path)", async () => {
-      const lines = Array.from(
-        { length: 10 },
-        (_, i) => `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
-      ).join("\n") + "\n";
+    it("should return newest-first by default for a single date", async () => {
+      const lines =
+        Array.from(
+          { length: 10 },
+          (_, i) =>
+            `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
+        ).join("\n") + "\n";
 
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
@@ -1100,16 +1273,22 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(5);
-      // Tail already returns newest-first; sort=desc should keep that order
-      expect(result.data!.entries[0].content).toBe("line-5");
-      expect(result.data!.entries[4].content).toBe("line-9");
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        "line-9",
+        "line-8",
+        "line-7",
+        "line-6",
+        "line-5",
+      ]);
     });
 
     it("should return oldest-first when sort=asc for single date", async () => {
-      const lines = Array.from(
-        { length: 10 },
-        (_, i) => `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
-      ).join("\n") + "\n";
+      const lines =
+        Array.from(
+          { length: 10 },
+          (_, i) =>
+            `{"timestamp":"2026-04-01T${String(i).padStart(2, "0")}:00:00Z","message":"line-${i}"}`,
+        ).join("\n") + "\n";
 
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
@@ -1123,18 +1302,21 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(5);
-      // sort=asc on tail path: reverse the newest-first to oldest-first
-      expect(result.data!.entries[0].content).toBe("line-9");
-      expect(result.data!.entries[4].content).toBe("line-5");
+      // The newest five, oldest of them first
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        "line-5",
+        "line-6",
+        "line-7",
+        "line-8",
+        "line-9",
+      ]);
     });
 
     it("should return newest-first for date range when sort=desc", async () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -1157,9 +1339,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}\n{"msg":"d1-l3"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}\n{"msg":"d2-l3"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -1178,9 +1358,7 @@ describe("LogsService", () => {
       const day1 = '{"msg":"d1-l1"}\n{"msg":"d1-l2"}';
       const day2 = '{"msg":"d2-l1"}\n{"msg":"d2-l2"}';
 
-      mockMinioClient.getObject
-        .mockResolvedValueOnce(stringStream(day1))
-        .mockResolvedValueOnce(stringStream(day2));
+      serveDaysFrom("20260401", day1, day2);
 
       const result = await service.getLogs("bot-1", {
         dateRange: "20260401-20260402",
@@ -1197,15 +1375,11 @@ describe("LogsService", () => {
   });
 
   describe("getLogs - lookbackDays (latest mode)", () => {
-    /** Local-time YYYYMMDD for N days ago, matching the service's day bucketing. */
-    function localDateStr(daysAgo: number): string {
+    /** UTC YYYYMMDD for N days ago, matching the daily log file names. */
+    function utcDateStr(daysAgo: number): string {
       const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      return (
-        d.getFullYear().toString() +
-        String(d.getMonth() + 1).padStart(2, "0") +
-        String(d.getDate()).padStart(2, "0")
-      );
+      d.setUTCDate(d.getUTCDate() - daysAgo);
+      return d.toISOString().slice(0, 10).replace(/-/g, "");
     }
 
     /** Mock MinIO so each logs/bot-1/<date>.log resolves to the given content. */
@@ -1232,8 +1406,8 @@ describe("LogsService", () => {
     }
 
     it("should return newest-first entries across day files without a date param", async () => {
-      const today = localDateStr(0);
-      const older = localDateStr(2);
+      const today = utcDateStr(0);
+      const older = utcDateStr(2);
       mockFiles({
         [`logs/bot-1/${older}.log`]: '{"message":"old-1"}\n{"message":"old-2"}',
         [`logs/bot-1/${today}.log`]: '{"message":"new-1"}\n{"message":"new-2"}',
@@ -1246,7 +1420,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "new-2",
         "new-1",
         "old-2",
@@ -1259,13 +1433,19 @@ describe("LogsService", () => {
     it("should return the newest `limit` metric entries across days", async () => {
       const metric = (day: string, n: number) =>
         `{"_metric":"signal","run":"${day}-${n}","timestamp":"2026-01-01T0${n}:00:00Z"}`;
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
-      const older = localDateStr(2);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
+      const older = utcDateStr(2);
       mockFiles({
-        [`logs/bot-1/${today}.log`]: [metric("t", 1), metric("t", 2)].join("\n"),
-        [`logs/bot-1/${yesterday}.log`]: [metric("y", 1), metric("y", 2)].join("\n"),
-        [`logs/bot-1/${older}.log`]: [metric("o", 1), metric("o", 2)].join("\n"),
+        [`logs/bot-1/${today}.log`]: [metric("t", 1), metric("t", 2)].join(
+          "\n",
+        ),
+        [`logs/bot-1/${yesterday}.log`]: [metric("y", 1), metric("y", 2)].join(
+          "\n",
+        ),
+        [`logs/bot-1/${older}.log`]: [metric("o", 1), metric("o", 2)].join(
+          "\n",
+        ),
       });
 
       const result = await service.getLogs("bot-1", {
@@ -1277,7 +1457,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       // Unlike date-range metric queries, latest mode respects limit
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         metric("t", 2),
         metric("t", 1),
         metric("y", 2),
@@ -1286,8 +1466,8 @@ describe("LogsService", () => {
     });
 
     it("should stop scanning older days once enough entries are collected", async () => {
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
       mockFiles({
         [`logs/bot-1/${today}.log`]:
           '{"message":"a"}\n{"message":"b"}\n{"message":"c"}',
@@ -1301,7 +1481,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual(["c", "b"]);
+      expect(result.data!.entries.map(messageOf)).toEqual(["c", "b"]);
       expect(result.data!.hasMore).toBe(true);
       // Only today's file was opened; older days were never touched
       const touchedPaths = [
@@ -1312,8 +1492,8 @@ describe("LogsService", () => {
     });
 
     it("should apply offset across the lookback window for pagination", async () => {
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
       mockFiles({
         [`logs/bot-1/${today}.log`]: '{"message":"t1"}\n{"message":"t2"}',
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
@@ -1327,13 +1507,13 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       // Newest-first flat order is [t2, t1, y2, y1]; offset 2 -> [y2, y1]
-      expect(result.data!.entries.map((e) => e.content)).toEqual(["y2", "y1"]);
+      expect(result.data!.entries.map(messageOf)).toEqual(["y2", "y1"]);
       expect(result.data!.hasMore).toBe(false);
     });
 
     it("should return chronological order when sort=asc", async () => {
-      const today = localDateStr(0);
-      const yesterday = localDateStr(1);
+      const today = utcDateStr(0);
+      const yesterday = utcDateStr(1);
       mockFiles({
         [`logs/bot-1/${today}.log`]: '{"message":"t1"}\n{"message":"t2"}',
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
@@ -1347,7 +1527,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "y1",
         "y2",
         "t1",
@@ -1356,7 +1536,7 @@ describe("LogsService", () => {
     });
 
     it("should fall back to a full read when the tail window holds too few lines", async () => {
-      const today = localDateStr(0);
+      const today = utcDateStr(0);
       const todayPath = `logs/bot-1/${today}.log`;
       // File larger than the 512KB tail window whose tail only contains 2
       // lines (very long lines); the full file has 5
@@ -1399,7 +1579,7 @@ describe("LogsService", () => {
       expect(result.success).toBe(true);
       // Tail yielded only 2 of the needed 4 entries, so the day is re-read
       // in full and the newest 3 lines are returned
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         "line-5",
         "line-4",
         "line-3",
@@ -1421,7 +1601,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(1);
-      expect(result.data!.entries[0].content).toBe("explicit-date");
+      expect(messageOf(result.data!.entries[0])).toBe("explicit-date");
       expect(result.data!.entries[0].date).toBe("20260401");
     });
 
@@ -1458,7 +1638,7 @@ describe("LogsService", () => {
         type: "metrics",
       });
       expect(page1.success).toBe(true);
-      expect(page1.data!.entries.map((e) => e.content)).toEqual([
+      expect(page1.data!.entries.map(messageOf)).toEqual([
         metricLine(5),
         metricLine(4),
       ]);
@@ -1470,7 +1650,7 @@ describe("LogsService", () => {
         offset: 2,
         type: "metrics",
       });
-      expect(page2.data!.entries.map((e) => e.content)).toEqual([
+      expect(page2.data!.entries.map(messageOf)).toEqual([
         metricLine(3),
         metricLine(2),
       ]);
@@ -1482,9 +1662,7 @@ describe("LogsService", () => {
         offset: 4,
         type: "metrics",
       });
-      expect(page3.data!.entries.map((e) => e.content)).toEqual([
-        metricLine(1),
-      ]);
+      expect(page3.data!.entries.map(messageOf)).toEqual([metricLine(1)]);
       expect(page3.data!.hasMore).toBe(false);
     });
 
@@ -1519,9 +1697,9 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
-        metricLine(1),
-        metricLine(2),
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        metricLine(3),
+        metricLine(4),
       ]);
       expect(result.data!.hasMore).toBe(true);
     });
@@ -1547,7 +1725,7 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       // Newest-first across days: day2's metrics come first
-      expect(result.data!.entries.map((e) => e.content)).toEqual([
+      expect(result.data!.entries.map(messageOf)).toEqual([
         metricLine(3),
         metricLine(2),
       ]);
@@ -1555,6 +1733,454 @@ describe("LogsService", () => {
     });
   });
 
+  describe("getLogs - cursor paging", () => {
+    /** Serves logs/bot-1/<date>.log from `files`, ranged reads included. */
+    function serveFiles(files: Record<string, string>) {
+      const content = (path: string) => {
+        const date = path.slice("logs/bot-1/".length, -".log".length);
+        if (files[date] === undefined) throw { code: "NoSuchKey" };
+        return Buffer.from(files[date]);
+      };
+      mockMinioClient.statObject.mockImplementation(
+        async (_bucket: string, path: string) => ({
+          size: content(path).length,
+        }),
+      );
+      mockMinioClient.getObject.mockImplementation(
+        async (_bucket: string, path: string) => Readable.from([content(path)]),
+      );
+      mockMinioClient.getPartialObject.mockImplementation(
+        async (_bucket: string, path: string, start: number, length = 0) => {
+          const bytes = content(path);
+          return Readable.from([
+            bytes.subarray(start, length ? start + length : bytes.length),
+          ]);
+        },
+      );
+    }
+
+    const page = async (query: Partial<LogsQuery>) => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 100,
+        offset: 0,
+        ...query,
+      });
+      expect(result.success).toBe(true);
+      return result.data!;
+    };
+
+    it("should return the entries strictly older than the cursor entry", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\n" });
+
+      const older = await page({ before: "20260401:4" });
+
+      expect(older.entries.map((e) => e.content)).toEqual(["b", "a"]);
+      expect(older.hasMore).toBe(false);
+      expect(older.nextCursor).toBeNull();
+    });
+
+    it("should page backwards with nextCursor until no older entries remain", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\ne\n" });
+
+      const seen: string[] = [];
+      let result = await page({ limit: 2 });
+      seen.push(...result.entries.map((e) => e.content));
+      while (result.nextCursor) {
+        result = await page({ limit: 2, before: result.nextCursor });
+        seen.push(...result.entries.map((e) => e.content));
+      }
+
+      expect(seen).toEqual(["e", "d", "c", "b", "a"]);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it("should not shift a page when new lines are appended after the cursor", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\n" });
+      const first = await page({ limit: 2 });
+
+      serveFiles({ "20260401": "a\nb\nc\nd\nnew-1\nnew-2\n" });
+      const second = await page({ limit: 2, before: first.nextCursor! });
+
+      expect(first.entries.map((e) => e.content)).toEqual(["d", "c"]);
+      expect(second.entries.map((e) => e.content)).toEqual(["b", "a"]);
+    });
+
+    it("should accept a runtime _key as the cursor", async () => {
+      const line = (i: number) =>
+        `{"_key":"1775001600000000000-${i}","message":"m${i}"}`;
+      serveFiles({ "20260401": [0, 1, 2, 3].map(line).join("\n") + "\n" });
+
+      const older = await page({ before: "1775001600000000000-2" });
+
+      expect(older.entries.map((e) => e.key)).toEqual([
+        "1775001600000000000-1",
+        "1775001600000000000-0",
+      ]);
+    });
+
+    it("should continue into earlier days of the window", async () => {
+      serveFiles({ "20260401": "d1-a\nd1-b\n", "20260402": "d2-a\nd2-b\n" });
+
+      const older = await page({
+        date: undefined,
+        dateRange: "20260401-20260402",
+        before: "20260402:5",
+      });
+
+      expect(older.entries.map((e) => e.content)).toEqual([
+        "d2-a",
+        "d1-b",
+        "d1-a",
+      ]);
+    });
+
+    it("should return the entries just before the cursor oldest-first when sort=asc", async () => {
+      serveFiles({ "20260401": "a\nb\nc\nd\ne\n" });
+
+      const older = await page({ before: "20260401:8", limit: 2, sort: "asc" });
+
+      expect(older.entries.map((e) => e.content)).toEqual(["c", "d"]);
+      expect(older.hasMore).toBe(true);
+      expect(older.nextCursor).toBe("20260401:4");
+    });
+
+    it("should keep only metric lines older than the cursor when type=metrics", async () => {
+      serveFiles({
+        "20260401":
+          '{"_metric":"m1"}\nlog\n{"_metric":"m2"}\n{"_metric":"m3"}\n',
+      });
+
+      const older = await page({ before: "20260401:38", type: "metrics" });
+
+      expect(older.entries.map((e) => e.content)).toEqual([
+        '{"_metric":"m2"}',
+        '{"_metric":"m1"}',
+      ]);
+    });
+
+    it("should reject a cursor that matches no entry", async () => {
+      serveFiles({ "20260401": "a\n" });
+
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        before: "1775001600000000000-9",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/cursor/i);
+      expect(result.error).not.toMatch(/not found/i);
+    });
+
+    it("should reject a position cursor whose offset is not a safe byte offset", async () => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        before: `20260401:${"9".repeat(22)}`,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/offset is too large/i);
+      expect(mockMinioClient.getPartialObject).not.toHaveBeenCalled();
+    });
+    it("should reject a malformed cursor", async () => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 0,
+        before: "not-a-key",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/cursor/i);
+    });
+
+    it("should refuse before combined with offset", async () => {
+      const result = await service.getLogs("bot-1", {
+        date: "20260401",
+        limit: 10,
+        offset: 5,
+        before: "20260401:4",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/offset/);
+    });
+
+    it("should report nextCursor on an offset page that has more", async () => {
+      serveFiles({ "20260401": "a\nb\nc\n" });
+
+      const first = await page({ limit: 2 });
+
+      expect(first.hasMore).toBe(true);
+      expect(first.nextCursor).toBe("20260401:2");
+    });
+
+    describe("ascending pages", () => {
+      it("should return the newest entries of a multi-day window oldest-first and page back with nextCursor", async () => {
+        serveFiles({ "20260401": "a\nb\n", "20260402": "c\nd\n" });
+        const window: Partial<LogsQuery> = {
+          date: undefined,
+          dateRange: "20260401-20260402",
+          limit: 2,
+          sort: "asc",
+        };
+
+        const newest = await page(window);
+        const older = await page({ ...window, before: newest.nextCursor! });
+
+        expect(newest.entries.map((e) => e.content)).toEqual(["c", "d"]);
+        expect(newest.nextCursor).toBe("20260402:0");
+        expect(older.entries.map((e) => e.content)).toEqual(["a", "b"]);
+        expect(older.nextCursor).toBeNull();
+      });
+
+      it("should return the newest metrics oldest-first with nextCursor", async () => {
+        const metric = (n: number) => `{"_metric":"m${n}"}`;
+        serveFiles({ "20260401": [1, 2, 3].map(metric).join("\n") + "\n" });
+
+        const newest = await page({ limit: 2, type: "metrics", sort: "asc" });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric(2),
+          metric(3),
+        ]);
+        expect(newest.nextCursor).toBe(`20260401:${metric(1).length + 1}`);
+      });
+
+      it("should return the newest entries of a datetime window oldest-first", async () => {
+        const at = (hour: string) =>
+          `{"message":"${hour}","timestamp":"2026-04-01T${hour}:00:00Z"}`;
+        serveFiles({
+          "20260401": ["01", "02", "03", "04"].map(at).join("\n") + "\n",
+        });
+
+        const newest = await page({
+          date: undefined,
+          dateRange: "2026-04-01T00:00:00Z--2026-04-01T03:30:00Z",
+          limit: 2,
+          sort: "asc",
+        });
+
+        expect(newest.entries.map(messageOf)).toEqual(["02", "03"]);
+        expect(newest.hasMore).toBe(true);
+        expect(newest.nextCursor).toBe(`20260401:${at("01").length + 1}`);
+      });
+    });
+
+    it("should read the whole day when its tail holds fewer than limit lines", async () => {
+      // Five 200 KB lines: the last 512 KB holds only two whole lines
+      const lines = ["a", "b", "c", "d", "e"].map((c) => c.repeat(200 * 1024));
+      serveFiles({ "20260401": lines.join("\n") + "\n" });
+
+      const newest = await page({ limit: 3 });
+
+      expect(newest.entries.map((e) => e.content[0])).toEqual(["e", "d", "c"]);
+      expect(newest.hasMore).toBe(true);
+      expect(newest.nextCursor).toBe(`20260401:${2 * (200 * 1024 + 1)}`);
+    });
+    describe("windows larger than 10000 entries", () => {
+      // A realtime bot writing a metric every 5s fills ~17k lines a day
+      const metric = (day: string, i: number) => `{"_metric":"${day}-${i}"}`;
+      const metrics = (day: string, count: number) =>
+        Array.from({ length: count }, (_, i) => metric(day, i)).join("\n") +
+        "\n";
+
+      it("should return the newest metrics of the window and continue with before", async () => {
+        serveFiles({
+          "20260401": metrics("d1", 10000),
+          "20260402": metrics("d2", 3),
+        });
+        const window: Partial<LogsQuery> = {
+          date: undefined,
+          dateRange: "20260401-20260402",
+          type: "metrics",
+          limit: 2,
+        };
+
+        const newest = await page(window);
+        const older = await page({ ...window, before: newest.nextCursor! });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric("d2", 2),
+          metric("d2", 1),
+        ]);
+        expect(older.entries.map((e) => e.content)).toEqual([
+          metric("d2", 0),
+          metric("d1", 9999),
+        ]);
+      });
+
+      it("should return the newest metrics oldest-first when sort=asc", async () => {
+        serveFiles({
+          "20260401": metrics("d1", 10000),
+          "20260402": metrics("d2", 3),
+        });
+
+        const newest = await page({
+          date: undefined,
+          dateRange: "20260401-20260402",
+          type: "metrics",
+          limit: 2,
+          sort: "asc",
+        });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric("d2", 1),
+          metric("d2", 2),
+        ]);
+      });
+
+      it("should return the newest metrics of one day holding 17000", async () => {
+        serveFiles({ "20260401": metrics("d1", 17000) });
+
+        const newest = await page({ type: "metrics", limit: 2 });
+        const older = await page({
+          type: "metrics",
+          limit: 2,
+          before: newest.nextCursor!,
+        });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          metric("d1", 16999),
+          metric("d1", 16998),
+        ]);
+        expect(older.entries.map((e) => e.content)).toEqual([
+          metric("d1", 16997),
+          metric("d1", 16996),
+        ]);
+      });
+
+      it("should page a day by a deep offset", async () => {
+        const count = 160000;
+        serveFiles({
+          "20260401":
+            Array.from({ length: count }, (_, i) => `l${i}`).join("\n") + "\n",
+        });
+
+        const deep = await page({ limit: 2, offset: 150000 });
+
+        expect(deep.entries.map((e) => e.content)).toEqual([
+          `l${count - 150001}`,
+          `l${count - 150002}`,
+        ]);
+      });
+      it("should continue a raw log window with before past a 10000-line day", async () => {
+        const lines = (day: string, count: number) =>
+          Array.from({ length: count }, (_, i) => `${day}-${i}`).join("\n") +
+          "\n";
+        serveFiles({
+          "20260401": lines("d1", 10000),
+          "20260402": lines("d2", 1),
+        });
+        const window: Partial<LogsQuery> = {
+          date: undefined,
+          dateRange: "20260401-20260402",
+          limit: 2,
+        };
+
+        const newest = await page(window);
+        const older = await page({ ...window, before: newest.nextCursor! });
+
+        expect(newest.entries.map((e) => e.content)).toEqual([
+          "d2-0",
+          "d1-9999",
+        ]);
+        expect(older.entries.map((e) => e.content)).toEqual([
+          "d1-9998",
+          "d1-9997",
+        ]);
+      });
+    });
+
+    describe("repeated runtime keys", () => {
+      const keyed = (i: number) =>
+        `{"_key":"1775001600000000000-${i}","message":"m${i}"}`;
+      const file = [keyed(1), keyed(2), keyed(1), keyed(3)].join("\n") + "\n";
+
+      it("should return a repeated key once", async () => {
+        serveFiles({ "20260401": file });
+
+        const all = await page({});
+
+        expect(all.entries.map((e) => e.key)).toEqual([
+          "1775001600000000000-3",
+          "1775001600000000000-2",
+          "1775001600000000000-1",
+        ]);
+      });
+
+      it("should page across a repeated key without skipping or looping", async () => {
+        serveFiles({ "20260401": file });
+
+        const keys: string[] = [];
+        let result = await page({ limit: 1 });
+        keys.push(...result.entries.map((e) => e.key));
+        for (let i = 0; result.nextCursor && i < 10; i++) {
+          result = await page({ limit: 1, before: result.nextCursor });
+          keys.push(...result.entries.map((e) => e.key));
+        }
+
+        expect(result.nextCursor).toBeNull();
+        expect(new Set(keys)).toEqual(
+          new Set([
+            "1775001600000000000-1",
+            "1775001600000000000-2",
+            "1775001600000000000-3",
+          ]),
+        );
+      });
+    });
+  });
+
+  describe("getLogs - UTC day files", () => {
+    // Tests run in Pacific/Kiritimati (UTC+14), where this is Oct 23
+    beforeEach(() => {
+      jest.useFakeTimers({
+        now: new Date("2026-10-22T12:00:00Z"),
+        doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+      });
+      mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
+      mockMinioClient.getObject.mockRejectedValue({ code: "NoSuchKey" });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    const readPaths = () =>
+      [
+        ...mockMinioClient.statObject.mock.calls,
+        ...mockMinioClient.getObject.mock.calls,
+      ].map((call: string[]) => call[1]);
+
+    it("should start a lookback at today's UTC day", async () => {
+      await service.getLogs("bot-1", {
+        lookbackDays: 2,
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(new Set(readPaths())).toEqual(
+        new Set(["logs/bot-1/20261022.log", "logs/bot-1/20261021.log"]),
+      );
+    });
+
+    it("should read the UTC days a datetime range with an offset covers", async () => {
+      await service.getLogs("bot-1", {
+        dateRange: "2026-10-22T01:00:00+05:00--2026-10-22T03:00:00+05:00",
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(new Set(readPaths())).toEqual(
+        new Set(["logs/bot-1/20261021.log"]),
+      );
+    });
+  });
   describe("getLogs - auth and validation", () => {
     it("should return failure when user is not authenticated", async () => {
       const unauthService = new LogsService(

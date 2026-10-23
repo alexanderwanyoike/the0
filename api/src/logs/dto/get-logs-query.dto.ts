@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsInt, IsIn, Min, Max } from "class-validator";
+import {
+  IsOptional,
+  IsString,
+  IsInt,
+  IsIn,
+  Min,
+  Max,
+  MaxLength,
+} from "class-validator";
 import { Transform } from "class-transformer";
 import { ApiPropertyOptional } from "@nestjs/swagger";
 
@@ -32,11 +40,25 @@ export class GetLogsQueryDto {
   @Max(2000)
   limit?: number;
 
+  /**
+   * Prefer `before`: an offset shifts when new lines arrive, and every entry
+   * it skips is read and held.
+   */
   @IsOptional()
   @Transform(toStrictNumber)
   @IsInt()
   @Min(0)
+  @Max(10000)
   offset?: number;
+
+  /**
+   * An entry key, usually the previous page's `nextCursor`: returns the
+   * `limit` entries just older than that entry. Not combinable with `offset`.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  before?: string;
 
   /** `metrics` keeps only metric lines. */
   @ApiPropertyOptional({ enum: ["all", "metrics"] })

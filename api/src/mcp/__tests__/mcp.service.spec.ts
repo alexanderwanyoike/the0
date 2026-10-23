@@ -165,6 +165,7 @@ describe("McpService", () => {
   };
 
   const mockLogEntry = {
+    key: "20251202:0",
     date: "20251202",
     content: "Bot executed successfully",
     timestamp: "2025-12-02T10:00:00Z",
@@ -515,7 +516,7 @@ describe("McpService", () => {
     describe("logs_get", () => {
       it("should return bot logs", async () => {
         logsService.getLogs.mockResolvedValue(
-          Ok({ entries: [mockLogEntry], hasMore: false }),
+          Ok({ entries: [mockLogEntry], hasMore: false, nextCursor: null }),
         );
 
         const result = await service.handleToolCall(
@@ -533,7 +534,7 @@ describe("McpService", () => {
 
       it("should cap limit at 500", async () => {
         logsService.getLogs.mockResolvedValue(
-          Ok({ entries: [], hasMore: false }),
+          Ok({ entries: [], hasMore: false, nextCursor: null }),
         );
 
         await service.handleToolCall(
@@ -558,7 +559,7 @@ describe("McpService", () => {
     describe("logs_summary", () => {
       it("should return log summary", async () => {
         logsService.getLogs.mockResolvedValue(
-          Ok({ entries: [mockLogEntry], hasMore: false }),
+          Ok({ entries: [mockLogEntry], hasMore: false, nextCursor: null }),
         );
 
         const result = await service.handleToolCall(
@@ -574,26 +575,56 @@ describe("McpService", () => {
         expect(data.error_count).toBe(0);
       });
 
+      it("should summarise today's UTC day file", async () => {
+        // Tests run in Pacific/Kiritimati (UTC+14), where this is Oct 23
+        jest.useFakeTimers({
+          now: new Date("2026-10-22T12:00:00Z"),
+          doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+        });
+        try {
+          logsService.getLogs.mockResolvedValue(
+            Ok({ entries: [], hasMore: false, nextCursor: null }),
+          );
+
+          await service.handleToolCall(
+            "logs_summary",
+            { bot_id: "bot-123" },
+            actor,
+          );
+
+          expect(logsService.getLogs).toHaveBeenCalledWith(
+            "bot-123",
+            expect.objectContaining({ date: "20261022" }),
+            actor.userId,
+          );
+        } finally {
+          jest.useRealTimers();
+        }
+      });
+
       it("should count errors in logs", async () => {
         const logsWithErrors = [
           {
+            key: "20251202:0",
             date: "20251202",
             content: "something went wrong with error",
             timestamp: "2025-12-02T10:00:00Z",
           },
           {
+            key: "20251202:32",
             date: "20251202",
             content: "success message",
             timestamp: "2025-12-02T10:01:00Z",
           },
           {
+            key: "20251202:48",
             date: "20251202",
             content: "task failed to complete",
             timestamp: "2025-12-02T10:02:00Z",
           },
         ];
         logsService.getLogs.mockResolvedValue(
-          Ok({ entries: logsWithErrors, hasMore: false }),
+          Ok({ entries: logsWithErrors, hasMore: false, nextCursor: null }),
         );
 
         const result = await service.handleToolCall(
@@ -605,6 +636,73 @@ describe("McpService", () => {
         const data = JSON.parse(result.content[0].text);
         // 2 logs contain error keywords: "error" and "failed"
         expect(data.error_count).toBe(2);
+      });
+
+      it("should count errors by the level of structured and wrapped lines", async () => {
+        const contents = [
+          // errors
+          '{"level":"error","message":"order rejected"}',
+          '{"_key":"1792713599999000000-0","message":"ERROR:main:boom","timestamp":"2026-10-22T10:00:00Z"}',
+          '{"_key":"1792713599999000000-1","message":"order failed","timestamp":"2026-10-22T10:00:00Z"}',
+          // not errors
+          '{"_metric":"orders","failed":0}',
+          '{"level":"info","message":"filled","error_count":0}',
+          '{"_key":"1792713599999000000-2","message":"INFO:main:no errors today","timestamp":"2026-10-22T10:00:00Z"}',
+        ];
+        logsService.getLogs.mockResolvedValue(
+          Ok({
+            entries: contents.map((content, i) => ({
+              key: `20261022:${i}`,
+              date: "20261022",
+              content,
+              timestamp: null as string | null,
+            })),
+            hasMore: false,
+            nextCursor: null,
+          }),
+        );
+
+        const result = await service.handleToolCall(
+          "logs_summary",
+          { bot_id: "bot-123" },
+          actor,
+        );
+
+        expect(JSON.parse(result.content[0].text).error_count).toBe(3);
+      });
+
+      it("should count pino numeric levels and CRITICAL or FATAL prefixes", async () => {
+        const contents = [
+          // errors
+          '{"level":50,"msg":"order rejected"}',
+          '{"level":60,"msg":"crashed"}',
+          '{"level":"50","msg":"order rejected"}',
+          "CRITICAL: exchange down",
+          "FATAL: out of memory",
+          // not errors
+          '{"level":30,"msg":"filled, no error"}',
+          '{"level":"40","msg":"slow fill, retry failed once"}',
+        ];
+        logsService.getLogs.mockResolvedValue(
+          Ok({
+            entries: contents.map((content, i) => ({
+              key: `20261022:${i}`,
+              date: "20261022",
+              content,
+              timestamp: null as string | null,
+            })),
+            hasMore: false,
+            nextCursor: null,
+          }),
+        );
+
+        const result = await service.handleToolCall(
+          "logs_summary",
+          { bot_id: "bot-123" },
+          actor,
+        );
+
+        expect(JSON.parse(result.content[0].text).error_count).toBe(5);
       });
     });
 

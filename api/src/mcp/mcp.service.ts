@@ -19,8 +19,51 @@ import { DeleteBot, DeployBot, UpdateBot } from "@/bot/commands/bot-commands";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { LogsService } from "@/logs/logs.service";
+import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
+
+const LEVEL_PREFIX =
+  /^(?:\[[^\]]*\]\s*)?(DEBUG|INFO|WARN(?:ING)?|ERROR|CRITICAL|FATAL):/i;
+const ERROR_PREFIXES = new Set(["ERROR", "CRITICAL", "FATAL"]);
+// Pino levels as numbers or digit strings, as the frontend maps them.
+const ERROR_LEVELS = new Set(["error", "critical", "fatal", "50", "60"]);
+
+function isErrorLevel(level: string | number): boolean {
+  return typeof level === "number"
+    ? level > 40
+    : ERROR_LEVELS.has(level.toLowerCase());
+}
+
+/**
+ * Entry content is the stored line verbatim, so a JSON line is judged by
+ * its level, never by field names such as `failed` or `error_count`.
+ */
+function isErrorLine(content: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return isErrorText(content);
+  }
+  if (parsed === null || typeof parsed !== "object") {
+    return isErrorText(content);
+  }
+  const line = parsed as Record<string, unknown>;
+  if (line._metric) return false;
+  if (typeof line.level === "string" || typeof line.level === "number") {
+    return isErrorLevel(line.level);
+  }
+  const message = line.message ?? line.msg;
+  return typeof message === "string" && isErrorText(message);
+}
+
+function isErrorText(text: string): boolean {
+  const prefix = LEVEL_PREFIX.exec(text);
+  if (prefix) return ERROR_PREFIXES.has(prefix[1].toUpperCase());
+  const lower = text.toLowerCase();
+  return lower.includes("error") || lower.includes("failed");
+}
 
 @Injectable()
 export class McpService {
@@ -267,17 +310,10 @@ export class McpService {
   }
 
   private async handleLogsSummary(input: { bot_id: string }, actor: Actor) {
-    // Get recent logs to analyze - use today's date as default
-    const today = new Date();
-    const todayStr =
-      today.getFullYear().toString() +
-      (today.getMonth() + 1).toString().padStart(2, "0") +
-      today.getDate().toString().padStart(2, "0");
-
     const result = await this.logsService.getLogs(
       input.bot_id,
       {
-        date: todayStr,
+        date: utcDay(new Date()),
         limit: 100,
         offset: 0,
       },
@@ -288,11 +324,7 @@ export class McpService {
     }
 
     const logs = result.data?.entries || [];
-    const errorCount = logs.filter(
-      (log) =>
-        log.content?.toLowerCase().includes("error") ||
-        log.content?.toLowerCase().includes("failed"),
-    ).length;
+    const errorCount = logs.filter((log) => isErrorLine(log.content)).length;
 
     return {
       bot_id: input.bot_id,
