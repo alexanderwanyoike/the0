@@ -38,7 +38,6 @@ describe("LogsService", () => {
   let mockBotService: Partial<BotService>;
   let mockConfigService: Partial<ConfigService>;
   let mockLogger: Partial<PinoLogger>;
-  let mockRequest: any;
 
   const userId = "user-abc";
   const getLogs = (
@@ -48,8 +47,6 @@ describe("LogsService", () => {
   ) => service.getLogs(botId, query, uid);
 
   beforeEach(() => {
-    mockRequest = { user: { uid: userId } };
-
     mockMinioClient = {
       statObject: jest.fn().mockResolvedValue({}),
       getObject: jest.fn(),
@@ -72,7 +69,6 @@ describe("LogsService", () => {
     };
 
     service = new LogsService(
-      mockRequest,
       mockMinioClient,
       mockConfigService as ConfigService,
       mockBotService as BotService,
@@ -2187,21 +2183,20 @@ describe("LogsService", () => {
     });
   });
   describe("getLogs - auth and validation", () => {
-    it("should decide access by the user passed in, not the request's user", async () => {
+    it("should refuse a caller who is not the bot's owner", async () => {
       const ownerOnly = {
         findOneByUserId: jest.fn(async (uid: string) =>
           uid === userId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
         ),
       };
-      const requestOfOwner = new LogsService(
-        { user: { uid: userId } } as any,
+      const ownerOnlyService = new LogsService(
         mockMinioClient,
         mockConfigService as ConfigService,
         ownerOnly as any,
         mockLogger as PinoLogger,
       );
 
-      const result = await requestOfOwner.getLogs(
+      const result = await ownerOnlyService.getLogs(
         "bot-1",
         { date: "20260401", limit: 100, offset: 0 },
         "",

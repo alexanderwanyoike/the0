@@ -1,9 +1,7 @@
 import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { AuthenticatedRequest } from "@/auth/auth.types";
 import {
   Result,
   Ok,
@@ -75,7 +73,6 @@ export class LogsService {
   }
 
   constructor(
-    @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
     private readonly configService: ConfigService,
     private readonly botService: BotService,
