@@ -132,11 +132,8 @@ export function useAutoRefreshPolling({
   ]);
 }
 
-// -- Live lines --
-
 interface LiveLogsOptions {
   stream: LogStream;
-  /** Subscribe to the stream (live mode with a bot and a user). */
   live: boolean;
   onEntries: (entries: LogEntry[]) => void;
   /** The stream has just opened: history read before then may miss lines

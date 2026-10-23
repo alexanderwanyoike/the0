@@ -17,7 +17,7 @@ export interface LogsQuery {
    *  the bot last ran. Ignored when date/dateRange is set. */
   lookbackDays?: number;
   limit?: number;
-  /** Entry key: only entries older than it. Only ever a page's nextCursor. */
+  /** Entry key: only entries older than it. */
   before?: string;
   type?: string;
   sort?: "asc" | "desc";

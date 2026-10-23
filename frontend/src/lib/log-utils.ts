@@ -91,7 +91,6 @@ export function parseLiveUpdate(data: string): LogEntry[] {
   return entries;
 }
 
-/** The live entries a query of `type` shows. */
 export function filterLiveEntries(
   entries: LogEntry[],
   type?: string,

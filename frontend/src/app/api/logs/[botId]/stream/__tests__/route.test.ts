@@ -91,8 +91,6 @@ describe("GET /api/logs/[botId]/stream", () => {
     });
     const response = await GET(req, { params });
 
-    // Next sends the response head with the first body chunk, so without
-    // one the client waits for the api's first keepalive to see the stream
     const reader = response.body!.getReader();
     const { value } = await reader.read();
     expect(new TextDecoder().decode(value)).toBe(": connected\n\n");

@@ -279,8 +279,6 @@ export const useBotLogs = ({
   );
   fetchLogsRef.current = fetchLogs;
 
-  // -- Live lines --
-
   const handleLiveEntries = useCallback((live: LogEntry[]) => {
     const entries = filterLiveEntries(live, queryRef.current.type);
     if (entries.length === 0) return;
