@@ -637,6 +637,39 @@ describe("McpService", () => {
         // 2 logs contain error keywords: "error" and "failed"
         expect(data.error_count).toBe(2);
       });
+
+      it("should count errors by the level of structured and wrapped lines", async () => {
+        const contents = [
+          // errors
+          '{"level":"error","message":"order rejected"}',
+          '{"_key":"1792713599999000000-0","message":"ERROR:main:boom","timestamp":"2026-10-22T10:00:00Z"}',
+          '{"_key":"1792713599999000000-1","message":"order failed","timestamp":"2026-10-22T10:00:00Z"}',
+          // not errors
+          '{"_metric":"orders","failed":0}',
+          '{"level":"info","message":"filled","error_count":0}',
+          '{"_key":"1792713599999000000-2","message":"INFO:main:no errors today","timestamp":"2026-10-22T10:00:00Z"}',
+        ];
+        logsService.getLogs.mockResolvedValue(
+          Ok({
+            entries: contents.map((content, i) => ({
+              key: `20261022:${i}`,
+              date: "20261022",
+              content,
+              timestamp: null as string | null,
+            })),
+            hasMore: false,
+            nextCursor: null,
+          }),
+        );
+
+        const result = await service.handleToolCall(
+          "logs_summary",
+          { bot_id: "bot-123" },
+          actor,
+        );
+
+        expect(JSON.parse(result.content[0].text).error_count).toBe(3);
+      });
     });
 
     describe("bot_state_list", () => {
