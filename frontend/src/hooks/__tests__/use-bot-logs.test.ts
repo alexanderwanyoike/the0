@@ -2405,6 +2405,74 @@ describe("useBotLogs", () => {
       }
     });
 
+    it("keeps live lines flowing when an older page loads during a refresh", async () => {
+      let stream: ReturnType<typeof createMockSSEStream> | null = null;
+      let restCalls = 0;
+      let answerRefresh: (() => void) | null = null;
+      const history = restResponse({
+        data: [logEntry({ content: "current" })],
+        hasMore: true,
+        nextCursor: "20240101:200",
+      });
+      mockAuthFetch.mockImplementation(
+        async (input: RequestInfo | URL, opts?: RequestInit) => {
+          const url = String(input);
+          if (url.includes("/stream")) {
+            stream = createMockSSEStream(opts?.signal ?? undefined);
+            return { ok: true, body: stream.stream } as Response;
+          }
+          restCalls++;
+          if (restCalls === 2) {
+            // The refresh: answers when told, or fails like fetch on abort
+            return new Promise<Response>((resolve, reject) => {
+              answerRefresh = () => resolve(history);
+              opts?.signal?.addEventListener("abort", () =>
+                reject(new DOMException("aborted", "AbortError")),
+              );
+            });
+          }
+          return restCalls === 1
+            ? history
+            : restResponse({ data: [logEntry({ content: "earlier" })] });
+        },
+      );
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            initialQuery: { limit: 1, sort: "asc" },
+          }),
+        );
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.hasEarlierLogs).toBe(true);
+        });
+
+        act(() => {
+          result.current.refresh();
+        });
+        await act(async () => {
+          await result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          answerRefresh?.();
+        });
+        act(() => {
+          stream!.controller.push("update", [logEntry({ content: "live" })]);
+        });
+
+        await waitFor(() =>
+          expect(result.current.logs.map((l) => l.content)).toContain("live"),
+        );
+      } finally {
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
+      }
+    });
+
     it("starts again from the newest page when the query changes after paging", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
