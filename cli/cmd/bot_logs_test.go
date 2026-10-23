@@ -245,7 +245,7 @@ func watchEntries(keys ...string) []internal.LogEntry {
 
 func TestLogWatchNewEntries(t *testing.T) {
 	t.Run("prints the first fetch in full", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 
 		got, _ := watch.newEntries(watchEntries("a", "b"))
 
@@ -255,7 +255,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("prints only entries whose key it has not printed", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(watchEntries("a", "b"))
 
 		got, _ := watch.newEntries(watchEntries("a", "b", "c"))
@@ -266,7 +266,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("prints nothing when nothing new arrived", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(watchEntries("a", "b"))
 
 		if got, _ := watch.newEntries(watchEntries("a", "b")); len(got) != 0 {
@@ -275,7 +275,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("an empty fetch does not forget what was printed", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(watchEntries("a", "b"))
 		watch.newEntries(nil)
 
@@ -287,7 +287,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("warns when a fetch shares no key with the previous one", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(watchEntries("a", "b"))
 
 		got, mayHaveSkipped := watch.newEntries(watchEntries("d", "e"))
@@ -301,7 +301,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("does not warn while fetches overlap", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		if _, mayHaveSkipped := watch.newEntries(watchEntries("a", "b")); mayHaveSkipped {
 			t.Error("first fetch: mayHaveSkipped = true, want false")
 		}
@@ -321,7 +321,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 			}
 			return entries
 		}
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(unkeyed("started", "bought"))
 
 		got, _ := watch.newEntries(unkeyed("started", "bought", "sold"))
@@ -339,7 +339,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 			}
 			return entries
 		}
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(ticks("2026-10-22T10:00:00Z", "2026-10-22T10:00:01Z"))
 
 		got, _ := watch.newEntries(ticks("2026-10-22T10:00:00Z", "2026-10-22T10:00:01Z", "2026-10-22T10:00:02Z"))
@@ -350,7 +350,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("prints new entries as the limit window moves on", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		watch.newEntries(watchEntries("a", "b", "c"))
 
 		got, _ := watch.newEntries(watchEntries("c", "d", "e"))
@@ -361,7 +361,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	})
 
 	t.Run("prints in the api's oldest-first order, like a tail", func(t *testing.T) {
-		watch := &logWatch{}
+		watch := newLogWatch(10)
 		first, _ := watch.newEntries(watchEntries("a", "b"))
 		next, _ := watch.newEntries(watchEntries("b", "c", "d"))
 

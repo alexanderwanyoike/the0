@@ -151,7 +151,16 @@ func jsonString(value string) string {
 // `limit` entries, so an entry that left that window never comes back and
 // the set stays bounded however long the watch runs.
 type logWatch struct {
+	limit    int
 	previous map[string]struct{}
+}
+
+func newLogWatch(limit int) *logWatch {
+	return &logWatch{limit: limit}
+}
+
+func watchLogsParams(dateParam string, limit int) *internal.LogsParams {
+	return botLogsParams(dateParam, limit)
 }
 
 func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEntry, mayHaveSkipped bool) {

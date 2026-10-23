@@ -985,12 +985,12 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	watch := &logWatch{}
+	watch := newLogWatch(limit)
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	params := botLogsParams(dateParam, limit)
+	params := watchLogsParams(dateParam, limit)
 
 	// Fetch initial logs
 	logs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
