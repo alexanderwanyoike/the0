@@ -1179,8 +1179,9 @@ describe("useBotLogs", () => {
 
     function setupStreamingMocks(
       rest: {
-        data?: { date: string; content: string; timestamp?: string }[];
+        data?: TestEntry[];
         hasMore?: boolean;
+        nextCursor?: string | null;
       } = {},
     ) {
       mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
