@@ -106,6 +106,12 @@ func TestLogEntryText(t *testing.T) {
 			want:    `{"message":{"text":"nested"}}`,
 		},
 		{
+			name:    "field names keep <, > and & as written",
+			key:     "1792713599999000000-9",
+			content: `{"_key":"1792713599999000000-9","_metric":"pnl","<a&b>":1}`,
+			want:    `{"_metric":"pnl","<a&b>":1}`,
+		},
+		{
 			name:    "a null _metric is not a metric",
 			content: `{"_metric":null,"message":"not a metric"}`,
 			want:    "not a metric",
