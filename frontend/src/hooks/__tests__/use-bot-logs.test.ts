@@ -2478,6 +2478,121 @@ describe("useBotLogs", () => {
       }
     });
 
+    describe("load earlier during a refresh", () => {
+      /** A view whose refresh is held open, with pages answered on demand. */
+      function viewWithHeldRefresh({ holdPages }: { holdPages: boolean }) {
+        let refreshing = false;
+        let answerRefresh: (() => void) | null = null;
+        const pageAnswers: (() => void)[] = [];
+        mockAuthFetch.mockImplementation(async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), "http://localhost");
+          const before = url.searchParams.get("before");
+          if (before) {
+            const page = restResponse({
+              data: [logEntry({ content: `earlier from ${before}` })],
+            });
+            if (!holdPages) return page;
+            return new Promise<Response>((resolve) =>
+              pageAnswers.push(() => resolve(page)),
+            );
+          }
+          if (refreshing) {
+            return new Promise<Response>((resolve) => {
+              answerRefresh = () =>
+                resolve(
+                  restResponse({
+                    data: [
+                      logEntry({ content: "current" }),
+                      logEntry({ content: "newer" }),
+                    ],
+                    hasMore: true,
+                    nextCursor: "20240101:300",
+                  }),
+                );
+            });
+          }
+          return restResponse({
+            data: [logEntry({ content: "current" })],
+            hasMore: true,
+            nextCursor: "20240101:200",
+          });
+        });
+        const hook = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            initialQuery: { limit: 1, sort: "asc" },
+          }),
+        );
+        return {
+          hook,
+          startRefresh: () => {
+            refreshing = true;
+            act(() => hook.result.current.refresh());
+          },
+          answerRefresh: () => answerRefresh?.(),
+          pageAnswers,
+        };
+      }
+
+      const pageCursors = () =>
+        mockAuthFetch.mock.calls
+          .map((call) => new URL(String(call[0]), "http://localhost"))
+          .map((url) => url.searchParams.get("before"))
+          .filter((before) => before !== null);
+
+      it("keeps the earlier page when it would land before the refresh", async () => {
+        const view = viewWithHeldRefresh({ holdPages: false });
+        const { result } = view.hook;
+        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+
+        view.startRefresh();
+        let loading: Promise<void> = Promise.resolve();
+        act(() => {
+          loading = result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          view.answerRefresh();
+          await loading;
+        });
+
+        expect(pageCursors()).toEqual(["20240101:300"]);
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "earlier from 20240101:300",
+          "current",
+          "newer",
+        ]);
+      });
+
+      it("never joins a page read from the cursor the refresh replaced", async () => {
+        const view = viewWithHeldRefresh({ holdPages: true });
+        const { result } = view.hook;
+        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+
+        view.startRefresh();
+        let loading: Promise<void> = Promise.resolve();
+        act(() => {
+          loading = result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          view.answerRefresh();
+        });
+        await waitFor(() => expect(view.pageAnswers.length).toBeGreaterThan(0));
+        await act(async () => {
+          view.pageAnswers.forEach((answer) => answer());
+          await loading;
+        });
+
+        expect(result.current.logs.map((l) => l.content)).not.toContain(
+          "earlier from 20240101:200",
+        );
+        expect(result.current.logs.map((l) => l.content)).toContain(
+          "earlier from 20240101:300",
+        );
+      });
+    });
+
     it("keeps loaded earlier pages when a poll fires", async () => {
       jest.useFakeTimers();
       try {
