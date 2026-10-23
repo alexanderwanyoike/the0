@@ -109,6 +109,8 @@ export const useBotLogs = ({
 
   const restAbortRef = useRef<AbortController | null>(null);
   const pageAbortRef = useRef<AbortController | null>(null);
+  // Settles when the replace fetch in flight does; null when none is
+  const replaceSettledRef = useRef<Promise<void> | null>(null);
   // True once a replace fetch has delivered data for the current bot. While
   // set, replace fetches are background refreshes: they must not flip
   // `loading` (which would unmount dashboards into their loading screen).
@@ -173,6 +175,10 @@ export const useBotLogs = ({
         if (merge === "append") setHasMore(hasOlder);
         else setHasEarlierLogs(hasOlder);
       } else {
+        // The view restarts from this page: older pages were read from a
+        // cursor it replaces
+        pageAbortRef.current?.abort();
+        paginatedRef.current = false;
         historyLoadedRef.current = true;
         hasDataRef.current = true;
         setLogs(page.entries.slice(-MAX_LOG_ENTRIES));
@@ -221,6 +227,18 @@ export const useBotLogs = ({
       // A replace supersedes everything in flight. A page never aborts a
       // replace: live lines would stay buffered with no history to join.
       const controller = new AbortController();
+      let settleReplace = (): void => {};
+      if (!merge) {
+        const settled: Promise<void> = new Promise((resolve) => {
+          settleReplace = () => {
+            if (replaceSettledRef.current === settled) {
+              replaceSettledRef.current = null;
+            }
+            resolve();
+          };
+        });
+        replaceSettledRef.current = settled;
+      }
       pageAbortRef.current?.abort();
       if (merge) {
         pageAbortRef.current = controller;
@@ -265,6 +283,7 @@ export const useBotLogs = ({
         handleFetchFailure(err, merge, wasHistoryLoaded);
         return false;
       } finally {
+        settleReplace();
         if (!controller.signal.aborted) {
           if (merge) {
             setLoadingEarlier(false);
@@ -392,22 +411,30 @@ export const useBotLogs = ({
     if (stream.status === "down") stream.reconnect();
   }, [query, fetchLogs, stream]);
 
+  // A page read while a replace is in flight would come from the cursor the
+  // replace is about to change, so it waits and reads the fresh one.
+  const fetchOlderPage = useCallback(
+    async (merge: "append" | "prepend"): Promise<boolean> => {
+      while (replaceSettledRef.current) await replaceSettledRef.current;
+      const before = nextCursorRef.current;
+      if (!before) return false;
+      return fetchLogsRef.current({ ...queryRef.current, before }, merge);
+    },
+    [],
+  );
+
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore) return;
     loadingMoreRef.current = true;
     setLoadingMore(true);
 
     try {
-      const ok = await fetchLogs(
-        { ...query, before: nextCursorRef.current ?? undefined },
-        "append",
-      );
-      if (ok) paginatedRef.current = true;
+      if (await fetchOlderPage("append")) paginatedRef.current = true;
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [fetchLogs, hasMore, query]);
+  }, [fetchOlderPage, hasMore]);
 
   const loadEarlierLogs = useCallback(async () => {
     if (!botId || !user || loadingEarlier) return;
@@ -415,16 +442,12 @@ export const useBotLogs = ({
     setLoadingEarlier(true);
 
     try {
-      const ok = await fetchLogs(
-        { ...query, before: nextCursorRef.current ?? undefined },
-        "prepend",
-      );
-      if (ok) paginatedRef.current = true;
+      if (await fetchOlderPage("prepend")) paginatedRef.current = true;
     } finally {
       loadingEarlierRef.current = false;
       setLoadingEarlier(false);
     }
-  }, [botId, user, loadingEarlier, fetchLogs, query]);
+  }, [botId, user, loadingEarlier, fetchOlderPage]);
 
   const exportLogs = useCallback(() => {
     if (logs.length === 0) {
