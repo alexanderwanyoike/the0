@@ -73,13 +73,19 @@ function useLogStreamConnection(botId: string): LogStream {
       signal: controller.signal,
     })
       .then(async (response) => {
+        // A request can answer after its teardown, while a newer one is
+        // still connecting
+        if (controller.signal.aborted) {
+          await response.body?.cancel();
+          return;
+        }
         if (!response.ok || !response.body) {
           throw new Error(`Stream response: ${response.status}`);
         }
         setStatus("open");
 
         await readSSEEvents(response.body, (eventType, data) => {
-          if (eventType !== "update") return;
+          if (eventType !== "update" || controller.signal.aborted) return;
           let entries: LogEntry[];
           try {
             entries = parseLiveUpdate(data);
