@@ -36,7 +36,7 @@ func logEntryText(entry internal.LogEntry) string {
 	}
 
 	// A metric's data is in its fields, not its message.
-	if _, isMetric := fields["_metric"]; !isMetric {
+	if !jsTruthy(fields["_metric"]) {
 		message := stringField(fields, "message")
 		if message == "" {
 			message = stringField(fields, "msg")
@@ -89,6 +89,26 @@ func jsonObjectMembers(content string) ([]jsonMember, bool) {
 		return nil, false
 	}
 	return members, true
+}
+
+// jsTruthy is JavaScript's Boolean(), the api's rule for a metric line.
+func jsTruthy(raw json.RawMessage) bool {
+	var value interface{}
+	if raw == nil || json.Unmarshal(raw, &value) != nil {
+		return false
+	}
+	switch v := value.(type) {
+	case nil:
+		return false
+	case bool:
+		return v
+	case string:
+		return v != ""
+	case float64:
+		return v != 0
+	default:
+		return true
+	}
 }
 
 func stringField(fields map[string]json.RawMessage, name string) string {
