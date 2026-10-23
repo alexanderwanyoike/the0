@@ -1883,7 +1883,7 @@ describe("LogsService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/cursor/i);
+      expect(result.error).toMatch(/offset is too large/i);
       expect(mockMinioClient.getPartialObject).not.toHaveBeenCalled();
     });
     it("should reject a malformed cursor", async () => {
