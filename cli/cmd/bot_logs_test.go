@@ -159,9 +159,14 @@ func TestLogEntryTime(t *testing.T) {
 			want:  "2026-10-22",
 		},
 		{
-			name:  "falls back to the day of the log file for an unreadable timestamp",
+			name:  "shows an unreadable timestamp as written",
 			entry: internal.LogEntry{Date: "20261022", Timestamp: "yesterday"},
-			want:  "2026-10-22",
+			want:  "yesterday",
+		},
+		{
+			name:  "shows a timestamp without a zone as written",
+			entry: internal.LogEntry{Date: "20261022", Timestamp: "2026-10-22T10:00:00"},
+			want:  "2026-10-22T10:00:00",
 		},
 		{
 			name:  "shows an unreadable date as sent",
