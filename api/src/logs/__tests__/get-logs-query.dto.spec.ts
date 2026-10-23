@@ -33,6 +33,12 @@ describe("GetLogsQueryDto", () => {
       expect(errors[0].property).toBe(field);
     });
 
+    it("rejects an offset above 10000", async () => {
+      const { errors } = await validateQuery({ offset: "10001" });
+
+      expect(errors[0].property).toBe("offset");
+    });
+
     it("rejects lookbackDays outside 1-90", async () => {
       expect(
         (await validateQuery({ lookbackDays: "0" })).errors.length,

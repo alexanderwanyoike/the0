@@ -2019,6 +2019,20 @@ describe("LogsService", () => {
         ]);
       });
 
+      it("should page a day by a deep offset", async () => {
+        const count = 160000;
+        serveFiles({
+          "20260401":
+            Array.from({ length: count }, (_, i) => `l${i}`).join("\n") + "\n",
+        });
+
+        const deep = await page({ limit: 2, offset: 150000 });
+
+        expect(deep.entries.map((e) => e.content)).toEqual([
+          `l${count - 150001}`,
+          `l${count - 150002}`,
+        ]);
+      });
       it("should continue a raw log window with before past a day that fills the cap", async () => {
         const lines = (day: string, count: number) =>
           Array.from({ length: count }, (_, i) => `${day}-${i}`).join("\n") +
