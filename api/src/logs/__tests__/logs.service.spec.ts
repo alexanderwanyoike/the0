@@ -2187,23 +2187,28 @@ describe("LogsService", () => {
     });
   });
   describe("getLogs - auth and validation", () => {
-    it("should return failure when user is not authenticated", async () => {
-      const unauthService = new LogsService(
-        { user: null } as any,
+    it("should decide access by the user passed in, not the request's user", async () => {
+      const ownerOnly = {
+        findOneByUserId: jest.fn(async (uid: string) =>
+          uid === userId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
+        ),
+      };
+      const requestOfOwner = new LogsService(
+        { user: { uid: userId } } as any,
         mockMinioClient,
         mockConfigService as ConfigService,
-        mockBotService as BotService,
+        ownerOnly as any,
         mockLogger as PinoLogger,
       );
 
-      const result = await unauthService.getLogs("bot-1", {
-        date: "20260401",
-        limit: 100,
-        offset: 0,
-      });
+      const result = await requestOfOwner.getLogs(
+        "bot-1",
+        { date: "20260401", limit: 100, offset: 0 },
+        "",
+      );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Authentication required");
+      expect(result.error).toContain("access denied");
     });
 
     it("should return failure when bot is not found", async () => {

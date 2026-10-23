@@ -440,14 +440,14 @@ describe("LogStreamService", () => {
       });
 
       it("should still reject a stream without a user when history=false", async () => {
-        const { streamService } = withOwner(userId);
+        const { streamService } = withOwner(userId, { user: { uid: userId } });
 
         await streamService.stream("bot-1", "", mockReq, mockRes, {
           history: false,
         });
 
         const error = events().find((e) => e.startsWith("event: error"));
-        expect(error).toContain("Authentication required");
+        expect(error).toContain(ACCESS_DENIED_MESSAGE);
         expect(mockNatsService.subscribe).not.toHaveBeenCalled();
       });
     });
