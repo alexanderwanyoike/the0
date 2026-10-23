@@ -504,6 +504,29 @@ describe("ConsoleInterface", () => {
       expect(screen.getByText("10:00:00")).toBeInTheDocument();
     });
 
+    it("labels its times as UTC", () => {
+      const logs: LogEntry[] = [
+        {
+          key: "20251227:0",
+          date: "20251227",
+          timestamp: null,
+          content: "[2025-12-27 10:00:00] Message",
+        },
+      ];
+
+      for (const compact of [false, true]) {
+        const { unmount } = render(
+          <ConsoleInterface {...defaultProps} logs={logs} compact={compact} />,
+        );
+        expect(screen.getByText("UTC")).toBeInTheDocument();
+        expect(screen.getByText("10:00:00").closest("[title]")).toHaveAttribute(
+          "title",
+          "12-27 10:00:00 UTC",
+        );
+        unmount();
+      }
+    });
+
     it("displays level indicator", () => {
       const logs: LogEntry[] = [{ date: "20251227", content: "INFO: Message" }];
 
