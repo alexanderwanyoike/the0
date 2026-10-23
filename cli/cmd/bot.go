@@ -885,6 +885,19 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 	}
 }
 
+func botLogsParams(dateParam string, limit int) *internal.LogsParams {
+	params := &internal.LogsParams{
+		Limit: limit,
+	}
+
+	if strings.Contains(dateParam, "-") {
+		params.DateRange = dateParam
+	} else {
+		params.Date = dateParam
+	}
+	return params
+}
+
 func validateDateParam(dateParam string) error {
 	// Check for date format (YYYYMMDD)
 	dateRegex := regexp.MustCompile(`^\d{8}$`)
@@ -919,16 +932,7 @@ func validateDateParam(dateParam string) error {
 }
 
 func displayBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dateParam string, limit int) {
-	// Build parameters
-	params := &internal.LogsParams{
-		Limit: limit,
-	}
-
-	if strings.Contains(dateParam, "-") {
-		params.DateRange = dateParam
-	} else {
-		params.Date = dateParam
-	}
+	params := botLogsParams(dateParam, limit)
 
 	// Fetch logs
 	logs, err := apiClient.GetBotLogs(auth, botID, params)
@@ -981,16 +985,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	// Initial fetch
-	params := &internal.LogsParams{
-		Limit: limit,
-	}
-
-	if strings.Contains(dateParam, "-") {
-		params.DateRange = dateParam
-	} else {
-		params.Date = dateParam
-	}
+	params := botLogsParams(dateParam, limit)
 
 	// Fetch initial logs
 	logs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
