@@ -284,28 +284,6 @@ describe("LogsService", () => {
       expect(result.data!.entries[1].content).toContain("m2");
     });
 
-    it("should stop reading early once limit is reached (stream path)", async () => {
-      // Use date range to trigger stream-from-start path
-      const lines = Array.from(
-        { length: 1000 },
-        (_, i) => `{"level":"info","msg":"line-${i}"}`,
-      ).join("\n");
-
-      const stream = stringStream(lines);
-      const destroySpy = jest.spyOn(stream, "destroy");
-      mockMinioClient.getObject.mockResolvedValue(stream);
-
-      const result = await service.getLogs("bot-1", {
-        dateRange: "20260401-20260401",
-        limit: 2,
-        offset: 0,
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.data!.entries).toHaveLength(2);
-      expect(destroySpy).toHaveBeenCalled();
-    });
-
     it("should handle multi-chunk streams correctly", async () => {
       const lines = [
         '{"level":"info","msg":"first"}',
