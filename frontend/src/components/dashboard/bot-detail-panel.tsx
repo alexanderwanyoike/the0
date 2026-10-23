@@ -4,7 +4,10 @@ import React, { useState } from "react";
 import { Loader2, Terminal } from "lucide-react";
 import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
 import { ConsoleInterface } from "@/components/bot/console-interface";
-import { IntervalPicker } from "@/components/bot/interval-picker";
+import {
+  IntervalPicker,
+  IntervalValue,
+} from "@/components/bot/interval-picker";
 import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { BotLogStreamProvider } from "@/hooks/bot-logs/bot-log-stream";
@@ -32,6 +35,9 @@ const CenteredSpinner = () => (
 );
 
 type DetailLogs = ReturnType<typeof useBotDetailLogs>;
+
+const intervalViewKey = ({ type, start, end }: IntervalValue) =>
+  `${type}:${start}:${end}`;
 
 const DashboardArea = ({
   bot,
@@ -94,6 +100,7 @@ const ConsolePanel = ({ botId, logs }: { botId: string; logs: DetailLogs }) => (
         loadingMore={logs.loadingMore}
         sort={logs.sortOrder}
         onSortChange={logs.handleSortChange}
+        viewKey={intervalViewKey(logs.interval)}
         className="h-full"
         compact
       />
@@ -166,6 +173,7 @@ function BotDetailContent({
           onCopyConfig={owned.copyConfig}
           onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
           interval={logs.interval}
+          intervalViewKey={intervalViewKey(logs.interval)}
           onIntervalChange={logs.handleIntervalChange}
           showLive={!logs.scheduled}
           showLatest={logs.scheduled}

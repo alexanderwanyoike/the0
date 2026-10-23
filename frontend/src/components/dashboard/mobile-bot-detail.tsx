@@ -67,6 +67,8 @@ interface MobileBotDetailProps {
   onCopyConfig: () => void;
   onOpenUpdateModal: () => void;
   interval: IntervalValue;
+  /** Names the interval's window for the console. */
+  intervalViewKey: string;
   onIntervalChange: (value: IntervalValue) => void;
   showLive?: boolean;
   showLatest?: boolean;
@@ -103,6 +105,7 @@ export function MobileBotDetail({
   onCopyConfig,
   onOpenUpdateModal,
   interval,
+  intervalViewKey,
   onIntervalChange,
   showLive,
   showLatest,
@@ -215,6 +218,7 @@ export function MobileBotDetail({
             loadingMore={loadingMore}
             sort={sort}
             onSortChange={onSortChange}
+            viewKey={intervalViewKey}
             className="h-full"
             compact
           />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, ScrollText } from "lucide-react";
@@ -44,6 +44,9 @@ interface ConsoleInterfaceProps {
   sort?: "asc" | "desc";
   /** Callback when user toggles sort order */
   onSortChange?: (sort: "asc" | "desc") => void;
+  /** Names the window of logs shown (such as the interval); a new one opens
+   *  at its newest line. */
+  viewKey?: string;
 }
 
 const PagerButton = ({
@@ -100,6 +103,7 @@ type ConsoleLogViewProps = Pick<
   searchQuery: string;
   sort: "asc" | "desc";
   autoScroll: boolean;
+  view: string;
 };
 
 const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
@@ -116,9 +120,32 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
   hasMore,
   loadMore,
   loadingMore,
+  view,
 }) => {
   const [, setIsUserAtBottom] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const newestIndex = sort === "asc" ? displayLogs.length - 1 : 0;
+
+  // The old window's lines stay up until the new window's arrive, so the
+  // jump to the newest line waits for them. Earlier pages and live lines
+  // keep the reader's place.
+  const viewRef = useRef(view);
+  const jumpPendingRef = useRef(false);
+  useEffect(() => {
+    if (viewRef.current === view) return;
+    viewRef.current = view;
+    jumpPendingRef.current = true;
+  }, [view]);
+  useEffect(() => {
+    if (!jumpPendingRef.current || displayLogs.length === 0) return;
+    jumpPendingRef.current = false;
+    virtuosoRef.current?.scrollToIndex({
+      index: newestIndex,
+      align: sort === "asc" ? "end" : "start",
+    });
+    // Only new lines end the wait; a sort flip remounts the list instead
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayLogs]);
 
   // Background refreshes keep showing the current lines; only an empty
   // console shows the spinner.
@@ -140,8 +167,10 @@ const ConsoleLogView: React.FC<ConsoleLogViewProps> = ({
 
   return (
     <Virtuoso
+      key={sort}
       ref={virtuosoRef}
       data={displayLogs}
+      initialTopMostItemIndex={newestIndex}
       overscan={50}
       followOutput={
         connected && sort === "asc" && autoScroll ? "smooth" : false
@@ -194,9 +223,16 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
   lastUpdate,
   sort = "desc",
   onSortChange,
+  viewKey = "",
   ...pagination
 }) => {
   const filters = useConsoleFilters(onDateChange, onDateRangeChange);
+  const view = [
+    viewKey,
+    filters.selectedDate,
+    filters.dateRange.start,
+    filters.dateRange.end,
+  ].join("|");
   const { searchQuery } = filters;
   const [autoScroll, setAutoScroll] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -254,6 +290,7 @@ export const ConsoleInterface: React.FC<ConsoleInterfaceProps> = ({
           sort={sort}
           autoScroll={autoScroll}
           searchQuery={searchQuery}
+          view={view}
         />
       </div>
     </div>
