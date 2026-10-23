@@ -168,6 +168,9 @@ func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEnt
 			fresh = append(fresh, log)
 		}
 	}
+	// Every fetched line being new means the window moved past all the
+	// lines printed last time, so lines between the two may be gone.
+	mayHaveSkipped = len(w.previous) > 0 && len(fresh) == len(logs)
 	w.previous = current
-	return fresh, false
+	return fresh, mayHaveSkipped
 }

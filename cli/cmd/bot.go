@@ -1019,7 +1019,11 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 				continue
 			}
 
-			if fresh, _ := watch.newEntries(newLogs); len(fresh) > 0 {
+			fresh, mayHaveSkipped := watch.newEntries(newLogs)
+			if mayHaveSkipped {
+				logger.Warning("... lines may have been skipped: more than %d arrived since the last poll (raise --limit) ...", limit)
+			}
+			if len(fresh) > 0 {
 				displayLogEntries(fresh)
 			}
 		}
