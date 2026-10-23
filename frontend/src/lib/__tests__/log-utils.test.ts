@@ -57,6 +57,22 @@ describe("buildLogsSearchParams", () => {
     expect(buildLogsSearchParams({}).get("date")).toBe(today);
   });
 
+  it("reads an older page of a live view from its cursor's day", () => {
+    jest.useFakeTimers({ now: new Date("2026-10-23T00:05:00Z") });
+    try {
+      const params = buildLogsSearchParams({
+        before: "20261022:5000",
+        limit: 100,
+      });
+      expect(params.get("date")).toBe("20261022");
+      expect(buildLogsSearchParams({ limit: 100 }).get("date")).toBe(
+        "20261023",
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("includes the cursor, type and sort only when set", () => {
     const params = buildLogsSearchParams({
       date: "20240101",
