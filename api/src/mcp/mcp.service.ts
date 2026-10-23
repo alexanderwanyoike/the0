@@ -23,6 +23,40 @@ import { utcDay } from "@/logs/log-entry";
 import { BotStateService } from "@/bot-state/bot-state.service";
 import { BotQueryService } from "@/bot-query/bot-query.service";
 
+// The same prefixes the frontend reads a plain-text line's level from.
+const LEVEL_PREFIX = /^(?:\[[^\]]*\]\s*)?(DEBUG|INFO|WARN(?:ING)?|ERROR):/i;
+const ERROR_LEVELS = new Set(["error", "critical", "fatal"]);
+
+/**
+ * Entry content is the stored line verbatim, so a JSON line is judged by
+ * its level, never by field names such as `failed` or `error_count`.
+ */
+function isErrorLine(content: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return isErrorText(content);
+  }
+  if (parsed === null || typeof parsed !== "object") {
+    return isErrorText(content);
+  }
+  const line = parsed as Record<string, unknown>;
+  if (line._metric) return false;
+  if (typeof line.level === "string") {
+    return ERROR_LEVELS.has(line.level.toLowerCase());
+  }
+  const message = line.message ?? line.msg;
+  return typeof message === "string" && isErrorText(message);
+}
+
+function isErrorText(text: string): boolean {
+  const prefix = LEVEL_PREFIX.exec(text);
+  if (prefix) return prefix[1].toUpperCase() === "ERROR";
+  const lower = text.toLowerCase();
+  return lower.includes("error") || lower.includes("failed");
+}
+
 @Injectable()
 export class McpService {
   constructor(
@@ -282,11 +316,7 @@ export class McpService {
     }
 
     const logs = result.data?.entries || [];
-    const errorCount = logs.filter(
-      (log) =>
-        log.content?.toLowerCase().includes("error") ||
-        log.content?.toLowerCase().includes("failed"),
-    ).length;
+    const errorCount = logs.filter((log) => isErrorLine(log.content)).length;
 
     return {
       bot_id: input.bot_id,
