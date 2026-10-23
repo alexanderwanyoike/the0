@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"reflect"
-	"sort"
 	"testing"
 	"time"
 
@@ -192,54 +191,55 @@ func watchEntries(keys ...string) []internal.LogEntry {
 	return entries
 }
 
-func sortedKeys(entries []internal.LogEntry) []string {
-	keys := make([]string, len(entries))
-	for i, entry := range entries {
-		keys[i] = entry.Key
-	}
-	sort.Strings(keys)
-	return keys
-}
-
 func TestLogWatchNewEntries(t *testing.T) {
 	t.Run("prints the first fetch in full", func(t *testing.T) {
 		watch := &logWatch{}
 
-		got := sortedKeys(watch.newEntries(watchEntries("b", "a")))
+		got := watch.newEntries(watchEntries("a", "b"))
 
-		if !reflect.DeepEqual(got, []string{"a", "b"}) {
-			t.Errorf("newEntries() keys = %v, want [a b]", got)
+		if want := watchEntries("a", "b"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
 		}
 	})
 
 	t.Run("prints only entries whose key it has not printed", func(t *testing.T) {
 		watch := &logWatch{}
-		watch.newEntries(watchEntries("b", "a"))
+		watch.newEntries(watchEntries("a", "b"))
 
-		got := sortedKeys(watch.newEntries(watchEntries("c", "b", "a")))
+		got := watch.newEntries(watchEntries("a", "b", "c"))
 
-		if !reflect.DeepEqual(got, []string{"c"}) {
-			t.Errorf("newEntries() keys = %v, want [c]", got)
+		if want := watchEntries("c"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
 		}
 	})
 
 	t.Run("prints nothing when nothing new arrived", func(t *testing.T) {
 		watch := &logWatch{}
-		watch.newEntries(watchEntries("b", "a"))
+		watch.newEntries(watchEntries("a", "b"))
 
-		if got := watch.newEntries(watchEntries("b", "a")); len(got) != 0 {
-			t.Errorf("newEntries() = %v, want none", sortedKeys(got))
+		if got := watch.newEntries(watchEntries("a", "b")); len(got) != 0 {
+			t.Errorf("newEntries() = %v, want none", got)
 		}
 	})
 
 	t.Run("prints new entries as the limit window moves on", func(t *testing.T) {
 		watch := &logWatch{}
-		watch.newEntries(watchEntries("c", "b", "a"))
+		watch.newEntries(watchEntries("a", "b", "c"))
 
-		got := sortedKeys(watch.newEntries(watchEntries("e", "d", "c")))
+		got := watch.newEntries(watchEntries("c", "d", "e"))
 
-		if !reflect.DeepEqual(got, []string{"d", "e"}) {
-			t.Errorf("newEntries() keys = %v, want [d e]", got)
+		if want := watchEntries("d", "e"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("prints in the api's oldest-first order, like a tail", func(t *testing.T) {
+		watch := &logWatch{}
+		first := watch.newEntries(watchEntries("a", "b"))
+		next := watch.newEntries(watchEntries("b", "c", "d"))
+
+		if got, want := append(first, next...), watchEntries("a", "b", "c", "d"); !reflect.DeepEqual(got, want) {
+			t.Errorf("printed = %v, want %v", got, want)
 		}
 	})
 }
