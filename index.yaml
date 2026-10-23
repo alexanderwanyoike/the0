@@ -4,6 +4,72 @@ entries:
   - annotations:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
+        - kind: changed
+          description: "The runtime formats each log chunk once and stamps every line with a stable _key, so stored and live log lines are byte for byte the same"
+        - kind: changed
+          description: "REST and live log streams return one entry shape (key, date, timestamp, content), where content is the stored line as written"
+        - kind: added
+          description: "Log pages take a before cursor and return nextCursor, so new lines no longer shift older pages; offset is capped at 10000"
+        - kind: added
+          description: "The log stream accepts history=false, and each bot page shares one live log stream between the console and the dashboard"
+        - kind: fixed
+          description: "Live log lines no longer show twice; the frontend matches duplicates by entry key"
+        - kind: fixed
+          description: "sort=asc returns the newest entries in time order on every read, and busy metric windows return the latest metrics instead of the earliest"
+        - kind: fixed
+          description: "Single-day log reads honour sort, and daily log files and today use UTC everywhere"
+        - kind: fixed
+          description: "The bot page catches up on lines missed while the live log stream was down"
+        - kind: fixed
+          description: "MCP logs_summary counts errors by log level instead of matching words anywhere in the line"
+        - kind: changed
+          description: "Log export downloads NDJSON, and console times are shown in UTC"
+        - kind: changed
+          description: "Log access is checked against the caller's own user only"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.21.0
+    created: "2026-10-23T09:32:51.998617255Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: d7ac4338c9e1a1848283d903f08b7a434f4e57a28dce786419ca0a3be57e8f0d
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.16.0/the0-0.16.0.tgz
+    version: 0.16.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
         - kind: fixed
           description: "Rotating the storage credentials no longer breaks scheduled bots: bot, CronJob and query pods read the storage keys from the release's Secret instead of keeping copies of them"
         - kind: fixed
@@ -2723,4 +2789,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-22T19:56:52.335035414Z"
+generated: "2026-10-23T09:32:51.998750305Z"
