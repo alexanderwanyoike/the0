@@ -180,6 +180,21 @@ describe("filterLiveEntries", () => {
 });
 
 describe("formatLogsForExport", () => {
+  it("wraps a stored plain-text line as {message}", () => {
+    const plain = 'old plain line with a "quote"';
+    const exported = formatLogsForExport([
+      entry(plain),
+      entry('{"message":"json line"}'),
+    ]);
+    expect(exported).toBe(
+      JSON.stringify({ message: plain }) + '\n{"message":"json line"}\n',
+    );
+    exported
+      .trimEnd()
+      .split("\n")
+      .forEach((line) => expect(() => JSON.parse(line)).not.toThrow());
+  });
+
   it("writes the stored lines as NDJSON, one per line", () => {
     const lines = [
       '{"_key":"1792713599999000000-0","message":"a"}',
