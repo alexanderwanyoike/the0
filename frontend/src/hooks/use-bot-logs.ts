@@ -438,11 +438,13 @@ export const useBotLogs = ({
       return;
     }
 
-    const blob = new Blob([formatLogsForExport(logs)], { type: "text/plain" });
+    const blob = new Blob([formatLogsForExport(logs)], {
+      type: "application/x-ndjson",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.txt`;
+    a.download = `bot-${botId}-logs-${new Date().toISOString().split("T")[0]}.ndjson`;
     a.click();
     URL.revokeObjectURL(url);
   }, [logs, botId, toast]);

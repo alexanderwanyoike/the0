@@ -102,5 +102,5 @@ export function filterLiveEntries(
 }
 
 export function formatLogsForExport(logs: LogEntry[]): string {
-  return logs.map((log) => `[${log.date}] ${log.content}`).join("\n");
+  return logs.map((log) => `${log.content}\n`).join("");
 }
