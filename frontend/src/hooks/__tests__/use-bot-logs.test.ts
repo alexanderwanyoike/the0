@@ -2408,7 +2408,7 @@ describe("useBotLogs", () => {
 
     it("keeps live lines flowing when an older page loads during a refresh", async () => {
       let stream: ReturnType<typeof createMockSSEStream> | null = null;
-      let restCalls = 0;
+      let refreshing = false;
       let answerRefresh: (() => void) | null = null;
       const history = restResponse({
         data: [logEntry({ content: "current" })],
@@ -2422,8 +2422,10 @@ describe("useBotLogs", () => {
             stream = createMockSSEStream(opts?.signal ?? undefined);
             return { ok: true, body: stream.stream } as Response;
           }
-          restCalls++;
-          if (restCalls === 2) {
+          if (url.includes("before=")) {
+            return restResponse({ data: [logEntry({ content: "earlier" })] });
+          }
+          if (refreshing && !answerRefresh) {
             // The refresh: answers when told, or fails like fetch on abort
             return new Promise<Response>((resolve, reject) => {
               answerRefresh = () => resolve(history);
@@ -2432,9 +2434,8 @@ describe("useBotLogs", () => {
               );
             });
           }
-          return restCalls === 1
-            ? history
-            : restResponse({ data: [logEntry({ content: "earlier" })] });
+          // The first read and the read once the stream opens
+          return history;
         },
       );
 
@@ -2451,14 +2452,17 @@ describe("useBotLogs", () => {
           expect(result.current.hasEarlierLogs).toBe(true);
         });
 
+        refreshing = true;
         act(() => {
           result.current.refresh();
         });
-        await act(async () => {
-          await result.current.loadEarlierLogs();
+        let loadingEarlier: Promise<void> = Promise.resolve();
+        act(() => {
+          loadingEarlier = result.current.loadEarlierLogs();
         });
         await act(async () => {
           answerRefresh?.();
+          await loadingEarlier;
         });
         act(() => {
           stream!.controller.push("update", [logEntry({ content: "live" })]);
