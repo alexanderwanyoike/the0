@@ -38,13 +38,15 @@ describe("LogsService", () => {
   let mockBotService: Partial<BotService>;
   let mockConfigService: Partial<ConfigService>;
   let mockLogger: Partial<PinoLogger>;
-  let mockRequest: any;
 
   const userId = "user-abc";
+  const getLogs = (
+    botId: string,
+    query: Parameters<LogsService["getLogs"]>[1],
+    uid: string = userId,
+  ) => service.getLogs(botId, query, uid);
 
   beforeEach(() => {
-    mockRequest = { user: { uid: userId } };
-
     mockMinioClient = {
       statObject: jest.fn().mockResolvedValue({}),
       getObject: jest.fn(),
@@ -67,7 +69,6 @@ describe("LogsService", () => {
     };
 
     service = new LogsService(
-      mockRequest,
       mockMinioClient,
       mockConfigService as ConfigService,
       mockBotService as BotService,
@@ -110,7 +111,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -150,7 +151,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -172,7 +173,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -191,7 +192,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 5,
         offset: 0,
@@ -213,7 +214,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", lines, ""); // second day empty
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 3,
         offset: 5,
@@ -241,7 +242,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 2,
         offset: 0,
@@ -268,7 +269,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 1,
@@ -292,7 +293,7 @@ describe("LogsService", () => {
       // Split into 20-byte chunks to force leftover handling
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines, 20));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -311,7 +312,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(content));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -325,7 +326,7 @@ describe("LogsService", () => {
       // A day's read starts by statting its file
       mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -338,7 +339,7 @@ describe("LogsService", () => {
     it("should return empty array when log file does not exist (date range)", async () => {
       mockMinioClient.getObject.mockRejectedValue({ code: "NoSuchKey" });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 100,
         offset: 0,
@@ -352,7 +353,7 @@ describe("LogsService", () => {
       // Cloudflare R2 returns "NotFound" instead of "NoSuchKey"
       mockMinioClient.statObject.mockRejectedValue({ code: "NotFound" });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260405",
         limit: 100,
         offset: 0,
@@ -365,7 +366,7 @@ describe("LogsService", () => {
     it("should treat an R2 NotFound from getObject as a missing file", async () => {
       mockMinioClient.getObject.mockRejectedValue({ code: "NotFound" });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260405-20260405",
         limit: 100,
         offset: 0,
@@ -382,7 +383,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 4,
         offset: 0,
@@ -402,7 +403,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 2,
         offset: 1,
@@ -419,7 +420,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", content, "");
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 100,
         offset: 0,
@@ -439,7 +440,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 10,
         offset: 2,
@@ -470,7 +471,7 @@ describe("LogsService", () => {
         }),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 2,
         offset: 0,
@@ -497,7 +498,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -521,7 +522,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -543,7 +544,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -575,7 +576,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(content));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -596,7 +597,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(content));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -615,7 +616,7 @@ describe("LogsService", () => {
         '{"_key":"1792674000123456789-0","message":"Bought 1 BTC","timestamp":"2026-10-22T10:00:00.123Z"}';
       mockMinioClient.getObject.mockResolvedValue(stringStream(line + "\n"));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20261022",
         limit: 100,
         offset: 0,
@@ -638,7 +639,7 @@ describe("LogsService", () => {
       const content = `plain one\n${wrapped}\nlast\n`;
       mockMinioClient.getObject.mockResolvedValue(stringStream(content));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260330",
         limit: 100,
         offset: 0,
@@ -679,12 +680,12 @@ describe("LogsService", () => {
         },
       );
 
-      const tailed = await service.getLogs("bot-1", {
+      const tailed = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
       });
-      const streamed = await service.getLogs("bot-1", {
+      const streamed = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 100,
         offset: 0,
@@ -712,7 +713,7 @@ describe("LogsService", () => {
       );
 
       // The tail holds limit + 1 whole lines, so the day is not read whole
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 2,
         offset: 0,
@@ -732,7 +733,7 @@ describe("LogsService", () => {
         stringStream("prix: 10€\nnext\n"),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -746,7 +747,7 @@ describe("LogsService", () => {
       const line = '{"timestamp":"2026-10-22 12:00:00+02:00","message":"x"}';
       mockMinioClient.getObject.mockResolvedValue(stringStream(line));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20261022",
         limit: 100,
         offset: 0,
@@ -764,7 +765,7 @@ describe("LogsService", () => {
         ),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260330",
         limit: 100,
         offset: 0,
@@ -788,7 +789,7 @@ describe("LogsService", () => {
           stringStream(lines.join("\n") + "\n"),
         );
 
-        const result = await service.getLogs("bot-1", {
+        const result = await getLogs("bot-1", {
           date: "20260401",
           limit: 100,
           offset: 0,
@@ -806,7 +807,7 @@ describe("LogsService", () => {
         '{"_metric":"price","value":42,"timestamp":"2026-04-01T10:00:00Z"}';
       mockMinioClient.getObject.mockResolvedValue(stringStream(metricLine));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -828,7 +829,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -871,7 +872,7 @@ describe("LogsService", () => {
         stringStream(tailWithPartial),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -897,7 +898,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 10,
         offset: 0,
@@ -923,7 +924,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -950,7 +951,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -975,7 +976,7 @@ describe("LogsService", () => {
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -999,7 +1000,7 @@ describe("LogsService", () => {
       // File is smaller than TAIL_BYTES, so getObject is used
       mockMinioClient.getObject.mockResolvedValue(stringStream(fileContent));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -1029,7 +1030,7 @@ describe("LogsService", () => {
       );
 
       // The tail holds limit + 1 whole lines, so the day is not read whole
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 1,
         offset: 0,
@@ -1073,7 +1074,7 @@ describe("LogsService", () => {
         ),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: `${at(0)}--${at(599)}`,
         limit: 2,
         offset: 0,
@@ -1094,7 +1095,7 @@ describe("LogsService", () => {
         stringStream(lines.join("\n") + "\n"),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "2026-04-01T00:00:00Z--2026-04-01T00:00:01Z",
         limit: 10,
         offset: 0,
@@ -1117,7 +1118,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
         limit: 100,
         offset: 0,
@@ -1137,7 +1138,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2, day3);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260403",
         limit: 100,
         offset: 0,
@@ -1163,7 +1164,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260402", day1Lines, day2Lines);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "2026-04-02T23:00:00Z--2026-04-03T01:00:00Z",
         limit: 100,
         offset: 0,
@@ -1186,7 +1187,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
         limit: 100,
         offset: 0,
@@ -1214,7 +1215,7 @@ describe("LogsService", () => {
 
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
         limit: 100,
         offset: 0,
@@ -1240,7 +1241,7 @@ describe("LogsService", () => {
       mockMinioClient.statObject.mockResolvedValue({ size: fileSize });
       mockMinioClient.getObject.mockResolvedValue(stringStream(fileContent));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "2026-04-03T10:00:00Z--2026-04-03T11:00:00Z",
         limit: 100,
         offset: 0,
@@ -1264,7 +1265,7 @@ describe("LogsService", () => {
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 5,
         offset: 0,
@@ -1293,7 +1294,7 @@ describe("LogsService", () => {
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 5,
         offset: 0,
@@ -1318,7 +1319,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 6,
         offset: 0,
@@ -1341,7 +1342,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 2,
         offset: 2,
@@ -1360,7 +1361,7 @@ describe("LogsService", () => {
 
       serveDaysFrom("20260401", day1, day2);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 10,
         offset: 0,
@@ -1413,7 +1414,7 @@ describe("LogsService", () => {
         [`logs/bot-1/${today}.log`]: '{"message":"new-1"}\n{"message":"new-2"}',
       });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 10,
         offset: 0,
@@ -1448,7 +1449,7 @@ describe("LogsService", () => {
         ),
       });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 3,
         offset: 0,
@@ -1474,7 +1475,7 @@ describe("LogsService", () => {
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y"}',
       });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 2,
         offset: 0,
@@ -1499,7 +1500,7 @@ describe("LogsService", () => {
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
       });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 2,
         offset: 2,
@@ -1519,7 +1520,7 @@ describe("LogsService", () => {
         [`logs/bot-1/${yesterday}.log`]: '{"message":"y1"}\n{"message":"y2"}',
       });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 10,
         offset: 0,
@@ -1570,7 +1571,7 @@ describe("LogsService", () => {
             : notFound(),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 3,
         offset: 0,
@@ -1592,7 +1593,7 @@ describe("LogsService", () => {
         "logs/bot-1/20260401.log": '{"message":"explicit-date"}',
       });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         lookbackDays: 7,
         limit: 10,
@@ -1608,7 +1609,7 @@ describe("LogsService", () => {
     it("should return empty entries when no day in the window has logs", async () => {
       mockFiles({});
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 7,
         limit: 10,
         offset: 0,
@@ -1631,7 +1632,7 @@ describe("LogsService", () => {
       );
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
-      const page1 = await service.getLogs("bot-1", {
+      const page1 = await getLogs("bot-1", {
         date: "20260401",
         limit: 2,
         offset: 0,
@@ -1644,7 +1645,7 @@ describe("LogsService", () => {
       ]);
       expect(page1.data!.hasMore).toBe(true);
 
-      const page2 = await service.getLogs("bot-1", {
+      const page2 = await getLogs("bot-1", {
         date: "20260401",
         limit: 2,
         offset: 2,
@@ -1656,7 +1657,7 @@ describe("LogsService", () => {
       ]);
       expect(page2.data!.hasMore).toBe(true);
 
-      const page3 = await service.getLogs("bot-1", {
+      const page3 = await getLogs("bot-1", {
         date: "20260401",
         limit: 2,
         offset: 4,
@@ -1670,7 +1671,7 @@ describe("LogsService", () => {
       const lines = [metricLine(1), metricLine(2), metricLine(3)].join("\n");
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -1688,7 +1689,7 @@ describe("LogsService", () => {
       );
       mockMinioClient.getObject.mockImplementation(() => stringStream(lines));
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 2,
         offset: 0,
@@ -1716,7 +1717,7 @@ describe("LogsService", () => {
           ),
       );
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 2,
         offset: 0,
@@ -1760,7 +1761,7 @@ describe("LogsService", () => {
     }
 
     const page = async (query: Partial<LogsQuery>) => {
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -1862,7 +1863,7 @@ describe("LogsService", () => {
     it("should reject a cursor that matches no entry", async () => {
       serveFiles({ "20260401": "a\n" });
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -1875,7 +1876,7 @@ describe("LogsService", () => {
     });
 
     it("should reject a position cursor whose offset is not a safe byte offset", async () => {
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -1887,7 +1888,7 @@ describe("LogsService", () => {
       expect(mockMinioClient.getPartialObject).not.toHaveBeenCalled();
     });
     it("should reject a malformed cursor", async () => {
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 0,
@@ -1899,7 +1900,7 @@ describe("LogsService", () => {
     });
 
     it("should refuse before combined with offset", async () => {
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 10,
         offset: 5,
@@ -2158,7 +2159,7 @@ describe("LogsService", () => {
       ].map((call: string[]) => call[1]);
 
     it("should start a lookback at today's UTC day", async () => {
-      await service.getLogs("bot-1", {
+      await getLogs("bot-1", {
         lookbackDays: 2,
         limit: 10,
         offset: 0,
@@ -2170,7 +2171,7 @@ describe("LogsService", () => {
     });
 
     it("should read the UTC days a datetime range with an offset covers", async () => {
-      await service.getLogs("bot-1", {
+      await getLogs("bot-1", {
         dateRange: "2026-10-22T01:00:00+05:00--2026-10-22T03:00:00+05:00",
         limit: 10,
         offset: 0,
@@ -2182,23 +2183,27 @@ describe("LogsService", () => {
     });
   });
   describe("getLogs - auth and validation", () => {
-    it("should return failure when user is not authenticated", async () => {
-      const unauthService = new LogsService(
-        { user: null } as any,
+    it("should refuse a caller who is not the bot's owner", async () => {
+      const ownerOnly = {
+        findOneByUserId: jest.fn(async (uid: string) =>
+          uid === userId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
+        ),
+      };
+      const ownerOnlyService = new LogsService(
         mockMinioClient,
         mockConfigService as ConfigService,
-        mockBotService as BotService,
+        ownerOnly as any,
         mockLogger as PinoLogger,
       );
 
-      const result = await unauthService.getLogs("bot-1", {
-        date: "20260401",
-        limit: 100,
-        offset: 0,
-      });
+      const result = await ownerOnlyService.getLogs(
+        "bot-1",
+        { date: "20260401", limit: 100, offset: 0 },
+        "",
+      );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Authentication required");
+      expect(result.error).toContain("access denied");
     });
 
     it("should return failure when bot is not found", async () => {
@@ -2206,7 +2211,7 @@ describe("LogsService", () => {
         Failure("not found"),
       );
 
-      const result = await service.getLogs("bot-999", {
+      const result = await getLogs("bot-999", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -2219,7 +2224,7 @@ describe("LogsService", () => {
     it("should check ownership against an explicit userId", async () => {
       mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
 
-      const result = await service.getLogs(
+      const result = await getLogs(
         "bot-1",
         { date: "20260401", limit: 100, offset: 0 },
         "other-user",
@@ -2233,7 +2238,7 @@ describe("LogsService", () => {
     });
 
     it("should return failure for invalid date format", async () => {
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "not-a-date",
         limit: 100,
         offset: 0,
@@ -2252,7 +2257,7 @@ describe("LogsService", () => {
       const error = failure();
       mockMinioClient.statObject.mockRejectedValue(error);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         date: "20260401",
         limit: 100,
         offset: 0,
@@ -2269,7 +2274,7 @@ describe("LogsService", () => {
       const error = failure();
       mockMinioClient.getObject.mockRejectedValue(error);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         dateRange: "20260401-20260402",
         limit: 100,
         offset: 0,
@@ -2286,7 +2291,7 @@ describe("LogsService", () => {
       const error = failure();
       mockMinioClient.statObject.mockRejectedValue(error);
 
-      const result = await service.getLogs("bot-1", {
+      const result = await getLogs("bot-1", {
         lookbackDays: 3,
         limit: 100,
         offset: 0,

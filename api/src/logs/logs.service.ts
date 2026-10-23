@@ -1,9 +1,7 @@
 import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { AuthenticatedRequest } from "@/auth/auth.types";
 import {
   Result,
   Ok,
@@ -75,7 +73,6 @@ export class LogsService {
   }
 
   constructor(
-    @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
     private readonly configService: ConfigService,
     private readonly botService: BotService,
@@ -84,14 +81,12 @@ export class LogsService {
     this.logBucket = this.configService.get<string>("LOG_BUCKET") || "bot-logs";
   }
 
-  /** Whether the user (else the request's user) may read the bot's logs. */
+  /** Whether the user may read the bot's logs. */
   async checkAccess(
     botId: string,
-    userId?: string,
+    userId: string,
   ): Promise<Result<true, string>> {
-    const uid = userId || this.request?.user?.uid;
-    if (!uid) return Failure("Authentication required");
-    const botResult = await this.botService.findOneByUserId(uid, botId);
+    const botResult = await this.botService.findOneByUserId(userId, botId);
     if (!botResult.success) {
       return Failure("Bot not found or access denied");
     }
@@ -101,7 +96,7 @@ export class LogsService {
   async getLogs(
     botId: string,
     query: LogsQuery,
-    userId?: string,
+    userId: string,
   ): Promise<Result<LogsPage, string>> {
     const access = await this.checkAccess(botId, userId);
     if (!access.success) return Failure(access.error);

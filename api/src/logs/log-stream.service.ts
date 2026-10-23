@@ -116,11 +116,6 @@ export class LogStreamService {
 
   /** @returns true when the error refused access and the stream was ended. */
   private endOnAccessError(res: Response, error: string | null): boolean {
-    if (error?.includes("Authentication required")) {
-      res.write(sseEvent("error", { message: "Authentication required" }));
-      res.end();
-      return true;
-    }
     if (error?.includes("not found") || error?.includes("access denied")) {
       res.write(sseEvent("error", { message: ACCESS_DENIED_MESSAGE }));
       res.end();

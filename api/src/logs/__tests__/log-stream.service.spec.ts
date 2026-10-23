@@ -366,14 +366,13 @@ describe("LogStreamService", () => {
         mockRes.write.mock.calls.map((call: string[]) => call[0]);
 
       /** A stream service over a real LogsService, so ownership is real. */
-      const withOwner = (ownerId: string, request: any = { user: null }) => {
+      const withOwner = (ownerId: string) => {
         const botService = {
           findOneByUserId: jest.fn(async (uid: string) =>
             uid === ownerId ? Ok({ id: "bot-1" }) : Failure("Bot not found"),
           ),
         };
         const logsService = new LogsService(
-          request,
           { getObject: jest.fn(), statObject: jest.fn() } as any,
           { get: jest.fn().mockReturnValue("bot-logs") } as any,
           botService as any,
@@ -447,7 +446,7 @@ describe("LogStreamService", () => {
         });
 
         const error = events().find((e) => e.startsWith("event: error"));
-        expect(error).toContain("Authentication required");
+        expect(error).toContain(ACCESS_DENIED_MESSAGE);
         expect(mockNatsService.subscribe).not.toHaveBeenCalled();
       });
     });
@@ -529,7 +528,6 @@ describe("LogStreamService", () => {
         getPartialObject: jest.fn(),
       };
       const logsService = new LogsService(
-        { user: { uid: userId } } as any,
         minio as any,
         { get: jest.fn().mockReturnValue("bot-logs") } as any,
         {
