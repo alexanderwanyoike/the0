@@ -507,6 +507,20 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 			expectedLogs: 1,
 		},
 		{
+			name:       "logs in ascending order",
+			botID:      "bot-123",
+			params:     &internal.LogsParams{Date: "20241201", Limit: 100, Sort: "asc"},
+			statusCode: 200,
+			responseBody: `{
+				"success": true,
+				"data": [
+					{"key": "1-0", "date": "20241201", "timestamp": "2024-12-01T12:00:00Z", "content": "first"},
+					{"key": "1-1", "date": "20241201", "timestamp": null, "content": "second"}
+				]
+			}`,
+			expectedLogs: 2,
+		},
+		{
 			name:          "bot not found",
 			botID:         "nonexistent-bot",
 			params:        &internal.LogsParams{Date: "20241201"},
@@ -566,6 +580,9 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 					}
 					if tt.params.DateRange != "" && query.Get("dateRange") != tt.params.DateRange {
 						t.Errorf("Expected dateRange query param %s, got %s", tt.params.DateRange, query.Get("dateRange"))
+					}
+					if query.Get("sort") != tt.params.Sort {
+						t.Errorf("Expected sort query param %q, got %q", tt.params.Sort, query.Get("sort"))
 					}
 					if tt.params.Limit > 0 {
 						expectedLimit := fmt.Sprintf("%d", tt.params.Limit)
