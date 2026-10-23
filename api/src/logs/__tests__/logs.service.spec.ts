@@ -205,14 +205,12 @@ describe("LogsService", () => {
       expect(result.data!.entries[4].content).toContain("line-49");
     });
 
-    it("should respect offset at the line level (date range uses stream)", async () => {
-      // Offset is meaningful for stream-from-start (multi-date range) queries
+    it("should apply offset counting back from the newest entry", async () => {
       const lines = Array.from(
         { length: 10 },
         (_, i) => `{"level":"info","msg":"line-${i}"}`,
       ).join("\n");
 
-      // Use a two-day range so dates.length > 1 triggers the stream path
       serveDaysFrom("20260401", lines, ""); // second day empty
 
       const result = await service.getLogs("bot-1", {
@@ -324,7 +322,7 @@ describe("LogsService", () => {
     });
 
     it("should return empty array when log file does not exist", async () => {
-      // Single-date tail path calls statObject first
+      // A day's read starts by statting its file
       mockMinioClient.statObject.mockRejectedValue({ code: "NoSuchKey" });
 
       const result = await service.getLogs("bot-1", {
@@ -338,7 +336,6 @@ describe("LogsService", () => {
     });
 
     it("should return empty array when log file does not exist (date range)", async () => {
-      // Multi-date range triggers stream path, which handles NoSuchKey on getObject
       mockMinioClient.getObject.mockRejectedValue({ code: "NoSuchKey" });
 
       const result = await service.getLogs("bot-1", {
@@ -351,7 +348,7 @@ describe("LogsService", () => {
       expect(result.data!.entries).toEqual([]);
     });
 
-    it("should handle R2 NotFound error on tail path (statObject)", async () => {
+    it("should treat an R2 NotFound from statObject as a missing file", async () => {
       // Cloudflare R2 returns "NotFound" instead of "NoSuchKey"
       mockMinioClient.statObject.mockRejectedValue({ code: "NotFound" });
 
@@ -365,7 +362,7 @@ describe("LogsService", () => {
       expect(result.data!.entries).toEqual([]);
     });
 
-    it("should handle R2 NotFound error on stream path (getObject)", async () => {
+    it("should treat an R2 NotFound from getObject as a missing file", async () => {
       mockMinioClient.getObject.mockRejectedValue({ code: "NotFound" });
 
       const result = await service.getLogs("bot-1", {
@@ -417,7 +414,7 @@ describe("LogsService", () => {
       expect(result.data!.entries[0].content).toContain("d1-l2");
       expect(result.data!.entries[1].content).toContain("d2-l1");
     });
-    it("should skip blank lines on the stream path", async () => {
+    it("should skip blank lines", async () => {
       const content = '{"msg":"a"}\n\n   \n{"msg":"b"}\n';
 
       serveDaysFrom("20260401", content, "");
@@ -456,7 +453,7 @@ describe("LogsService", () => {
       ]);
     });
 
-    it("should return the newest entries when an older day alone fills the read cap", async () => {
+    it("should return the newest entries when an older day holds 10000 lines", async () => {
       const files: Record<string, string> = {
         "logs/bot-1/20260401.log":
           Array.from({ length: 10000 }, (_, i) => `{"msg":"d1-${i}"}`).join(
@@ -889,7 +886,6 @@ describe("LogsService", () => {
     });
 
     it("should return chronological entries for date range", async () => {
-      // Two dates with a few lines each - should stream from start
       const day1 = [
         '{"timestamp":"2026-04-01T01:00:00Z","message":"d1-line1"}',
         '{"timestamp":"2026-04-01T02:00:00Z","message":"d1-line2"}',
@@ -917,7 +913,7 @@ describe("LogsService", () => {
       expect(messageOf(result.data!.entries[3])).toBe("d2-line2");
     });
 
-    it("should stream from start for metrics filter on single date", async () => {
+    it("should find metrics anywhere in a single day", async () => {
       const lines = [
         '{"level":"info","message":"noise"}',
         '{"_metric":true,"name":"pnl","value":42}',
@@ -937,10 +933,9 @@ describe("LogsService", () => {
 
       expect(result.success).toBe(true);
       expect(result.data!.entries).toHaveLength(2);
-      // Metrics from anywhere in the file, streamed from start
       expect(result.data!.entries[0].content).toContain('"name":"pnl"');
       expect(result.data!.entries[1].content).toContain('"name":"sharpe"');
-      // getObject should have been called (not getPartialObject)
+      // Metrics are read from the whole day, not its tail
       expect(mockMinioClient.getObject).toHaveBeenCalled();
     });
 
@@ -977,7 +972,6 @@ describe("LogsService", () => {
             `{"timestamp":"2026-04-01T10:00:00Z","message":"line-${i}"}`,
         ).join("\n") + "\n";
 
-      // Tail path: single date, non-metrics
       mockMinioClient.statObject.mockResolvedValue({ size: 100 });
       mockMinioClient.getObject.mockResolvedValue(stringStream(lines));
 
@@ -1234,9 +1228,7 @@ describe("LogsService", () => {
       ]);
     });
 
-    it("should use tail path for single-date datetime range and filter by time", async () => {
-      // When the datetime range spans a single day, it should use the tail path
-      // but still apply time filtering
+    it("should filter a single-day datetime range by time", async () => {
       const lines = [
         '{"timestamp":"2026-04-03T08:00:00Z","message":"morning"}',
         '{"timestamp":"2026-04-03T10:30:00Z","message":"mid-morning"}',
@@ -1261,7 +1253,7 @@ describe("LogsService", () => {
   });
 
   describe("getLogs - sort parameter", () => {
-    it("should return newest-first by default for single date (tail path)", async () => {
+    it("should return newest-first by default for a single date", async () => {
       const lines =
         Array.from(
           { length: 10 },
@@ -1990,7 +1982,7 @@ describe("LogsService", () => {
       expect(newest.hasMore).toBe(true);
       expect(newest.nextCursor).toBe(`20260401:${2 * (200 * 1024 + 1)}`);
     });
-    describe("windows holding more than the read cap", () => {
+    describe("windows larger than 10000 entries", () => {
       // A realtime bot writing a metric every 5s fills ~17k lines a day
       const metric = (day: string, i: number) => `{"_metric":"${day}-${i}"}`;
       const metrics = (day: string, count: number) =>
@@ -2042,7 +2034,7 @@ describe("LogsService", () => {
         ]);
       });
 
-      it("should return the newest metrics of one day holding more than the cap", async () => {
+      it("should return the newest metrics of one day holding 17000", async () => {
         serveFiles({ "20260401": metrics("d1", 17000) });
 
         const newest = await page({ type: "metrics", limit: 2 });
@@ -2076,7 +2068,7 @@ describe("LogsService", () => {
           `l${count - 150002}`,
         ]);
       });
-      it("should continue a raw log window with before past a day that fills the cap", async () => {
+      it("should continue a raw log window with before past a 10000-line day", async () => {
         const lines = (day: string, count: number) =>
           Array.from({ length: count }, (_, i) => `${day}-${i}`).join("\n") +
           "\n";
