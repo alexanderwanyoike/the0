@@ -108,6 +108,7 @@ export const useBotLogs = ({
   const stream = useBotLogStream(botId);
 
   const restAbortRef = useRef<AbortController | null>(null);
+  const pageAbortRef = useRef<AbortController | null>(null);
   // True once a replace fetch has delivered data for the current bot. While
   // set, replace fetches are background refreshes: they must not flip
   // `loading` (which would unmount dashboards into their loading screen).
@@ -216,9 +217,16 @@ export const useBotLogs = ({
     ): Promise<boolean> => {
       if (!botId) return false;
 
-      restAbortRef.current?.abort();
+      // A replace supersedes everything in flight. A page never aborts a
+      // replace: live lines would stay buffered with no history to join.
       const controller = new AbortController();
-      restAbortRef.current = controller;
+      pageAbortRef.current?.abort();
+      if (merge) {
+        pageAbortRef.current = controller;
+      } else {
+        restAbortRef.current?.abort();
+        restAbortRef.current = controller;
+      }
 
       // Buffer live updates while a replace fetch is in flight: an SSE line
       // that arrives after the server snapshots the response would otherwise
@@ -255,9 +263,12 @@ export const useBotLogs = ({
         return false;
       } finally {
         if (!controller.signal.aborted) {
-          setLoading(false);
-          setIsFetching(false);
-          setLoadingEarlier(false);
+          if (merge) {
+            setLoadingEarlier(false);
+          } else {
+            setLoading(false);
+            setIsFetching(false);
+          }
         }
       }
     },
@@ -305,6 +316,7 @@ export const useBotLogs = ({
 
     return () => {
       restAbortRef.current?.abort();
+      pageAbortRef.current?.abort();
     };
   }, [botId, user, streaming]);
 
