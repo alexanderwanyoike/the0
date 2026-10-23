@@ -98,7 +98,9 @@ jest.mock("@/components/bot/bot-dashboard-loader", () => ({
 }));
 
 jest.mock("@/components/bot/console-interface", () => ({
-  ConsoleInterface: () => <div data-testid="console-interface" />,
+  ConsoleInterface: ({ viewKey }: { viewKey?: string }) => (
+    <div data-testid="console-interface" data-view={viewKey} />
+  ),
   ConnectionStatusIndicator: () => (
     <div data-testid="connection-status-indicator" />
   ),
@@ -431,6 +433,26 @@ describe("BotDetailPanel", () => {
         expect.objectContaining({ botId: "bot-123" }),
         { sharedStream: true },
       );
+    });
+  });
+
+  describe("console window", () => {
+    it("tells the console when the interval picks another window", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Test Bot");
+      const before = screen
+        .getByTestId("console-interface")
+        .getAttribute("data-view");
+
+      fireEvent.click(screen.getByRole("button", { name: "1h" }));
+
+      const after = screen
+        .getByTestId("console-interface")
+        .getAttribute("data-view");
+      expect(before).toBeTruthy();
+      expect(after).toBeTruthy();
+      expect(after).not.toBe(before);
     });
   });
 
