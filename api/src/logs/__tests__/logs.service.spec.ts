@@ -1073,6 +1073,68 @@ describe("LogsService", () => {
   });
 
   describe("getLogs - datetime range filtering", () => {
+    it("should stop reading a day once its lines pass the end of the window", async () => {
+      // 10000 lines a second apart from midnight; the window holds the first 600
+      const at = (i: number) =>
+        new Date(Date.UTC(2026, 3, 1) + i * 1000).toISOString();
+      const lines = Array.from(
+        { length: 10000 },
+        (_, i) => `{"message":"m${i}","timestamp":"${at(i)}"}\n`,
+      );
+      const file = Buffer.from(lines.join(""));
+      let linesRead = 0;
+      mockMinioClient.statObject.mockResolvedValue({ size: file.length });
+      mockMinioClient.getPartialObject.mockImplementation(
+        async (_b: string, _p: string, start: number, length = 0) =>
+          Readable.from([
+            file.subarray(start, length ? start + length : file.length),
+          ]),
+      );
+      mockMinioClient.getObject.mockImplementation(async () =>
+        Readable.from(
+          (function* () {
+            for (const line of lines) {
+              linesRead++;
+              yield Buffer.from(line);
+            }
+          })(),
+        ),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: `${at(0)}--${at(599)}`,
+        limit: 2,
+        offset: 0,
+      });
+
+      expect(result.data!.entries.map(messageOf)).toEqual(["m599", "m598"]);
+      expect(linesRead).toBeLessThan(1000);
+    });
+
+    it("should keep reading past lines without a timestamp", async () => {
+      const lines = [
+        '{"message":"a","timestamp":"2026-04-01T00:00:00Z"}',
+        "no timestamp here",
+        '{"message":"b","timestamp":"2026-04-01T00:00:01Z"}',
+        '{"message":"late","timestamp":"2026-04-01T05:00:00Z"}',
+      ];
+      mockMinioClient.getObject.mockResolvedValue(
+        stringStream(lines.join("\n") + "\n"),
+      );
+
+      const result = await service.getLogs("bot-1", {
+        dateRange: "2026-04-01T00:00:00Z--2026-04-01T00:00:01Z",
+        limit: 10,
+        offset: 0,
+        sort: "asc",
+      });
+
+      expect(result.data!.entries.map(messageOf)).toEqual([
+        "a",
+        "no timestamp here",
+        "b",
+      ]);
+    });
     it("should filter lines by timestamp when datetime range is provided", async () => {
       const lines = [
         '{"timestamp":"2026-04-03T09:30:00Z","message":"before range"}',
