@@ -286,6 +286,33 @@ func TestLogWatchNewEntries(t *testing.T) {
 		}
 	})
 
+	t.Run("warns when a fetch shares no key with the previous one", func(t *testing.T) {
+		watch := &logWatch{}
+		watch.newEntries(watchEntries("a", "b"))
+
+		got, mayHaveSkipped := watch.newEntries(watchEntries("d", "e"))
+
+		if !mayHaveSkipped {
+			t.Error("newEntries() mayHaveSkipped = false, want true")
+		}
+		if want := watchEntries("d", "e"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("does not warn while fetches overlap", func(t *testing.T) {
+		watch := &logWatch{}
+		if _, mayHaveSkipped := watch.newEntries(watchEntries("a", "b")); mayHaveSkipped {
+			t.Error("first fetch: mayHaveSkipped = true, want false")
+		}
+		if _, mayHaveSkipped := watch.newEntries(watchEntries("b", "c")); mayHaveSkipped {
+			t.Error("overlapping fetch: mayHaveSkipped = true, want false")
+		}
+		if _, mayHaveSkipped := watch.newEntries(nil); mayHaveSkipped {
+			t.Error("empty fetch: mayHaveSkipped = true, want false")
+		}
+	})
+
 	t.Run("prints new entries as the limit window moves on", func(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b", "c"))
