@@ -155,6 +155,12 @@ type logWatch struct {
 }
 
 func (w *logWatch) newEntries(logs []internal.LogEntry) []internal.LogEntry {
+	// An empty answer (a day not written yet, a store hiccup) says nothing
+	// about which lines are still in the window.
+	if len(logs) == 0 {
+		return nil
+	}
+
 	var fresh []internal.LogEntry
 	current := make(map[string]struct{}, len(logs))
 	for _, log := range logs {
