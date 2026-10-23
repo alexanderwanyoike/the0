@@ -36,6 +36,18 @@ type LogsSyncer struct {
 	logger        util.Logger
 	lastOffset    int64
 	uploadTimeout time.Duration
+	// pending is a chunk whose upload failed. It is resent as formatted,
+	// because reformatting would give its lines new keys and timestamps and
+	// live viewers that already got it could not recognise the duplicates.
+	pending *logChunk
+}
+
+// logChunk is one raw span of the log file and the NDJSON formatted from it.
+type logChunk struct {
+	offset  int64
+	rawSize int
+	at      time.Time
+	content string
 }
 
 // NewLogsSyncer creates a new logs syncer.
@@ -93,6 +105,7 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 	if currentSize < l.lastOffset {
 		l.logger.Info("Log file truncated/rotated, resetting offset", "old_offset", l.lastOffset, "new_size", currentSize)
 		l.lastOffset = 0
+		l.pending = nil
 	}
 
 	if currentSize == l.lastOffset {
@@ -114,48 +127,20 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		if ctx.Err() != nil {
 			break
 		}
-		remainingBytes := currentSize - l.lastOffset
-		if remainingBytes > maxChunkSize {
-			remainingBytes = maxChunkSize
-		}
-		readSize := int(remainingBytes)
-
-		n, err := io.ReadFull(file, buf[:readSize])
-		if err == io.ErrUnexpectedEOF {
-			// File was shorter than expected (likely concurrent truncation) — process what we got
-			l.logger.Info("Log file shorter than expected, processing partial read", "expected", readSize, "got", n)
-			err = nil
-		}
-		if err != nil {
-			l.logger.Info("Failed to read log file", "error", err.Error())
+		chunk, ok := l.nextChunk(file, buf, currentSize)
+		if !ok {
 			break
 		}
-		if n == 0 {
-			break
-		}
-
-		// Adjust to newline boundary to avoid splitting log lines or UTF-8 runes.
-		// Only applies when there's more data remaining (not the final chunk).
-		chunkSize, seekErr := adjustChunkToNewlineBoundary(file, buf, n, l.lastOffset, currentSize)
-		if seekErr != nil {
-			l.logger.Info("Failed to seek in log file", "error", seekErr.Error())
-			break
-		}
-		if chunkSize != n && chunkSize == 0 {
-			// No newline found — upload the full read as-is to avoid stalling
-			l.logger.Info("No newline boundary in chunk, uploading as-is", "bytes", n)
-			chunkSize = n
-		}
-
-		chunk := string(buf[:chunkSize])
 
 		if uploadErr := l.uploadChunk(ctx, chunk); uploadErr != nil {
 			l.logger.Info("Failed to upload logs", "error", uploadErr.Error())
+			l.pending = &chunk
 			break
 		}
 
-		l.lastOffset += int64(chunkSize)
-		totalBytes += chunkSize
+		l.pending = nil
+		l.lastOffset += int64(chunk.rawSize)
+		totalBytes += chunk.rawSize
 		chunks++
 	}
 
@@ -164,6 +149,61 @@ func (l *LogsSyncer) Sync(ctx context.Context) bool {
 		return true
 	}
 	return false
+}
+
+// nextChunk returns the chunk starting at lastOffset and leaves file
+// positioned after it: the pending chunk when its retry is due, otherwise the
+// next raw span read from file and formatted with the current time.
+func (l *LogsSyncer) nextChunk(file *os.File, buf []byte, currentSize int64) (logChunk, bool) {
+	if p := l.pending; p != nil && p.offset == l.lastOffset && p.offset+int64(p.rawSize) <= currentSize {
+		if _, err := file.Seek(p.offset+int64(p.rawSize), io.SeekStart); err != nil {
+			l.logger.Info("Failed to seek in log file", "error", err.Error())
+			return logChunk{}, false
+		}
+		return *p, true
+	}
+	l.pending = nil
+
+	remainingBytes := currentSize - l.lastOffset
+	if remainingBytes > int64(len(buf)) {
+		remainingBytes = int64(len(buf))
+	}
+	readSize := int(remainingBytes)
+
+	n, err := io.ReadFull(file, buf[:readSize])
+	if err == io.ErrUnexpectedEOF {
+		// File was shorter than expected (likely concurrent truncation), so process what we got
+		l.logger.Info("Log file shorter than expected, processing partial read", "expected", readSize, "got", n)
+		err = nil
+	}
+	if err != nil {
+		l.logger.Info("Failed to read log file", "error", err.Error())
+		return logChunk{}, false
+	}
+	if n == 0 {
+		return logChunk{}, false
+	}
+
+	// Adjust to newline boundary to avoid splitting log lines or UTF-8 runes.
+	// Only applies when there's more data remaining (not the final chunk).
+	chunkSize, seekErr := adjustChunkToNewlineBoundary(file, buf, n, l.lastOffset, currentSize)
+	if seekErr != nil {
+		l.logger.Info("Failed to seek in log file", "error", seekErr.Error())
+		return logChunk{}, false
+	}
+	if chunkSize != n && chunkSize == 0 {
+		// No newline found: upload the full read as-is to avoid stalling
+		l.logger.Info("No newline boundary in chunk, uploading as-is", "bytes", n)
+		chunkSize = n
+	}
+
+	at := time.Now()
+	return logChunk{
+		offset:  l.lastOffset,
+		rawSize: chunkSize,
+		at:      at,
+		content: miniologger.FormatLogChunk(string(buf[:chunkSize]), at),
+	}, true
 }
 
 // adjustChunkToNewlineBoundary finds the last newline in buf[:n] and seeks the
@@ -192,11 +232,14 @@ func adjustChunkToNewlineBoundary(file *os.File, buf []byte, n int, offset int64
 // append is O(day-file-size) and can fail transiently — neither should
 // delay or suppress the live stream. An upload failure keeps lastOffset in
 // place so the chunk is re-uploaded on the next Sync (durability never drops
-// data); that retry also re-publishes to NATS, which is accepted
-// at-least-once behavior for the live stream.
-func (l *LogsSyncer) uploadChunk(ctx context.Context, content string) error {
+// data); that retry also re-publishes the same bytes to NATS, which is
+// accepted at-least-once behavior for the live stream.
+func (l *LogsSyncer) uploadChunk(ctx context.Context, chunk logChunk) error {
+	if chunk.content == "" {
+		return nil
+	}
 	if l.natsPublisher != nil {
-		if err := l.natsPublisher.Publish(l.botID, content); err != nil {
+		if err := l.natsPublisher.Publish(l.botID, chunk.content); err != nil {
 			l.logger.Info("Failed to publish logs to NATS", "error", err.Error())
 		}
 	}
@@ -204,7 +247,7 @@ func (l *LogsSyncer) uploadChunk(ctx context.Context, content string) error {
 	syncCtx, cancel := context.WithTimeout(ctx, l.uploadTimeout)
 	defer cancel()
 
-	return l.logUploader.AppendBotLogs(syncCtx, l.botID, content)
+	return l.logUploader.AppendBotLogs(syncCtx, l.botID, chunk.content, chunk.at)
 }
 
 // Close cleans up all owned resources (uploader and publisher).
