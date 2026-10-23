@@ -159,8 +159,11 @@ func newLogWatch(limit int) *logWatch {
 	return &logWatch{limit: limit}
 }
 
+// watchLogsParams asks for one entry past the limit: when exactly `limit`
+// lines arrive between polls, that extra entry is the last one already
+// printed, and its overlap is what tells a full window from a gap.
 func watchLogsParams(dateParam string, limit int) *internal.LogsParams {
-	return botLogsParams(dateParam, limit)
+	return botLogsParams(dateParam, limit+1)
 }
 
 func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEntry, mayHaveSkipped bool) {
@@ -182,6 +185,9 @@ func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEnt
 	// lines printed last time, so lines between the two may be gone.
 	mayHaveSkipped = len(w.previous) > 0 && len(fresh) == len(logs)
 	w.previous = current
+	if len(fresh) > w.limit {
+		fresh = fresh[len(fresh)-w.limit:]
+	}
 	return fresh, mayHaveSkipped
 }
 
