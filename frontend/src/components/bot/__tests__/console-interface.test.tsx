@@ -4,6 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { ConsoleInterface } from "../console-interface";
 import type { LogEntry } from "@/types/logs";
 
+/** A log line as the api sends it, keyed by its day and content. */
+const line = (content: string, date = "20251227"): LogEntry => ({
+  key: `${date}:${content}`,
+  date,
+  timestamp: null,
+  content,
+});
+
 jest.mock("react-virtuoso", () => ({
   Virtuoso: React.forwardRef(
     (
@@ -89,14 +97,8 @@ describe("ConsoleInterface", () => {
   describe("rendering", () => {
     it("renders console header with title and entry count", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] INFO: Test log 1",
-        },
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:01:00] INFO: Test log 2",
-        },
+        line("[2024-01-01 10:00:00] INFO: Test log 1", "2024-01-01"),
+        line("[2024-01-01 10:01:00] INFO: Test log 2", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -150,10 +152,7 @@ describe("ConsoleInterface", () => {
   describe("log entries", () => {
     it("renders log entries with correct content", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] INFO: Starting bot",
-        },
+        line("[2024-01-01 10:00:00] INFO: Starting bot", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -163,14 +162,8 @@ describe("ConsoleInterface", () => {
 
     it("displays logs in reverse order (newest first)", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] INFO: First log",
-        },
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:01:00] INFO: Second log",
-        },
+        line("[2024-01-01 10:00:00] INFO: First log", "2024-01-01"),
+        line("[2024-01-01 10:01:00] INFO: Second log", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -182,10 +175,7 @@ describe("ConsoleInterface", () => {
 
     it("renders ERROR logs with appropriate styling", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] ERROR: Something failed",
-        },
+        line("[2024-01-01 10:00:00] ERROR: Something failed", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -195,10 +185,7 @@ describe("ConsoleInterface", () => {
 
     it("renders WARN logs", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] WARN: Warning message",
-        },
+        line("[2024-01-01 10:00:00] WARN: Warning message", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -208,10 +195,7 @@ describe("ConsoleInterface", () => {
 
     it("renders DEBUG logs", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] DEBUG: Debug info",
-        },
+        line("[2024-01-01 10:00:00] DEBUG: Debug info", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -223,11 +207,7 @@ describe("ConsoleInterface", () => {
   describe("metric entries", () => {
     it("renders metric entries with special styling", () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content:
-            '[2024-01-01 10:00:00] {"_metric": "portfolio_value", "value": 10000}',
-        },
+        line('[2024-01-01 10:00:00] {"_metric": "portfolio_value", "value": 10000}', "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -241,9 +221,9 @@ describe("ConsoleInterface", () => {
     it("filters logs based on search query", async () => {
       const user = userEvent.setup();
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Apple" },
-        { date: "2024-01-01", content: "[2024-01-01 10:01:00] INFO: Banana" },
-        { date: "2024-01-01", content: "[2024-01-01 10:02:00] INFO: Cherry" },
+        line("[2024-01-01 10:00:00] INFO: Apple", "2024-01-01"),
+        line("[2024-01-01 10:01:00] INFO: Banana", "2024-01-01"),
+        line("[2024-01-01 10:02:00] INFO: Cherry", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -263,7 +243,7 @@ describe("ConsoleInterface", () => {
     it("shows no matches message when search has no results", async () => {
       const user = userEvent.setup();
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -580,7 +560,7 @@ describe("ConsoleInterface", () => {
   describe("followOutput behavior", () => {
     it("should disable followOutput when not connected even with sort=asc", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -599,7 +579,7 @@ describe("ConsoleInterface", () => {
 
     it("should enable followOutput when connected with sort=asc", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -618,7 +598,7 @@ describe("ConsoleInterface", () => {
 
     it("should disable followOutput when sort=desc even if connected", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -639,15 +619,9 @@ describe("ConsoleInterface", () => {
   describe("entry count badge", () => {
     it("shows correct count after filtering", async () => {
       const logs: LogEntry[] = [
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:00:00] INFO: Match this",
-        },
-        { date: "2024-01-01", content: "[2024-01-01 10:01:00] INFO: No match" },
-        {
-          date: "2024-01-01",
-          content: "[2024-01-01 10:02:00] INFO: Match this too",
-        },
+        line("[2024-01-01 10:00:00] INFO: Match this", "2024-01-01"),
+        line("[2024-01-01 10:01:00] INFO: No match", "2024-01-01"),
+        line("[2024-01-01 10:02:00] INFO: Match this too", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -660,7 +634,7 @@ describe("ConsoleInterface", () => {
       const { rerender } = render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "2024-01-01", content: "Log 1" }]}
+          logs={[line("Log 1", "2024-01-01")]}
         />,
       );
 
@@ -670,8 +644,8 @@ describe("ConsoleInterface", () => {
         <ConsoleInterface
           {...defaultProps}
           logs={[
-            { date: "2024-01-01", content: "Log 1" },
-            { date: "2024-01-01", content: "Log 2" },
+            line("Log 1", "2024-01-01"),
+            line("Log 2", "2024-01-01"),
           ]}
         />,
       );
@@ -683,7 +657,7 @@ describe("ConsoleInterface", () => {
   describe("load earlier logs", () => {
     it("should render 'Load earlier logs' button when hasEarlierLogs is true", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -700,7 +674,7 @@ describe("ConsoleInterface", () => {
 
     it("should not render button when hasEarlierLogs is false", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -710,7 +684,7 @@ describe("ConsoleInterface", () => {
 
     it("should not render button when hasEarlierLogs is true but onLoadEarlier is undefined", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -727,7 +701,7 @@ describe("ConsoleInterface", () => {
     it("should hide button when search query is active", async () => {
       const user = userEvent.setup();
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -753,7 +727,7 @@ describe("ConsoleInterface", () => {
       const user = userEvent.setup();
       const onLoadEarlier = jest.fn();
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -772,7 +746,7 @@ describe("ConsoleInterface", () => {
 
     it("should show loading state when loadingEarlier is true", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -791,7 +765,7 @@ describe("ConsoleInterface", () => {
 
     it("should disable button when loadingEarlier is true", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -812,7 +786,7 @@ describe("ConsoleInterface", () => {
   describe("load more (pagination footer)", () => {
     it("should render footer when hasMore is true", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -829,7 +803,7 @@ describe("ConsoleInterface", () => {
 
     it("should not render footer when hasMore is false", () => {
       const logs: LogEntry[] = [
-        { date: "2024-01-01", content: "[2024-01-01 10:00:00] INFO: Test log" },
+        line("[2024-01-01 10:00:00] INFO: Test log", "2024-01-01"),
       ];
 
       render(
@@ -849,7 +823,7 @@ describe("ConsoleInterface", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "2024-01-01", content: "INFO: footer click" }]}
+          logs={[line("INFO: footer click", "2024-01-01")]}
           hasMore={true}
           loadMore={loadMore}
         />,
@@ -863,7 +837,7 @@ describe("ConsoleInterface", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "2024-01-01", content: "INFO: footer loading" }]}
+          logs={[line("INFO: footer loading", "2024-01-01")]}
           hasMore={true}
           loadMore={jest.fn()}
           loadingMore={true}
@@ -878,7 +852,7 @@ describe("ConsoleInterface", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "2024-01-01", content: "INFO: footer missing" }]}
+          logs={[line("INFO: footer missing", "2024-01-01")]}
           hasMore={true}
         />,
       );
@@ -902,17 +876,17 @@ describe("ConsoleInterface", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "2024-01-01", content }]}
+          logs={[line(content, "2024-01-01")]}
         />,
       );
     }
 
-    function localStamp(ms: number) {
+    function utcStamp(ms: number) {
       const d = new Date(ms);
       const p = (n: number) => String(n).padStart(2, "0");
       return {
-        date: `${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-        time: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
+        date: `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`,
+        time: `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`,
       };
     }
 
@@ -920,7 +894,7 @@ describe("ConsoleInterface", () => {
       renderMetricWithoutParsedTimestamp(
         '{"_metric":"price","value":1,"timestamp":1704103200}',
       );
-      const { date, time } = localStamp(1704103200 * 1000);
+      const { date, time } = utcStamp(1704103200 * 1000);
       expect(screen.getByText(date)).toBeInTheDocument();
       expect(screen.getByText(time)).toBeInTheDocument();
       expect(screen.getByText("value: 1")).toBeInTheDocument();
@@ -930,7 +904,7 @@ describe("ConsoleInterface", () => {
       renderMetricWithoutParsedTimestamp(
         '{"_metric":"price","value":2,"timestamp":"1704103260000Z"}',
       );
-      const { time } = localStamp(1704103260000);
+      const { time } = utcStamp(1704103260000);
       expect(screen.getByText(time)).toBeInTheDocument();
     });
 
@@ -938,7 +912,7 @@ describe("ConsoleInterface", () => {
       renderMetricWithoutParsedTimestamp(
         '{"_metric":"price","value":3,"timestamp":"2024-01-01T10:01:30Z"}',
       );
-      const { time } = localStamp(Date.parse("2024-01-01T10:01:30Z"));
+      const { time } = utcStamp(Date.parse("2024-01-01T10:01:30Z"));
       expect(screen.getByText(time)).toBeInTheDocument();
     });
 
@@ -951,10 +925,12 @@ describe("ConsoleInterface", () => {
 
   describe("rendering performance", () => {
     function makeLogs(count: number, prefix = "Log"): LogEntry[] {
-      return Array.from({ length: count }, (_, i) => ({
-        date: `2026-04-01T00:00:${String(i % 60).padStart(2, "0")}Z`,
-        content: `[2026-04-01 00:00:${String(i % 60).padStart(2, "0")}] INFO: ${prefix} message ${i}`,
-      }));
+      return Array.from({ length: count }, (_, i) =>
+        line(
+          `[2026-04-01 00:00:${String(i % 60).padStart(2, "0")}] INFO: ${prefix} message ${i}`,
+          `2026-04-01T00:00:${String(i % 60).padStart(2, "0")}Z`,
+        ),
+      );
     }
 
     it("should render logs in received order without client-side reversal", () => {
@@ -995,9 +971,9 @@ describe("ConsoleInterface", () => {
       // Render logs where several entries have the same content
       const repeatedContent = "[2026-04-01 00:00:00] INFO: Repeated log message";
       const logs: LogEntry[] = [
-        { date: "2026-04-01", content: repeatedContent },
-        { date: "2026-04-01", content: repeatedContent },
-        { date: "2026-04-01", content: repeatedContent },
+        line(repeatedContent, "2026-04-01"),
+        line(repeatedContent, "2026-04-01"),
+        line(repeatedContent, "2026-04-01"),
       ];
 
       mockParseLogLine.mockClear();

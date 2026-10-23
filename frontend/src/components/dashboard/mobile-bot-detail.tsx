@@ -48,6 +48,7 @@ interface MobileBotDetailProps {
   maskedConfig: Record<string, any>;
   logs: any[];
   logsLoading: boolean;
+  logsFetching?: boolean;
   refreshLogs: () => void;
   setDateFilter: (date: string | null) => void;
   setDateRangeFilter: (startDate: string, endDate: string) => void;
@@ -67,6 +68,8 @@ interface MobileBotDetailProps {
   onCopyConfig: () => void;
   onOpenUpdateModal: () => void;
   interval: IntervalValue;
+  /** Names the interval's window for the console. */
+  intervalViewKey: string;
   onIntervalChange: (value: IntervalValue) => void;
   showLive?: boolean;
   showLatest?: boolean;
@@ -84,6 +87,7 @@ export function MobileBotDetail({
   maskedConfig,
   logs,
   logsLoading,
+  logsFetching,
   refreshLogs,
   setDateFilter,
   setDateRangeFilter,
@@ -103,6 +107,7 @@ export function MobileBotDetail({
   onCopyConfig,
   onOpenUpdateModal,
   interval,
+  intervalViewKey,
   onIntervalChange,
   showLive,
   showLatest,
@@ -215,6 +220,8 @@ export function MobileBotDetail({
             loadingMore={loadingMore}
             sort={sort}
             onSortChange={onSortChange}
+            viewKey={intervalViewKey}
+            fetching={logsFetching}
             className="h-full"
             compact
           />

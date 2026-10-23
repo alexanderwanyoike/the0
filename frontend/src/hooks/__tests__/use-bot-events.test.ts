@@ -130,7 +130,6 @@ describe("useBotEvents", () => {
       loading: false,
       error: null,
       hasMore: false,
-      total: 2,
       refresh: mockRefresh,
       loadMore: jest.fn(),
       setDateFilter: mockSetDateFilter,
@@ -149,7 +148,7 @@ describe("useBotEvents", () => {
         streaming: false,
         autoRefresh: false,
         refreshInterval: 30000,
-        initialQuery: { limit: 1000, offset: 0, type: "metrics" },
+        initialQuery: { limit: 1000, type: "metrics", sort: "asc" },
       });
     });
 
@@ -233,9 +232,8 @@ describe("useBotEvents", () => {
         expect.objectContaining({
           initialQuery: {
             limit: 1000,
-            offset: 0,
             type: "metrics",
-            sort: "desc",
+            sort: "asc",
             lookbackDays: 30,
           },
         }),
@@ -330,7 +328,7 @@ describe("useBotEvents", () => {
   });
 
   describe("event ordering", () => {
-    it("sorts parsed events chronologically regardless of fetch order", () => {
+    it("keeps events in the order the api sent them", () => {
       // Single raw entry so the (per-entry) parser is invoked exactly once
       mockUseBotLogs.mockReturnValue({
         isFetching: false,
@@ -338,7 +336,6 @@ describe("useBotEvents", () => {
         loading: false,
         error: null,
         hasMore: false,
-        total: 1,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -348,8 +345,6 @@ describe("useBotEvents", () => {
       } as any);
 
       const { parseEvents } = jest.requireMock("@/lib/events/event-parser");
-      // Simulate a newest-first (sort=desc) API response: parseEvents
-      // preserves input order, so events arrive newest-first here.
       (parseEvents as jest.Mock).mockReturnValueOnce([
         {
           timestamp: new Date("2026-07-14T23:40:00Z"),
@@ -377,13 +372,10 @@ describe("useBotEvents", () => {
       const { result } = renderHook(() => useBotEvents({ botId: "bot-123" }));
 
       expect(result.current.events.map((e) => e.raw)).toEqual([
-        "oldest",
-        "middle",
         "newest",
+        "middle",
+        "oldest",
       ]);
-      // latest() takes the last element, so chronological order makes it
-      // return the genuinely newest event
-      expect(result.current.utils.latest("signal")?.raw).toBe("newest");
     });
   });
 
@@ -421,7 +413,6 @@ describe("useBotEvents", () => {
         loading: false,
         error: null,
         hasMore: false,
-        total: 1,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -459,7 +450,6 @@ describe("useBotEvents", () => {
         loading: false,
         error: null,
         hasMore: false,
-        total: 0,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -483,7 +473,6 @@ describe("useBotEvents", () => {
         loading: false,
         error: null,
         hasMore: false,
-        total: 0,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -508,12 +497,11 @@ describe("useBotEvents", () => {
 
     it("returns loading state from useBotLogs", () => {
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [],
         loading: true,
         error: null,
         hasMore: false,
-        total: 0,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -536,12 +524,11 @@ describe("useBotEvents", () => {
   describe("error state", () => {
     it("returns error from useBotLogs", () => {
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [],
         loading: false,
         error: "Failed to fetch logs",
         hasMore: false,
-        total: 0,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -740,14 +727,13 @@ describe("useBotEvents", () => {
 
       // Simulate events change
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [
           { date: "20240101", content: "[2024-01-01 12:00:00] INFO: New log" },
         ],
         loading: false,
         error: null,
         hasMore: false,
-        total: 1,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,
@@ -766,12 +752,11 @@ describe("useBotEvents", () => {
   describe("empty state", () => {
     it("handles empty logs array", () => {
       mockUseBotLogs.mockReturnValue({
-      isFetching: false,
+        isFetching: false,
         logs: [],
         loading: false,
         error: null,
         hasMore: false,
-        total: 0,
         refresh: mockRefresh,
         loadMore: jest.fn(),
         setDateFilter: mockSetDateFilter,

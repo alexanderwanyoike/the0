@@ -22,7 +22,11 @@ jest.mock("@/components/ui/popover", () => ({
 
 jest.mock("@/components/ui/calendar", () => ({
   Calendar: (props: any) => (
-    <div data-testid="calendar" data-mode={props.mode} />
+    <div
+      data-testid="calendar"
+      data-mode={props.mode}
+      data-time-zone={props.timeZone}
+    />
   ),
 }));
 
@@ -170,6 +174,15 @@ describe("IntervalPicker", () => {
 
     const liveButton = screen.getByRole("button", { name: /live/i });
     expect(liveButton.className).toContain("bg-secondary");
+  });
+
+  it("shows calendar days as UTC days, the days log files are named by", () => {
+    render(<IntervalPicker value={LIVE_INTERVAL} onChange={mockOnChange} />);
+
+    expect(screen.getByTestId("calendar")).toHaveAttribute(
+      "data-time-zone",
+      "UTC",
+    );
   });
 
   it("should render Custom button", () => {

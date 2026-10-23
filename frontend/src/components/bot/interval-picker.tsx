@@ -126,8 +126,7 @@ export function IntervalPicker({
           size="sm"
           className={cn(
             "h-7 px-2.5 text-xs font-mono",
-            value.label === "live" &&
-              "bg-secondary text-secondary-foreground",
+            value.label === "live" && "bg-secondary text-secondary-foreground",
           )}
           onClick={() => onChange(LIVE_INTERVAL)}
         >
@@ -186,6 +185,7 @@ export function IntervalPicker({
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
             mode="range"
+            timeZone="UTC"
             selected={range}
             onSelect={handleRangeSelect}
             numberOfMonths={2}

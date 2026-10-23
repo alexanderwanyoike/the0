@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/lib/auth-fetch";
 import { validateSSEAuth } from "@/lib/sse/sse-auth";
+import type { LogEntry } from "@/types/logs";
 
 // Mock dependencies
 jest.mock("@/contexts/auth-context", () => ({
@@ -76,18 +77,38 @@ function createMockSSEStream(signal?: AbortSignal): {
   };
 }
 
+type TestEntry = Partial<LogEntry> & { content: string };
+
+/** A full api entry; tests that do not care about keys key it by content. */
+function logEntry({ content, ...fields }: TestEntry): LogEntry {
+  return {
+    key: content,
+    date: "20240101",
+    timestamp: null,
+    content,
+    ...fields,
+  };
+}
+
+/** The api pairs hasMore with the cursor of the next older page. */
 function restResponse({
   data = [],
-  total = data.length,
   hasMore = false,
+  nextCursor = hasMore ? "20240101:0" : null,
 }: {
-  data?: { date: string; content: string; timestamp?: string }[];
-  total?: number;
+  data?: TestEntry[];
   hasMore?: boolean;
+  nextCursor?: string | null;
 } = {}) {
   return {
     ok: true,
-    json: async () => ({ data, total, hasMore }),
+    json: async () => ({
+      success: true,
+      data: data.map(logEntry),
+      hasMore,
+      nextCursor,
+      message: "Logs retrieved successfully",
+    }),
   } as any;
 }
 
@@ -108,8 +129,8 @@ function streamCallCount() {
 describe("useBotLogs", () => {
   const mockToast = jest.fn();
   const mockLogs = [
-    { date: "2024-01-01T10:00:00Z", content: "Log line 1\nLog line 2" },
-    { date: "2024-01-01T10:01:00Z", content: "Log line 3" },
+    logEntry({ content: "Log line 1", timestamp: "2024-01-01T10:00:00Z" }),
+    logEntry({ content: "Log line 2", timestamp: "2024-01-01T10:01:00Z" }),
   ];
 
   beforeEach(() => {
@@ -131,7 +152,7 @@ describe("useBotLogs", () => {
   it("should return loading state initially", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: mockLogs, total: 2, hasMore: false }),
+      json: async () => ({ data: mockLogs, hasMore: false }),
     } as Response);
 
     const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -143,10 +164,10 @@ describe("useBotLogs", () => {
     });
   });
 
-  it("should fetch and expand logs successfully", async () => {
+  it("holds one log per api entry, as sent", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: mockLogs, total: 3, hasMore: false }),
+      json: async () => ({ data: mockLogs, hasMore: false, nextCursor: null }),
     } as Response);
 
     const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -155,10 +176,7 @@ describe("useBotLogs", () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Logs should be expanded (each line becomes a separate entry)
-    expect(result.current.logs.length).toBe(3); // "Log line 1", "Log line 2", "Log line 3"
-    expect(result.current.logs[0].content).toBe("Log line 1");
-    expect(result.current.logs[1].content).toBe("Log line 2");
+    expect(result.current.logs).toEqual(mockLogs);
     expect(result.current.error).toBeNull();
   });
 
@@ -213,22 +231,21 @@ describe("useBotLogs", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: [{ date: "2024-01-01", content: "Page 1" }],
-          total: 2,
+          data: [logEntry({ content: "Page 1" })],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: [{ date: "2024-01-01", content: "Page 2" }],
-          total: 2,
+          data: [logEntry({ content: "Page 2" })],
           hasMore: false,
         }),
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
     );
 
     await waitFor(() => {
@@ -250,8 +267,7 @@ describe("useBotLogs", () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ date: "2024-01-01", content: "Log entry" }],
-        total: 1,
+        data: [logEntry({ content: "Log entry" })],
         hasMore: false,
       }),
     } as Response);
@@ -275,33 +291,30 @@ describe("useBotLogs", () => {
 
   it("should cap logs at MAX_LOG_ENTRIES when loadMore accumulates too many", async () => {
     // Initial fetch returns 8000 entries
-    const initialLogs = Array.from({ length: 8000 }, (_, i) => ({
-      date: "2024-01-01",
-      content: `Line ${i}`,
-    }));
+    const initialLogs = Array.from({ length: 8000 }, (_, i) =>
+      logEntry({ content: `Line ${i}` }),
+    );
     mockAuthFetch
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           data: initialLogs,
-          total: 11000,
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: Array.from({ length: 3000 }, (_, i) => ({
-            date: "2024-01-01",
-            content: `Extra ${i}`,
-          })),
-          total: 11000,
+          data: Array.from({ length: 3000 }, (_, i) =>
+            logEntry({ content: `Extra ${i}` }),
+          ),
           hasMore: false,
         }),
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 8000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 8000 } }),
     );
 
     await waitFor(() => {
@@ -324,21 +337,19 @@ describe("useBotLogs", () => {
   });
 
   it("should cap logs on initial fetch if response is very large", async () => {
-    const hugeLogs = Array.from({ length: 12000 }, (_, i) => ({
-      date: "2024-01-01",
-      content: `Huge ${i}`,
-    }));
+    const hugeLogs = Array.from({ length: 12000 }, (_, i) =>
+      logEntry({ content: `Huge ${i}` }),
+    );
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         data: hugeLogs,
-        total: 12000,
         hasMore: false,
       }),
     } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 15000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 15000 } }),
     );
 
     await waitFor(() => {
@@ -350,42 +361,11 @@ describe("useBotLogs", () => {
     expect(result.current.logs[0].content).toBe("Huge 2000");
   });
 
-  it("should preserve timestamp field when expanding log entries", async () => {
-    mockAuthFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: [
-          {
-            date: "20260403",
-            content: "line1\nline2",
-            timestamp: "2026-04-03T10:00:00Z",
-          },
-        ],
-        total: 2,
-        hasMore: false,
-      }),
-    } as Response);
-
-    const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    // Both expanded lines should carry the original timestamp
-    expect(result.current.logs).toHaveLength(2);
-    expect(result.current.logs[0].timestamp).toBe("2026-04-03T10:00:00Z");
-    expect(result.current.logs[1].timestamp).toBe("2026-04-03T10:00:00Z");
-  });
-
-  // ---- Navigation bugs ----
-
   it("should reset state when botId changes", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ date: "20240101", content: "Bot A log" }],
-        total: 1,
+        data: [logEntry({ content: "Bot A log" })],
         hasMore: false,
       }),
     } as Response);
@@ -415,8 +395,7 @@ describe("useBotLogs", () => {
         return {
           ok: true,
           json: async () => ({
-            data: [{ date: "20240101", content: "Bot A" }],
-            total: 1,
+            data: [logEntry({ content: "Bot A" })],
             hasMore: false,
           }),
         } as any;
@@ -440,8 +419,7 @@ describe("useBotLogs", () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ date: "20240101", content: "Bot C" }],
-        total: 1,
+        data: [logEntry({ content: "Bot C" })],
         hasMore: false,
       }),
     } as any);
@@ -459,8 +437,7 @@ describe("useBotLogs", () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ date: "20240101", content: "Log" }],
-        total: 1,
+        data: [logEntry({ content: "Log" })],
         hasMore: false,
       }),
     } as Response);
@@ -488,7 +465,7 @@ describe("useBotLogs", () => {
   it("should encode botId in URL", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     renderHook(() => useBotLogs({ botId: "bot/special&chars" }));
@@ -504,7 +481,7 @@ describe("useBotLogs", () => {
   it("should handle rapid botId changes without errors", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     const { result, rerender } = renderHook(
@@ -527,8 +504,7 @@ describe("useBotLogs", () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ date: "20260401", content: "Log" }],
-        total: 1,
+        data: [logEntry({ content: "Log" })],
         hasMore: false,
       }),
     } as Response);
@@ -577,8 +553,7 @@ describe("useBotLogs", () => {
       mockAuthFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          data: [{ date: "20260401", content: "Log" }],
-          total: 1,
+          data: [logEntry({ content: "Log" })],
           hasMore: false,
         }),
       } as Response);
@@ -637,33 +612,30 @@ describe("useBotLogs", () => {
 
   it("should grow buffer past 2000 when loadMore appends", async () => {
     // Initial fetch fills to exactly 2000 entries (old MAX_LOG_ENTRIES)
-    const initialLogs = Array.from({ length: 2000 }, (_, i) => ({
-      date: "2024-01-01",
-      content: `Line ${i}`,
-    }));
+    const initialLogs = Array.from({ length: 2000 }, (_, i) =>
+      logEntry({ content: `Line ${i}` }),
+    );
     mockAuthFetch
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           data: initialLogs,
-          total: 4000,
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: Array.from({ length: 2000 }, (_, i) => ({
-            date: "2024-01-01",
-            content: `Extra ${i}`,
-          })),
-          total: 4000,
+          data: Array.from({ length: 2000 }, (_, i) =>
+            logEntry({ content: `Extra ${i}` }),
+          ),
           hasMore: false,
         }),
       } as Response);
 
     const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 2000, offset: 0 } }),
+      useBotLogs({ botId: "bot-1", initialQuery: { limit: 2000 } }),
     );
 
     await waitFor(() => {
@@ -682,54 +654,15 @@ describe("useBotLogs", () => {
     expect(result.current.hasMore).toBe(false);
   });
 
-  it("should advance offset on consecutive loadMore calls", async () => {
-    let callCount = 0;
-    mockAuthFetch.mockImplementation(async () => {
-      callCount++;
-      return {
-        ok: true,
-        json: async () => ({
-          data: [{ date: "2024-01-01", content: `Page ${callCount}` }],
-          total: 10,
-          hasMore: true,
-        }),
-      } as Response;
-    });
-
-    const { result } = renderHook(() =>
-      useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
-    );
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    // First loadMore: offset should be 1
-    await act(async () => {
-      await result.current.loadMore();
-    });
-
-    const firstLoadMoreUrl = mockAuthFetch.mock.calls[1][0] as string;
-    expect(firstLoadMoreUrl).toContain("offset=1");
-
-    // Second loadMore: offset should be 2 (not 1 again)
-    await act(async () => {
-      await result.current.loadMore();
-    });
-
-    const secondLoadMoreUrl = mockAuthFetch.mock.calls[2][0] as string;
-    expect(secondLoadMoreUrl).toContain("offset=2");
-  });
-
   it("should not overwrite paginated data when auto-refresh fires", async () => {
     jest.useFakeTimers();
     try {
       mockAuthFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          data: [{ date: "2024-01-01", content: "Page 1" }],
-          total: 2,
+          data: [logEntry({ content: "Page 1" })],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       } as Response);
 
@@ -738,7 +671,7 @@ describe("useBotLogs", () => {
           botId: "bot-1",
           autoRefresh: true,
           refreshInterval: 5000,
-          initialQuery: { limit: 1, offset: 0 },
+          initialQuery: { limit: 1 },
         }),
       );
 
@@ -757,8 +690,7 @@ describe("useBotLogs", () => {
       mockAuthFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          data: [{ date: "2024-01-01", content: "Page 2" }],
-          total: 2,
+          data: [logEntry({ content: "Page 2" })],
           hasMore: false,
         }),
       } as Response);
@@ -786,13 +718,13 @@ describe("useBotLogs", () => {
   it("should build correct URL with query parameters", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     renderHook(() =>
       useBotLogs({
         botId: "bot-1",
-        initialQuery: { limit: 50, offset: 10 },
+        initialQuery: { limit: 50 },
       }),
     );
 
@@ -803,14 +735,13 @@ describe("useBotLogs", () => {
     const calledUrl = mockAuthFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain("/api/logs/bot-1");
     expect(calledUrl).toContain("limit=50");
-    expect(calledUrl).toContain("offset=10");
   });
 
   describe("latest mode (lookbackDays)", () => {
     beforeEach(() => {
       mockAuthFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ data: [], total: 0, hasMore: false }),
+        json: async () => ({ data: [], hasMore: false }),
       } as Response);
     });
 
@@ -818,7 +749,11 @@ describe("useBotLogs", () => {
       renderHook(() =>
         useBotLogs({
           botId: "bot-1",
-          initialQuery: { limit: 100, offset: 0, sort: "desc", lookbackDays: 30 },
+          initialQuery: {
+            limit: 100,
+            sort: "desc",
+            lookbackDays: 30,
+          },
         }),
       );
 
@@ -864,7 +799,7 @@ describe("useBotLogs", () => {
       const { result } = renderHook(() =>
         useBotLogs({
           botId: "bot-1",
-          initialQuery: { limit: 100, offset: 0, lookbackDays: 30 },
+          initialQuery: { limit: 100, lookbackDays: 30 },
         }),
       );
 
@@ -891,7 +826,7 @@ describe("useBotLogs", () => {
       const { result } = renderHook(() =>
         useBotLogs({
           botId: "bot-1",
-          initialQuery: { limit: 100, offset: 0, lookbackDays: 30 },
+          initialQuery: { limit: 100, lookbackDays: 30 },
         }),
       );
 
@@ -914,10 +849,10 @@ describe("useBotLogs", () => {
     });
   });
 
-  it("should include sort=desc in URL by default", async () => {
+  it("asks for chronological order (sort=asc) by default", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -927,13 +862,13 @@ describe("useBotLogs", () => {
     });
 
     const url = mockAuthFetch.mock.calls[0][0] as string;
-    expect(url).toContain("sort=desc");
+    expect(url).toContain("sort=asc");
   });
 
-  it("should pass sort=asc when query sort is changed", async () => {
+  it("asks for sort=desc when the query sort is changed", async () => {
     mockAuthFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ data: [], total: 0, hasMore: false }),
+      json: async () => ({ data: [], hasMore: false }),
     } as Response);
 
     const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
@@ -945,7 +880,7 @@ describe("useBotLogs", () => {
     mockAuthFetch.mockClear();
 
     act(() => {
-      result.current.updateQuery({ sort: "asc" });
+      result.current.updateQuery({ sort: "desc" });
     });
 
     await waitFor(() => {
@@ -953,7 +888,7 @@ describe("useBotLogs", () => {
     });
 
     const url = mockAuthFetch.mock.calls[0][0] as string;
-    expect(url).toContain("sort=asc");
+    expect(url).toContain("sort=desc");
   });
 
   it("should reconfigure polling when refreshInterval changes", async () => {
@@ -962,8 +897,7 @@ describe("useBotLogs", () => {
       mockAuthFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          data: [{ date: "20260406", content: "Log" }],
-          total: 1,
+          data: [logEntry({ content: "Log" })],
           hasMore: false,
         }),
       } as Response);
@@ -1005,8 +939,7 @@ describe("useBotLogs", () => {
       mockAuthFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          data: [{ date: "20260406", content: "Log" }],
-          total: 1,
+          data: [logEntry({ content: "Log" })],
           hasMore: false,
         }),
       } as Response);
@@ -1047,9 +980,9 @@ describe("useBotLogs", () => {
         callCount++;
         if (callCount === 1) {
           return restResponse({
-            data: [{ date: "20240101", content: "Page 1" }],
-            total: 2,
+            data: [logEntry({ content: "Page 1" })],
             hasMore: true,
+            nextCursor: "20240101:0",
           });
         }
         return new Promise((resolve) => {
@@ -1058,7 +991,7 @@ describe("useBotLogs", () => {
       });
 
       const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
       );
 
       await waitFor(() => expect(result.current.hasMore).toBe(true));
@@ -1076,8 +1009,7 @@ describe("useBotLogs", () => {
       await act(async () => {
         resolveSecond!(
           restResponse({
-            data: [{ date: "20240101", content: "Page 2" }],
-            total: 2,
+            data: [logEntry({ content: "Page 2" })],
             hasMore: false,
           }),
         );
@@ -1097,9 +1029,9 @@ describe("useBotLogs", () => {
           callCount++;
           if (callCount === 1) {
             return restResponse({
-              data: [{ date: "20240101", content: "Page 1" }],
-              total: 2,
+              data: [logEntry({ content: "Page 1" })],
               hasMore: true,
+              nextCursor: "20240101:0",
             });
           }
           return new Promise((resolve) => {
@@ -1112,7 +1044,7 @@ describe("useBotLogs", () => {
             botId: "bot-1",
             autoRefresh: true,
             refreshInterval: 5000,
-            initialQuery: { limit: 1, offset: 0 },
+            initialQuery: { limit: 1 },
           }),
         );
 
@@ -1139,8 +1071,7 @@ describe("useBotLogs", () => {
         await act(async () => {
           slowResolve!(
             restResponse({
-              data: [{ date: "20240101", content: "Page 2" }],
-              total: 2,
+              data: [logEntry({ content: "Page 2" })],
               hasMore: false,
             }),
           );
@@ -1215,7 +1146,11 @@ describe("useBotLogs", () => {
         mockAuthFetch.mockResolvedValue(restResponse());
 
         const { unmount } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", autoRefresh: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1242,11 +1177,13 @@ describe("useBotLogs", () => {
       controller: MockSSEStreamController;
     } | null = null;
 
-    function setupStreamingMocks(rest: {
-      data?: { date: string; content: string; timestamp?: string }[];
-      total?: number;
-      hasMore?: boolean;
-    } = {}) {
+    function setupStreamingMocks(
+      rest: {
+        data?: TestEntry[];
+        hasMore?: boolean;
+        nextCursor?: string | null;
+      } = {},
+    ) {
       mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
         if (typeof url === "string" && url.includes("/stream")) {
           currentMockStream = createMockSSEStream(opts?.signal);
@@ -1268,10 +1205,9 @@ describe("useBotLogs", () => {
     it("fetches history via REST and connects SSE", async () => {
       setupStreamingMocks({
         data: [
-          { date: "2024-01-01T10:01:00Z", content: "newest" },
-          { date: "2024-01-01T10:00:00Z", content: "oldest" },
+          logEntry({ content: "oldest" }),
+          logEntry({ content: "newest" }),
         ],
-        total: 2,
       });
 
       const { result } = renderHook(() =>
@@ -1283,17 +1219,18 @@ describe("useBotLogs", () => {
         expect(result.current.logs).toHaveLength(2);
       });
 
-      // History arrives desc from the API but is displayed chronologically
-      // (oldest first) so live appends land at the bottom.
-      expect(result.current.logs[0].content).toBe("oldest");
-      expect(result.current.logs[1].content).toBe("newest");
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "oldest",
+        "newest",
+      ]);
       expect(streamCallCount()).toBe(1);
-      expect(restCallCount()).toBe(1);
+      // The history read, then a read once the stream is open
+      await waitFor(() => expect(restCallCount()).toBe(2));
     });
 
     it("appends SSE update events after history loads", async () => {
       setupStreamingMocks({
-        data: [{ date: "2024-01-01T10:00:00Z", content: "Initial" }],
+        data: [logEntry({ content: "Initial" })],
       });
 
       const { result } = renderHook(() =>
@@ -1306,10 +1243,12 @@ describe("useBotLogs", () => {
       });
 
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: "New log entry",
-          timestamp: "2024-01-01T10:02:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "New log entry",
+            timestamp: "2024-01-01T10:02:00Z",
+          }),
+        ]);
       });
 
       await waitFor(() => {
@@ -1320,9 +1259,75 @@ describe("useBotLogs", () => {
       });
     });
 
+    it("shows a live line once when the history already holds it", async () => {
+      const stored = {
+        key: "1792713599999000000-0",
+        date: "20261022",
+        timestamp: "2026-10-22T23:59:59.999Z",
+        content: '{"_key":"1792713599999000000-0","message":"filled"}',
+      };
+      setupStreamingMocks({ data: [stored] });
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.logs).toHaveLength(1);
+      });
+
+      act(() => {
+        currentMockStream!.controller.push("update", [stored]);
+        currentMockStream!.controller.push("update", [
+          logEntry({ content: "after" }),
+        ]);
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs.map((l) => l.key)).toEqual([
+          "1792713599999000000-0",
+          "after",
+        ]);
+      });
+    });
+
+    it("shows a repeated live chunk once", async () => {
+      setupStreamingMocks();
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", streaming: true }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.connected).toBe(true);
+        expect(result.current.loading).toBe(false);
+      });
+
+      const chunk = [
+        logEntry({ content: "a", key: "1792713599999000000-0" }),
+        logEntry({ content: "b", key: "1792713599999000000-1" }),
+      ];
+      act(() => {
+        currentMockStream!.controller.push("update", chunk);
+        currentMockStream!.controller.push("update", chunk);
+        currentMockStream!.controller.push("update", [
+          logEntry({ content: "c" }),
+        ]);
+      });
+
+      await waitFor(() => {
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "a",
+          "b",
+          "c",
+        ]);
+      });
+    });
+
     it("ignores SSE history events (history comes from REST)", async () => {
       setupStreamingMocks({
-        data: [{ date: "2024-01-01T10:00:00Z", content: "REST history" }],
+        data: [logEntry({ content: "REST history" })],
       });
 
       const { result } = renderHook(() =>
@@ -1336,7 +1341,7 @@ describe("useBotLogs", () => {
 
       act(() => {
         currentMockStream!.controller.push("history", [
-          { date: "2024-01-01T09:00:00Z", content: "SSE history dupe" },
+          logEntry({ content: "SSE history dupe" }),
         ]);
       });
 
@@ -1368,14 +1373,18 @@ describe("useBotLogs", () => {
 
       // Updates arrive while REST history is still in flight
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: "overlap line",
-          timestamp: "2024-01-01T10:01:00Z",
-        });
-        currentMockStream!.controller.push("update", {
-          content: "fresh line",
-          timestamp: "2024-01-01T10:02:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "overlap line",
+            timestamp: "2024-01-01T10:01:00Z",
+          }),
+        ]);
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "fresh line",
+            timestamp: "2024-01-01T10:02:00Z",
+          }),
+        ]);
       });
 
       // History resolves already containing the overlapping line
@@ -1384,17 +1393,14 @@ describe("useBotLogs", () => {
           restResponse({
             data: [
               {
-                date: "2024-01-01T10:01:00Z",
-                content: "overlap line",
-                timestamp: "2024-01-01T10:01:00Z",
-              },
-              {
-                date: "2024-01-01T10:00:00Z",
                 content: "old line",
                 timestamp: "2024-01-01T10:00:00Z",
               },
+              {
+                content: "overlap line",
+                timestamp: "2024-01-01T10:01:00Z",
+              },
             ],
-            total: 2,
           }),
         );
       });
@@ -1421,7 +1427,7 @@ describe("useBotLogs", () => {
         restCall++;
         if (restCall === 1) {
           return restResponse({
-            data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
+            data: [logEntry({ content: "history line" })],
           });
         }
         return new Promise((resolve) => {
@@ -1447,10 +1453,12 @@ describe("useBotLogs", () => {
 
       // An update arrives while the replace fetch is still in flight
       act(() => {
-        liveStream!.controller.push("update", {
-          content: "mid-refresh line",
-          timestamp: "2024-01-01T10:05:00Z",
-        });
+        liveStream!.controller.push("update", [
+          logEntry({
+            content: "mid-refresh line",
+            timestamp: "2024-01-01T10:05:00Z",
+          }),
+        ]);
       });
 
       await act(async () => {
@@ -1462,7 +1470,7 @@ describe("useBotLogs", () => {
         restResolvers.forEach((resolve) =>
           resolve(
             restResponse({
-              data: [{ date: "2024-01-01T10:00:00Z", content: "history line" }],
+              data: [logEntry({ content: "history line" })],
             }),
           ),
         );
@@ -1490,7 +1498,11 @@ describe("useBotLogs", () => {
         });
 
         const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1526,12 +1538,16 @@ describe("useBotLogs", () => {
             throw new Error("Connection refused");
           }
           return restResponse({
-            data: [{ date: "2024-01-01T10:00:00Z", content: "REST log" }],
+            data: [logEntry({ content: "REST log" })],
           });
         });
 
         const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1585,7 +1601,11 @@ describe("useBotLogs", () => {
       jest.useFakeTimers();
       try {
         const { result, unmount } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true, refreshInterval: 5000 }),
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 5000,
+          }),
         );
 
         await act(async () => {
@@ -1615,7 +1635,7 @@ describe("useBotLogs", () => {
       await waitFor(() => expect(result.current.connected).toBe(true));
 
       setupStreamingMocks({
-        data: [{ date: "20240101", content: "Historical log" }],
+        data: [logEntry({ content: "Historical log" })],
       });
 
       act(() => {
@@ -1685,7 +1705,7 @@ describe("useBotLogs", () => {
 
     it("resets state when botId changes", async () => {
       setupStreamingMocks({
-        data: [{ date: "2024-01-01T10:00:00Z", content: "Bot A log" }],
+        data: [logEntry({ content: "Bot A log" })],
       });
 
       const { result, rerender } = renderHook(
@@ -1700,7 +1720,6 @@ describe("useBotLogs", () => {
 
       await waitFor(() => {
         expect(result.current.logs).toEqual([]);
-        expect(result.current.total).toBe(0);
       });
     });
 
@@ -1749,27 +1768,25 @@ describe("useBotLogs", () => {
     });
 
     it("caps entries at 10000 when updates exceed the cap", async () => {
-      const entries = Array.from({ length: 10000 }, (_, i) => ({
-        date: "2024-01-01T10:00:00Z",
-        content: `Entry ${i}`,
-      }));
-      setupStreamingMocks({ data: entries, total: 10000 });
+      const entries = Array.from({ length: 10000 }, (_, i) =>
+        logEntry({ content: `Entry ${i}` }),
+      );
+      setupStreamingMocks({ data: entries });
 
       const { result } = renderHook(() =>
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 10000, offset: 0, sort: "desc" },
+          initialQuery: { limit: 10000, sort: "asc" },
         }),
       );
 
       await waitFor(() => expect(result.current.logs).toHaveLength(10000));
 
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: "New entry",
-          timestamp: "2024-01-01T11:00:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({ content: "New entry", timestamp: "2024-01-01T11:00:00Z" }),
+        ]);
       });
 
       await waitFor(() => {
@@ -1782,9 +1799,9 @@ describe("useBotLogs", () => {
 
     it("exposes hasEarlierLogs when the initial live fetch has more", async () => {
       setupStreamingMocks({
-        data: [{ date: "2024-01-01T10:00:00Z", content: "Log" }],
-        total: 500,
+        data: [logEntry({ content: "Log" })],
         hasMore: true,
+        nextCursor: "20240101:0",
       });
 
       const { result } = renderHook(() =>
@@ -1798,9 +1815,9 @@ describe("useBotLogs", () => {
 
     it("prepends earlier logs without duplicating existing entries", async () => {
       setupStreamingMocks({
-        data: [{ date: "2024-01-01T10:00:00Z", content: "Current log" }],
-        total: 2,
+        data: [logEntry({ content: "Current log" })],
         hasMore: true,
+        nextCursor: "20240101:0",
       });
 
       const { result } = renderHook(() =>
@@ -1811,10 +1828,9 @@ describe("useBotLogs", () => {
 
       setupStreamingMocks({
         data: [
-          { date: "2024-01-01T10:00:00Z", content: "Current log" },
-          { date: "2024-01-01T09:00:00Z", content: "Earlier log" },
+          logEntry({ content: "Current log" }),
+          logEntry({ content: "Earlier log" }),
         ],
-        total: 2,
         hasMore: false,
       });
 
@@ -1839,7 +1855,11 @@ describe("useBotLogs", () => {
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 100, offset: 0, sort: "desc", type: "metrics" },
+          initialQuery: {
+            limit: 100,
+            sort: "desc",
+            type: "metrics",
+          },
         }),
       );
 
@@ -1849,14 +1869,18 @@ describe("useBotLogs", () => {
       });
 
       act(() => {
-        currentMockStream!.controller.push("update", {
-          content: JSON.stringify({ _metric: "trade", price: 100 }),
-          timestamp: "2024-01-01T10:01:00Z",
-        });
-        currentMockStream!.controller.push("update", {
-          content: "plain non-metric log line",
-          timestamp: "2024-01-01T10:02:00Z",
-        });
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: JSON.stringify({ _metric: "trade", price: 100 }),
+            timestamp: "2024-01-01T10:01:00Z",
+          }),
+        ]);
+        currentMockStream!.controller.push("update", [
+          logEntry({
+            content: "plain non-metric log line",
+            timestamp: "2024-01-01T10:02:00Z",
+          }),
+        ]);
       });
 
       await waitFor(() => {
@@ -1875,7 +1899,11 @@ describe("useBotLogs", () => {
         useBotLogs({
           botId: "bot-1",
           streaming: true,
-          initialQuery: { limit: 100, offset: 0, sort: "desc", type: "metrics" },
+          initialQuery: {
+            limit: 100,
+            sort: "desc",
+            type: "metrics",
+          },
         }),
       );
 
@@ -1892,8 +1920,7 @@ describe("useBotLogs", () => {
     const logsResponse = {
       ok: true,
       json: async () => ({
-        data: [{ date: "20260406", content: "Log" }],
-        total: 1,
+        data: [logEntry({ content: "Log" })],
         hasMore: false,
       }),
     } as Response;
@@ -2049,10 +2076,13 @@ describe("useBotLogs", () => {
       createSpy.mockRestore();
     });
 
-    it("downloads the loaded lines as dated plain text", async () => {
+    it("downloads the loaded lines as an NDJSON file", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "first\nsecond" }],
+          data: [
+            { content: '{"message":"first"}', date: "20240101" },
+            { content: '{"message":"second"}', date: "20240101" },
+          ],
         }),
       );
       const originalCreate = URL.createObjectURL;
@@ -2078,13 +2108,13 @@ describe("useBotLogs", () => {
         });
 
         const today = new Date().toISOString().split("T")[0];
-        expect(anchor.download).toBe(`bot-bot-1-logs-${today}.txt`);
+        expect(anchor.download).toBe(`bot-bot-1-logs-${today}.ndjson`);
         expect(anchor.href).toBe("blob:logs");
         expect(click).toHaveBeenCalledTimes(1);
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:logs");
-        expect(blobs[0].type).toBe("text/plain");
+        expect(blobs[0].type).toBe("application/x-ndjson");
         expect(await blobs[0].text()).toBe(
-          "[2024-01-01T10:00:00Z] first\n[2024-01-01T10:00:00Z] second",
+          '{"message":"first"}\n{"message":"second"}\n',
         );
       } finally {
         createSpy.mockRestore();
@@ -2098,14 +2128,14 @@ describe("useBotLogs", () => {
     it("surfaces a loadMore failure as an error without a toast or query change", async () => {
       mockAuthFetch.mockResolvedValueOnce(
         restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "page one" }],
-          total: 2,
+          data: [logEntry({ content: "page one" })],
           hasMore: true,
+          nextCursor: "20240101:0",
         }),
       );
 
       const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
       );
       await waitFor(() => expect(result.current.hasMore).toBe(true));
 
@@ -2116,7 +2146,6 @@ describe("useBotLogs", () => {
 
       expect(result.current.error).toBe("page two failed");
       expect(mockToast).not.toHaveBeenCalled();
-      expect(result.current.query.offset).toBe(0);
       expect(result.current.logs.map((l) => l.content)).toEqual(["page one"]);
       expect(result.current.loadingMore).toBe(false);
     });
@@ -2124,7 +2153,7 @@ describe("useBotLogs", () => {
     it("ignores loadMore when the API reported no further pages", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "only page" }],
+          data: [logEntry({ content: "only page" })],
         }),
       );
 
@@ -2137,51 +2166,27 @@ describe("useBotLogs", () => {
 
       expect(restCallCount()).toBe(1);
     });
+  });
 
-    it("resets the offset to zero when the query changes after paginating", async () => {
+  describe("history order and page direction", () => {
+    it("offers older pages at the bottom of a newest-first view", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "row" }],
-          total: 3,
+          data: [
+            logEntry({ content: "newest" }),
+            logEntry({ content: "oldest" }),
+          ],
           hasMore: true,
         }),
       );
 
       const { result } = renderHook(() =>
-        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1, offset: 0 } }),
-      );
-      await waitFor(() => expect(result.current.hasMore).toBe(true));
-
-      await act(async () => {
-        await result.current.loadMore();
-      });
-      expect(result.current.query.offset).toBe(1);
-
-      act(() => {
-        result.current.updateQuery({ type: "metrics" });
-      });
-
-      expect(result.current.query.offset).toBe(0);
-      const lastUrl = mockAuthFetch.mock.calls.at(-1)![0] as string;
-      expect(lastUrl).not.toContain("offset=");
-      expect(lastUrl).toContain("type=metrics");
-    });
-  });
-
-  describe("history order and page direction", () => {
-    it("keeps the API order and exposes hasMore (not hasEarlierLogs) without streaming", async () => {
-      mockAuthFetch.mockResolvedValue(
-        restResponse({
-          data: [
-            { date: "2024-01-01T10:01:00Z", content: "newest" },
-            { date: "2024-01-01T10:00:00Z", content: "oldest" },
-          ],
-          total: 4,
-          hasMore: true,
+        useBotLogs({
+          botId: "bot-1",
+          streaming: true,
+          initialQuery: { limit: 2, sort: "desc" },
         }),
       );
-
-      const { result } = renderHook(() => useBotLogs({ botId: "bot-1" }));
       await waitFor(() => expect(result.current.logs).toHaveLength(2));
 
       expect(result.current.logs.map((l) => l.content)).toEqual([
@@ -2190,21 +2195,66 @@ describe("useBotLogs", () => {
       ]);
       expect(result.current.hasMore).toBe(true);
       expect(result.current.hasEarlierLogs).toBe(false);
-      expect(result.current.total).toBe(4);
+
+      mockAuthFetch.mockResolvedValue(
+        restResponse({ data: [logEntry({ content: "older still" })] }),
+      );
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "newest",
+        "oldest",
+        "older still",
+      ]);
     });
 
-    it("advances the earlier-logs offset by one page per successful load", async () => {
-      const streams: ReturnType<typeof createMockSSEStream>[] = [];
+    it("offers older pages at the top of a chronological view", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [
+            logEntry({ content: "oldest" }),
+            logEntry({ content: "newest" }),
+          ],
+          hasMore: true,
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 2, sort: "asc" } }),
+      );
+      await waitFor(() => expect(result.current.logs).toHaveLength(2));
+
+      expect(result.current.hasEarlierLogs).toBe(true);
+      expect(result.current.hasMore).toBe(false);
+
+      mockAuthFetch.mockResolvedValue(
+        restResponse({ data: [logEntry({ content: "older still" })] }),
+      );
+      await act(async () => {
+        await result.current.loadEarlierLogs();
+      });
+
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "older still",
+        "oldest",
+        "newest",
+      ]);
+    });
+
+    it("puts live lines on the newest side of a newest-first view", async () => {
+      let stream: ReturnType<typeof createMockSSEStream> | null = null;
       mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
         if (typeof url === "string" && url.includes("/stream")) {
-          const s = createMockSSEStream(opts?.signal);
-          streams.push(s);
-          return { ok: true, body: s.stream } as any;
+          stream = createMockSSEStream(opts?.signal);
+          return { ok: true, body: stream.stream } as any;
         }
         return restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "Current" }],
-          total: 10,
-          hasMore: true,
+          data: [
+            logEntry({ content: "newer" }),
+            logEntry({ content: "older" }),
+          ],
         });
       });
 
@@ -2213,11 +2263,128 @@ describe("useBotLogs", () => {
           useBotLogs({
             botId: "bot-1",
             streaming: true,
-            initialQuery: { limit: 2, offset: 0, sort: "desc" },
+            initialQuery: { limit: 2, sort: "desc" },
           }),
         );
-        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.logs).toHaveLength(2);
+        });
+
+        act(() => {
+          stream!.controller.push("update", [
+            logEntry({ content: "live 1" }),
+            logEntry({ content: "live 2" }),
+          ]);
+        });
+
+        await waitFor(() => {
+          expect(result.current.logs.map((l) => l.content)).toEqual([
+            "live 2",
+            "live 1",
+            "newer",
+            "older",
+          ]);
+        });
+      } finally {
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
+      }
+    });
+  });
+
+  describe("paging older entries", () => {
+    it("pages older entries before each page's nextCursor", async () => {
+      mockAuthFetch
+        .mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "newest" })],
+            hasMore: true,
+            nextCursor: "20240101:200",
+          }),
+        )
+        .mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "older" })],
+            hasMore: true,
+            nextCursor: "20240101:100",
+          }),
+        )
+        .mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "oldest" })],
+            hasMore: false,
+            nextCursor: null,
+          }),
+        );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
+      );
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      const urls = mockAuthFetch.mock.calls.map((c) => c[0] as string);
+      expect(urls[0]).not.toContain("before=");
+      expect(urls[1]).toContain("before=20240101%3A200");
+      expect(urls[2]).toContain("before=20240101%3A100");
+      urls.forEach((url) => expect(url).not.toContain("offset="));
+      expect(result.current.logs.map((l) => l.content)).toEqual([
+        "newest",
+        "older",
+        "oldest",
+      ]);
+      expect(result.current.hasMore).toBe(false);
+    });
+
+    it("loads earlier logs before the history's nextCursor, never a live line's key", async () => {
+      const streams: ReturnType<typeof createMockSSEStream>[] = [];
+      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
+        if (typeof url === "string" && url.includes("/stream")) {
+          const s = createMockSSEStream(opts?.signal);
+          streams.push(s);
+          return { ok: true, body: s.stream } as any;
+        }
+        return !String(url).includes("before=")
+          ? restResponse({
+              data: [logEntry({ content: "Current" })],
+              hasMore: true,
+              nextCursor: "20240101:200",
+            })
+          : restResponse({
+              data: [logEntry({ content: "Earlier" })],
+              hasMore: true,
+              nextCursor: "20240101:100",
+            });
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            initialQuery: { limit: 2, sort: "asc" },
+          }),
+        );
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.hasEarlierLogs).toBe(true);
+        });
         expect(result.current.hasMore).toBe(false);
+
+        act(() => {
+          streams[0].controller.push("update", [
+            logEntry({ content: "live", key: "1792713599999000000-0" }),
+          ]);
+        });
+        await waitFor(() => expect(result.current.logs).toHaveLength(2));
 
         await act(async () => {
           await result.current.loadEarlierLogs();
@@ -2229,12 +2396,275 @@ describe("useBotLogs", () => {
         const restUrls = mockAuthFetch.mock.calls
           .map((c) => c[0] as string)
           .filter((u) => !u.includes("/stream"));
-        expect(restUrls[1]).toContain("offset=2");
-        expect(restUrls[2]).toContain("offset=4");
+        const pageUrls = restUrls.filter((u) => u.includes("before="));
+        expect(pageUrls[0]).toContain("before=20240101%3A200");
+        expect(pageUrls[1]).toContain("before=20240101%3A100");
+        restUrls.forEach((url) => expect(url).not.toContain("offset="));
         expect(result.current.loadingEarlier).toBe(false);
       } finally {
         streams.forEach((s) => s.controller.close());
       }
+    });
+
+    it("keeps live lines flowing when an older page loads during a refresh", async () => {
+      let stream: ReturnType<typeof createMockSSEStream> | null = null;
+      let refreshing = false;
+      let answerRefresh: (() => void) | null = null;
+      const history = restResponse({
+        data: [logEntry({ content: "current" })],
+        hasMore: true,
+        nextCursor: "20240101:200",
+      });
+      mockAuthFetch.mockImplementation(
+        async (input: RequestInfo | URL, opts?: RequestInit) => {
+          const url = String(input);
+          if (url.includes("/stream")) {
+            stream = createMockSSEStream(opts?.signal ?? undefined);
+            return { ok: true, body: stream.stream } as Response;
+          }
+          if (url.includes("before=")) {
+            return restResponse({ data: [logEntry({ content: "earlier" })] });
+          }
+          if (refreshing && !answerRefresh) {
+            // The refresh: answers when told, or fails like fetch on abort
+            return new Promise<Response>((resolve, reject) => {
+              answerRefresh = () => resolve(history);
+              opts?.signal?.addEventListener("abort", () =>
+                reject(new DOMException("aborted", "AbortError")),
+              );
+            });
+          }
+          // The first read and the read once the stream opens
+          return history;
+        },
+      );
+
+      try {
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            initialQuery: { limit: 1, sort: "asc" },
+          }),
+        );
+        await waitFor(() => {
+          expect(result.current.connected).toBe(true);
+          expect(result.current.hasEarlierLogs).toBe(true);
+        });
+
+        refreshing = true;
+        act(() => {
+          result.current.refresh();
+        });
+        let loadingEarlier: Promise<void> = Promise.resolve();
+        act(() => {
+          loadingEarlier = result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          answerRefresh?.();
+          await loadingEarlier;
+        });
+        act(() => {
+          stream!.controller.push("update", [logEntry({ content: "live" })]);
+        });
+
+        await waitFor(() =>
+          expect(result.current.logs.map((l) => l.content)).toContain("live"),
+        );
+      } finally {
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
+      }
+    });
+
+    describe("load earlier during a refresh", () => {
+      /** A view whose refresh is held open, with pages answered on demand. */
+      function viewWithHeldRefresh({ holdPages }: { holdPages: boolean }) {
+        let refreshing = false;
+        let answerRefresh: (() => void) | null = null;
+        const pageAnswers: (() => void)[] = [];
+        mockAuthFetch.mockImplementation(async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), "http://localhost");
+          const before = url.searchParams.get("before");
+          if (before) {
+            const page = restResponse({
+              data: [logEntry({ content: `earlier from ${before}` })],
+            });
+            if (!holdPages) return page;
+            return new Promise<Response>((resolve) =>
+              pageAnswers.push(() => resolve(page)),
+            );
+          }
+          if (refreshing) {
+            return new Promise<Response>((resolve) => {
+              answerRefresh = () =>
+                resolve(
+                  restResponse({
+                    data: [
+                      logEntry({ content: "current" }),
+                      logEntry({ content: "newer" }),
+                    ],
+                    hasMore: true,
+                    nextCursor: "20240101:300",
+                  }),
+                );
+            });
+          }
+          return restResponse({
+            data: [logEntry({ content: "current" })],
+            hasMore: true,
+            nextCursor: "20240101:200",
+          });
+        });
+        const hook = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            initialQuery: { limit: 1, sort: "asc" },
+          }),
+        );
+        return {
+          hook,
+          startRefresh: () => {
+            refreshing = true;
+            act(() => hook.result.current.refresh());
+          },
+          answerRefresh: () => answerRefresh?.(),
+          pageAnswers,
+        };
+      }
+
+      const pageCursors = () =>
+        mockAuthFetch.mock.calls
+          .map((call) => new URL(String(call[0]), "http://localhost"))
+          .map((url) => url.searchParams.get("before"))
+          .filter((before) => before !== null);
+
+      it("keeps the earlier page when it would land before the refresh", async () => {
+        const view = viewWithHeldRefresh({ holdPages: false });
+        const { result } = view.hook;
+        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+
+        view.startRefresh();
+        let loading: Promise<void> = Promise.resolve();
+        act(() => {
+          loading = result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          view.answerRefresh();
+          await loading;
+        });
+
+        expect(pageCursors()).toEqual(["20240101:300"]);
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "earlier from 20240101:300",
+          "current",
+          "newer",
+        ]);
+      });
+
+      it("never joins a page read from the cursor the refresh replaced", async () => {
+        const view = viewWithHeldRefresh({ holdPages: true });
+        const { result } = view.hook;
+        await waitFor(() => expect(result.current.hasEarlierLogs).toBe(true));
+
+        view.startRefresh();
+        let loading: Promise<void> = Promise.resolve();
+        act(() => {
+          loading = result.current.loadEarlierLogs();
+        });
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          view.answerRefresh();
+        });
+        await waitFor(() => expect(view.pageAnswers.length).toBeGreaterThan(0));
+        await act(async () => {
+          view.pageAnswers.forEach((answer) => answer());
+          await loading;
+        });
+
+        expect(result.current.logs.map((l) => l.content)).not.toContain(
+          "earlier from 20240101:200",
+        );
+        expect(result.current.logs.map((l) => l.content)).toContain(
+          "earlier from 20240101:300",
+        );
+      });
+    });
+
+    it("keeps loaded earlier pages when a poll fires", async () => {
+      jest.useFakeTimers();
+      try {
+        mockAuthFetch.mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "current" })],
+            hasMore: true,
+          }),
+        );
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: 5000,
+            initialQuery: { limit: 1, sort: "asc" },
+          }),
+        );
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(0);
+        });
+        expect(result.current.hasEarlierLogs).toBe(true);
+
+        mockAuthFetch.mockResolvedValueOnce(
+          restResponse({ data: [logEntry({ content: "earlier" })] }),
+        );
+        await act(async () => {
+          await result.current.loadEarlierLogs();
+        });
+        expect(result.current.logs).toHaveLength(2);
+
+        mockAuthFetch.mockResolvedValue(
+          restResponse({ data: [logEntry({ content: "current" })] }),
+        );
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(5000);
+        });
+
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "earlier",
+          "current",
+        ]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("starts again from the newest page when the query changes after paging", async () => {
+      mockAuthFetch.mockResolvedValue(
+        restResponse({
+          data: [logEntry({ content: "row" })],
+          hasMore: true,
+          nextCursor: "20240101:100",
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        useBotLogs({ botId: "bot-1", initialQuery: { limit: 1 } }),
+      );
+      await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+      await act(async () => {
+        await result.current.loadMore();
+      });
+      expect(mockAuthFetch.mock.calls.at(-1)![0]).toContain("before=");
+
+      act(() => {
+        result.current.updateQuery({ type: "metrics" });
+      });
+
+      const lastUrl = mockAuthFetch.mock.calls.at(-1)![0] as string;
+      expect(lastUrl).not.toContain("before=");
+      expect(lastUrl).toContain("type=metrics");
     });
   });
 
@@ -2247,7 +2677,7 @@ describe("useBotLogs", () => {
           return { ok: true, body: stream.stream } as any;
         }
         return restResponse({
-          data: [{ date: "2024-01-01T10:00:00Z", content: "history" }],
+          data: [logEntry({ content: "history" })],
         });
       });
       const errorSpy = jest
@@ -2265,10 +2695,12 @@ describe("useBotLogs", () => {
 
         act(() => {
           stream!.controller.push("update", "{not json");
-          stream!.controller.push("update", {
-            content: "after bad line",
-            timestamp: "2024-01-01T10:05:00Z",
-          });
+          stream!.controller.push("update", [
+            logEntry({
+              content: "after bad line",
+              timestamp: "2024-01-01T10:05:00Z",
+            }),
+          ]);
         });
 
         await waitFor(() => {
@@ -2277,53 +2709,15 @@ describe("useBotLogs", () => {
             "after bad line",
           ]);
         });
-        expect(result.current.total).toBe(2);
         expect(errorSpy).toHaveBeenCalledWith(
           "Failed to parse update SSE event:",
           expect.any(Error),
         );
       } finally {
         errorSpy.mockRestore();
-        (stream as ReturnType<typeof createMockSSEStream> | null)?.controller.close();
-      }
-    });
-
-    it("splits a multi-line update into one entry per non-empty line", async () => {
-      let stream: ReturnType<typeof createMockSSEStream> | null = null;
-      mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
-        if (typeof url === "string" && url.includes("/stream")) {
-          stream = createMockSSEStream(opts?.signal);
-          return { ok: true, body: stream.stream } as any;
-        }
-        return restResponse();
-      });
-
-      try {
-        const { result } = renderHook(() =>
-          useBotLogs({ botId: "bot-1", streaming: true }),
-        );
-        await waitFor(() => {
-          expect(result.current.connected).toBe(true);
-          expect(result.current.loading).toBe(false);
-        });
-
-        act(() => {
-          stream!.controller.push("update", {
-            content: "line a\n\nline b",
-            timestamp: "2024-01-01T10:05:00Z",
-          });
-        });
-
-        await waitFor(() => {
-          expect(result.current.logs.map((l) => l.content)).toEqual([
-            "line a",
-            "line b",
-          ]);
-        });
-        expect(result.current.logs[0].date).toBe("2024-01-01T10:05:00Z");
-        expect(result.current.total).toBe(2);
-      } finally {
-        (stream as ReturnType<typeof createMockSSEStream> | null)?.controller.close();
+        (
+          stream as ReturnType<typeof createMockSSEStream> | null
+        )?.controller.close();
       }
     });
   });

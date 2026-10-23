@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -18,10 +19,7 @@ import (
 
 // MockMinIOLogger implements miniologger.MinIOLogger for testing.
 type MockMinIOLogger struct {
-	AppendCalls []struct {
-		BotID   string
-		Content string
-	}
+	AppendCalls     []appendCall
 	StoreFinalCalls []struct {
 		BotID   string
 		Content string
@@ -32,11 +30,14 @@ type MockMinIOLogger struct {
 	CloseCalled     bool
 }
 
-func (m *MockMinIOLogger) AppendBotLogs(ctx context.Context, botID, content string) error {
-	m.AppendCalls = append(m.AppendCalls, struct {
-		BotID   string
-		Content string
-	}{BotID: botID, Content: content})
+type appendCall struct {
+	BotID   string
+	Content string
+	At      time.Time
+}
+
+func (m *MockMinIOLogger) AppendBotLogs(ctx context.Context, botID, content string, at time.Time) error {
+	m.AppendCalls = append(m.AppendCalls, appendCall{BotID: botID, Content: content, At: at})
 	return m.AppendError
 }
 
@@ -90,7 +91,7 @@ type slowDeadlineRecordingUploader struct {
 	returnErr        error
 }
 
-func (s *slowDeadlineRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string) error {
+func (s *slowDeadlineRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string, at time.Time) error {
 	if d, ok := ctx.Deadline(); ok {
 		s.observedDeadline = d
 	}
@@ -114,7 +115,7 @@ func TestLogsSyncer_DefaultUploadTimeoutIs120s(t *testing.T) {
 	require.NotNil(t, syncer)
 
 	start := time.Now()
-	err := syncer.uploadChunk(context.Background(), "hello")
+	err := syncer.uploadChunk(context.Background(), logChunk{content: "hello"})
 	require.NoError(t, err)
 
 	require.False(t, recorder.observedDeadline.IsZero(), "upload should have observed a ctx deadline")
@@ -129,7 +130,7 @@ func TestLogsSyncer_WithUploadTimeoutOverridesDefault(t *testing.T) {
 	require.NotNil(t, syncer)
 
 	start := time.Now()
-	err := syncer.uploadChunk(context.Background(), "hello")
+	err := syncer.uploadChunk(context.Background(), logChunk{content: "hello"})
 	require.NoError(t, err)
 
 	gotTimeout := recorder.observedDeadline.Sub(start)
@@ -142,7 +143,7 @@ func TestLogsSyncer_UploadTimeoutEnforced(t *testing.T) {
 	syncer := NewLogsSyncer("bot-1", "/logs", recorder, nil, &util.DefaultLogger{}, WithLogsUploadTimeout(50*time.Millisecond))
 	require.NotNil(t, syncer)
 
-	err := syncer.uploadChunk(context.Background(), "hello")
+	err := syncer.uploadChunk(context.Background(), logChunk{content: "hello"})
 	require.Error(t, err, "upload must error when mock blocks past the configured timeout")
 	assert.True(t, errors.Is(err, context.DeadlineExceeded),
 		"error should wrap context.DeadlineExceeded, got %v", err)
@@ -206,7 +207,8 @@ func TestLogsSyncer_Sync_FirstSync(t *testing.T) {
 	assert.True(t, synced, "should return true when logs are synced")
 	require.Len(t, mockUploader.AppendCalls, 1)
 	assert.Equal(t, "bot-1", mockUploader.AppendCalls[0].BotID)
-	assert.Equal(t, content, mockUploader.AppendCalls[0].Content)
+	assert.Equal(t, []string{"2024-01-01 10:00:00 Bot started", "2024-01-01 10:00:01 Processing..."},
+		entryMessages(t, mockUploader.AppendCalls[0].Content))
 }
 
 func TestLogsSyncer_Sync_IncrementalSync(t *testing.T) {
@@ -224,7 +226,7 @@ func TestLogsSyncer_Sync_IncrementalSync(t *testing.T) {
 	synced := syncer.Sync(context.Background())
 	assert.True(t, synced)
 	require.Len(t, mockUploader.AppendCalls, 1)
-	assert.Equal(t, initial, mockUploader.AppendCalls[0].Content)
+	assert.Equal(t, []string{"Line 1"}, entryMessages(t, mockUploader.AppendCalls[0].Content))
 
 	// Append more content
 	additional := "Line 2\nLine 3\n"
@@ -238,7 +240,7 @@ func TestLogsSyncer_Sync_IncrementalSync(t *testing.T) {
 	synced = syncer.Sync(context.Background())
 	assert.True(t, synced)
 	require.Len(t, mockUploader.AppendCalls, 2)
-	assert.Equal(t, additional, mockUploader.AppendCalls[1].Content)
+	assert.Equal(t, []string{"Line 2", "Line 3"}, entryMessages(t, mockUploader.AppendCalls[1].Content))
 }
 
 func TestLogsSyncer_Sync_NoNewContent(t *testing.T) {
@@ -295,14 +297,17 @@ func TestLogsSyncer_Sync_LargeFileChunking(t *testing.T) {
 	require.Len(t, mockUploader.AppendCalls, 3, "should split into 3 chunks")
 	require.Len(t, mockPublisher.PublishCalls, 3, "publisher should also get 3 chunks")
 
-	// Verify chunk sizes
-	assert.Len(t, mockUploader.AppendCalls[0].Content, chunkSize, "first chunk should be 1MB")
-	assert.Len(t, mockUploader.AppendCalls[1].Content, chunkSize, "second chunk should be 1MB")
-	assert.Len(t, mockUploader.AppendCalls[2].Content, chunkSize/2, "third chunk should be 0.5MB")
-
-	// Verify total content is preserved
-	total := mockUploader.AppendCalls[0].Content + mockUploader.AppendCalls[1].Content + mockUploader.AppendCalls[2].Content
-	assert.Equal(t, content, total, "all chunks combined should equal original content")
+	// With no newline to split on, each raw chunk becomes one entry.
+	var messages []string
+	for i, call := range mockUploader.AppendCalls {
+		assert.Equal(t, call.Content, mockPublisher.PublishCalls[i].Content, "chunk %d", i)
+		messages = append(messages, entryMessages(t, call.Content)...)
+	}
+	require.Len(t, messages, 3)
+	assert.Len(t, messages[0], chunkSize, "first chunk should be 1MB")
+	assert.Len(t, messages[1], chunkSize, "second chunk should be 1MB")
+	assert.Len(t, messages[2], chunkSize/2, "third chunk should be 0.5MB")
+	assert.Equal(t, content, strings.Join(messages, ""), "all chunks combined should equal original content")
 }
 
 func TestLogsSyncer_Close(t *testing.T) {
@@ -346,12 +351,11 @@ func TestLogsSyncer_Sync_WithNATSPublisher(t *testing.T) {
 
 	assert.True(t, synced, "should return true when logs are synced")
 	require.Len(t, mockUploader.AppendCalls, 1)
-	assert.Equal(t, content, mockUploader.AppendCalls[0].Content)
+	assert.Equal(t, []string{"2024-01-01 10:00:00 Bot started"}, entryMessages(t, mockUploader.AppendCalls[0].Content))
 
-	// Verify NATS publisher was called with same content
 	require.Len(t, mockPublisher.PublishCalls, 1)
 	assert.Equal(t, "bot-1", mockPublisher.PublishCalls[0].BotID)
-	assert.Equal(t, content, mockPublisher.PublishCalls[0].Content)
+	assert.Equal(t, mockUploader.AppendCalls[0].Content, mockPublisher.PublishCalls[0].Content)
 }
 
 // orderRecordingUploader and orderRecordingPublisher share a slice to record
@@ -361,7 +365,7 @@ type orderRecordingUploader struct {
 	err   error
 }
 
-func (o *orderRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string) error {
+func (o *orderRecordingUploader) AppendBotLogs(ctx context.Context, botID, content string, at time.Time) error {
 	*o.order = append(*o.order, "upload")
 	return o.err
 }
@@ -413,7 +417,7 @@ func TestLogsSyncer_Sync_PublishesToNATSWhenUploadFails(t *testing.T) {
 	assert.False(t, synced, "sync reports failure so durability is retried")
 	require.Len(t, mockPublisher.PublishCalls, 1,
 		"chunk must still reach live viewers when MinIO upload fails")
-	assert.Equal(t, content, mockPublisher.PublishCalls[0].Content)
+	assert.Equal(t, []string{"important live line"}, entryMessages(t, mockPublisher.PublishCalls[0].Content))
 }
 
 func TestLogsSyncer_Sync_RetriesUploadOfSameChunkAfterFailure(t *testing.T) {
@@ -436,7 +440,121 @@ func TestLogsSyncer_Sync_RetriesUploadOfSameChunkAfterFailure(t *testing.T) {
 	mockUploader.AppendError = nil
 	assert.True(t, syncer.Sync(context.Background()))
 	require.Len(t, mockUploader.AppendCalls, 2)
-	assert.Equal(t, content, mockUploader.AppendCalls[1].Content)
+	assert.Equal(t, mockUploader.AppendCalls[0].Content, mockUploader.AppendCalls[1].Content,
+		"a retry resends the bytes it formatted the first time, keys and timestamps included")
+	assert.True(t, mockUploader.AppendCalls[0].At.Equal(mockUploader.AppendCalls[1].At),
+		"a retry goes to the daily file of its first attempt")
+	require.Len(t, mockPublisher.PublishCalls, 2)
+	assert.Equal(t, mockPublisher.PublishCalls[0].Content, mockPublisher.PublishCalls[1].Content)
+	assert.Equal(t, []string{"line to retry"}, entryMessages(t, mockUploader.AppendCalls[1].Content))
+}
+
+func TestLogsSyncer_Sync_RetriesSameChunkWhenMoreLinesArrived(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+	require.NoError(t, os.WriteFile(logFile, []byte("first\n"), 0644))
+
+	mockUploader := &MockMinIOLogger{AppendError: assert.AnError}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
+	assert.False(t, syncer.Sync(context.Background()))
+
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	_, err = f.WriteString("second\n")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	mockUploader.AppendError = nil
+	assert.True(t, syncer.Sync(context.Background()))
+
+	require.Len(t, mockUploader.AppendCalls, 3)
+	assert.Equal(t, mockUploader.AppendCalls[0].Content, mockUploader.AppendCalls[1].Content,
+		"the failed chunk is resent unchanged, not merged with the lines that arrived since")
+	assert.Equal(t, []string{"second"}, entryMessages(t, mockUploader.AppendCalls[2].Content))
+}
+
+func TestLogsSyncer_Sync_KeysAreUniqueAcrossChunks(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+	require.NoError(t, os.WriteFile(logFile, []byte("a\nb\n"), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
+	require.True(t, syncer.Sync(context.Background()))
+
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	_, err = f.WriteString("c\n")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	require.True(t, syncer.Sync(context.Background()))
+
+	seen := map[string]bool{}
+	for _, call := range mockUploader.AppendCalls {
+		for _, entry := range decodeEntries(t, call.Content) {
+			key, ok := entry["_key"].(string)
+			require.True(t, ok, "every entry has a string _key")
+			assert.False(t, seen[key], "duplicate key %s", key)
+			seen[key] = true
+		}
+	}
+	assert.Len(t, seen, 3)
+}
+
+func TestLogsSyncer_Sync_StoresUnderTheTimeInTheKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "bot.log"), []byte("a\nb\n"), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, nil, &util.DefaultLogger{})
+	require.True(t, syncer.Sync(context.Background()))
+
+	require.Len(t, mockUploader.AppendCalls, 1)
+	call := mockUploader.AppendCalls[0]
+	for i, entry := range decodeEntries(t, call.Content) {
+		assert.Equal(t, fmt.Sprintf("%d-%d", call.At.UnixNano(), i), entry["_key"],
+			"the daily file is picked by the same time the keys carry")
+	}
+}
+
+func TestLogsSyncer_Sync_BlankChunkSendsNothing(t *testing.T) {
+	tmpDir := t.TempDir()
+	logFile := filepath.Join(tmpDir, "bot.log")
+	require.NoError(t, os.WriteFile(logFile, []byte("\n  \n"), 0644))
+
+	mockUploader := &MockMinIOLogger{}
+	mockPublisher := &MockLogPublisher{}
+	syncer := NewLogsSyncer("bot-1", tmpDir, mockUploader, mockPublisher, &util.DefaultLogger{})
+	syncer.Sync(context.Background())
+
+	assert.Empty(t, mockUploader.AppendCalls)
+	assert.Empty(t, mockPublisher.PublishCalls, "live viewers get no empty messages")
+}
+
+// decodeEntries parses an NDJSON chunk the syncer sent, failing the test on
+// any line that is not a JSON object with a timestamp and an entry key.
+func decodeEntries(t *testing.T, content string) []map[string]interface{} {
+	t.Helper()
+	require.True(t, strings.HasSuffix(content, "\n"), "chunk should end with a newline: %q", content)
+	var entries []map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSuffix(content, "\n"), "\n") {
+		var entry map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &entry), "line should be a JSON object: %s", line)
+		require.Contains(t, entry, "timestamp")
+		require.Contains(t, entry, "_key")
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func entryMessages(t *testing.T, content string) []string {
+	t.Helper()
+	var messages []string
+	for _, entry := range decodeEntries(t, content) {
+		message, _ := entry["message"].(string)
+		messages = append(messages, message)
+	}
+	return messages
 }
 
 func TestLogsSyncer_Sync_NATSPublishError(t *testing.T) {

@@ -1,4 +1,11 @@
-import { render, screen, waitFor, act, fireEvent, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BotDetailPanel } from "../bot-detail-panel";
 import { BotService } from "@/lib/api/api-client";
@@ -38,26 +45,36 @@ jest.mock("@/lib/api/api-client", () => ({
   },
 }));
 
+const mockUseBotLogs = jest.fn();
+let mockLogsFetching = false;
 jest.mock("@/hooks/use-bot-logs", () => ({
-  useBotLogs: () => ({
-    logs: [],
-    loading: false,
-    error: null,
-    hasMore: false,
-    total: 0,
-    query: {},
-    refresh: jest.fn(),
-    loadMore: jest.fn(),
-    loadEarlierLogs: jest.fn(),
-    updateQuery: jest.fn(),
-    setDateFilter: jest.fn(),
-    setDateRangeFilter: jest.fn(),
-    exportLogs: jest.fn(),
-    connected: false,
-    lastUpdate: null,
-    hasEarlierLogs: false,
-    loadingEarlier: false,
-  }),
+  useBotLogs: (...args: unknown[]) => {
+    const { useSharedBotLogStream } = jest.requireActual(
+      "@/hooks/bot-logs/bot-log-stream",
+    );
+    mockUseBotLogs(...args, {
+      sharedStream: useSharedBotLogStream("bot-123") !== null,
+    });
+    return {
+      logs: [],
+      loading: false,
+      isFetching: mockLogsFetching,
+      error: null,
+      hasMore: false,
+      query: {},
+      refresh: jest.fn(),
+      loadMore: jest.fn(),
+      loadEarlierLogs: jest.fn(),
+      updateQuery: jest.fn(),
+      setDateFilter: jest.fn(),
+      setDateRangeFilter: jest.fn(),
+      exportLogs: jest.fn(),
+      connected: false,
+      lastUpdate: null,
+      hasEarlierLogs: false,
+      loadingEarlier: false,
+    };
+  },
 }));
 
 jest.mock("@/lib/bot-utils", () => ({
@@ -73,11 +90,29 @@ jest.mock("@/hooks/use-media-query", () => ({
 }));
 
 jest.mock("@/components/bot/bot-dashboard-loader", () => ({
-  BotDashboardLoader: () => <div data-testid="bot-dashboard" />,
+  BotDashboardLoader: function MockDashboard() {
+    const { useSharedBotLogStream } = jest.requireActual(
+      "@/hooks/bot-logs/bot-log-stream",
+    );
+    const shared = useSharedBotLogStream("bot-123") !== null;
+    return <div data-testid="bot-dashboard" data-shared-stream={shared} />;
+  },
 }));
 
 jest.mock("@/components/bot/console-interface", () => ({
-  ConsoleInterface: () => <div data-testid="console-interface" />,
+  ConsoleInterface: ({
+    viewKey,
+    fetching,
+  }: {
+    viewKey?: string;
+    fetching?: boolean;
+  }) => (
+    <div
+      data-testid="console-interface"
+      data-view={viewKey}
+      data-fetching={String(fetching)}
+    />
+  ),
   ConnectionStatusIndicator: () => (
     <div data-testid="connection-status-indicator" />
   ),
@@ -301,7 +336,9 @@ describe("BotDetailPanel", () => {
         success: false,
         error: { message: "nope" },
       } as any);
-      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       render(<BotDetailPanel botId="bot-123" />);
       await screen.findByText("Enabled");
@@ -325,7 +362,9 @@ describe("BotDetailPanel", () => {
     async function confirmDelete() {
       await screen.findByText("Test Bot");
       await userEvent.click(screen.getByRole("button", { name: /delete/i }));
-      await userEvent.click(screen.getByRole("button", { name: /delete bot/i }));
+      await userEvent.click(
+        screen.getByRole("button", { name: /delete bot/i }),
+      );
     }
 
     it("moves to the next remaining bot", async () => {
@@ -365,7 +404,9 @@ describe("BotDetailPanel", () => {
         success: false,
         error: { message: "delete broke" },
       } as any);
-      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
       render(<BotDetailPanel botId="bot-123" />);
       await confirmDelete();
@@ -380,6 +421,83 @@ describe("BotDetailPanel", () => {
       expect(mockRemoveBotFromList).not.toHaveBeenCalled();
       expect(mockReplace).not.toHaveBeenCalled();
       errorSpy.mockRestore();
+    });
+  });
+
+  describe("one log stream per bot page", () => {
+    it("gives the console and the dashboard the bot page's stream", async () => {
+      mockGetBot.mockResolvedValue({
+        success: true,
+        data: {
+          ...mockBot,
+          customBotId: "custom-1",
+          config: { ...mockBot.config, hasFrontend: true },
+        },
+      } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await screen.findByText("Test Bot");
+      expect(screen.getByTestId("bot-dashboard")).toHaveAttribute(
+        "data-shared-stream",
+        "true",
+      );
+      expect(mockUseBotLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: "bot-123" }),
+        { sharedStream: true },
+      );
+    });
+  });
+
+  describe("console window", () => {
+    it("tells the console when the interval picks another window", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Test Bot");
+      const before = screen
+        .getByTestId("console-interface")
+        .getAttribute("data-view");
+
+      fireEvent.click(screen.getByRole("button", { name: "1h" }));
+
+      const after = screen
+        .getByTestId("console-interface")
+        .getAttribute("data-view");
+      expect(before).toBeTruthy();
+      expect(after).toBeTruthy();
+      expect(after).not.toBe(before);
+    });
+  });
+
+  describe("console fetch state", () => {
+    afterEach(() => {
+      mockLogsFetching = false;
+    });
+
+    it("tells the console while its logs are being fetched", async () => {
+      mockLogsFetching = true;
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+      await screen.findByText("Test Bot");
+
+      expect(screen.getByTestId("console-interface")).toHaveAttribute(
+        "data-fetching",
+        "true",
+      );
+    });
+  });
+
+  describe("log order", () => {
+    it("asks for logs in the chronological order the console shows", async () => {
+      mockGetBot.mockResolvedValue({ success: true, data: mockBot } as never);
+      render(<BotDetailPanel botId="bot-123" />);
+
+      await screen.findByText("Test Bot");
+      expect(mockUseBotLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          initialQuery: expect.objectContaining({ sort: "asc" }),
+        }),
+        expect.anything(),
+      );
     });
   });
 
@@ -457,12 +575,16 @@ describe("BotDetailPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: /update via cli/i }));
 
       const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText("Update Bot via CLI")).toBeInTheDocument();
+      expect(
+        within(dialog).getByText("Update Bot via CLI"),
+      ).toBeInTheDocument();
       expect(within(dialog).getByDisplayValue("bot-123")).toBeInTheDocument();
       expect(
         within(dialog).getByDisplayValue("the0 bot update bot-123 config.json"),
       ).toBeInTheDocument();
-      expect(within(dialog).getByText("the0 bot logs bot-123")).toBeInTheDocument();
+      expect(
+        within(dialog).getByText("the0 bot logs bot-123"),
+      ).toBeInTheDocument();
 
       const [copyId, copyCommand] = within(dialog).getAllByRole("button", {
         name: /copy/i,
@@ -491,7 +613,9 @@ describe("BotDetailPanel", () => {
       mockGetBot.mockResolvedValue({ success: true, data: mockBot } as any);
       render(<BotDetailPanel botId="bot-123" />);
 
-      expect(await screen.findByTestId("mobile-bot-detail")).toBeInTheDocument();
+      expect(
+        await screen.findByTestId("mobile-bot-detail"),
+      ).toBeInTheDocument();
       expect(screen.queryByText("Bot Details")).not.toBeInTheDocument();
     });
 

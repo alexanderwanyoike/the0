@@ -163,7 +163,7 @@ const FALLBACK_REFRESH_INTERVAL = 30000;
  * bots that do not stream so the console hides their controls.
  */
 export function useBotDetailLogs(botId: string, bot: DetailBot | null) {
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const useStreaming = shouldUseLogStreaming(bot);
   const scheduled = isScheduledBot(bot);
@@ -210,16 +210,11 @@ export function useBotDetailLogs(botId: string, bot: DetailBot | null) {
     refreshInterval: FALLBACK_REFRESH_INTERVAL,
     // Scheduled bots start in latest mode: newest lines across the lookback
     // window instead of today's (possibly empty) file. SSE appends land on
-    // top of that history when a run executes. Realtime bots keep the
-    // hook's default query (today, streamed).
+    // top of that history when a run executes. Realtime bots read today,
+    // streamed.
     initialQuery: scheduled
-      ? {
-          limit: 1000,
-          offset: 0,
-          sort: "desc" as const,
-          lookbackDays: DEFAULT_LOOKBACK_DAYS,
-        }
-      : undefined,
+      ? { limit: 1000, sort: sortOrder, lookbackDays: DEFAULT_LOOKBACK_DAYS }
+      : { limit: 1000, sort: sortOrder },
   });
 
   const handleIntervalChange = (val: IntervalValue) => {
@@ -249,6 +244,7 @@ export function useBotDetailLogs(botId: string, bot: DetailBot | null) {
     handleSortChange,
     logs: logsHook.logs,
     logsLoading: logsHook.loading,
+    logsFetching: logsHook.isFetching,
     refreshLogs: logsHook.refresh,
     setDateFilter: logsHook.setDateFilter,
     setDateRangeFilter: logsHook.setDateRangeFilter,

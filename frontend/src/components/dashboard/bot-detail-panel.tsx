@@ -4,9 +4,13 @@ import React, { useState } from "react";
 import { Loader2, Terminal } from "lucide-react";
 import { BotDashboardLoader } from "@/components/bot/bot-dashboard-loader";
 import { ConsoleInterface } from "@/components/bot/console-interface";
-import { IntervalPicker } from "@/components/bot/interval-picker";
+import {
+  IntervalPicker,
+  IntervalValue,
+} from "@/components/bot/interval-picker";
 import { ConnectionStatusIndicator } from "@/components/bot/console-interface";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { BotLogStreamProvider } from "@/hooks/bot-logs/bot-log-stream";
 import { MobileBotDetail } from "./mobile-bot-detail";
 import {
   BotConfigCard,
@@ -31,6 +35,9 @@ const CenteredSpinner = () => (
 );
 
 type DetailLogs = ReturnType<typeof useBotDetailLogs>;
+
+const intervalViewKey = ({ type, start, end }: IntervalValue) =>
+  `${type}:${start}:${end}`;
 
 const DashboardArea = ({
   bot,
@@ -93,6 +100,8 @@ const ConsolePanel = ({ botId, logs }: { botId: string; logs: DetailLogs }) => (
         loadingMore={logs.loadingMore}
         sort={logs.sortOrder}
         onSortChange={logs.handleSortChange}
+        viewKey={intervalViewKey(logs.interval)}
+        fetching={logs.logsFetching}
         className="h-full"
         compact
       />
@@ -102,6 +111,21 @@ const ConsolePanel = ({ botId, logs }: { botId: string; logs: DetailLogs }) => (
 
 export function BotDetailPanel({ botId }: BotDetailPanelProps) {
   const owned = useOwnedBot(botId);
+  // The views read logs only once the owner's bot loads; match their bot id
+  return (
+    <BotLogStreamProvider botId={owned.bot ? botId : ""}>
+      <BotDetailContent botId={botId} owned={owned} />
+    </BotLogStreamProvider>
+  );
+}
+
+function BotDetailContent({
+  botId,
+  owned,
+}: {
+  botId: string;
+  owned: ReturnType<typeof useOwnedBot>;
+}) {
   const { bot } = owned;
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const mediaQuery = useMediaQuery("(min-width: 1280px)");
@@ -131,6 +155,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           maskedConfig={owned.maskedConfig}
           logs={logs.logs}
           logsLoading={logs.logsLoading}
+          logsFetching={logs.logsFetching}
           refreshLogs={logs.refreshLogs}
           setDateFilter={logs.setDateFilter}
           setDateRangeFilter={logs.setDateRangeFilter}
@@ -150,6 +175,7 @@ export function BotDetailPanel({ botId }: BotDetailPanelProps) {
           onCopyConfig={owned.copyConfig}
           onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
           interval={logs.interval}
+          intervalViewKey={intervalViewKey(logs.interval)}
           onIntervalChange={logs.handleIntervalChange}
           showLive={!logs.scheduled}
           showLatest={logs.scheduled}

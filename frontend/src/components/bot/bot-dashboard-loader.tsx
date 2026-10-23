@@ -10,10 +10,7 @@ import React, {
 } from "react";
 import * as ReactDOM from "react-dom";
 import * as ReactJSXRuntime from "react/jsx-runtime";
-import {
-  BotEventsProvider,
-
-} from "@/contexts/bot-events-context";
+import { BotEventsProvider } from "@/contexts/bot-events-context";
 import { RefreshCw, AlertCircle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -94,7 +91,6 @@ class DashboardErrorBoundary extends Component<
   }
 }
 
-
 interface BotDashboardLoaderProps {
   botId: string;
   customBotId: string;
@@ -129,9 +125,9 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
     null,
   );
   const [loadError, setLoadError] = useState<Error | null>(null);
-  const [loadPhase, setLoadPhase] = useState<
-    "dashboard" | "events" | null
-  >(null);
+  const [loadPhase, setLoadPhase] = useState<"dashboard" | "events" | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!customBotId) {
@@ -152,34 +148,42 @@ export const BotDashboardLoader = React.memo(function BotDashboardLoader({
 
     const importBundle = async (): Promise<DashboardComponent> => {
       // Try localStorage cache first (only if versioned)
-      if (cacheKey) try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const blob = new Blob([cached], { type: "application/javascript" });
-          const url = URL.createObjectURL(blob);
-          try {
-            const mod = await import(/* webpackIgnore: true */ url);
-            if (!mod.default) throw new Error("Bundle must export a default component");
-            return mod.default;
-          } finally {
-            URL.revokeObjectURL(url);
+      if (cacheKey)
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const blob = new Blob([cached], { type: "application/javascript" });
+            const url = URL.createObjectURL(blob);
+            try {
+              const mod = await import(/* webpackIgnore: true */ url);
+              if (!mod.default)
+                throw new Error("Bundle must export a default component");
+              return mod.default;
+            } finally {
+              URL.revokeObjectURL(url);
+            }
           }
+        } catch {
+          // localStorage unavailable or blob import failed
         }
-      } catch {
-        // localStorage unavailable or blob import failed
-      }
 
       // Fetch, cache, then import
       const res = await fetch(frontendUrl);
       if (!res.ok) throw new Error(`Failed to fetch bundle: ${res.statusText}`);
       const text = await res.text();
-      if (cacheKey) try { localStorage.setItem(cacheKey, text); } catch { /* quota exceeded */ }
+      if (cacheKey)
+        try {
+          localStorage.setItem(cacheKey, text);
+        } catch {
+          /* quota exceeded */
+        }
 
       const blob = new Blob([text], { type: "application/javascript" });
       const url = URL.createObjectURL(blob);
       try {
         const mod = await import(/* webpackIgnore: true */ url);
-        if (!mod.default) throw new Error("Bundle must export a default component");
+        if (!mod.default)
+          throw new Error("Bundle must export a default component");
         return mod.default;
       } finally {
         URL.revokeObjectURL(url);

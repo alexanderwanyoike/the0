@@ -131,7 +131,7 @@ func TestAppendBotLogs(t *testing.T) {
 			mutexesMu: sync.RWMutex{},
 		}
 
-		err := logger.AppendBotLogs(context.Background(), "test-bot", "")
+		err := logger.AppendBotLogs(context.Background(), "test-bot", "", time.Now())
 		assert.NoError(t, err) // Should not error on empty logs
 	})
 
@@ -158,10 +158,10 @@ func TestAppendBotLogs(t *testing.T) {
 		botID := "test-bot-123"
 
 		// Test appending logs multiple times
-		err = logger.AppendBotLogs(context.Background(), botID, "First log entry")
+		err = logger.AppendBotLogs(context.Background(), botID, "First log entry\n", time.Now())
 		assert.NoError(t, err)
 
-		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry")
+		err = logger.AppendBotLogs(context.Background(), botID, "Second log entry\n", time.Now())
 		assert.NoError(t, err)
 
 		// Verify logs were written by reading them back
@@ -171,7 +171,7 @@ func TestAppendBotLogs(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		timestamp := time.Now().Format("20060102")
+		timestamp := time.Now().UTC().Format("20060102")
 		objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
@@ -181,10 +181,8 @@ func TestAppendBotLogs(t *testing.T) {
 		content, err := io.ReadAll(obj)
 		require.NoError(t, err)
 
-		contentStr := string(content)
-		assert.Contains(t, contentStr, "First log entry")
-		assert.Contains(t, contentStr, "Second log entry")
-		assert.Contains(t, contentStr, time.Now().Format("2006-01-02")) // Should have timestamps
+		assert.Equal(t, "First log entry\nSecond log entry\n", string(content),
+			"chunks are stored exactly as given, the caller formats them")
 	})
 
 	t.Run("ConcurrentAppends", func(t *testing.T) {
@@ -217,8 +215,8 @@ func TestAppendBotLogs(t *testing.T) {
 		for i := 0; i < numGoroutines; i++ {
 			go func(index int) {
 				defer wg.Done()
-				logEntry := fmt.Sprintf("Log entry from goroutine %d", index)
-				err := logger.AppendBotLogs(context.Background(), botID, logEntry)
+				logEntry := fmt.Sprintf("Log entry from goroutine %d\n", index)
+				err := logger.AppendBotLogs(context.Background(), botID, logEntry, time.Now())
 				assert.NoError(t, err)
 			}(i)
 		}
@@ -232,7 +230,7 @@ func TestAppendBotLogs(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		timestamp := time.Now().Format("20060102")
+		timestamp := time.Now().UTC().Format("20060102")
 		objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 		obj, err := client.GetObject(context.Background(), "test-logs", objectPath, minio.GetObjectOptions{})
@@ -341,10 +339,10 @@ func TestGetLogFilePathEdgeCases(t *testing.T) {
 			expected: "logs/leap-year-bot/20240229.log",
 		},
 		{
-			name:     "Different timezone should not affect date",
+			name:     "Uses the UTC date whatever the zone",
 			botID:    "tz-bot",
 			date:     time.Date(2023, 12, 31, 23, 59, 59, 0, time.FixedZone("EST", -5*60*60)),
-			expected: "logs/tz-bot/20231231.log",
+			expected: "logs/tz-bot/20240101.log",
 		},
 	}
 
@@ -396,7 +394,7 @@ func TestGetMutexConcurrency(t *testing.T) {
 // TestComposeAppend verifies that AppendBotLogs scales with chunk size rather
 // than accumulated file size by appending many chunks and checking that each
 // append completes within a bounded duration. It also verifies that the final
-// file content is the ordered concatenation of all chunks with timestamps.
+// file content is the ordered concatenation of all chunks.
 func TestComposeAppend(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test")
@@ -431,7 +429,7 @@ func TestComposeAppend(t *testing.T) {
 
 	// Append all chunks.
 	for i, chunk := range chunks {
-		err := logger.AppendBotLogs(context.Background(), botID, chunk)
+		err := logger.AppendBotLogs(context.Background(), botID, chunk, time.Now())
 		require.NoError(t, err, "chunk %d failed", i)
 	}
 
@@ -442,7 +440,7 @@ func TestComposeAppend(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
+	timestamp := time.Now().UTC().Format("20060102")
 	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 	obj, err := client.GetObject(context.Background(), "test-compose-logs", objectPath, minio.GetObjectOptions{})
@@ -470,9 +468,7 @@ func TestComposeAppend(t *testing.T) {
 		lastIdx = idx
 	}
 
-	// Each entry must have a timestamp prefix like [2026-04-01 ...]
-	todayPrefix := time.Now().Format("2006-01-02")
-	assert.Contains(t, contentStr, todayPrefix, "file should contain today's date in timestamp prefixes")
+	assert.Equal(t, strings.Join(chunks, ""), contentStr, "chunks are stored exactly as given")
 
 	// Verify no temp objects were left behind. Because cleanup is synchronous
 	// (runs before AppendBotLogs returns), we can assert immediately without
@@ -510,7 +506,7 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 
 	botID := "first-write-bot"
 
-	err = logger.AppendBotLogs(context.Background(), botID, "hello world")
+	err = logger.AppendBotLogs(context.Background(), botID, "hello world", time.Now())
 	require.NoError(t, err)
 
 	// Read back
@@ -520,7 +516,7 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	timestamp := time.Now().Format("20060102")
+	timestamp := time.Now().UTC().Format("20060102")
 	objectPath := fmt.Sprintf("logs/%s/%s.log", botID, timestamp)
 
 	obj, err := client.GetObject(context.Background(), "test-first-write", objectPath, minio.GetObjectOptions{})
@@ -530,8 +526,32 @@ func TestComposeAppendFirstWrite(t *testing.T) {
 	content, err := io.ReadAll(obj)
 	require.NoError(t, err)
 
-	assert.Contains(t, string(content), "hello world")
-	assert.Contains(t, string(content), time.Now().Format("2006-01-02"))
+	assert.Equal(t, "hello world", string(content), "the chunk is stored exactly as given")
+}
+
+func TestAppendBotLogs_DailyFileIsTheUTCDateOfTheChunkTime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	server := s3test.StartT(t)
+	logger, err := NewMinIOLogger(context.Background(), MinioLoggerOptions{
+		Endpoint:      server.Endpoint,
+		AccessKey:     s3test.AccessKey,
+		SecretKey:     s3test.SecretKey,
+		LogsBucket:    "test-utc-day-logs",
+		ResultsBucket: "test-utc-day-results",
+	})
+	require.NoError(t, err)
+	defer logger.Close()
+
+	// 01:00 at UTC+5 is 20:00 the previous day in UTC.
+	at := time.Date(2026, 10, 22, 1, 0, 0, 0, time.FixedZone("UTC+5", 5*60*60))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), "utc-bot", "line\n", at))
+
+	_, err = server.Client.StatObject(context.Background(), "test-utc-day-logs",
+		"logs/utc-bot/20261021.log", minio.StatObjectOptions{})
+	assert.NoError(t, err, "the chunk should land in the UTC day's file")
 }
 
 // fakeMultipartClient is a controllable implementation of multipartClient.
@@ -619,7 +639,7 @@ func primeDailyLog(t *testing.T, client *minio.Client, bucket, botID string, siz
 	for i := range payload {
 		payload[i] = 'x'
 	}
-	dailyKey := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().Format("20060102"))
+	dailyKey := fmt.Sprintf("logs/%s/%s.log", botID, time.Now().UTC().Format("20060102"))
 	_, err := client.PutObject(context.Background(), bucket, dailyKey, bytes.NewReader(payload), int64(len(payload)), minio.PutObjectOptions{ContentType: "text/plain"})
 	require.NoError(t, err)
 }
@@ -645,11 +665,11 @@ func TestComposeAppendSmallTail(t *testing.T) {
 	defer logger.Close()
 
 	botID := "small-tail-bot"
-	day := time.Now().Format("20060102")
+	day := time.Now().UTC().Format("20060102")
 	bulk := strings.Repeat("x", int(composeMinPartSize)+1)
-	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk))
-	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line"))
-	if time.Now().Format("20060102") != day {
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, bulk, time.Now()))
+	require.NoError(t, logger.AppendBotLogs(context.Background(), botID, "small tail line", time.Now()))
+	if time.Now().UTC().Format("20060102") != day {
 		t.Skip("appends straddled midnight, so the tail started a new daily log instead of composing")
 	}
 
@@ -691,7 +711,7 @@ func TestAppendBotLogs_AbortsOnCompleteMultipartError(t *testing.T) {
 	fake := &fakeMultipartClient{completeErr: fmt.Errorf("simulated r2 complete failure")}
 	logger.mpClient = fake
 
-	err = logger.AppendBotLogs(context.Background(), botID, "new chunk")
+	err = logger.AppendBotLogs(context.Background(), botID, "new chunk", time.Now())
 	require.Error(t, err, "AppendBotLogs should surface the compose failure")
 	assert.Contains(t, err.Error(), "simulated r2 complete failure")
 
@@ -725,7 +745,7 @@ func TestAppendBotLogs_AbortsOnCopyPartError(t *testing.T) {
 	fake := &fakeMultipartClient{copyErr: fmt.Errorf("simulated uploadpartcopy failure"), copyErrPart: 2}
 	logger.mpClient = fake
 
-	err = logger.AppendBotLogs(context.Background(), botID, "new chunk")
+	err = logger.AppendBotLogs(context.Background(), botID, "new chunk", time.Now())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "simulated uploadpartcopy failure")
 
@@ -760,7 +780,7 @@ func TestAppendBotLogs_NoLeakedUploadsOnHappyCompose(t *testing.T) {
 		chunk[i] = 'y'
 	}
 	for i := 0; i < 10; i++ {
-		err := logger.AppendBotLogs(context.Background(), botID, string(chunk))
+		err := logger.AppendBotLogs(context.Background(), botID, string(chunk), time.Now())
 		require.NoError(t, err, "append %d failed", i)
 	}
 
@@ -790,7 +810,7 @@ func TestMinIOLoggerInterface(t *testing.T) {
 	assert.NotNil(t, logger)
 
 	// Test interface methods exist (will fail without real MinIO, but interface is satisfied)
-	err := logger.AppendBotLogs(context.Background(), "test", "")
+	err := logger.AppendBotLogs(context.Background(), "test", "", time.Now())
 	assert.NoError(t, err) // Empty logs should not error
 
 	err = logger.StoreFinalLogs(context.Background(), "test", "")
@@ -800,7 +820,7 @@ func TestMinIOLoggerInterface(t *testing.T) {
 	assert.NoError(t, err) // Close should not error
 
 	// Test that AppendBotLogs fails gracefully with nil client when logs are non-empty
-	err = logger.AppendBotLogs(context.Background(), "test", "some logs")
+	err = logger.AppendBotLogs(context.Background(), "test", "some logs", time.Now())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "MinIO client is not initialized")
 

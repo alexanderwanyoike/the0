@@ -155,8 +155,11 @@ type APIKeyValidationResponse struct {
 
 // LogEntry represents a single log entry
 type LogEntry struct {
-	Date    string `json:"date"`
-	Content string `json:"content"`
+	Key  string `json:"key"`
+	Date string `json:"date"`
+	// Empty when the api sends null: the line has no timestamp of its own.
+	Timestamp string `json:"timestamp"`
+	Content   string `json:"content"`
 }
 
 // LogsResponse represents the API response for bot logs
@@ -171,6 +174,7 @@ type LogsParams struct {
 	Date      string `json:"date,omitempty"`
 	DateRange string `json:"dateRange,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
+	Sort      string `json:"sort,omitempty"`
 }
 
 // TestAPIKey tests if an API key is valid
@@ -882,6 +886,9 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 		}
 		if params.Limit > 0 {
 			q.Add("limit", fmt.Sprintf("%d", params.Limit))
+		}
+		if params.Sort != "" {
+			q.Add("sort", params.Sort)
 		}
 		req.URL.RawQuery = q.Encode()
 	}

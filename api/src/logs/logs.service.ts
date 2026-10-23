@@ -1,12 +1,20 @@
 import { Injectable, Scope, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { REQUEST } from "@nestjs/core";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
-import { AuthenticatedRequest } from "@/auth/auth.types";
-import { Result, Ok, Failure, errorMessage, hasErrorCode } from "@/common/result";
+import {
+  Result,
+  Ok,
+  Failure,
+  errorMessage,
+  hasErrorCode,
+} from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
+import { LogEntry, runtimeKeyDay, storedLogEntry, utcDay } from "./log-entry";
+import { LineSplitter } from "./line-splitter";
+
+export type { LogEntry } from "./log-entry";
 
 export interface LogsQuery {
   date?: string;
@@ -16,6 +24,8 @@ export interface LogsQuery {
   lookbackDays?: number;
   limit: number;
   offset: number;
+  /** Entry key: only entries older than that entry, within the window. */
+  before?: string;
   type?: "all" | "metrics";
   sort?: "asc" | "desc";
   // Parsed datetime bounds (set by parseDateQuery for datetime ranges)
@@ -23,16 +33,26 @@ export interface LogsQuery {
   endTime?: Date;
 }
 
-export interface LogEntry {
-  date: string;
-  content: string;
-  timestamp: string | null;
+export interface LogsPage {
+  entries: LogEntry[];
+  hasMore: boolean;
+  /** `before` for the next older page; null when the window holds none. */
+  nextCursor: string | null;
 }
 
-interface DatedLogsRead {
+interface PageRead {
   entries: LogEntry[];
-  metricsHasMore: boolean;
+  hasMore: boolean;
 }
+
+/** Entries before this byte position of this daily file are older. */
+interface FilePosition {
+  date: string;
+  offset: number;
+}
+
+// 15 digits stay within Number.MAX_SAFE_INTEGER, far past any daily file.
+const POSITION_KEY = /^(\d{8}):(\d{1,15})$/;
 
 const dayLogPath = (botId: string, date: string): string =>
   `logs/${botId}/${date}.log`;
@@ -41,14 +61,18 @@ const dayLogPath = (botId: string, date: string): string =>
 export class LogsService {
   private static readonly TAIL_BYTES = 512 * 1024; // 512KB
   private logBucket: string;
+  /** Byte offset of each entry read by this request, for cursors and repeats. */
+  private readonly offsets = new WeakMap<LogEntry, number>();
 
   /** AWS/MinIO use "NoSuchKey", Cloudflare R2 uses "NotFound". */
   private static isNotFoundError(error: unknown): boolean {
-    return hasErrorCode(error) && (error.code === "NoSuchKey" || error.code === "NotFound");
+    return (
+      hasErrorCode(error) &&
+      (error.code === "NoSuchKey" || error.code === "NotFound")
+    );
   }
 
   constructor(
-    @Inject(REQUEST) private readonly request: AuthenticatedRequest,
     @Inject(MINIO_CLIENT) private readonly minioClient: Minio.Client,
     private readonly configService: ConfigService,
     private readonly botService: BotService,
@@ -57,152 +81,184 @@ export class LogsService {
     this.logBucket = this.configService.get<string>("LOG_BUCKET") || "bot-logs";
   }
 
-  async getLogs(
+  /** Whether the user may read the bot's logs. */
+  async checkAccess(
     botId: string,
-    query: LogsQuery,
-    userId?: string,
-  ): Promise<Result<{ entries: LogEntry[]; hasMore: boolean }, string>> {
-    // Verify bot ownership
-    const uid = userId || this.request?.user?.uid;
-    if (!uid) return Failure("Authentication required");
-    const botResult = await this.botService.findOneByUserId(uid, botId);
+    userId: string,
+  ): Promise<Result<true, string>> {
+    const botResult = await this.botService.findOneByUserId(userId, botId);
     if (!botResult.success) {
       return Failure("Bot not found or access denied");
     }
+    return Ok(true);
+  }
 
-    // Latest mode: no explicit window - serve the newest entries regardless
-    // of when the bot last ran (scheduled bots may not have run today).
-    if (!query.date && !query.dateRange && query.lookbackDays) {
-      try {
-        return Ok(await this.getLatestLogs(botId, query));
-      } catch (error: unknown) {
-        this.logger.error({ err: error }, "Error fetching latest logs");
-        return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
-      }
-    }
-
-    // Generate date list from query
-    const dates = this.parseDateQuery(query);
-    if (!dates.length) {
-      return Failure(
-        "Invalid date or dateRange format. Use YYYYMMDD, YYYYMMDD-YYYYMMDD, or ISO datetime range with -- separator",
-      );
-    }
+  async getLogs(
+    botId: string,
+    query: LogsQuery,
+    userId: string,
+  ): Promise<Result<LogsPage, string>> {
+    const access = await this.checkAccess(botId, userId);
+    if (!access.success) return Failure(access.error);
 
     try {
-      const { entries, metricsHasMore } = await this.readDatedLogs(
-        botId,
-        dates,
-        query,
-      );
-      // For metrics we know the exact filtered count before truncation, so
-      // hasMore can be computed precisely instead of the >=limit heuristic
-      // used for raw logs (whose streams stop early at the limit).
-      const hasMore =
-        query.type === "metrics"
-          ? metricsHasMore
-          : entries.length >= query.limit;
-      return Ok({ entries, hasMore });
+      const read = await this.readPage(botId, query);
+      if (!read.success) return Failure(read.error);
+      return Ok(this.toPage(read.data, query));
     } catch (error: unknown) {
-      this.logger.error({ err: error }, "Error fetching logs");
+      this.logger.error(
+        { err: error },
+        this.isLatestMode(query)
+          ? "Error fetching latest logs"
+          : "Error fetching logs",
+      );
       return Failure(`Failed to fetch logs: ${errorMessage(error)}`);
     }
   }
 
-  private async readDatedLogs(
+  private async readPage(
     botId: string,
-    dates: string[],
     query: LogsQuery,
-  ): Promise<DatedLogsRead> {
-    const sortOrder = query.sort || "desc";
+  ): Promise<Result<PageRead, string>> {
+    if (query.before !== undefined) return this.readBefore(botId, query);
 
-    if (dates.length === 1 && query.type !== "metrics" && !query.startTime) {
-      // Single date, non-metrics: tail for latest entries (returns newest-first)
-      const entries: LogEntry[] = [];
-      await this.tailFilteredLogs(
-        dayLogPath(botId, dates[0]),
-        dates[0],
-        query,
-        entries,
-      );
-      if (sortOrder === "asc") entries.reverse();
-      return { entries, metricsHasMore: false };
+    // Latest mode: no explicit window - serve the newest entries regardless
+    // of when the bot last ran (scheduled bots may not have run today).
+    if (this.isLatestMode(query)) {
+      const dates = this.generateLookbackDates(query.lookbackDays!);
+      return Ok(await this.readNewestFirst(botId, dates, query));
     }
 
-    // Multi-date or metrics: stream from start (returns oldest-first)
-    return sortOrder === "desc"
-      ? this.streamDatesNewestFirst(botId, dates, query)
-      : this.streamDatesOldestFirst(botId, dates, query);
+    const dates = this.parseDateQuery(query);
+    if (!dates.length) return Failure(LogsService.INVALID_WINDOW);
+
+    return Ok(await this.readNewestFirst(botId, [...dates].reverse(), query));
+  }
+
+  private static readonly INVALID_WINDOW =
+    "Invalid date or dateRange format. Use YYYYMMDD, YYYYMMDD-YYYYMMDD, or ISO datetime range with -- separator";
+
+  private isLatestMode(query: LogsQuery): boolean {
+    return !query.date && !query.dateRange && !!query.lookbackDays;
   }
 
   /**
-   * Reads entries in chronological order, reverses to newest-first, then
-   * applies offset and limit. Total reads are capped to prevent memory
-   * exhaustion on huge ranges.
+   * The `limit` entries just older than the cursor entry, walking the
+   * window's days newest-first from the cursor's day.
    */
-  private async streamDatesNewestFirst(
+  private async readBefore(
     botId: string,
-    dates: string[],
     query: LogsQuery,
-  ): Promise<DatedLogsRead> {
-    const entries: LogEntry[] = [];
-    const skipped = { count: 0 };
-    const maxRead = Math.max(query.offset + query.limit, 10000);
-    const cappedQuery = { ...query, offset: 0, limit: maxRead };
-    for (const date of dates) {
-      await this.streamFilteredLogs(
-        dayLogPath(botId, date),
-        date,
-        cappedQuery,
-        entries,
-        skipped,
-      );
-      if (entries.length >= maxRead) break;
+  ): Promise<Result<PageRead, string>> {
+    if (query.offset) {
+      return Failure("before cannot be combined with offset");
     }
-    entries.reverse();
-    const metricsHasMore = entries.length > query.offset + query.limit;
-    entries.splice(0, query.offset);
-    if (entries.length > query.limit) entries.length = query.limit;
-    return { entries, metricsHasMore };
+    const window = this.isLatestMode(query)
+      ? this.generateLookbackDates(query.lookbackDays!)
+      : this.parseDateQuery(query).reverse();
+    if (!window.length) return Failure(LogsService.INVALID_WINDOW);
+
+    const cursor = await this.resolveCursor(botId, query.before!);
+    if (!cursor.success) return Failure(cursor.error);
+
+    const dates = window.filter((date) => date <= cursor.data.date);
+    return Ok(await this.readNewestFirst(botId, dates, query, cursor.data));
   }
 
-  private async streamDatesOldestFirst(
+  private async resolveCursor(
     botId: string,
-    dates: string[],
-    query: LogsQuery,
-  ): Promise<DatedLogsRead> {
-    const entries: LogEntry[] = [];
-    const skipped = { count: 0 };
-    for (const date of dates) {
-      await this.streamFilteredLogs(
-        dayLogPath(botId, date),
-        date,
-        query,
-        entries,
-        skipped,
-      );
-      // Metric streams don't stop at the limit mid-file (the whole day
-      // is read), so one extra entry past the limit is the hasMore
-      // sentinel; raw-log streams stop exactly at the limit.
-      if (entries.length > query.limit) break;
-      if (query.type !== "metrics" && entries.length >= query.limit) break;
+    key: string,
+  ): Promise<Result<FilePosition, string>> {
+    const position = POSITION_KEY.exec(key);
+    if (position && this.isValidDateFormat(position[1])) {
+      return Ok({ date: position[1], offset: Number(position[2]) });
     }
-    const metricsHasMore = entries.length > query.limit;
-    if (entries.length > query.limit) entries.length = query.limit;
-    return { entries, metricsHasMore };
+    if (/^\d{8}:\d{16,}$/.test(key)) {
+      return Failure("Invalid before cursor: its byte offset is too large");
+    }
+    const date = runtimeKeyDay(key);
+    if (!date) {
+      return Failure("Invalid before cursor: expected a log entry key");
+    }
+    const offset = await this.findKeyOffset(botId, date, key);
+    if (offset === null) {
+      return Failure("The before cursor matches no log entry");
+    }
+    return Ok({ date, offset });
+  }
+
+  /** The first copy wins, matching dropRepeatedKeys. */
+  private async findKeyOffset(
+    botId: string,
+    date: string,
+    key: string,
+  ): Promise<number | null> {
+    const stream = await this.openLogStream(dayLogPath(botId, date));
+    if (!stream) return null;
+    const matches = (line: string) =>
+      line.includes(key) && storedLogEntry(line, date, 0).key === key;
+
+    const splitter = new LineSplitter();
+    for await (const chunk of stream) {
+      for (const { line, offset } of splitter.push(chunk)) {
+        if (matches(line)) {
+          (
+            stream as NodeJS.ReadableStream & { destroy?: () => void }
+          ).destroy?.();
+          return offset;
+        }
+      }
+    }
+    const trailing = splitter.rest();
+    return trailing && matches(trailing.line) ? trailing.offset : null;
+  }
+
+  private toPage(read: PageRead, query: LogsQuery): LogsPage {
+    const entries = this.dropRepeatedKeys(read.entries);
+    const oldest =
+      query.sort === "asc" ? entries[0] : entries[entries.length - 1];
+    const nextCursor =
+      read.hasMore && oldest
+        ? `${oldest.date}:${this.offsets.get(oldest)}`
+        : null;
+    return { entries, hasMore: read.hasMore, nextCursor };
   }
 
   /**
-   * Latest mode: walk day files newest-first (today back through
-   * lookbackDays) and collect entries until offset+limit+1 are found. The
-   * +1 sentinel lets hasMore reflect real data instead of guessing whether
-   * unscanned days would have contributed anything.
+   * A storage append that completed but timed out is retried with the same
+   * bytes, so a daily file can hold a runtime chunk twice. The first copy is
+   * the entry; later copies are dropped.
    */
-  private async getLatestLogs(
+  private dropRepeatedKeys(entries: LogEntry[]): LogEntry[] {
+    const firstAt = new Map<string, number>();
+    for (const entry of entries) {
+      const at = this.offsets.get(entry) ?? 0;
+      const seen = firstAt.get(entry.key);
+      if (seen === undefined || at < seen) firstAt.set(entry.key, at);
+    }
+    return entries.filter(
+      (entry) => firstAt.get(entry.key) === (this.offsets.get(entry) ?? 0),
+    );
+  }
+
+  private storedEntry(line: string, date: string, offset: number): LogEntry {
+    const entry = storedLogEntry(line, date, offset);
+    this.offsets.set(entry, offset);
+    return entry;
+  }
+
+  /**
+   * Walks day files newest-first and collects entries until offset+limit+1
+   * are found. The +1 sentinel lets hasMore reflect real data instead of
+   * guessing whether unscanned days would have contributed anything.
+   * `bound` limits its day to the bytes before a cursor position.
+   */
+  private async readNewestFirst(
     botId: string,
+    dates: string[],
     query: LogsQuery,
-  ): Promise<{ entries: LogEntry[]; hasMore: boolean }> {
-    const dates = this.generateLookbackDates(query.lookbackDays!);
+    bound?: FilePosition,
+  ): Promise<PageRead> {
     const maxNeeded = query.offset + query.limit + 1;
 
     // Chronological accumulator: each older day is prepended as a block, so
@@ -211,45 +267,41 @@ export class LogsService {
     let collected: LogEntry[] = [];
     for (const date of dates) {
       const logPath = dayLogPath(botId, date);
+      const end = bound?.date === date ? bound.offset : undefined;
       const dayEntries: LogEntry[] = [];
       if (query.type === "metrics") {
-        // Metric lines are sparse; stream the whole day file. Offset is
-        // deliberately zeroed - pagination applies to the flattened result.
-        await this.streamFilteredLogs(
+        // Metric lines can be anywhere in the day, so read all of it.
+        await this.streamNewestLogs(
           logPath,
           date,
-          { ...query, offset: 0 },
+          query,
           dayEntries,
-          { count: 0 },
+          maxNeeded,
+          end,
         );
       } else {
         // Raw logs can be huge; tail keeps only the newest lines per day.
         const truncated = await this.tailFilteredLogs(
           logPath,
           date,
-          { ...query, offset: 0, limit: maxNeeded },
+          { ...query, limit: maxNeeded },
           dayEntries,
+          end,
         );
         if (truncated && dayEntries.length < maxNeeded) {
           // The tail window held fewer lines than needed (very long lines
           // or a deep offset). Skipping the rest of the day would silently
-          // splice in older days' entries, so re-read the whole day capped
-          // the same way the dateRange desc path caps its reads.
+          // splice in older days' entries, so re-read the whole day.
           dayEntries.length = 0;
-          await this.streamFilteredLogs(
+          await this.streamNewestLogs(
             logPath,
             date,
-            { ...query, offset: 0, limit: Math.max(maxNeeded, 10000) },
+            query,
             dayEntries,
-            { count: 0 },
+            maxNeeded,
+            end,
           );
         }
-      }
-      // Keep only the newest maxNeeded lines per day so a huge day (many
-      // metrics, or the full-read fallback above) can't grow the working
-      // set beyond ~2x maxNeeded.
-      if (dayEntries.length > maxNeeded) {
-        dayEntries.splice(0, dayEntries.length - maxNeeded);
       }
       collected = dayEntries.concat(collected);
       if (collected.length >= maxNeeded) break;
@@ -263,56 +315,78 @@ export class LogsService {
     return { entries, hasMore };
   }
 
-  /** Newest-first YYYYMMDD list: today back through `days` days (local time,
-   *  matching the runtime's day bucketing of log files). */
+  /** Newest-first YYYYMMDD list: today back through `days` UTC days. */
   private generateLookbackDates(days: number): string[] {
     const dates: string[] = [];
     const current = new Date();
     for (let i = 0; i < days; i++) {
-      dates.push(
-        current.getFullYear().toString() +
-          (current.getMonth() + 1).toString().padStart(2, "0") +
-          current.getDate().toString().padStart(2, "0"),
-      );
-      current.setDate(current.getDate() - 1);
+      dates.push(utcDay(current));
+      current.setUTCDate(current.getUTCDate() - 1);
     }
     return dates;
   }
 
-  private async streamFilteredLogs(
+  /**
+   * Reads the whole file (up to `end`) but keeps only its newest `keep`
+   * matching entries, so memory stays bounded however long the day is.
+   */
+  private async streamNewestLogs(
     logPath: string,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-    skipped: { count: number },
+    keep: number,
+    end?: number,
   ): Promise<void> {
-    const stream = await this.openLogStream(logPath);
+    const stream = await this.openLogStream(logPath, end);
     if (!stream) return;
 
-    let leftover = "";
-    for await (const chunk of stream) {
-      const lines = (leftover + chunk.toString("utf-8")).split("\n");
-      leftover = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!this.collectLine(line, logDate, query, entries, skipped)) continue;
-        if (query.type !== "metrics" && entries.length >= query.limit) {
+    const newest: LogEntry[] = [];
+    let pastWindow = false;
+    const take = (line: string, offset: number) => {
+      // Lines are stored in time order, so none after this one can match.
+      if (LogsService.isAfterTimeWindow(line, query)) {
+        pastWindow = true;
+        return;
+      }
+      this.collectLine(line, offset, logDate, query, newest);
+      // Trimming in batches keeps the splice cost linear overall.
+      if (newest.length >= 2 * keep) newest.splice(0, newest.length - keep);
+    };
+    const splitter = new LineSplitter();
+    read: for await (const chunk of stream) {
+      for (const { line, offset } of splitter.push(chunk)) {
+        take(line, offset);
+        if (pastWindow) {
           (
             stream as NodeJS.ReadableStream & { destroy?: () => void }
           ).destroy?.();
-          return;
+          break read;
         }
       }
     }
+    const trailing = pastWindow ? null : splitter.rest();
+    if (trailing) take(trailing.line, trailing.offset);
 
-    this.collectTrailingLine(leftover, logDate, query, entries, skipped);
+    if (newest.length > keep) newest.splice(0, newest.length - keep);
+    // A spread of this many arguments overflows the call stack.
+    for (const entry of newest) entries.push(entry);
   }
 
   private async openLogStream(
     logPath: string,
+    end?: number,
   ): Promise<NodeJS.ReadableStream | null> {
+    if (end === 0) return null;
     try {
-      return await this.minioClient.getObject(this.logBucket, logPath);
+      return end === undefined
+        ? await this.minioClient.getObject(this.logBucket, logPath)
+        : await this.minioClient.getPartialObject(
+            this.logBucket,
+            logPath,
+            0,
+            end,
+          );
     } catch (error: unknown) {
       if (LogsService.isNotFoundError(error)) return null;
       throw error;
@@ -322,52 +396,21 @@ export class LogsService {
   /** @returns true when the line was appended to `entries`. */
   private collectLine(
     line: string,
+    offset: number,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
-    skipped: { count: number },
   ): boolean {
-    if (!this.passesLineFilters(line, query, skipped)) return false;
-    const normalized = this.normalizeLine(line, logDate);
-    if (LogsService.isOutsideTimeWindow(normalized, query)) return false;
-    entries.push(normalized);
+    if (!this.passesLineFilters(line, query)) return false;
+    const entry = this.storedEntry(line, logDate, offset);
+    if (LogsService.isOutsideTimeWindow(entry, query)) return false;
+    entries.push(entry);
     return true;
   }
 
-  /**
-   * Complete lines stop the stream once a raw-log read reaches its limit;
-   * the content after the last newline has no stream left to stop, so the
-   * limit is checked before taking it instead.
-   */
-  private collectTrailingLine(
-    leftover: string,
-    logDate: string,
-    query: LogsQuery,
-    entries: LogEntry[],
-    skipped: { count: number },
-  ): void {
-    if (!this.passesLineFilters(leftover, query, skipped)) return;
-    if (query.type !== "metrics" && entries.length >= query.limit) return;
-    const normalized = this.normalizeLine(leftover, logDate);
-    if (LogsService.isOutsideTimeWindow(normalized, query)) return;
-    entries.push(normalized);
-  }
-
-  /** Not a pure check: a line skipped for the offset is consumed here. */
-  private passesLineFilters(
-    line: string,
-    query: LogsQuery,
-    skipped: { count: number },
-  ): boolean {
+  private passesLineFilters(line: string, query: LogsQuery): boolean {
     if (!line.trim()) return false;
-    if (query.type === "metrics" && !LogsService.isMetricLine(line)) {
-      return false;
-    }
-    if (skipped.count < query.offset) {
-      skipped.count++;
-      return false;
-    }
-    return true;
+    return query.type !== "metrics" || LogsService.isMetricLine(line);
   }
 
   /** Metric detection parses JSON instead of string-matching "_metric",
@@ -378,6 +421,13 @@ export class LogsService {
     } catch {
       return false;
     }
+  }
+
+  private static isAfterTimeWindow(line: string, query: LogsQuery): boolean {
+    if (!query.endTime) return false;
+    const { timestamp } = storedLogEntry(line, "", 0);
+    const time = timestamp ? new Date(timestamp).getTime() : NaN;
+    return time > query.endTime.getTime();
   }
 
   /** Lines without a timestamp are kept: they cannot be placed in a window. */
@@ -393,13 +443,15 @@ export class LogsService {
     );
   }
 
-  /** @returns true when the file was larger than the tail window, i.e. the
+  /** `end` limits the read to the file's bytes before that offset.
+   *  @returns true when the file was larger than the tail window, i.e. the
    *  read may have skipped earlier lines from this day. */
   private async tailFilteredLogs(
     logPath: string,
     logDate: string,
     query: LogsQuery,
     entries: LogEntry[],
+    end?: number,
   ): Promise<boolean> {
     let stat: { size: number };
     try {
@@ -409,67 +461,57 @@ export class LogsService {
       throw error;
     }
 
-    const fileSize = stat.size;
+    const fileSize = Math.min(stat.size ?? 0, end ?? Infinity);
     const start = Math.max(0, fileSize - LogsService.TAIL_BYTES);
+    if (end !== undefined && fileSize === 0) return false;
 
     let stream: NodeJS.ReadableStream;
     try {
-      stream =
-        start > 0
-          ? await this.minioClient.getPartialObject(
-              this.logBucket,
-              logPath,
-              start,
-            )
-          : await this.minioClient.getObject(this.logBucket, logPath);
+      if (end !== undefined) {
+        stream = await this.minioClient.getPartialObject(
+          this.logBucket,
+          logPath,
+          start,
+          fileSize - start,
+        );
+      } else {
+        stream =
+          start > 0
+            ? await this.minioClient.getPartialObject(
+                this.logBucket,
+                logPath,
+                start,
+              )
+            : await this.minioClient.getObject(this.logBucket, logPath);
+      }
     } catch (error: unknown) {
       // File may have been deleted between stat and read
       if (LogsService.isNotFoundError(error)) return false;
       throw error;
     }
 
-    const chunks: Buffer[] = [];
+    const splitter = new LineSplitter(start);
+    const lines = [];
     for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      lines.push(...splitter.push(chunk));
     }
-    const content = Buffer.concat(chunks).toString("utf-8");
-
-    const lines = content.split("\n");
+    const trailing = splitter.rest();
+    if (trailing) lines.push(trailing);
     // Drop first line if reading from mid-file (likely partial)
     if (start > 0) lines.shift();
 
-    for (const line of lines) {
+    for (const { line, offset } of lines) {
       if (!line.trim()) continue;
-      const normalized = this.normalizeLine(line, logDate);
-      if (LogsService.isOutsideTimeWindow(normalized, query)) continue;
-      entries.push(normalized);
+      const entry = this.storedEntry(line, logDate, offset);
+      if (LogsService.isOutsideTimeWindow(entry, query)) continue;
+      entries.push(entry);
     }
 
-    // Keep only the last `limit` entries (skip for metrics - return all)
-    if (query.type !== "metrics" && entries.length > query.limit) {
+    if (entries.length > query.limit) {
       entries.splice(0, entries.length - query.limit);
     }
 
     return start > 0;
-  }
-
-  private normalizeLine(line: string, logDate: string): LogEntry {
-    try {
-      const parsed = JSON.parse(line);
-      const timestamp = parsed.timestamp || null;
-
-      if (parsed._metric) {
-        // Metric line - keep full JSON as content for frontend metric rendering
-        return { date: logDate, content: line, timestamp };
-      }
-
-      // NDJSON wrapped text - extract message for clean display
-      const content = parsed.message || line;
-      return { date: logDate, content, timestamp };
-    } catch {
-      // Old format or plain text - not JSON
-      return { date: logDate, content: line, timestamp: null };
-    }
   }
 
   private parseDateQuery(query: LogsQuery): string[] {
@@ -493,10 +535,7 @@ export class LogsService {
         query.startTime = startTime;
         query.endTime = endTime;
 
-        // Generate date list from the datetime range
-        const startDate = parts[0].slice(0, 10).replace(/-/g, "");
-        const endDate = parts[1].slice(0, 10).replace(/-/g, "");
-        return this.generateDateRange(startDate, endDate);
+        return this.generateDateRange(utcDay(startTime), utcDay(endTime));
       }
 
       // Legacy YYYYMMDD-YYYYMMDD format
@@ -517,48 +556,34 @@ export class LogsService {
   }
 
   private isValidDateFormat(date: string): boolean {
-    const dateRegex = /^\d{8}$/;
-    if (!dateRegex.test(date)) {
-      return false;
-    }
+    const day = LogsService.parseDay(date);
+    return day !== null && utcDay(day) === date;
+  }
 
-    const year = parseInt(date.substring(0, 4));
-    const month = parseInt(date.substring(4, 6));
-    const day = parseInt(date.substring(6, 8));
-
-    const dateObj = new Date(year, month - 1, day);
-    return (
-      dateObj.getFullYear() === year &&
-      dateObj.getMonth() === month - 1 &&
-      dateObj.getDate() === day
+  /** Midnight UTC of a YYYYMMDD day; out-of-range parts roll over. */
+  private static parseDay(date: string): Date | null {
+    if (!/^\d{8}$/.test(date)) return null;
+    return new Date(
+      Date.UTC(
+        parseInt(date.substring(0, 4)),
+        parseInt(date.substring(4, 6)) - 1,
+        parseInt(date.substring(6, 8)),
+      ),
     );
   }
 
   private generateDateRange(startDate: string, endDate: string): string[] {
     const dates: string[] = [];
-    const start = new Date(
-      parseInt(startDate.substring(0, 4)),
-      parseInt(startDate.substring(4, 6)) - 1,
-      parseInt(startDate.substring(6, 8)),
-    );
-    const end = new Date(
-      parseInt(endDate.substring(0, 4)),
-      parseInt(endDate.substring(4, 6)) - 1,
-      parseInt(endDate.substring(6, 8)),
-    );
-
-    if (start > end) {
+    const start = LogsService.parseDay(startDate);
+    const end = LogsService.parseDay(endDate);
+    if (!start || !end || start > end) {
       return [];
     }
 
     const current = new Date(start);
     while (current <= end) {
-      const dateStr =
-        current.getFullYear().toString() +
-        (current.getMonth() + 1).toString().padStart(2, "0") +
-        current.getDate().toString().padStart(2, "0");
-      dates.push(dateStr);
-      current.setDate(current.getDate() + 1);
+      dates.push(utcDay(current));
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return dates;

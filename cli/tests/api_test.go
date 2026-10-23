@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"the0/internal"
@@ -507,6 +508,20 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 			expectedLogs: 1,
 		},
 		{
+			name:       "logs in ascending order",
+			botID:      "bot-123",
+			params:     &internal.LogsParams{Date: "20241201", Limit: 100, Sort: "asc"},
+			statusCode: 200,
+			responseBody: `{
+				"success": true,
+				"data": [
+					{"key": "1-0", "date": "20241201", "timestamp": "2024-12-01T12:00:00Z", "content": "first"},
+					{"key": "1-1", "date": "20241201", "timestamp": null, "content": "second"}
+				]
+			}`,
+			expectedLogs: 2,
+		},
+		{
 			name:          "bot not found",
 			botID:         "nonexistent-bot",
 			params:        &internal.LogsParams{Date: "20241201"},
@@ -567,6 +582,9 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 					if tt.params.DateRange != "" && query.Get("dateRange") != tt.params.DateRange {
 						t.Errorf("Expected dateRange query param %s, got %s", tt.params.DateRange, query.Get("dateRange"))
 					}
+					if query.Get("sort") != tt.params.Sort {
+						t.Errorf("Expected sort query param %q, got %q", tt.params.Sort, query.Get("sort"))
+					}
 					if tt.params.Limit > 0 {
 						expectedLimit := fmt.Sprintf("%d", tt.params.Limit)
 						if query.Get("limit") != expectedLimit {
@@ -614,6 +632,34 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAPIClient_GetBotLogs_DecodesKeyAndTimestamp(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"success": true,
+			"data": [
+				{"key": "1792713599999000000-0", "date": "20261022", "timestamp": "2026-10-22T23:59:59.999Z", "content": "keyed"},
+				{"key": "20261022:42", "date": "20261022", "timestamp": null, "content": "legacy"}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	client := internal.NewAPIClient(server.URL)
+	logs, err := client.GetBotLogs(&internal.Auth{APIKey: "test-key"}, "bot-1", &internal.LogsParams{Date: "20261022"})
+	if err != nil {
+		t.Fatalf("GetBotLogs() unexpected error = %v", err)
+	}
+
+	want := []internal.LogEntry{
+		{Key: "1792713599999000000-0", Date: "20261022", Timestamp: "2026-10-22T23:59:59.999Z", Content: "keyed"},
+		{Key: "20261022:42", Date: "20261022", Content: "legacy"},
+	}
+	if !reflect.DeepEqual(logs, want) {
+		t.Errorf("GetBotLogs() = %+v, want %+v", logs, want)
 	}
 }
 

@@ -2,8 +2,8 @@ apiVersion: v2
 name: the0
 description: An open-source algorithmic trading platform for creating, deploying, and managing trading bots
 type: application
-version: 0.15.1
-appVersion: "1.20.1"
+version: 0.16.0
+appVersion: "1.21.0"
 kubeVersion: ">=1.21.0-0"
 keywords:
   - trading
@@ -30,24 +30,28 @@ annotations:
     - name: Discord
       url: https://discord.gg/8xpMh3RR3
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "Rotating the storage credentials no longer breaks scheduled bots: bot, CronJob and query pods read the storage keys from the release's Secret instead of keeping copies of them"
-    - kind: fixed
-      description: "Existing CronJobs and realtime bot pods are updated whenever anything the controller writes into them changes, such as the storage endpoint, buckets or credentials"
-    - kind: security
-      description: "Storage credentials are no longer stored in plain text in bot pod, CronJob and Job specs"
     - kind: changed
-      description: "Upgrading restarts every realtime bot pod and rewrites every scheduled-bot CronJob once"
-    - kind: security
-      description: "Runtime and CLI built with Go 1.26.10, which distrusts compromised intermediate certificates in crypto/x509 (GO-2026-6809)"
-    - kind: security
-      description: "follow-redirects 1.16.1 in the api and frontend, which strips credential headers on cross-origin redirects (GHSA-8r9p-f939-6h3c, GHSA-q3jh-wrc6-jgq8)"
-    - kind: security
-      description: "Frontend on next 15.5.28 (GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r)"
-    - kind: security
-      description: "Docs site built with vite 6.4.5 and dompurify 3.4.17 (GHSA-587h-7wmj-h5pm, GHSA-mrv2-3pqr-j5jr)"
+      description: "The runtime formats each log chunk once and stamps every line with a stable _key, so stored and live log lines are byte for byte the same"
+    - kind: changed
+      description: "REST and live log streams return one entry shape (key, date, timestamp, content), where content is the stored line as written"
+    - kind: added
+      description: "Log pages take a before cursor and return nextCursor, so new lines no longer shift older pages; offset is capped at 10000"
+    - kind: added
+      description: "The log stream accepts history=false, and each bot page shares one live log stream between the console and the dashboard"
     - kind: fixed
-      description: "The api image builds against current Alpine packages again"
+      description: "Live log lines no longer show twice; the frontend matches duplicates by entry key"
+    - kind: fixed
+      description: "sort=asc returns the newest entries in time order on every read, and busy metric windows return the latest metrics instead of the earliest"
+    - kind: fixed
+      description: "Single-day log reads honour sort, and daily log files and today use UTC everywhere"
+    - kind: fixed
+      description: "The bot page catches up on lines missed while the live log stream was down"
+    - kind: fixed
+      description: "MCP logs_summary counts errors by log level instead of matching words anywhere in the line"
+    - kind: changed
+      description: "Log export downloads NDJSON, and console times are shown in UTC"
+    - kind: changed
+      description: "Log access is checked against the caller's own user only"
   artifacthub.io/images: |
     - name: api
       image: ghcr.io/alexanderwanyoike/the0/api

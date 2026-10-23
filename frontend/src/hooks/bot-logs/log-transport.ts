@@ -1,25 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { authFetch } from "@/lib/auth-fetch";
-import { buildLogsSearchParams, expandLogEntries } from "@/lib/log-utils";
-import { validateSSEAuth } from "@/lib/sse/sse-auth";
-import { readSSEEvents } from "@/lib/sse/sse-stream-reader";
+import { buildLogsSearchParams } from "@/lib/log-utils";
 import type { LogEntry, LogsQuery } from "@/types/logs";
+import type { LogStream } from "./bot-log-stream";
 
 // -- REST pages --
 
 interface LogsResponse {
   data: LogEntry[];
-  total: number;
   hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export interface LogsPage {
-  /** One entry per non-empty line, in API order. */
+  /** In API order. */
   entries: LogEntry[];
-  total: number;
   hasMore: boolean;
+  /** `before` for the next older page; null when there is none. */
+  nextCursor: string | null;
 }
 
 export async function fetchLogsPage(
@@ -38,9 +38,9 @@ export async function fetchLogsPage(
 
   const result: LogsResponse = await response.json();
   return {
-    entries: expandLogEntries(result.data),
-    total: result.total,
+    entries: result.data,
     hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
   };
 }
 
@@ -132,97 +132,51 @@ export function useAutoRefreshPolling({
   ]);
 }
 
-// -- SSE live stream --
-
-interface LiveLogStreamOptions {
-  botId: string;
-  user: unknown;
-  liveMode: boolean;
-  /** Changing this tears the stream down and reconnects. */
-  reconnectKey: number;
-  onUpdate: (data: string) => void;
+interface LiveLogsOptions {
+  stream: LogStream;
+  live: boolean;
+  onEntries: (entries: LogEntry[]) => void;
+  /** The stream has just opened: history read before then may miss lines
+   *  written while it was not open. */
+  onOpen: () => void;
   startPolling: () => void;
   stopPolling: () => void;
 }
 
 /**
- * SSE connection lifecycle for live mode. Returns whether the stream is
- * currently connected; any stream failure falls back to REST polling.
+ * Live entries from the bot's log stream while `live`. Whenever the stream
+ * is down this view falls back to REST polling. Returns whether the stream
+ * is connected.
  */
-export function useLiveLogStream({
-  botId,
-  user,
-  liveMode,
-  reconnectKey,
-  onUpdate,
+export function useLiveLogs({
+  stream,
+  live,
+  onEntries,
+  onOpen,
   startPolling,
   stopPolling,
-}: LiveLogStreamOptions): boolean {
-  const [connected, setConnected] = useState(false);
+}: LiveLogsOptions): boolean {
+  const { status, subscribe } = stream;
+  const previousStatusRef = useRef(status);
 
   useEffect(() => {
-    if (!liveMode || !botId || !user) return;
+    if (!live) return;
+    return subscribe(onEntries);
+  }, [live, subscribe, onEntries]);
 
-    const authResult = validateSSEAuth();
-    if (!authResult.success) {
-      // Can't stream without auth; keep data fresh via polling instead
+  useEffect(() => {
+    const opened = status === "open" && previousStatusRef.current !== "open";
+    previousStatusRef.current = status;
+    if (!live) return;
+    if (status === "down") {
       startPolling();
       return () => stopPolling();
     }
-
-    const controller = new AbortController();
-
-    authFetch(`/api/logs/${encodeURIComponent(botId)}/stream`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok || !response.body) {
-          throw new Error(`Stream response: ${response.status}`);
-        }
-
-        setConnected(true);
-        stopPolling();
-
-        await readSSEEvents(response.body, (eventType, data) => {
-          // "history" events are intentionally ignored - REST is the
-          // single source of history (see useBotLogs module doc).
-          if (eventType === "update") onUpdate(data);
-        });
-
-        // Stream ended cleanly (server restart, proxy recycle, access
-        // denied). Live updates are gone either way, so unless this was our
-        // own teardown, fall back to polling to keep data flowing.
-        setConnected(false);
-        if (!controller.signal.aborted) {
-          startPolling();
-        }
-      })
-      .catch((err) => {
-        // Intentional teardown (unmount, filter change, refresh) must not
-        // trigger fallback polling - that's how intervals used to leak.
-        // signal.aborted is checked first because browsers may reject an
-        // aborted body read with TypeError, not AbortError.
-        if (controller.signal.aborted || err?.name === "AbortError") return;
-
-        setConnected(false);
-        startPolling();
-      });
-
-    return () => {
-      controller.abort();
-      setConnected(false);
-      // Fallback polling belongs to this SSE session
+    if (status === "open") {
       stopPolling();
-    };
-  }, [
-    botId,
-    user,
-    liveMode,
-    reconnectKey,
-    onUpdate,
-    startPolling,
-    stopPolling,
-  ]);
+      if (opened) onOpen();
+    }
+  }, [live, status, onOpen, startPolling, stopPolling]);
 
-  return connected;
+  return live && status === "open";
 }

@@ -77,15 +77,23 @@ export function BotEventsProvider({
   refreshInterval = 30000,
   dateRange,
 }: BotEventsProviderProps) {
-  const { events, loading, isFetching, connected, lastUpdate, error, utils, refresh } =
-    useBotEvents({
-      botId,
-      streaming,
-      latest,
-      autoRefresh,
-      refreshInterval,
-      dateRange,
-    });
+  const {
+    events,
+    loading,
+    isFetching,
+    connected,
+    lastUpdate,
+    error,
+    utils,
+    refresh,
+  } = useBotEvents({
+    botId,
+    streaming,
+    latest,
+    autoRefresh,
+    refreshInterval,
+    dateRange,
+  });
 
   // Errors only reach bot frontends when there is nothing to render: this is
   // what makes the naive `if (error) return <Error/>` pattern safe to write
@@ -105,7 +113,17 @@ export function BotEventsProvider({
       refresh,
       botId,
     }),
-    [events, loading, isFetching, connected, lastUpdate, displayError, utils, refresh, botId],
+    [
+      events,
+      loading,
+      isFetching,
+      connected,
+      lastUpdate,
+      displayError,
+      utils,
+      refresh,
+      botId,
+    ],
   );
 
   return (
