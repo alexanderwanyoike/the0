@@ -129,13 +129,22 @@ func withoutRuntimeKey(content string, members []jsonMember, entryKey string) st
 		if member.name == "_key" && json.Unmarshal(member.value, &key) == nil && key == entryKey {
 			continue
 		}
-		name, _ := json.Marshal(member.name)
-		kept = append(kept, string(name)+":"+string(member.value))
+		kept = append(kept, jsonString(member.name)+":"+string(member.value))
 	}
 	if len(kept) == len(members) {
 		return content
 	}
 	return "{" + strings.Join(kept, ",") + "}"
+}
+
+// jsonString leaves <, > and & as written; json.Marshal escapes them for
+// HTML, which a terminal is not.
+func jsonString(value string) string {
+	var buffer strings.Builder
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	_ = encoder.Encode(value)
+	return strings.TrimSuffix(buffer.String(), "\n")
 }
 
 // logWatch remembers only the previous fetch's keys: each fetch is the newest
