@@ -247,7 +247,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 	t.Run("prints the first fetch in full", func(t *testing.T) {
 		watch := &logWatch{}
 
-		got := watch.newEntries(watchEntries("a", "b"))
+		got, _ := watch.newEntries(watchEntries("a", "b"))
 
 		if want := watchEntries("a", "b"); !reflect.DeepEqual(got, want) {
 			t.Errorf("newEntries() = %v, want %v", got, want)
@@ -258,7 +258,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b"))
 
-		got := watch.newEntries(watchEntries("a", "b", "c"))
+		got, _ := watch.newEntries(watchEntries("a", "b", "c"))
 
 		if want := watchEntries("c"); !reflect.DeepEqual(got, want) {
 			t.Errorf("newEntries() = %v, want %v", got, want)
@@ -269,7 +269,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b"))
 
-		if got := watch.newEntries(watchEntries("a", "b")); len(got) != 0 {
+		if got, _ := watch.newEntries(watchEntries("a", "b")); len(got) != 0 {
 			t.Errorf("newEntries() = %v, want none", got)
 		}
 	})
@@ -279,7 +279,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 		watch.newEntries(watchEntries("a", "b"))
 		watch.newEntries(nil)
 
-		got := watch.newEntries(watchEntries("a", "b", "c"))
+		got, _ := watch.newEntries(watchEntries("a", "b", "c"))
 
 		if want := watchEntries("c"); !reflect.DeepEqual(got, want) {
 			t.Errorf("newEntries() = %v, want %v", got, want)
@@ -290,7 +290,7 @@ func TestLogWatchNewEntries(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b", "c"))
 
-		got := watch.newEntries(watchEntries("c", "d", "e"))
+		got, _ := watch.newEntries(watchEntries("c", "d", "e"))
 
 		if want := watchEntries("d", "e"); !reflect.DeepEqual(got, want) {
 			t.Errorf("newEntries() = %v, want %v", got, want)
@@ -299,8 +299,8 @@ func TestLogWatchNewEntries(t *testing.T) {
 
 	t.Run("prints in the api's oldest-first order, like a tail", func(t *testing.T) {
 		watch := &logWatch{}
-		first := watch.newEntries(watchEntries("a", "b"))
-		next := watch.newEntries(watchEntries("b", "c", "d"))
+		first, _ := watch.newEntries(watchEntries("a", "b"))
+		next, _ := watch.newEntries(watchEntries("b", "c", "d"))
 
 		if got, want := append(first, next...), watchEntries("a", "b", "c", "d"); !reflect.DeepEqual(got, want) {
 			t.Errorf("printed = %v, want %v", got, want)

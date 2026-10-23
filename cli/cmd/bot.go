@@ -999,7 +999,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 		os.Exit(1)
 	}
 
-	if fresh := watch.newEntries(logs); len(fresh) > 0 {
+	if fresh, _ := watch.newEntries(logs); len(fresh) > 0 {
 		displayLogEntries(fresh)
 	}
 
@@ -1019,7 +1019,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 				continue
 			}
 
-			if fresh := watch.newEntries(newLogs); len(fresh) > 0 {
+			if fresh, _ := watch.newEntries(newLogs); len(fresh) > 0 {
 				displayLogEntries(fresh)
 			}
 		}

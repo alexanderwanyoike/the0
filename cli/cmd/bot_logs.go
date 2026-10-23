@@ -154,14 +154,13 @@ type logWatch struct {
 	previous map[string]struct{}
 }
 
-func (w *logWatch) newEntries(logs []internal.LogEntry) []internal.LogEntry {
+func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEntry, mayHaveSkipped bool) {
 	// An empty answer (a day not written yet, a store hiccup) says nothing
 	// about which lines are still in the window.
 	if len(logs) == 0 {
-		return nil
+		return nil, false
 	}
 
-	var fresh []internal.LogEntry
 	current := make(map[string]struct{}, len(logs))
 	for _, log := range logs {
 		current[log.Key] = struct{}{}
@@ -170,5 +169,5 @@ func (w *logWatch) newEntries(logs []internal.LogEntry) []internal.LogEntry {
 		}
 	}
 	w.previous = current
-	return fresh
+	return fresh, false
 }
