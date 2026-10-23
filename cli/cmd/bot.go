@@ -1045,6 +1045,6 @@ func displayLogEntries(logs []internal.LogEntry) {
 	white := color.New(color.FgWhite)
 
 	for _, log := range logs {
-		fmt.Printf("[%s] %s\n", cyan.Sprint(logEntryTime(log)), white.Sprint(logEntryText(log.Content)))
+		fmt.Printf("[%s] %s\n", cyan.Sprint(logEntryTime(log)), white.Sprint(logEntryText(log)))
 	}
 }

@@ -19,7 +19,8 @@ func logEntryTime(entry internal.LogEntry) string {
 	return entry.Date
 }
 
-func logEntryText(content string) string {
+func logEntryText(entry internal.LogEntry) string {
+	content := entry.Content
 	members, ok := jsonObjectMembers(content)
 	if !ok {
 		return content
