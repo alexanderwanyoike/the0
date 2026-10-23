@@ -10,7 +10,11 @@ import (
 )
 
 func logEntryTime(entry internal.LogEntry) string {
-	if logTime, err := time.Parse(time.RFC3339, entry.Timestamp); err == nil {
+	if entry.Timestamp != "" {
+		logTime, err := time.Parse(time.RFC3339, entry.Timestamp)
+		if err != nil {
+			return entry.Timestamp
+		}
 		return logTime.UTC().Format("2006-01-02 15:04:05") + " UTC"
 	}
 	if day, err := time.Parse("20060102", entry.Date); err == nil {
