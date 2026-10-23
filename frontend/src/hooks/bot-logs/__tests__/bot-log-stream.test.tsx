@@ -51,36 +51,22 @@ const PLAIN = entry('{"message":"bought"}');
 
 let streams: MockStream[];
 let streamOk: boolean;
+/** While set, stream requests wait for releaseStream to answer. */
+let holdStreams: boolean;
+let held: (() => void)[];
+const releaseStream = (index: number) => held[index]();
 
 function mockApi() {
   mockAuthFetch.mockImplementation(async (input, opts) => {
     const url = String(input);
     if (url.includes("/stream")) {
       if (!streamOk) return { ok: false, status: 503 } as Response;
-      let controller!: ReadableStreamDefaultController<Uint8Array>;
-      const body = new ReadableStream<Uint8Array>({
-        start(c) {
-          controller = c;
-          opts?.signal?.addEventListener("abort", () => {
-            try {
-              c.error(new TypeError("Failed to fetch"));
-            } catch {
-              // already closed
-            }
-          });
-        },
-      });
-      streams.push({
-        url,
-        signal: opts?.signal,
-        push: (entries) =>
-          controller.enqueue(
-            encoder.encode(
-              `event: update\ndata: ${JSON.stringify(entries)}\n\n`,
-            ),
-          ),
-      });
-      return { ok: true, body } as Response;
+      if (holdStreams) {
+        return new Promise<Response>((resolve) =>
+          held.push(() => resolve(streamResponse(url, opts?.signal))),
+        );
+      }
+      return streamResponse(url, opts?.signal);
     }
     return {
       ok: true,
@@ -92,6 +78,36 @@ function mockApi() {
       }),
     } as Response;
   });
+}
+
+function streamResponse(url: string, signal?: AbortSignal | null): Response {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+      signal?.addEventListener("abort", () => {
+        try {
+          c.error(new TypeError("Failed to fetch"));
+        } catch {
+          // already closed
+        }
+      });
+    },
+  });
+  streams.push({
+    url,
+    signal: signal!,
+    push: (entries) => {
+      try {
+        controller.enqueue(
+          encoder.encode(`event: update\ndata: ${JSON.stringify(entries)}\n\n`),
+        );
+      } catch {
+        // the reader cancelled this stream
+      }
+    },
+  });
+  return { ok: true, body } as Response;
 }
 
 const restUrls = () =>
@@ -137,6 +153,8 @@ describe("BotLogStreamProvider", () => {
     jest.clearAllMocks();
     streams = [];
     streamOk = true;
+    holdStreams = false;
+    held = [];
     mockUseAuth.mockReturnValue({ user: { id: "user-1" } } as never);
     mockUseToast.mockReturnValue({
       toast: jest.fn(),
@@ -228,6 +246,44 @@ describe("BotLogStreamProvider", () => {
       expect(streams).toHaveLength(1);
       expect(streams[0].signal.aborted).toBe(false);
       expect(result.current.dashboard.connected).toBe(true);
+      unmount();
+    });
+  });
+
+  describe("stale connections", () => {
+    it("ignores a stream that answers after it was closed", async () => {
+      holdStreams = true;
+      const { result, unmount } = renderBotPage({
+        dashboardQuery: { limit: 100, date: "20261021", type: "metrics" },
+      });
+      await waitFor(() => expect(held).toHaveLength(1));
+
+      act(() => {
+        result.current.console.setDateFilter("20261021");
+      });
+      act(() => {
+        result.current.console.setDateFilter(null);
+      });
+      await waitFor(() => expect(held).toHaveLength(2));
+
+      await act(async () => {
+        releaseStream(0);
+      });
+      await waitFor(() => expect(streams).toHaveLength(1));
+      act(() => {
+        streams[0].push([PLAIN]);
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+
+      expect(result.current.console.connected).toBe(false);
+      expect(result.current.console.logs).toEqual([]);
+
+      await act(async () => {
+        releaseStream(1);
+      });
+      await waitFor(() => expect(result.current.console.connected).toBe(true));
       unmount();
     });
   });
