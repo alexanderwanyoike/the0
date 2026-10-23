@@ -61,6 +61,9 @@ export class LogStreamService {
         ? await this.checkAccess(res, botId, userId)
         : await this.sendHistoricalLogs(res, botId, userId);
     if (!shouldContinue) return;
+    // Some proxies send the response head only with the first body chunk,
+    // which a stream without history might not write until the keepalive.
+    res.write(": connected\n\n");
 
     if (disconnected) {
       cleanup();
