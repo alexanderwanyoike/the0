@@ -313,6 +313,24 @@ func TestLogWatchNewEntries(t *testing.T) {
 		}
 	})
 
+	t.Run("dedupes by day and content when the api sends no key", func(t *testing.T) {
+		unkeyed := func(lines ...string) []internal.LogEntry {
+			entries := make([]internal.LogEntry, len(lines))
+			for i, line := range lines {
+				entries[i] = internal.LogEntry{Date: "20261022", Content: line}
+			}
+			return entries
+		}
+		watch := &logWatch{}
+		watch.newEntries(unkeyed("started", "bought"))
+
+		got, _ := watch.newEntries(unkeyed("started", "bought", "sold"))
+
+		if want := unkeyed("sold"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
 	t.Run("prints new entries as the limit window moves on", func(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b", "c"))
