@@ -45,7 +45,7 @@ func logEntryText(entry internal.LogEntry) string {
 		}
 	}
 
-	return withoutRuntimeKey(content, members)
+	return withoutRuntimeKey(content, members, entry.Key)
 }
 
 type jsonMember struct {
@@ -96,11 +96,13 @@ func stringField(fields map[string]json.RawMessage, name string) string {
 }
 
 // withoutRuntimeKey returns a line stored before the runtime keyed lines
-// byte for byte, as the api returned it then.
-func withoutRuntimeKey(content string, members []jsonMember) string {
+// byte for byte, as the api returned it then. A `_key` is the runtime's only
+// when the api took it as the entry key; any other is the bot's own field.
+func withoutRuntimeKey(content string, members []jsonMember, entryKey string) string {
 	var kept []string
 	for _, member := range members {
-		if member.name == "_key" {
+		var key string
+		if member.name == "_key" && json.Unmarshal(member.value, &key) == nil && key == entryKey {
 			continue
 		}
 		name, _ := json.Marshal(member.name)
