@@ -136,20 +136,21 @@ export const useBotLogs = ({
 
   const liveMode = streaming && !isHistoricalQuery(query);
 
+  // Background refetch (polls, the stream opening) that skips views the
+  // user has paged, whose older pages a replace would drop.
+  const refetchUnlessPaged = useCallback(() => {
+    if (
+      !paginatedRef.current &&
+      !loadingMoreRef.current &&
+      !loadingEarlierRef.current
+    ) {
+      fetchLogsRef.current();
+    }
+  }, []);
+
   const { startPolling, stopPolling, isPolling } = useLogPolling(
     refreshInterval,
-    () => {
-      // Skip the tick while the user has paginated or a pagination fetch
-      // is in flight - fetchLogs aborts the previous request, so firing
-      // here would silently cancel their load-more/load-earlier click.
-      if (
-        !paginatedRef.current &&
-        !loadingMoreRef.current &&
-        !loadingEarlierRef.current
-      ) {
-        fetchLogsRef.current();
-      }
-    },
+    refetchUnlessPaged,
   );
 
   // -- Pending live updates (SSE lines buffered while history is in flight) --
@@ -247,6 +248,8 @@ export const useBotLogs = ({
         }
 
         const page = await fetchLogsPage(botId, queryParams, controller.signal);
+        // Superseded after its response arrived: the newer fetch owns state
+        if (controller.signal.aborted) return false;
         applyPage(page, merge, queryParams.sort);
         return true;
       } catch (err: any) {
@@ -335,6 +338,7 @@ export const useBotLogs = ({
     stream,
     live: liveMode && !!botId && !!user,
     onEntries: handleLiveEntries,
+    onOpen: refetchUnlessPaged,
     startPolling,
     stopPolling,
   });

@@ -139,6 +139,9 @@ interface LiveLogsOptions {
   /** Subscribe to the stream (live mode with a bot and a user). */
   live: boolean;
   onEntries: (entries: LogEntry[]) => void;
+  /** The stream has just opened: history read before then may miss lines
+   *  written while it was not open. */
+  onOpen: () => void;
   startPolling: () => void;
   stopPolling: () => void;
 }
@@ -152,10 +155,12 @@ export function useLiveLogs({
   stream,
   live,
   onEntries,
+  onOpen,
   startPolling,
   stopPolling,
 }: LiveLogsOptions): boolean {
   const { status, subscribe } = stream;
+  const previousStatusRef = useRef(status);
 
   useEffect(() => {
     if (!live) return;
@@ -163,13 +168,18 @@ export function useLiveLogs({
   }, [live, subscribe, onEntries]);
 
   useEffect(() => {
+    const opened = status === "open" && previousStatusRef.current !== "open";
+    previousStatusRef.current = status;
     if (!live) return;
     if (status === "down") {
       startPolling();
       return () => stopPolling();
     }
-    if (status === "open") stopPolling();
-  }, [live, status, startPolling, stopPolling]);
+    if (status === "open") {
+      stopPolling();
+      if (opened) onOpen();
+    }
+  }, [live, status, onOpen, startPolling, stopPolling]);
 
   return live && status === "open";
 }
