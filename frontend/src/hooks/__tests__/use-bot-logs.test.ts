@@ -2473,6 +2473,52 @@ describe("useBotLogs", () => {
       }
     });
 
+    it("keeps loaded earlier pages when a poll fires", async () => {
+      jest.useFakeTimers();
+      try {
+        mockAuthFetch.mockResolvedValueOnce(
+          restResponse({
+            data: [logEntry({ content: "current" })],
+            hasMore: true,
+          }),
+        );
+        const { result } = renderHook(() =>
+          useBotLogs({
+            botId: "bot-1",
+            autoRefresh: true,
+            refreshInterval: 5000,
+            initialQuery: { limit: 1, sort: "asc" },
+          }),
+        );
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(0);
+        });
+        expect(result.current.hasEarlierLogs).toBe(true);
+
+        mockAuthFetch.mockResolvedValueOnce(
+          restResponse({ data: [logEntry({ content: "earlier" })] }),
+        );
+        await act(async () => {
+          await result.current.loadEarlierLogs();
+        });
+        expect(result.current.logs).toHaveLength(2);
+
+        mockAuthFetch.mockResolvedValue(
+          restResponse({ data: [logEntry({ content: "current" })] }),
+        );
+        await act(async () => {
+          await jest.advanceTimersByTimeAsync(5000);
+        });
+
+        expect(result.current.logs.map((l) => l.content)).toEqual([
+          "earlier",
+          "current",
+        ]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it("starts again from the newest page when the query changes after paging", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
