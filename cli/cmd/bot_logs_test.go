@@ -106,6 +106,31 @@ func TestLogEntryText(t *testing.T) {
 			want:    `{"message":{"text":"nested"}}`,
 		},
 		{
+			name:    "a null _metric is not a metric",
+			content: `{"_metric":null,"message":"not a metric"}`,
+			want:    "not a metric",
+		},
+		{
+			name:    "a false _metric is not a metric",
+			content: `{"_metric":false,"message":"not a metric"}`,
+			want:    "not a metric",
+		},
+		{
+			name:    "an empty _metric is not a metric",
+			content: `{"_metric":"","message":"not a metric"}`,
+			want:    "not a metric",
+		},
+		{
+			name:    "a zero _metric is not a metric",
+			content: `{"_metric":0,"message":"not a metric"}`,
+			want:    "not a metric",
+		},
+		{
+			name:    "an object _metric is a metric",
+			content: `{"_metric":{},"message":"a metric"}`,
+			want:    `{"_metric":{},"message":"a metric"}`,
+		},
+		{
 			name:    "a _key the bot wrote is not the entry key and stays in the line",
 			key:     "20261022:0",
 			content: `{"_key":"user-42","event":"tick"}`,
