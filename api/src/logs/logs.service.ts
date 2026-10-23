@@ -357,7 +357,8 @@ export class LogsService {
     if (trailing) take(trailing.line, trailing.offset);
 
     if (newest.length > keep) newest.splice(0, newest.length - keep);
-    entries.push(...newest);
+    // A spread of this many arguments overflows the call stack.
+    for (const entry of newest) entries.push(entry);
   }
 
   private async openLogStream(

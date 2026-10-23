@@ -40,11 +40,15 @@ export class GetLogsQueryDto {
   @Max(2000)
   limit?: number;
 
-  /** Prefer `before`: an offset shifts when new lines arrive. */
+  /**
+   * Prefer `before`: an offset shifts when new lines arrive, and every entry
+   * it skips is read and held.
+   */
   @IsOptional()
   @Transform(toStrictNumber)
   @IsInt()
   @Min(0)
+  @Max(10000)
   offset?: number;
 
   /**
