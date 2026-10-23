@@ -91,6 +91,15 @@ const CompactStatusAndSearch = ({
   </>
 );
 
+const TimeZoneLabel = () => (
+  <span
+    className="mr-1 text-[10px] font-mono text-gray-500 dark:text-gray-400"
+    title="Log times are UTC"
+  >
+    UTC
+  </span>
+);
+
 export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = (props) => {
   const { compact, loading, sort, autoScroll } = props;
 
@@ -105,6 +114,7 @@ export const ConsoleToolbar: React.FC<ConsoleToolbarProps> = (props) => {
         )}
       >
         {compact && <CompactStatusAndSearch {...props} />}
+        <TimeZoneLabel />
         {!compact && (
           <Button
             variant="ghost"
