@@ -45,24 +45,14 @@ jest.mock("@/lib/api/api-client", () => ({
   },
 }));
 
-/** The bot page's shared log stream, or null while the module is missing. */
-function mockSharedStreamFor(botId: string): unknown {
-  let useShared: ((id: string) => unknown) | undefined;
-  try {
-    useShared = jest.requireActual(
-      "@/hooks/bot-logs/bot-log-stream",
-    ).useSharedBotLogStream;
-  } catch {
-    return null;
-  }
-  return useShared!(botId);
-}
-
 const mockUseBotLogs = jest.fn();
 jest.mock("@/hooks/use-bot-logs", () => ({
   useBotLogs: (...args: unknown[]) => {
+    const { useSharedBotLogStream } = jest.requireActual(
+      "@/hooks/bot-logs/bot-log-stream",
+    );
     mockUseBotLogs(...args, {
-      sharedStream: mockSharedStreamFor("bot-123") !== null,
+      sharedStream: useSharedBotLogStream("bot-123") !== null,
     });
     return {
       logs: [],
@@ -99,7 +89,10 @@ jest.mock("@/hooks/use-media-query", () => ({
 
 jest.mock("@/components/bot/bot-dashboard-loader", () => ({
   BotDashboardLoader: function MockDashboard() {
-    const shared = mockSharedStreamFor("bot-123") !== null;
+    const { useSharedBotLogStream } = jest.requireActual(
+      "@/hooks/bot-logs/bot-log-stream",
+    );
+    const shared = useSharedBotLogStream("bot-123") !== null;
     return <div data-testid="bot-dashboard" data-shared-stream={shared} />;
   },
 }));
