@@ -176,11 +176,12 @@ func (w *logWatch) newEntries(logs []internal.LogEntry) (fresh []internal.LogEnt
 	return fresh, mayHaveSkipped
 }
 
-// watchKey falls back to day and content for an api that predates entry
-// keys; identical lines on one day then print once.
+// watchKey falls back for an api that predates entry keys. That api sends
+// the bare message as content, so the timestamp is what tells a bot's
+// repeated messages apart; only repeats within one timestamp print once.
 func watchKey(entry internal.LogEntry) string {
 	if entry.Key != "" {
 		return entry.Key
 	}
-	return entry.Date + "|" + entry.Content
+	return entry.Date + "|" + entry.Timestamp + "|" + entry.Content
 }
