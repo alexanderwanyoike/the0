@@ -100,6 +100,17 @@ export function filterLiveEntries(
     : entries;
 }
 
+/** Lines stored before the runtime wrote JSON are wrapped the way the
+ *  runtime wraps plain text, so every exported line is JSON. */
+function asJsonLine(content: string): string {
+  try {
+    JSON.parse(content);
+    return content;
+  } catch {
+    return JSON.stringify({ message: content });
+  }
+}
+
 export function formatLogsForExport(logs: LogEntry[]): string {
-  return logs.map((log) => `${log.content}\n`).join("");
+  return logs.map((log) => `${asJsonLine(log.content)}\n`).join("");
 }
