@@ -180,9 +180,19 @@ describe("filterLiveEntries", () => {
 });
 
 describe("formatLogsForExport", () => {
-  it("prefixes each line with its date", () => {
-    expect(
-      formatLogsForExport([entry("a"), { ...entry("b"), date: "20240102" }]),
-    ).toBe("[20240101] a\n[20240102] b");
+  it("writes the stored lines as NDJSON, one per line", () => {
+    const lines = [
+      '{"_key":"1792713599999000000-0","message":"a"}',
+      '{"_metric":"price","value":1}',
+    ];
+    const exported = formatLogsForExport([
+      entry(lines[0]),
+      { ...entry(lines[1]), date: "20240102" },
+    ]);
+    expect(exported).toBe(lines.join("\n") + "\n");
+    exported
+      .trimEnd()
+      .split("\n")
+      .forEach((line) => expect(() => JSON.parse(line)).not.toThrow());
   });
 });

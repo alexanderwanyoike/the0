@@ -2075,12 +2075,12 @@ describe("useBotLogs", () => {
       createSpy.mockRestore();
     });
 
-    it("downloads the loaded lines as dated plain text", async () => {
+    it("downloads the loaded lines as an NDJSON file", async () => {
       mockAuthFetch.mockResolvedValue(
         restResponse({
           data: [
-            { content: "first", date: "20240101" },
-            { content: "second", date: "20240101" },
+            { content: '{"message":"first"}', date: "20240101" },
+            { content: '{"message":"second"}', date: "20240101" },
           ],
         }),
       );
@@ -2107,13 +2107,13 @@ describe("useBotLogs", () => {
         });
 
         const today = new Date().toISOString().split("T")[0];
-        expect(anchor.download).toBe(`bot-bot-1-logs-${today}.txt`);
+        expect(anchor.download).toBe(`bot-bot-1-logs-${today}.ndjson`);
         expect(anchor.href).toBe("blob:logs");
         expect(click).toHaveBeenCalledTimes(1);
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:logs");
-        expect(blobs[0].type).toBe("text/plain");
+        expect(blobs[0].type).toBe("application/x-ndjson");
         expect(await blobs[0].text()).toBe(
-          "[20240101] first\n[20240101] second",
+          '{"message":"first"}\n{"message":"second"}\n',
         );
       } finally {
         createSpy.mockRestore();
