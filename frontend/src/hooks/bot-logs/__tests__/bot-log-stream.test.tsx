@@ -54,6 +54,8 @@ let streamOk: boolean;
 /** While set, stream requests wait for releaseStream to answer. */
 let holdStreams: boolean;
 let held: (() => void)[];
+/** What the api has stored; a metrics read gets only the metric lines. */
+let stored: LogEntry[];
 const releaseStream = (index: number) => held[index]();
 
 function mockApi() {
@@ -68,11 +70,14 @@ function mockApi() {
       }
       return streamResponse(url, opts?.signal);
     }
+    const data = url.includes("type=metrics")
+      ? stored.filter((e) => e.content.includes('"_metric"'))
+      : stored;
     return {
       ok: true,
       json: async () => ({
         success: true,
-        data: [],
+        data,
         hasMore: false,
         nextCursor: null,
       }),
@@ -155,6 +160,7 @@ describe("BotLogStreamProvider", () => {
     streamOk = true;
     holdStreams = false;
     held = [];
+    stored = [];
     mockUseAuth.mockReturnValue({ user: { id: "user-1" } } as never);
     mockUseToast.mockReturnValue({
       toast: jest.fn(),
@@ -246,6 +252,75 @@ describe("BotLogStreamProvider", () => {
       expect(streams).toHaveLength(1);
       expect(streams[0].signal.aborted).toBe(false);
       expect(result.current.dashboard.connected).toBe(true);
+      unmount();
+    });
+  });
+
+  describe("catching up", () => {
+    it("reads history again once the stream opens", async () => {
+      holdStreams = true;
+      const { result, unmount } = renderBotPage();
+      await waitFor(() => {
+        expect(held).toHaveLength(1);
+        expect(result.current.console.loading).toBe(false);
+        expect(result.current.dashboard.loading).toBe(false);
+      });
+
+      // Written after the first read, before the stream opened
+      stored = [PLAIN, METRIC];
+      await act(async () => {
+        releaseStream(0);
+      });
+
+      await waitFor(() => {
+        expect(result.current.console.logs).toEqual([PLAIN, METRIC]);
+        expect(result.current.dashboard.logs).toEqual([METRIC]);
+      });
+      unmount();
+    });
+
+    it("catches every view up when the stream comes back", async () => {
+      streamOk = false;
+      const { result, unmount } = renderHook(
+        () => ({
+          console: useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 60000,
+            initialQuery: { limit: 100, sort: "asc" },
+          }),
+          dashboard: useBotLogs({
+            botId: "bot-1",
+            streaming: true,
+            refreshInterval: 60000,
+            initialQuery: { limit: 100, sort: "asc", type: "metrics" },
+          }),
+        }),
+        {
+          wrapper: ({ children }: { children: React.ReactNode }) => (
+            <BotLogStreamProvider botId="bot-1">
+              {children}
+            </BotLogStreamProvider>
+          ),
+        },
+      );
+      await waitFor(() => {
+        expect(result.current.console.loading).toBe(false);
+        expect(result.current.dashboard.loading).toBe(false);
+      });
+
+      // Written while the stream was down
+      stored = [PLAIN, METRIC];
+      streamOk = true;
+      act(() => {
+        result.current.console.refresh();
+      });
+
+      await waitFor(() => {
+        expect(result.current.dashboard.connected).toBe(true);
+        expect(result.current.dashboard.logs).toEqual([METRIC]);
+        expect(result.current.console.logs).toEqual([PLAIN, METRIC]);
+      });
       unmount();
     });
   });

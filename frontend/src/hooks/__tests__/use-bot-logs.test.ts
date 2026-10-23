@@ -1223,7 +1223,8 @@ describe("useBotLogs", () => {
         "newest",
       ]);
       expect(streamCallCount()).toBe(1);
-      expect(restCallCount()).toBe(1);
+      // The history read, then a read once the stream is open
+      await waitFor(() => expect(restCallCount()).toBe(2));
     });
 
     it("appends SSE update events after history loads", async () => {
@@ -2344,15 +2345,13 @@ describe("useBotLogs", () => {
 
     it("loads earlier logs before the history's nextCursor, never a live line's key", async () => {
       const streams: ReturnType<typeof createMockSSEStream>[] = [];
-      let restCalls = 0;
       mockAuthFetch.mockImplementation(async (url: any, opts?: any) => {
         if (typeof url === "string" && url.includes("/stream")) {
           const s = createMockSSEStream(opts?.signal);
           streams.push(s);
           return { ok: true, body: s.stream } as any;
         }
-        restCalls++;
-        return restCalls === 1
+        return !String(url).includes("before=")
           ? restResponse({
               data: [logEntry({ content: "Current" })],
               hasMore: true,
@@ -2396,8 +2395,9 @@ describe("useBotLogs", () => {
         const restUrls = mockAuthFetch.mock.calls
           .map((c) => c[0] as string)
           .filter((u) => !u.includes("/stream"));
-        expect(restUrls[1]).toContain("before=20240101%3A200");
-        expect(restUrls[2]).toContain("before=20240101%3A100");
+        const pageUrls = restUrls.filter((u) => u.includes("before="));
+        expect(pageUrls[0]).toContain("before=20240101%3A200");
+        expect(pageUrls[1]).toContain("before=20240101%3A100");
         restUrls.forEach((url) => expect(url).not.toContain("offset="));
         expect(result.current.loadingEarlier).toBe(false);
       } finally {
