@@ -4,6 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { ConsoleInterface } from "./console-interface";
 import type { LogEntry } from "@/types/logs";
 
+/** A log line as the api sends it, keyed by its day and content. */
+const line = (content: string, date = "20251227"): LogEntry => ({
+  key: `${date}:${content}`,
+  date,
+  timestamp: null,
+  content,
+});
+
 jest.mock("react-virtuoso", () => ({
   Virtuoso: React.forwardRef(
     (
@@ -61,8 +69,8 @@ describe("ConsoleInterface", () => {
 
     it("renders log entries", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "First log message" },
-        { date: "20251227", content: "Second log message" },
+        line("First log message", "20251227"),
+        line("Second log message", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -73,10 +81,10 @@ describe("ConsoleInterface", () => {
 
     it("renders metrics with special styling", () => {
       const logs: LogEntry[] = [
-        {
-          date: "20251227",
-          content: '{"_metric": "trade", "symbol": "BTC/USD", "price": 50000}',
-        },
+        line(
+          '{"_metric": "trade", "symbol": "BTC/USD", "price": 50000}',
+          "20251227",
+        ),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -89,10 +97,10 @@ describe("ConsoleInterface", () => {
 
     it("renders structured JSON logs as messages", () => {
       const logs: LogEntry[] = [
-        {
-          date: "20251227",
-          content: '{"level": "info", "msg": "Bot initialized successfully"}',
-        },
+        line(
+          '{"level": "info", "msg": "Bot initialized successfully"}',
+          "20251227",
+        ),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -105,9 +113,9 @@ describe("ConsoleInterface", () => {
 
     it("shows entry count in header", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "Log 1" },
-        { date: "20251227", content: "Log 2" },
-        { date: "20251227", content: "Log 3" },
+        line("Log 1", "20251227"),
+        line("Log 2", "20251227"),
+        line("Log 3", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -116,7 +124,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("hides header in compact mode", () => {
-      const logs: LogEntry[] = [{ date: "20251227", content: "Log message" }];
+      const logs: LogEntry[] = [line("Log message", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} compact={true} />);
 
@@ -125,7 +133,7 @@ describe("ConsoleInterface", () => {
 
     it("displays timestamps correctly", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "[2025-12-27 14:30:45] Hello world" },
+        line("[2025-12-27 14:30:45] Hello world", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -136,9 +144,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("shows message for logs without timestamp", () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "No timestamp here" },
-      ];
+      const logs: LogEntry[] = [line("No timestamp here", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -150,7 +156,7 @@ describe("ConsoleInterface", () => {
   describe("log level indicators", () => {
     it("shows ERROR level badge", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "ERROR: Something went wrong" },
+        line("ERROR: Something went wrong", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -159,9 +165,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("shows WARN level badge", () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "WARN: Be careful" },
-      ];
+      const logs: LogEntry[] = [line("WARN: Be careful", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -169,9 +173,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("shows INFO level badge", () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "INFO: All good" },
-      ];
+      const logs: LogEntry[] = [line("INFO: All good", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -179,9 +181,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("shows DEBUG level badge", () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "DEBUG: Debugging info" },
-      ];
+      const logs: LogEntry[] = [line("DEBUG: Debugging info", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -191,7 +191,7 @@ describe("ConsoleInterface", () => {
 
   describe("copy functionality", () => {
     it("has copy button in log entry", async () => {
-      const logs: LogEntry[] = [{ date: "20251227", content: "Copy me" }];
+      const logs: LogEntry[] = [line("Copy me", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -206,9 +206,7 @@ describe("ConsoleInterface", () => {
         clipboard: { writeText },
       });
 
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "Copy this message" },
-      ];
+      const logs: LogEntry[] = [line("Copy this message", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -228,10 +226,10 @@ describe("ConsoleInterface", () => {
       });
 
       const logs: LogEntry[] = [
-        {
-          date: "20251227",
-          content: '{"_metric": "trade", "symbol": "ETH/USD", "amount": 10}',
-        },
+        line(
+          '{"_metric": "trade", "symbol": "ETH/USD", "amount": 10}',
+          "20251227",
+        ),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -253,7 +251,7 @@ describe("ConsoleInterface", () => {
         clipboard: { writeText },
       });
 
-      const logs: LogEntry[] = [{ date: "20251227", content: "Copy me" }];
+      const logs: LogEntry[] = [line("Copy me", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -277,9 +275,9 @@ describe("ConsoleInterface", () => {
 
     it("filters logs by search query", async () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "Apple message" },
-        { date: "20251227", content: "Banana message" },
-        { date: "20251227", content: "Cherry message" },
+        line("Apple message", "20251227"),
+        line("Banana message", "20251227"),
+        line("Cherry message", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -301,8 +299,8 @@ describe("ConsoleInterface", () => {
 
     it("search is case insensitive", async () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "UPPERCASE message" },
-        { date: "20251227", content: "lowercase message" },
+        line("UPPERCASE message", "20251227"),
+        line("lowercase message", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -346,7 +344,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("shows 'No logs match filter' when search has no results", async () => {
-      const logs: LogEntry[] = [{ date: "20251227", content: "Some log" }];
+      const logs: LogEntry[] = [line("Some log", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -362,9 +360,9 @@ describe("ConsoleInterface", () => {
 
     it("updates entry count based on filter", async () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "Match this" },
-        { date: "20251227", content: "Match this too" },
-        { date: "20251227", content: "Ignore this" },
+        line("Match this", "20251227"),
+        line("Match this too", "20251227"),
+        line("Ignore this", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -461,7 +459,7 @@ describe("ConsoleInterface", () => {
   describe("expand/collapse interactions", () => {
     it("displays long messages", () => {
       const longMessage = "A".repeat(200);
-      const logs: LogEntry[] = [{ date: "20251227", content: longMessage }];
+      const logs: LogEntry[] = [line(longMessage, "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -470,9 +468,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("expands message on click", async () => {
-      const logs: LogEntry[] = [
-        { date: "20251227", content: "Click to expand me" },
-      ];
+      const logs: LogEntry[] = [line("Click to expand me", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -495,7 +491,7 @@ describe("ConsoleInterface", () => {
   describe("timestamp and indicator display", () => {
     it("displays timestamp from log", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "[2025-12-27 10:00:00] Message" },
+        line("[2025-12-27 10:00:00] Message", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -528,7 +524,7 @@ describe("ConsoleInterface", () => {
     });
 
     it("displays level indicator", () => {
-      const logs: LogEntry[] = [{ date: "20251227", content: "INFO: Message" }];
+      const logs: LogEntry[] = [line("INFO: Message", "20251227")];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
 
@@ -545,9 +541,9 @@ describe("ConsoleInterface", () => {
 
     it("displays logs in received order (no client-side reversal)", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: "First log" },
-        { date: "20251227", content: "Second log" },
-        { date: "20251227", content: "Third log" },
+        line("First log", "20251227"),
+        line("Second log", "20251227"),
+        line("Third log", "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -567,7 +563,7 @@ describe("ConsoleInterface", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "20251227", content: "Log" }]}
+          logs={[line("Log", "20251227")]}
           sort="desc"
           onSortChange={onSortChange}
         />,
@@ -585,7 +581,7 @@ describe("ConsoleInterface", () => {
       render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "20251227", content: "Log" }]}
+          logs={[line("Log", "20251227")]}
           sort="asc"
           onSortChange={onSortChange}
         />,
@@ -601,7 +597,7 @@ describe("ConsoleInterface", () => {
       const { rerender } = render(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "20251227", content: "Log" }]}
+          logs={[line("Log", "20251227")]}
           sort="desc"
         />,
       );
@@ -612,7 +608,7 @@ describe("ConsoleInterface", () => {
       rerender(
         <ConsoleInterface
           {...defaultProps}
-          logs={[{ date: "20251227", content: "Log" }]}
+          logs={[line("Log", "20251227")]}
           sort="asc"
         />,
       );
@@ -624,7 +620,7 @@ describe("ConsoleInterface", () => {
         <ConsoleInterface
           {...defaultProps}
           compact={true}
-          logs={[{ date: "20251227", content: "Log" }]}
+          logs={[line("Log", "20251227")]}
         />,
       );
 
@@ -636,10 +632,7 @@ describe("ConsoleInterface", () => {
   describe("metric rendering", () => {
     it("shows metric type as badge", () => {
       const logs: LogEntry[] = [
-        {
-          date: "20251227",
-          content: '{"_metric": "portfolio_value", "value": 10000}',
-        },
+        line('{"_metric": "portfolio_value", "value": 10000}', "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -650,10 +643,10 @@ describe("ConsoleInterface", () => {
 
     it("excludes _metric key from display values", () => {
       const logs: LogEntry[] = [
-        {
-          date: "20251227",
-          content: '{"_metric": "trade", "symbol": "BTC", "price": 50000}',
-        },
+        line(
+          '{"_metric": "trade", "symbol": "BTC", "price": 50000}',
+          "20251227",
+        ),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -666,11 +659,10 @@ describe("ConsoleInterface", () => {
 
     it("formats nested objects in metrics", () => {
       const logs: LogEntry[] = [
-        {
-          date: "20251227",
-          content:
-            '{"_metric": "order", "details": {"id": 123, "status": "filled"}}',
-        },
+        line(
+          '{"_metric": "order", "details": {"id": 123, "status": "filled"}}',
+          "20251227",
+        ),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
@@ -681,7 +673,7 @@ describe("ConsoleInterface", () => {
 
     it("displays metric value", () => {
       const logs: LogEntry[] = [
-        { date: "20251227", content: '{"_metric": "test", "value": 1}' },
+        line('{"_metric": "test", "value": 1}', "20251227"),
       ];
 
       render(<ConsoleInterface {...defaultProps} logs={logs} />);
