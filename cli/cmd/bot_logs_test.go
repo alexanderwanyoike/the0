@@ -274,6 +274,18 @@ func TestLogWatchNewEntries(t *testing.T) {
 		}
 	})
 
+	t.Run("an empty fetch does not forget what was printed", func(t *testing.T) {
+		watch := &logWatch{}
+		watch.newEntries(watchEntries("a", "b"))
+		watch.newEntries(nil)
+
+		got := watch.newEntries(watchEntries("a", "b", "c"))
+
+		if want := watchEntries("c"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
 	t.Run("prints new entries as the limit window moves on", func(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b", "c"))
