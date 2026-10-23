@@ -509,8 +509,7 @@ export class LogsService {
       entries.push(entry);
     }
 
-    // Keep only the last `limit` entries (skip for metrics - return all)
-    if (query.type !== "metrics" && entries.length > query.limit) {
+    if (entries.length > query.limit) {
       entries.splice(0, entries.length - query.limit);
     }
 
