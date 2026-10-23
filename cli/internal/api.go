@@ -171,6 +171,7 @@ type LogsParams struct {
 	Date      string `json:"date,omitempty"`
 	DateRange string `json:"dateRange,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
+	Sort      string `json:"sort,omitempty"`
 }
 
 // TestAPIKey tests if an API key is valid
@@ -882,6 +883,9 @@ func (c *APIClient) GetBotLogs(auth *Auth, botID string, params *LogsParams) ([]
 		}
 		if params.Limit > 0 {
 			q.Add("limit", fmt.Sprintf("%d", params.Limit))
+		}
+		if params.Sort != "" {
+			q.Add("sort", params.Sort)
 		}
 		req.URL.RawQuery = q.Encode()
 	}

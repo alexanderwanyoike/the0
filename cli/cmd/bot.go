@@ -886,8 +886,11 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 }
 
 func botLogsParams(dateParam string, limit int) *internal.LogsParams {
+	// asc is the newest `limit` entries in chronological order, so the
+	// newest line ends up at the bottom like tail.
 	params := &internal.LogsParams{
 		Limit: limit,
+		Sort:  "asc",
 	}
 
 	if strings.Contains(dateParam, "-") {
