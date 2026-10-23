@@ -98,7 +98,7 @@ func NewBotLogsCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&watchMode, "watch", "w", false, "Watch logs in real-time (polls every 5 seconds)")
+	cmd.Flags().BoolVarP(&watchMode, "watch", "w", false, "Watch logs in real-time (polls every second)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum number of log entries to return (max 1000)")
 
 	return cmd
@@ -854,8 +854,7 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 			os.Exit(1)
 		}
 	} else {
-		// Default to current date
-		dateParam = time.Now().Format("20060102")
+		dateParam = defaultLogDate(time.Now())
 	}
 
 	// Validate limit
@@ -883,6 +882,26 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 	} else {
 		displayBotLogs(apiClient, auth, botID, dateParam, limit)
 	}
+}
+
+func botLogsParams(dateParam string, limit int) *internal.LogsParams {
+	// asc is the newest `limit` entries in chronological order, so the
+	// newest line ends up at the bottom like tail.
+	params := &internal.LogsParams{
+		Limit: limit,
+		Sort:  "asc",
+	}
+
+	if strings.Contains(dateParam, "-") {
+		params.DateRange = dateParam
+	} else {
+		params.Date = dateParam
+	}
+	return params
+}
+
+func defaultLogDate(now time.Time) string {
+	return now.UTC().Format("20060102")
 }
 
 func validateDateParam(dateParam string) error {
@@ -919,16 +938,7 @@ func validateDateParam(dateParam string) error {
 }
 
 func displayBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dateParam string, limit int) {
-	// Build parameters
-	params := &internal.LogsParams{
-		Limit: limit,
-	}
-
-	if strings.Contains(dateParam, "-") {
-		params.DateRange = dateParam
-	} else {
-		params.Date = dateParam
-	}
+	params := botLogsParams(dateParam, limit)
 
 	// Fetch logs
 	logs, err := apiClient.GetBotLogs(auth, botID, params)
@@ -975,22 +985,12 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Keep track of last seen timestamp to avoid duplicates
-	var lastTimestamp int64 = 0
+	watch := newLogWatch(limit)
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	// Initial fetch
-	params := &internal.LogsParams{
-		Limit: limit,
-	}
-
-	if strings.Contains(dateParam, "-") {
-		params.DateRange = dateParam
-	} else {
-		params.Date = dateParam
-	}
+	params := watchLogsParams(dateParam, limit)
 
 	// Fetch initial logs
 	logs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
@@ -999,16 +999,8 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 		os.Exit(1)
 	}
 
-	if len(logs) > 0 {
-		displayLogEntries(logs)
-		// Update last timestamp
-		for _, log := range logs {
-			if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-				if logTime.Unix() > lastTimestamp {
-					lastTimestamp = logTime.Unix()
-				}
-			}
-		}
+	if fresh, _ := watch.newEntries(logs); len(fresh) > 0 {
+		displayLogEntries(fresh)
 	}
 
 	logger.Newline()
@@ -1020,33 +1012,18 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 			logger.Info("Stopped watching logs")
 			return
 		case <-ticker.C:
-			// Fetch new logs since last timestamp
 			newLogs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
 			if err != nil {
 				logger.Error("Error fetching logs: %v", err)
 				continue
 			}
 
-			// Filter out logs we've already seen
-			var unseenLogs []internal.LogEntry
-			for _, log := range newLogs {
-				if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-					if logTime.Unix() > lastTimestamp {
-						unseenLogs = append(unseenLogs, log)
-					}
-				}
+			fresh, mayHaveSkipped := watch.newEntries(newLogs)
+			if mayHaveSkipped {
+				logger.Warning("... lines may have been skipped: more than %d arrived since the last poll (raise --limit) ...", limit)
 			}
-
-			if len(unseenLogs) > 0 {
-				displayLogEntries(unseenLogs)
-				// Update last timestamp
-				for _, log := range unseenLogs {
-					if logTime, err := time.Parse(time.RFC3339, log.Date); err == nil {
-						if logTime.Unix() > lastTimestamp {
-							lastTimestamp = logTime.Unix()
-						}
-					}
-				}
+			if len(fresh) > 0 {
+				displayLogEntries(fresh)
 			}
 		}
 	}
@@ -1071,16 +1048,6 @@ func displayLogEntries(logs []internal.LogEntry) {
 	white := color.New(color.FgWhite)
 
 	for _, log := range logs {
-		// Parse and format date
-		logTime, err := time.Parse(time.RFC3339, log.Date)
-		var timeStr string
-		if err != nil {
-			timeStr = log.Date // Fallback to original date string
-		} else {
-			timeStr = logTime.Format("2006-01-02 15:04:05")
-		}
-
-		// Display log entry
-		fmt.Printf("[%s] %s\n", cyan.Sprint(timeStr), white.Sprint(log.Content))
+		fmt.Printf("[%s] %s\n", cyan.Sprint(logEntryTime(log)), white.Sprint(logEntryText(log)))
 	}
 }
