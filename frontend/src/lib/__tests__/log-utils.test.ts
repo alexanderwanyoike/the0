@@ -1,6 +1,7 @@
 import {
   MAX_LOG_ENTRIES,
   buildLogsSearchParams,
+  filterLiveEntries,
   formatLogsForExport,
   isHistoricalQuery,
   mergeUniqueEntries,
@@ -12,6 +13,13 @@ const entry = (content: string, key = content): LogEntry => ({
   key,
   date: "20240101",
   timestamp: null,
+  content,
+});
+
+const liveEntry = (index: number, content: string): LogEntry => ({
+  key: `1792713599999000000-${index}`,
+  date: "20261022",
+  timestamp: "2026-10-22T23:59:59.999Z",
   content,
 });
 
@@ -117,33 +125,12 @@ describe("mergeUniqueEntries", () => {
 });
 
 describe("parseLiveUpdate", () => {
-  const liveEntry = (index: number, content: string): LogEntry => ({
-    key: `1792713599999000000-${index}`,
-    date: "20261022",
-    timestamp: "2026-10-22T23:59:59.999Z",
-    content,
-  });
-
   it("returns the entries of an update as sent", () => {
     const entries = [
       liveEntry(0, '{"_key":"1792713599999000000-0","message":"one"}'),
       liveEntry(1, '{"_key":"1792713599999000000-1","message":"two"}'),
     ];
     expect(parseLiveUpdate(JSON.stringify(entries))).toEqual(entries);
-  });
-
-  it("keeps only metric lines for a metrics query, by the api's rule", () => {
-    const metric = liveEntry(0, '{"_metric":"price","v":1}');
-    const entries = [
-      metric,
-      liveEntry(1, '{"message":"mentions _metric in passing"}'),
-      liveEntry(2, '{"_metric":"","v":1}'),
-      liveEntry(3, "null"),
-      liveEntry(4, "{bad json"),
-    ];
-    expect(parseLiveUpdate(JSON.stringify(entries), "metrics")).toEqual([
-      metric,
-    ]);
   });
 
   it("throws on payloads that are not JSON", () => {
@@ -154,6 +141,25 @@ describe("parseLiveUpdate", () => {
     expect(() =>
       parseLiveUpdate(JSON.stringify({ content: "a", timestamp: "t" })),
     ).toThrow();
+  });
+});
+
+describe("filterLiveEntries", () => {
+  it("keeps only metric lines for a metrics query, by the api's rule", () => {
+    const metric = liveEntry(0, '{"_metric":"price","v":1}');
+    const entries = [
+      metric,
+      liveEntry(1, '{"message":"mentions _metric in passing"}'),
+      liveEntry(2, '{"_metric":"","v":1}'),
+      liveEntry(3, "null"),
+      liveEntry(4, "{bad json"),
+    ];
+    expect(filterLiveEntries(entries, "metrics")).toEqual([metric]);
+  });
+
+  it("keeps every line for other queries", () => {
+    const entries = [liveEntry(0, "plain"), liveEntry(1, '{"_metric":"a"}')];
+    expect(filterLiveEntries(entries)).toEqual(entries);
   });
 });
 
