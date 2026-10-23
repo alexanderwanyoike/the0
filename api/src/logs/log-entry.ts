@@ -22,10 +22,11 @@ interface ParsedLine {
 }
 
 /**
- * The runtime's `<unix ns>-<index>` form. Files from before the runtime
- * stamped keys can hold a `_key` a bot logged itself, which is not unique.
+ * The runtime's `<unix ns>-<index>` form; a nanosecond time has at least 16
+ * digits. Files from before the runtime stamped keys can hold a `_key` a bot
+ * logged itself, which is not unique.
  */
-const RUNTIME_KEY = /^\d+-\d+$/;
+const RUNTIME_KEY = /^(\d{16,})-\d+$/;
 
 function parseLine(line: string): ParsedLine {
   try {
@@ -47,14 +48,12 @@ function parseLine(line: string): ParsedLine {
 export const utcDay = (date: Date): string =>
   date.toISOString().slice(0, 10).replace(/-/g, "");
 
-const KEY_CHUNK_NS = /^(\d{7,})-\d+$/;
-
 /**
  * The runtime names a chunk's daily file after the UTC day of the chunk time
  * it puts in every `_key` of that chunk, so a live line can name its file.
  */
 export function runtimeKeyDay(key: string): string | null {
-  const match = KEY_CHUNK_NS.exec(key);
+  const match = RUNTIME_KEY.exec(key);
   if (!match) return null;
   const millis = Number(match[1].slice(0, -6));
   const day = new Date(millis);
