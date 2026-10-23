@@ -344,16 +344,30 @@ export class LogsService {
     if (!stream) return;
 
     const newest: LogEntry[] = [];
+    let pastWindow = false;
     const take = (line: string, offset: number) => {
+      // Lines are stored in time order, so none after this one can match.
+      if (LogsService.isAfterTimeWindow(line, query)) {
+        pastWindow = true;
+        return;
+      }
       this.collectLine(line, offset, logDate, query, newest);
       // Trimming in batches keeps the splice cost linear overall.
       if (newest.length >= 2 * keep) newest.splice(0, newest.length - keep);
     };
     const splitter = new LineSplitter();
-    for await (const chunk of stream) {
-      for (const { line, offset } of splitter.push(chunk)) take(line, offset);
+    read: for await (const chunk of stream) {
+      for (const { line, offset } of splitter.push(chunk)) {
+        take(line, offset);
+        if (pastWindow) {
+          (
+            stream as NodeJS.ReadableStream & { destroy?: () => void }
+          ).destroy?.();
+          break read;
+        }
+      }
     }
-    const trailing = splitter.rest();
+    const trailing = pastWindow ? null : splitter.rest();
     if (trailing) take(trailing.line, trailing.offset);
 
     if (newest.length > keep) newest.splice(0, newest.length - keep);
@@ -409,6 +423,13 @@ export class LogsService {
     } catch {
       return false;
     }
+  }
+
+  private static isAfterTimeWindow(line: string, query: LogsQuery): boolean {
+    if (!query.endTime) return false;
+    const { timestamp } = storedLogEntry(line, "", 0);
+    const time = timestamp ? new Date(timestamp).getTime() : NaN;
+    return time > query.endTime.getTime();
   }
 
   /** Lines without a timestamp are kept: they cannot be placed in a window. */
