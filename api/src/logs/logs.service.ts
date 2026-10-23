@@ -178,6 +178,9 @@ export class LogsService {
     if (position && this.isValidDateFormat(position[1])) {
       return Ok({ date: position[1], offset: Number(position[2]) });
     }
+    if (/^\d{8}:\d{16,}$/.test(key)) {
+      return Failure("Invalid before cursor: its byte offset is too large");
+    }
     const date = runtimeKeyDay(key);
     if (!date) {
       return Failure("Invalid before cursor: expected a log entry key");
