@@ -80,8 +80,16 @@ export function parseLiveUpdate(data: string, type?: string): LogEntry[] {
   if (!Array.isArray(entries)) {
     throw new TypeError("Live update is not a list of log entries");
   }
+  return filterLiveEntries(entries, type);
+}
+
+/** The live entries a query of `type` shows. */
+export function filterLiveEntries(
+  entries: LogEntry[],
+  type?: string,
+): LogEntry[] {
   return type === "metrics"
-    ? entries.filter((entry: LogEntry) => isMetricLine(entry.content))
+    ? entries.filter((entry) => isMetricLine(entry.content))
     : entries;
 }
 
