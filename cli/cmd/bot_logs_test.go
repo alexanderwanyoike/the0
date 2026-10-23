@@ -331,6 +331,24 @@ func TestLogWatchNewEntries(t *testing.T) {
 		}
 	})
 
+	t.Run("prints a repeated message again when the api sends no key", func(t *testing.T) {
+		ticks := func(timestamps ...string) []internal.LogEntry {
+			entries := make([]internal.LogEntry, len(timestamps))
+			for i, timestamp := range timestamps {
+				entries[i] = internal.LogEntry{Date: "20261022", Timestamp: timestamp, Content: "tick"}
+			}
+			return entries
+		}
+		watch := &logWatch{}
+		watch.newEntries(ticks("2026-10-22T10:00:00Z", "2026-10-22T10:00:01Z"))
+
+		got, _ := watch.newEntries(ticks("2026-10-22T10:00:00Z", "2026-10-22T10:00:01Z", "2026-10-22T10:00:02Z"))
+
+		if want := ticks("2026-10-22T10:00:02Z"); !reflect.DeepEqual(got, want) {
+			t.Errorf("newEntries() = %v, want %v", got, want)
+		}
+	})
+
 	t.Run("prints new entries as the limit window moves on", func(t *testing.T) {
 		watch := &logWatch{}
 		watch.newEntries(watchEntries("a", "b", "c"))
