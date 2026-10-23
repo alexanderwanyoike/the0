@@ -2,6 +2,9 @@ import type { LogEntry, LogsQuery } from "@/types/logs";
 
 export const MAX_LOG_ENTRIES = 10000;
 
+/** The api's nextCursor: `<YYYYMMDD>:<byte offset>` in that day's file. */
+const POSITION_CURSOR = /^(\d{8}):\d+$/;
+
 /** A date or date range pins the view to history, which live streaming
  *  cannot extend. */
 export function isHistoricalQuery(query: LogsQuery): boolean {
@@ -17,9 +20,14 @@ export function buildLogsSearchParams(query: LogsQuery): URLSearchParams {
   } else if (query.lookbackDays) {
     searchParams.set("lookbackDays", query.lookbackDays.toString());
   } else {
+    // A live view's older pages belong to its cursor's day, which stops
+    // being today at midnight UTC
+    const cursorDay = query.before
+      ? POSITION_CURSOR.exec(query.before)?.[1]
+      : undefined;
     searchParams.set(
       "date",
-      new Date().toISOString().slice(0, 10).replace(/-/g, ""),
+      cursorDay ?? new Date().toISOString().slice(0, 10).replace(/-/g, ""),
     );
   }
   if (query.limit) searchParams.set("limit", query.limit.toString());
