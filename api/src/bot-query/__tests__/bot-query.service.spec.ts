@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
@@ -109,7 +110,7 @@ describe("BotQueryService", () => {
       mockBotService.findOne.mockResolvedValue({
         success: false,
         data: null,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
       });
 
       const result = await service.executeQuery(actor, "nonexistent-bot", {
@@ -126,7 +127,7 @@ describe("BotQueryService", () => {
       mockBotService.findOne.mockResolvedValue({
         success: false,
         data: null,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
       });
 
       await service.executeQuery(actor, "someone-elses-bot", {

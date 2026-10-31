@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CommandHandler } from "@/command-bus/command";
+import { appError, AppError } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { BotDeleteResult } from "@/custom-bot/custom-bot.types";
@@ -31,11 +32,11 @@ export class DeleteBotHandler
   async execute({
     actor,
     botId,
-  }: DeleteBot): Promise<Result<BotDeleteResult, string>> {
+  }: DeleteBot): Promise<Result<BotDeleteResult, AppError>> {
     // Read first: the delete event carries the config the bot was stored with.
     const botResult = await this.bots.findOne(actor.userId, botId);
     if (!botResult.success) {
-      return Failure("Bot not found");
+      return Failure(appError("not_found", "Bot not found"));
     }
 
     const eventsResult = await this.events.deleted(botResult.data);

@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import { createId } from "@paralleldrive/cuid2";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CommandHandler } from "@/command-bus/command";
+import { AppError } from "@/common/app-error";
 import { Failure, Result } from "@/common/result";
 import { BotRepository } from "../bot.repository";
 import { BotEventRelay } from "../bot-event-relay";
@@ -26,7 +27,7 @@ export class DeployBotHandler
     this.commandBus.register(DeployBot, this);
   }
 
-  async execute({ actor, bot }: DeployBot): Promise<Result<Bot, string>> {
+  async execute({ actor, bot }: DeployBot): Promise<Result<Bot, AppError>> {
     const resolved = await this.configs.resolve(bot.config);
     if (!resolved.success) {
       return Failure(resolved.error);

@@ -32,7 +32,7 @@ export class ApiKeyRepository extends RoleRepository<ApiKey> {
       const result = await this.create(data);
 
       if (!result.success) {
-        return Failure(result.error);
+        return Failure(result.error.message);
       }
 
       // Return with the actual key

@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import * as semver from "semver";
+import { appError, AppError } from "@/common/app-error";
 import { Failure, Ok, Result } from "@/common/result";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
 import { CustomBot } from "@/custom-bot/custom-bot.types";
@@ -16,23 +17,23 @@ export class BotConfigResolver {
     private readonly botValidator: BotValidator,
   ) {}
 
-  async resolve(config: BotConfig): Promise<Result<CustomBot, string>> {
+  async resolve(config: BotConfig): Promise<Result<CustomBot, AppError>> {
     const { type, version } = config;
 
     if (!type) {
-      return Failure("Bot type is required");
+      return invalid("Bot type is required");
     }
 
     if (!version) {
-      return Failure("Bot version is required");
+      return invalid("Bot version is required");
     }
 
     if (!BOT_TYPE_PATTERN.test(type)) {
-      return Failure("Invalid bot type format. Expected format: type/name");
+      return invalid("Invalid bot type format. Expected format: type/name");
     }
 
     if (!semver.valid(version)) {
-      return Failure("Invalid version format. Expected format: x.y.z");
+      return invalid("Invalid version format. Expected format: x.y.z");
     }
 
     const name = customBotNameOf(type);
@@ -43,7 +44,7 @@ export class BotConfigResolver {
     const customBotResult =
       await this.customBotService.getGlobalSpecificVersion(name.data, version);
     if (!customBotResult.success) {
-      return Failure(`Bot type '${type}' not found`);
+      return invalid(`Bot type '${type}' not found`);
     }
 
     const customBot = customBotResult.data;
@@ -52,9 +53,12 @@ export class BotConfigResolver {
       customBot,
     );
     if (!validationResult.success) {
-      return Failure(validationResult.error.join(", ") || "Invalid bot config");
+      return invalid(validationResult.error.join(", ") || "Invalid bot config");
     }
 
     return Ok(customBot);
   }
 }
+
+const invalid = (message: string): Result<CustomBot, AppError> =>
+  Failure(appError("validation", message));

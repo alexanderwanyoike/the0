@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { BotRepository } from "../bot.repository";
 import { BotValidator } from "../bot.validator";
 import { CustomBotService } from "@/custom-bot/custom-bot.service";
@@ -199,7 +200,7 @@ describe("Bot commands", () => {
       const result = await deploy(actor, invalidTypeBot);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid bot type format");
+      expect(result.error.message).toContain("Invalid bot type format");
     });
 
     it("should validate semantic version format", async () => {
@@ -214,7 +215,7 @@ describe("Bot commands", () => {
       const result = await deploy(actor, invalidVersionBot);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid version format");
+      expect(result.error.message).toContain("Invalid version format");
     });
 
     // Feature gate tests removed for OSS version
@@ -231,7 +232,7 @@ describe("Bot commands", () => {
       const result = await deploy(actor, validBotData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("not found");
+      expect(result.error.message).toContain("not found");
     });
 
     it("should fail when bot config validation fails", async () => {
@@ -244,18 +245,18 @@ describe("Bot commands", () => {
       const result = await deploy(actor, validBotData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Missing required field");
+      expect(result.error.message).toContain("Missing required field");
     });
 
     it("should fail when the repository cannot store the bot", async () => {
       jest
         .spyOn(repository, "createWithEvents")
-        .mockResolvedValue(Failure("db down"));
+        .mockResolvedValue(Failure(appError("internal", "db down")));
       jest.spyOn(repository, "findOne");
 
       const result = await deploy(actor, validBotData);
 
-      expect(result).toEqual(Failure("db down"));
+      expect(result).toEqual(Failure(appError("internal", "db down")));
       expect(relay.publishCommitted).not.toHaveBeenCalled();
       expect(repository.findOne).not.toHaveBeenCalled();
     });
@@ -357,7 +358,9 @@ describe("Bot commands", () => {
 
     it("cannot update or delete a bot the Actor's user does not own", async () => {
       validator.validate = jest.fn().mockReturnValue(Ok(null));
-      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Failure(appError("not_found", "missing")));
       jest
         .spyOn(repository, "updateWithEvents")
         .mockResolvedValue(Ok(mockBot()));
@@ -378,8 +381,8 @@ describe("Bot commands", () => {
       });
       const removed = await remove(otherUser, "test-id");
 
-      expect(updated).toEqual(Failure("Bot not found"));
-      expect(removed).toEqual(Failure("Bot not found"));
+      expect(updated).toEqual(Failure(appError("not_found", "Bot not found")));
+      expect(removed).toEqual(Failure(appError("not_found", "Bot not found")));
       expect(repository.findOne).toHaveBeenCalledWith(
         "other-user-id",
         "test-id",
@@ -590,8 +593,8 @@ describe("Bot commands", () => {
       const result = await update(actor, "test-id", majorUpdateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Major version upgrade");
-      expect(result.error).toContain("requires delete and redeploy");
+      expect(result.error.message).toContain("Major version upgrade");
+      expect(result.error.message).toContain("requires delete and redeploy");
       expect(updateSpy).not.toHaveBeenCalled();
     });
 
@@ -677,29 +680,31 @@ describe("Bot commands", () => {
       const result = await update(actor, "test-id", updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Invalid configuration");
+      expect(result.error.message).toContain("Invalid configuration");
     });
 
     it("should handle repository update failures", async () => {
       jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: false,
-        error: "Update failed",
+        error: appError("internal", "Update failed"),
         data: null,
       });
 
       const result = await update(actor, "test-id", updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Update failed");
+      expect(result.error).toEqual(appError("internal", "Update failed"));
     });
 
     it("should fail when the bot to update does not exist", async () => {
-      jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+      jest
+        .spyOn(repository, "findOne")
+        .mockResolvedValue(Failure(appError("not_found", "missing")));
       jest.spyOn(repository, "updateWithEvents");
 
       const result = await update(actor, "test-id", updateData);
 
-      expect(result).toEqual(Failure("Bot not found"));
+      expect(result).toEqual(Failure(appError("not_found", "Bot not found")));
       expect(repository.updateWithEvents).not.toHaveBeenCalled();
     });
 
@@ -836,7 +841,7 @@ describe("Bot commands", () => {
       it("should not ask the relay to publish when the repository update fails", async () => {
         jest
           .spyOn(repository, "updateWithEvents")
-          .mockResolvedValue(Failure("nope"));
+          .mockResolvedValue(Failure(appError("not_found", "nope")));
 
         await update(actor, "test-id", updateData);
 
@@ -927,14 +932,14 @@ describe("Bot commands", () => {
     it("should handle removal failures", async () => {
       jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
         data: null,
       });
 
       const result = await remove(actor, "test-id");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error).toEqual(appError("not_found", "Bot not found"));
     });
 
     describe("lifecycle", () => {
@@ -958,11 +963,13 @@ describe("Bot commands", () => {
       });
 
       it("should fail when the bot does not exist", async () => {
-        jest.spyOn(repository, "findOne").mockResolvedValue(Failure("missing"));
+        jest
+          .spyOn(repository, "findOne")
+          .mockResolvedValue(Failure(appError("not_found", "missing")));
 
         const result = await remove(actor, "test-id");
 
-        expect(result).toEqual(Failure("Bot not found"));
+        expect(result).toEqual(Failure(appError("not_found", "Bot not found")));
         expect(repository.removeWithEvents).not.toHaveBeenCalled();
       });
 
@@ -977,7 +984,9 @@ describe("Bot commands", () => {
         const result = await remove(actor, "test-id");
 
         expect(result).toEqual(
-          Failure("Invalid bot type: missing name after '/'"),
+          Failure(
+            appError("validation", "Invalid bot type: missing name after '/'"),
+          ),
         );
         expect(logger.warn).toHaveBeenCalledWith(
           { type: "scheduled/ " },
@@ -1055,11 +1064,11 @@ describe("Bot commands", () => {
       it("should neither check orphans nor ask the relay to publish when removal fails", async () => {
         jest
           .spyOn(repository, "removeWithEvents")
-          .mockResolvedValue(Failure("db down"));
+          .mockResolvedValue(Failure(appError("internal", "db down")));
 
         const result = await remove(actor, "test-id");
 
-        expect(result).toEqual(Failure("db down"));
+        expect(result).toEqual(Failure(appError("internal", "db down")));
         expect(mockCustomBotService.checkOrphaned).not.toHaveBeenCalled();
         expect(relay.publishCommitted).not.toHaveBeenCalled();
       });

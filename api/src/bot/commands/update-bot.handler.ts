@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import * as semver from "semver";
 import { CommandBus } from "@/command-bus/command-bus";
 import { CommandHandler } from "@/command-bus/command";
+import { appError, AppError } from "@/common/app-error";
 import { Failure, Result } from "@/common/result";
 import { BotRepository } from "../bot.repository";
 import { BotEventRelay } from "../bot-event-relay";
@@ -30,7 +31,7 @@ export class UpdateBotHandler
     actor,
     botId,
     changes,
-  }: UpdateBot): Promise<Result<Bot, string>> {
+  }: UpdateBot): Promise<Result<Bot, AppError>> {
     const resolved = await this.configs.resolve(changes.config);
     if (!resolved.success) {
       return Failure(resolved.error);
@@ -38,7 +39,7 @@ export class UpdateBotHandler
 
     const currentBot = await this.bots.findOne(actor.userId, botId);
     if (!currentBot.success) {
-      return Failure("Bot not found");
+      return Failure(appError("not_found", "Bot not found"));
     }
     const currentVersion = currentBot.data.config?.version;
     const newVersion = changes.config?.version;
@@ -47,7 +48,7 @@ export class UpdateBotHandler
       newVersion,
     );
     if (majorChangeError) {
-      return Failure(majorChangeError);
+      return Failure(appError("validation", majorChangeError));
     }
 
     const newCustomBot = resolved.data;

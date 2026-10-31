@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import request from "supertest";
 
@@ -175,7 +176,9 @@ describe("ApiKeyController (e2e)", () => {
   });
 
   it("/api-keys/:id (GET) should return 404 for non-existent key", async () => {
-    mockRepository.findOne.mockResolvedValue(Failure("Not found"));
+    mockRepository.findOne.mockResolvedValue(
+      Failure(appError("not_found", "Not found")),
+    );
 
     return request(app.getHttpServer())
       .get("/api-keys/non-existent-id")
@@ -230,7 +233,7 @@ describe("ApiKeyController (e2e)", () => {
 
   it("should handle repository errors gracefully", async () => {
     mockRepository.findAll.mockResolvedValue(
-      Failure("Database connection error"),
+      Failure(appError("internal", "Database connection error")),
     );
 
     return request(app.getHttpServer())

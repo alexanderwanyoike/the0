@@ -209,7 +209,7 @@ export class McpService {
   private async handleBotList(actor: Actor) {
     const result = await this.botService.findAll(actor);
     if (!result.success) {
-      throw new Error(result.error || "Failed to list bots");
+      throw new Error(result.error.message || "Failed to list bots");
     }
     // Return summary fields only to reduce context size
     return (result.data || []).map((bot) => ({
@@ -225,7 +225,7 @@ export class McpService {
   private async handleBotGet(input: BotGetInput, actor: Actor) {
     const result = await this.botService.findOne(actor, input.bot_id);
     if (!result.success) {
-      throw new Error(result.error || "Bot not found");
+      throw new Error(result.error.message || "Bot not found");
     }
     return result.data;
   }
@@ -242,7 +242,7 @@ export class McpService {
       new DeployBot(actor, { name, config: input.config }),
     );
     if (!result.success) {
-      throw new Error(result.error || "Failed to deploy bot");
+      throw new Error(result.error.message || "Failed to deploy bot");
     }
     return {
       message: "Bot deployed successfully",
@@ -263,7 +263,7 @@ export class McpService {
       }),
     );
     if (!result.success) {
-      throw new Error(result.error || "Failed to update bot");
+      throw new Error(result.error.message || "Failed to update bot");
     }
     return {
       message: "Bot updated successfully",
@@ -279,7 +279,7 @@ export class McpService {
       new DeleteBot(actor, input.bot_id),
     );
     if (!result.success) {
-      throw new Error(result.error || "Failed to delete bot");
+      throw new Error(result.error.message || "Failed to delete bot");
     }
     return { message: "Bot deleted successfully", bot_id: input.bot_id };
   }

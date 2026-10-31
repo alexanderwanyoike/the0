@@ -49,7 +49,7 @@ export class BotController {
       new DeployBot(actor, { ...createBotDto }),
     );
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
     return result.data;
   }
@@ -59,7 +59,7 @@ export class BotController {
   async findAll(@CurrentActor() actor: Actor) {
     const result = await this.botService.findAll(actor);
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw new NotFoundException(result.error.message);
     }
     return result.data;
   }
@@ -71,7 +71,7 @@ export class BotController {
   async findOne(@CurrentActor() actor: Actor, @Param("id") id: string) {
     const result = await this.botService.findOne(actor, id);
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw new NotFoundException(result.error.message);
     }
     return result.data;
   }
@@ -90,7 +90,7 @@ export class BotController {
       new UpdateBot(actor, id, { ...updateBotDto }),
     );
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
     return result.data;
   }
@@ -102,7 +102,7 @@ export class BotController {
   async remove(@CurrentActor() actor: Actor, @Param("id") id: string) {
     const result = await this.commandBus.execute(new DeleteBot(actor, id));
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
     return result.data;
   }

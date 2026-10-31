@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { BotController } from "../bot.controller";
 import { BotService } from "../bot.service";
 import { BotRepository } from "../bot.repository";
@@ -85,7 +86,11 @@ describe("BotController - Enhanced Tests", () => {
     getAllUserVersions: jest.fn(),
     getAllGlobalVersions: jest.fn(),
     getAllUserSpecificVersions: jest.fn(),
-    checkOrphaned: jest.fn().mockResolvedValue(Ok({ orphaned: false, name: "test", version: "1.0.0" })),
+    checkOrphaned: jest
+      .fn()
+      .mockResolvedValue(
+        Ok({ orphaned: false, name: "test", version: "1.0.0" }),
+      ),
   };
 
   beforeEach(async () => {
@@ -207,7 +212,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw BadRequestException when service fails", async () => {
       jest.spyOn(repository, "createWithEvents").mockResolvedValue({
         success: false,
-        error: "Creation failed",
+        error: appError("internal", "Creation failed"),
         data: null,
       });
 
@@ -308,7 +313,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw NotFoundException when service fails", async () => {
       jest.spyOn(repository, "findAll").mockResolvedValue({
         success: false,
-        error: "Database error",
+        error: appError("internal", "Database error"),
         data: null,
       });
 
@@ -353,7 +358,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw NotFoundException when bot not found", async () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
         data: null,
       });
 
@@ -365,7 +370,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should handle invalid bot ID format", async () => {
       jest.spyOn(repository, "findOne").mockResolvedValue({
         success: false,
-        error: "Invalid ID format",
+        error: appError("validation", "Invalid ID format"),
         data: null,
       });
 
@@ -450,7 +455,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw BadRequestException when update fails", async () => {
       jest.spyOn(repository, "updateWithEvents").mockResolvedValue({
         success: false,
-        error: "Update failed",
+        error: appError("internal", "Update failed"),
         data: null,
       });
 
@@ -521,7 +526,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should throw BadRequestException when removal fails", async () => {
       jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
-        error: "Bot not found",
+        error: appError("not_found", "Bot not found"),
         data: null,
       });
 
@@ -533,7 +538,7 @@ describe("BotController - Enhanced Tests", () => {
     it("should handle unauthorized removal attempt", async () => {
       jest.spyOn(repository, "removeWithEvents").mockResolvedValue({
         success: false,
-        error: "Unauthorized",
+        error: appError("internal", "Unauthorized"),
         data: null,
       });
 

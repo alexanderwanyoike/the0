@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { PinoLogger } from "nestjs-pino";
 import { McpService } from "../mcp.service";
 import { mockActor } from "@/test/mock-actor";
@@ -68,7 +69,7 @@ function createBotStore(seed: Bot[]) {
     },
     async findOne(userId: string, id: string) {
       const bot = owned(userId, id);
-      return bot ? Ok(bot) : Failure("Not found");
+      return bot ? Ok(bot) : Failure(appError("not_found", "Not found"));
     },
     async createWithEvents(data: Partial<Bot>, botEvents: BotEvent[]) {
       const bot = {
@@ -87,7 +88,7 @@ function createBotStore(seed: Bot[]) {
       botEvents: BotEvent[],
     ) {
       const bot = owned(userId, id);
-      if (!bot) return Failure("Not found");
+      if (!bot) return Failure(appError("not_found", "Not found"));
       const updated = { ...bot, ...data, updatedAt: new Date() };
       bots.set(id, updated);
       events.push(...botEvents);

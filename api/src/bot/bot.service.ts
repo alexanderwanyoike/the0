@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { BotRepository } from "./bot.repository";
 import { Bot } from "./entities/bot.entity";
+import { AppError } from "@/common/app-error";
 import { Result } from "@/common/result";
 import { Actor } from "@/auth/actor";
 
@@ -9,15 +10,15 @@ import { Actor } from "@/auth/actor";
 export class BotService {
   constructor(private readonly botRepository: BotRepository) {}
 
-  findAll(actor: Actor): Promise<Result<Bot[], string>> {
+  findAll(actor: Actor): Promise<Result<Bot[], AppError>> {
     return this.botRepository.findAll(actor.userId);
   }
 
-  findOne(actor: Actor, id: string): Promise<Result<Bot, string>> {
+  findOne(actor: Actor, id: string): Promise<Result<Bot, AppError>> {
     return this.botRepository.findOne(actor.userId, id);
   }
 
-  findOneByUserId(userId: string, id: string): Promise<Result<Bot, string>> {
+  findOneByUserId(userId: string, id: string): Promise<Result<Bot, AppError>> {
     return this.botRepository.findOne(userId, id);
   }
 }

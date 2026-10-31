@@ -1,3 +1,4 @@
+import { appError, AppError } from "./app-error";
 import { Result, Ok, Failure, errorMessage } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
@@ -16,7 +17,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
     return this.tables[this.tableName];
   }
 
-  async create(args: Partial<T>): Promise<Result<T, string>> {
+  async create(args: Partial<T>): Promise<Result<T, AppError>> {
     try {
       const data = {
         ...args,
@@ -32,14 +33,14 @@ export abstract class RoleRepository<T> implements Repository<T> {
       } as T);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating document");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async findAll(userId: string): Promise<Result<T[], string>> {
+  async findAll(userId: string): Promise<Result<T[], AppError>> {
     try {
       if (!userId) {
-        return Failure("User ID is required");
+        return Failure(appError("validation", "User ID is required"));
       }
 
       const records = await this.db
@@ -55,14 +56,14 @@ export abstract class RoleRepository<T> implements Repository<T> {
       );
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async findOne(userId: string, id: string): Promise<Result<T, string>> {
+  async findOne(userId: string, id: string): Promise<Result<T, AppError>> {
     try {
       if (!userId || !id) {
-        return Failure("User ID and ID are required");
+        return Failure(appError("validation", "User ID and ID are required"));
       }
 
       const records = await this.db
@@ -71,13 +72,13 @@ export abstract class RoleRepository<T> implements Repository<T> {
         .where(and(eq(this.table.userId, userId), eq(this.table.id, id)));
 
       if (records.length === 0) {
-        return Failure("Not found");
+        return Failure(appError("not_found", "Not found"));
       }
 
       return Ok(this.transformSnapshotToData<T>(records[0]));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
@@ -85,10 +86,10 @@ export abstract class RoleRepository<T> implements Repository<T> {
     userId: string,
     id: string,
     args: Partial<T>,
-  ): Promise<Result<T, string>> {
+  ): Promise<Result<T, AppError>> {
     try {
       if (!userId || !id) {
-        return Failure("User ID and ID are required");
+        return Failure(appError("validation", "User ID and ID are required"));
       }
 
       const updateData = {
@@ -104,14 +105,14 @@ export abstract class RoleRepository<T> implements Repository<T> {
       return this.findOne(userId, id);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error updating document");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async remove(userId: string, id: string): Promise<Result<void, string>> {
+  async remove(userId: string, id: string): Promise<Result<void, AppError>> {
     try {
       if (!userId || !id) {
-        return Failure("User ID and ID are required");
+        return Failure(appError("validation", "User ID and ID are required"));
       }
 
       await this.db
@@ -121,7 +122,7 @@ export abstract class RoleRepository<T> implements Repository<T> {
       return Ok(null);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting document");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
