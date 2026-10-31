@@ -168,6 +168,34 @@ describe("the0-react SDK", () => {
     });
   });
 
+  describe("what the platform provides", () => {
+    it("types the bot id and every utility the platform binds", () => {
+      const events: BotEvent[] = [];
+      const value: The0EventsContextValue = {
+        ...createMockContextValue(events),
+        botId: "bot-1",
+        isFetching: false,
+        connected: true,
+        lastUpdate: null,
+        utils: {
+          ...createMockUtils(events),
+          getMetricTypes: () => ["price"],
+          groupByTimeWindow: () => [],
+          latestByType: () => ({}),
+          countByType: () => ({ price: 2 }),
+        },
+      };
+
+      const { result } = renderHook(() => useThe0Events(), {
+        wrapper: createWrapper(value),
+      });
+
+      expect(result.current.botId).toBe("bot-1");
+      expect(result.current.utils.getMetricTypes?.()).toEqual(["price"]);
+      expect(result.current.utils.countByType?.()).toEqual({ price: 2 });
+    });
+  });
+
   describe("useBotEvents (alias)", () => {
     it("should be an alias for useThe0Events", () => {
       expect(useBotEvents).toBe(useThe0Events);
