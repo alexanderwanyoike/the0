@@ -310,7 +310,7 @@ describe("CustomBotService", () => {
       expect(result.error.message).toBe("Database error");
     });
 
-    it("should handle unexpected errors gracefully", async () => {
+    it("should report an unexpected error without its message", async () => {
       const userId = "user123";
       const filePath =
         "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
@@ -326,9 +326,9 @@ describe("CustomBotService", () => {
         filePath,
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Failed to create custom bot");
-      expect(result.error.message).toContain("Unexpected error");
+      expect(result).toEqual(
+        Failure(appError("internal", "Failed to create custom bot")),
+      );
     });
 
     it("should fail when realtime bot does not specify runtime", async () => {
@@ -819,7 +819,7 @@ describe("CustomBotService", () => {
       expect(result.error.message).toContain("ZIP validation failed");
     });
 
-    it("should handle unexpected errors gracefully", async () => {
+    it("should report an unexpected error without its message", async () => {
       const userId = "user123";
       const botName = "test-bot";
       const filePath =
@@ -837,9 +837,9 @@ describe("CustomBotService", () => {
         filePath,
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Failed to update custom bot");
-      expect(result.error.message).toContain("Database connection failed");
+      expect(result).toEqual(
+        Failure(appError("internal", "Failed to update custom bot")),
+      );
     });
 
     describe("pre-upload checks", () => {
@@ -1085,7 +1085,7 @@ describe("CustomBotService", () => {
       expect(mockRepository.getUserCustomBots).toHaveBeenCalledWith(userId);
     });
 
-    it("should handle unexpected errors gracefully", async () => {
+    it("should report an unexpected error without its message", async () => {
       const userId = "user123";
 
       mockRepository.getUserCustomBots.mockRejectedValue(
@@ -1094,9 +1094,9 @@ describe("CustomBotService", () => {
 
       const result = await service.getUserCustomBots(userId);
 
-      expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Failed to get user custom bots");
-      expect(result.error.message).toContain("Network timeout");
+      expect(result).toEqual(
+        Failure(appError("internal", "Failed to get user custom bots")),
+      );
     });
 
     it("should maintain correct data structure for grouped bots", async () => {
