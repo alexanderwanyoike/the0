@@ -14,10 +14,6 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/lib/auth/jwt-auth.service");
 
 // Mock all auth utility setters
-jest.mock("@/lib/axios-interceptor", () => ({
-  setAuthService: jest.fn(),
-}));
-
 jest.mock("@/lib/auth-fetch", () => ({
   setAuthFetchService: jest.fn(),
 }));
@@ -154,7 +150,6 @@ describe("AuthContext", () => {
     });
 
     it("should register auth service with all utilities", async () => {
-      const setAuthService = require("@/lib/axios-interceptor").setAuthService;
       const setAuthFetchService =
         require("@/lib/auth-fetch").setAuthFetchService;
       const setSSEAuthService = require("@/lib/sse/sse-auth").setSSEAuthService;
@@ -168,7 +163,6 @@ describe("AuthContext", () => {
       );
 
       await waitFor(() => {
-        expect(setAuthService).toHaveBeenCalled();
         expect(setAuthFetchService).toHaveBeenCalled();
         expect(setSSEAuthService).toHaveBeenCalled();
       });
