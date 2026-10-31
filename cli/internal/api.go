@@ -209,7 +209,7 @@ func (c *APIClient) DeployBot(config *BotConfig, auth *Auth, zipPath string, isU
 	filePath, err := c.UploadFileDirect(config.Name, config.Version, zipPath, auth)
 	if err != nil {
 		logger.StopSpinner()
-		return fmt.Errorf("failed to upload file: %v", err)
+		return fmt.Errorf("failed to upload file: %w", err)
 	}
 	logger.StopSpinnerWithSuccess("Upload complete ⚡")
 
