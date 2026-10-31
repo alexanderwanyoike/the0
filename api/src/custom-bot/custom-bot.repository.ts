@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
+import pino from "pino";
 import { RoleRevisionRepository } from "@/common/role-revision.repository";
+import { READ_FAILED } from "@/common/role.repository";
 import {
   CustomBot,
   CustomBotWithVersions,
@@ -10,6 +12,8 @@ import { Result, Ok, Failure, errorMessage } from "@/common/result";
 import { isForeignKeyViolation } from "@/common/database-errors";
 import { eq, and, desc, inArray, type SQL } from "drizzle-orm";
 import * as semver from "semver";
+
+const logger = pino({ name: "CustomBotRepository" });
 
 export type RemoveVersionsFailure =
   | { reason: "in-use" }
@@ -34,7 +38,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
       return Ok(result.data.length > 0);
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -46,7 +50,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       }
       return Ok(result.data.length > 0);
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -59,7 +63,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       const result = await this.findByKeyAndVersion(userId, name, version);
       return Ok(result.success);
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -71,7 +75,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       const result = await this.findGlobalByKeyAndVersion(name, version);
       return Ok(result.success);
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -91,7 +95,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(groupByName(result.data));
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -112,7 +116,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       // findByKey already orders by createdAt desc.
       return Ok(toBotWithVersions(result.data));
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -132,7 +136,7 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
       // findGlobalByKey already orders by createdAt desc.
       return Ok(toBotWithVersions(result.data));
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -195,7 +199,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(records.length);
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      logger.error({ err: error }, "Error counting custom bot instances");
+      return Failure(READ_FAILED);
     }
   }
 
@@ -223,7 +228,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
 
       return Ok(counts);
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      logger.error({ err: error }, "Error counting custom bot instances");
+      return Failure(READ_FAILED);
     }
   }
 
@@ -281,7 +287,8 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         ),
       );
     } catch (error: unknown) {
-      return Failure(appError("internal", errorMessage(error)));
+      logger.error({ err: error }, "Error fetching the Catalogue");
+      return Failure(READ_FAILED);
     }
   }
 }

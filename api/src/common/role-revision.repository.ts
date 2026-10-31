@@ -1,5 +1,6 @@
 import { appError, AppError } from "./app-error";
-import { Result, Ok, Failure, errorMessage } from "./result";
+import { Result, Ok, Failure } from "./result";
+import { READ_FAILED, WRITE_FAILED } from "./role.repository";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
 import pino from "pino";
@@ -44,7 +45,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       } as T);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating document");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(WRITE_FAILED);
     }
   }
 
@@ -67,7 +68,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       );
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -85,7 +86,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document by ID");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -98,7 +99,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       return Ok(null);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting document");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(WRITE_FAILED);
     }
   }
 
@@ -126,7 +127,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching documents by key",
       );
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -157,7 +158,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching document by key and version",
       );
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -178,7 +179,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching global latest version");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -200,7 +201,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching global documents by key",
       );
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 
@@ -229,7 +230,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching global document by key and version",
       );
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(READ_FAILED);
     }
   }
 

@@ -14,6 +14,7 @@ import {
 } from "./custom-bot.types";
 import { appError, AppError } from "@/common/app-error";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
+import { WRITE_FAILED } from "@/common/role.repository";
 
 @Injectable()
 export class CustomBotService {
@@ -417,13 +418,19 @@ export class CustomBotService {
       customBot.id,
     );
     if (!removeResult.success) {
+      if (removeResult.error.reason === "error") {
+        this.logger.error(
+          { name, error: removeResult.error.message },
+          "Failed to delete custom bot versions",
+        );
+      }
       return Failure(
         removeResult.error.reason === "in-use"
           ? appError(
               "validation",
               `Cannot delete version ${version}: active instance(s) reference it`,
             )
-          : appError("internal", removeResult.error.message),
+          : WRITE_FAILED,
       );
     }
 
@@ -499,13 +506,19 @@ export class CustomBotService {
       name,
     );
     if (!removeResult.success) {
+      if (removeResult.error.reason === "error") {
+        this.logger.error(
+          { name, error: removeResult.error.message },
+          "Failed to delete custom bot versions",
+        );
+      }
       return Failure(
         removeResult.error.reason === "in-use"
           ? appError(
               "validation",
               "Cannot delete: versions with active instance(s)",
             )
-          : appError("internal", removeResult.error.message),
+          : WRITE_FAILED,
       );
     }
 

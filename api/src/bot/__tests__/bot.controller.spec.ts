@@ -466,7 +466,7 @@ describe("BotController - Enhanced Tests", () => {
         .fn()
         .mockResolvedValue({
           success: false,
-          error: appError("internal", "Bot type not found"),
+          error: appError("not_found", "Bot type not found"),
           data: null,
         });
 

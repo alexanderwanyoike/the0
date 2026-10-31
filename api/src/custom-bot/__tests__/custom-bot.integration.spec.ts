@@ -380,7 +380,7 @@ describe("Custom Bot API Integration Tests", () => {
       expect(response.body.message).toBe("Custom bot updated successfully");
     });
 
-    it("should return 400 when bot does not exist", async () => {
+    it("should return 404 when bot does not exist", async () => {
       const filePath = "test-user-123/non-existent-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
@@ -392,7 +392,7 @@ describe("Custom Bot API Integration Tests", () => {
           config: JSON.stringify({ ...validConfig, name: "non-existent-bot" }),
           filePath: filePath,
         })
-        .expect(400);
+        .expect(404);
 
       expect(response.body.message).toBe(
         "Custom bot does not exist. Create it first using POST.",
@@ -776,7 +776,7 @@ describe("Custom Bot API Integration Tests", () => {
           config: JSON.stringify(validConfig),
           filePath: filePath,
         })
-        .expect(400);
+        .expect(500);
 
       expect(response.body.message).toContain("Database connection failed");
     });
@@ -796,7 +796,7 @@ describe("Custom Bot API Integration Tests", () => {
           config: JSON.stringify(validConfig),
           filePath: filePath,
         })
-        .expect(400);
+        .expect(500);
 
       expect(response.body.message).toContain("ZIP validation failed");
     });

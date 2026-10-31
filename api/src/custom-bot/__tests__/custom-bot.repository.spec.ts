@@ -460,7 +460,7 @@ describe("CustomBotRepository", () => {
       const result = await repository.getUserCustomBots("user123");
 
       expect(result.success).toBe(false);
-      expect(result.error.message).toBe("Unexpected error");
+      expect(result.error.message).toBe("Failed to read from the database");
 
       // Restore original method
       repository.findAll = originalFindAll;
@@ -782,7 +782,7 @@ describe("CustomBotRepository", () => {
         await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(false);
-      expect(result.error.message).toContain("Database error");
+      expect(result.error.message).toBe("Failed to read from the database");
     });
   });
 

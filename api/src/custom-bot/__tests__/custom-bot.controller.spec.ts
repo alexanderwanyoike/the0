@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
 import { appError, AppError } from "@/common/app-error";
 import { CustomBotController } from "../custom-bot.controller";
 import {
@@ -131,7 +135,7 @@ describe("CustomBotController", () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it("should throw BadRequestException when GCS validation fails", async () => {
+    it("should throw InternalServerErrorException when the file check fails", async () => {
       const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
@@ -144,7 +148,7 @@ describe("CustomBotController", () => {
 
       await expect(
         controller.createCustomBot("test-bot", body, mockUser),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(InternalServerErrorException);
     });
 
     it("should throw BadRequestException when config is missing", async () => {
@@ -498,13 +502,13 @@ describe("CustomBotController", () => {
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
 
-    it("should throw BadRequestException when service returns error", async () => {
+    it("should throw InternalServerErrorException when reading fails", async () => {
       mockService.getUserCustomBots.mockResolvedValue(
         Failure(appError("internal", "Database connection failed")),
       );
 
       await expect(controller.getUserCustomBots(mockUser)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
 
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
