@@ -37,6 +37,8 @@ func realtimeRun() launch.Settings {
 			StateBucket:        "acme-state",
 			LogsBucket:         "acme-logs",
 			QueryResultsBucket: "acme-results",
+			MaxStateSizeMB:     4096,
+			MaxStateFileSizeMB: 20,
 		},
 		NATSURL: "nats://nats:4222",
 	}
@@ -269,6 +271,7 @@ func TestSyncEnv_IsTheStorageAndNATSTheSyncProcessReads(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_USE_SSL",
 		"MINIO_CODE_BUCKET", "MINIO_STATE_BUCKET", "MINIO_LOGS_BUCKET", "MINIO_QUERY_RESULTS_BUCKET",
+		"MAX_STATE_SIZE_MB", "MAX_STATE_FILE_SIZE_MB",
 		"NATS_URL",
 	}, names(env))
 	assert.Equal(t, sent.Storage, launch.ReadStorage(lookupIn(env)))
