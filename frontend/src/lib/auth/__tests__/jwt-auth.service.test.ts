@@ -102,6 +102,35 @@ describe("JwtAuthService", () => {
       expect(localStorage.getItem("auth-token")).toBeNull();
     });
 
+    it.each([
+      [502, { success: false, message: "API service unavailable" }],
+      [504, { success: false, message: "API service timed out" }],
+      [502, "<html>Bad Gateway</html>"],
+    ])(
+      "names the authentication service when the proxy answers %i",
+      async (status, body) => {
+        mockFetch.mockResolvedValueOnce(
+          createMockResponse({
+            ok: false,
+            status,
+            json: jest.fn(async () =>
+              typeof body === "string" ? JSON.parse(body) : body,
+            ),
+          }),
+        );
+
+        const result = await authService.login({
+          email: "test@example.com",
+          password: "password123",
+        });
+
+        expect(result).toEqual({
+          success: false,
+          error: "Authentication service unavailable",
+        });
+      },
+    );
+
     it("should handle network errors", async () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
