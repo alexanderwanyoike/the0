@@ -71,10 +71,11 @@ func BuildCompiledLanguagesIfNeeded(projectPath string) error {
 			return fmt.Errorf("docker unavailable for %s build", builder.Name())
 		}
 
-		vm, err := NewVendorManager(projectPath)
+		runner, err := NewDockerRunner()
 		if err != nil {
 			return fmt.Errorf("failed to initialize vendor manager: %v", err)
 		}
+		vm := NewVendorManager(projectPath, runner)
 		defer vm.Close()
 
 		if err := vm.CheckDockerRunning(); err != nil {

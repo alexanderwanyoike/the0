@@ -1,16 +1,11 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/fatih/color"
 )
 
@@ -18,26 +13,16 @@ const (
 	vendorContainerName = "the0-vendor-"
 )
 
-// VendorManager handles Docker-based package vendoring
+// VendorManager runs a project's dependency installs and builds
 type VendorManager struct {
-	dockerClient *client.Client
-	runner       BuildRunner
-	projectPath  string
-	runtime      string
+	runner      BuildRunner
+	projectPath string
+	runtime     string
 }
 
-// NewVendorManager creates a new vendor manager instance
-func NewVendorManager(projectPath string) (*VendorManager, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Docker client: %v", err)
-	}
-
-	return &VendorManager{
-		dockerClient: cli,
-		runner:       &dockerRunner{api: cli},
-		projectPath:  projectPath,
-	}, nil
+// NewVendorManager runs projectPath's installs and builds with runner.
+func NewVendorManager(projectPath string, runner BuildRunner) *VendorManager {
+	return &VendorManager{runner: runner, projectPath: projectPath}
 }
 
 // CheckDockerInstalled verifies if Docker is installed and accessible
@@ -52,49 +37,15 @@ func CheckDockerInstalled() error {
 
 // CheckDockerRunning verifies if Docker daemon is running
 func (vm *VendorManager) CheckDockerRunning() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err := vm.dockerClient.Ping(ctx)
-	if err != nil {
+	if err := vm.runner.Ping(); err != nil {
 		return fmt.Errorf("Docker daemon is not running. Please start Docker and try again")
 	}
 	return nil
 }
 
-// Close closes the Docker client connection
+// Close closes the runner's connection
 func (vm *VendorManager) Close() error {
-	if vm.dockerClient != nil {
-		return vm.dockerClient.Close()
-	}
-	return nil
-}
-
-// cleanupContainer removes a container
-func (vm *VendorManager) cleanupContainer(containerID string) {
-	ctx := context.Background()
-	vm.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
-}
-
-// getContainerLogs retrieves logs from a container for debugging
-func (vm *VendorManager) getContainerLogs(containerID string) (string, error) {
-	ctx := context.Background()
-
-	reader, err := vm.dockerClient.ContainerLogs(ctx, containerID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-	})
-	if err != nil {
-		return "", err
-	}
-	defer reader.Close()
-
-	logs, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-
-	return string(logs), nil
+	return vm.runner.Close()
 }
 
 // verifyVendoredFiles verifies that vendoring was successful
@@ -175,11 +126,6 @@ func (vm *VendorManager) formatFileSize(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-// cleanDockerLogOutput removes Docker log headers from raw log data
-func (vm *VendorManager) cleanDockerLogOutput(logData []byte) string {
-	return cleanDockerLogOutput(logData)
 }
 
 // getBuildEnvVars returns environment variables for the build container
