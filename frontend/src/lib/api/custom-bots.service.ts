@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/auth-fetch";
+import { ApiError, apiRequest } from "@/lib/auth-fetch";
 import { Result, Ok, Failure } from "@/lib/result";
 import {
   CustomBotWithVersions,
@@ -7,10 +7,7 @@ import {
   CustomBotConfig,
 } from "@/types/custom-bots";
 
-export interface CustomBotServiceError {
-  message: string;
-  statusCode: number;
-}
+export type CustomBotServiceError = ApiError;
 
 export class CustomBotService {
   /**
@@ -20,23 +17,24 @@ export class CustomBotService {
   static async getCustomBots(): Promise<
     Result<CustomBotWithVersions[], CustomBotServiceError>
   > {
+    const response = await apiRequest<{
+      success: boolean;
+      data: any[];
+      message: string;
+    }>("/api/custom-bots");
+
+    if (!response.success) {
+      return Failure(response.error);
+    }
+    if (!response.data?.success) {
+      return Failure({
+        message: "Failed to fetch custom bots",
+        statusCode: 500,
+      });
+    }
+
+    // Reshaping throws on a body whose data is missing or not a list.
     try {
-      const response = await apiRequest<{
-        success: boolean;
-        data: any[];
-        message: string;
-      }>("/api/custom-bots");
-
-      if (!response.success) {
-        return Failure(response.error);
-      }
-      if (!response.data?.success) {
-        return Failure({
-          message: "Failed to fetch custom bots",
-          statusCode: 500,
-        });
-      }
-
       // Check if data is already in CustomBotWithVersions format (has versions array)
       const rawData = response.data.data;
       let customBots: CustomBotWithVersions[];
@@ -68,7 +66,7 @@ export class CustomBotService {
       return Ok(customBots);
     } catch (error: any) {
       return Failure({
-        message: error.message || "Network error",
+        message: error.message || "Invalid custom bots response",
         statusCode: 500,
       });
     }
@@ -81,30 +79,23 @@ export class CustomBotService {
   static async getCustomBot(
     botName: string,
   ): Promise<Result<CustomBotWithVersions, CustomBotServiceError>> {
-    try {
-      // First get all custom bots to find the one with the matching name
-      const allBotsResult = await this.getCustomBots();
+    // First get all custom bots to find the one with the matching name
+    const allBotsResult = await this.getCustomBots();
 
-      if (!allBotsResult.success) {
-        return Failure(allBotsResult.error);
-      }
+    if (!allBotsResult.success) {
+      return Failure(allBotsResult.error);
+    }
 
-      const customBot = allBotsResult.data.find((bot) => bot.name === botName);
+    const customBot = allBotsResult.data.find((bot) => bot.name === botName);
 
-      if (!customBot) {
-        return Failure({
-          message: "Bot not found",
-          statusCode: 404,
-        });
-      }
-
-      return Ok(customBot);
-    } catch (error: any) {
+    if (!customBot) {
       return Failure({
-        message: error.message || "Network error",
-        statusCode: 500,
+        message: "Bot not found",
+        statusCode: 404,
       });
     }
+
+    return Ok(customBot);
   }
 
   /**
