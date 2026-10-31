@@ -68,11 +68,11 @@ func LoadConfigFromEnv() (*Config, error) {
 	cfg.LogsBucket = launched.LogsBucket
 	cfg.QueryResultBucket = launched.QueryResultsBucket
 
-	if launched.MaxStateSizeMB != 0 {
-		cfg.MaxStateSizeBytes = launched.MaxStateSizeMB * 1024 * 1024
+	if launched.MaxStateSizeMB != nil {
+		cfg.MaxStateSizeBytes = *launched.MaxStateSizeMB * 1024 * 1024
 	}
-	if launched.MaxStateFileSizeMB != 0 {
-		cfg.MaxStateFileSizeBytes = launched.MaxStateFileSizeMB * 1024 * 1024
+	if launched.MaxStateFileSizeMB != nil {
+		cfg.MaxStateFileSizeBytes = *launched.MaxStateFileSizeMB * 1024 * 1024
 	}
 
 	return cfg, nil

@@ -244,6 +244,7 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 	if err != nil {
 		botConfig = "{}"
 	}
+	maxStateSizeMB, maxStateFileSizeMB := config.MaxStateSizeMB, config.MaxStateFileSizeMB
 	settings := launch.Settings{
 		BotID:           executable.ID,
 		CodeFile:        executable.FilePath,
@@ -261,8 +262,8 @@ func launchSettings(config *DockerRunnerConfig, executable model.Executable) lau
 			StateBucket:        config.MinioStateBucket,
 			LogsBucket:         config.MinioLogsBucket,
 			QueryResultsBucket: config.MinIOQueryResultsBucket,
-			MaxStateSizeMB:     config.MaxStateSizeMB,
-			MaxStateFileSizeMB: config.MaxStateFileSizeMB,
+			MaxStateSizeMB:     &maxStateSizeMB,
+			MaxStateFileSizeMB: &maxStateFileSizeMB,
 		},
 	}
 
