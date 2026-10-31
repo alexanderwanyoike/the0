@@ -59,11 +59,7 @@ spec:
             # Dynamically constructed service URLs
             - name: BOT_API_URL
               value: "http://{{ include "the0.fullname" . }}-api:{{ .Values.the0Api.port }}"
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "the0.secretName" . }}
-                  key: jwt-secret
+            {{- /* The frontend no longer reads JWT_SECRET; older values files still set it here, and it must not render as a plain value. */}}
             {{- range $key, $value := .Values.the0Frontend.env }}
             {{- if and (ne $key "BOT_API_URL") (ne $key "JWT_SECRET") }}
             - name: {{ $key }}
