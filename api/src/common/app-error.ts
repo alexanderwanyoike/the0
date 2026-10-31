@@ -1,3 +1,5 @@
+import { Failure, Result } from "./result";
+
 /**
  * What went wrong, from a fixed set every front door knows how to answer.
  * Add a code only when a caller has to react to it differently from the
@@ -18,3 +20,6 @@ export const appError = (code: ErrorCode, message: string): AppError => ({
   code,
   message,
 });
+
+export const invalid = <T>(message: string): Result<T, AppError> =>
+  Failure(appError("validation", message));
