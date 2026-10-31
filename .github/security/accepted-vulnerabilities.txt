@@ -24,3 +24,11 @@ GHSA-vfj7-8cjw-p6xm
 # runner only; it never handles untrusted input.
 GHSA-5gmw-xhrv-c9v3
 GHSA-85c8-ppgw-ccpr
+
+# decode-uri-component DoS in decoding, reached through minio > query-string@7.
+# The fix (0.5.1) is ESM-only and query-string@7 loads it with require(), so
+# forcing it breaks minio. minio only calls query-string's stringify, never
+# parse, and nothing else in the api decodes with it. Revisit when minio moves
+# to a query-string that takes the fixed decoder.
+GHSA-qr28-fpjm-wq7f
+CVE-2026-118664
