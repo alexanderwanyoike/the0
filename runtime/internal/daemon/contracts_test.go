@@ -24,3 +24,13 @@ func TestContracts_ValidBotIDsNameTheirLogSubjectUnchanged(t *testing.T) {
 		assert.NotEqual(t, id, sanitizeBotID(id), "invalid %q", id)
 	}
 }
+
+func TestContracts_PublishesLogsOnTheSubjectTheApiSubscribesTo(t *testing.T) {
+	var contract struct {
+		BotID   string `json:"botId"`
+		Subject string `json:"subject"`
+	}
+	contracts.Load(t, "log-lines.json", &contract)
+
+	assert.Equal(t, contract.Subject, logSubject(contract.BotID))
+}

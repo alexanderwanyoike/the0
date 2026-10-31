@@ -16,6 +16,7 @@ Change a contract here first, then make both sides pass. A test that only one si
 |---|---|
 | `events/streams.json` | The JetStream streams the api creates and the subjects each holds |
 | `events/<subject>.json` | One bot event per subject: the subject and the payload the api publishes on it |
+| `log-lines.json` | A raw log chunk, the NDJSON the runtime formats it into for storage and NATS, the subject it goes out on, and the entries the api reads from it |
 | `bot-ids.json` | Bot IDs both sides accept and use unchanged, and IDs the api refuses to read logs or state for |
 
 ## Where the tests are
