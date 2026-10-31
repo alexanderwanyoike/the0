@@ -8,14 +8,14 @@ When one side drifts, its tests fail against the shared example, not just agains
 
 ## The rule
 
-Change a contract here first, then make both sides pass. A test that only one side runs belongs in that side's own tests, not here. Nothing is generated from these files, and no code outside tests reads them.
+Change a contract here first, then make both sides pass. An example only one side needs belongs in that side's own tests, not here. Nothing is generated from these files, and no code outside tests reads them.
 
 ## Files
 
 | File | Agreement |
 |---|---|
 | `events/streams.json` | The JetStream streams the api creates and the subjects each holds |
-| `events/<subject>.json` | One bot event per subject: the subject and the payload the api publishes on it |
+| `events/bot-*.json` | One bot event per THE0_EVENTS subject: the subject and the payload the api publishes on it. A code archive's storage key travels here as `custom.filePath`, which the runtime downloads as is |
 | `log-lines.json` | A raw log chunk, the NDJSON the runtime formats it into for storage and NATS, the subject it goes out on, and the entries the api reads from it |
 | `storage-keys.json` | Where the runtime writes a bot's daily logs (by the UTC day of the line) and its state, which the api reads and the runtime's garbage collector reads back |
 | `query.json` | The query server's default port and path, the request the api sends, and each status and body the server answers with, along with what the api reports for it |
