@@ -229,7 +229,7 @@ func deployBotInstance(cmd *cobra.Command, args []string) {
 	logger.UpdateSpinner("Creating bot instance")
 
 	// Deploy bot
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	request := &internal.BotDeployRequest{
 		Name:   botName,
 		Config: config,
@@ -237,28 +237,9 @@ func deployBotInstance(cmd *cobra.Command, args []string) {
 
 	bot, err := apiClient.DeployBotInstance(auth, request)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry deployment
-			bot, err = apiClient.DeployBotInstance(auth, request)
-			if err != nil {
-				logger.StopSpinnerWithError("Deployment failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Deployment failed")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Deployment failed", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinnerWithSuccess("Bot deployed successfully ⚡")
@@ -278,31 +259,12 @@ func listBotInstances(cmd *cobra.Command, args []string) {
 	}
 
 	// List bots
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	bots, err := apiClient.ListBots(auth)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry listing
-			bots, err = apiClient.ListBots(auth)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to fetch bots")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to fetch bots")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to fetch bots", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -401,7 +363,7 @@ func updateBotInstance(cmd *cobra.Command, args []string) {
 	logger.UpdateSpinner("Applying configuration")
 
 	// Update bot
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	request := &internal.BotUpdateRequest{
 		Name:   botName,
 		Config: configMap,
@@ -409,28 +371,9 @@ func updateBotInstance(cmd *cobra.Command, args []string) {
 
 	err = apiClient.UpdateBotInstance(auth, botID, request)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry update
-			err = apiClient.UpdateBotInstance(auth, botID, request)
-			if err != nil {
-				logger.StopSpinnerWithError("Update failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Update failed")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Update failed", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinnerWithSuccess("Bot updated successfully")
@@ -470,31 +413,12 @@ func deleteBotInstance(cmd *cobra.Command, args []string, skipConfirm bool) {
 	}
 
 	// Delete bot
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	deleteResp, err := apiClient.DeleteBotInstance(auth, botID)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry deletion
-			deleteResp, err = apiClient.DeleteBotInstance(auth, botID)
-			if err != nil {
-				logger.StopSpinnerWithError("Deletion failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Deletion failed")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Deletion failed", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinnerWithSuccess("Bot deleted successfully")
@@ -534,31 +458,15 @@ func setBotEnabled(botID string, enabled bool) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 
 	// First, fetch the bot to get its current config
 	logger.UpdateSpinner("Fetching bot configuration")
 	bot, err := apiClient.FindBotByNameOrID(auth, botID)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-			bot, err = apiClient.FindBotByNameOrID(auth, botID)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to fetch bot")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to fetch bot")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to fetch bot", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	// Update config with enabled status
@@ -577,25 +485,9 @@ func setBotEnabled(botID string, enabled bool) {
 
 	err = apiClient.UpdateBotInstance(auth, bot.ID, request)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-			err = apiClient.UpdateBotInstance(auth, bot.ID, request)
-			if err != nil {
-				logger.StopSpinnerWithError("Update failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Update failed")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Update failed", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	status := "enabled"
@@ -620,28 +512,12 @@ func listBotState(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	keys, err := apiClient.ListBotState(auth, botID)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-			keys, err = apiClient.ListBotState(auth, botID)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to list state")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to list state")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to list state", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -695,28 +571,12 @@ func getBotStateKey(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	value, err := apiClient.GetBotStateKey(auth, botID, key)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-			value, err = apiClient.GetBotStateKey(auth, botID, key)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to get state key")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to get state key")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to get state key", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -745,28 +605,12 @@ func deleteBotStateKey(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	deleted, err := apiClient.DeleteBotStateKey(auth, botID, key)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-			deleted, err = apiClient.DeleteBotStateKey(auth, botID, key)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to delete state key")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to delete state key")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to delete state key", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	if deleted {
@@ -810,28 +654,12 @@ func clearBotState(cmd *cobra.Command, args []string, skipConfirm bool) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 	cleared, err := apiClient.ClearBotState(auth, botID)
 	if err != nil {
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-			cleared, err = apiClient.ClearBotState(auth, botID)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to clear state")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to clear state")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to clear state", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	if cleared {
@@ -873,7 +701,7 @@ func getBotLogs(cmd *cobra.Command, args []string, watchMode bool, limit int) {
 		os.Exit(1)
 	}
 
-	apiClient := internal.NewAPIClient(internal.GetAPIBaseURL())
+	apiClient := internal.NewSessionClient()
 
 	if watchMode {
 		logger.StopSpinner()
@@ -943,28 +771,9 @@ func displayBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, d
 	// Fetch logs
 	logs, err := apiClient.GetBotLogs(auth, botID, params)
 	if err != nil {
-		// Retry with new auth if needed
-		if internal.IsAuthError(err) {
-			logger.UpdateSpinner("Session expired. Re-authenticating")
-			auth, err = internal.PromptForNewAPIKey()
-			if err != nil {
-				logger.StopSpinnerWithError("Authentication failed")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-
-			// Retry fetching logs
-			logs, err = apiClient.GetBotLogs(auth, botID, params)
-			if err != nil {
-				logger.StopSpinnerWithError("Failed to fetch logs")
-				logger.Error("%v", err)
-				os.Exit(1)
-			}
-		} else {
-			logger.StopSpinnerWithError("Failed to fetch logs")
-			logger.Error("%v", err)
-			os.Exit(1)
-		}
+		logger.StopSpinnerWithError(failureTitle("Failed to fetch logs", err))
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	logger.StopSpinner()
@@ -993,7 +802,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 	params := watchLogsParams(dateParam, limit)
 
 	// Fetch initial logs
-	logs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
+	logs, err := apiClient.GetBotLogs(auth, botID, params)
 	if err != nil {
 		logger.Error("Failed to fetch logs: %v", err)
 		os.Exit(1)
@@ -1012,7 +821,7 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 			logger.Info("Stopped watching logs")
 			return
 		case <-ticker.C:
-			newLogs, err := fetchLogsWithRetry(apiClient, auth, botID, params)
+			newLogs, err := apiClient.GetBotLogs(auth, botID, params)
 			if err != nil {
 				logger.Error("Error fetching logs: %v", err)
 				continue
@@ -1027,20 +836,6 @@ func watchBotLogs(apiClient *internal.APIClient, auth *internal.Auth, botID, dat
 			}
 		}
 	}
-}
-
-func fetchLogsWithRetry(apiClient *internal.APIClient, auth *internal.Auth, botID string, params *internal.LogsParams) ([]internal.LogEntry, error) {
-	logs, err := apiClient.GetBotLogs(auth, botID, params)
-	if err != nil && internal.IsAuthError(err) {
-		// Try to get new auth token
-		newAuth, authErr := internal.PromptForNewAPIKey()
-		if authErr != nil {
-			return nil, authErr
-		}
-		// Retry with new auth
-		logs, err = apiClient.GetBotLogs(newAuth, botID, params)
-	}
-	return logs, err
 }
 
 func displayLogEntries(logs []internal.LogEntry) {

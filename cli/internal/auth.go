@@ -151,6 +151,17 @@ func GetAuthTokenWithRetry() (*Auth, error) {
 	return auth, nil
 }
 
+// NewSessionClient is the api client commands use: when the api rejects the
+// saved key mid-command, it asks for a new one once and carries on.
+func NewSessionClient() *APIClient {
+	client := NewAPIClient(GetAPIBaseURL())
+	client.Relogin = func() (*Auth, error) {
+		logger.UpdateSpinner("Session expired. Re-authenticating")
+		return PromptForNewAPIKey()
+	}
+	return client
+}
+
 // IsAuthError checks if an error is authentication related by looking for
 // an APIError with a 401 or 403 status code
 func IsAuthError(err error) bool {
