@@ -10,45 +10,95 @@ import { BOT_TOPICS, SCHEDULED_BOT_TOPICS } from "../bot.constants";
 import { BotEvent } from "../bot-event-outbox";
 import { BotEventFactory } from "../commands/bot-event-factory";
 
-interface EventContract {
-  subject: string;
-  payload: {
-    id: string;
-    config: BotConfig & { customBotId?: string };
-    custom?: {
-      config: CustomBot["config"];
-      createdAt: string;
-      updatedAt: string;
-      filePath: string;
-      version: string;
-    };
-  };
-}
-
 const event = (name: string) =>
-  loadContract<EventContract>(`events/${name}.json`);
+  loadContract<{ subject: string; payload: unknown }>(`events/${name}.json`);
 
-/** The Catalogue row the contract's payload was built from. */
-function customBotOf({ payload }: EventContract): CustomBot {
-  const custom = payload.custom!;
+const REALTIME_BOT = "q3n8v1x7k2m9p4r6t0w5y8z1";
+const SCHEDULED_BOT = "h5j9l3n7p1r5t9v3x7z1b5d9";
+
+/**
+ * A Catalogue row as the custom bot repository returns it after an upload:
+ * the uploaded bot-config.yaml plus the hasFrontend flag the upload adds.
+ * Written out here rather than read from the contract, so the payload's
+ * custom part is checked against what the api holds, not against itself.
+ */
+function catalogueRow(
+  id: string,
+  name: string,
+  version: string,
+  type: "realtime" | "scheduled",
+  entrypoints: CustomBot["config"]["entrypoints"] & { query?: string },
+  description: string,
+): CustomBot {
   return {
-    id: payload.config.customBotId!,
-    name: custom.config.name,
-    version: custom.version,
-    config: custom.config,
-    filePath: custom.filePath,
-    userId: "uploader-1",
+    id,
+    name,
+    version,
+    config: {
+      name,
+      description,
+      version,
+      type,
+      runtime: "python3.11",
+      author: "alex",
+      entrypoints,
+      schema: {
+        bot: {
+          type: "object",
+          properties: { symbol: { type: "string" } },
+          required: ["symbol"],
+        },
+      },
+      readme: `# ${name}`,
+      metadata: { tags: ["example"] },
+      hasFrontend: false,
+    },
+    filePath: `u4b8c2d6f0h3j7k1m5n9p2r6/${name}/${name}-${version}.zip`,
+    userId: "u4b8c2d6f0h3j7k1m5n9p2r6",
     status: "active",
-    createdAt: new Date(custom.createdAt),
-    updatedAt: new Date(custom.updatedAt),
+    createdAt: new Date("2026-10-01T09:30:00.000Z"),
+    updatedAt: new Date("2026-10-02T10:45:00.000Z"),
   };
 }
 
-/** The Bot's config as the request carried it, before the event adds to it. */
-function requestConfigOf({ payload }: EventContract): BotConfig {
-  const { customBotId: _customBotId, ...config } = payload.config;
-  return config;
-}
+const gridTrader = (id: string, version: string) =>
+  catalogueRow(
+    id,
+    "grid-trader",
+    version,
+    "realtime",
+    { bot: "main.py", query: "query.py" },
+    "Grid trading strategy",
+  );
+
+const smaCrossover = (id: string, version: string) =>
+  catalogueRow(
+    id,
+    "sma-crossover",
+    version,
+    "scheduled",
+    { bot: "main.py" },
+    "SMA crossover strategy",
+  );
+
+const gridConfig = (version: string, symbol: string): BotConfig => ({
+  name: "Grid BTC",
+  type: "realtime/grid-trader",
+  version,
+  symbol,
+});
+
+const smaConfig = (
+  version: string,
+  symbol: string,
+  schedule: string,
+): BotConfig => ({
+  name: "SMA AAPL",
+  type: "scheduled/sma-crossover",
+  version,
+  schedule,
+  symbol,
+});
 
 /** What NatsService sends: the payload as JSON. */
 const onTheWire = (events: BotEvent[]) =>
@@ -71,39 +121,68 @@ describe("bot event contracts", () => {
 
   describe("publish each bot command's event as the contract shows it", () => {
     it.each([
-      ["bot-created", "created"],
-      ["bot-schedule-created", "created"],
-      ["bot-updated", "updated"],
-      ["bot-schedule-updated", "updated"],
-    ] as const)("publishes %s", (name, command) => {
-      const contract = event(name);
-
-      const events = factory[command](
-        contract.payload.id,
-        requestConfigOf(contract),
-        customBotOf(contract),
-      );
-
-      expect(onTheWire(events)).toEqual([contract]);
-    });
-
-    it.each(["bot-deleted", "bot-schedule-deleted"])(
+      [
+        "bot-created",
+        "created",
+        REALTIME_BOT,
+        gridConfig("1.0.0", "BTC/USD"),
+        gridTrader("c7d2f9h4j6l1n3p5r8s0u2w4", "1.0.0"),
+      ],
+      [
+        "bot-updated",
+        "updated",
+        REALTIME_BOT,
+        gridConfig("1.1.0", "ETH/USD"),
+        gridTrader("e1g5i9k3m7o1q5s9u3w7y1a5", "1.1.0"),
+      ],
+      [
+        "bot-schedule-created",
+        "created",
+        SCHEDULED_BOT,
+        smaConfig("1.2.0", "AAPL", "0 14 * * 1-5"),
+        smaCrossover("f2h6j0l4n8p2r6t0v4x8z2b6", "1.2.0"),
+      ],
+      [
+        "bot-schedule-updated",
+        "updated",
+        SCHEDULED_BOT,
+        smaConfig("1.3.0", "MSFT", "30 15 * * 1-5"),
+        smaCrossover("g3i7k1m5o9q3s7u1w5y9a3c7", "1.3.0"),
+      ],
+    ] as const)(
       "publishes %s",
-      async (name) => {
-        const contract = event(name);
-        const created = event(name.replace("deleted", "updated"));
-        customBotService.getGlobalSpecificVersion.mockResolvedValue(
-          Ok(customBotOf(created)),
-        );
+      (name, command, botId, requestConfig, customBot) => {
+        const events = factory[command](botId, requestConfig, customBot);
 
-        const events = await factory.deleted(
-          mockBot({ id: contract.payload.id, config: contract.payload.config }),
-        );
-
-        expect(events.success).toBe(true);
-        expect(onTheWire(events.data!)).toEqual([contract]);
+        expect(onTheWire(events)).toEqual([event(name)]);
       },
     );
+
+    it.each([
+      [
+        "bot-deleted",
+        REALTIME_BOT,
+        gridConfig("1.1.0", "ETH/USD"),
+        gridTrader("e1g5i9k3m7o1q5s9u3w7y1a5", "1.1.0"),
+      ],
+      [
+        "bot-schedule-deleted",
+        SCHEDULED_BOT,
+        smaConfig("1.3.0", "MSFT", "30 15 * * 1-5"),
+        smaCrossover("g3i7k1m5o9q3s7u1w5y9a3c7", "1.3.0"),
+      ],
+    ])("publishes %s", async (name, botId, storedConfig, versionInUse) => {
+      customBotService.getGlobalSpecificVersion.mockResolvedValue(
+        Ok(versionInUse),
+      );
+
+      const events = await factory.deleted(
+        mockBot({ id: botId, config: { ...storedConfig, hasFrontend: false } }),
+      );
+
+      expect(events.success).toBe(true);
+      expect(onTheWire(events.data!)).toEqual([event(name)]);
+    });
   });
 
   it("publishes bot events only on subjects THE0_EVENTS holds", () => {

@@ -39,7 +39,8 @@
           "tags": [
             "example"
           ]
-        }
+        },
+        "hasFrontend": false
       },
       "createdAt": "2026-10-01T09:30:00.000Z",
       "updatedAt": "2026-10-02T10:45:00.000Z",
