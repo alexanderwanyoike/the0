@@ -912,4 +912,3 @@ func TestValidationErrorNotMistakenForAuth(t *testing.T) {
 		t.Errorf("error message should contain 'invalid version format', got: %v", err)
 	}
 }
-

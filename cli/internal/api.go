@@ -573,9 +573,9 @@ type VersionWithInstances struct {
 
 // VersionsWithInstancesResponse represents the response for listing versions with instance counts
 type VersionsWithInstancesResponse struct {
-	Success bool                  `json:"success"`
+	Success bool                   `json:"success"`
 	Data    []VersionWithInstances `json:"data"`
-	Message string                `json:"message"`
+	Message string                 `json:"message"`
 }
 
 // BotDeleteResponse represents the response from deleting a bot instance
