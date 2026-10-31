@@ -18,7 +18,7 @@ import {
   ApiBody,
 } from "@nestjs/swagger";
 import { IsString, IsOptional, IsObject, IsNumber } from "class-validator";
-import { BotQueryService, BotQueryErrorCode } from "./bot-query.service";
+import { BotQueryService } from "./bot-query.service";
 import { Actor } from "@/auth/actor";
 import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
@@ -101,14 +101,14 @@ export class BotQueryController {
     });
 
     if (!result.success) {
-      switch (result.error?.code) {
-        case BotQueryErrorCode.BOT_NOT_FOUND:
+      switch (result.error.code) {
+        case "not_found":
           throw new NotFoundException("Bot not found or access denied");
-        case BotQueryErrorCode.NO_QUERY_ENTRYPOINT:
+        case "unprocessable":
           throw new UnprocessableEntityException(result.error.message);
-        case BotQueryErrorCode.RUNTIME_UNAVAILABLE:
+        case "unavailable":
           throw new ServiceUnavailableException(result.error.message);
-        case BotQueryErrorCode.TIMEOUT:
+        case "timeout":
           throw new GatewayTimeoutException(result.error.message);
         default:
           throw new BadRequestException(

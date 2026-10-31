@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { appError } from "@/common/app-error";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
-import { BotQueryService, BotQueryErrorCode } from "../bot-query.service";
+import { BotQueryService } from "../bot-query.service";
 import { BotService } from "@/bot/bot.service";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockBot as createMockBot, mockBotConfig } from "@/test/mock-bot";
@@ -118,7 +118,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(result.error?.message).toBe("Bot not found or access denied");
       expect(mockFetch).not.toHaveBeenCalled();
     });
@@ -159,7 +159,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(result.error?.message).toBe("Bot not found in runtime");
     });
 
@@ -184,7 +184,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.NO_QUERY_ENTRYPOINT);
+      expect(result.error?.code).toBe("unprocessable");
       expect(result.error?.message).toBe(
         "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them.",
       );
@@ -208,7 +208,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.QUERY_FAILED);
+      expect(result.error?.code).toBe("validation");
       expect(result.error?.message).toContain("Internal server error");
     });
 
@@ -229,7 +229,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.TIMEOUT);
+      expect(result.error?.code).toBe("timeout");
       expect(result.error?.message).toContain("timed out after 5 seconds");
     });
 
@@ -249,7 +249,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotQueryErrorCode.RUNTIME_UNAVAILABLE);
+      expect(result.error?.code).toBe("unavailable");
       expect(result.error?.message).toContain("runtime is not available");
     });
 
@@ -405,7 +405,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.QUERY_FAILED,
+        code: "validation",
         message: "Query failed: Internal server error",
       });
       expect(mockLogger.error).toHaveBeenCalledWith(
@@ -454,7 +454,7 @@ describe("BotQueryService", () => {
       const result = await pending;
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.TIMEOUT,
+        code: "timeout",
         message: "Query timed out after 2 seconds",
       });
     });
@@ -482,7 +482,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
+        code: "unavailable",
         message:
           "Bot runtime is not available. Ensure the bot-runner service is running.",
       });
@@ -504,7 +504,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.QUERY_FAILED,
+        code: "internal",
         message: "Query failed: socket hang up",
       });
       expect(mockLogger.error).toHaveBeenCalledWith(
@@ -528,7 +528,7 @@ describe("BotQueryService", () => {
       });
 
       expect(result.error).toEqual({
-        code: BotQueryErrorCode.QUERY_FAILED,
+        code: "internal",
         message: "Query failed: Unexpected token",
       });
     });

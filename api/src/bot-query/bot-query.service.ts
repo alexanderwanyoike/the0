@@ -3,21 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
+import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, errorMessage } from "@/common/result";
-
-export enum BotQueryErrorCode {
-  BOT_NOT_FOUND = "BOT_NOT_FOUND",
-  NO_QUERY_ENTRYPOINT = "NO_QUERY_ENTRYPOINT",
-  QUERY_FAILED = "QUERY_FAILED",
-  RUNTIME_UNAVAILABLE = "RUNTIME_UNAVAILABLE",
-  TIMEOUT = "TIMEOUT",
-  INVALID_RESPONSE = "INVALID_RESPONSE",
-}
-
-export interface BotQueryError {
-  code: BotQueryErrorCode;
-  message: string;
-}
 
 export interface QueryResult {
   status: string;
@@ -55,14 +42,11 @@ export class BotQueryService {
     actor: Actor,
     botId: string,
     request: QueryRequest,
-  ): Promise<Result<QueryResult, BotQueryError>> {
+  ): Promise<Result<QueryResult, AppError>> {
     // Verify bot exists and user has access
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure({
-        code: BotQueryErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      });
+      return Failure(appError("not_found", "Bot not found or access denied"));
     }
 
     try {
@@ -106,7 +90,7 @@ export class BotQueryService {
     botId: string,
     request: QueryRequest,
     response: Response,
-  ): Promise<Result<QueryResult, BotQueryError>> {
+  ): Promise<Result<QueryResult, AppError>> {
     const errorText = await response.text();
     this.logger.error(
       {
@@ -119,41 +103,40 @@ export class BotQueryService {
     );
 
     if (response.status === 404) {
-      return Failure({
-        code: BotQueryErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found in runtime",
-      });
+      return Failure(appError("not_found", "Bot not found in runtime"));
     }
 
     if (response.status === 422) {
-      return Failure({
-        code: BotQueryErrorCode.NO_QUERY_ENTRYPOINT,
-        message:
+      return Failure(
+        appError(
+          "unprocessable",
           "This bot defines no queries. Add a query entrypoint (entrypoints.query in bot-config.yaml) to answer them.",
-      });
+        ),
+      );
     }
 
-    return Failure({
-      code: BotQueryErrorCode.QUERY_FAILED,
-      message: `Query failed: ${errorText}`,
-    });
+    // The runtime's 500 covers both a bot refusing the query with an error
+    // result and a bot that is not running; only the body tells them apart.
+    return Failure(appError("validation", `Query failed: ${errorText}`));
   }
 
   private queryFailure(
     botId: string,
     request: QueryRequest,
     error: unknown,
-  ): Result<QueryResult, BotQueryError> {
+  ): Result<QueryResult, AppError> {
     const err = error as {
       name?: string;
       code?: string;
       cause?: { code?: string };
     };
     if (err.name === "AbortError") {
-      return Failure({
-        code: BotQueryErrorCode.TIMEOUT,
-        message: `Query timed out after ${request.timeoutSec || 30} seconds`,
-      });
+      return Failure(
+        appError(
+          "timeout",
+          `Query timed out after ${request.timeoutSec || 30} seconds`,
+        ),
+      );
     }
 
     if (err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
@@ -161,21 +144,21 @@ export class BotQueryService {
         { botId, queryPath: request.queryPath, error: errorMessage(error) },
         "Runtime unavailable",
       );
-      return Failure({
-        code: BotQueryErrorCode.RUNTIME_UNAVAILABLE,
-        message:
+      return Failure(
+        appError(
+          "unavailable",
           "Bot runtime is not available. Ensure the bot-runner service is running.",
-      });
+        ),
+      );
     }
 
     this.logger.error(
       { botId, queryPath: request.queryPath, error: errorMessage(error) },
       "Query execution error",
     );
-    return Failure({
-      code: BotQueryErrorCode.QUERY_FAILED,
-      message: `Query failed: ${errorMessage(error)}`,
-    });
+    return Failure(
+      appError("internal", `Query failed: ${errorMessage(error)}`),
+    );
   }
 }
 
