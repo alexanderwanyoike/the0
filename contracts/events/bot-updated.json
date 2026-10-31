@@ -1,0 +1,50 @@
+{
+  "subject": "the0.bot.updated",
+  "payload": {
+    "id": "q3n8v1x7k2m9p4r6t0w5y8z1",
+    "config": {
+      "name": "Grid BTC",
+      "type": "realtime/grid-trader",
+      "version": "1.1.0",
+      "symbol": "ETH/USD",
+      "customBotId": "e1g5i9k3m7o1q5s9u3w7y1a5"
+    },
+    "custom": {
+      "config": {
+        "name": "grid-trader",
+        "description": "Grid trading strategy",
+        "version": "1.1.0",
+        "type": "realtime",
+        "runtime": "python3.11",
+        "author": "alex",
+        "entrypoints": {
+          "bot": "main.py",
+          "query": "query.py"
+        },
+        "schema": {
+          "bot": {
+            "type": "object",
+            "properties": {
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "symbol"
+            ]
+          }
+        },
+        "readme": "# grid-trader",
+        "metadata": {
+          "tags": [
+            "example"
+          ]
+        }
+      },
+      "createdAt": "2026-10-01T09:30:00.000Z",
+      "updatedAt": "2026-10-02T10:45:00.000Z",
+      "filePath": "u4b8c2d6f0h3j7k1m5n9p2r6/grid-trader/grid-trader-1.1.0.zip",
+      "version": "1.1.0"
+    }
+  }
+}

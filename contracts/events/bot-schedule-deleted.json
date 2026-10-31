@@ -1,0 +1,14 @@
+{
+  "subject": "the0.bot-schedule.deleted",
+  "payload": {
+    "id": "h5j9l3n7p1r5t9v3x7z1b5d9",
+    "config": {
+      "name": "SMA AAPL",
+      "type": "scheduled/sma-crossover",
+      "version": "1.3.0",
+      "schedule": "30 15 * * 1-5",
+      "symbol": "MSFT",
+      "hasFrontend": false
+    }
+  }
+}
