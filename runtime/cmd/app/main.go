@@ -51,6 +51,9 @@ var (
 	minioBucket    string
 	minioUseSSL    bool
 
+	minioLogsBucket         string
+	minioQueryResultsBucket string
+
 	storageCredentialsSecret         string
 	storageCredentialsAccessKeyField string
 	storageCredentialsSecretKeyField string
@@ -164,6 +167,8 @@ func main() {
 	controllerCmd.Flags().DurationVar(&controllerReconcileInterval, "reconcile-interval", 30*time.Second, "How often to reconcile state")
 	controllerCmd.Flags().StringVar(&minioEndpoint, "minio-endpoint", getEnv("MINIO_ENDPOINT", "minio:9000"), "MinIO endpoint for bot code")
 	controllerCmd.Flags().StringVar(&minioBucket, "minio-bucket", getEnv("MINIO_BUCKET", launch.DefaultCodeBucket), "MinIO bucket for bot code")
+	controllerCmd.Flags().StringVar(&minioLogsBucket, "minio-logs-bucket", getEnv("MINIO_LOGS_BUCKET", launch.DefaultLogsBucket), "MinIO bucket bot pods write their logs to")
+	controllerCmd.Flags().StringVar(&minioQueryResultsBucket, "minio-query-results-bucket", getEnv("MINIO_QUERY_RESULTS_BUCKET", launch.DefaultQueryResultsBucket), "MinIO bucket query pods write their results to")
 	controllerCmd.Flags().StringVar(&runtimeImage, "runtime-image", getEnv("RUNTIME_IMAGE", "runtime:latest"), "Runtime image for init containers and sidecars")
 	controllerCmd.Flags().StringVar(&runtimeImagePullPolicy, "runtime-image-pull-policy", getEnv("RUNTIME_IMAGE_PULL_POLICY", "IfNotPresent"), "Image pull policy for runtime init/sidecar (Never, IfNotPresent, Always)")
 	controllerCmd.Flags().StringVar(&storageCredentialsSecret, "storage-credentials-secret", getEnv("STORAGE_CREDENTIALS_SECRET", ""), "Secret bot pods read the MinIO credentials from (empty writes them into pod specs)")
@@ -367,17 +372,19 @@ func runController() {
 
 	// Create controller manager
 	manager, err := controller.NewManager(mongoClient, controller.ManagerConfig{
-		Namespace:              controllerNamespace,
-		ReconcileInterval:      controllerReconcileInterval,
-		MinIOEndpoint:          minioEndpoint,
-		MinIOAccessKey:         minioAccessKey,
-		MinIOSecretKey:         minioSecretKey,
-		MinIOBucket:            minioBucket,
-		MinIOUseSSL:            minioUseSSL,
-		NATSURL:                natsUrl,
-		RuntimeImage:           runtimeImage,
-		RuntimeImagePullPolicy: runtimeImagePullPolicy,
-		Logger:                 &util.DefaultLogger{},
+		Namespace:               controllerNamespace,
+		ReconcileInterval:       controllerReconcileInterval,
+		MinIOEndpoint:           minioEndpoint,
+		MinIOAccessKey:          minioAccessKey,
+		MinIOSecretKey:          minioSecretKey,
+		MinIOBucket:             minioBucket,
+		MinIOLogsBucket:         minioLogsBucket,
+		MinIOQueryResultsBucket: minioQueryResultsBucket,
+		MinIOUseSSL:             minioUseSSL,
+		NATSURL:                 natsUrl,
+		RuntimeImage:            runtimeImage,
+		RuntimeImagePullPolicy:  runtimeImagePullPolicy,
+		Logger:                  &util.DefaultLogger{},
 		StorageCredentials: podgen.StorageCredentialsSecret{
 			Name:           storageCredentialsSecret,
 			AccessKeyField: storageCredentialsAccessKeyField,

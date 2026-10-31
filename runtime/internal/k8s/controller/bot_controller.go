@@ -48,11 +48,13 @@ type BotControllerConfig struct {
 	ControllerName string
 
 	// MinIO configuration for downloading bot code
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-	MinIOUseSSL    bool
+	MinIOEndpoint           string
+	MinIOAccessKey          string
+	MinIOSecretKey          string
+	MinIOBucket             string
+	MinIOLogsBucket         string
+	MinIOQueryResultsBucket string
+	MinIOUseSSL             bool
 
 	StorageCredentials podgen.StorageCredentialsSecret
 
@@ -99,17 +101,19 @@ func NewBotController(
 	}
 
 	podGenConfig := podgen.PodGeneratorConfig{
-		Namespace:              config.Namespace,
-		ControllerName:         config.ControllerName,
-		MinIOEndpoint:          config.MinIOEndpoint,
-		MinIOAccessKey:         config.MinIOAccessKey,
-		MinIOSecretKey:         config.MinIOSecretKey,
-		MinIOBucket:            config.MinIOBucket,
-		MinIOUseSSL:            config.MinIOUseSSL,
-		StorageCredentials:     config.StorageCredentials,
-		NATSURL:                config.NATSURL,
-		RuntimeImage:           config.RuntimeImage,
-		RuntimeImagePullPolicy: corev1.PullPolicy(config.RuntimeImagePullPolicy),
+		Namespace:               config.Namespace,
+		ControllerName:          config.ControllerName,
+		MinIOEndpoint:           config.MinIOEndpoint,
+		MinIOAccessKey:          config.MinIOAccessKey,
+		MinIOSecretKey:          config.MinIOSecretKey,
+		MinIOBucket:             config.MinIOBucket,
+		MinIOLogsBucket:         config.MinIOLogsBucket,
+		MinIOQueryResultsBucket: config.MinIOQueryResultsBucket,
+		MinIOUseSSL:             config.MinIOUseSSL,
+		StorageCredentials:      config.StorageCredentials,
+		NATSURL:                 config.NATSURL,
+		RuntimeImage:            config.RuntimeImage,
+		RuntimeImagePullPolicy:  corev1.PullPolicy(config.RuntimeImagePullPolicy),
 	}
 
 	return &BotController{
