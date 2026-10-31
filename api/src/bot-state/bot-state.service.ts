@@ -34,6 +34,10 @@ const VALID_KEY_REGEX = /^[a-zA-Z0-9_-]{1,255}$/;
 /** Allowlist regex for bot IDs: prevents path traversal */
 const VALID_BOT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 
+/** The object the runtime keeps a bot's state archive in. */
+export const stateObjectName = (botId: string): string =>
+  `${botId}/state.tar.gz`;
+
 export interface BotStateError {
   code: BotStateErrorCode;
   message: string;
@@ -389,7 +393,7 @@ export class BotStateService {
     }
 
     try {
-      const statePath = `${botId}/state.tar.gz`;
+      const statePath = stateObjectName(botId);
 
       // Check if state exists
       try {
@@ -421,7 +425,7 @@ export class BotStateService {
   private async downloadAndExtractStateWithEtag(
     botId: string,
   ): Promise<StateDownloadResult | null> {
-    const statePath = `${botId}/state.tar.gz`;
+    const statePath = stateObjectName(botId);
 
     // Check if state exists and get ETag for optimistic locking
     let stat: Minio.BucketItemStat;
@@ -490,7 +494,7 @@ export class BotStateService {
     tempDir: string,
     expectedEtag?: string,
   ): Promise<boolean> {
-    const statePath = `${botId}/state.tar.gz`;
+    const statePath = stateObjectName(botId);
 
     if (!(await this.hasStateFiles(tempDir))) {
       return this.removeStateUnlessModified(botId, statePath, expectedEtag);
