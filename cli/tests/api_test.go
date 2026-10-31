@@ -396,7 +396,7 @@ func TestAPIClient_GetCustomBot(t *testing.T) {
 			statusCode:    404,
 			responseBody:  `{"error": "Bot not found"}`,
 			expectedError: true,
-			errorContains: "custom bot not found",
+			errorContains: "Bot not found",
 		},
 		{
 			name:          "unauthorized",
@@ -528,7 +528,7 @@ func TestAPIClient_GetBotLogs(t *testing.T) {
 			statusCode:    404,
 			responseBody:  `{"error": "Bot not found"}`,
 			expectedError: true,
-			errorContains: "bot not found",
+			errorContains: "Bot not found",
 		},
 		{
 			name:          "unauthorized",
@@ -712,7 +712,7 @@ func TestAPIClient_ExecuteBotQuery(t *testing.T) {
 			statusCode:    404,
 			responseBody:  `{"success": false, "message": "Bot not found"}`,
 			expectedError: true,
-			errorContains: "bot not found",
+			errorContains: "Bot not found",
 		},
 		{
 			name:  "bot defines no queries",
