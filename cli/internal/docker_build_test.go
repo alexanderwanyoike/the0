@@ -175,6 +175,28 @@ func TestDockerRunner_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("removes its container when the step passes", func(t *testing.T) {
+		docker := &fakeDocker{}
+
+		if _, err := (&dockerRunner{api: docker}).Run(rustStep()); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(docker.removed, []string{"ctr-1"}) {
+			t.Errorf("removed %v, want [ctr-1]", docker.removed)
+		}
+	})
+
+	t.Run("removes its container when the step fails", func(t *testing.T) {
+		docker := &fakeDocker{exitCode: 1}
+
+		if _, err := (&dockerRunner{api: docker}).Run(rustStep()); err == nil {
+			t.Fatal("Run() error = nil, want the failed exit")
+		}
+		if !reflect.DeepEqual(docker.removed, []string{"ctr-1"}) {
+			t.Errorf("removed %v, want [ctr-1]: a failed build must not leave its container behind", docker.removed)
+		}
+	})
+
 	t.Run("returns the engine's error when the container cannot be created", func(t *testing.T) {
 		createErr := errors.New("no such image")
 		docker := &fakeDocker{createErr: createErr}
