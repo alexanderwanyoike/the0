@@ -295,6 +295,30 @@ func TestLaunch_RunnerReadsExactlyWhatEachBackendSends(t *testing.T) {
 		}
 	})
 
+	t.Run("a bot without config sends BOT_CONFIG as {} on both backends", func(t *testing.T) {
+		bot := roundTripBot
+		bot.Config = nil
+		realtimeExecutable := dockerExecutable(true)
+		realtimeExecutable.Config = nil
+		scheduledExecutable := dockerExecutable(false)
+		scheduledExecutable.Config = nil
+		pod, err := generator.GeneratePod(bot)
+		require.NoError(t, err)
+		scheduled, err := generator.GenerateScheduledPodSpec(bot)
+		require.NoError(t, err)
+
+		for name, s := range map[string]sent{
+			"docker realtime run":      dockerSent(t, realtimeExecutable),
+			"docker scheduled run":     dockerSent(t, scheduledExecutable),
+			"kubernetes realtime run":  podSent(container(t, pod.Spec.Containers, "bot")),
+			"kubernetes scheduled run": podSent(container(t, scheduled.Containers, "bot")),
+		} {
+			got, err := read(t, s.command, s.env)
+			require.NoError(t, err, name)
+			assert.Equal(t, "{}", got.BotConfig, name)
+		}
+	})
+
 	t.Run("kubernetes sync sidecar", func(t *testing.T) {
 		want := inPod(launchOf(launch.Run, "realtime"), true, true)
 		syncEnv := podSent(container(t, realtimePod.Spec.InitContainers, "sync")).env
