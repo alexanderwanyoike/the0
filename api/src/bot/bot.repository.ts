@@ -2,9 +2,10 @@ import { Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import pino from "pino";
 import { Bot } from "./entities/bot.entity";
-import { RoleRepository } from "@/common/role.repository";
+import { RoleRepository, WRITE_FAILED } from "@/common/role.repository";
 import { appError, AppError } from "@/common/app-error";
-import { Failure, Ok, Result, errorMessage } from "@/common/result";
+import { isForeignKeyViolation } from "@/common/database-errors";
+import { Failure, Ok, Result } from "@/common/result";
 import { appendBotEvents, BotEvent, Executor } from "./bot-event-outbox";
 
 const logger = pino({ name: "BotRepository" });
@@ -34,7 +35,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return Ok(this.transformSnapshotToData<Bot>(record));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating bot");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(writeFailure(error));
     }
   }
 
@@ -62,7 +63,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return this.findOne(userId, id);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error updating bot");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(writeFailure(error));
     }
   }
 
@@ -83,7 +84,7 @@ export class BotRepository extends RoleRepository<Bot> {
       return Ok(null);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting bot");
-      return Failure(appError("internal", errorMessage(error)));
+      return Failure(WRITE_FAILED);
     }
   }
 
@@ -91,3 +92,9 @@ export class BotRepository extends RoleRepository<Bot> {
     return and(eq(this.table.userId, userId), eq(this.table.id, id));
   }
 }
+
+/** customBotId is the only reference a caller can break: by deleting the version. */
+const writeFailure = (error: unknown): AppError =>
+  isForeignKeyViolation(error)
+    ? appError("validation", "Custom bot version no longer exists")
+    : WRITE_FAILED;

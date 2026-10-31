@@ -7,8 +7,6 @@ import {
   Delete,
   UseGuards,
   Put,
-  BadRequestException,
-  NotFoundException,
 } from "@nestjs/common";
 import { BotService } from "./bot.service";
 import { CreateBotDto } from "./dto/create-bot.dto";
@@ -25,6 +23,7 @@ import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 import { CommandBus } from "@/command-bus/command-bus";
+import { toHttpException } from "@/common/http-error";
 import { DeleteBot, DeployBot, UpdateBot } from "./commands/bot-commands";
 
 @ApiTags("bots")
@@ -49,7 +48,7 @@ export class BotController {
       new DeployBot(actor, { ...createBotDto }),
     );
     if (!result.success) {
-      throw new BadRequestException(result.error.message);
+      throw toHttpException(result.error);
     }
     return result.data;
   }
@@ -59,7 +58,7 @@ export class BotController {
   async findAll(@CurrentActor() actor: Actor) {
     const result = await this.botService.findAll(actor);
     if (!result.success) {
-      throw new NotFoundException(result.error.message);
+      throw toHttpException(result.error);
     }
     return result.data;
   }
@@ -71,7 +70,7 @@ export class BotController {
   async findOne(@CurrentActor() actor: Actor, @Param("id") id: string) {
     const result = await this.botService.findOne(actor, id);
     if (!result.success) {
-      throw new NotFoundException(result.error.message);
+      throw toHttpException(result.error);
     }
     return result.data;
   }
@@ -90,7 +89,7 @@ export class BotController {
       new UpdateBot(actor, id, { ...updateBotDto }),
     );
     if (!result.success) {
-      throw new BadRequestException(result.error.message);
+      throw toHttpException(result.error);
     }
     return result.data;
   }
@@ -102,7 +101,7 @@ export class BotController {
   async remove(@CurrentActor() actor: Actor, @Param("id") id: string) {
     const result = await this.commandBus.execute(new DeleteBot(actor, id));
     if (!result.success) {
-      throw new BadRequestException(result.error.message);
+      throw toHttpException(result.error);
     }
     return result.data;
   }
