@@ -17,51 +17,45 @@ import (
 	"runtime/internal/model"
 )
 
+// eventSubjects pairs each event contract with the subject the subscriber
+// consumes it on, in the order THE0_EVENTS lists them.
+var eventSubjects = []struct {
+	contract string
+	subject  string
+}{
+	{"bot-created", SubjectBotCreated},
+	{"bot-updated", SubjectBotUpdated},
+	{"bot-deleted", SubjectBotDeleted},
+	{"bot-schedule-created", SubjectBotScheduleCreated},
+	{"bot-schedule-updated", SubjectBotScheduleUpdated},
+	{"bot-schedule-deleted", SubjectBotScheduleDeleted},
+}
+
+// customFieldsTheRuntimeDrops are fields of custom.config the runtime does
+// not store: the api serves bot frontends itself.
+var customFieldsTheRuntimeDrops = []string{"hasFrontend"}
+
 type eventContract struct {
 	Subject string          `json:"subject"`
 	Payload json.RawMessage `json:"payload"`
 }
 
-// eventPayload is the payload as the api means it, decoded independently of
-// the runtime's own message types.
-type eventPayload struct {
-	ID     string                 `json:"id"`
-	Config map[string]interface{} `json:"config"`
-	Custom *struct {
-		Config struct {
-			Name        string            `json:"name"`
-			Version     string            `json:"version"`
-			Type        string            `json:"type"`
-			Runtime     string            `json:"runtime"`
-			Entrypoints map[string]string `json:"entrypoints"`
-		} `json:"config"`
-		CreatedAt string `json:"createdAt"`
-		UpdatedAt string `json:"updatedAt"`
-		FilePath  string `json:"filePath"`
-		Version   string `json:"version"`
-	} `json:"custom"`
-}
-
-func loadEvent(t *testing.T, name string) (eventContract, eventPayload) {
+// loadEvent returns the contract and its payload decoded without the
+// runtime's types, so a field the runtime names differently shows up as a
+// difference instead of decoding to the same zero value on both sides.
+func loadEvent(t *testing.T, name string) (eventContract, map[string]interface{}) {
 	t.Helper()
 	var contract eventContract
 	contracts.Load(t, "events/"+name+".json", &contract)
-	var payload eventPayload
+	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(contract.Payload, &payload))
 	return contract, payload
 }
 
 func TestContracts_EventSubjectsAreTheOnesTheSubscriberConsumes(t *testing.T) {
-	for name, subject := range map[string]string{
-		"bot-created":          SubjectBotCreated,
-		"bot-updated":          SubjectBotUpdated,
-		"bot-deleted":          SubjectBotDeleted,
-		"bot-schedule-created": SubjectBotScheduleCreated,
-		"bot-schedule-updated": SubjectBotScheduleUpdated,
-		"bot-schedule-deleted": SubjectBotScheduleDeleted,
-	} {
-		contract, _ := loadEvent(t, name)
-		assert.Equal(t, contract.Subject, subject, name)
+	for _, event := range eventSubjects {
+		contract, _ := loadEvent(t, event.contract)
+		assert.Equal(t, contract.Subject, event.subject, event.contract)
 	}
 }
 
@@ -69,44 +63,49 @@ func TestContracts_StreamsAreTheOnesTheApiCreates(t *testing.T) {
 	var streams map[string][]string
 	contracts.Load(t, "events/streams.json", &streams)
 
-	assert.Equal(t, []string{
-		SubjectBotCreated, SubjectBotUpdated, SubjectBotDeleted,
-		SubjectBotScheduleCreated, SubjectBotScheduleUpdated, SubjectBotScheduleDeleted,
-	}, streams[botevents.StreamName])
+	var consumed []string
+	for _, event := range eventSubjects {
+		consumed = append(consumed, event.subject)
+	}
+	assert.Equal(t, consumed, streams[botevents.StreamName])
 	assert.Equal(t, streams[eventstest.Stream.Name], eventstest.Stream.Subjects,
 		"the test stream stands in for the api's")
 }
 
-func requireStoredAsSent(t *testing.T, sent eventPayload, stored model.Bot) {
+func asJSONObject(t *testing.T, v interface{}) map[string]interface{} {
 	t.Helper()
-	assert.Equal(t, sent.ID, stored.ID)
-	storedConfig, err := json.Marshal(stored.Config)
+	encoded, err := json.Marshal(v)
 	require.NoError(t, err)
-	sentConfig, err := json.Marshal(sent.Config)
-	require.NoError(t, err)
-	assert.JSONEq(t, string(sentConfig), string(storedConfig))
-
-	custom := stored.CustomBotVersion
-	assert.Equal(t, sent.Custom.Version, custom.Version)
-	assert.Equal(t, sent.Custom.FilePath, custom.FilePath)
-	assert.Equal(t, sent.Custom.Config.Name, custom.Config.Name)
-	assert.Equal(t, sent.Custom.Config.Version, custom.Config.Version)
-	assert.Equal(t, sent.Custom.Config.Type, custom.Config.Type)
-	assert.Equal(t, sent.Custom.Config.Runtime, custom.Config.Runtime)
-	assert.Equal(t, sent.Custom.Config.Entrypoints, custom.Config.Entrypoints)
-	assertSameInstant(t, sent.Custom.CreatedAt, custom.CreatedAt)
-	assertSameInstant(t, sent.Custom.UpdatedAt, custom.UpdatedAt)
+	var object map[string]interface{}
+	require.NoError(t, json.Unmarshal(encoded, &object))
+	return object
 }
 
 // The schedule subscriber re-encodes these times, so only the instant is
 // agreed, not the text.
-func assertSameInstant(t *testing.T, sent, stored string) {
+func normaliseTimes(t *testing.T, custom map[string]interface{}) {
 	t.Helper()
-	want, err := time.Parse(time.RFC3339Nano, sent)
-	require.NoError(t, err)
-	got, err := time.Parse(time.RFC3339Nano, stored)
-	require.NoError(t, err, "stored time %q", stored)
-	assert.True(t, want.Equal(got), "sent %s, stored %s", sent, stored)
+	for _, field := range []string{"createdAt", "updatedAt"} {
+		text, _ := custom[field].(string)
+		at, err := time.Parse(time.RFC3339Nano, text)
+		require.NoError(t, err, "custom.%s %q", field, text)
+		custom[field] = at.UTC().Format(time.RFC3339Nano)
+	}
+}
+
+func requireStoredAsSent(t *testing.T, sent map[string]interface{}, stored model.Bot) {
+	t.Helper()
+	assert.Equal(t, sent["id"], stored.ID)
+	assert.Equal(t, sent["config"], asJSONObject(t, stored.Config))
+
+	want := asJSONObject(t, sent["custom"])
+	for _, field := range customFieldsTheRuntimeDrops {
+		delete(want["config"].(map[string]interface{}), field)
+	}
+	got := asJSONObject(t, stored.CustomBotVersion)
+	normaliseTimes(t, want)
+	normaliseTimes(t, got)
+	assert.Equal(t, want, got)
 }
 
 // Bots and schedules are stored in the same shape apart from a schedule's
@@ -135,6 +134,7 @@ func TestContracts_ApiEventsAreStoredAsSent(t *testing.T) {
 			created, createdPayload := loadEvent(t, kind.prefix+"-created")
 			updated, updatedPayload := loadEvent(t, kind.prefix+"-updated")
 			deleted, _ := loadEvent(t, kind.prefix+"-deleted")
+			id, _ := createdPayload["id"].(string)
 
 			kind.events.ResetStream(t)
 			db := mongoServer.Database()
@@ -143,15 +143,15 @@ func TestContracts_ApiEventsAreStoredAsSent(t *testing.T) {
 
 			kind.events.Publish(t, created.Subject, created.Payload)
 			kind.events.WaitForHandled(t)
-			requireStoredAsSent(t, createdPayload, findStored(t, collection, createdPayload.ID))
+			requireStoredAsSent(t, createdPayload, findStored(t, collection, id))
 
 			kind.events.Publish(t, updated.Subject, updated.Payload)
 			kind.events.WaitForHandled(t)
-			requireStoredAsSent(t, updatedPayload, findStored(t, collection, updatedPayload.ID))
+			requireStoredAsSent(t, updatedPayload, findStored(t, collection, id))
 
 			kind.events.Publish(t, deleted.Subject, deleted.Payload)
 			kind.events.WaitForHandled(t)
-			assert.Equal(t, int64(0), count(t, collection, bson.M{"id": createdPayload.ID}))
+			assert.Equal(t, int64(0), count(t, collection, bson.M{"id": id}))
 		})
 	}
 }
