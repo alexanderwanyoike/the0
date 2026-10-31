@@ -73,7 +73,6 @@ describe("CustomBotService", () => {
       isVersionNewer: jest.fn(),
       checkUserOwnership: jest.fn(),
       getAllUserVersions: jest.fn(),
-      getSpecificUserVersion: jest.fn(),
       getUserCustomBots: jest.fn(),
       countInstancesByCustomBotId: jest.fn(),
       countInstancesByCustomBotIds: jest.fn(),
@@ -1170,68 +1169,6 @@ describe("CustomBotService", () => {
     });
   });
 
-  describe("getAllUserVersions", () => {
-    it("should return all versions for a specific bot successfully", async () => {
-      const userId = "user123";
-      const botName = "test-bot";
-      const mockVersions: CustomBotWithVersions = {
-        id: "bot-id",
-        name: "test-bot",
-        userId,
-        versions: [
-          {
-            version: "1.1.0",
-            config: { ...validConfig, version: "1.1.0" },
-            filePath: "path1",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            status: "active",
-            id: "bot-1",
-            userId,
-          },
-          {
-            version: "1.0.0",
-            config: validConfig,
-            filePath: "path2",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            status: "active",
-            id: "bot-1",
-            userId,
-          },
-        ],
-        latestVersion: "1.1.0",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      mockRepository.getAllUserVersions.mockResolvedValue(Ok(mockVersions));
-
-      const result = await service.getAllUserVersions(userId, botName);
-
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockVersions);
-      expect(mockRepository.getAllUserVersions).toHaveBeenCalledWith(
-        userId,
-        botName,
-      );
-    });
-
-    it("should handle repository errors", async () => {
-      const userId = "user123";
-      const botName = "test-bot";
-
-      mockRepository.getAllUserVersions.mockResolvedValue(
-        Failure(appError("not_found", "Bot not found")),
-      );
-
-      const result = await service.getAllUserVersions(userId, botName);
-
-      expect(result.success).toBe(false);
-      expect(result.error.message).toBe("Bot not found");
-    });
-  });
-
   describe("getAllGlobalVersions", () => {
     it("should return all global versions for a bot successfully", async () => {
       const botName = "test-bot";
@@ -1263,61 +1200,6 @@ describe("CustomBotService", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockVersions);
       expect(mockRepository.getAllGlobalVersions).toHaveBeenCalledWith(botName);
-    });
-  });
-
-  describe("getUserSpecificVersion", () => {
-    it("should return specific version successfully", async () => {
-      const userId = "user123";
-      const botName = "test-bot";
-      const version = "1.0.0";
-      const mockBot = {
-        id: "bot-id",
-        name: "test-bot",
-        version: "1.0.0",
-        config: validConfig,
-        status: "active",
-        filePath:
-          "gs://test-bucket/user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
-        userId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as CustomBot;
-
-      mockRepository.getSpecificUserVersion.mockResolvedValue(Ok(mockBot));
-
-      const result = await service.getUserSpecificVersion(
-        userId,
-        botName,
-        version,
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockBot);
-      expect(mockRepository.getSpecificUserVersion).toHaveBeenCalledWith(
-        userId,
-        botName,
-        version,
-      );
-    });
-
-    it("should handle version not found", async () => {
-      const userId = "user123";
-      const botName = "test-bot";
-      const version = "1.0.0";
-
-      mockRepository.getSpecificUserVersion.mockResolvedValue(
-        Failure(appError("not_found", "Version not found")),
-      );
-
-      const result = await service.getUserSpecificVersion(
-        userId,
-        botName,
-        version,
-      );
-
-      expect(result.success).toBe(false);
-      expect(result.error.message).toBe("Version not found");
     });
   });
 

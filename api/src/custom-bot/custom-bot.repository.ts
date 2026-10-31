@@ -27,21 +27,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     super("name"); // Use 'name' as the revision key field
   }
 
-  async userBotExists(
-    userId: string,
-    name: string,
-  ): Promise<Result<boolean, AppError>> {
-    try {
-      const result = await this.findByKey(userId, name);
-      if (!result.success) {
-        return Failure(result.error);
-      }
-      return Ok(result.data.length > 0);
-    } catch (error: unknown) {
-      return Failure(READ_FAILED);
-    }
-  }
-
   async globalBotExists(name: string): Promise<Result<boolean, AppError>> {
     try {
       const result = await this.findGlobalByKey(name);
@@ -49,19 +34,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
         return Failure(result.error);
       }
       return Ok(result.data.length > 0);
-    } catch (error: unknown) {
-      return Failure(READ_FAILED);
-    }
-  }
-
-  async userVersionExists(
-    userId: string,
-    name: string,
-    version: string,
-  ): Promise<Result<boolean, AppError>> {
-    try {
-      const result = await this.findByKeyAndVersion(userId, name, version);
-      return Ok(result.success);
     } catch (error: unknown) {
       return Failure(READ_FAILED);
     }
@@ -138,14 +110,6 @@ export class CustomBotRepository extends RoleRevisionRepository<CustomBot> {
     } catch (error: unknown) {
       return Failure(READ_FAILED);
     }
-  }
-
-  async getSpecificUserVersion(
-    userId: string,
-    name: string,
-    version: string,
-  ): Promise<Result<CustomBot, AppError>> {
-    return this.findByKeyAndVersion(userId, name, version);
   }
 
   async getSpecificGlobalVersion(

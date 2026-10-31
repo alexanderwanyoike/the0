@@ -295,29 +295,10 @@ export class CustomBotService {
     }
   }
 
-  async getAllUserVersions(
-    userId: string,
-    name: string,
-  ): Promise<Result<CustomBotWithVersions, AppError>> {
-    return await this.customBotRepository.getAllUserVersions(userId, name);
-  }
-
   async getAllGlobalVersions(
     name: string,
   ): Promise<Result<CustomBotWithVersions, AppError>> {
     return await this.customBotRepository.getAllGlobalVersions(name);
-  }
-
-  async getUserSpecificVersion(
-    userId: string,
-    name: string,
-    version: string,
-  ): Promise<Result<CustomBot, AppError>> {
-    return await this.customBotRepository.getSpecificUserVersion(
-      userId,
-      name,
-      version,
-    );
   }
 
   async getGlobalSpecificVersion(

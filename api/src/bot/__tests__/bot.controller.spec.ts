@@ -77,16 +77,9 @@ describe("BotController - Enhanced Tests", () => {
       error: null,
       data: mockCustomBot,
     }),
-    getUserSpecificVersion: jest.fn().mockResolvedValue({
-      success: true,
-      error: null,
-      data: mockCustomBot,
-    }),
     createCustomBot: jest.fn(),
     updateCustomBot: jest.fn(),
-    getAllUserVersions: jest.fn(),
     getAllGlobalVersions: jest.fn(),
-    getAllUserSpecificVersions: jest.fn(),
     checkOrphaned: jest
       .fn()
       .mockResolvedValue(
