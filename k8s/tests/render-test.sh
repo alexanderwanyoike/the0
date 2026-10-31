@@ -114,7 +114,12 @@ for release in the0 the0-the0 trading; do
     check_agrees "controller NATS_URL matches api NATS_URLS: $label" \
       "$api_nats" "$(rendered_env "$rendering" bot-controller.yaml NATS_URL)"
 
-    api_minio="$(rendered_env "$rendering" the0-api.yaml MINIO_ENDPOINT):$(rendered_env "$rendering" the0-api.yaml MINIO_PORT)"
+    api_minio_host=$(rendered_env "$rendering" the0-api.yaml MINIO_ENDPOINT)
+    api_minio_port=$(rendered_env "$rendering" the0-api.yaml MINIO_PORT)
+    api_minio=""
+    if [[ -n "$api_minio_host" && -n "$api_minio_port" ]]; then
+      api_minio="$api_minio_host:$api_minio_port"
+    fi
     check_agrees "controller MINIO_ENDPOINT matches api MINIO_ENDPOINT:MINIO_PORT: $label" \
       "$api_minio" "$(rendered_env "$rendering" bot-controller.yaml MINIO_ENDPOINT)"
     check_agrees "controller --minio-endpoint matches api MINIO_ENDPOINT:MINIO_PORT: $label" \
