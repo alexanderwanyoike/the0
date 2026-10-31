@@ -23,7 +23,8 @@ interface QueryContract {
     body: Record<string, unknown>;
     api: {
       result?: QueryResult;
-      error?: { code: string; message?: string; messageContains?: string };
+      /** `{body}` in a message stands for the body exactly as sent. */
+      error?: { code: string; message: string };
     };
   }[];
 }
@@ -67,8 +68,10 @@ describe("query contracts", () => {
 
   describe("report each answer of the query server", () => {
     it.each(contract.responses)("reports $case", async (response) => {
+      // Go's json.Encoder ends the body with a newline.
+      const sent = JSON.stringify(response.body) + "\n";
       fetch.mockResolvedValue(
-        new Response(JSON.stringify(response.body), {
+        new Response(sent, {
           status: response.status,
           headers: { "Content-Type": "application/json" },
         }),
@@ -82,13 +85,10 @@ describe("query contracts", () => {
       }
       const expected = response.api.error!;
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(expected.code);
-      if (expected.message !== undefined) {
-        expect(result.error?.message).toBe(expected.message);
-      }
-      if (expected.messageContains !== undefined) {
-        expect(result.error?.message).toContain(expected.messageContains);
-      }
+      expect(result.error).toEqual({
+        code: expected.code,
+        message: expected.message.replace("{body}", sent),
+      });
     });
   });
 });

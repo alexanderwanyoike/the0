@@ -5,7 +5,7 @@
     "bot_id": "q3n8v1x7k2m9p4r6t0w5y8z1",
     "query_path": "/today",
     "params": { "symbol": "AAPL", "days": 5 },
-    "timeout_sec": 30
+    "timeout_sec": 12
   },
   "responses": [
     {
@@ -70,7 +70,7 @@
       "api": {
         "error": {
           "code": "QUERY_FAILED",
-          "messageContains": "No handler for path: /status (available: /today, /history, /health, /info)"
+          "message": "Query failed: {body}"
         }
       }
     },
@@ -86,7 +86,41 @@
       "api": {
         "error": {
           "code": "QUERY_FAILED",
-          "messageContains": "failed to get container IP: container is not running"
+          "message": "Query failed: {body}"
+        }
+      }
+    },
+    {
+      "case": "no query path",
+      "request": { "bot_id": "q3n8v1x7k2m9p4r6t0w5y8z1", "params": {} },
+      "status": 400,
+      "body": {
+        "status": "error",
+        "error": "query_path is required",
+        "duration": 0,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "QUERY_FAILED",
+          "message": "Query failed: {body}"
+        }
+      }
+    },
+    {
+      "case": "method not allowed",
+      "method": "GET",
+      "status": 405,
+      "body": {
+        "status": "error",
+        "error": "method not allowed",
+        "duration": 0,
+        "timestamp": "2026-10-31T12:00:00Z"
+      },
+      "api": {
+        "error": {
+          "code": "QUERY_FAILED",
+          "message": "Query failed: {body}"
         }
       }
     }

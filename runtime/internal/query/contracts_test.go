@@ -17,15 +17,21 @@ import (
 	"runtime/internal/contracts"
 )
 
+type queryAnswer struct {
+	Case string `json:"case"`
+	// Method and Request, when set, replace the POST of the contract's
+	// request: the api never sends anything else, but the server answers it.
+	Method  string                 `json:"method"`
+	Request json.RawMessage        `json:"request"`
+	Status  int                    `json:"status"`
+	Body    map[string]interface{} `json:"body"`
+}
+
 type queryContract struct {
 	Port      int             `json:"port"`
 	Path      string          `json:"path"`
 	Request   json.RawMessage `json:"request"`
-	Responses []struct {
-		Case   string                 `json:"case"`
-		Status int                    `json:"status"`
-		Body   map[string]interface{} `json:"body"`
-	} `json:"responses"`
+	Responses []queryAnswer   `json:"responses"`
 }
 
 type stubResolver struct{ err error }
@@ -33,37 +39,42 @@ type stubResolver struct{ err error }
 func (r stubResolver) ResolveBot(context.Context, string) (string, error) { return "", r.err }
 
 type stubExecutor struct {
-	response func(Request) *Response
+	response func() *Response
 	got      *Request
 }
 
 func (e stubExecutor) ExecuteQuery(_ context.Context, req Request, _ string) *Response {
 	*e.got = req
-	return e.response(req)
+	return e.response()
 }
 
 type queryServerSetup struct {
 	resolveErr error
-	answer     func(Request) *Response
+	answer     func() *Response
 }
 
 // queryServerSetups makes the server reach each case of the contract the way
 // the Docker and Kubernetes backends make it: a resolver refusing the bot, or
-// an executor's answer. Every case in the contract needs one here.
-func queryServerSetups(botID string, start time.Time) map[string]queryServerSetup {
+// an executor's answer. A case the server refuses before resolving needs no
+// setup, but every case in the contract needs an entry here.
+func queryServerSetups(t *testing.T, botID string, answered queryAnswer, start time.Time) map[string]queryServerSetup {
+	sdkAnswer, err := json.Marshal(map[string]interface{}{"status": "ok", "data": answered.Body["data"]})
+	require.NoError(t, err)
 	return map[string]queryServerSetup{
-		"answered": {answer: func(Request) *Response {
-			return ParseQueryOutput([]byte(`{"status":"ok","data":{"trades":3,"pnl":12.5}}`), start)
+		"answered": {answer: func() *Response {
+			return ParseQueryOutput(sdkAnswer, start)
 		}},
 		"bot not found":      {resolveErr: fmt.Errorf("bot not found: %s", botID)},
 		"no queries defined": {resolveErr: NoQueryEntrypointError(botID)},
-		"no handler for the path": {answer: func(Request) *Response {
+		"no handler for the path": {answer: func() *Response {
 			sdkResult := `{"status":"error","error":"No handler for path: /status","available":["/today","/history","/health","/info"]}`
 			return FailedRunResponse([]byte(sdkResult), func() string { return "" }, start)
 		}},
-		"bot not running": {answer: func(Request) *Response {
+		"bot not running": {answer: func() *Response {
 			return ErrorResponse("failed to get container IP: container is not running", start)
 		}},
+		"no query path":      {},
+		"method not allowed": {},
 	}
 }
 
@@ -74,6 +85,17 @@ func keysOf(m map[string]interface{}) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func answerOf(t *testing.T, contract queryContract, name string) queryAnswer {
+	t.Helper()
+	for _, answer := range contract.Responses {
+		if answer.Case == name {
+			return answer
+		}
+	}
+	t.Fatalf("query.json has no %q case", name)
+	return queryAnswer{}
 }
 
 func TestContracts_QueryServerListensOnTheApisDefaultPort(t *testing.T) {
@@ -93,7 +115,7 @@ func TestContracts_QueryServerAnswersAsTheApiExpects(t *testing.T) {
 		TimeoutSec int                    `json:"timeout_sec"`
 	}
 	require.NoError(t, json.Unmarshal(contract.Request, &sent))
-	setups := queryServerSetups(sent.BotID, time.Now())
+	setups := queryServerSetups(t, sent.BotID, answerOf(t, contract, "answered"), time.Now())
 
 	for _, want := range contract.Responses {
 		t.Run(want.Case, func(t *testing.T) {
@@ -104,9 +126,16 @@ func TestContracts_QueryServerAnswersAsTheApiExpects(t *testing.T) {
 				Resolver: stubResolver{err: setup.resolveErr},
 				Executor: stubExecutor{response: setup.answer, got: &got},
 			})
+			method, request := http.MethodPost, contract.Request
+			if want.Method != "" {
+				method = want.Method
+			}
+			if want.Request != nil {
+				request = want.Request
+			}
 			w := httptest.NewRecorder()
 
-			server.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, contract.Path, bytes.NewReader(contract.Request)))
+			server.Handler().ServeHTTP(w, httptest.NewRequest(method, contract.Path, bytes.NewReader(request)))
 
 			assert.Equal(t, want.Status, w.Code)
 			var body map[string]interface{}
