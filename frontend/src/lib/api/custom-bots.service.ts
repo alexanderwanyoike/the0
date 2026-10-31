@@ -1,4 +1,4 @@
-import { ApiClient, ApiResponse } from "@/lib/api-client";
+import { apiRequest } from "@/lib/auth-fetch";
 import { Result, Ok, Failure } from "@/lib/result";
 import {
   CustomBotWithVersions,
@@ -21,16 +21,19 @@ export class CustomBotService {
     Result<CustomBotWithVersions[], CustomBotServiceError>
   > {
     try {
-      const response = await ApiClient.get<{
+      const response = await apiRequest<{
         success: boolean;
         data: any[];
         message: string;
       }>("/api/custom-bots");
 
-      if (!response.data || !response.data.success) {
+      if (!response.success) {
+        return Failure(response.error);
+      }
+      if (!response.data?.success) {
         return Failure({
-          message: response.error?.message || "Failed to fetch custom bots",
-          statusCode: response.error?.statusCode || 500,
+          message: "Failed to fetch custom bots",
+          statusCode: 500,
         });
       }
 
