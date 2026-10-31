@@ -52,6 +52,32 @@ func TestExecute_ReportsACommandsErrorOnce(t *testing.T) {
 		}
 	})
 
+	t.Run("a command that printed its own failure exits 1 without another line", func(t *testing.T) {
+		out, errOut := captureLogger(t)
+		root := testRoot(func(*cobra.Command, []string) error {
+			logger.Error("API key is invalid")
+			logger.Print("Check your API key and permissions")
+			return errReported
+		})
+		var cobraOut, stderr bytes.Buffer
+		root.SetOut(&cobraOut)
+		root.SetErr(&cobraOut)
+		root.SetArgs([]string{"thing", "bot-1"})
+
+		if code := Execute(root, &stderr); code != 1 {
+			t.Errorf("exit code = %d, want 1", code)
+		}
+		if got, want := errOut.String(), "x API key is invalid\n"; got != want {
+			t.Errorf("logger error output = %q, want %q", got, want)
+		}
+		if got, want := out.String(), "Check your API key and permissions\n"; got != want {
+			t.Errorf("logger output = %q, want %q", got, want)
+		}
+		if cobraOut.Len() != 0 || stderr.Len() != 0 {
+			t.Errorf("printed more: cobra %q, stderr %q", cobraOut.String(), stderr.String())
+		}
+	})
+
 	t.Run("a command that succeeds exits 0 and prints nothing extra", func(t *testing.T) {
 		_, errOut := captureLogger(t)
 		root := testRoot(func(*cobra.Command, []string) error { return nil })

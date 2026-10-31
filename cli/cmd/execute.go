@@ -18,6 +18,10 @@ type commandError struct {
 func (e *commandError) Error() string { return e.err.Error() }
 func (e *commandError) Unwrap() error { return e.err }
 
+// errReported ends a command that has already printed why it failed,
+// for failures whose explanation runs past a single error line.
+var errReported = errors.New("failure already reported")
+
 // Execute runs root and returns the process exit code. It is the only
 // place the CLI decides how a failed command ends.
 func Execute(root *cobra.Command, stderr io.Writer) int {
@@ -26,6 +30,9 @@ func Execute(root *cobra.Command, stderr io.Writer) int {
 	err := root.Execute()
 	if err == nil {
 		return 0
+	}
+	if errors.Is(err, errReported) {
+		return 1
 	}
 
 	var cmdErr *commandError
