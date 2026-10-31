@@ -959,12 +959,15 @@ describe("Bot commands", () => {
 
         expect(result).toEqual(
           Failure(
-            appError("validation", "Invalid bot type: missing name after '/'"),
+            appError(
+              "validation",
+              "Invalid bot type format. Expected format: type/name",
+            ),
           ),
         );
         expect(logger.warn).toHaveBeenCalledWith(
           { type: "scheduled/ " },
-          "Invalid bot type: missing name after '/'",
+          "Invalid bot type format. Expected format: type/name",
         );
         expect(repository.removeWithEvents).not.toHaveBeenCalled();
       });
