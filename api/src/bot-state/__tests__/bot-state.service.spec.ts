@@ -243,7 +243,7 @@ describe("BotStateService", () => {
 
       expect(result).toEqual(
         Failure({
-          code: "internal",
+          code: "validation",
           message: "Invalid bot ID format",
         }),
       );
@@ -385,7 +385,7 @@ describe("BotStateService", () => {
       );
       expect(result).toEqual(
         Failure({
-          code: "internal",
+          code: "validation",
           message: "Invalid bot ID format",
         }),
       );

@@ -1,20 +1,10 @@
-import {
-  Controller,
-  Get,
-  Delete,
-  Param,
-  UseGuards,
-  BadRequestException,
-  NotFoundException,
-  PayloadTooLargeException,
-  UnprocessableEntityException,
-  ConflictException,
-} from "@nestjs/common";
+import { Controller, Get, Delete, Param, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { BotStateService } from "./bot-state.service";
 import { Actor } from "@/auth/actor";
 import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { toHttpException } from "@/common/http-error";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
 @ApiTags("bot-state")
@@ -36,12 +26,7 @@ export class BotStateController {
     const result = await this.botStateService.listKeys(actor, botId);
 
     if (!result.success) {
-      switch (result.error.code) {
-        case "not_found":
-          throw new NotFoundException("Bot not found or access denied");
-        default:
-          throw new BadRequestException("Failed to list state keys");
-      }
+      throw toHttpException(result.error);
     }
 
     return {
@@ -69,20 +54,7 @@ export class BotStateController {
     const result = await this.botStateService.getKey(actor, botId, key);
 
     if (!result.success) {
-      switch (result.error.code) {
-        case "not_found":
-          throw new NotFoundException("Bot or state key not found");
-        case "validation":
-          throw new BadRequestException("Invalid state key");
-        case "too_large":
-          throw new PayloadTooLargeException(result.error.message);
-        case "unprocessable":
-          throw new UnprocessableEntityException(
-            "State file contains invalid JSON",
-          );
-        default:
-          throw new BadRequestException("Failed to get state key");
-      }
+      throw toHttpException(result.error);
     }
 
     return {
@@ -112,18 +84,7 @@ export class BotStateController {
     const result = await this.botStateService.deleteKey(actor, botId, key);
 
     if (!result.success) {
-      switch (result.error.code) {
-        case "not_found":
-          throw new NotFoundException("Bot not found or access denied");
-        case "validation":
-          throw new BadRequestException("Invalid state key");
-        case "conflict":
-          throw new ConflictException(
-            "State was modified by another operation. Please retry the request.",
-          );
-        default:
-          throw new BadRequestException("Failed to delete state key");
-      }
+      throw toHttpException(result.error);
     }
 
     return {
@@ -147,12 +108,7 @@ export class BotStateController {
     const result = await this.botStateService.clearState(actor, botId);
 
     if (!result.success) {
-      switch (result.error.code) {
-        case "not_found":
-          throw new NotFoundException("Bot not found or access denied");
-        default:
-          throw new BadRequestException("Failed to clear state");
-      }
+      throw toHttpException(result.error);
     }
 
     return {

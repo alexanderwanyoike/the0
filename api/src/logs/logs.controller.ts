@@ -7,7 +7,6 @@ import {
   Res,
   UseGuards,
   BadRequestException,
-  NotFoundException,
 } from "@nestjs/common";
 import {
   ApiBadRequestResponse,
@@ -25,6 +24,7 @@ import { isValidBotId } from "./bot-id";
 import { GetLogsQueryDto } from "./dto/get-logs-query.dto";
 import { StreamLogsQueryDto } from "./dto/stream-logs-query.dto";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { toHttpException } from "@/common/http-error";
 import { AuthenticatedUser } from "@/auth/auth.types";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
@@ -77,10 +77,7 @@ export class LogsController {
     );
 
     if (!result.success) {
-      if (result.error.code === "not_found") {
-        throw new NotFoundException(result.error.message);
-      }
-      throw new BadRequestException(result.error.message);
+      throw toHttpException(result.error);
     }
 
     return {

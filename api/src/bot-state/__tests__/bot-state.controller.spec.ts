@@ -2,7 +2,11 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BotStateController } from "../bot-state.controller";
 import { BotStateService } from "../bot-state.service";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
-import { NotFoundException, BadRequestException } from "@nestjs/common";
+import {
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+} from "@nestjs/common";
 import { Ok, Failure } from "@/common/result";
 import { mockActor } from "@/test/mock-actor";
 
@@ -68,7 +72,7 @@ describe("BotStateController", () => {
       );
     });
 
-    it("should throw BadRequestException on storage errors", async () => {
+    it("should throw InternalServerErrorException on storage errors", async () => {
       mockBotStateService.listKeys!.mockResolvedValue(
         Failure({
           code: "internal",
@@ -77,7 +81,7 @@ describe("BotStateController", () => {
       );
 
       await expect(controller.listKeys(actor, testBotId)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
     });
   });
@@ -223,7 +227,7 @@ describe("BotStateController", () => {
       );
     });
 
-    it("should throw BadRequestException on storage errors", async () => {
+    it("should throw InternalServerErrorException on storage errors", async () => {
       mockBotStateService.clearState!.mockResolvedValue(
         Failure({
           code: "internal",
@@ -232,7 +236,7 @@ describe("BotStateController", () => {
       );
 
       await expect(controller.clearState(actor, testBotId)).rejects.toThrow(
-        BadRequestException,
+        InternalServerErrorException,
       );
     });
   });

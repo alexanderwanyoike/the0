@@ -5,10 +5,6 @@ import {
   Body,
   UseGuards,
   BadRequestException,
-  NotFoundException,
-  ServiceUnavailableException,
-  GatewayTimeoutException,
-  UnprocessableEntityException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -22,6 +18,7 @@ import { BotQueryService } from "./bot-query.service";
 import { Actor } from "@/auth/actor";
 import { CurrentActor } from "@/auth/actor.decorators";
 import { AuthCombinedGuard } from "@/auth/auth-combined.guard";
+import { toHttpException } from "@/common/http-error";
 import { ApiJwtOrApiKeyAuth } from "@/swagger/api-auth.decorators";
 
 class ExecuteQueryDto {
@@ -101,20 +98,7 @@ export class BotQueryController {
     });
 
     if (!result.success) {
-      switch (result.error.code) {
-        case "not_found":
-          throw new NotFoundException("Bot not found or access denied");
-        case "unprocessable":
-          throw new UnprocessableEntityException(result.error.message);
-        case "unavailable":
-          throw new ServiceUnavailableException(result.error.message);
-        case "timeout":
-          throw new GatewayTimeoutException(result.error.message);
-        default:
-          throw new BadRequestException(
-            result.error?.message || "Query failed",
-          );
-      }
+      throw toHttpException(result.error);
     }
 
     return {

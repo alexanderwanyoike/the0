@@ -62,7 +62,7 @@ describe("bot ID contracts", () => {
       const result = await service.listKeys(mockActor(), id);
 
       expect(result.error).toEqual({
-        code: "internal",
+        code: "validation",
         message: "Invalid bot ID format",
       });
       expect(botService.findOne).not.toHaveBeenCalled();
