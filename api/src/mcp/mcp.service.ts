@@ -1,18 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import { PinoLogger } from "nestjs-pino";
+import { ClassConstructor } from "class-transformer";
+import { MCP_TOOL_NAMES, BotDeployInput, LogsGetInput } from "./mcp.types";
 import {
-  MCP_TOOL_NAMES,
-  BotDeployInput,
-  BotUpdateInput,
-  BotDeleteInput,
-  BotGetInput,
-  BotStateListInput,
-  BotStateGetInput,
-  BotQueryInput,
-  LogsGetInput,
-  CustomBotGetInput,
-  CustomBotSchemaInput,
-} from "./mcp.types";
+  BotArguments,
+  BotQueryArguments,
+  BotStateKeyArguments,
+  BotUpdateArguments,
+  CustomBotArguments,
+  validateArguments,
+} from "./mcp.arguments";
+import { CreateBotDto } from "@/bot/dto/create-bot.dto";
+import { GetLogsQueryDto } from "@/logs/dto/get-logs-query.dto";
 import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
 import { DeleteBot, DeployBot, UpdateBot } from "@/bot/commands/bot-commands";
@@ -113,43 +112,61 @@ export class McpService {
       case MCP_TOOL_NAMES.BOT_LIST:
         return this.handleBotList(actor);
       case MCP_TOOL_NAMES.BOT_GET:
-        return this.handleBotGet(args as unknown as BotGetInput, actor);
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleBotGet(input, actor),
+        );
       case MCP_TOOL_NAMES.BOT_DEPLOY:
         return this.handleBotDeploy(args as unknown as BotDeployInput, actor);
       case MCP_TOOL_NAMES.BOT_UPDATE:
-        return this.handleBotUpdate(args as unknown as BotUpdateInput, actor);
+        return this.withArguments(BotUpdateArguments, args, (input) =>
+          this.handleBotUpdate(input, actor),
+        );
       case MCP_TOOL_NAMES.BOT_DELETE:
-        return this.handleBotDelete(args as unknown as BotDeleteInput, actor);
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleBotDelete(input, actor),
+        );
       case MCP_TOOL_NAMES.LOGS_GET:
-        return this.handleLogsGet(args as unknown as LogsGetInput, actor);
+        return this.withArguments(BotArguments, args, () =>
+          this.handleLogsGet(args as unknown as LogsGetInput, actor),
+        );
       case MCP_TOOL_NAMES.LOGS_SUMMARY:
-        return this.handleLogsSummary(
-          args as unknown as { bot_id: string },
-          actor,
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleLogsSummary(input, actor),
         );
       case MCP_TOOL_NAMES.BOT_STATE_LIST:
-        return this.handleBotStateList(
-          args as unknown as BotStateListInput,
-          actor,
+        return this.withArguments(BotArguments, args, (input) =>
+          this.handleBotStateList(input, actor),
         );
       case MCP_TOOL_NAMES.BOT_STATE_GET:
-        return this.handleBotStateGet(
-          args as unknown as BotStateGetInput,
-          actor,
+        return this.withArguments(BotStateKeyArguments, args, (input) =>
+          this.handleBotStateGet(input, actor),
         );
       case MCP_TOOL_NAMES.BOT_QUERY:
-        return this.handleBotQuery(args as unknown as BotQueryInput, actor);
+        return this.withArguments(BotQueryArguments, args, (input) =>
+          this.handleBotQuery(input, actor),
+        );
       case MCP_TOOL_NAMES.CUSTOM_BOT_LIST:
         return this.handleCustomBotList();
       case MCP_TOOL_NAMES.CUSTOM_BOT_GET:
-        return this.handleCustomBotGet(args as unknown as CustomBotGetInput);
+        return this.withArguments(CustomBotArguments, args, (input) =>
+          this.handleCustomBotGet(input),
+        );
       case MCP_TOOL_NAMES.CUSTOM_BOT_SCHEMA:
-        return this.handleCustomBotSchema(
-          args as unknown as CustomBotSchemaInput,
+        return this.withArguments(CustomBotArguments, args, (input) =>
+          this.handleCustomBotSchema(input),
         );
       default:
         return Promise.resolve(invalid(`Unknown tool: ${name}`));
     }
+  }
+
+  private async withArguments<T extends object>(
+    dto: ClassConstructor<T>,
+    args: object,
+    run: (input: T) => Promise<ToolResult>,
+  ): Promise<ToolResult> {
+    const input = await validateArguments(dto, args);
+    return input.success ? run(input.data) : input;
   }
 
   // Bot Handlers
@@ -169,7 +186,7 @@ export class McpService {
     );
   }
 
-  private handleBotGet(input: BotGetInput, actor: Actor): Promise<ToolResult> {
+  private handleBotGet(input: BotArguments, actor: Actor): Promise<ToolResult> {
     return this.botService.findOne(actor, input.bot_id);
   }
 
@@ -177,15 +194,15 @@ export class McpService {
     input: BotDeployInput,
     actor: Actor,
   ): Promise<ToolResult> {
-    // REST gets CreateBotDto's required name from the global ValidationPipe,
-    // which tool arguments never pass through; DeployBot validates the rest.
-    const name = input.config?.name;
-    if (!name) {
-      return invalid("Config must include a 'name' field");
-    }
+    // The tool takes the name inside the config, where REST takes it beside.
+    const bot = await validateArguments(CreateBotDto, {
+      name: input.config?.name,
+      config: input.config,
+    });
+    if (!bot.success) return bot;
 
     const result = await this.commandBus.execute(
-      new DeployBot(actor, { name, config: input.config }),
+      new DeployBot(actor, { ...bot.data }),
     );
     if (!result.success) return result;
     return Ok({
@@ -200,7 +217,7 @@ export class McpService {
   }
 
   private async handleBotUpdate(
-    input: BotUpdateInput,
+    input: BotUpdateArguments,
     actor: Actor,
   ): Promise<ToolResult> {
     const result = await this.commandBus.execute(
@@ -220,7 +237,7 @@ export class McpService {
   }
 
   private async handleBotDelete(
-    input: BotDeleteInput,
+    input: BotArguments,
     actor: Actor,
   ): Promise<ToolResult> {
     const result = await this.commandBus.execute(
@@ -235,13 +252,27 @@ export class McpService {
     input: LogsGetInput,
     actor: Actor,
   ): Promise<ToolResult> {
+    // An absent key must stay absent: the DTO's number transform turns an
+    // explicit undefined into NaN.
+    const query = await validateArguments(
+      GetLogsQueryDto,
+      Object.fromEntries(
+        Object.entries({
+          date: input.date,
+          dateRange: input.date_range,
+          limit: input.limit,
+        }).filter(([, value]) => value !== undefined),
+      ),
+    );
+    if (!query.success) return query;
+
     // Cap limit to prevent context overflow
-    const limit = Math.min(input.limit || 100, 500);
+    const limit = Math.min(query.data.limit || 100, 500);
     const result = await this.logsService.getLogs(
       input.bot_id,
       {
-        date: input.date,
-        dateRange: input.date_range,
+        date: query.data.date,
+        dateRange: query.data.dateRange,
         limit,
         offset: 0,
       },
@@ -257,7 +288,7 @@ export class McpService {
   }
 
   private async handleLogsSummary(
-    input: { bot_id: string },
+    input: BotArguments,
     actor: Actor,
   ): Promise<ToolResult> {
     const result = await this.logsService.getLogs(
@@ -288,27 +319,18 @@ export class McpService {
 
   // Bot State Handlers
   private async handleBotStateList(
-    input: BotStateListInput,
+    input: BotArguments,
     actor: Actor,
   ): Promise<ToolResult> {
-    if (!input.bot_id) {
-      return invalid("bot_id is required");
-    }
     const result = await this.botStateService.listKeys(actor, input.bot_id);
     if (!result.success) return result;
     return Ok({ bot_id: input.bot_id, keys: result.data });
   }
 
   private async handleBotStateGet(
-    input: BotStateGetInput,
+    input: BotStateKeyArguments,
     actor: Actor,
   ): Promise<ToolResult> {
-    if (!input.bot_id) {
-      return invalid("bot_id is required");
-    }
-    if (!input.key) {
-      return invalid("key is required");
-    }
     const result = await this.botStateService.getKey(
       actor,
       input.bot_id,
@@ -320,15 +342,9 @@ export class McpService {
 
   // Bot Query Handlers
   private async handleBotQuery(
-    input: BotQueryInput,
+    input: BotQueryArguments,
     actor: Actor,
   ): Promise<ToolResult> {
-    if (!input.bot_id) {
-      return invalid("bot_id is required");
-    }
-    if (!input.query_path) {
-      return invalid("query_path is required");
-    }
     return this.botQueryService.executeQuery(actor, input.bot_id, {
       queryPath: input.query_path,
       params: input.params,
@@ -354,7 +370,7 @@ export class McpService {
   }
 
   private async handleCustomBotGet(
-    input: CustomBotGetInput,
+    input: CustomBotArguments,
   ): Promise<ToolResult> {
     const result = await this.findCustomBot(input);
     if (!result.success) return result;
@@ -374,7 +390,7 @@ export class McpService {
   }
 
   private async handleCustomBotSchema(
-    input: CustomBotSchemaInput,
+    input: CustomBotArguments,
   ): Promise<ToolResult> {
     const result = await this.findCustomBot(input);
     if (!result.success) return result;
@@ -386,7 +402,7 @@ export class McpService {
     });
   }
 
-  private findCustomBot(input: { name: string; version?: string }) {
+  private findCustomBot(input: CustomBotArguments) {
     return input.version
       ? this.customBotService.getGlobalSpecificVersion(
           input.name,
