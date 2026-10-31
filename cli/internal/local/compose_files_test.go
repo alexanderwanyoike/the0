@@ -88,6 +88,19 @@ func TestComposeFiles_RuntimeServicesReadTheApisSettings(t *testing.T) {
 	}
 }
 
+// YAML aliases do not reach across files, so the dev overlay leaves the
+// shared settings to the base file rather than repeating them. NATS_URL is
+// the runtime's name, which the api never reads. The overlay's MinIO host is
+// deliberately different (the api reaches MinIO through the host).
+func TestComposeDevOverlay_LeavesSharedSettingsToTheBaseFile(t *testing.T) {
+	api := loadCompose(t, embeddedComposeDevFile, nil)["the0-api"].Environment
+	for _, name := range []string{"NATS_URLS", "NATS_URL", "LOG_BUCKET", "CUSTOM_BOTS_BUCKET", "RUNTIME_QUERY_URL"} {
+		if value, ok := api[name]; ok {
+			t.Errorf("docker-compose.dev.yml sets the api's %s to %q; leave it to docker-compose.yml", name, value)
+		}
+	}
+}
+
 func TestComposeFiles_QueryPortAgrees(t *testing.T) {
 	for name, file := range baseComposeFiles {
 		services := loadCompose(t, file, nil)
