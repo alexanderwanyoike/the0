@@ -101,6 +101,10 @@ shared_value_cases=(
   "external NATS URL and S3|--set global.existingSecret=s --set nats.enabled=false --set nats.external.url=nats://nats.example:4222 --set minio.enabled=false --set minio.external.endpoint=s3.example.com --set minio.external.port=8443 --set minio.external.useSSL=false"
   "external NATS host and port|--set global.existingSecret=s --set nats.enabled=false --set nats.external.host=nats.example --set nats.external.port=4333"
   "custom logs bucket|--set the0Api.env.LOG_BUCKET=team-logs"
+  "api code bucket|--set the0Api.env.CUSTOM_BOTS_BUCKET=team-code"
+  "controller code bucket|--set botController.minio.bucket=team-code"
+  "aws example|-f $CHART_DIR/examples/aws-production.yaml"
+  "gcp example|-f $CHART_DIR/examples/gcp-production.yaml"
 )
 
 for release in the0 the0-the0 trading; do
@@ -136,7 +140,35 @@ for release in the0 the0-the0 trading; do
     api_logs=$(rendered_env "$rendering" the0-api.yaml LOG_BUCKET | paste -sd ' ')
     check_agrees "gc MINIO_LOGS_BUCKET matches api LOG_BUCKET: $label" \
       "$api_logs" "$(rendered_env "$rendering" gc-cronjob.yaml MINIO_LOGS_BUCKET)"
+    check_agrees "controller MINIO_LOGS_BUCKET matches api LOG_BUCKET: $label" \
+      "$api_logs" "$(rendered_env "$rendering" bot-controller.yaml MINIO_LOGS_BUCKET | paste -sd ' ')"
+
+    api_code=$(rendered_env "$rendering" the0-api.yaml CUSTOM_BOTS_BUCKET | paste -sd ' ')
+    check_agrees "controller MINIO_BUCKET matches api CUSTOM_BOTS_BUCKET: $label" \
+      "$api_code" "$(rendered_env "$rendering" bot-controller.yaml MINIO_BUCKET | paste -sd ' ')"
+    check_agrees "controller --minio-bucket matches api CUSTOM_BOTS_BUCKET: $label" \
+      "$api_code" "$(rendered_arg "$rendering" bot-controller.yaml minio-bucket)"
   done
+done
+
+# The api and the controller both honour either code bucket value; the api's
+# wins when both are set.
+code_bucket_cases=(
+  "defaults|custom-bots|"
+  "api value|team-code|--set the0Api.env.CUSTOM_BOTS_BUCKET=team-code"
+  "controller value|team-code|--set botController.minio.bucket=team-code"
+  "both values|api-code|--set the0Api.env.CUSTOM_BOTS_BUCKET=api-code --set botController.minio.bucket=controller-code"
+  "aws example|the0-custom-bots|-f $CHART_DIR/examples/aws-production.yaml"
+  "gcp example|the0-custom-bots|-f $CHART_DIR/examples/gcp-production.yaml"
+)
+for code_case in "${code_bucket_cases[@]}"; do
+  IFS='|' read -r label expected overrides_text <<< "$code_case"
+  read -ra overrides <<< "$overrides_text"
+  helm template the0-the0 "$CHART_DIR" ${overrides[@]+"${overrides[@]}"} > "$rendering"
+  check "api CUSTOM_BOTS_BUCKET is the code bucket: $label" \
+    "$expected" "$(rendered_env "$rendering" the0-api.yaml CUSTOM_BOTS_BUCKET | paste -sd ' ')"
+  check "controller --minio-bucket is the code bucket: $label" \
+    "$expected" "$(rendered_arg "$rendering" bot-controller.yaml minio-bucket)"
 done
 
 for release in the0 the0-the0 trading; do

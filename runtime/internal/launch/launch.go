@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	"github.com/spf13/pflag"
 
@@ -66,6 +67,11 @@ type Storage struct {
 	StateBucket        string
 	LogsBucket         string
 	QueryResultsBucket string
+
+	// MaxStateSizeMB and MaxStateFileSizeMB limit the state a run saves. Nil
+	// leaves each to the storage default; zero is a limit like any other.
+	MaxStateSizeMB     *int64
+	MaxStateFileSizeMB *int64
 }
 
 // WithDefaults is s with every bucket it leaves empty set to its default.
@@ -162,6 +168,19 @@ func QueryParams(params map[string]interface{}) (string, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal query params: %w", err)
+	}
+	return string(data), nil
+}
+
+// BotConfig is how a launch sends a bot's config: as JSON object text, which
+// is {} when the bot has none.
+func BotConfig(config map[string]interface{}) (string, error) {
+	if config == nil {
+		return "{}", nil
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config: %w", err)
 	}
 	return string(data), nil
 }
@@ -310,6 +329,8 @@ var variables = []variable{
 	synced(text("MINIO_STATE_BUCKET", func(s *Settings) *string { return &s.Storage.StateBucket })),
 	synced(text("MINIO_LOGS_BUCKET", func(s *Settings) *string { return &s.Storage.LogsBucket })),
 	synced(text("MINIO_QUERY_RESULTS_BUCKET", func(s *Settings) *string { return &s.Storage.QueryResultsBucket })),
+	synced(number("MAX_STATE_SIZE_MB", func(s *Settings) **int64 { return &s.Storage.MaxStateSizeMB })),
+	synced(number("MAX_STATE_FILE_SIZE_MB", func(s *Settings) **int64 { return &s.Storage.MaxStateFileSizeMB })),
 	ofRuns(synced(text("NATS_URL", func(s *Settings) *string { return &s.NATSURL }))),
 }
 
@@ -343,6 +364,24 @@ func boolean(name string, field func(*Settings) *bool) variable {
 	v := flag(name, field)
 	v.write = func(s *Settings) (string, bool) { return fmt.Sprintf("%t", *field(s)), true }
 	return v
+}
+
+// number is sent when it is set. A value that is not a number reads as unset.
+func number(name string, field func(*Settings) **int64) variable {
+	return variable{
+		name: name,
+		write: func(s *Settings) (string, bool) {
+			if *field(s) == nil {
+				return "", false
+			}
+			return strconv.FormatInt(**field(s), 10), true
+		},
+		read: func(s *Settings, value string) {
+			if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+				*field(s) = &n
+			}
+		},
+	}
 }
 
 func synced(v variable) variable {

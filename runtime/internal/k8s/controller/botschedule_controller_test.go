@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"runtime/internal/k8s/podgen"
+	"runtime/internal/launch"
 	"runtime/internal/model"
 )
 
@@ -896,10 +897,12 @@ func TestBotScheduleController_Reconcile_CronJobReadsStorageCredentialsFromTheSe
 
 	controller := NewBotScheduleController(
 		BotScheduleControllerConfig{
-			Namespace:          "the0",
-			ControllerName:     "test-controller",
-			MinIOAccessKey:     "access-key",
-			MinIOSecretKey:     "secret-key",
+			Namespace:      "the0",
+			ControllerName: "test-controller",
+			Storage: launch.Storage{
+				AccessKey: "access-key",
+				SecretKey: "secret-key",
+			},
 			StorageCredentials: testStorageCredentialsSecret("the0-the0-secrets"),
 		},
 		&MockDesiredSchedules{Running: []model.BotSchedule{schedule}},
@@ -920,8 +923,10 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageCredentialsCha
 		return BotScheduleControllerConfig{
 			Namespace:      "the0",
 			ControllerName: "test-controller",
-			MinIOAccessKey: "access-key",
-			MinIOSecretKey: secretKey,
+			Storage: launch.Storage{
+				AccessKey: "access-key",
+				SecretKey: secretKey,
+			},
 		}
 	}
 	fromSecret := func(name string) BotScheduleControllerConfig {
@@ -979,6 +984,54 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageCredentialsCha
 			cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
 			require.NotNil(t, cronJob)
 			tc.check(t, cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env)
+		})
+	}
+}
+
+func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageSettingsChange(t *testing.T) {
+	base := BotScheduleControllerConfig{
+		Namespace:      "the0",
+		ControllerName: "test-controller",
+		Storage: launch.Storage{
+			Endpoint:   "minio:9000",
+			AccessKey:  "access-key",
+			SecretKey:  "secret-key",
+			CodeBucket: "custom-bots",
+		},
+	}
+	cases := []struct {
+		name   string
+		change func(*BotScheduleControllerConfig)
+		env    string
+		want   string
+	}{
+		{"storage endpoint", func(c *BotScheduleControllerConfig) { c.Storage.Endpoint = "storage.example:443" }, "MINIO_ENDPOINT", "storage.example:443"},
+		{"code bucket", func(c *BotScheduleControllerConfig) { c.Storage.CodeBucket = "team-code" }, "MINIO_CODE_BUCKET", "team-code"},
+		{"logs bucket", func(c *BotScheduleControllerConfig) { c.Storage.LogsBucket = "team-logs" }, "MINIO_LOGS_BUCKET", "team-logs"},
+		{"query results bucket", func(c *BotScheduleControllerConfig) { c.Storage.QueryResultsBucket = "team-results" }, "MINIO_QUERY_RESULTS_BUCKET", "team-results"},
+		{"storage SSL", func(c *BotScheduleControllerConfig) { c.Storage.UseSSL = true }, "MINIO_USE_SSL", "true"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+			mockCronClient := NewMockK8sCronJobClient()
+			controllerWith := func(config BotScheduleControllerConfig) *BotScheduleController {
+				return NewBotScheduleController(config, &MockDesiredSchedules{Running: []model.BotSchedule{schedule}}, mockCronClient)
+			}
+			after := base
+			tc.change(&after)
+
+			require.NoError(t, controllerWith(base).Reconcile(context.Background()))
+			require.Equal(t, 1, mockCronClient.CreateCalled)
+
+			require.NoError(t, controllerWith(after).Reconcile(context.Background()))
+
+			assert.Equal(t, 1, mockCronClient.UpdateCalled,
+				"an existing CronJob must follow the controller's storage settings")
+			cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+			require.NotNil(t, cronJob)
+			assert.Equal(t, tc.want, envToMap(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env)[tc.env])
 		})
 	}
 }

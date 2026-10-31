@@ -362,6 +362,20 @@ func TestConfig_LoadFromEnv(t *testing.T) {
 		assert.Equal(t, int64(100*1024*1024), cfg.MaxStateSizeBytes)
 		assert.Equal(t, int64(5*1024*1024), cfg.MaxStateFileSizeBytes)
 	})
+
+	t.Run("ExplicitZeroLimits", func(t *testing.T) {
+		os.Setenv("MINIO_ENDPOINT", "minio.example.com:443")
+		os.Setenv("MINIO_ACCESS_KEY", "mykey")
+		os.Setenv("MINIO_SECRET_KEY", "mysecret")
+		os.Setenv("MAX_STATE_SIZE_MB", "0")
+		os.Setenv("MAX_STATE_FILE_SIZE_MB", "0")
+
+		cfg, err := LoadConfigFromEnv()
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(0), cfg.MaxStateSizeBytes)
+		assert.Equal(t, int64(0), cfg.MaxStateFileSizeBytes)
+	})
 }
 
 // TestDefaultConfig tests the default config values

@@ -54,13 +54,10 @@ type PodGeneratorConfig struct {
 	// ControllerName identifies this controller for the managed-by label.
 	ControllerName string
 
-	// MinIO configuration for downloading bot code
-	MinIOEndpoint    string
-	MinIOAccessKey   string
-	MinIOSecretKey   string
-	MinIOBucket      string
-	MinIOStateBucket string // Bucket for persistent bot state (default: "bot-state")
-	MinIOUseSSL      bool
+	// Storage is the MinIO bot pods download code from and save state, logs
+	// and query results to. An empty StateBucket defaults to
+	// launch.DefaultStateBucket.
+	Storage launch.Storage
 
 	StorageCredentials StorageCredentialsSecret
 
@@ -98,8 +95,8 @@ func NewPodGenerator(config PodGeneratorConfig) *PodGenerator {
 	if config.Namespace == "" {
 		config.Namespace = "the0"
 	}
-	if config.MinIOStateBucket == "" {
-		config.MinIOStateBucket = launch.DefaultStateBucket
+	if config.Storage.StateBucket == "" {
+		config.Storage.StateBucket = launch.DefaultStateBucket
 	}
 	if config.RuntimeImage == "" {
 		config.RuntimeImage = "runtime:latest"
@@ -265,28 +262,21 @@ func (g *PodGenerator) GenerateQueryPod(bot model.Bot, queryPath string, queryPa
 // launchOf is the launch of bot that every container of its pods starts
 // from, before the pod gives it a mode.
 func (g *PodGenerator) launchOf(bot model.Bot, cfg *botConfig) (launch.Settings, error) {
-	configJSON, err := json.Marshal(bot.Config)
+	botConfig, err := launch.BotConfig(bot.Config)
 	if err != nil {
-		return launch.Settings{}, fmt.Errorf("failed to marshal config: %w", err)
+		return launch.Settings{}, err
 	}
 	return launch.Settings{
 		BotID:      bot.ID,
 		CodeFile:   cfg.filePath,
 		Runtime:    cfg.runtime,
 		Entrypoint: cfg.entrypoint,
-		BotConfig:  string(configJSON),
+		BotConfig:  botConfig,
 		CodePath:   constants.DefaultCodePath,
 		StatePath:  constants.DefaultStatePath,
 		LogsPath:   constants.DefaultLogsPath,
 		StateDir:   launch.DefaultStateDir,
-		Storage: launch.Storage{
-			Endpoint:    g.config.MinIOEndpoint,
-			AccessKey:   g.config.MinIOAccessKey,
-			SecretKey:   g.config.MinIOSecretKey,
-			UseSSL:      g.config.MinIOUseSSL,
-			CodeBucket:  g.config.MinIOBucket,
-			StateBucket: g.config.MinIOStateBucket,
-		},
+		Storage:    g.config.Storage,
 	}, nil
 }
 

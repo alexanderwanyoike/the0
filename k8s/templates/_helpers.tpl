@@ -204,6 +204,15 @@ self-hosters already set.
 {{- end }}
 
 {{/*
+Code bucket. The api reads it as CUSTOM_BOTS_BUCKET and the controller as
+--minio-bucket. Both values keys predate the helper, so either one sets it;
+the api's wins when both are set.
+*/}}
+{{- define "the0.codeBucket" -}}
+{{ .Values.the0Api.env.CUSTOM_BOTS_BUCKET | default .Values.botController.minio.bucket | default "custom-bots" }}
+{{- end }}
+
+{{/*
 MinIO access key
 */}}
 {{- define "the0.minioAccessKey" -}}

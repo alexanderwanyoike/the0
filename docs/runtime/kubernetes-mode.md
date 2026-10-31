@@ -163,6 +163,8 @@ MINIO_SECRET_KEY=the0password
 NATS_URL=nats://localhost:4222         # NATS for real-time events
 RECONCILE_INTERVAL=30s                 # Controller reconciliation interval
 MINIO_BUCKET=custom-bots               # Bucket bot pods download code from; must match the API's CUSTOM_BOTS_BUCKET
+MINIO_LOGS_BUCKET=bot-logs             # Bucket bot pods write logs to; must match the API's LOG_BUCKET
+MINIO_QUERY_RESULTS_BUCKET=query-results # Bucket query pods write results to and the controller reads them from
 ```
 
 ## CLI Commands

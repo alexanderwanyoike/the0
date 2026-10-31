@@ -138,7 +138,8 @@ the0Api:
     DATABASE_TYPE: "postgres"
     MINIO_EXTERNAL_ENDPOINT: "minio.the0.local:30002"
     STORAGE_PATH: "/app/uploads/custom-bots"
-    CUSTOM_BOTS_BUCKET: "custom-bots"
+    # CUSTOM_BOTS_BUCKET: the code bucket for the api and the controller,
+    # overriding botController.minio.bucket.
     LOG_BUCKET: "bot-logs"
     BACKTEST_BUCKET: "backtests"
     NODE_ENV: "development"
@@ -257,7 +258,8 @@ botController:
   #         name: the0-secrets
   #         key: MONGO_URI
   env: []
-  # MinIO configuration for bot code storage
+  # MinIO configuration for bot code storage. The api uploads code to the same
+  # bucket; the0Api.env.CUSTOM_BOTS_BUCKET overrides it for both.
   minio:
     bucket: "custom-bots"
   resources:
