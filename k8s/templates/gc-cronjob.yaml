@@ -39,6 +39,8 @@ spec:
                   value: {{ include "the0.minioEndpointWithPort" . | quote }}
                 - name: MINIO_USE_SSL
                   value: {{ include "the0.minioUseSSL" . | quote }}
+                - name: MINIO_LOGS_BUCKET
+                  value: {{ include "the0.logsBucket" . | quote }}
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:

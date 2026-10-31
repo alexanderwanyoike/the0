@@ -184,6 +184,14 @@ false
 {{- end }}
 
 {{/*
+Logs bucket. The api reads it as LOG_BUCKET and the runtime as
+MINIO_LOGS_BUCKET; the0Api.env.LOG_BUCKET stays the one value self-hosters set.
+*/}}
+{{- define "the0.logsBucket" -}}
+{{ .Values.the0Api.env.LOG_BUCKET | default "bot-logs" }}
+{{- end }}
+
+{{/*
 MinIO access key
 */}}
 {{- define "the0.minioAccessKey" -}}
