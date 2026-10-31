@@ -1,9 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import {
-  BotStateService,
-  StateKey,
-  BotStateErrorCode,
-} from "../bot-state.service";
+import { BotStateService, StateKey } from "../bot-state.service";
 import { ConfigService } from "@nestjs/config";
 import { BotService } from "@/bot/bot.service";
 import { PinoLogger } from "nestjs-pino";
@@ -149,7 +145,7 @@ describe("BotStateService", () => {
       const result = await service.listKeys(actor, "nonexistent-bot");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
     });
 
     it("should verify bot ownership before listing", async () => {
@@ -160,7 +156,7 @@ describe("BotStateService", () => {
       const result = await service.listKeys(actor, testBotId);
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(mockBotService.findOne).toHaveBeenCalledWith(actor, testBotId);
     });
   });
@@ -178,35 +174,35 @@ describe("BotStateService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
     });
 
     it("should reject invalid keys with forward slash", async () => {
       const result = await service.getKey(actor, testBotId, "../escape");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+      expect(result.error?.code).toBe("validation");
     });
 
     it("should reject invalid keys with backslash", async () => {
       const result = await service.getKey(actor, testBotId, "..\\escape");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+      expect(result.error?.code).toBe("validation");
     });
 
     it("should reject invalid keys with double dots", async () => {
       const result = await service.getKey(actor, testBotId, "..");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+      expect(result.error?.code).toBe("validation");
     });
 
     it("should reject empty key", async () => {
       const result = await service.getKey(actor, testBotId, "");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+      expect(result.error?.code).toBe("validation");
     });
   });
 
@@ -223,21 +219,21 @@ describe("BotStateService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
     });
 
     it("should reject invalid keys with path separators", async () => {
       const result = await service.deleteKey(actor, testBotId, "../escape");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+      expect(result.error?.code).toBe("validation");
     });
 
     it("should reject empty key", async () => {
       const result = await service.deleteKey(actor, testBotId, "");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+      expect(result.error?.code).toBe("validation");
     });
   });
 
@@ -247,7 +243,7 @@ describe("BotStateService", () => {
 
       expect(result).toEqual(
         Failure({
-          code: BotStateErrorCode.STORAGE_ERROR,
+          code: "internal",
           message: "Invalid bot ID format",
         }),
       );
@@ -261,7 +257,7 @@ describe("BotStateService", () => {
 
       expect(result).toEqual(
         Failure({
-          code: BotStateErrorCode.KEY_NOT_FOUND,
+          code: "not_found",
           message: "State key not found",
         }),
       );
@@ -273,7 +269,7 @@ describe("BotStateService", () => {
 
       const result = await service.getKey(actor, testBotId, "portfolio");
 
-      expect(result.error?.code).toBe(BotStateErrorCode.KEY_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(fs.existsSync(downloadedDirs[0])).toBe(false);
     });
 
@@ -311,7 +307,7 @@ describe("BotStateService", () => {
 
       expect(result).toEqual(
         Failure({
-          code: BotStateErrorCode.FILE_TOO_LARGE,
+          code: "too_large",
           message: "State file exceeds maximum size limit (1MB)",
         }),
       );
@@ -334,7 +330,7 @@ describe("BotStateService", () => {
 
       expect(result).toEqual(
         Failure({
-          code: BotStateErrorCode.INVALID_JSON,
+          code: "unprocessable",
           message: "State file contains invalid JSON",
         }),
       );
@@ -352,7 +348,7 @@ describe("BotStateService", () => {
 
       expect(result).toEqual(
         Failure({
-          code: BotStateErrorCode.STORAGE_ERROR,
+          code: "internal",
           message: "Failed to get state key",
         }),
       );
@@ -370,7 +366,7 @@ describe("BotStateService", () => {
 
       const result = await service.getKey(actor, testBotId, "portfolio");
 
-      expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
+      expect(result.error?.code).toBe("internal");
       expect(mockMinioClient.fGetObject).not.toHaveBeenCalled();
     });
   });
@@ -389,7 +385,7 @@ describe("BotStateService", () => {
       );
       expect(result).toEqual(
         Failure({
-          code: BotStateErrorCode.STORAGE_ERROR,
+          code: "internal",
           message: "Invalid bot ID format",
         }),
       );
@@ -474,7 +470,7 @@ describe("BotStateService", () => {
 
         expect(result).toEqual(
           Failure({
-            code: BotStateErrorCode.CONCURRENT_MODIFICATION,
+            code: "conflict",
             message:
               "State was modified by another operation. Please retry the request.",
           }),
@@ -492,9 +488,7 @@ describe("BotStateService", () => {
 
         const result = await service.deleteKey(actor, testBotId, "portfolio");
 
-        expect(result.error?.code).toBe(
-          BotStateErrorCode.CONCURRENT_MODIFICATION,
-        );
+        expect(result.error?.code).toBe("conflict");
         expect(mockLogger.warn).toHaveBeenCalledWith(
           { botId: testBotId, expectedEtag: "etag-1" },
           "State object was deleted during modification",
@@ -510,7 +504,7 @@ describe("BotStateService", () => {
 
         expect(result).toEqual(
           Failure({
-            code: BotStateErrorCode.STORAGE_ERROR,
+            code: "internal",
             message: "Failed to delete state key",
           }),
         );
@@ -529,7 +523,7 @@ describe("BotStateService", () => {
 
         const result = await service.deleteKey(actor, testBotId, "portfolio");
 
-        expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
+        expect(result.error?.code).toBe("internal");
       });
     });
 
@@ -566,9 +560,7 @@ describe("BotStateService", () => {
 
         const result = await service.deleteKey(actor, testBotId, "portfolio");
 
-        expect(result.error?.code).toBe(
-          BotStateErrorCode.CONCURRENT_MODIFICATION,
-        );
+        expect(result.error?.code).toBe("conflict");
         expect(mockLogger.warn).toHaveBeenCalledWith(
           { botId: testBotId, expectedEtag: "etag-1", currentEtag: "etag-2" },
           "Concurrent modification detected during state deletion",
@@ -598,7 +590,7 @@ describe("BotStateService", () => {
 
         const result = await service.deleteKey(actor, testBotId, "portfolio");
 
-        expect(result.error?.code).toBe(BotStateErrorCode.STORAGE_ERROR);
+        expect(result.error?.code).toBe("internal");
         expect(mockMinioClient.removeObject).not.toHaveBeenCalled();
       });
 
@@ -723,7 +715,7 @@ describe("BotStateService", () => {
       const result = await service.clearState(actor, "nonexistent-bot");
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
     });
 
     it("should verify bot ownership before clearing", async () => {
@@ -734,7 +726,7 @@ describe("BotStateService", () => {
       const result = await service.clearState(actor, testBotId);
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe(BotStateErrorCode.BOT_NOT_FOUND);
+      expect(result.error?.code).toBe("not_found");
       expect(mockBotService.findOne).toHaveBeenCalledWith(actor, testBotId);
     });
   });
@@ -753,7 +745,7 @@ describe("BotStateService", () => {
       it(`should reject ${description}`, async () => {
         const result = await service.getKey(actor, testBotId, key);
         expect(result.success).toBe(false);
-        expect(result.error?.code).toBe(BotStateErrorCode.INVALID_KEY);
+        expect(result.error?.code).toBe("validation");
       });
     });
 

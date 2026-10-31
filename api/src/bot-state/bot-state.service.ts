@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import { Actor } from "@/auth/actor";
 import { BotService } from "@/bot/bot.service";
+import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure, hasErrorCode } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
@@ -11,16 +12,6 @@ import * as fs from "fs/promises";
 import type { Stats } from "fs";
 import * as path from "path";
 import * as os from "os";
-
-export enum BotStateErrorCode {
-  BOT_NOT_FOUND = "BOT_NOT_FOUND",
-  KEY_NOT_FOUND = "KEY_NOT_FOUND",
-  INVALID_KEY = "INVALID_KEY",
-  STORAGE_ERROR = "STORAGE_ERROR",
-  FILE_TOO_LARGE = "FILE_TOO_LARGE",
-  INVALID_JSON = "INVALID_JSON",
-  CONCURRENT_MODIFICATION = "CONCURRENT_MODIFICATION",
-}
 
 /** Default maximum state file size (10MB) - configurable via MAX_STATE_FILE_SIZE_MB env var */
 const DEFAULT_MAX_STATE_FILE_SIZE = 10 * 1024 * 1024;
@@ -37,11 +28,6 @@ const VALID_BOT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 /** The object the runtime keeps a bot's state archive in. */
 export const stateObjectName = (botId: string): string =>
   `${botId}/state.tar.gz`;
-
-export interface BotStateError {
-  code: BotStateErrorCode;
-  message: string;
-}
 
 export interface StateKey {
   key: string;
@@ -103,22 +89,16 @@ export class BotStateService {
   async listKeys(
     actor: Actor,
     botId: string,
-  ): Promise<Result<StateKey[], BotStateError>> {
+  ): Promise<Result<StateKey[], AppError>> {
     // Validate bot ID to prevent path traversal
     if (!this.isValidBotId(botId)) {
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Invalid bot ID format",
-      });
+      return Failure(appError("internal", "Invalid bot ID format"));
     }
 
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure({
-        code: BotStateErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      });
+      return Failure(appError("not_found", "Bot not found or access denied"));
     }
 
     try {
@@ -153,10 +133,7 @@ export class BotStateService {
       }
     } catch (error: unknown) {
       this.logger.error({ err: error, botId }, "Error listing state keys");
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Failed to list state keys",
-      });
+      return Failure(appError("internal", "Failed to list state keys"));
     }
   }
 
@@ -167,26 +144,20 @@ export class BotStateService {
     actor: Actor,
     botId: string,
     key: string,
-  ): Promise<Result<unknown, BotStateError>> {
+  ): Promise<Result<unknown, AppError>> {
     const accessError = await this.checkBotAccess(actor, botId);
     if (accessError) {
       return Failure(accessError);
     }
 
     if (!this.isValidKey(key)) {
-      return Failure({
-        code: BotStateErrorCode.INVALID_KEY,
-        message: "Invalid state key",
-      });
+      return Failure(appError("validation", "Invalid state key"));
     }
 
     try {
       const tempDir = await this.downloadAndExtractState(botId);
       if (!tempDir) {
-        return Failure({
-          code: BotStateErrorCode.KEY_NOT_FOUND,
-          message: "State key not found",
-        });
+        return Failure(appError("not_found", "State key not found"));
       }
 
       try {
@@ -196,10 +167,7 @@ export class BotStateService {
       }
     } catch (error: unknown) {
       this.logger.error({ err: error, botId, key }, "Error getting state key");
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Failed to get state key",
-      });
+      return Failure(appError("internal", "Failed to get state key"));
     }
   }
 
@@ -210,20 +178,14 @@ export class BotStateService {
   private async checkBotAccess(
     actor: Actor,
     botId: string,
-  ): Promise<BotStateError | null> {
+  ): Promise<AppError | null> {
     if (!this.isValidBotId(botId)) {
-      return {
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Invalid bot ID format",
-      };
+      return appError("internal", "Invalid bot ID format");
     }
 
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return {
-        code: BotStateErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      };
+      return appError("not_found", "Bot not found or access denied");
     }
 
     return null;
@@ -233,17 +195,14 @@ export class BotStateService {
     tempDir: string,
     botId: string,
     key: string,
-  ): Promise<Result<unknown, BotStateError>> {
+  ): Promise<Result<unknown, AppError>> {
     const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
 
     let stats: Stats;
     try {
       stats = await fs.stat(filepath);
     } catch {
-      return Failure({
-        code: BotStateErrorCode.KEY_NOT_FOUND,
-        message: "State key not found",
-      });
+      return Failure(appError("not_found", "State key not found"));
     }
 
     // Checked before reading so an oversized value is never loaded into memory.
@@ -252,10 +211,12 @@ export class BotStateService {
         { botId, key, size: stats.size, maxSize: this.maxStateFileSize },
         "State file exceeds maximum size",
       );
-      return Failure({
-        code: BotStateErrorCode.FILE_TOO_LARGE,
-        message: `State file exceeds maximum size limit (${Math.round(this.maxStateFileSize / 1024 / 1024)}MB)`,
-      });
+      return Failure(
+        appError(
+          "too_large",
+          `State file exceeds maximum size limit (${Math.round(this.maxStateFileSize / 1024 / 1024)}MB)`,
+        ),
+      );
     }
 
     const content = await fs.readFile(filepath, "utf-8");
@@ -266,7 +227,7 @@ export class BotStateService {
     content: string,
     botId: string,
     key: string,
-  ): Result<unknown, BotStateError> {
+  ): Result<unknown, AppError> {
     try {
       return Ok(JSON.parse(content));
     } catch (parseError: unknown) {
@@ -274,10 +235,9 @@ export class BotStateService {
         { err: parseError, botId, key },
         "Invalid JSON in state file",
       );
-      return Failure({
-        code: BotStateErrorCode.INVALID_JSON,
-        message: "State file contains invalid JSON",
-      });
+      return Failure(
+        appError("unprocessable", "State file contains invalid JSON"),
+      );
     }
   }
 
@@ -289,30 +249,21 @@ export class BotStateService {
     actor: Actor,
     botId: string,
     key: string,
-  ): Promise<Result<boolean, BotStateError>> {
+  ): Promise<Result<boolean, AppError>> {
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure({
-        code: BotStateErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      });
+      return Failure(appError("not_found", "Bot not found or access denied"));
     }
 
     // Validate bot ID to prevent path traversal
     if (!this.isValidBotId(botId)) {
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Invalid bot ID format",
-      });
+      return Failure(appError("internal", "Invalid bot ID format"));
     }
 
     // Validate key using allowlist regex
     if (!this.isValidKey(key)) {
-      return Failure({
-        code: BotStateErrorCode.INVALID_KEY,
-        message: "Invalid state key",
-      });
+      return Failure(appError("validation", "Invalid state key"));
     }
 
     try {
@@ -329,10 +280,7 @@ export class BotStateService {
       }
     } catch (error: unknown) {
       this.logger.error({ err: error, botId, key }, "Error deleting state key");
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Failed to delete state key",
-      });
+      return Failure(appError("internal", "Failed to delete state key"));
     }
   }
 
@@ -342,7 +290,7 @@ export class BotStateService {
     key: string,
     tempDir: string,
     etag: string,
-  ): Promise<Result<boolean, BotStateError>> {
+  ): Promise<Result<boolean, AppError>> {
     const filepath = path.join(tempDir, ".the0-state", `${key}.json`);
     try {
       await fs.access(filepath);
@@ -358,11 +306,12 @@ export class BotStateService {
       etag,
     );
     if (!uploadSucceeded) {
-      return Failure({
-        code: BotStateErrorCode.CONCURRENT_MODIFICATION,
-        message:
+      return Failure(
+        appError(
+          "conflict",
           "State was modified by another operation. Please retry the request.",
-      });
+        ),
+      );
     }
 
     return Ok(true);
@@ -374,22 +323,16 @@ export class BotStateService {
   async clearState(
     actor: Actor,
     botId: string,
-  ): Promise<Result<boolean, BotStateError>> {
+  ): Promise<Result<boolean, AppError>> {
     // Validate bot ID to prevent path traversal
     if (!this.isValidBotId(botId)) {
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Invalid bot ID format",
-      });
+      return Failure(appError("internal", "Invalid bot ID format"));
     }
 
     // Verify bot ownership
     const botResult = await this.botService.findOne(actor, botId);
     if (!botResult.success) {
-      return Failure({
-        code: BotStateErrorCode.BOT_NOT_FOUND,
-        message: "Bot not found or access denied",
-      });
+      return Failure(appError("not_found", "Bot not found or access denied"));
     }
 
     try {
@@ -411,10 +354,7 @@ export class BotStateService {
       return Ok(true);
     } catch (error: unknown) {
       this.logger.error({ err: error, botId }, "Error clearing state");
-      return Failure({
-        code: BotStateErrorCode.STORAGE_ERROR,
-        message: "Failed to clear state",
-      });
+      return Failure(appError("internal", "Failed to clear state"));
     }
   }
 
