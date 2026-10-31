@@ -1008,6 +1008,8 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageSettingsChange
 		{"storage endpoint", func(c *BotScheduleControllerConfig) { c.Storage.Endpoint = "storage.example:443" }, "MINIO_ENDPOINT", "storage.example:443"},
 		{"code bucket", func(c *BotScheduleControllerConfig) { c.Storage.CodeBucket = "team-code" }, "MINIO_CODE_BUCKET", "team-code"},
 		{"logs bucket", func(c *BotScheduleControllerConfig) { c.Storage.LogsBucket = "team-logs" }, "MINIO_LOGS_BUCKET", "team-logs"},
+		{"query results bucket", func(c *BotScheduleControllerConfig) { c.Storage.QueryResultsBucket = "team-results" }, "MINIO_QUERY_RESULTS_BUCKET", "team-results"},
+		{"storage SSL", func(c *BotScheduleControllerConfig) { c.Storage.UseSSL = true }, "MINIO_USE_SSL", "true"},
 	}
 
 	for _, tc := range cases {

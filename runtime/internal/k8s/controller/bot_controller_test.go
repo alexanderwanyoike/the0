@@ -798,6 +798,8 @@ func TestBotController_Reconcile_ReplacesPodWhenStorageSettingsChange(t *testing
 		{"storage endpoint", func(c *BotControllerConfig) { c.Storage.Endpoint = "storage.example:443" }},
 		{"code bucket", func(c *BotControllerConfig) { c.Storage.CodeBucket = "team-code" }},
 		{"logs bucket", func(c *BotControllerConfig) { c.Storage.LogsBucket = "team-logs" }},
+		{"query results bucket", func(c *BotControllerConfig) { c.Storage.QueryResultsBucket = "team-results" }},
+		{"storage SSL", func(c *BotControllerConfig) { c.Storage.UseSSL = true }},
 	}
 
 	for _, tc := range cases {
