@@ -292,14 +292,10 @@ func (c *APIClient) ListBots(auth *Auth) ([]BotInstance, error) {
 	}
 
 	// The api answers with a bare array; older ones wrapped it in an envelope.
-	var env envelope[[]BotInstance]
-	if err := json.Unmarshal(body, &env); err == nil {
-		if !env.Success {
-			return nil, fmt.Errorf("API returned error: %s", env.Message)
-		}
-		return env.Data, nil
+	if bots, err := decode[[]BotInstance](body); err == nil {
+		return bots, nil
 	}
-	return decode[[]BotInstance](body)
+	return unwrap[[]BotInstance](body)
 }
 
 // DeployBotInstance deploys a new bot instance
