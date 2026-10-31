@@ -1,16 +1,10 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
-	"os/user"
 	"path/filepath"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/fatih/color"
 )
 
@@ -36,7 +30,7 @@ func buildFrontend(vm *VendorManager) error {
 	os.RemoveAll(distPath)
 
 	// Step 1: Pull Node image if needed
-	if err := pullFrontendImage(vm); err != nil {
+	if err := vm.runner.EnsureImage(frontendNodeImage); err != nil {
 		return fmt.Errorf("failed to pull Node image: %v", err)
 	}
 
@@ -45,7 +39,7 @@ func buildFrontend(vm *VendorManager) error {
 	if err != nil {
 		return fmt.Errorf("failed to run frontend build container: %v", err)
 	}
-	defer vm.cleanupContainer(containerID)
+	defer vm.runner.Remove(containerID)
 
 	// Step 3: Verify bundle was created
 	bundlePath := filepath.Join(vm.projectPath, "frontend", "dist", "bundle.js")
@@ -61,69 +55,14 @@ func buildFrontend(vm *VendorManager) error {
 	return nil
 }
 
-func pullFrontendImage(vm *VendorManager) error {
-	ctx := context.Background()
-
-	// Check if image exists locally
-	images, err := vm.dockerClient.ImageList(ctx, image.ListOptions{})
-	if err != nil {
-		return err
-	}
-
-	imageExists := false
-	for _, img := range images {
-		for _, tag := range img.RepoTags {
-			if tag == frontendNodeImage {
-				imageExists = true
-				break
-			}
-		}
-		if imageExists {
-			break
-		}
-	}
-
-	if imageExists {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	blue.Printf("Pulling Docker image: %s...\n", frontendNodeImage)
-
-	reader, err := vm.dockerClient.ImagePull(ctx, frontendNodeImage, image.PullOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	// Read pull output (but don't display it to keep output clean)
-	io.Copy(io.Discard, reader)
-
-	return nil
-}
-
 func runFrontendBuildContainer(vm *VendorManager) (string, error) {
-	ctx := context.Background()
-
-	// Generate unique container name
-	containerName := fmt.Sprintf("%sfrontend-%d", vendorContainerName, time.Now().Unix())
-
 	// Prepare absolute paths for volume mounting
 	absProjectPath, err := filepath.Abs(vm.projectPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute project path: %v", err)
 	}
 
-	// Get current user info for ownership
-	currentUser, err := user.Current()
-	var uid, gid string
-	if err == nil {
-		uid = currentUser.Uid
-		gid = currentUser.Gid
-	} else {
-		uid = "1000"
-		gid = "1000"
-	}
+	uid, gid := hostUserIDs()
 
 	// Configure npm auth for GitHub Packages if GITHUB_TOKEN is set. The SDKs
 	// now live on the public npm registry, but bots created before the move
@@ -138,88 +77,16 @@ func runFrontendBuildContainer(vm *VendorManager) (string, error) {
 		npmAuthSetup, uid, gid,
 	)
 
-	config := &container.Config{
-		Image: frontendNodeImage,
-		Cmd: []string{
-			"sh", "-c",
-			buildCmd,
-		},
-		WorkingDir: "/project/frontend",
-		Env:        getBuildEnvVars(),
-	}
-
-	hostConfig := &container.HostConfig{
-		Binds: []string{
-			fmt.Sprintf("%s:/project", absProjectPath),
-		},
-		AutoRemove: false,
-	}
-
-	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
-	if err != nil {
-		return "", err
-	}
-
-	if err := vm.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
-	}
-
-	// Stream logs in real-time
-	logReader, err := vm.dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Timestamps: false,
+	return vm.runner.Run(BuildStep{
+		NamePrefix:      "frontend-",
+		Image:           frontendNodeImage,
+		Cmd:             []string{"sh", "-c", buildCmd},
+		WorkingDir:      "/project/frontend",
+		Env:             getBuildEnvVars(),
+		Binds:           []string{fmt.Sprintf("%s:/project", absProjectPath)},
+		FailureHeadline: "Frontend build",
+		FailedCommand:   "frontend build",
 	})
-	if err != nil {
-		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
-	}
-
-	logDone := make(chan struct{})
-	go func() {
-		defer close(logDone)
-		defer logReader.Close()
-
-		blue := color.New(color.FgBlue)
-		buffer := make([]byte, 1024)
-		for {
-			n, err := logReader.Read(buffer)
-			if err != nil {
-				if err != io.EOF {
-					blue.Printf("Log read error: %v\n", err)
-				}
-				break
-			}
-			if n > 0 {
-				output := vm.cleanDockerLogOutput(buffer[:n])
-				if output != "" {
-					blue.Printf("  %s", output)
-				}
-			}
-		}
-	}()
-
-	// Wait for container to finish
-	statusCh, errCh := vm.dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return resp.ID, err
-		}
-	case status := <-statusCh:
-		<-logDone
-		if status.StatusCode != 0 {
-			logs, _ := vm.getContainerLogs(resp.ID)
-			red := color.New(color.FgRed)
-			red.Printf("Frontend build failed with exit code %d\n", status.StatusCode)
-			if logs != "" {
-				red.Printf("Full error log:\n%s\n", logs)
-			}
-			return resp.ID, fmt.Errorf("frontend build failed with exit code %d", status.StatusCode)
-		}
-	}
-
-	return resp.ID, nil
 }
 
 // BuildFrontendIfNeeded builds the bundle whenever the project has a
