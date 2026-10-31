@@ -983,6 +983,50 @@ func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageCredentialsCha
 	}
 }
 
+func TestBotScheduleController_Reconcile_UpdatesCronJobWhenStorageSettingsChange(t *testing.T) {
+	base := BotScheduleControllerConfig{
+		Namespace:      "the0",
+		ControllerName: "test-controller",
+		MinIOEndpoint:  "minio:9000",
+		MinIOAccessKey: "access-key",
+		MinIOSecretKey: "secret-key",
+		MinIOBucket:    "custom-bots",
+	}
+	cases := []struct {
+		name   string
+		change func(*BotScheduleControllerConfig)
+		env    string
+		want   string
+	}{
+		{"storage endpoint", func(c *BotScheduleControllerConfig) { c.MinIOEndpoint = "storage.example:443" }, "MINIO_ENDPOINT", "storage.example:443"},
+		{"code bucket", func(c *BotScheduleControllerConfig) { c.MinIOBucket = "team-code" }, "MINIO_CODE_BUCKET", "team-code"},
+		{"logs bucket", func(c *BotScheduleControllerConfig) { c.MinIOLogsBucket = "team-logs" }, "MINIO_LOGS_BUCKET", "team-logs"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			schedule := createTestSchedule("schedule-1", "daily-report", "1.0.0", "python3.11", "0 9 * * *")
+			mockCronClient := NewMockK8sCronJobClient()
+			controllerWith := func(config BotScheduleControllerConfig) *BotScheduleController {
+				return NewBotScheduleController(config, &MockDesiredSchedules{Running: []model.BotSchedule{schedule}}, mockCronClient)
+			}
+			after := base
+			tc.change(&after)
+
+			require.NoError(t, controllerWith(base).Reconcile(context.Background()))
+			require.Equal(t, 1, mockCronClient.CreateCalled)
+
+			require.NoError(t, controllerWith(after).Reconcile(context.Background()))
+
+			assert.Equal(t, 1, mockCronClient.UpdateCalled,
+				"an existing CronJob must follow the controller's storage settings")
+			cronJob := mockCronClient.CronJobs["the0/schedule-schedule-1"]
+			require.NotNil(t, cronJob)
+			assert.Equal(t, tc.want, envToMap(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Env)[tc.env])
+		})
+	}
+}
+
 func envToMap(env []corev1.EnvVar) map[string]string {
 	values := make(map[string]string, len(env))
 	for _, variable := range env {

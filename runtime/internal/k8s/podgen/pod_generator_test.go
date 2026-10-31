@@ -779,6 +779,8 @@ func TestConfigChanged_FollowsEveryGeneratorSettingInThePod(t *testing.T) {
 		{"storage SSL", func(c *PodGeneratorConfig) { c.MinIOUseSSL = true }},
 		{"code bucket", func(c *PodGeneratorConfig) { c.MinIOBucket = "other-bots" }},
 		{"state bucket", func(c *PodGeneratorConfig) { c.MinIOStateBucket = "other-state" }},
+		{"logs bucket", func(c *PodGeneratorConfig) { c.MinIOLogsBucket = "other-logs" }},
+		{"query results bucket", func(c *PodGeneratorConfig) { c.MinIOQueryResultsBucket = "other-results" }},
 		{"literal secret key rotated", func(c *PodGeneratorConfig) { c.MinIOSecretKey = "rotated" }},
 		{"credentials moved to the secret", func(c *PodGeneratorConfig) {
 			c.StorageCredentials = StorageCredentialsSecret{Name: "the0-the0-secrets", AccessKeyField: "minio-access-key", SecretKeyField: "minio-secret-key"}
