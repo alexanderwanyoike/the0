@@ -3,7 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import * as Minio from "minio";
 import { BotService } from "@/bot/bot.service";
-import { BotStateService } from "@/bot-state/bot-state.service";
+import {
+  BotStateService,
+  stateObjectName,
+} from "@/bot-state/bot-state.service";
 import { Ok } from "@/common/result";
 import { loadContract } from "@/test/contracts";
 import { createMockLogger } from "@/test/mock-logger";
@@ -81,4 +84,35 @@ describe("storage key contracts", () => {
       expect(minio.removeObject).toHaveBeenCalledWith(expect.any(String), key);
     },
   );
+
+  it.each(keys.state)(
+    "downloads $botId's state from $key",
+    async ({ botId, key }) => {
+      const minio = {
+        statObject: jest.fn().mockResolvedValue({ size: 1, etag: "e" }),
+        fGetObject: jest.fn().mockRejectedValue(new Error("stop here")),
+      };
+      const service = new BotStateService(
+        minio as unknown as Minio.Client,
+        config,
+        {
+          findOne: jest.fn().mockResolvedValue(Ok({})),
+        } as unknown as BotService,
+        logger,
+      );
+
+      await service.listKeys(mockActor(), botId);
+
+      expect(minio.fGetObject).toHaveBeenCalledWith(
+        expect.any(String),
+        key,
+        expect.any(String),
+      );
+    },
+  );
+
+  // Reads, writes and clears all name the object through this one function.
+  it.each(keys.state)("names $botId's state object $key", ({ botId, key }) => {
+    expect(stateObjectName(botId)).toBe(key);
+  });
 });
