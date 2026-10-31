@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -104,6 +106,26 @@ func TestAPIClient_LogsInAgainOnceWhenTheKeyIsRejected(t *testing.T) {
 		}
 		if err.Error() != cause.Error() {
 			t.Errorf("error text = %q, want %q", err.Error(), cause.Error())
+		}
+	})
+
+	t.Run("a failed login during a custom bot upload stays a ReloginError", func(t *testing.T) {
+		var seen []string
+		srv := keyServer(t, "fresh", &seen)
+
+		zipPath := filepath.Join(t.TempDir(), "bot.zip")
+		if err := os.WriteFile(zipPath, []byte("zip"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		client := internal.NewAPIClient(srv.URL)
+		cause := errors.New("EOF")
+		client.Relogin = func() (*internal.Auth, error) { return nil, cause }
+
+		err := client.DeployBot(&internal.BotConfig{Name: "b", Version: "1.0.0"}, &internal.Auth{APIKey: "stale"}, zipPath, false)
+
+		var reloginErr *internal.ReloginError
+		if !errors.As(err, &reloginErr) {
+			t.Fatalf("error = %v (%T), want it to wrap a *ReloginError", err, err)
 		}
 	})
 

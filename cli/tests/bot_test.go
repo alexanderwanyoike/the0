@@ -66,6 +66,13 @@ func TestAPIClient_ListBots(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:          "bare array, as the api answers today",
+			statusCode:    200,
+			responseBody:  `[{"id": "bot-1", "name": "a"}, {"id": "bot-2", "name": "b"}]`,
+			expectedBots:  2,
+			expectedError: false,
+		},
+		{
 			name:          "invalid auth",
 			statusCode:    401,
 			responseBody:  `{"error": "Unauthorized"}`,
