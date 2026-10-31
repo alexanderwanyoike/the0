@@ -1,14 +1,7 @@
-import { Readable } from "stream";
-import { ConfigService } from "@nestjs/config";
-import { PinoLogger } from "nestjs-pino";
-import * as Minio from "minio";
 import { BOT_LOG_TOPICS } from "@/bot/bot.constants";
-import { BotService } from "@/bot/bot.service";
-import { Ok } from "@/common/result";
 import { loadContract } from "@/test/contracts";
-import { createMockLogger } from "@/test/mock-logger";
+import { logsServiceServing } from "@/test/logs-service-serving";
 import { LogEntry, liveLogEntries } from "../log-entry";
-import { LogsService } from "../logs.service";
 
 const contract = loadContract<{
   botId: string;
@@ -31,22 +24,7 @@ describe("log line contracts", () => {
   });
 
   it("reads a runtime-formatted daily file as the same entries", async () => {
-    const file = contract.chunk.formatted;
-    const minio = {
-      statObject: jest
-        .fn()
-        .mockResolvedValue({ size: Buffer.byteLength(file) }),
-      getObject: jest.fn(async () => Readable.from([Buffer.from(file)])),
-      getPartialObject: jest.fn(),
-    };
-    const service = new LogsService(
-      minio as unknown as Minio.Client,
-      { get: (): undefined => undefined } as unknown as ConfigService,
-      {
-        findOneByUserId: jest.fn().mockResolvedValue(Ok({})),
-      } as unknown as BotService,
-      createMockLogger() as unknown as PinoLogger,
-    );
+    const { service } = logsServiceServing(contract.chunk.formatted);
 
     const page = await service.getLogs(
       contract.botId,

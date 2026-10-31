@@ -1,5 +1,3 @@
-import { Readable } from "stream";
-import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
 import * as Minio from "minio";
 import { BotService } from "@/bot/bot.service";
@@ -9,39 +7,31 @@ import {
 } from "@/bot-state/bot-state.service";
 import { Ok } from "@/common/result";
 import { loadContract } from "@/test/contracts";
+import { logsServiceServing } from "@/test/logs-service-serving";
+import { unsetConfig } from "@/test/mock-config";
 import { createMockLogger } from "@/test/mock-logger";
 import { mockActor } from "@/test/mock-actor";
 import { utcDay } from "../log-entry";
-import { LogsService } from "../logs.service";
 
 const keys = loadContract<{
   logs: { botId: string; at: string; date: string; key: string }[];
   state: { botId: string; key: string }[];
 }>("storage-keys.json");
 
-const config = { get: (): undefined => undefined } as unknown as ConfigService;
-const logger = createMockLogger() as unknown as PinoLogger;
+/** A BotStateService over `minio` that finds every bot. */
+const stateServiceOver = (minio: Record<string, jest.Mock>) =>
+  new BotStateService(
+    minio as unknown as Minio.Client,
+    unsetConfig(),
+    { findOne: jest.fn().mockResolvedValue(Ok({})) } as unknown as BotService,
+    createMockLogger() as unknown as PinoLogger,
+  );
 
 describe("storage key contracts", () => {
   it.each(keys.logs)(
     "reads $botId's logs for $date from $key",
     async ({ botId, date, key }) => {
-      const line = '{"message":"hello"}\n';
-      const minio = {
-        statObject: jest
-          .fn()
-          .mockResolvedValue({ size: Buffer.byteLength(line) }),
-        getObject: jest.fn(async () => Readable.from([Buffer.from(line)])),
-        getPartialObject: jest.fn(),
-      };
-      const service = new LogsService(
-        minio as unknown as Minio.Client,
-        config,
-        {
-          findOneByUserId: jest.fn().mockResolvedValue(Ok({})),
-        } as unknown as BotService,
-        logger,
-      );
+      const { service, minio } = logsServiceServing('{"message":"hello"}\n');
 
       const page = await service.getLogs(
         botId,
@@ -68,16 +58,11 @@ describe("storage key contracts", () => {
         statObject: jest.fn().mockResolvedValue({ size: 1 }),
         removeObject: jest.fn().mockResolvedValue(undefined),
       };
-      const service = new BotStateService(
-        minio as unknown as Minio.Client,
-        config,
-        {
-          findOne: jest.fn().mockResolvedValue(Ok({})),
-        } as unknown as BotService,
-        logger,
-      );
 
-      const cleared = await service.clearState(mockActor(), botId);
+      const cleared = await stateServiceOver(minio).clearState(
+        mockActor(),
+        botId,
+      );
 
       expect(cleared.success).toBe(true);
       expect(minio.statObject).toHaveBeenCalledWith(expect.any(String), key);
@@ -92,16 +77,8 @@ describe("storage key contracts", () => {
         statObject: jest.fn().mockResolvedValue({ size: 1, etag: "e" }),
         fGetObject: jest.fn().mockRejectedValue(new Error("stop here")),
       };
-      const service = new BotStateService(
-        minio as unknown as Minio.Client,
-        config,
-        {
-          findOne: jest.fn().mockResolvedValue(Ok({})),
-        } as unknown as BotService,
-        logger,
-      );
 
-      await service.listKeys(mockActor(), botId);
+      await stateServiceOver(minio).listKeys(mockActor(), botId);
 
       expect(minio.fGetObject).toHaveBeenCalledWith(
         expect.any(String),

@@ -1,4 +1,4 @@
-import { ConfigService } from "@nestjs/config";
+import { unsetConfig } from "@/test/mock-config";
 import { PinoLogger } from "nestjs-pino";
 import { BotService } from "@/bot/bot.service";
 import { Ok } from "@/common/result";
@@ -38,7 +38,7 @@ describe("query contracts", () => {
   beforeEach(() => {
     fetch = jest.spyOn(global, "fetch");
     service = new BotQueryService(
-      { get: (): undefined => undefined } as unknown as ConfigService,
+      unsetConfig(),
       {
         findOne: jest.fn().mockResolvedValue(Ok(mockBot())),
       } as unknown as BotService,
