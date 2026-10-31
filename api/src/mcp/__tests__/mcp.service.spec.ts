@@ -1034,7 +1034,10 @@ describe("McpService", () => {
           failure: "a deploy without a name",
           tool: "bot_deploy",
           args: { config: { type: "scheduled/test-bot", version: "1.0.0" } },
-          error: ["validation", "Config must include a 'name' field"],
+          error: [
+            "validation",
+            "name must be a string, name should not be empty",
+          ],
         },
         {
           failure: "a deploy of a Custom bot missing from the Catalogue",
@@ -1052,19 +1055,25 @@ describe("McpService", () => {
           failure: "a state list without a bot_id",
           tool: "bot_state_list",
           args: {},
-          error: ["validation", "bot_id is required"],
+          error: [
+            "validation",
+            "bot_id should not be empty, bot_id must be a string",
+          ],
         },
         {
           failure: "a state read without a key",
           tool: "bot_state_get",
           args: { bot_id: "bot-123" },
-          error: ["validation", "key is required"],
+          error: [
+            "validation",
+            "key should not be empty, key must be a string",
+          ],
         },
         {
           failure: "a query without a path",
           tool: "bot_query",
           args: { bot_id: "bot-123" },
-          error: ["validation", "query_path is required"],
+          error: ["validation", "query_path must be a string"],
         },
         {
           failure: "an unknown tool",
@@ -1108,6 +1117,79 @@ describe("McpService", () => {
         );
 
         expect(result).toEqual(toolError(code, message));
+      });
+
+      describe("refuse arguments the REST DTOs refuse, before calling anything", () => {
+        it.each([
+          {
+            tool: "bot_get",
+            args: {},
+            message: "bot_id should not be empty, bot_id must be a string",
+          },
+          {
+            tool: "bot_update",
+            args: { bot_id: "bot-123" },
+            message: "config must be an object, config should not be empty",
+          },
+          {
+            tool: "bot_update",
+            args: { bot_id: 5, config: callerBot.config },
+            message: "bot_id must be a string",
+          },
+          {
+            tool: "bot_deploy",
+            args: { config: "nope" },
+            message:
+              "name must be a string, name should not be empty, config must be an object",
+          },
+          {
+            tool: "logs_get",
+            args: { bot_id: "bot-123", limit: 0 },
+            message: "limit must not be less than 1",
+          },
+          {
+            tool: "logs_get",
+            args: { bot_id: "bot-123", date: 20260101 },
+            message: "date must be a string",
+          },
+          {
+            tool: "bot_query",
+            args: {
+              bot_id: "bot-123",
+              query_path: "/today",
+              timeout_sec: "30",
+            },
+            message:
+              "timeout_sec must be a number conforming to the specified constraints",
+          },
+          {
+            tool: "custom_bot_get",
+            args: {},
+            message: "name should not be empty, name must be a string",
+          },
+        ])("refuses $tool with $args", async ({ tool, args, message }) => {
+          const result = await service.handleToolCall(tool, args, actor);
+
+          expect(result).toEqual(toolError("validation", message));
+          expect([...store.bots.values()]).toEqual([callerBot, otherUsersBot]);
+          expect(store.events).toEqual([]);
+          expect(logsService.getLogs).not.toHaveBeenCalled();
+          expect(botQueryService.executeQuery).not.toHaveBeenCalled();
+          expect(
+            customBotService.getGlobalLatestVersion,
+          ).not.toHaveBeenCalled();
+        });
+
+        it("ignores arguments no tool reads", async () => {
+          const result = await service.handleToolCall(
+            "bot_get",
+            { bot_id: "bot-123", verbose: true },
+            actor,
+          );
+
+          expect(result.isError).toBeUndefined();
+          expect(parse(result).id).toBe("bot-123");
+        });
       });
 
       it("reports an unexpected exception as internal, without its message", async () => {
