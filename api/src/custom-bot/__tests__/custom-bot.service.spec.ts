@@ -1,4 +1,5 @@
 import { CustomBotService } from "../custom-bot.service";
+import { appError } from "@/common/app-error";
 import { CustomBotRepository } from "../custom-bot.repository";
 import { StorageService } from "../storage.service";
 import {
@@ -146,7 +147,7 @@ describe("CustomBotService", () => {
       it.each([
         [Ok("frontend/test-bot/1.0.0"), true],
         [Ok(null), false],
-        [Failure("extract failed"), false],
+        [Failure(appError("internal", "extract failed")), false],
       ])(
         "should store hasFrontend from the frontend extraction result (%j)",
         async (extracted, hasFrontend) => {
@@ -221,8 +222,8 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Validation failed");
-      expect(result.error).toContain("name is required");
+      expect(result.error.message).toContain("Validation failed");
+      expect(result.error.message).toContain("name is required");
     });
 
     it("should fail when bot already exists", async () => {
@@ -240,7 +241,9 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Custom bot with this name already exists");
+      expect(result.error.message).toBe(
+        "Custom bot with this name already exists",
+      );
     });
 
     it("should fail when ZIP validation fails", async () => {
@@ -251,7 +254,7 @@ describe("CustomBotService", () => {
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
       mockStorageService.validateZipStructure.mockResolvedValue(
-        Failure("Required entrypoint not found"),
+        Failure(appError("validation", "Required entrypoint not found")),
       );
 
       const result = await service.createCustomBot(
@@ -261,7 +264,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("ZIP validation failed");
+      expect(result.error.message).toContain("ZIP validation failed");
     });
 
     it("should fail when ZIP validation fails", async () => {
@@ -272,7 +275,7 @@ describe("CustomBotService", () => {
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
       mockStorageService.validateZipStructure.mockResolvedValue(
-        Failure("Required entrypoint not found"),
+        Failure(appError("validation", "Required entrypoint not found")),
       );
 
       const result = await service.createCustomBot(
@@ -282,7 +285,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("ZIP validation failed");
+      expect(result.error.message).toContain("ZIP validation failed");
     });
 
     it("should handle repository errors", async () => {
@@ -294,7 +297,7 @@ describe("CustomBotService", () => {
       mockRepository.globalBotExists.mockResolvedValue(Ok(false));
       mockStorageService.validateZipStructure.mockResolvedValue(Ok(true));
       mockRepository.createNewGlobalVersion.mockResolvedValue(
-        Failure("Database error"),
+        Failure(appError("internal", "Database error")),
       );
 
       const result = await service.createCustomBot(
@@ -304,7 +307,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database error");
+      expect(result.error.message).toBe("Database error");
     });
 
     it("should handle unexpected errors gracefully", async () => {
@@ -324,8 +327,8 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Failed to create custom bot");
-      expect(result.error).toContain("Unexpected error");
+      expect(result.error.message).toContain("Failed to create custom bot");
+      expect(result.error.message).toContain("Unexpected error");
     });
 
     it("should fail when realtime bot does not specify runtime", async () => {
@@ -364,7 +367,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe(
+      expect(result.error.message).toBe(
         `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
       );
       expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
@@ -471,7 +474,7 @@ describe("CustomBotService", () => {
       it.each([
         [Ok("frontend/test-bot/1.1.0"), true],
         [Ok(null), false],
-        [Failure("extract failed"), false],
+        [Failure(appError("internal", "extract failed")), false],
       ])(
         "should store hasFrontend from the frontend extraction result (%j)",
         async (extracted, hasFrontend) => {
@@ -572,7 +575,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe(
+      expect(result.error.message).toBe(
         `Bots must specify a valid runtime (${SUPPORTED_RUNTIMES.join(", ")})`,
       );
       expect(mockStorageService.validateZipStructure).not.toHaveBeenCalled();
@@ -654,7 +657,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe(
+      expect(result.error.message).toBe(
         "Bot name in config must match the URL parameter",
       );
     });
@@ -676,7 +679,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe(
+      expect(result.error.message).toBe(
         "Custom bot does not exist. Create it first using POST.",
       );
     });
@@ -690,7 +693,7 @@ describe("CustomBotService", () => {
       mockValidateConfig.mockReturnValue({ valid: true });
       mockRepository.globalBotExists.mockResolvedValue(Ok(true));
       mockRepository.checkUserOwnership.mockResolvedValue(
-        Failure("Insufficient permissions"),
+        Failure(appError("forbidden", "Insufficient permissions")),
       );
 
       const result = await service.updateCustomBot(
@@ -701,7 +704,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Insufficient permissions");
+      expect(result.error.message).toBe("Insufficient permissions");
     });
 
     it("should fail when new version is not newer", async () => {
@@ -736,7 +739,9 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("must be greater than current version");
+      expect(result.error.message).toContain(
+        "must be greater than current version",
+      );
     });
 
     it("should fail when version already exists", async () => {
@@ -772,7 +777,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("already exists for this bot");
+      expect(result.error.message).toContain("already exists for this bot");
     });
 
     it("should fail when ZIP validation fails", async () => {
@@ -800,7 +805,7 @@ describe("CustomBotService", () => {
       mockRepository.isVersionNewer.mockReturnValue(true);
       mockRepository.globalVersionExists.mockResolvedValue(Ok(false));
       mockStorageService.validateZipStructure.mockResolvedValue(
-        Failure("Invalid ZIP structure"),
+        Failure(appError("validation", "Invalid ZIP structure")),
       );
 
       const result = await service.updateCustomBot(
@@ -811,7 +816,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("ZIP validation failed");
+      expect(result.error.message).toContain("ZIP validation failed");
     });
 
     it("should handle unexpected errors gracefully", async () => {
@@ -833,8 +838,8 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Failed to update custom bot");
-      expect(result.error).toContain("Database connection failed");
+      expect(result.error.message).toContain("Failed to update custom bot");
+      expect(result.error.message).toContain("Database connection failed");
     });
 
     describe("pre-upload checks", () => {
@@ -865,30 +870,39 @@ describe("CustomBotService", () => {
         const result = await update();
 
         expect(result).toEqual(
-          Failure("Validation failed: name is required, version is invalid"),
+          Failure(
+            appError(
+              "validation",
+              "Validation failed: name is required, version is invalid",
+            ),
+          ),
         );
         expect(mockRepository.globalBotExists).not.toHaveBeenCalled();
       });
 
       it("should pass through a repository error when checking the bot exists", async () => {
         arrangePassingChecks();
-        mockRepository.globalBotExists.mockResolvedValue(Failure("db down"));
+        mockRepository.globalBotExists.mockResolvedValue(
+          Failure(appError("internal", "db down")),
+        );
 
         const result = await update();
 
-        expect(result).toEqual(Failure("db down"));
+        expect(result).toEqual(Failure(appError("internal", "db down")));
         expect(mockRepository.checkUserOwnership).not.toHaveBeenCalled();
       });
 
       it("should pass through a repository error when loading the latest version", async () => {
         arrangePassingChecks();
         mockRepository.getGlobalLatestVersion.mockResolvedValue(
-          Failure("latest lookup failed"),
+          Failure(appError("internal", "latest lookup failed")),
         );
 
         const result = await update();
 
-        expect(result).toEqual(Failure("latest lookup failed"));
+        expect(result).toEqual(
+          Failure(appError("internal", "latest lookup failed")),
+        );
         expect(mockRepository.isVersionNewer).not.toHaveBeenCalled();
       });
 
@@ -902,7 +916,12 @@ describe("CustomBotService", () => {
         const result = await update();
 
         expect(result).toEqual(
-          Failure("Version 1.0.0 must be greater than current version 2.0.0"),
+          Failure(
+            appError(
+              "validation",
+              "Version 1.0.0 must be greater than current version 2.0.0",
+            ),
+          ),
         );
         expect(mockRepository.isVersionNewer).toHaveBeenCalledWith(
           "2.0.0",
@@ -914,12 +933,14 @@ describe("CustomBotService", () => {
       it("should pass through a repository error when checking the version exists", async () => {
         arrangePassingChecks();
         mockRepository.globalVersionExists.mockResolvedValue(
-          Failure("version lookup failed"),
+          Failure(appError("internal", "version lookup failed")),
         );
 
         const result = await update();
 
-        expect(result).toEqual(Failure("version lookup failed"));
+        expect(result).toEqual(
+          Failure(appError("internal", "version lookup failed")),
+        );
         expect(mockRepository.globalVersionExists).toHaveBeenCalledWith(
           "test-bot",
           "1.0.0",
@@ -930,7 +951,7 @@ describe("CustomBotService", () => {
       it("should run the checks in order before storing the version", async () => {
         arrangePassingChecks();
         mockStorageService.validateZipStructure.mockResolvedValue(
-          Failure("stop here"),
+          Failure(appError("internal", "stop here")),
         );
 
         await update();
@@ -1054,13 +1075,13 @@ describe("CustomBotService", () => {
       const userId = "user123";
 
       mockRepository.getUserCustomBots.mockResolvedValue(
-        Failure("Database connection failed"),
+        Failure(appError("internal", "Database connection failed")),
       );
 
       const result = await service.getUserCustomBots(userId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Database connection failed");
+      expect(result.error.message).toBe("Database connection failed");
       expect(mockRepository.getUserCustomBots).toHaveBeenCalledWith(userId);
     });
 
@@ -1074,8 +1095,8 @@ describe("CustomBotService", () => {
       const result = await service.getUserCustomBots(userId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Failed to get user custom bots");
-      expect(result.error).toContain("Network timeout");
+      expect(result.error.message).toContain("Failed to get user custom bots");
+      expect(result.error.message).toContain("Network timeout");
     });
 
     it("should maintain correct data structure for grouped bots", async () => {
@@ -1201,13 +1222,13 @@ describe("CustomBotService", () => {
       const botName = "test-bot";
 
       mockRepository.getAllUserVersions.mockResolvedValue(
-        Failure("Bot not found"),
+        Failure(appError("not_found", "Bot not found")),
       );
 
       const result = await service.getAllUserVersions(userId, botName);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Bot not found");
+      expect(result.error.message).toBe("Bot not found");
     });
   });
 
@@ -1286,7 +1307,7 @@ describe("CustomBotService", () => {
       const version = "1.0.0";
 
       mockRepository.getSpecificUserVersion.mockResolvedValue(
-        Failure("Version not found"),
+        Failure(appError("not_found", "Version not found")),
       );
 
       const result = await service.getUserSpecificVersion(
@@ -1296,7 +1317,7 @@ describe("CustomBotService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Version not found");
+      expect(result.error.message).toBe("Version not found");
     });
   });
 
@@ -1376,32 +1397,32 @@ describe("CustomBotService", () => {
       const result = await service.deleteVersion(userId, botName, version);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("3 active instance(s)");
+      expect(result.error.message).toContain("3 active instance(s)");
       expect(mockStorageService.deleteFile).not.toHaveBeenCalled();
       expect(mockRepository.removeVersion).not.toHaveBeenCalled();
     });
 
     it("should fail if user does not own the bot", async () => {
       mockRepository.checkUserOwnership.mockResolvedValue(
-        Failure("Insufficient permissions"),
+        Failure(appError("forbidden", "Insufficient permissions")),
       );
 
       const result = await service.deleteVersion(userId, botName, version);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Insufficient permissions");
+      expect(result.error.message).toBe("Insufficient permissions");
     });
 
     it("should fail if version does not exist", async () => {
       mockRepository.checkUserOwnership.mockResolvedValue(Ok(true));
       mockRepository.getSpecificGlobalVersion.mockResolvedValue(
-        Failure("Not found"),
+        Failure(appError("not_found", "Not found")),
       );
 
       const result = await service.deleteVersion(userId, botName, version);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Not found");
+      expect(result.error.message).toBe("Not found");
     });
   });
 
@@ -1512,7 +1533,7 @@ describe("CustomBotService", () => {
       const result = await service.deleteAllVersions(userId, botName);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("active instance(s)");
+      expect(result.error.message).toContain("active instance(s)");
       expect(mockRepository.removeAllByName).not.toHaveBeenCalled();
     });
   });
@@ -1624,12 +1645,14 @@ describe("CustomBotService", () => {
     });
 
     it("should handle missing custom bot", async () => {
-      mockRepository.findOneById.mockResolvedValue(Failure("Not found"));
+      mockRepository.findOneById.mockResolvedValue(
+        Failure(appError("not_found", "Not found")),
+      );
 
       const result = await service.checkOrphaned("nonexistent");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Not found");
+      expect(result.error.message).toBe("Not found");
     });
   });
 });

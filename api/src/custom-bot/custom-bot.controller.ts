@@ -84,7 +84,7 @@ export class CustomBotController {
     const fileExistsResult = await this.storageService.fileExists(filePath);
     if (!fileExistsResult.success) {
       throw new BadRequestException(
-        `File validation failed: ${fileExistsResult.error}`,
+        `File validation failed: ${fileExistsResult.error.message}`,
       );
     }
 
@@ -187,7 +187,9 @@ export class CustomBotController {
     );
 
     if (!uploadResult.success) {
-      throw new BadRequestException(`Upload failed: ${uploadResult.error}`);
+      throw new BadRequestException(
+        `Upload failed: ${uploadResult.error.message}`,
+      );
     }
 
     return {
@@ -222,7 +224,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
 
     return {
@@ -258,7 +260,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
 
     return {
@@ -277,7 +279,7 @@ export class CustomBotController {
     const result = await this.customBotService.getUserCustomBots(userId);
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
 
     return {
@@ -304,7 +306,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw new NotFoundException(result.error.message);
     }
 
     return {
@@ -323,7 +325,7 @@ export class CustomBotController {
     const result = await this.customBotService.getAllGlobalVersions(name);
 
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw new NotFoundException(result.error.message);
     }
 
     return {
@@ -392,7 +394,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
 
     return {
@@ -416,7 +418,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new BadRequestException(result.error);
+      throw new BadRequestException(result.error.message);
     }
 
     return {
@@ -441,7 +443,7 @@ export class CustomBotController {
     );
 
     if (!result.success) {
-      throw new NotFoundException(result.error);
+      throw new NotFoundException(result.error.message);
     }
 
     return {

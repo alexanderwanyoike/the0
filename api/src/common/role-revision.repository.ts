@@ -1,3 +1,4 @@
+import { appError, AppError } from "./app-error";
 import { Result, Ok, Failure, errorMessage } from "./result";
 import { getDatabase, getTables } from "@/database/connection";
 import { eq, and, desc } from "drizzle-orm";
@@ -27,7 +28,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     return this.tables[this.tableName];
   }
 
-  async create(args: Partial<T>): Promise<Result<T, string>> {
+  async create(args: Partial<T>): Promise<Result<T, AppError>> {
     try {
       const data = {
         ...args,
@@ -43,14 +44,14 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       } as T);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error creating document");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async findAll(userId: string): Promise<Result<T[], string>> {
+  async findAll(userId: string): Promise<Result<T[], AppError>> {
     try {
       if (!userId) {
-        return Failure("User ID is required");
+        return Failure(appError("validation", "User ID is required"));
       }
 
       const records = await this.db
@@ -66,11 +67,11 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       );
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching documents");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async findOneById(id: string): Promise<Result<T, string>> {
+  async findOneById(id: string): Promise<Result<T, AppError>> {
     try {
       const records = await this.db
         .select()
@@ -78,17 +79,17 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .where(eq(this.table.id, id));
 
       if (records.length === 0) {
-        return Failure("Not found");
+        return Failure(appError("not_found", "Not found"));
       }
 
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching document by ID");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async remove(userId: string, id: string): Promise<Result<void, string>> {
+  async remove(userId: string, id: string): Promise<Result<void, AppError>> {
     try {
       await this.db
         .delete(this.table)
@@ -97,12 +98,12 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
       return Ok(null);
     } catch (error: unknown) {
       logger.error({ err: error }, "Error deleting document");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
   // Generic revision methods using configurable key field
-  async findByKey(userId: string, key: string): Promise<Result<T[], string>> {
+  async findByKey(userId: string, key: string): Promise<Result<T[], AppError>> {
     try {
       const records = await this.db
         .select()
@@ -125,7 +126,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching documents by key",
       );
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
@@ -133,7 +134,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
     userId: string,
     key: string,
     version: string,
-  ): Promise<Result<T, string>> {
+  ): Promise<Result<T, AppError>> {
     try {
       const records = await this.db
         .select()
@@ -147,7 +148,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         );
 
       if (records.length === 0) {
-        return Failure("Not found");
+        return Failure(appError("not_found", "Not found"));
       }
 
       return Ok(this.transformRecordToData(records[0]));
@@ -156,12 +157,12 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching document by key and version",
       );
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
   // Global methods (not user-scoped) for checking uniqueness
-  async getGlobalLatestVersion(key: string): Promise<Result<T, string>> {
+  async getGlobalLatestVersion(key: string): Promise<Result<T, AppError>> {
     try {
       const records = await this.db
         .select()
@@ -171,17 +172,17 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         .limit(1);
 
       if (records.length === 0) {
-        return Failure("Not found");
+        return Failure(appError("not_found", "Not found"));
       }
 
       return Ok(this.transformRecordToData(records[0]));
     } catch (error: unknown) {
       logger.error({ err: error }, "Error fetching global latest version");
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
-  async findGlobalByKey(key: string): Promise<Result<T[], string>> {
+  async findGlobalByKey(key: string): Promise<Result<T[], AppError>> {
     try {
       const records = await this.db
         .select()
@@ -199,14 +200,14 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching global documents by key",
       );
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 
   async findGlobalByKeyAndVersion(
     key: string,
     version: string,
-  ): Promise<Result<T, string>> {
+  ): Promise<Result<T, AppError>> {
     try {
       const records = await this.db
         .select()
@@ -219,7 +220,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         );
 
       if (records.length === 0) {
-        return Failure("Not found");
+        return Failure(appError("not_found", "Not found"));
       }
 
       return Ok(this.transformRecordToData(records[0]));
@@ -228,7 +229,7 @@ export abstract class RoleRevisionRepository<T extends RevisionEntity> {
         { err: error, keyField: this.keyField },
         "Error fetching global document by key and version",
       );
-      return Failure(errorMessage(error));
+      return Failure(appError("internal", errorMessage(error)));
     }
   }
 

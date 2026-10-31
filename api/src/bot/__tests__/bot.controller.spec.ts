@@ -252,7 +252,7 @@ describe("BotController - Enhanced Tests", () => {
         .fn()
         .mockResolvedValue({
           success: false,
-          error: "Bot not found",
+          error: appError("not_found", "Bot not found"),
           data: null,
         });
 
@@ -466,7 +466,7 @@ describe("BotController - Enhanced Tests", () => {
         .fn()
         .mockResolvedValue({
           success: false,
-          error: "Bot type not found",
+          error: appError("internal", "Bot type not found"),
           data: null,
         });
 

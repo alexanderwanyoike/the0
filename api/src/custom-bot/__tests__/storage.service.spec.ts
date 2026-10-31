@@ -125,7 +125,7 @@ describe("StorageService", () => {
       const result = await service.ensureBucket();
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Bucket creation failed");
+      expect(result.error.message).toContain("Bucket creation failed");
     });
   });
 
@@ -163,7 +163,7 @@ describe("StorageService", () => {
       const result = await service.fileExists("test/file.zip");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network error");
+      expect(result.error.message).toContain("Network error");
     });
   });
 
@@ -203,7 +203,7 @@ describe("StorageService", () => {
       ]);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Required file missing");
+      expect(result.error.message).toContain("Required file missing");
     });
 
     it("should handle corrupted ZIP files", async () => {
@@ -217,7 +217,7 @@ describe("StorageService", () => {
       ]);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Error validating ZIP structure");
+      expect(result.error.message).toContain("Error validating ZIP structure");
     });
   });
 
@@ -263,7 +263,7 @@ describe("StorageService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Upload failed");
+      expect(result.error.message).toContain("Upload failed");
     });
   });
 
@@ -293,7 +293,7 @@ describe("StorageService", () => {
       const result = await service.downloadFile("user123/nonexistent.zip");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("File not found");
+      expect(result.error.message).toContain("File not found");
     });
   });
 
@@ -318,7 +318,7 @@ describe("StorageService", () => {
       const result = await service.deleteFile("user123/test-bot/1.0.0");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Deletion failed");
+      expect(result.error.message).toContain("Deletion failed");
     });
   });
 
@@ -347,7 +347,7 @@ describe("StorageService", () => {
       const result = await service.getFileInfo("user123/nonexistent.zip");
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("File not found");
+      expect(result.error.message).toContain("File not found");
     });
   });
 
@@ -384,7 +384,7 @@ describe("StorageService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Frontend bundle not found");
+      expect(result.error.message).toBe("Frontend bundle not found");
     });
 
     it("should handle other errors", async () => {
@@ -395,7 +395,7 @@ describe("StorageService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network error");
+      expect(result.error.message).toContain("Network error");
     });
   });
 
@@ -496,7 +496,9 @@ describe("StorageService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Error extracting frontend bundle");
+      expect(result.error.message).toContain(
+        "Error extracting frontend bundle",
+      );
     });
   });
 
@@ -570,7 +572,7 @@ describe("StorageService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Bucket not found");
+      expect(result.error.message).toContain("Bucket not found");
     });
 
     it("should handle errors during object removal", async () => {
@@ -590,7 +592,7 @@ describe("StorageService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Permission denied");
+      expect(result.error.message).toContain("Permission denied");
     });
   });
 });

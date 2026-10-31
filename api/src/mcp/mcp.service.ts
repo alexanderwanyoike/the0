@@ -395,7 +395,7 @@ export class McpService {
   private async handleCustomBotList() {
     const result = await this.customBotService.getAllGlobalCustomBots();
     if (!result.success) {
-      throw new Error(result.error || "Failed to list custom bots");
+      throw new Error(result.error.message || "Failed to list custom bots");
     }
     // Return summary fields only
     return (result.data || []).map((bot) => ({
@@ -420,7 +420,7 @@ export class McpService {
     }
 
     if (!result.success) {
-      throw new Error(result.error || "Custom bot not found");
+      throw new Error(result.error.message || "Custom bot not found");
     }
 
     const bot = result.data;
@@ -449,7 +449,7 @@ export class McpService {
     }
 
     if (!result.success) {
-      throw new Error(result.error || "Custom bot not found");
+      throw new Error(result.error.message || "Custom bot not found");
     }
 
     return {

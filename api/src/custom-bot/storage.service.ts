@@ -1,6 +1,7 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PinoLogger } from "nestjs-pino";
+import { appError, AppError } from "@/common/app-error";
 import { Result, Ok, Failure } from "@/common/result";
 import { MINIO_CLIENT } from "@/minio";
 import * as Minio from "minio";
@@ -24,7 +25,7 @@ export class StorageService {
     });
   }
 
-  async ensureBucket(): Promise<Result<void, string>> {
+  async ensureBucket(): Promise<Result<void, AppError>> {
     try {
       const exists = await this.minioClient.bucketExists(this.bucketName);
       if (!exists) {
@@ -33,11 +34,16 @@ export class StorageService {
       }
       return Ok(undefined);
     } catch (error) {
-      return Failure(`Failed to ensure bucket exists: ${error.message}`);
+      return Failure(
+        appError(
+          "internal",
+          `Failed to ensure bucket exists: ${error.message}`,
+        ),
+      );
     }
   }
 
-  async fileExists(filePath: string): Promise<Result<boolean, string>> {
+  async fileExists(filePath: string): Promise<Result<boolean, AppError>> {
     try {
       await this.minioClient.statObject(this.bucketName, filePath);
       return Ok(true);
@@ -49,11 +55,13 @@ export class StorageService {
       ) {
         return Ok(false);
       }
-      return Failure(`Error checking file existence: ${error.message}`);
+      return Failure(
+        appError("internal", `Error checking file existence: ${error.message}`),
+      );
     }
   }
 
-  async getFileInfo(filePath: string): Promise<Result<any, string>> {
+  async getFileInfo(filePath: string): Promise<Result<any, AppError>> {
     try {
       const stat = await this.minioClient.statObject(this.bucketName, filePath);
       return Ok({
@@ -62,14 +70,16 @@ export class StorageService {
         etag: stat.etag,
       });
     } catch (error) {
-      return Failure(`Error getting file info: ${error.message}`);
+      return Failure(
+        appError("internal", `Error getting file info: ${error.message}`),
+      );
     }
   }
 
   async validateZipStructure(
     filePath: string,
     requiredFiles: string[],
-  ): Promise<Result<boolean, string>> {
+  ): Promise<Result<boolean, AppError>> {
     try {
       // Download the ZIP file from MinIO
       const stream = await this.minioClient.getObject(
@@ -92,13 +102,20 @@ export class StorageService {
       for (const requiredFile of requiredFiles) {
         const found = entries.some((entry) => entry.entryName === requiredFile);
         if (!found) {
-          return Failure(`Required file missing: ${requiredFile}`);
+          return Failure(
+            appError("validation", `Required file missing: ${requiredFile}`),
+          );
         }
       }
 
       return Ok(true);
     } catch (error) {
-      return Failure(`Error validating ZIP structure: ${error.message}`);
+      return Failure(
+        appError(
+          "internal",
+          `Error validating ZIP structure: ${error.message}`,
+        ),
+      );
     }
   }
 
@@ -107,7 +124,7 @@ export class StorageService {
     fileName: string,
     userId: string,
     botName: string,
-  ): Promise<Result<string, string>> {
+  ): Promise<Result<string, AppError>> {
     try {
       const filePath = `${userId}/${botName}/${fileName}`;
 
@@ -127,11 +144,13 @@ export class StorageService {
       this.logger.info({ filePath }, "Uploaded bot file to MinIO");
       return Ok(filePath);
     } catch (error) {
-      return Failure(`Error uploading file: ${error.message}`);
+      return Failure(
+        appError("internal", `Error uploading file: ${error.message}`),
+      );
     }
   }
 
-  async downloadFile(filePath: string): Promise<Result<Buffer, string>> {
+  async downloadFile(filePath: string): Promise<Result<Buffer, AppError>> {
     try {
       const stream = await this.minioClient.getObject(
         this.bucketName,
@@ -147,21 +166,25 @@ export class StorageService {
       const buffer = Buffer.concat(chunks);
       return Ok(buffer);
     } catch (error) {
-      return Failure(`Error downloading file: ${error.message}`);
+      return Failure(
+        appError("internal", `Error downloading file: ${error.message}`),
+      );
     }
   }
 
-  async deleteFile(filePath: string): Promise<Result<void, string>> {
+  async deleteFile(filePath: string): Promise<Result<void, AppError>> {
     try {
       await this.minioClient.removeObject(this.bucketName, filePath);
       return Ok(undefined);
     } catch (error) {
-      return Failure(`Error deleting file: ${error.message}`);
+      return Failure(
+        appError("internal", `Error deleting file: ${error.message}`),
+      );
     }
   }
 
   // Helper method to get object metadata
-  async getObjectMetadata(filePath: string): Promise<Result<any, string>> {
+  async getObjectMetadata(filePath: string): Promise<Result<any, AppError>> {
     try {
       const stat = await this.minioClient.statObject(this.bucketName, filePath);
       return Ok({
@@ -171,12 +194,14 @@ export class StorageService {
         metadata: stat.metaData,
       });
     } catch (error) {
-      return Failure(`Error getting object metadata: ${error.message}`);
+      return Failure(
+        appError("internal", `Error getting object metadata: ${error.message}`),
+      );
     }
   }
 
   // Helper method to list objects with prefix
-  async listObjects(prefix: string): Promise<Result<string[], string>> {
+  async listObjects(prefix: string): Promise<Result<string[], AppError>> {
     try {
       const objects: string[] = [];
       const stream = this.minioClient.listObjects(
@@ -191,7 +216,9 @@ export class StorageService {
 
       return Ok(objects);
     } catch (error) {
-      return Failure(`Error listing objects: ${error.message}`);
+      return Failure(
+        appError("internal", `Error listing objects: ${error.message}`),
+      );
     }
   }
 
@@ -201,7 +228,7 @@ export class StorageService {
    */
   async getBotFrontendStream(
     frontendPath: string,
-  ): Promise<Result<NodeJS.ReadableStream, string>> {
+  ): Promise<Result<NodeJS.ReadableStream, AppError>> {
     try {
       const stream = await this.minioClient.getObject(
         this.bucketName,
@@ -213,9 +240,14 @@ export class StorageService {
         error.code === "NoSuchKey" ||
         error.message?.includes("does not exist")
       ) {
-        return Failure("Frontend bundle not found");
+        return Failure(appError("not_found", "Frontend bundle not found"));
       }
-      return Failure(`Error retrieving frontend bundle: ${error.message}`);
+      return Failure(
+        appError(
+          "internal",
+          `Error retrieving frontend bundle: ${error.message}`,
+        ),
+      );
     }
   }
 
@@ -229,7 +261,7 @@ export class StorageService {
     userId: string,
     botName: string,
     version: string,
-  ): Promise<Result<string | null, string>> {
+  ): Promise<Result<string | null, AppError>> {
     try {
       // Download the ZIP file
       const stream = await this.minioClient.getObject(
@@ -292,7 +324,12 @@ export class StorageService {
 
       return Ok(frontendStoragePath);
     } catch (error) {
-      return Failure(`Error extracting frontend bundle: ${error.message}`);
+      return Failure(
+        appError(
+          "internal",
+          `Error extracting frontend bundle: ${error.message}`,
+        ),
+      );
     }
   }
 
@@ -310,7 +347,7 @@ export class StorageService {
   async deletePrefixFromBucket(
     bucket: string,
     prefix: string,
-  ): Promise<Result<number, string>> {
+  ): Promise<Result<number, AppError>> {
     try {
       const stream = this.minioClient.listObjects(bucket, prefix, true);
       let deletedCount = 0;
@@ -322,7 +359,12 @@ export class StorageService {
 
       return Ok(deletedCount);
     } catch (error) {
-      return Failure(`Error deleting objects with prefix: ${error.message}`);
+      return Failure(
+        appError(
+          "internal",
+          `Error deleting objects with prefix: ${error.message}`,
+        ),
+      );
     }
   }
 }

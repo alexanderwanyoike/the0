@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { appError } from "@/common/app-error";
 import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { CustomBotModule } from "../custom-bot.module";
@@ -286,7 +287,12 @@ describe("Custom Bot API Integration Tests", () => {
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
       storageService.validateZipStructure.mockResolvedValue(
-        Failure("Required bot entrypoint main.py not found in ZIP"),
+        Failure(
+          appError(
+            "validation",
+            "Required bot entrypoint main.py not found in ZIP",
+          ),
+        ),
       );
 
       const response = await request(app.getHttpServer())
@@ -399,7 +405,7 @@ describe("Custom Bot API Integration Tests", () => {
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(true));
       repository.checkUserOwnership.mockResolvedValue(
-        Failure("Insufficient permissions"),
+        Failure(appError("forbidden", "Insufficient permissions")),
       );
 
       const response = await request(app.getHttpServer())
@@ -528,7 +534,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 404 when bot not found", async () => {
       repository.getAllGlobalVersions.mockResolvedValue(
-        Failure("Bot not found"),
+        Failure(appError("not_found", "Bot not found")),
       );
 
       const response = await request(app.getHttpServer())
@@ -566,7 +572,7 @@ describe("Custom Bot API Integration Tests", () => {
 
     it("should return 404 when specific version not found", async () => {
       repository.getSpecificGlobalVersion.mockResolvedValue(
-        Failure("Version not found"),
+        Failure(appError("not_found", "Version not found")),
       );
 
       const response = await request(app.getHttpServer())
@@ -761,7 +767,7 @@ describe("Custom Bot API Integration Tests", () => {
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(
-        Failure("Database connection failed"),
+        Failure(appError("internal", "Database connection failed")),
       );
 
       const response = await request(app.getHttpServer())
@@ -781,7 +787,7 @@ describe("Custom Bot API Integration Tests", () => {
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
       storageService.validateZipStructure.mockResolvedValue(
-        Failure("GCS service unavailable"),
+        Failure(appError("internal", "GCS service unavailable")),
       );
 
       const response = await request(app.getHttpServer())
@@ -801,7 +807,7 @@ describe("Custom Bot API Integration Tests", () => {
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
       storageService.validateZipStructure.mockResolvedValue(
-        Failure("ZIP file size exceeds 200MB limit"),
+        Failure(appError("validation", "ZIP file size exceeds 200MB limit")),
       );
 
       const response = await request(app.getHttpServer())
@@ -848,7 +854,12 @@ describe("Custom Bot API Integration Tests", () => {
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
       storageService.validateZipStructure.mockResolvedValue(
-        Failure("Failed to validate ZIP structure: not a valid ZIP file"),
+        Failure(
+          appError(
+            "validation",
+            "Failed to validate ZIP structure: not a valid ZIP file",
+          ),
+        ),
       );
 
       const response = await request(app.getHttpServer())
