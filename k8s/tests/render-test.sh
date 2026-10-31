@@ -82,11 +82,11 @@ rendered_arg() {
   ' "$1"
 }
 
-# An empty api value means the setting vanished from both sides, which check
-# alone would accept.
+# An empty reference value means the setting vanished from both sides, which
+# check alone would accept.
 check_agrees() {
   if [[ -z "$2" ]]; then
-    echo "FAIL $1: the api value is empty"
+    echo "FAIL $1: the reference value is empty"
     failures=$((failures + 1))
   else
     check "$@"
