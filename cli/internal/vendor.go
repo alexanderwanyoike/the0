@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -22,6 +21,7 @@ const (
 // VendorManager handles Docker-based package vendoring
 type VendorManager struct {
 	dockerClient *client.Client
+	runner       BuildRunner
 	projectPath  string
 	runtime      string
 }
@@ -35,6 +35,7 @@ func NewVendorManager(projectPath string) (*VendorManager, error) {
 
 	return &VendorManager{
 		dockerClient: cli,
+		runner:       &dockerRunner{api: cli},
 		projectPath:  projectPath,
 	}, nil
 }
@@ -178,36 +179,7 @@ func (vm *VendorManager) formatFileSize(bytes int64) string {
 
 // cleanDockerLogOutput removes Docker log headers from raw log data
 func (vm *VendorManager) cleanDockerLogOutput(logData []byte) string {
-	var output strings.Builder
-	i := 0
-
-	for i < len(logData) {
-		// Docker log format: 8-byte header + message
-		// Header: [stream_type][0][0][0][size_bytes_3][size_bytes_2][size_bytes_1][size_bytes_0]
-		if i+8 > len(logData) {
-			// Not enough bytes for header, append remaining
-			output.Write(logData[i:])
-			break
-		}
-
-		// Extract message size from header
-		size := int(logData[i+4])<<24 | int(logData[i+5])<<16 | int(logData[i+6])<<8 | int(logData[i+7])
-
-		// Skip header
-		i += 8
-
-		// Extract message
-		if i+size <= len(logData) {
-			output.Write(logData[i : i+size])
-			i += size
-		} else {
-			// Invalid size, append remaining
-			output.Write(logData[i:])
-			break
-		}
-	}
-
-	return output.String()
+	return cleanDockerLogOutput(logData)
 }
 
 // getBuildEnvVars returns environment variables for the build container
