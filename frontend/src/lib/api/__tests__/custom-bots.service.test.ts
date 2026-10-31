@@ -97,6 +97,20 @@ describe("CustomBotService", () => {
       }
     });
 
+    it.each([
+      ["no data", null],
+      ["data that is not a list", {}],
+    ])("should fail rather than throw on a body with %s", async (_, data) => {
+      respond({ success: true, data, message: "Success" });
+
+      const result = await CustomBotService.getCustomBots();
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.statusCode).toBe(500);
+      }
+    });
+
     it("should transform raw bot data to versioned format", async () => {
       // Raw format without versions array
       const rawBot = {
