@@ -5,7 +5,6 @@ package storage
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"runtime/internal/launch"
 )
@@ -69,15 +68,11 @@ func LoadConfigFromEnv() (*Config, error) {
 	cfg.LogsBucket = launched.LogsBucket
 	cfg.QueryResultBucket = launched.QueryResultsBucket
 
-	if sizeStr := os.Getenv("MAX_STATE_SIZE_MB"); sizeStr != "" {
-		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
-			cfg.MaxStateSizeBytes = size * 1024 * 1024
-		}
+	if launched.MaxStateSizeMB != 0 {
+		cfg.MaxStateSizeBytes = launched.MaxStateSizeMB * 1024 * 1024
 	}
-	if sizeStr := os.Getenv("MAX_STATE_FILE_SIZE_MB"); sizeStr != "" {
-		if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
-			cfg.MaxStateFileSizeBytes = size * 1024 * 1024
-		}
+	if launched.MaxStateFileSizeMB != 0 {
+		cfg.MaxStateFileSizeBytes = launched.MaxStateFileSizeMB * 1024 * 1024
 	}
 
 	return cfg, nil
