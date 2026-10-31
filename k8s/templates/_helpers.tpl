@@ -158,11 +158,7 @@ MinIO endpoint (host only, no port) — used by the API service
 MinIO endpoint with port (host:port) — used by the bot-controller
 */}}
 {{- define "the0.minioEndpointWithPort" -}}
-{{- if .Values.minio.enabled -}}
-{{ include "the0.fullname" . }}-minio:{{ .Values.minio.port }}
-{{- else -}}
-{{ .Values.minio.external.endpoint }}:{{ .Values.minio.external.port }}
-{{- end -}}
+{{ include "the0.minioEndpoint" . }}:{{ include "the0.minioPort" . }}
 {{- end }}
 
 {{/*
