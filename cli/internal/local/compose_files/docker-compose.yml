@@ -139,7 +139,7 @@ services:
       BOT_API_URL: http://the0-api:3000
 
       # Runtime query server URL (standalone query-server service)
-      RUNTIME_QUERY_URL: http://query-server:${QUERY_SERVER_PORT:-9477}
+      RUNTIME_QUERY_URL: http://query-server:9477
 
     ports:
       - "3000:3000"
@@ -345,11 +345,11 @@ services:
       TEMP_DIR: /tmp/query-server
       DOCKER_NETWORK: the0-oss-network
 
-      # Query server port; QUERY_SERVER_PORT in .env moves every use of it
-      QUERY_SERVER_PORT: "${QUERY_SERVER_PORT:-9477}"
+      # Query server port
+      QUERY_SERVER_PORT: "9477"
 
     ports:
-      - "${QUERY_SERVER_PORT:-9477}:${QUERY_SERVER_PORT:-9477}"  # Query server endpoint
+      - "9477:9477"  # Query server endpoint
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/query-server:/tmp/query-server
@@ -362,7 +362,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:${QUERY_SERVER_PORT:-9477}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9477/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
