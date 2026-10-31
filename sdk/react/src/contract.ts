@@ -54,6 +54,21 @@ export interface BotEventUtils {
     metricType: string,
     valueKey?: string
   ) => { timestamp: Date; value: number }[];
+
+  // Every platform version provides the utilities below. They are optional
+  // only so that code which builds its own BotEventUtils, such as a
+  // dashboard's test mocks, still compiles.
+
+  /** Metric types present in the events */
+  getMetricTypes?: () => string[];
+  /** Group events into fixed time windows */
+  groupByTimeWindow?: (
+    window: "1m" | "5m" | "15m" | "1h" | "4h" | "1d"
+  ) => BotEvent[][];
+  /** The latest event of each metric type */
+  latestByType?: () => Record<string, BotEvent>;
+  /** Number of events of each metric type */
+  countByType?: () => Record<string, number>;
 }
 
 export interface The0EventsContextValue {
@@ -78,4 +93,7 @@ export interface The0EventsContextValue {
   error: string | null;
   utils: BotEventUtils;
   refresh: () => void;
+  /** The bot whose events these are. Every platform version provides it;
+   *  optional so that hand-built context values still compile. */
+  botId?: string;
 }
