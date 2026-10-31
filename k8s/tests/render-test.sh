@@ -136,6 +136,8 @@ for release in the0 the0-the0 trading; do
     api_logs=$(rendered_env "$rendering" the0-api.yaml LOG_BUCKET | paste -sd ' ')
     check_agrees "gc MINIO_LOGS_BUCKET matches api LOG_BUCKET: $label" \
       "$api_logs" "$(rendered_env "$rendering" gc-cronjob.yaml MINIO_LOGS_BUCKET)"
+    check_agrees "controller MINIO_LOGS_BUCKET matches api LOG_BUCKET: $label" \
+      "$api_logs" "$(rendered_env "$rendering" bot-controller.yaml MINIO_LOGS_BUCKET | paste -sd ' ')"
   done
 done
 
