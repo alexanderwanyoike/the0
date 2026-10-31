@@ -5,6 +5,70 @@ entries:
       artifacthub.io/category: integration-delivery
       artifacthub.io/changes: |
         - kind: changed
+          description: "The api, gc and bot controller read the NATS URL, MinIO host and port, logs bucket and code bucket from one chart value each, so the two sides cannot drift"
+        - kind: changed
+          description: "The bot controller takes logs and query results bucket settings, and bot pods, sync sidecars and query pods use them instead of fixed bucket names"
+        - kind: fixed
+          description: "The aws and gcp example values no longer point the api and the bot controller at different code buckets"
+        - kind: fixed
+          description: "gc cleans the logs bucket the api reads and the bot pods write"
+        - kind: changed
+          description: "If only botController.minio.bucket is set, the api now uses that code bucket too; copy existing objects from custom-bots or set the0Api.env.CUSTOM_BOTS_BUCKET"
+        - kind: changed
+          description: "The api defaults LOG_BUCKET to bot-logs"
+        - kind: removed
+          description: "The unused API_BASE_URL value"
+        - kind: fixed
+          description: "Bots on Docker get the runner's state size limits, and a bot without config gets BOT_CONFIG={} on Docker and Kubernetes alike"
+        - kind: removed
+          description: "Docker bot containers no longer set the unread ID, CONFIG, ENTRYPOINT_TYPE and CODE_MOUNT_DIR variables"
+        - kind: changed
+          description: "Upgrading rewrites every scheduled-bot CronJob and restarts every realtime bot pod once"
+      artifacthub.io/images: |
+        - name: api
+          image: ghcr.io/alexanderwanyoike/the0/api
+        - name: frontend
+          image: ghcr.io/alexanderwanyoike/the0/frontend
+        - name: runtime
+          image: ghcr.io/alexanderwanyoike/the0/runtime
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://docs.the0.app
+        - name: Source
+          url: https://github.com/alexanderwanyoike/the0
+        - name: Discord
+          url: https://discord.gg/8xpMh3RR3
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 1.22.0
+    created: "2026-10-31T13:31:46.651657645Z"
+    description: An open-source algorithmic trading platform for creating, deploying,
+      and managing trading bots
+    digest: 194a0a1b52c845c44c0a0cc427b15e0c4b961cd21ba782536234099f7f8cafc8
+    home: https://github.com/alexanderwanyoike/the0
+    icon: https://raw.githubusercontent.com/alexanderwanyoike/the0/main/assets/the0-icon.png
+    keywords:
+    - trading
+    - bots
+    - backtesting
+    - automation
+    - fintech
+    kubeVersion: '>=1.21.0-0'
+    maintainers:
+    - name: Alexander Wanyoike
+      url: https://github.com/alexanderwanyoike
+    name: the0
+    sources:
+    - https://github.com/alexanderwanyoike/the0
+    type: application
+    urls:
+    - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.17.0/the0-0.17.0.tgz
+    version: 0.17.0
+  - annotations:
+      artifacthub.io/category: integration-delivery
+      artifacthub.io/changes: |
+        - kind: changed
           description: "The runtime formats each log chunk once and stamps every line with a stable _key, so stored and live log lines are byte for byte the same"
         - kind: changed
           description: "REST and live log streams return one entry shape (key, date, timestamp, content), where content is the stored line as written"
@@ -2789,4 +2853,4 @@ entries:
     urls:
     - https://github.com/alexanderwanyoike/the0/releases/download/the0-0.2.0/the0-0.2.0.tgz
     version: 0.2.0
-generated: "2026-10-23T09:32:51.998750305Z"
+generated: "2026-10-31T13:31:46.651903286Z"
