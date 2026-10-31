@@ -1,0 +1,19 @@
+{
+  "valid": [
+    "q3n8v1x7k2m9p4r6t0w5y8z1",
+    "550e8400-e29b-41d4-a716-446655440001",
+    "Xk3Lm9Qp2Rt7Vw1Yz4Ab",
+    "bot_1"
+  ],
+  "invalid": [
+    "",
+    "bot.1",
+    "bot*",
+    "bot>",
+    "bot 1",
+    "bot/1",
+    "../state",
+    "bot\n1",
+    "bøt"
+  ]
+}
