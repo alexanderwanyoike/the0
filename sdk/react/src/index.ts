@@ -6,80 +6,18 @@
  */
 
 import { useContext, createContext } from "react";
-import { THE0_GLOBALS } from "./contract";
+import { THE0_GLOBALS, The0EventsContextValue } from "./contract";
 
 export { THE0_GLOBALS } from "./contract";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface BotEvent {
-  timestamp: Date;
-  type: "log" | "metric";
-  data: string | Record<string, unknown>;
-  metricType?: string;
-  level?: "DEBUG" | "INFO" | "WARN" | "ERROR";
-  raw: string;
-}
-
-export interface BotEventUtils {
-  /** Get events from the last duration (e.g., "1h", "24h", "7d") */
-  since: (duration: string) => BotEvent[];
-  /** Get events between two dates */
-  between: (start: Date, end: Date) => BotEvent[];
-  /** Filter events by metric type */
-  filterByType: (metricType: string) => BotEvent[];
-  /** Get only metric events */
-  metrics: () => BotEvent[];
-  /** Get only log events */
-  logs: () => BotEvent[];
-  /** Get the latest event of a specific metric type */
-  latest: (metricType: string) => BotEvent | null;
-  /** Group events by metric type */
-  groupByMetricType: () => Record<string, BotEvent[]>;
-  /** Group events by execution run (for scheduled bots) */
-  groupByRun: (gapThresholdMs?: number) => BotEvent[][];
-  /** Extract time series data for charting */
-  extractTimeSeries: (
-    metricType: string,
-    valueKey?: string
-  ) => { timestamp: Date; value: number }[];
-}
-
-export interface The0EventsContextValue {
-  events: BotEvent[];
-  /** True only while there is nothing to render yet (initial load). The
-   *  platform refreshes data in the background without flipping this, so
-   *  guard full-screen loading states with `events.length === 0`. */
-  loading: boolean;
-  /** True while a background refresh is in flight. Optional: older platform
-   *  versions may not provide it. */
-  isFetching?: boolean;
-  /** Live stream state: true = SSE connected, false = degraded to polling,
-   *  undefined = not streaming. Optional: older platform versions may not
-   *  provide it. Use for a live/updating indicator. */
-  connected?: boolean;
-  /** When data last arrived (REST or SSE). Optional: older platform
-   *  versions may not provide it. */
-  lastUpdate?: Date | null;
-  /** Set only when there is nothing to render (initial load failed), so a
-   *  plain `if (error)` early return is safe: background refresh failures
-   *  never blank a dashboard that has data on screen. */
-  error: string | null;
-  utils: BotEventUtils;
-  refresh: () => void;
-}
+export type {
+  BotEvent,
+  BotEventUtils,
+  The0EventsContextValue,
+} from "./contract";
 
 // ============================================================================
 // Context (shared with main app via global)
 // ============================================================================
-
-declare global {
-  interface Window {
-    __THE0_EVENTS_CONTEXT__?: React.Context<The0EventsContextValue | null>;
-  }
-}
 
 // Get or create the shared context
 function getSharedContext(): React.Context<The0EventsContextValue | null> {
