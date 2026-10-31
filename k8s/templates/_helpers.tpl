@@ -137,10 +137,18 @@ nats://{{ .Values.nats.external.host }}:{{ .Values.nats.external.port }}
 {{- end }}
 
 {{/*
+Bot-controller query server port. Not a value: the controller binary always
+listens on 9477 and has no flag to change it.
+*/}}
+{{- define "the0.queryPort" -}}
+9477
+{{- end }}
+
+{{/*
 Bot-controller query server URL, used by the API service
 */}}
 {{- define "the0.runtimeQueryUrl" -}}
-http://{{ include "the0.fullname" . }}-bot-controller:9477
+http://{{ include "the0.fullname" . }}-bot-controller:{{ include "the0.queryPort" . }}
 {{- end }}
 
 {{/*

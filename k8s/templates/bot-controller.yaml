@@ -150,7 +150,7 @@ spec:
               containerPort: 8080
               protocol: TCP
             - name: query
-              containerPort: 9477
+              containerPort: {{ include "the0.queryPort" . }}
               protocol: TCP
           # Health probes for proper lifecycle management
           livenessProbe:
@@ -198,7 +198,7 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 9477
+    - port: {{ include "the0.queryPort" . }}
       targetPort: query
       protocol: TCP
       name: query
