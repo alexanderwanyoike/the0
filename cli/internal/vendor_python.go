@@ -1,16 +1,11 @@
 package internal
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/user"
 	"path/filepath"
-	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/fatih/color"
 )
 
@@ -75,7 +70,7 @@ func (v *PythonVendor) Vendor(vm *VendorManager) error {
 	blue.Println("Installing Python dependencies...")
 
 	// Step 1: Pull Python image if needed
-	if err := v.pullImage(vm); err != nil {
+	if err := vm.runner.EnsureImage(pythonImage); err != nil {
 		return fmt.Errorf("failed to pull Python image: %v", err)
 	}
 
@@ -93,7 +88,7 @@ func (v *PythonVendor) Vendor(vm *VendorManager) error {
 	if err != nil {
 		return fmt.Errorf("failed to run vendoring container: %v", err)
 	}
-	defer vm.cleanupContainer(containerID)
+	defer vm.runner.Remove(containerID)
 
 	// Step 4: Verify vendored files
 	if err := vm.verifyVendoredFiles(vendorPath); err != nil {
@@ -104,55 +99,8 @@ func (v *PythonVendor) Vendor(vm *VendorManager) error {
 	return nil
 }
 
-// pullImage pulls the Python image if it doesn't exist locally
-func (v *PythonVendor) pullImage(vm *VendorManager) error {
-	ctx := context.Background()
-
-	// Check if image exists locally
-	images, err := vm.dockerClient.ImageList(ctx, image.ListOptions{})
-	if err != nil {
-		return err
-	}
-
-	imageExists := false
-	for _, img := range images {
-		for _, tag := range img.RepoTags {
-			if tag == pythonImage {
-				imageExists = true
-				break
-			}
-		}
-		if imageExists {
-			break
-		}
-	}
-
-	if imageExists {
-		return nil
-	}
-
-	blue := color.New(color.FgBlue)
-	blue.Printf("Pulling Docker image: %s...\n", pythonImage)
-
-	reader, err := vm.dockerClient.ImagePull(ctx, pythonImage, image.PullOptions{})
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	// Read pull output (but don't display it to keep output clean)
-	io.Copy(io.Discard, reader)
-
-	return nil
-}
-
 // runContainer creates and runs a container for Python vendoring
 func (v *PythonVendor) runContainer(vm *VendorManager) (string, error) {
-	ctx := context.Background()
-
-	// Generate unique container name
-	containerName := fmt.Sprintf("%s%d", vendorContainerName, time.Now().Unix())
-
 	// Prepare absolute paths for volume mounting
 	vendorPath := filepath.Join(vm.projectPath, vendorDir)
 	requirementsPath := filepath.Join(vm.projectPath, "requirements.txt")
@@ -167,95 +115,18 @@ func (v *PythonVendor) runContainer(vm *VendorManager) (string, error) {
 		return "", fmt.Errorf("failed to get absolute requirements path: %v", err)
 	}
 
-	config := &container.Config{
-		Image: pythonImage,
-		Cmd: []string{
-			"sh", "-c",
-			v.getInstallCommand(),
-		},
+	return vm.runner.Run(BuildStep{
+		Image:      pythonImage,
+		Cmd:        []string{"sh", "-c", v.getInstallCommand()},
 		WorkingDir: "/app",
 		Env:        getBuildEnvVars(),
-	}
-
-	hostConfig := &container.HostConfig{
 		Binds: []string{
 			fmt.Sprintf("%s:/vendor", absVendorPath),
 			fmt.Sprintf("%s:/requirements.txt:ro", absRequirementsPath),
 		},
-		AutoRemove: false, // We'll remove manually after copying files
-	}
-
-	resp, err := vm.dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, containerName)
-	if err != nil {
-		return "", err
-	}
-
-	if err := vm.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
-	}
-
-	// Stream logs in real-time while container is running
-	logReader, err := vm.dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Follow:     true,
-		Timestamps: false,
+		FailureHeadline: "Python dependency installation",
+		FailedCommand:   "pip install",
 	})
-	if err != nil {
-		return resp.ID, fmt.Errorf("failed to get container logs: %v", err)
-	}
-
-	// Stream logs in a goroutine
-	logDone := make(chan struct{})
-	go func() {
-		defer close(logDone)
-		defer logReader.Close()
-
-		blue := color.New(color.FgBlue)
-		buffer := make([]byte, 1024)
-		for {
-			n, err := logReader.Read(buffer)
-			if err != nil {
-				if err != io.EOF {
-					blue.Printf("Log read error: %v\n", err)
-				}
-				break
-			}
-
-			if n > 0 {
-				// Clean Docker log headers and display output
-				output := vm.cleanDockerLogOutput(buffer[:n])
-				if output != "" {
-					blue.Printf("  %s", output)
-				}
-			}
-		}
-	}()
-
-	// Wait for container to finish
-	statusCh, errCh := vm.dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return resp.ID, err
-		}
-	case status := <-statusCh:
-		// Wait for logs to finish streaming
-		<-logDone
-
-		if status.StatusCode != 0 {
-			// Get full container logs for error details
-			logs, _ := vm.getContainerLogs(resp.ID)
-			red := color.New(color.FgRed)
-			red.Printf("Python dependency installation failed with exit code %d\n", status.StatusCode)
-			if logs != "" {
-				red.Printf("Full error log:\n%s\n", logs)
-			}
-			return resp.ID, fmt.Errorf("pip install failed with exit code %d", status.StatusCode)
-		}
-	}
-
-	return resp.ID, nil
 }
 
 // getInstallCommand returns the pip install command with proper ownership
