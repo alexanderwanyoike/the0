@@ -103,7 +103,7 @@ func BuildFrontendIfNeeded(projectPath string) error {
 	// Check Docker availability
 	if err := CheckDockerInstalled(); err != nil {
 		red.Printf("Docker required for frontend build: %v\n", err)
-		red.Println("Solution: Install Docker or pre-build the frontend with 'npm run build'")
+		red.Println("Solution: Install Docker and try again: the frontend is built in Docker on every deploy")
 		return fmt.Errorf("docker unavailable for frontend build")
 	}
 
@@ -116,7 +116,7 @@ func BuildFrontendIfNeeded(projectPath string) error {
 
 	if err := vm.CheckDockerRunning(); err != nil {
 		red.Printf("Docker daemon not running: %v\n", err)
-		red.Println("Solution: Start Docker or pre-build the frontend")
+		red.Println("Solution: Start Docker and try again")
 		return fmt.Errorf("docker daemon not running for frontend build")
 	}
 
