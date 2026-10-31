@@ -1,16 +1,15 @@
 package docker
 
 import (
-	"encoding/json"
 	"fmt"
 	"runtime/internal/launch"
 	"runtime/internal/model"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/strslice"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewContainerBuilder(t *testing.T) {
@@ -155,27 +154,11 @@ func TestContainerBuilder_WithExecutable(t *testing.T) {
 
 	cfg, _ := builder.Build()
 
-	// Verify environment variables
-	assert.Contains(t, cfg.Env, "ID=bot-123")
-	assert.Contains(t, cfg.Env, "ENTRYPOINT_TYPE=bot")
-	assert.Contains(t, cfg.Env, "CODE_MOUNT_DIR=bot")
-
-	// Verify CONFIG env var contains marshaled JSON
-	var configEnv string
+	// runtime execute, not the container, gives the bot its ID and config.
 	for _, env := range cfg.Env {
-		if len(env) > 7 && env[:7] == "CONFIG=" {
-			configEnv = env[7:]
-			break
-		}
+		name, _, _ := strings.Cut(env, "=")
+		assert.NotContains(t, []string{"ID", "CONFIG", "ENTRYPOINT_TYPE", "CODE_MOUNT_DIR"}, name)
 	}
-	assert.NotEmpty(t, configEnv)
-
-	// Verify it's valid JSON
-	var parsedConfig map[string]interface{}
-	err := json.Unmarshal([]byte(configEnv), &parsedConfig)
-	require.NoError(t, err)
-	assert.Equal(t, "BTC/USD", parsedConfig["symbol"])
-	assert.Equal(t, float64(100), parsedConfig["threshold"])
 
 	// Verify labels
 	assert.Equal(t, "bot-123", cfg.Labels["runtime.id"])
@@ -220,39 +203,21 @@ func TestContainerBuilder_WithLaunch(t *testing.T) {
 	}
 }
 
-func TestContainerBuilder_WithExecutable_MarshalError(t *testing.T) {
-	// Create an executable with a config that can't be marshaled
-	// (functions can't be marshaled to JSON)
+func TestContainerConfig_SendsAnEmptyBotConfigWhenTheConfigCannotBeMarshaled(t *testing.T) {
 	type unmarshalable struct {
 		Fn func()
 	}
-
 	executable := model.Executable{
-		ID:         "bot-123",
-		Entrypoint: "bot",
-		EntrypointFiles: map[string]string{
-			"bot": "main.py",
-		},
-		Config: map[string]interface{}{
-			"unmarshalable": unmarshalable{Fn: func() {}},
-		},
+		ID:              "bot-123",
+		Runtime:         "python3.11",
+		Entrypoint:      "bot",
+		EntrypointFiles: map[string]string{"bot": "main.py"},
+		Config:          map[string]interface{}{"unmarshalable": unmarshalable{Fn: func() {}}},
 	}
 
-	builder := NewContainerBuilder("python:3.11").
-		WithExecutable(executable)
+	cfg, _ := ContainerConfig(NewMockConfig(), executable, "the0/runtime:latest")
 
-	cfg, _ := builder.Build()
-
-	// Should fallback to empty config
-	var configEnv string
-	for _, env := range cfg.Env {
-		if len(env) > 7 && env[:7] == "CONFIG=" {
-			configEnv = env[7:]
-			break
-		}
-	}
-	// Fallback should be empty JSON object
-	assert.Equal(t, "{}", configEnv)
+	assert.Contains(t, cfg.Env, "BOT_CONFIG={}")
 }
 
 func TestContainerBuilder_WithDevRuntime(t *testing.T) {

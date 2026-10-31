@@ -191,7 +191,7 @@ func container(t *testing.T, containers []corev1.Container, name string) corev1.
 // Each backend also sets these for the bot process itself. `runtime execute`
 // reads none of them.
 var (
-	dockerProcessEnv = []string{"PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED", "ID", "CONFIG", "ENTRYPOINT_TYPE", "CODE_MOUNT_DIR"}
+	dockerProcessEnv = []string{"PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}
 	podProcessEnv    = []string{"PYTHONUNBUFFERED"}
 )
 
