@@ -16,6 +16,12 @@ import { appError, AppError } from "@/common/app-error";
 import { Result, Failure, Ok, errorMessage } from "@/common/result";
 import { WRITE_FAILED } from "@/common/role.repository";
 
+/** A publish request as a client sends it: the config is JSON text. */
+export interface PublishRequest {
+  config: unknown;
+  filePath: unknown;
+}
+
 @Injectable()
 export class CustomBotService {
   constructor(
@@ -24,11 +30,15 @@ export class CustomBotService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async createCustomBot(
+  /** Publishes the first version of a new Custom bot, as its Uploader. */
+  async publishFirstVersion(
     userId: string,
-    config: CustomBotConfig,
-    filePath: string,
+    name: string,
+    request: PublishRequest,
   ): Promise<Result<CustomBot, AppError>> {
+    const parsed = await this.parsePublishRequest(userId, name, request);
+    if (!parsed.success) return Failure(parsed.error);
+    const { config, filePath } = parsed.data;
     try {
       // Validate config structure
       const validation = validateCustomBotConfigPayload(config);
@@ -79,6 +89,70 @@ export class CustomBotService {
         ),
       );
     }
+  }
+
+  /**
+   * The checks a publish request passes before its config is read as a
+   * Custom bot: the upload must be the caller's own and exist, and the
+   * config must be JSON naming the Custom bot being published.
+   */
+  private async parsePublishRequest(
+    userId: string,
+    name: string,
+    request: PublishRequest,
+  ): Promise<Result<{ config: CustomBotConfig; filePath: string }, AppError>> {
+    const filePath = this.checkFilePath(request.filePath, userId);
+    if (!filePath.success) return Failure(filePath.error);
+
+    const fileExists = await this.storageService.fileExists(filePath.data);
+    if (!fileExists.success) {
+      return Failure(
+        appError(
+          fileExists.error.code,
+          `File validation failed: ${fileExists.error.message}`,
+        ),
+      );
+    }
+    if (!fileExists.data) {
+      return invalid("File not found at specified file path");
+    }
+
+    if (!request.config) {
+      return invalid("Config field is required");
+    }
+
+    let config: CustomBotConfig;
+    try {
+      config = JSON.parse(request.config as string);
+    } catch {
+      return invalid("Config must be valid JSON");
+    }
+
+    if (config.name !== name) {
+      return invalid("Bot name in config must match URL parameter");
+    }
+
+    return Ok({ config, filePath: filePath.data });
+  }
+
+  private checkFilePath(
+    filePath: unknown,
+    userId: string,
+  ): Result<string, AppError> {
+    if (typeof filePath !== "string") {
+      return invalid("filePath must be a string");
+    }
+    const trimmed = filePath.trim();
+    if (trimmed === "") {
+      return invalid("filePath is required");
+    }
+    if (trimmed.includes("..") || trimmed.includes("//")) {
+      return invalid("Invalid file path");
+    }
+    if (!trimmed.startsWith(`${userId}/`)) {
+      return invalid("File path must belong to the authenticated user");
+    }
+    return Ok(trimmed);
   }
 
   private async storeVersion(
@@ -140,14 +214,17 @@ export class CustomBotService {
     );
   }
 
-  async updateCustomBot(
+  /** Publishes a new version of a Custom bot; only its Uploader may. */
+  async publishVersion(
     userId: string,
     name: string,
-    config: CustomBotConfig,
-    filePath: string,
+    request: PublishRequest,
   ): Promise<Result<CustomBot, AppError>> {
+    const parsed = await this.parsePublishRequest(userId, name, request);
+    if (!parsed.success) return Failure(parsed.error);
+    const { config, filePath } = parsed.data;
     try {
-      const configCheck = this.checkUpdateConfig(name, config);
+      const configCheck = this.checkUpdateConfig(config);
       if (!configCheck.success) return Failure(configCheck.error);
 
       const ownerCheck = await this.checkUserOwnsExistingBot(userId, name);
@@ -173,25 +250,13 @@ export class CustomBotService {
     }
   }
 
-  private checkUpdateConfig(
-    name: string,
-    config: CustomBotConfig,
-  ): Result<null, AppError> {
+  private checkUpdateConfig(config: CustomBotConfig): Result<null, AppError> {
     const validation = validateCustomBotConfigPayload(config);
     if (!validation.valid) {
       return Failure(
         appError(
           "validation",
           `Validation failed: ${validation.errors?.join(", ")}`,
-        ),
-      );
-    }
-
-    if (config.name !== name) {
-      return Failure(
-        appError(
-          "validation",
-          "Bot name in config must match the URL parameter",
         ),
       );
     }
@@ -549,3 +614,6 @@ export class CustomBotService {
     });
   }
 }
+
+const invalid = <T>(message: string): Result<T, AppError> =>
+  Failure(appError("validation", message));
