@@ -73,15 +73,13 @@ describe("CustomBotController", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath:
-          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+        filePath: "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation
@@ -117,8 +115,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when file does not exist at filePath", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return file not found
@@ -134,8 +131,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when GCS validation fails", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       // Mock GCS file validation to return error
@@ -151,8 +147,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when config is missing", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -167,8 +162,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when config is invalid JSON", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: "invalid json", filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -187,8 +181,7 @@ describe("CustomBotController", () => {
         ...validConfig,
         name: "different-bot",
       };
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -206,8 +199,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when service returns error", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -255,15 +247,13 @@ describe("CustomBotController", () => {
         name: "test-bot",
         version: "1.1.0",
         config: updateConfig,
-        filePath:
-          "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
+        filePath: "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      const filePath =
-        "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
+      const filePath = "user123/test-bot/1.1.0/test-bot_1.1.0_123456.zip";
       const body = { config: JSON.stringify(updateConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -291,8 +281,7 @@ describe("CustomBotController", () => {
     });
 
     it("should throw BadRequestException when service returns error", async () => {
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = { config: JSON.stringify(validConfig), filePath };
 
       mockStorageService.fileExists.mockResolvedValue({
@@ -322,8 +311,7 @@ describe("CustomBotController", () => {
         ...validConfig,
         name: "different-bot",
       };
-      const filePath =
-        "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
+      const filePath = "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip";
       const body = {
         config: JSON.stringify(configWithDifferentName),
         filePath,
@@ -520,7 +508,6 @@ describe("CustomBotController", () => {
 
       expect(mockService.getUserCustomBots).toHaveBeenCalledWith("user123");
     });
-
   });
 
   describe("getAllVersions", () => {
@@ -578,8 +565,7 @@ describe("CustomBotController", () => {
         name: "test-bot",
         version: "1.0.0",
         config: validConfig,
-        filePath:
-          "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
+        filePath: "user123/test-bot/1.0.0/test-bot_1.0.0_123456.zip",
         userId: "user123",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -587,10 +573,7 @@ describe("CustomBotController", () => {
 
       mockService.getGlobalSpecificVersion.mockResolvedValue(Ok(mockBot));
 
-      const result = await controller.getSpecificVersion(
-        "test-bot",
-        "1.0.0",
-      );
+      const result = await controller.getSpecificVersion("test-bot", "1.0.0");
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(mockBot);
@@ -667,7 +650,9 @@ describe("CustomBotController", () => {
 
     it("should throw BadRequestException when version has instances", async () => {
       mockService.deleteVersion.mockResolvedValue(
-        Failure("Cannot delete version 1.0.0: 3 active instance(s) reference it"),
+        Failure(
+          "Cannot delete version 1.0.0: 3 active instance(s) reference it",
+        ),
       );
 
       await expect(

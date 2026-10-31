@@ -322,8 +322,10 @@ export class CustomBotService {
     name: string,
     version: string,
   ): Promise<Result<void, string>> {
-    const ownershipResult =
-      await this.customBotRepository.checkUserOwnership(userId, name);
+    const ownershipResult = await this.customBotRepository.checkUserOwnership(
+      userId,
+      name,
+    );
     if (!ownershipResult.success) {
       return Failure(ownershipResult.error);
     }
@@ -390,8 +392,10 @@ export class CustomBotService {
     userId: string,
     name: string,
   ): Promise<Result<void, string>> {
-    const ownershipResult =
-      await this.customBotRepository.checkUserOwnership(userId, name);
+    const ownershipResult = await this.customBotRepository.checkUserOwnership(
+      userId,
+      name,
+    );
     if (!ownershipResult.success) {
       return Failure(ownershipResult.error);
     }
@@ -464,8 +468,7 @@ export class CustomBotService {
   ): Promise<
     Result<{ orphaned: boolean; name: string; version: string }, string>
   > {
-    const botResult =
-      await this.customBotRepository.findOneById(customBotId);
+    const botResult = await this.customBotRepository.findOneById(customBotId);
     if (!botResult.success) {
       return Failure(botResult.error);
     }

@@ -209,8 +209,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when config is missing", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
 
@@ -225,8 +224,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when config is invalid JSON", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
 
@@ -242,8 +240,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when bot name in config doesnt match URL", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
       const configWithDifferentName = {
         ...validConfig,
         name: "different-name",
@@ -265,8 +262,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when bot already exists", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(true));
@@ -285,8 +281,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when ZIP validation fails", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -306,8 +301,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when config validation fails", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
       const invalidConfig = {
         ...validConfig,
         version: "invalid-version", // Invalid semver
@@ -381,8 +375,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when bot does not exist", async () => {
-      const filePath =
-        "test-user-123/non-existent-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/non-existent-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -401,8 +394,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when user is not the owner", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(true));
@@ -422,8 +414,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when version is not newer", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
       const mockExistingBot: CustomBot = {
         id: "existing-id",
         name: "integration-test-bot",
@@ -456,8 +447,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should return 400 when version already exists", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.1.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.1.0/test-bot.zip";
       const mockExistingBot: CustomBot = {
         id: "existing-id",
         name: "integration-test-bot",
@@ -767,8 +757,7 @@ describe("Custom Bot API Integration Tests", () => {
 
   describe("Error handling and edge cases", () => {
     it("should handle repository errors gracefully", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(
@@ -787,8 +776,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should handle GCS service errors gracefully", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/test-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -808,8 +796,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should handle large file uploads properly", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/large-bot.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/large-bot.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));
@@ -856,8 +843,7 @@ describe("Custom Bot API Integration Tests", () => {
     });
 
     it("should validate file content type properly", async () => {
-      const filePath =
-        "test-user-123/integration-test-bot/1.0.0/fake.zip";
+      const filePath = "test-user-123/integration-test-bot/1.0.0/fake.zip";
 
       storageService.fileExists.mockResolvedValue(Ok(true));
       repository.globalBotExists.mockResolvedValue(Ok(false));

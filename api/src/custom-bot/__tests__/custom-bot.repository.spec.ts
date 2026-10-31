@@ -744,12 +744,10 @@ describe("CustomBotRepository", () => {
       };
       mockTables.bots = mockBotsTable;
 
-      mockDb.where.mockResolvedValue([
-        { id: "bot-1" },
-        { id: "bot-2" },
-      ]);
+      mockDb.where.mockResolvedValue([{ id: "bot-1" }, { id: "bot-2" }]);
 
-      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+      const result =
+        await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(2);
@@ -763,7 +761,9 @@ describe("CustomBotRepository", () => {
 
       mockDb.where.mockResolvedValue([]);
 
-      const result = await repository.countInstancesByCustomBotId("unused-custom-bot-id");
+      const result = await repository.countInstancesByCustomBotId(
+        "unused-custom-bot-id",
+      );
 
       expect(result.success).toBe(true);
       expect(result.data).toBe(0);
@@ -777,7 +777,8 @@ describe("CustomBotRepository", () => {
 
       mockDb.where.mockRejectedValue(new Error("Database error"));
 
-      const result = await repository.countInstancesByCustomBotId("custom-bot-id-1");
+      const result =
+        await repository.countInstancesByCustomBotId("custom-bot-id-1");
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Database error");
@@ -797,7 +798,11 @@ describe("CustomBotRepository", () => {
         { customBotId: "cb-2" },
       ]);
 
-      const result = await repository.countInstancesByCustomBotIds(["cb-1", "cb-2", "cb-3"]);
+      const result = await repository.countInstancesByCustomBotIds([
+        "cb-1",
+        "cb-2",
+        "cb-3",
+      ]);
 
       expect(result.success).toBe(true);
       expect(result.data!.get("cb-1")).toBe(2);
