@@ -112,18 +112,6 @@ const server = setupServer(
     });
   }),
 
-  http.get("/api/custom-bots/:name/:version", ({ params }) => {
-    return HttpResponse.json({
-      ...mockCustomBot.versions[0],
-      name: params.name,
-      version: params.version,
-    });
-  }),
-
-  http.get("/api/custom-bots/:name/versions", () => {
-    return HttpResponse.json(["1.0.0", "0.9.0"]);
-  }),
-
   // API keys endpoints
   http.get("/api/api-keys", () => {
     return HttpResponse.json([mockApiKey]);
