@@ -1,6 +1,5 @@
-import axios from "@/lib/axios-interceptor";
-import { Result, Ok, Failure } from "@/lib/result";
-import { getErrorMessage, getErrorStatusCode } from "@/lib/axios";
+import { ApiError, apiRequest } from "@/lib/auth-fetch";
+import { Result } from "@/lib/result";
 
 export interface ApiKey {
   id: string;
@@ -22,81 +21,45 @@ export interface ApiKeyStats {
   active: number;
 }
 
-export type ApiKeyServiceError = {
-  message: string;
-  statusCode: number;
-};
+export type ApiKeyServiceError = ApiError;
+
+const TIMEOUT_MS = 10_000;
 
 export class ApiKeyService {
-  public static async getApiKeys(): Promise<
-    Result<ApiKey[], ApiKeyServiceError>
-  > {
-    try {
-      const response = await axios.get("/api/api-keys", {
-        timeout: 10000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+  public static getApiKeys(): Promise<Result<ApiKey[], ApiKeyServiceError>> {
+    return apiRequest("/api/api-keys", { timeoutMs: TIMEOUT_MS });
   }
 
-  public static async createApiKey(
+  public static createApiKey(
     request: CreateApiKeyRequest,
   ): Promise<Result<ApiKey, ApiKeyServiceError>> {
-    try {
-      const response = await axios.post("/api/api-keys", request, {
-        timeout: 10000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+    return apiRequest("/api/api-keys", {
+      method: "POST",
+      body: request,
+      timeoutMs: TIMEOUT_MS,
+    });
   }
 
-  public static async getApiKey(
+  public static getApiKey(
     id: string,
   ): Promise<Result<ApiKey, ApiKeyServiceError>> {
-    try {
-      const response = await axios.get(`/api/api-keys/${id}`, {
-        timeout: 10000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+    return apiRequest(`/api/api-keys/${id}`, { timeoutMs: TIMEOUT_MS });
   }
 
-  public static async deleteApiKey(
+  public static deleteApiKey(
     id: string,
   ): Promise<Result<{ message: string }, ApiKeyServiceError>> {
-    try {
-      const response = await axios.delete(`/api/api-keys/${id}`, {
-        timeout: 10000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
+    return apiRequest(`/api/api-keys/${id}`, {
+      method: "DELETE",
+      timeoutMs: TIMEOUT_MS,
+    });
   }
 
-  public static async getApiKeyStats(): Promise<
+  public static getApiKeyStats(): Promise<
     Result<ApiKeyStats, ApiKeyServiceError>
   > {
-    try {
-      const response = await axios.get("/api/api-keys/stats/summary", {
-        timeout: 10000,
-      });
-      return Ok(response.data);
-    } catch (error: any) {
-      return this.handleError(error);
-    }
-  }
-
-  private static handleError(error: any): Result<any, ApiKeyServiceError> {
-    return Failure({
-      message: getErrorMessage(error),
-      statusCode: getErrorStatusCode(error),
+    return apiRequest("/api/api-keys/stats/summary", {
+      timeoutMs: TIMEOUT_MS,
     });
   }
 }
